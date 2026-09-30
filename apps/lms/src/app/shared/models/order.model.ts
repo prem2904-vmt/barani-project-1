@@ -128,6 +128,9 @@ export interface OrderTest {
    *  endpoints): the profile's setting when ordered as part of a profile,
    *  else the test's own. Read via `resolvePrintPicker`. */
   printPicker?: boolean | null;
+  /** RESOLVED "Start with" for the picker ('all' ticked | 'none' ticked),
+   *  by the same ordered rule — read via `resolvePrintPickerDefault`. */
+  printPickerDefault?: string | null;
   /** Resolved profile/package name (annotated by the samples endpoint). */
   packageName?: string;
   /** Display sequence within the tube (profile-authored order, never alphabetical). */

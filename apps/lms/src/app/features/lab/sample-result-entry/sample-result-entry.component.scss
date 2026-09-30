@@ -339,6 +339,37 @@
 .pf-sre__attach-record { font-size: 10.5px; color: var(--text-tertiary); font-style: italic; }
 .pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: var(--color-violet-600, #7c3aed); flex-shrink: 0; }
 
+/* Nothing from a test will print (picker on, every value unticked). */
+.pf-sre__grow-warn td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
+.pf-sre__nothing-prints {
+  display: flex; align-items: flex-start; gap: 8px; margin: 8px 12px 4px;
+  font-size: 12.5px; line-height: 1.4; color: var(--amber-text, #b45309);
+}
+.pf-sre__grow-warn .pf-sre__nothing-prints { margin: 0; }
+.pf-sre__nothing-prints svg { flex: none; margin-top: 2px; }
+
+/* ── The value + its "print in bold" toggle ───────────────────────────── */
+.pf-sre__rv { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pf-sre__rv > .pf-sre__ginput, .pf-sre__rv > .pf-sre__gselect { flex: 1 1 auto; min-width: 0; }
+.pf-sre__rv--bold .pf-sre__ginput, .pf-sre__rv--bold .pf-sre__ginput--ta { font-weight: 700; }
+:host ::ng-deep .pf-sre__rv--bold .pf-sre__gselect .pf-dd__trigger,
+:host ::ng-deep .pf-sre__rv--bold .pf-sre__gselect .pf-dd__trigger * { font-weight: 700; }
+.pf-sre__bold {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; border-radius: var(--nd-radius-sm);
+  border: 1px solid transparent; background: transparent; color: var(--text-tertiary);
+  cursor: pointer; transition: background var(--nd-dur-fast) ease, color var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
+}
+@media (hover: hover) { .pf-sre__bold:hover:not(:disabled) { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); } }
+.pf-sre__bold:focus-visible { outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent); }
+.pf-sre__bold[aria-pressed='true'] {
+  color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-violet-600, #7c3aed) 35%, transparent);
+}
+.pf-sre__bold:disabled { cursor: default; }
+@media (pointer: coarse) { .pf-sre__bold { width: 44px; height: 44px; } }
+
 /* ── Read-only VIEW (?view=1) ───────────────────────────────────────── */
 .pf-sre--view .pf-sre__attach-btn,
 .pf-sre--view .pf-sre__attach-eye,

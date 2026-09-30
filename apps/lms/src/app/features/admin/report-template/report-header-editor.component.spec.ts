@@ -177,6 +177,32 @@ describe('Report designer — letterhead editor', () => {
     expect(p.c.selected()).toBe('address');
   });
 
+  it('Banner: the band has the same print switch — off hides it, the name turns dark, on brings it back', () => {
+    const p = make({ headerPreset: 'banner' });
+    const sw = () => Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-rhe-li__sw'))
+      .find(b => b.getAttribute('aria-label') === 'Print Banner')!;
+    expect(sw()).toBeTruthy();
+    expect(sw().getAttribute('aria-checked')).toBe('true');
+    expect(p.el.querySelector('.pf-rhe-thumb--nobanner')).toBeNull();
+    sw().click();
+    p.f.detectChanges();
+    expect(p.cfg()!.items['banner']?.hidden).toBe(true);
+    expect(p.item('banner').hidden).toBe(true);
+    expect(sw().getAttribute('aria-checked')).toBe('false');
+    expect(p.c.entries().find(e => e.id === 'banner')!.value).toContain('dark ink');
+    expect(p.item('name').color).not.toBe('#ffffff');
+    // The style picker's Banner thumbnail shows the band off too.
+    expect(p.el.querySelector('.pf-rhe-thumb--banner.pf-rhe-thumb--nobanner')).not.toBeNull();
+    // Its own card has the switch as well (it was suppressed for the band).
+    p.c.select('banner');
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]')).not.toBeNull();
+    (p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]') as HTMLButtonElement).click();
+    p.f.detectChanges();
+    expect(p.item('banner').hidden).toBeFalsy();
+    expect(p.item('name').color).toBe('#ffffff');
+  });
+
   it('switching style with moved elements asks whether to keep the positions', async () => {
     const p = make({ metadata: writeHeaderLayout(BASE, setItem(null, 'address', { x: 50, y: 30, size: 9 })) });
     await p.c.setPreset('centered');

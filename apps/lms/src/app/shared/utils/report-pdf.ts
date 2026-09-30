@@ -1532,19 +1532,30 @@ function computeReportLayout(
     // hid it. Untouched templates keep that; an edited layout draws it on top.
     if (n && !active) add(n);
     const band = add({ id: 'banner', kind: 'banner', label: 'Banner', x: 0, y: 0, w: A4.w, h: 54, align: 'left' });
+    // The lab can switch the band OFF (a hidden override, like any element):
+    // the header then reads like a normal letterhead — logo and name from
+    // the top margin, the name in dark ink (white text would vanish on the
+    // paper), the contact line right under them. Shown → byte-identical.
+    const bandOn = !band.hidden;
     const bh = band.h ?? 54;
     const size = theme.logoSize === 'sm' ? 22 : theme.logoSize === 'lg' ? 36 : 28;
     const lp = theme.logoPosition;
     const lx = (w: number) => lp === 'right' ? A4.w - MARGIN_X - w : lp === 'center' ? (A4.w - w) / 2 : MARGIN_X;
-    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: lx(size), y: (bh - size) / 2, align: lp,
-                       defX: lx, defY: h => (bh - h) / 2, w: size, h: size, url: logoUrl });
+    const logoY = (h: number) => bandOn ? (bh - h) / 2 : LH_TOP;
+    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: lx(size), y: logoY(size), align: lp,
+                       defX: lx, defY: logoY, w: size, h: size, url: logoUrl });
     const wmX = lp === 'center' ? (A4.w / 2) : (logo.defBox.x + logo.defBox.w + 10);
     const wmAlign: Align = lp === 'center' ? 'center' : 'left';
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: 24, align: wmAlign,
-          style: 'bold', size: 18 * fs, color: '#ffffff', tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: 40, align: wmAlign,
-          style: 'normal', size: 9 * fs, color: '#ffffff', tone: 'plain' });
-    joined('contact', ['address', 'phone', 'email'], MARGIN_X, bh + 10, 'left');
+    // Band off: centred → the name sits UNDER the logo (Centered's rhythm);
+    // left / right → beside it, on the Classic baselines.
+    const nameY = bandOn ? 24 : lp === 'center' ? LH_TOP + logo.defBox.h + 14 : LH_TOP + 18;
+    const tagY = bandOn ? 40 : nameY + 14;
+    const contactY = bandOn ? bh + 10 : Math.max(LH_TOP + 48, tagY + 12, logo.defBox.y + logo.defBox.h + 10);
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: nameY, align: wmAlign,
+          style: 'bold', size: 18 * fs, color: bandOn ? '#ffffff' : BLACK, tone: 'plain' });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: tagY, align: wmAlign,
+          style: 'normal', size: 9 * fs, color: bandOn ? '#ffffff' : TEXT_DIM, tone: 'plain' });
+    joined('contact', ['address', 'phone', 'email'], MARGIN_X, contactY, 'left');
     if (n && active) add(n);
   } else if (preset === 'minimal') {
     const n = nablSeed(); if (n) add(n);
@@ -2475,6 +2486,10 @@ interface PanelRowData {
   color?: string | null;
   /** Admin-configured conditional bold (condition `then.bold`). */
   bold?: boolean;
+  /** The tech's "print in bold" pick for this value (snapshot `result.bold`)
+   *  — bolds the RESULT cell exactly like an abnormal value; it only adds
+   *  bold, never removes the abnormal styling. */
+  printBold?: boolean;
   /** Text-typed cell values keyed by column name (e.g. description) so the
    *  columnar renderer can fill admin text columns instead of leaving them
    *  permanently blank. */
@@ -2501,6 +2516,13 @@ function methodForValue(
     if ((hit ?? '').trim()) return hit!.trim();
   }
   return (t.method ?? '').trim() || undefined;
+}
+
+/** The tech's "print in bold" value names on a test's snapshot
+ *  (`result.bold`, written at result entry by the B toggle). */
+export function printBoldNames(t: { result?: Record<string, unknown> | null }): Set<string> {
+  const raw = t.result?.['bold'];
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : []);
 }
 
 /** Sub-line text for a group's methods: one method → "Hexokinase"; values
@@ -2668,6 +2690,7 @@ function buildPanelGroup(
     const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
     const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+    const boldNames = printBoldNames(t);
     const savedValues = (t.result?.['values'] ?? undefined) as Record<string, SavedFlag> | undefined;
     for (const sec of visibleSecs.slice(firstGrid)) {
       if (sec.type !== 'grid') {
@@ -2741,6 +2764,7 @@ function buildPanelGroup(
           abnormal: hasSaved ? saved.abnormal : (sev === 'high' || sev === 'warn' || !!letter || saved.abnormal),
           color: r.color ?? null,
           bold: !!r.isBold,
+          printBold: !!r.parameterName && boldNames.has(r.parameterName),
           texts: Object.keys(texts).length ? texts : undefined,
           description: descriptionText(r.cells) || undefined,
           method: methodForValue(t, r.parameterName),
@@ -2762,6 +2786,7 @@ function buildPanelGroup(
   // Per-report picker applies here too (as in renderLegacyTest): an unticked
   // value never prints — nor lands on the abnormal-results sheet.
   const hiddenLegacy = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+  const boldLegacy = printBoldNames(t);
   for (const [paramName, v] of Object.entries(values ?? {})) {
     if (hiddenLegacy.has(paramName)) continue;
     // Criticals print as H / L — never C (report rule; see report-flag.ts).
@@ -2778,6 +2803,7 @@ function buildPanelGroup(
       flag: rf.flag,
       isLow: rf.isLow,
       abnormal: rf.abnormal,
+      printBold: boldLegacy.has(paramName),
       method: methodForValue(t, paramName),
     });
   }
@@ -3416,6 +3442,9 @@ function renderColumnarTable(
           // whatever the indicator setting (owner 2026-09-26).
           if (r.flag === 'A') styles['fontStyle'] = 'bold';
           if (adminColor) { styles['textColor'] = adminColor; styles['fontStyle'] = 'bold'; }
+          // The tech's "print in bold" pick: the SAME value-cell bold as an
+          // abnormal value (colour untouched — it adds emphasis, not a flag).
+          if (r.printBold) styles['fontStyle'] = 'bold';
         }
         // Conditional bold (condition `then.bold`) — bolds name + result.
         if (r.bold && (vc.nameOnly || vc.hasResult)) styles['fontStyle'] = 'bold';
@@ -3433,7 +3462,7 @@ function renderColumnarTable(
         ? { arrow: r.isLow ? 'down' : 'up',
             color: theme.flagStyle === 'bold_color' ? abnColor : BLACK,
             text: String(resultCellText),
-            bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' }
+            bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' || !!r.printBold }
         : null);
       // Its description, when the table has no column for it: ONE merged
       // row directly under the value, styled like the Sentence row.

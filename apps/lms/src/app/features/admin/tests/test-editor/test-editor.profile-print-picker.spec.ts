@@ -150,3 +150,50 @@ describe('Test editor — profile-level print picker', () => {
     expect(toggle(el)).toBeNull();
   });
 });
+
+/**
+ * Owner 2026-09-30: "Start with: All ticked | None ticked" next to the
+ * switch — shown only while it is on, stored as `printPickerDefault: 'none'`
+ * in the same wrapper (absent = all, so every existing test is unchanged).
+ * The profile's value overrides its members' when ordered as the profile.
+ */
+describe('Test editor — print picker "Start with"', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  const seg = (el: HTMLElement, id: string) => el.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+  const opt = (el: HTMLElement, id: string, label: string) =>
+    Array.from(seg(el, id)?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(b => b.textContent?.trim() === label)!;
+
+  it('profile: hidden while the switch is off; picking None writes printPickerDefault:"none"; All removes it', () => {
+    const { el, f, c } = renderOpen({ test: PROFILE(), type: 'profile' });
+    expect(seg(el, 'profile-print-picker-default')).toBeNull();
+    toggle(el)!.click(); f.detectChanges();
+    expect(opt(el, 'profile-print-picker-default', 'All ticked').getAttribute('aria-checked')).toBe('true');
+    expect(saved(c).printPickerDefault).toBeUndefined();
+    opt(el, 'profile-print-picker-default', 'None ticked').click(); f.detectChanges();
+    expect(opt(el, 'profile-print-picker-default', 'None ticked').getAttribute('aria-checked')).toBe('true');
+    expect(saved(c)).toMatchObject({ printPicker: true, printPickerDefault: 'none' });
+    opt(el, 'profile-print-picker-default', 'All ticked').click(); f.detectChanges();
+    expect(saved(c).printPickerDefault).toBeUndefined();
+  });
+
+  it('profile: loads None from the blob; switching the picker off drops both keys', () => {
+    const { el, f, c } = renderOpen({ test: PROFILE({ printPicker: true, printPickerDefault: 'none' }), type: 'profile' });
+    expect(opt(el, 'profile-print-picker-default', 'None ticked').getAttribute('aria-checked')).toBe('true');
+    expect(c.dirty()).toBe(false);
+    toggle(el)!.click(); f.detectChanges();
+    const blob = saved(c);
+    expect(blob.printPicker).toBeUndefined();
+    expect(blob.printPickerDefault).toBeUndefined();
+  });
+
+  it('single test: the Start-with control follows its own switch and wrapper', () => {
+    const { el, f, c } = renderOpen({ test: OGTT({ parameters: JSON.stringify({ printPicker: true, parameters: [
+      { name: 'glucose', title: 'Glucose', type: 'numeric', unit: 'mg/dL' }] }) }) });
+    expect(opt(el, 'print-picker-default', 'All ticked').getAttribute('aria-checked')).toBe('true');
+    opt(el, 'print-picker-default', 'None ticked').click(); f.detectChanges();
+    expect(JSON.parse(c._draft().parametersJson).printPickerDefault).toBe('none');
+    c.setPrintPickerEnabled(false); f.detectChanges();
+    expect(seg(el, 'print-picker-default')).toBeNull();
+    expect(JSON.parse(c._draft().parametersJson).printPickerDefault).toBeUndefined();
+  });
+});

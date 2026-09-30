@@ -376,19 +376,17 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             </div>
           }
 
-          <!-- Print on / off -->
-          @if (s.id !== 'banner') {
-            <div class="pf-rhe-row">
-              <div>
-                <p class="pf-rhe-row__t">Print this</p>
-                <p class="pf-rhe-row__s">{{ stateText(s) }}</p>
-              </div>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
-                      [attr.aria-label]="'Print ' + s.label" (click)="toggleEntry(s)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-              </button>
+          <!-- Print on / off (the banner too: off → the name turns dark ink). -->
+          <div class="pf-rhe-row">
+            <div>
+              <p class="pf-rhe-row__t">Print this</p>
+              <p class="pf-rhe-row__s">{{ stateText(s) }}</p>
             </div>
-          }
+            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
+                    [attr.aria-label]="'Print ' + s.label" (click)="toggleEntry(s)">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            </button>
+          </div>
 
           @if (s.item && !s.item.hidden) {
             @let it = s.item;
@@ -533,12 +531,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   </span>
                   <span class="pf-rhe-li__val">{{ e.value || stateText(e) }}</span>
                 </button>
-                @if (e.id !== 'banner') {
-                  <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
-                          [attr.aria-label]="'Print ' + e.label" (click)="toggleEntry(e)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                  </button>
-                }
+                <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
+                        [attr.aria-label]="'Print ' + e.label" (click)="toggleEntry(e)">
+                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                </button>
               </li>
             }
           </ul>
@@ -586,7 +582,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                 @for (p of presets; track p.value) {
                   <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="presetOf(template()) === p.value"
                           (click)="setPreset(p.value)">
-                    <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
+                    <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value + (p.value === 'banner' && bannerHidden() ? ' pf-rhe-thumb--nobanner' : '')" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
                     {{ p.label }}
                   </button>
                 }
@@ -832,6 +828,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-thumb--centered i { left: 42%; top: 8%; } .pf-rhe-thumb--centered b { left: 27%; top: 38%; } .pf-rhe-thumb--centered b + b { left: 35%; top: 52%; } .pf-rhe-thumb--centered em { top: 70%; }
     .pf-rhe-thumb--banner em { top: 0; left: 0; right: 0; height: 36%; } .pf-rhe-thumb--banner i { top: 6%; background: #fff; width: 13%; } .pf-rhe-thumb--banner b { top: 9%; background: #fff; } .pf-rhe-thumb--banner b + b { top: 50%; background: #cbd5e1; }
     .pf-rhe-thumb--minimal i, .pf-rhe-thumb--minimal em { display: none; } .pf-rhe-thumb--minimal b { left: 8%; }
+    /* Banner style with the band switched off: dark name on paper. */
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner em { display: none; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner i { background: #94a3b8; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b { background: #64748b; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b + b { background: #cbd5e1; }
     .pf-rhe-color { display: flex; align-items: center; gap: 8px; height: 40px; padding-right: 10px; border-radius: var(--nd-radius-sm);
       border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); overflow: hidden; font-size: 12px; color: var(--text-secondary); }
     .pf-rhe-color input { width: 44px; height: 48px; margin: -4px 0 -4px -4px; border: 0; padding: 0; background: transparent; cursor: pointer; }
@@ -904,6 +905,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   private readonly sideBody = viewChild<ElementRef<HTMLDivElement>>('sideBody');
 
   readonly cfg = computed(() => readHeaderLayout(this.template()));
+  /** The Banner style's band is switched off (a hidden override). */
+  readonly bannerHidden = computed(() => this.cfg()?.items['banner']?.hidden === true);
   /** Same resolved layout the PDF was drawn with. */
   readonly layout = computed(() => computeReportPageLayout({
     report: { id: 'layout', type: 'final', data: '{}' }, template: this.template(), imageCache: this.imageCache(),
@@ -1080,7 +1083,11 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       return out;
     }
     const preset = normalizeHeaderPreset(t.headerPreset);
-    if (preset === 'banner') push('banner', 'The coloured band behind the name', 'shown', byId.get('banner'));
+    if (preset === 'banner') {
+      const band = byId.get('banner');
+      push('banner', band?.hidden ? 'Off — the name prints in dark ink' : 'The coloured band behind the name',
+        band?.hidden ? 'hidden' : 'shown', band);
+    }
     const logo = byId.get('logo');
     if (logo) push('logo', t.logoUrl ? 'Uploaded image' : 'No image — placeholder prints', logo.hidden ? 'hidden' : 'shown', logo);
     else push('logo', 'This header style prints no logo', 'off');

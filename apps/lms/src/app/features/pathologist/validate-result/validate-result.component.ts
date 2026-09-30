@@ -41,6 +41,8 @@ interface ResultSnapshot {
   flagged?: Record<string, SavedFlag>;
   note?: string;
   flags?: { critical: boolean; notifications: string[] };
+  /** Value names the tech marked "print in bold" at result entry. */
+  bold?: string[];
 }
 
 type Flag = 'normal' | 'abnormal' | 'critical';
@@ -71,6 +73,8 @@ interface ValueRow {
   flag: Flag;
   /** The critical badge mw saved: CL / CH (legacy rows: C); '' otherwise. */
   crit?: CriticalCode | '';
+  /** The tech asked for this value to print bold (the B toggle). */
+  printBold?: boolean;
   /** True when the parameter has a reference (range or critical bounds) —
    *  only then does a "Normal" verdict mean anything. Referenceless
    *  categorical values are shown as recorded, not judged. */
@@ -200,7 +204,7 @@ interface ValueRow {
                                (click)="!isEditingTest(st) && openDetail(r)"
                                (keydown.enter)="!isEditingTest(st) && openDetail(r)">
                             <span class="pf-prow__name">{{ r.title }}</span>
-                            <span class="pf-prow__val">
+                            <span class="pf-prow__val" [class.pf-prow__val--bold]="r.printBold">
                               @if (isEditingTest(st)) {
                                 <input class="pf-prow__editin" [value]="editVal(r.name)"
                                        (input)="setEditVal(r.name, $any($event.target).value)"
@@ -209,6 +213,11 @@ interface ValueRow {
                                 @if (r.unit) { <em>{{ r.unit }}</em> }
                               } @else {
                                 {{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }
+                              }
+                              @if (r.printBold) {
+                                <span class="pf-prow__boldmark" title="Prints in bold on the report" aria-label="Prints in bold on the report" role="img">
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z"/><path d="M7 12h7.5a3.5 3.5 0 0 1 0 7H7z"/></svg>
+                                </span>
                               }
                             </span>
                             <span class="pf-prow__bar">
@@ -611,6 +620,9 @@ interface ValueRow {
     .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
     .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
     .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
+    .pf-prow__val--bold { font-weight: 800; }
+    .pf-prow__boldmark { display: inline-flex; align-items: center; justify-content: center; align-self: center; width: 18px; height: 18px; border-radius: 5px;
+      color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent); }
     .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
     .pf-prow__dash { color: var(--text-muted); }
     .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -1220,6 +1232,7 @@ export class ValidateResultComponent implements OnInit {
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
         flag: flagTone(saved?.flag),
         crit: criticalBadge(saved?.flag),
+        printBold: Array.isArray(snap.bold) && snap.bold.includes(p.name),
         hasRef: !!rangeText || critLow != null || critHigh != null
       };
     });

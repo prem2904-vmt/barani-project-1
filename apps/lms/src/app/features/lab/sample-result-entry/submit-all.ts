@@ -30,7 +30,13 @@ export interface TabSnapshot {
   /** In-house tests of the tube (outsourced lines already split off). */
   tests: OrderTest[];
   values: ValuesMap;
+  /** "Print in bold" value names per order-test id (the B toggle). Absent =
+   *  not known → the submit omits it and the server keeps the saved list. */
+  bold?: BoldMap;
 }
+
+/** "Print in bold" picks per order-test id → value names. */
+export type BoldMap = Record<string, string[]>;
 
 /** A writable test with one or more empty fields. */
 export interface MissingEntry {
@@ -146,12 +152,31 @@ export function invalidNumbers(tab: TabSnapshot): string[] {
 /** The per-tube submit body, in the per-tab submit's shape. Submit all
  *  sends EVERY writable test as-is — a test left empty (after the user
  *  confirmed) goes with empty values. */
-export function tabPayload(tab: TabSnapshot): { results: Array<{ orderTestId: string; values: Record<string, unknown>; note: undefined }> } {
+export function tabPayload(tab: TabSnapshot): { results: Array<{ orderTestId: string; values: Record<string, unknown>; note: undefined; bold?: string[] }> } {
   return {
     results: tab.tests
       .filter(isWritableTest)
-      .map((t) => ({ orderTestId: t.id, values: tab.values[t.id] ?? {}, note: undefined })),
+      .map((t) => ({
+        orderTestId: t.id, values: tab.values[t.id] ?? {}, note: undefined,
+        ...(tab.bold ? { bold: tab.bold[t.id] ?? [] } : {}),
+      })),
   };
+}
+
+/** The saved "print in bold" picks (each result snapshot's `bold[]`). */
+export function boldFromTests(tests: readonly OrderTest[]): BoldMap {
+  const out: BoldMap = {};
+  for (const t of tests) {
+    if (!t.currentResult) continue;
+    try {
+      const b = JSON.parse(t.currentResult)?.bold;
+      if (Array.isArray(b)) {
+        const names = b.filter((x: unknown): x is string => typeof x === 'string' && x.trim() !== '');
+        if (names.length) out[t.id] = names;
+      }
+    } catch { /* ignore */ }
+  }
+  return out;
 }
 
 /** Server prefill (each test's saved draft / result) — what the entry
