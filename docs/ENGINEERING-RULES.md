@@ -59,6 +59,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
 - Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
+- A derived delivery file (the combined report + partner PDF) is served from the bytes just built, never only via a storage round-trip; a cache probe treats ANY storage error as a miss (S3-compatible stores may answer a missing key with 403); staff screens say what the SERVED file contains (`GET /api/reports/{id}/pdf-parts`), never infer it from a flag. Test storage failures with the fake store's fault knobs.
 
 ## 5. Auth and security
 - The server decides access; the UI only reflects it (guards + a not-authorised screen, no screen without access).

@@ -38,7 +38,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean; waCloud?: boolean; waStatus?: string };
+type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean | 'attached'; waCloud?: boolean; waStatus?: string; pdfParts?: unknown };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -82,6 +82,15 @@ async function render(opts: Opts = {}) {
       : of({})),
   };
   const holding = signal(!!opts.holding);
+  const outsourcing = {
+    apiBase: '',
+    partnerReports: vi.fn(async () => opts.partner
+      ? [{ orderTestId: 'ot9', testName: 'Vitamin D', partnerLabName: 'Metro Labs', url: '/x.pdf',
+           ...(opts.partner === 'attached' ? { attachToReport: true, inReport: true } : {}) }]
+      : []),
+    pdfParts: vi.fn(async () => opts.pdfParts ?? { stored: true, combined: false, parts: [] }),
+    setAttachToReport: vi.fn(async () => []),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -93,10 +102,7 @@ async function render(opts: Opts = {}) {
       { provide: ChatService, useValue: { openConversationWithContext: vi.fn(async () => 'c1'), shareReport: vi.fn(async () => {}) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => opts.messages !== false } },
-      { provide: OutsourcingService, useValue: {
-        apiBase: '',
-        partnerReports: async () => opts.partner ? [{ orderTestId: 'ot9', testName: 'Vitamin D', partnerLabName: 'Metro Labs', url: '/x.pdf' }] : [],
-      } },
+      { provide: OutsourcingService, useValue: outsourcing },
       { provide: ReportLayoutService, useValue: { preview: () => of({ sections: [] }) } },
       { provide: ZoomTransitionService, useValue: { holding, attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', 'rep-1']]) } } },
@@ -110,7 +116,7 @@ async function render(opts: Opts = {}) {
   f.detectChanges();
   const c = f.componentInstance as any;
   const ready = () => { c._pdfReady.set(true); c.pageCount.set(2); f.detectChanges(); };
-  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready };
+  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing };
 }
 
 const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
@@ -544,5 +550,46 @@ describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud A
   it('a preliminary report never goes through the server send', async () => {
     const { c } = await render({ waCloud: true, partial: true });
     expect(c.waCloud()).toBe(false);
+  });
+});
+
+describe('Report view (nd) — partner reports tell the truth about the PDF', () => {
+  const where = (el: HTMLElement) => el.querySelector('[data-testid="rv-partner-where"]') as HTMLElement;
+
+  it('attached AND joined in the served PDF: "In this PDF, after our report" — no Attach action', async () => {
+    const { el, f, c } = await render({ partner: 'attached',
+      pdfParts: { stored: true, combined: true, parts: [{ url: '/x.pdf', joined: true, problem: null }] } });
+    c.refreshPdfParts('rep-1'); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(where(el).textContent?.trim()).toBe('In this PDF, after our report');
+    expect(el.querySelector('[data-testid="rv-partner-attach"]')).toBeNull();
+  });
+
+  it('attached but the served PDF lacks it (LAB-2609-000154): a red warning with the reason, never "In this PDF"', async () => {
+    const { el, f, c } = await render({ partner: 'attached',
+      pdfParts: { stored: true, combined: false, parts: [{ url: '/x.pdf', joined: false, problem: 'The partner file is no longer on the server.' }] } });
+    expect(where(el).textContent).not.toContain('In this PDF');
+    c.refreshPdfParts('rep-1'); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(where(el).textContent?.trim()).toBe('Not in this PDF — The partner file is no longer on the server.');
+    expect(where(el).classList).toContain('pf-rv-partner__lab--warn');
+  });
+
+  it('a legacy upload (LAB-2609-000153): "Attach to report" attaches every line of that file and reloads the preview', async () => {
+    const { el, f, outsourcing, renderSpy } = await render({ partner: true });
+    expect(where(el).textContent?.trim()).toBe('Sent as a separate file — attach it to send one PDF');
+    const btn = el.querySelector('[data-testid="rv-partner-attach"]') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-label')).toContain('Vitamin D');
+    const before = renderSpy.mock.calls.length;
+    const fetched = outsourcing.partnerReports.mock.calls.length;
+    btn.click();
+    await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(outsourcing.setAttachToReport).toHaveBeenCalledWith(['ot9'], true);
+    expect(outsourcing.partnerReports.mock.calls.length).toBe(fetched + 1);
+    // The preview is painted again from the server — now ours + the partner pages.
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it('no Attach action without the desk permission', async () => {
+    const { el } = await render({ partner: true, perms: ['view_report'] });
+    expect(el.querySelector('[data-testid="rv-partner-attach"]')).toBeNull();
   });
 });

@@ -345,16 +345,25 @@
           <section class="pf-rv-partner" aria-labelledby="pf-rv-partner-t">
             <h3 class="pf-rv-sec" id="pf-rv-partner-t">Partner lab reports</h3>
             @for (p of partnerReports(); track p.orderTestId) {
+              @let w = partnerWhere(p, pdfParts());
               <div class="pf-rv-partner__row">
                 <span class="pf-rv-partner__name">{{ p.testName }}
                   @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
-                  <span class="pf-rv-partner__lab" data-testid="rv-partner-where">{{ p.inReport ? 'In this PDF, after our report' : (p.attachToReport && p.attachProblem ? 'Sent as a separate file — couldn’t be joined' : 'Sent as a separate file') }}</span>
+                  <span class="pf-rv-partner__lab" [class.pf-rv-partner__lab--warn]="w.warn" data-testid="rv-partner-where">{{ w.text }}</span>
                 </span>
                 <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openPartnerReport(p)"
                         [attr.aria-label]="'Open partner report for ' + p.testName">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
                   <span class="nd-rowact__t">Open · print</span>
                 </button>
+                @if (w.canAttach && canAttachPartner()) {
+                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" data-testid="rv-partner-attach"
+                          [disabled]="!!attachingUrl()" [pfBusy]="attachingUrl() === p.url" pfBusyLabel="Attaching…"
+                          (click)="attachPartner(p)" [attr.aria-label]="'Attach the partner report for ' + p.testName + ' to our report'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
+                    <span class="nd-rowact__t">Attach to report</span>
+                  </button>
+                }
               </div>
             }
           </section>

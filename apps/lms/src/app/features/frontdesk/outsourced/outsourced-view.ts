@@ -139,6 +139,48 @@ export function firstAttachProblem(rows: readonly OutsourcedTube[] | null | unde
   return null;
 }
 
+/** What the report's DELIVERED PDF really contains for one partner file —
+ *  `GET /api/reports/{id}/pdf-parts` (the server built / read the combined
+ *  file to answer). Keyed by the partner file's url. */
+export interface PdfPartStatus {
+  url: string;
+  testNames?: string;
+  partnerLabName?: string | null;
+  joined: boolean;
+  problem?: string | null;
+}
+export interface PdfParts {
+  /** Our PDF is stored (nothing can be joined before it is). */
+  stored: boolean;
+  combined: boolean;
+  parts: PdfPartStatus[];
+}
+
+/** The report viewer's line for a partner report: where it goes, whether the
+ *  desk can still attach it, and a warning tone when an attached file is NOT
+ *  in the PDF. The server's pdf-parts answer wins over the flag — the flag
+ *  alone once claimed "In this PDF" for a file that wasn't (LAB-2609-000154). */
+export interface PartnerWhere {
+  text: string;
+  warn: boolean;
+  /** Not attached — offer "Attach to report" (legacy uploads have no flag). */
+  canAttach: boolean;
+}
+
+export function partnerWhere(p: PartnerReport, parts: PdfParts | null | undefined): PartnerWhere {
+  if (!p.attachToReport) {
+    return { text: 'Sent as a separate file — attach it to send one PDF', warn: false, canAttach: true };
+  }
+  if (p.attachProblem) return { text: `Sent as a separate file — ${p.attachProblem}`, warn: true, canAttach: false };
+  const st = parts?.parts.find(x => x.url === p.url);
+  if (st?.joined) return { text: 'In this PDF, after our report', warn: false, canAttach: false };
+  if (st && !st.joined) {
+    return { text: `Not in this PDF — ${st.problem ?? 'it couldn’t be joined'}`, warn: true, canAttach: false };
+  }
+  // No answer yet (loading / our PDF not stored yet / the check failed).
+  return { text: 'Attached — joined after our report', warn: false, canAttach: false };
+}
+
 /** Files the partner-report upload accepts (mirrors the backend). */
 export const PARTNER_REPORT_ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp';
 export const PARTNER_REPORT_MAX_MB = 15;

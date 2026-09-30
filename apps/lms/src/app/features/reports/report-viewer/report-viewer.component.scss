@@ -141,9 +141,10 @@
 .pf-rv-facts dd { margin: 0; font-size: 13px; color: var(--text-primary); @include nd.no-truncate; }
 .pf-rv-sec { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
 .pf-rv-partner { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
-.pf-rv-partner__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
-.pf-rv-partner__name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; @include nd.no-truncate; }
+.pf-rv-partner__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px; min-height: 44px; }
+.pf-rv-partner__name { flex: 1 1 12rem; font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; @include nd.no-truncate; }
 .pf-rv-partner__lab { display: block; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.pf-rv-partner__lab--warn { color: var(--red-text, #dc2626); }  // a real warning: the patient's PDF lacks it
 .pf-rv-explain { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
 
 /* Collapsed REPORT: a slim strip on the RIGHT edge, one expand target. */
