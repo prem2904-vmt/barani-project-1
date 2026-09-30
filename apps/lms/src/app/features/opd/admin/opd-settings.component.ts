@@ -173,7 +173,7 @@ export class OpdSettingsComponent {
   private readonly toasts = inject(ToastService);
 
   readonly MODES: { value: FollowUpMode; label: string; desc: string }[] = [
-    { value: 'off', label: 'Off', desc: 'No follow-up discount — every visit is billed at the full consultation fee.' },
+    { value: 'off', label: 'Off', desc: 'No clinic-wide rule. A service with its own follow-up rule (set on the service) still applies it.' },
     { value: 'auto', label: 'Automatic', desc: 'The matching tier’s discount is applied automatically when the consult is billed.' },
     { value: 'assisted', label: 'Assisted', desc: 'The matching tier’s discount is a ceiling — the front desk applies any amount up to it.' },
   ];

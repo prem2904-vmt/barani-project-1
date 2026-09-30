@@ -177,7 +177,8 @@ export class OpdBookVisitPage {
   readonly nextStepText = computed(() => {
     const d = this.doctor(); const who = d ? d.name : 'the doctor';
     const pron = this.pronoun();
-    if (this.takeVitalsHere() || this.workflow().vitals === 'off') return `then ${pron} goes to ${who}'s queue.`;
+    if (this.workflow().vitals === 'off') return `then ${pron} goes to ${who}'s queue.`;
+    if (this.takeVitalsHere() || this.workflow().vitals === 'desk') return `record ${pron === 'they' ? 'their' : pron === 'she' ? 'her' : 'his'} vitals here, then ${pron} goes to ${who}'s queue.`;
     return `then ${pron} goes to the vitals station.`;
   });
   readonly pronoun = computed(() => {

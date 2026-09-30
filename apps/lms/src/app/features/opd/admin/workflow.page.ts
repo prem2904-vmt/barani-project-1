@@ -109,14 +109,16 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
                   @if (s().workflow.vitals !== 'off') {
                     <span class="wf-step__k">Where</span>
                     <span class="nd-seg wf-seg" role="radiogroup" aria-label="Where vitals are taken">
-                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'desk'" (click)="put({ workflow: { vitals: 'desk' } })">Front desk screen</button>
+                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'desk'" (click)="put({ workflow: { vitals: 'desk', vitalsBy: 'front_desk' } })">Front desk screen</button>
                       <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'station'" (click)="put({ workflow: { vitals: 'station' } })">Separate station</button>
                     </span>
+                    @if (s().workflow.vitals === 'station') {
                     <span class="wf-step__k">Who</span>
                     <span class="nd-seg wf-seg" role="radiogroup" aria-label="Who takes vitals">
                       <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitalsBy === 'nurse'" (click)="put({ workflow: { vitalsBy: 'nurse' } })">Nurse</button>
                       <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitalsBy === 'front_desk'" (click)="put({ workflow: { vitalsBy: 'front_desk' } })">Front desk</button>
                     </span>
+                    } @else { <span class="wf-step__h">Taken by the front desk while booking.</span> }
                   } @else { <span class="wf-step__h">Skipped — the patient goes straight to the doctor's queue.</span> }
                 </div>
                 <svg class="wf-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
