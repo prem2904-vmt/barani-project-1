@@ -2,7 +2,7 @@ import { Route } from '@angular/router';
 import { appRoutes } from '../../app.routes';
 import { ADMIN_NAV, MORE_NAV, NavItem, NavVisibilityCtx, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, navItemVisible } from '../../layout/nav-items';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
-import { pickLanding } from './landing.guard';
+import { isOpdOnly, pickLanding } from './landing.guard';
 import { ROUTE_ACCESS, RouteAccessCtx, canOpenRoute } from './route-access';
 
 /**
@@ -270,6 +270,26 @@ describe('RBAC matrix — landing after login', () => {
   it('Billing Counter lands on /frontdesk (used to fall through to /403)', () => {
     const w = who('Billing Counter');
     expect(pickLanding({ hasAny: p => has(w)(p), isEnabled: () => true })).toBe('/frontdesk');
+  });
+});
+
+describe('RBAC matrix — OPD-only doctor lands on the queue first', () => {
+  const ctxFor = (perms: string[]): RouteAccessCtx => ({ hasAny: p => p.some(c => perms.includes(c)), isEnabled: () => true });
+  it('an OPD-only doctor lands on /opd/consult even with a lab read permission', () => {
+    const ctx = ctxFor(['view_report', 'view_order', 'view_test']);
+    expect(pickLanding(ctx)).not.toBe('/opd/consult');
+    expect(pickLanding({ ...ctx, opdDoctor: true, opdOnlyDoctor: true })).toBe('/opd/consult');
+  });
+  it('opdOnlyDoctor alone (OPD hidden / not a doctor) changes nothing', () => {
+    const ctx = ctxFor(['view_report']);
+    expect(pickLanding({ ...ctx, opdOnlyDoctor: true })).toBe(pickLanding(ctx));
+  });
+  it('isOpdOnly: only when every role is OPD-scoped', () => {
+    expect(isOpdOnly(['opd'])).toBe(true);
+    expect(isOpdOnly(['lab', 'opd'])).toBe(false);
+    expect(isOpdOnly(['lab'])).toBe(false);
+    expect(isOpdOnly([])).toBe(false);
+    expect(isOpdOnly(undefined)).toBe(false);
   });
 });
 

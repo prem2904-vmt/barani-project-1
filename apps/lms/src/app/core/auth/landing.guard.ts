@@ -40,16 +40,28 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
 export interface LandingCtx extends RouteAccessCtx {
   /** True only when the OPD gate is open AND the user is a doctor. */
   opdDoctor?: boolean;
+  /** True when, on top of `opdDoctor`, every role the user holds is an OPD role
+   *  (`/me.modules` is exactly ['opd'] — e.g. the seeded "Doctor (OPD)" role).
+   *  Such a doctor lands on their queue FIRST, even if the role also grants a
+   *  read permission that opens a lab screen (reports, orders). A user with any
+   *  lab-scoped role never gets this flag. */
+  opdOnlyDoctor?: boolean;
 }
 
 /** First landing the user can open, else '/403' (or '/opd/consult' for an
  *  OPD doctor with no other landing — see `opdDoctor`). Pure — shared by the
  *  guard, the top strip's "home" and the RBAC matrix spec. */
 export function pickLanding(ctx: LandingCtx): string {
+  if (ctx.opdDoctor && ctx.opdOnlyDoctor) return '/opd/consult';
   for (const l of LANDINGS) {
     if (canOpenRoute(l.path, ctx)) return l.path;
   }
   return ctx.opdDoctor ? '/opd/consult' : '/403';
+}
+
+/** The user's roles are ALL OPD-scoped (`/me.modules` exactly ['opd']). */
+export function isOpdOnly(modules: readonly string[] | null | undefined): boolean {
+  return !!modules && modules.length > 0 && modules.every(m => m === 'opd');
 }
 
 export const landingGuard: CanActivateFn = async (): Promise<UrlTree | boolean> => {
@@ -70,5 +82,6 @@ export const landingGuard: CanActivateFn = async (): Promise<UrlTree | boolean> 
     isSuper: auth.permissions().includes('*'),
     moduleEnabled: m => entitlements.moduleEnabled(m),
     opdDoctor: auth.isDoctor() && opdGate.visible(),
+    opdOnlyDoctor: isOpdOnly(auth.user()?.modules),
   })]);
 };

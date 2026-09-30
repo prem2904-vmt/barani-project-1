@@ -75,7 +75,7 @@ import {
 import { opdAreasFor } from "../../features/opd/shared/opd-nav";
 import { RouteAccessCtx } from "../../core/auth/route-access";
 import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
-import { pickLanding } from "../../core/auth/landing.guard";
+import { isOpdOnly, pickLanding } from "../../core/auth/landing.guard";
 import { DesktopWindowService } from "../../core/services/desktop-window.service";
 import { DesktopClockComponent } from "./desktop-clock.component";
 
@@ -728,6 +728,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       ...this.routeCtx(),
       moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
       opdDoctor: this.auth.isDoctor() && this.opdGate.visible(),
+      opdOnlyDoctor: isOpdOnly(this.auth.user()?.modules),
     });
   }
 
