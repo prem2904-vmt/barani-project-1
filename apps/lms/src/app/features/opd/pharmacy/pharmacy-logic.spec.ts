@@ -7,8 +7,8 @@ import { filterStock } from './stock.page';
 import { poLineTotal } from './purchase-orders.page';
 import { gstinOk } from './suppliers.page';
 import { returnable } from './returns.page';
-import { waitingFor } from './rx-queue.page';
-import { buildPharmacyPdf, itemLabel } from './pharmacy-print';
+import { waitingFor, todaySummary } from './rx-queue.page';
+import { buildPharmacyPdf, itemLabel, lineTaxSplit } from './pharmacy-print';
 import { sayRx, stripDays } from '../shared/rx-schedule';
 import type { RxLineView, StockRow } from './pharmacy.api';
 
@@ -168,6 +168,22 @@ describe('patient instructions come from the shared Rx model', () => {
     });
     expect(doc.getNumberOfPages()).toBe(1);
   });
+
+  it('a GST tax invoice (critic item #4): per-line taxable/CGST/SGST split off the same formula as the server', () => {
+    // 156.80 incl. 12% GST → taxable 140.00 → CGST/SGST 8.40 each.
+    expect(lineTaxSplit({ total: 156.8, taxSlab: 12 })).toEqual({ taxable: 140, cgst: 8.4, sgst: 8.4 });
+    expect(lineTaxSplit({ total: 100, taxSlab: 0 })).toEqual({ taxable: 100, cgst: 0, sgst: 0 });
+  });
+
+  it('a GST tax invoice (letterhead + HSN column + amount-in-words + pharmacist sign line) renders one A4 page', () => {
+    const doc = buildPharmacyPdf({
+      clinic: 'Micro World Clinic', patientName: 'Kavitha', instructions: [], number: 'PH-2609-00001', format: 'a4',
+      lines: [{ id: 'x', drugId: 'd1', drugName: 'Amoclav-PF 625', form: 'tab', schedule: 'H1', batchId: 'b', batchNo: 'AC1', expiryDate: '2027-01-28', qty: 7, mrp: 22.4, total: 156.8, returnedQty: 0, hsnCode: '3004' }],
+      bill: { id: 'b', invoiceNumber: 'PH-2609-00001', subTotal: 140, discount: 0, totalTaxable: 140, totalCgst: 8.4, totalSgst: 8.4, totalTax: 16.8, roundOff: 0.2, totalPayable: 157, totalPaid: 157, balance: 0, status: 'paid', payments: [] },
+      practice: { pharmacyName: 'Micro World Pharmacy', address: '12 Anna Salai, Chennai', phone: '9840000000', gstin: '33ABCDE1234F1Z5' },
+    });
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
 });
 
 describe('small helpers', () => {
@@ -189,5 +205,18 @@ describe('small helpers', () => {
     expect(waitingFor('2026-09-30T09:48:00Z', now)).toBe('12 min');
     expect(waitingFor('2026-09-30T07:55:00Z', now)).toBe('2 h 5 min');
     expect(waitingFor('2026-09-27T10:00:00Z', now)).toBe('3 d');
+  });
+
+  it("today's summary never counts a \"bill later\" balance as collected (critic P2 #16)", () => {
+    const d = (status: string, total: number, paid: number) => ({ status, total, paid });
+    // One sale paid in full, one dispensed but unpaid ("Give, bill later"), one still a draft (excluded).
+    const s = todaySummary([d('completed', 500, 500), d('completed', 300, 0), d('draft', 200, 0)]);
+    expect(s).toEqual({ billed: 800, collected: 500, due: 300 });
+    // A partial payment: collected is capped at what was actually paid, never more than billed.
+    expect(todaySummary([d('completed', 100, 40)])).toEqual({ billed: 100, collected: 40, due: 60 });
+    // Nothing sold yet today.
+    expect(todaySummary([])).toEqual({ billed: 0, collected: 0, due: 0 });
+    // A cancelled sale counts toward neither billed nor collected.
+    expect(todaySummary([d('cancelled', 999, 0)])).toEqual({ billed: 0, collected: 0, due: 0 });
   });
 });

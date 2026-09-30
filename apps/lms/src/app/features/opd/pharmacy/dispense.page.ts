@@ -13,7 +13,7 @@ import { labToday } from '../../../shared/utils/lab-clock';
 import { shortSched } from '../shared/rx-schedule';
 import {
   PharmacyApi, type BatchRow, type DispenseLineInput, type DispenseView, type DrugBrief, type PayMode, type PickBatch,
-  type PharmacyDrugRow, type RxDetail, type RxLineView,
+  type PharmacyDrugRow, type PharmacyInvoiceHeader, type RxDetail, type RxLineView,
 } from './pharmacy.api';
 import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords, type CartLine } from './pharmacy-math';
 import { instructionFor, whatsAppText, type InstructionLine } from './pharmacy-instructions';
@@ -116,17 +116,20 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                           <div class="ph-sub">{{ brandLine(drug) }}{{ brandLine(drug) ? ' · ' : '' }}{{ sched(l) }}</div>
                           @if (drug && drug.id !== l.drug?.id) { <div class="ph-sub">Substituted for {{ l.drugName }}</div> }
                           @if (l.remaining <= 0) { <div class="ph-sub">{{ l.dispenseStatus === 'not_dispensed' ? 'Not given' : 'Already given' }}</div> }
+                          @else if (d.consultStatus !== 'completed') {
+                            <div class="ph-sub">{{ l.quantity }} {{ l.form }} prescribed — waiting on the doctor</div>
+                          }
                           @else if (subOptions(l).length > 1 && !s.skip) {
                             <div style="margin-top:6px;max-width:280px">
                               <pf-select size="sm" [options]="subOptions(l)" [value]="s.drugId ?? ''" (valueChange)="setDrug(l, $event)" placeholder="Give…"></pf-select>
                             </div>
                           }
-                          @if (!l.drug && !drug && l.remaining > 0) {
+                          @if (d.consultStatus === 'completed' && !l.drug && !drug && l.remaining > 0) {
                             <div style="margin-top:6px"><pf-pharmacy-drug-picker [down]="true" placeholder="Not in the drug master — pick the drug to give" (picked)="pickFree(l, $event)"></pf-pharmacy-drug-picker></div>
                           }
                         </td>
                         <td class="nd-num" data-l="Batch">
-                          @if (!drug || s.skip || l.remaining <= 0) { <span class="ph-muted">—</span> }
+                          @if (d.consultStatus !== 'completed' || !drug || s.skip || l.remaining <= 0) { <span class="ph-muted">—</span> }
                           @else if (pharmacistPick()) {
                             <pf-select size="sm" [options]="batchOptions(l)" [value]="s.batchId ?? ''" (valueChange)="setBatch(l, $event)" placeholder="Pick a batch"></pf-select>
                           } @else {
@@ -135,7 +138,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                           }
                         </td>
                         <td class="r" data-l="Qty">
-                          @if (l.remaining > 0 && !s.skip) {
+                          @if (d.consultStatus === 'completed' && l.remaining > 0 && !s.skip) {
                             <span class="ph-qty">
                               <button type="button" (click)="bump(l, -1)" [disabled]="s.qty <= 1" [attr.aria-label]="'Less ' + l.drugName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
                               <input type="number" inputmode="numeric" [value]="s.qty" [attr.aria-label]="'Quantity of ' + l.drugName" (change)="setQty(l, $any($event.target).value)" />
@@ -146,13 +149,13 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                               <div class="ph-sub pf-exp-amber">{{ s.qty - l.remaining }} more than prescribed ({{ l.quantity }})</div>
                               <input class="nd-input" type="text" style="font-size:12.5px;padding:4px 8px;margin-top:4px;width:180px" placeholder="Reason (required)" [value]="s.overrideReason" [attr.aria-label]="'Reason for giving more of ' + l.drugName" (input)="setOverrideReason(l, $any($event.target).value)" />
                             }
-                          } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : 0 }}</span> }
+                          } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : (d.consultStatus === 'completed' ? 0 : l.quantity) }}</span> }
                         </td>
-                        <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
-                        <td class="r" data-l="MRP">{{ drug && !s.skip && l.remaining > 0 ? inr(unitMrp(l)) : '' }}</td>
-                        <td class="r" data-l="Amount">{{ drug && !s.skip && l.remaining > 0 ? inr(lineAmount(l)) : '' }}</td>
+                        <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
+                        <td class="r" data-l="MRP">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(unitMrp(l)) : '' }}</td>
+                        <td class="r" data-l="Amount">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(lineAmount(l)) : '' }}</td>
                         <td class="ph-td-act">
-                          @if (l.remaining > 0) {
+                          @if (d.consultStatus === 'completed' && l.remaining > 0) {
                             <button type="button" class="nd-btn nd-btn--tertiary" (click)="toggleSkip(l)" [attr.aria-label]="(s.skip ? 'Give ' : 'Skip ') + l.drugName">{{ s.skip ? 'Give' : 'Skip' }}</button>
                           }
                         </td>
@@ -167,7 +170,17 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
             </div>
           </section>
 
-          @if (!done()) {
+          @if (!done() && d.consultStatus !== 'completed') {
+            <aside class="nd-card" aria-labelledby="ph-w-t">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+                <span class="nd-card__label" id="ph-w-t">Waiting on the doctor</span>
+              </header>
+              <div class="nd-card__body">
+                <p class="ph-sub">The doctor hasn't completed this prescription yet — there's nothing to give or bill until the consult is marked complete.</p>
+              </div>
+            </aside>
+          } @else if (!done()) {
             <aside class="nd-card" aria-labelledby="ph-b-t">
               <header class="nd-card__head">
                 <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
@@ -236,6 +249,21 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                 </span>
               </header>
               <div class="nd-card__body">
+                @if (dueNow(); as due) {
+                  <div class="ph-note" data-tone="warn" role="status">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                    <span>Billed later — {{ inr(due, false) }} still due.</span>
+                  </div>
+                  <div class="nd-field">
+                    <span class="nd-field__lbl" id="ph-cp-l">Collect payment</span>
+                    <div class="nd-seg" role="radiogroup" aria-labelledby="ph-cp-l" style="width:100%">
+                      @for (m of modes; track m.v) {
+                        <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
+                      }
+                    </div>
+                  </div>
+                  <button type="button" class="nd-btn nd-btn--primary" style="width:100%" [disabled]="collecting()" [pfBusy]="collecting()" pfBusyLabel="Collecting…" (click)="collectPayment()">Collect {{ inr(due, false) }}</button>
+                }
                 @for (i of instructions(); track $index) {
                   <div class="ph-instr">
                     <div class="ph-instr__t"><b>{{ i.name }}</b>{{ i.say }}</div>
@@ -286,6 +314,9 @@ export class PharmacyDispensePage {
   protected readonly mode = signal<PayMode>('upi');
   protected readonly saving = signal(false);
   protected readonly done = signal<DispenseView | null>(null);
+  /** Pay later (P0 money gap): a "Give, bill later" sale still carries a
+   *  balance on its bill — collect it from the same instructions screen. */
+  protected readonly collecting = signal(false);
   private readonly today = labToday();
   protected readonly modes: { v: PayMode; l: string }[] = [{ v: 'cash', l: 'Cash' }, { v: 'upi', l: 'UPI' }, { v: 'card', l: 'Card' }];
   protected readonly inr = inr;
@@ -482,15 +513,45 @@ export class PharmacyDispensePage {
     if (!b) return 'Given';
     return b.balance <= 0 ? 'Paid ' + inr(b.totalPaid, false) : 'Due ' + inr(b.balance, false);
   });
+  /** Balance still owed on the just-given sale (null once it's fully paid). */
+  protected readonly dueNow = computed(() => {
+    const b = this.done()?.bill;
+    return b && b.balance > 0 ? b.balance : null;
+  });
+
+  protected collectPayment(): void {
+    const v = this.done();
+    const due = this.dueNow();
+    if (!v || !due || this.collecting()) return;
+    this.collecting.set(true);
+    this.api.payDispense(v.id, { mode: this.mode(), amount: due }).subscribe({
+      next: updated => { this.collecting.set(false); this.done.set(updated); this.toast.success(`${inr(due, false)} collected`); },
+      error: e => { this.collecting.set(false); this.toast.error(errText(e)); },
+    });
+  }
+
+  /** The GST tax-invoice letterhead (critic item #4) — fetched once, on the
+   *  first print, and reused after (branch GSTIN doesn't change mid-session). */
+  private readonly practice = signal<PharmacyInvoiceHeader | null>(null);
 
   protected print(): void {
+    if (this.practice()) { this.printNow(); return; }
+    this.api.invoiceHeader().subscribe({
+      next: h => { this.practice.set(h); this.printNow(); },
+      error: () => this.printNow(), // print still works without the letterhead
+    });
+  }
+
+  private printNow(): void {
     const v = this.done(), d = this.rx();
     if (!v || !d) return;
     printPharmacySheet({
       clinic: this.clinic(), patientName: d.patient.name, patientMeta: d.patient.meta, doctor: d.doctor.name, doctorRegNo: d.doctorRegNo,
       number: v.bill?.invoiceNumber ?? v.number, instructions: this.instructions(), lines: v.lines, bill: v.bill,
+      practice: this.practice(),
     });
   }
+
   protected afterSend(): void { this.toast.success('WhatsApp opened with the instructions'); }
   protected back(): void { void this.router.navigateByUrl('/opd/pharmacy'); }
 }

@@ -104,7 +104,13 @@ export interface DispenseLineView {
   overrideReason?: string | null;
   /** night/pharm — critic #8: strength + GST slab for the "generic-first" bill print, and what was ORDERED when a substitute was given. */
   strength?: string | null; taxSlab?: number; rxDrugName?: string | null;
+  /** night/money — the GST tax invoice print's per-line HSN (critic item #4). */
+  hsnCode?: string | null;
 }
+
+/** night/money — the GST tax invoice print's letterhead: name/address/phone off
+ *  the branch, GSTIN off the branch's GST config (the ONE GST home). */
+export interface PharmacyInvoiceHeader { pharmacyName: string; address?: string | null; phone?: string | null; email?: string | null; gstin?: string | null }
 
 export interface BillView {
   id: string; invoiceNumber?: string | null; subTotal: number; discount: number; totalTaxable: number; totalCgst: number;
@@ -176,6 +182,8 @@ export class PharmacyApi {
   // Settings
   settings(): Observable<PharmacyConfig> { return this.api.get(`${P}/settings`); }
   saveSettings(s: PharmacyConfig): Observable<PharmacyConfig> { return this.api.put(`${P}/settings`, s); }
+  /** The GST tax invoice print's letterhead (name/address/phone/GSTIN). */
+  invoiceHeader(): Observable<PharmacyInvoiceHeader> { return this.api.get(`${P}/invoice-header`); }
 
   // Rx
   rxQueue(): Observable<RxQueueRow[]> { return this.api.get(`${P}/rx-queue`); }
@@ -188,6 +196,9 @@ export class PharmacyApi {
     return this.api.get(`${P}/dispenses${qs({ date, kind, status })}`);
   }
   dispense(id: string): Observable<DispenseView> { return this.api.get(`${P}/dispenses/${id}`); }
+  /** Collect a later payment on a DISPENSED sale (an Rx given "bill later", or
+   *  any completed sale still carrying a balance). */
+  payDispense(id: string, body: PaymentBody): Observable<DispenseView> { return this.api.post(`${P}/dispenses/${id}/pay`, body); }
 
   // Counter
   counterCreate(body: CounterBody): Observable<DispenseView> { return this.api.post(`${P}/counter`, body); }

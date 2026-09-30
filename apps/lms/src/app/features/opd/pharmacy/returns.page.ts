@@ -67,7 +67,10 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
                 @for (s of sales(); track s.id) {
                   <button type="button" class="ph-row press" (click)="openSale(s)">
                     <span class="ph-row__main"><span class="ph-row__name">{{ s.customerName || 'Customer' }}</span><span class="ph-row__meta nd-num">{{ s.number }} · {{ s.lines }} {{ s.lines === 1 ? 'item' : 'items' }}</span></span>
-                    <span class="ph-row__end nd-num">{{ inr(s.total) }}</span>
+                    <span class="ph-row__end">
+                      <span class="nd-num">{{ inr(s.total) }}</span>
+                      <span class="ph-dot" [attr.data-tone]="s.paid >= s.total ? 'done' : 'warn'">{{ s.paid >= s.total ? 'Paid' : 'Due ' + inr(s.total - s.paid, false) }}</span>
+                    </span>
                   </button>
                 } @empty { <p class="ph-sub">No completed sales that day.</p> }
               } @else {
@@ -87,7 +90,7 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
                 </div>
                 @if (refund() != null) {
                   <div class="ph-note" role="status"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    <span>Back in stock.@if (creditNote()) { Refunded {{ inr(refunded()) }} · credit note {{ creditNote() }}.} @else { Nothing was paid on this bill, so nothing is refunded.}</span></div>
+                    <span>Back in stock.@if (creditNote()) { Refunded {{ inr(refunded()) }} · credit note {{ creditNote() }}.} @else { Nothing was paid on this bill — it's reduced to {{ inr(sale()?.bill?.totalPayable ?? 0) }} instead of a refund.}</span></div>
                 }
               }
             } @else {
