@@ -7,6 +7,7 @@ import { ReportColumn, ResolvedReportLayout } from '../../../shared/models/repor
 import { firstValueFrom } from 'rxjs';
 import { ReportPdfInput, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { resolveReportLayouts } from '../../../shared/utils/report-layouts';
+import { sampleSeriesValues } from '../../../shared/utils/report-chart/report-chart.sample';
 
 /** A profile member fed to the preview so a PROFILE previews exactly as it
  *  prints: one fabricated snapshot row per member, resolved through the same
@@ -20,6 +21,10 @@ export interface PreviewProfileMember {
   /** The member's OWN department (a package has none — its members print
    *  under theirs). Falls back to the previewed test's department. */
   department?: string | null;
+  /** Timed-series draw (minutes from the first draw) — the preview row then
+   *  carries it and plausible sample values, so a report chart over the time
+   *  points shows (docs/REPORT-CHARTS.md). */
+  offsetMin?: number | null;
 }
 
 /**
@@ -273,10 +278,14 @@ export class ReportPdfPreviewComponent implements OnDestroy {
       // PROFILE: one fabricated row per member, resolved through the same
       // helper the real report uses — so the profile merge, notes rule and
       // the profile's own column override all exercise the true path.
+      const seriesVals = members.some(m => m.offsetMin != null) ? sampleSeriesValues(testId, members) : null;
       snapshotTests = members.map(m => {
-        const vals = ReportPdfPreviewComponent.valuesFor(
-          ReportPdfPreviewComponent.namesFromParametersJson(m.parameters));
+        const vals = {
+          ...ReportPdfPreviewComponent.valuesFor(ReportPdfPreviewComponent.namesFromParametersJson(m.parameters)),
+          ...(seriesVals?.get(`${m.id}@${m.offsetMin}`) ?? {}),
+        };
         return {
+          ...(m.offsetMin != null ? { repeatOffsetMin: m.offsetMin } : {}),
           testId: m.id,
           name: m.name,
           department: m.department || this.department() || 'Department',

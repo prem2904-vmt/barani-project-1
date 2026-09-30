@@ -1878,3 +1878,16 @@ Ranges   pf-range-table[param][unit](bandsChange) · range-insight.ts (bandZones
          flag-conditions.ts (FLAG_CONDITIONS · operator 'flag' · evaluateRules · analyzeLines)
 Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected · nd.no-truncate · nd.reduced-motion
 ```
+
+## 26. Report chart block (Test Master)
+
+A **Chart** is a block of the Printed report print-order list
+(`pf-report-structure` → `pf-report-chart-editor`), available on ANY test or
+profile — see `docs/REPORT-CHARTS.md`. The block body is the editor (kit
+fields, `.nd-seg` for Type / Across / Size, `pf-select` for a line's unit,
+violet `.nd-toggle` switches, kit tick rows for chosen values) with a live
+preview drawn from sample values by the SAME geometry the PDF paints
+(`pf-report-chart`, inline SVG on a white paper surface in light and dark).
+The preview sits beside the form (sticky) at ≥760px of block width and
+ABOVE it below that. Prints / Hidden and ↑ / ↓ are the block's usual header
+controls. The PDF draws the chart as vectors and never splits it.
