@@ -1,20 +1,14 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { OpdStubPageComponent } from '../shared/opd-stub-page.component';
+import { OpdVitalsWorkspaceComponent } from './vitals-workspace.component';
 
-/**
- * OPD FOUNDATION STUB — owned by Agent B (vitals). Routed and gated already
- * (features/opd/opd.routes.ts); replace this component's body, keep the
- * class name + file path (the route imports them).
- */
+/** OPD → Vitals station (`/opd/vitals`) — AGENT B. The queue + capture
+ *  workspace, opening the oldest patient waiting for vitals. */
 @Component({
   selector: 'pf-opd-vitals-station',
   standalone: true,
-  imports: [OpdStubPageComponent],
+  imports: [OpdVitalsWorkspaceComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<pf-opd-stub-page [title]="title" [subtitle]="subtitle" [plan]="plan"></pf-opd-stub-page>`,
+  template: `<pf-opd-vitals-workspace></pf-opd-vitals-workspace>`,
+  styles: [':host { display: block; height: 100%; min-height: 0; }'],
 })
-export class OpdVitalsStationPage {
-  readonly title = "Vitals station";
-  readonly subtitle = "Patients waiting for vitals.";
-  readonly plan: string[] = ["Queue for the vitals station", "Opens the capture screen"];
-}
+export class OpdVitalsStationPage {}
