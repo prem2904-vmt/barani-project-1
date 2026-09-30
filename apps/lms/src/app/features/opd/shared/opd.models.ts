@@ -4,8 +4,13 @@
  * import from here; a change here is a CONTRACT change — coordinate through the
  * integrator (and change the C# side in the same PR).
  */
-import type { RxSchedule } from './rx-schedule';
+import type { RxSchedule, DrugForm } from './rx-schedule';
 import type { OpdFormDoc } from '../admin/forms/form-schema';
+
+// DrugForm is a SHARED wire vocabulary — the ONE definition is rx-schedule.ts
+// FORMS (mirrored server-side by RxScheduleMath.AllForms); re-exported here
+// so every OPD/pharmacy contract importing from opd.models.ts stays in sync.
+export type { DrugForm };
 
 // Form schema v2 (Agent A) is THE consult-form contract — it superseded the
 // foundation's v1 OpdFormSchema / OpdFormField (integrator). Types + pure
@@ -35,7 +40,6 @@ export type OpdBillKind = 'consult' | 'pharmacy';
 export type OpdBillStatus = 'draft' | 'pending' | 'partial' | 'paid' | 'cancelled';
 export type PharmacyDispenseKind = 'rx' | 'walk_in';
 export type DrugSchedule = 'none' | 'G' | 'H' | 'H1' | 'X';
-export type DrugForm = 'tab' | 'sachet' | 'syrup' | 'drops' | 'spray' | 'inhaler' | 'cream';
 
 // ── Admin masters (Agent A) ──────────────────────────────────────────────
 export interface OpdDepartment { id: string; name: string; code: string; defaultFormId?: string | null; sortOrder: number; isActive: boolean; }

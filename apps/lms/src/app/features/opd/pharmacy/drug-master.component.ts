@@ -176,10 +176,11 @@ export class PharmacyDrugMasterComponent {
     const key = `new-${++this.seq}`;
     const row: DrugGridRow = {
       key, isNew: true, id: key, rowId: key, catalogKey: '', origin: 'local', isMaster: false, name: 'New drug', generic: '', strength: '',
-      form: 'tab' as DrugForm, unit: 'tab', schedule: 'none', hsnCode: '3004', taxSlab: 12, defaultMrp: 0, aliases: [], isActive: true, onHand: 0,
+      // GST default 5% (post 22-Sep-2025 rates — PharmacyRules.DefaultTaxSlab server-side).
+      form: 'tab' as DrugForm, unit: 'tab', schedule: 'none', hsnCode: '3004', taxSlab: 5, defaultMrp: 0, aliases: [], isActive: true, onHand: 0,
     };
     this.all.update(a => [row, ...a]);
-    this.dirty.update(m => new Map(m).set(key, { name: row.name, generic: '', form: row.form, schedule: row.schedule, taxSlab: 12, hsnCode: '3004', unit: 'tab', defaultMrp: 0 }));
+    this.dirty.update(m => new Map(m).set(key, { name: row.name, generic: '', form: row.form, schedule: row.schedule, taxSlab: 5, hsnCode: '3004', unit: 'tab', defaultMrp: 0 }));
     setTimeout(() => this.grid?.startEditingCell({ rowIndex: 0, colKey: 'generic' }), 50);
   }
 

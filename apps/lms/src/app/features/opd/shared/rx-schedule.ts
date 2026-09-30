@@ -54,8 +54,11 @@ export interface RxLine {
   food?: RxFood;
 }
 
-export type DrugForm = 'tab' | 'sachet' | 'syrup' | 'drops' | 'spray' | 'inhaler' | 'cream';
-export type SiteKind = 'eye' | 'ear' | 'nose' | 'skin';
+export type DrugForm =
+  | 'tab' | 'cap' | 'sachet' | 'vaginal_tab' | 'pessary' | 'injection'
+  | 'syrup' | 'drops' | 'spray' | 'inhaler' | 'cream' | 'gel' | 'ointment' | 'lotion' | 'solution'
+  | 'shampoo' | 'soap' | 'powder' | 'gargle' | 'mouthwash';
+export type SiteKind = 'eye' | 'ear' | 'nose' | 'skin' | 'mouth' | 'vagina';
 
 /** What the model needs to know about a drug (a projection of the Drug master). */
 export interface RxDrugRef {
@@ -74,7 +77,7 @@ export interface RxDrugRef {
 }
 
 export interface FormDef {
-  verb: 'take' | 'put' | 'use' | 'apply';
+  verb: 'take' | 'put' | 'use' | 'apply' | 'insert' | 'give';
   one: string;
   many: string;
   doses: number[];
@@ -82,16 +85,38 @@ export interface FormDef {
   site?: boolean;
   /** Dispensed as one pack (bottle / tube / inhaler) — quantity is always 1. */
   pack?: boolean;
+  /** Said as just its unit word ("a thin layer"), never a counted number
+   *  (creams / gels / ointments / lotions / powders). Quantity math (packs
+   *  vs. units) is unchanged — this only affects the plain-language line. */
+  noDoseCount?: boolean;
 }
 
+/** ENT / Derm / Gynae / general OPD dose-form vocabulary (critic §1 #5) — the
+ *  ONE source; mirrored server-side by Services/Opd/RxSchedule.cs
+ *  (RxScheduleMath.AllForms) and Services/Opd/Pharmacy/PharmacyRules.cs. */
 export const FORMS: Readonly<Record<DrugForm, FormDef>> = {
-  tab:     { verb: 'take',  one: 'tablet', many: 'tablets', doses: [0.5, 1, 2], food: true },
-  sachet:  { verb: 'take',  one: 'sachet', many: 'sachets', doses: [1, 2], food: true },
-  syrup:   { verb: 'take',  one: 'ml', many: 'ml', doses: [5, 10, 15], food: true, pack: true },
-  drops:   { verb: 'put',   one: 'drop', many: 'drops', doses: [1, 2, 3], site: true, pack: true },
-  spray:   { verb: 'use',   one: 'spray', many: 'sprays', doses: [1, 2], site: true, pack: true },
-  inhaler: { verb: 'use',   one: 'puff', many: 'puffs', doses: [1, 2], pack: true },
-  cream:   { verb: 'apply', one: 'thin layer', many: 'thin layer', doses: [1], site: true, pack: true },
+  // Countable
+  tab:         { verb: 'take',   one: 'tablet', many: 'tablets', doses: [0.5, 1, 2], food: true },
+  cap:         { verb: 'take',   one: 'capsule', many: 'capsules', doses: [1, 2], food: true },
+  sachet:      { verb: 'take',   one: 'sachet', many: 'sachets', doses: [1, 2], food: true },
+  vaginal_tab: { verb: 'insert', one: 'vaginal tablet', many: 'vaginal tablets', doses: [1], site: true },
+  pessary:     { verb: 'insert', one: 'pessary', many: 'pessaries', doses: [1], site: true },
+  injection:   { verb: 'give',   one: 'injection', many: 'injections', doses: [1] },
+  // Pack (dispensed as one pack / tube / bottle — quantity is always 1)
+  syrup:     { verb: 'take',  one: 'ml', many: 'ml', doses: [5, 10, 15], food: true, pack: true },
+  drops:     { verb: 'put',   one: 'drop', many: 'drops', doses: [1, 2, 3], site: true, pack: true },
+  spray:     { verb: 'use',   one: 'spray', many: 'sprays', doses: [1, 2], site: true, pack: true },
+  inhaler:   { verb: 'use',   one: 'puff', many: 'puffs', doses: [1, 2], pack: true },
+  cream:     { verb: 'apply', one: 'a thin layer', many: 'a thin layer', doses: [1], site: true, pack: true, noDoseCount: true },
+  gel:       { verb: 'apply', one: 'a thin layer', many: 'a thin layer', doses: [1], site: true, pack: true, noDoseCount: true },
+  ointment:  { verb: 'apply', one: 'a thin layer', many: 'a thin layer', doses: [1], site: true, pack: true, noDoseCount: true },
+  lotion:    { verb: 'apply', one: 'a thin layer', many: 'a thin layer', doses: [1], site: true, pack: true, noDoseCount: true },
+  solution:  { verb: 'apply', one: 'ml', many: 'ml', doses: [1, 2, 5], site: true, pack: true },
+  shampoo:   { verb: 'use',   one: 'a wash', many: 'a wash', doses: [1], pack: true, noDoseCount: true },
+  soap:      { verb: 'use',   one: 'a wash', many: 'a wash', doses: [1], pack: true, noDoseCount: true },
+  powder:    { verb: 'apply', one: 'a light dusting', many: 'a light dusting', doses: [1], site: true, pack: true, noDoseCount: true },
+  gargle:    { verb: 'use',   one: 'a gargle', many: 'a gargle', doses: [1], site: true, pack: true, noDoseCount: true },
+  mouthwash: { verb: 'use',   one: 'a rinse', many: 'a rinse', doses: [1], site: true, pack: true, noDoseCount: true },
 };
 
 export const SITES: Readonly<Record<SiteKind, string[]>> = {
@@ -99,6 +124,8 @@ export const SITES: Readonly<Record<SiteKind, string[]>> = {
   ear: ['Both ears', 'Right ear', 'Left ear'],
   nose: ['Both nostrils', 'Right nostril', 'Left nostril'],
   skin: ['Affected area', 'Face', 'Scalp', 'Left side', 'Right side', 'Both sides'],
+  mouth: ['Mouth', 'Throat'],
+  vagina: ['Vagina'],
 };
 
 /** Standard durations offered by the pickers (days). */
@@ -251,7 +278,7 @@ const ordinal = (n: number) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 
 
 export const L10N: Readonly<Record<string, RxPhrases>> = {
   en: {
-    verb: { take: 'Take', put: 'Put', use: 'Use', apply: 'Apply' },
+    verb: { take: 'Take', put: 'Put', use: 'Use', apply: 'Apply', insert: 'Insert', give: 'Give' },
     slots3: ['in the morning', 'in the afternoon', 'at night'],
     slots4: ['in the morning', 'at noon', 'in the evening', 'at night'],
     nTimes: n => (n === 1 ? 'once a day' : n === 2 ? 'twice a day' : n + ' times a day'),
@@ -279,7 +306,7 @@ const phrases = (lang: string) => L10N[lang] ?? L10N['en'];
 
 function doseWords(d: Pick<RxDrugRef, 'form'>, n: number, Lx: RxPhrases): string {
   const f = formOf(d);
-  if (d.form === 'cream') return Lx.thin;
+  if (f.noDoseCount) return f.one;
   return (n === 0.5 ? Lx.half : n) + ' ' + (n > 1 ? f.many : f.one);
 }
 
@@ -362,13 +389,19 @@ export function qtyWords(l: RxLine, drug: Pick<RxDrugRef, 'form' | 'unit'>, star
 }
 
 const SHORTU: Record<Exclude<DrugForm, 'cream'>, [string, string]> = {
-  tab: ['tab', 'tabs'], sachet: ['sachet', 'sachets'], syrup: ['ml', 'ml'],
-  drops: ['drop', 'drops'], spray: ['spray', 'sprays'], inhaler: ['puff', 'puffs'],
+  tab: ['tab', 'tabs'], cap: ['cap', 'caps'], sachet: ['sachet', 'sachets'],
+  vaginal_tab: ['tab', 'tabs'], pessary: ['pessary', 'pessaries'], injection: ['inj', 'inj'],
+  syrup: ['ml', 'ml'], drops: ['drop', 'drops'], spray: ['spray', 'sprays'], inhaler: ['puff', 'puffs'],
+  gel: ['application', 'applications'], ointment: ['application', 'applications'], lotion: ['application', 'applications'],
+  solution: ['ml', 'ml'], shampoo: ['wash', 'washes'], soap: ['wash', 'washes'], powder: ['dusting', 'dustings'],
+  gargle: ['gargle', 'gargles'], mouthwash: ['rinse', 'rinses'],
 };
 
-/** Grid dose cell, e.g. "½ tab", "2 sprays", "Thin layer". */
+/** Grid dose cell, e.g. "½ tab", "2 sprays", "Thin layer", "A wash". */
 export function doseShort(d: Pick<RxDrugRef, 'form'>, n: number): string {
   if (d.form === 'cream') return 'Thin layer';
+  const f = formOf(d);
+  if (f.noDoseCount) return f.one.charAt(0).toUpperCase() + f.one.slice(1);
   const u = SHORTU[d.form as Exclude<DrugForm, 'cream'>] || SHORTU.tab;
   return (n === 0.5 ? '½' : n) + ' ' + (n > 1 ? u[1] : u[0]);
 }
