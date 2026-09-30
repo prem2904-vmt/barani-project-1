@@ -1,3 +1,4 @@
+import { sameDoctorOpenVisit } from './book-visit.page';
 import { TestBed } from '@angular/core/testing';
 import { OpdBookVisitPage } from './book-visit.page';
 import { DESK, PATIENT, QUOTE_D1, TESTS, VISIT, flush, harness, memoryStorage } from './opd-b.spec-helpers';
@@ -332,5 +333,17 @@ describe('New visit — choose-mode specimen (the KOH Mount / C&S fix)', () => {
     r.c.onPaid({ mode: 'upi' });
     await flush();
     expect(r.router.navigate).toHaveBeenCalled();
+  });
+});
+
+describe('sameDoctorOpenVisit (duplicate-visit nudge)', () => {
+  const row = (o: Partial<import('./desk.models').OpdVisitRow>) => ({ id: 'v', patientId: 'p', patientName: 'P', doctorUserId: 'd1', doctorName: 'Dr. A',
+    visitDate: '2026-09-30', token: 3, tokenLabel: 'E3', status: 'waiting', isFollowUp: false, charged: 0, hasLabOrder: false, createdAt: '', vitalsFlagged: false, ...o }) as import('./desk.models').OpdVisitRow;
+  it('finds an open visit with the same doctor', () => expect(sameDoctorOpenVisit([row({})], 'd1')?.tokenLabel).toBe('E3'));
+  it('ignores other doctors, closed visits and no doctor', () => {
+    expect(sameDoctorOpenVisit([row({ doctorUserId: 'd2' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({ status: 'completed' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({ status: 'cancelled' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({})], null)).toBeNull();
   });
 });

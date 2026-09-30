@@ -27,6 +27,7 @@ import { OpdVitalsFormComponent } from '../vitals/vitals-form.component';
 import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
 import { missingSpecimens, specimenPayload, type OpdInvestigationItem, type OpdTestLookup } from '../shared/opd-specimen';
 import { OpdDeskApi } from './desk-api.service';
+import type { OpdVisitRow } from './desk.models';
 import type { DeskData, DeskDepartment, DeskDoctor, DeskQuote, ServiceQuote } from './desk.models';
 import {
   type LabLine, deskBillPreview, draftKey, feeLineLabel, paymentParts, parseOverride, readDraft, waitLabel, waitTone, writeDraft,
@@ -123,6 +124,11 @@ export class OpdBookVisitPage {
   readonly doctors = computed(() => this.data()?.doctors ?? []);
   readonly departments = computed(() => this.data()?.departments ?? []);
   readonly doctor = computed<DeskDoctor | null>(() => this.doctors().find(d => d.id === this.doctorId()) ?? null);
+  /** Today's open visits of the picked patient (duplicate-visit nudge). */
+  readonly patientToday = signal<OpdVisitRow[]>([]);
+  /** An open visit today with the SAME doctor — the desk should reopen it, not book twice. */
+  readonly duplicateVisit = computed<OpdVisitRow | null>(() =>
+    sameDoctorOpenVisit(this.patientToday(), this.doctorId()));
   readonly department = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.departmentId()) ?? null);
   /** Doctors tab: department chip filter, then the band's catalogue search. */
   readonly deptFilter = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.deptFilterId()) ?? null);
@@ -222,6 +228,11 @@ export class OpdBookVisitPage {
     });
 
     // Re-quote whenever the doctor or the patient changes.
+    effect(() => {
+      const pid = this.patient()?.id ?? null;
+      if (!pid) { this.patientToday.set([]); return; }
+      this.desk.visits({}).subscribe({ next: rows => this.patientToday.set((rows ?? []).filter(r => r.patientId === pid)), error: () => this.patientToday.set([]) });
+    });
     effect(() => {
       const doc = this.doctorId();
       const pid = this.patient()?.id ?? null;
@@ -494,4 +505,10 @@ export class OpdBookVisitPage {
     this.toasts.success('Saved as draft');
     void this.router.navigateByUrl('/opd/desk');
   }
+}
+
+/** Pure: an open (not cancelled / no-show / completed) visit today with this doctor. */
+export function sameDoctorOpenVisit(rows: readonly OpdVisitRow[], doctorId: string | null): OpdVisitRow | null {
+  if (!doctorId) return null;
+  return rows.find(r => r.doctorUserId === doctorId && !['cancelled', 'no_show', 'completed'].includes(r.status)) ?? null;
 }

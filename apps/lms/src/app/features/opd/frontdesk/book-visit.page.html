@@ -297,6 +297,12 @@
               @if (!service() && !labTests().length) {
                 <p class="pf-ov-muted pf-ov-billempty">The bill fills in as you pick the doctor and the visit purpose.</p>
               }
+              @if (duplicateVisit(); as dup) {
+                <div class="pf-ov-dup" role="status">
+                  <strong>Already booked today</strong> — token {{ dup.tokenLabel }} with {{ dup.doctorName }} ({{ dup.status === 'in_consult' ? 'in consult' : dup.status }}).
+                  <a class="pf-ov-duplink" [routerLink]="['/opd/visit', dup.id]">Open that visit</a>
+                </div>
+              }
             </div>
 
             @if (service(); as s) {
