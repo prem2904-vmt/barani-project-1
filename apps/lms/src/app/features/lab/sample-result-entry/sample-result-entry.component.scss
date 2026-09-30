@@ -243,6 +243,23 @@
 /* How a calculated value got there — a neutral badge. */
 .pf-sre__calc-chip { background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
 .pf-sre__calc-chip[data-kind='na'] { background: transparent; color: var(--text-muted); border-style: dashed; }
+/* Analyzer prefill: a neutral source badge (violet mark), dashed once the
+   tech changed the value; the analyzer's H/L flags as small chips. */
+.pf-sre__an-chip {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 7px; min-height: 18px;
+  font-size: 10.5px; font-weight: 500; border-radius: 999px; vertical-align: middle; white-space: normal;
+  background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line);
+}
+.pf-sre__an-chip > svg { flex: none; color: var(--violet-text, #7c3aed); }
+.pf-sre__an-chip[data-kind='edited'] { background: transparent; border-style: dashed; color: var(--text-tertiary); }
+.pf-sre__an-flag {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; min-width: 18px; height: 18px; padding: 0 5px;
+  font-size: 10.5px; font-weight: 600; border-radius: 999px; vertical-align: middle;
+  background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line);
+}
+.pf-sre__an-flag[data-flag='H'] { background: rgba(245, 158, 11, 0.14); color: var(--amber-text, #b45309); border-color: rgba(245, 158, 11, 0.4); }
+.pf-sre__an-flag[data-flag='L'] { background: rgba(59, 130, 246, 0.14); color: var(--blue-text, #1d4ed8); border-color: rgba(59, 130, 246, 0.35); }
+.pf-sre-run { min-width: 220px; }
 .pf-sre__param-flag {
   display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
   width: 16px; height: 16px; margin-left: 6px; border-radius: 999px;

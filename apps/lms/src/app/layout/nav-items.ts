@@ -374,6 +374,12 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'lab'
   },
   {
+    // Analyzer runs that matched no tube (attach to a sample) + QC runs.
+    id: 'analyzer-results', label: 'Analyzer results', href: '/lab/analyzer-results',
+    iconPath: ['M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z', 'M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2'],
+    module: 'lab'
+  },
+  {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
   },
