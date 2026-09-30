@@ -1,6 +1,6 @@
 import {
-  OpdQuestion, answerText, conditionMet, conditionSources, isAnswered, isWide, missingRequired, normalizeSchema, printRows,
-  sampleAnswers, slugKey, typeName, visibleQuestions,
+  OpdQuestion, answerText, computeCalc, conditionMet, conditionSources, isAnswered, isWide, missingRequired, normalizeSchema,
+  normalizeQuestion, printRows, sampleAnswers, slugKey, typeName, visibleQuestions,
 } from './form-schema';
 
 const Q = (o: Partial<OpdQuestion> & { key: string }): OpdQuestion => ({ label: o.key, type: 'short', print: true, ...o });
@@ -124,5 +124,51 @@ describe('form schema — answers in plain words and printing', () => {
     expect(isWide(ENT[1])).toBe(false);
     expect(isWide(ENT[0])).toBe(true);
     expect(isWide(ENT[3])).toBe(true);
+  });
+});
+
+// critic §1 #6 — computed questions (EDD/POG for Gynae, PTA for ENT audiometry).
+describe('form schema — calc (edd/pog/pta)', () => {
+  const lmp = Q({ key: 'lmp', label: 'LMP', type: 'date' });
+  const edd = Q({ key: 'edd', label: 'EDD', type: 'calc', formula: 'edd', from: 'lmp', required: true });
+  const pog = Q({ key: 'pog', label: 'POG', type: 'calc', formula: 'pog', from: 'lmp' });
+  const pta = Q({
+    key: 'pta_r', label: 'PTA average (R)', type: 'calc', formula: 'pta', from: 'aud', row: 'Right AC',
+  });
+  const audTable = Q({ key: 'aud', label: 'PTA', type: 'table', unit: 'dB', rows: ['Right AC', 'Left AC'], cols: ['250', '500', '1000', '2000', '4000', '8000'] });
+
+  it('a calc question is never required, even if the input asked for it', () => {
+    expect(normalizeQuestion({ key: 'edd', label: 'EDD', type: 'calc', formula: 'edd', from: 'lmp', required: true })?.required).toBe(false);
+  });
+
+  it('edd = LMP + 280 days (Naegele), crossing a month and a leap year', () => {
+    expect(computeCalc(edd, lmp, { lmp: '2026-01-01' })).toBe('2026-10-08');          // ordinary year, crosses Jan→Oct
+    expect(computeCalc(edd, lmp, { lmp: '2024-01-01' })).toBe('2024-10-07');          // 2024 is a leap year (Feb 29 inside the window)
+    expect(computeCalc(edd, lmp, { lmp: '2026-06-15' })).toBe('2027-03-22');          // crosses a year boundary
+  });
+
+  it('edd is blank until LMP is set, and ignores a malformed date', () => {
+    expect(computeCalc(edd, lmp, {})).toBe('');
+    expect(computeCalc(edd, lmp, { lmp: 'not-a-date' })).toBe('');
+  });
+
+  it('pog = weeks + days from LMP to the anchor date (visit date, else today)', () => {
+    expect(computeCalc(pog, lmp, { lmp: '2026-08-01' }, '2026-09-30')).toBe('8w 4d');  // 60 days
+    expect(computeCalc(pog, lmp, { lmp: '2026-09-30' }, '2026-09-30')).toBe('0w 0d');  // booking day itself
+    expect(computeCalc(pog, lmp, { lmp: '2026-10-01' }, '2026-09-30')).toBe('');       // LMP after the anchor ⇒ blank, not negative
+  });
+
+  it('pta averages the 500/1000/2000 Hz cells of the named row, blank when a cell is missing', () => {
+    const full = { aud: [['20', '25', '30', '35', '40', '45'], ['', '', '', '', '', '']] };
+    expect(computeCalc(pta, audTable, full)).toBe('30');   // (25+30+35)/3
+    const missing = { aud: [['20', '25', '', '35', '40', '45'], []] };
+    expect(computeCalc(pta, audTable, missing)).toBe('');  // the 1000 Hz cell is blank ⇒ no partial average
+    expect(computeCalc(pta, audTable, {})).toBe('');        // no table answered yet
+  });
+
+  it('pta needs a table source and a real row', () => {
+    expect(computeCalc(pta, lmp, { aud: [['20', '25', '30']] })).toBe('');             // wrong source type
+    const noRow = Q({ ...pta, row: undefined });
+    expect(computeCalc(noRow, audTable, { aud: [['20', '25', '30', '35', '40', '45']] })).toBe('');
   });
 });

@@ -3,8 +3,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import { NdDateComponent } from '../../../../../shared/components/nd-date/nd-date.component';
 import { PfSelectOption, SelectComponent } from '../../../../../shared/primitives/select.component';
 import {
-  OpdAnswers, OpdMark, OpdMediaRef, OpdQuestion, OpdSided, Side, YES_NO, allQuestions, conditionMet, isWide, normalizeQuestion,
-  normalizeSchema, printRows, typeName,
+  OpdAnswers, OpdMark, OpdMediaRef, OpdQuestion, OpdSided, Side, YES_NO, allQuestions, computeCalc, conditionMet, isWide,
+  normalizeQuestion, normalizeSchema, printRows, typeName,
 } from '../form-schema';
 import type { BuilderAction } from '../form-builder-ops';
 
@@ -248,6 +248,9 @@ const SHAPES: Record<string, string[]> = {
             </tbody>
           </table></span>
         }
+        @case ('calc') {
+          <span class="nd-input ofr-static nd-num ofr-calc" [attr.aria-label]="aria(q, side) + ', calculated'">{{ calcValue(q) || '—' }}</span>
+        }
       }
     </ng-template>
   `,
@@ -356,6 +359,8 @@ export class OpdFormRendererComponent {
   readonly showHidden = input<boolean | null>(null);
   /** print: also print unanswered questions as blank lines (an empty form). */
   readonly printBlanks = input<boolean>(false);
+  /** The anchor "today" for a `calc` pog field (the visit date); defaults to today. */
+  readonly visitDate = input<string | null>(null);
 
   readonly answersChange = output<OpdAnswers>();
   readonly mediaRequest = output<OpdMediaRequest>();
@@ -400,6 +405,11 @@ export class OpdFormRendererComponent {
   shape(q: OpdQuestion): string[] { return SHAPES[q.shape ?? 'body'] ?? SHAPES['body']; }
   cell(v: unknown, r: number, c: number): string { const t = v as unknown[][]; return t?.[r]?.[c] == null ? '' : String(t[r][c]); }
   dateText(v: string): string { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v); return m ? `${m[3]}/${m[2]}/${m[1]}` : v; }
+  /** A `calc` field's live value — recomputed from the current answers on every render. */
+  calcValue(q: OpdQuestion): string {
+    const source = q.from ? this.byKey().get(q.from) : undefined;
+    return computeCalc(q, source, this.answers(), this.visitDate() ?? undefined);
+  }
 
   removeAt(v: unknown, i: number): unknown[] { return (Array.isArray(v) ? v : []).filter((_, k) => k !== i); }
   noteAt(v: unknown, i: number, note: string): OpdMark[] { return this.marksOf(v).map((m, k) => (k === i ? { ...m, note } : m)); }
@@ -418,12 +428,18 @@ export class OpdFormRendererComponent {
     this.set(q, side, [...this.marksOf(v), { x, y, note: '' }]);
   }
 
-  /** Emit a new answers object with one value replaced. */
+  /** Emit a new answers object with one value replaced — and any `calc` field
+   *  that reads THIS question recomputed and persisted alongside it, so a
+   *  save captures what's on screen without a server round-trip. */
   set(q: OpdQuestion, side: Side | null, value: unknown): void {
     if (!this.live()) return;
     const cur = this.answers() ?? {};
     let next: unknown = value;
     if (side) next = { ...((cur[q.key] ?? {}) as OpdSided), [side]: value };
-    this.answersChange.emit({ ...cur, [q.key]: next });
+    const merged: OpdAnswers = { ...cur, [q.key]: next };
+    for (const dep of this.list()) {
+      if (dep.type === 'calc' && dep.from === q.key) merged[dep.key] = computeCalc(dep, q, merged, this.visitDate() ?? undefined);
+    }
+    this.answersChange.emit(merged);
   }
 }

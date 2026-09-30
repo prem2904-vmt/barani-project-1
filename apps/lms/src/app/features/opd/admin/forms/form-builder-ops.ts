@@ -26,6 +26,9 @@ const TYPE_DEFAULTS: Record<OpdQType | 'lr', Partial<OpdQuestion> & { label: str
   media: { label: 'Nasal endoscopy' },
   diagram: { label: 'Ear drum', shape: 'ear' },
   table: { label: 'Audiometry by frequency', unit: 'dB', cols: AUDIOMETRY.cols, rows: AUDIOMETRY.rows },
+  // critic §1 #6 — read-only, computed from another question (edd/pog/pta); the
+  // admin picks the source question in the inspector after adding it.
+  calc: { label: 'Estimated date of delivery (EDD)', formula: 'edd' },
 };
 
 /** A new question from a gallery type (keyed uniquely against `taken`). */
