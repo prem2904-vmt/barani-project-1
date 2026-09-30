@@ -657,30 +657,37 @@
                     placeholder="Search this list" aria-label="Search patient, order, sample or test in this list" />
                 </label>
                 <div class="pf-work-hdr__filter">
-                  <div class="pf-tabs" role="tablist" aria-label="Work pane tabs" (click)="$event.stopPropagation()">
-                    <button type="button" role="tab" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-selected]="rightTab() === 'ip'"
+                  <!-- STATUS chips: toggle filters. Tap = only that status; tap the
+                       same chip again = all statuses. The date range (right) stays
+                       applied either way; counts are for the chosen dates. -->
+                  <div class="pf-tabs" role="group" aria-label="Filter by status" (click)="$event.stopPropagation()">
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-pressed]="rightTab() === 'ip'"
+                      [attr.title]="rightTab() === 'ip' ? 'Showing In progress only — tap to show all statuses' : 'Show In progress only'"
                       (click)="setRightTab('ip')">
                       In progress
                       <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length + draftOrders().length
                         }}</span>
                     </button>
-                    <button type="button" role="tab" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-selected]="rightTab() === 'done'"
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-pressed]="rightTab() === 'done'"
+                      [attr.title]="rightTab() === 'done' ? 'Showing Completed only — tap to show all statuses' : 'Show Completed only'"
                       (click)="setRightTab('done')">
                       Completed
                       <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
                     </button>
                     @if (showPaymentsDue()) {
-                    <button type="button" role="tab" class="pf-tabs__btn press"
+                    <button type="button" class="pf-tabs__btn press"
                       [class.pf-tabs__btn--on]="rightTab() === 'billing'"
-                      [attr.aria-selected]="rightTab() === 'billing'" (click)="setRightTab('billing')">
+                      [attr.aria-pressed]="rightTab() === 'billing'"
+                      [attr.title]="rightTab() === 'billing' ? 'Showing Payments due only — tap to show all statuses' : 'Show Payments due only'" (click)="setRightTab('billing')">
                       Payments due
                       <span class="pf-tabs__count" data-tone="warning">{{ paymentsDueOrders().length }}</span>
                     </button>
                     }
-                    <button type="button" role="tab" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'out'" [attr.aria-selected]="rightTab() === 'out'"
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'out'" [attr.aria-pressed]="rightTab() === 'out'"
+                      [attr.title]="rightTab() === 'out' ? 'Showing Outsourced only — tap to show all statuses' : 'Show Outsourced only'"
                       (click)="setRightTab('out')">
                       Outsourced
                       <span class="pf-tabs__count">{{ outsourcing.counts().outsourced }}</span>
@@ -688,7 +695,7 @@
                   </div>
                 </div>
 
-                @if (rightTab() === 'ip') {
+                <!-- Date filter — applies to EVERY status (independent of the chips). -->
                 <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
                   <!-- Date filters for Right Pane -->
                   <div class="pf-hdr-date-pills">
@@ -752,7 +759,6 @@
                     }
                   </div>
                 </div>
-                }
 
                 <svg class="pf-appt-split__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
@@ -806,7 +812,10 @@
 
               <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
                    list (parked carts, localStorage), then live in-progress orders. -->
-              @if (rightTab() === 'ip') {
+              @if (statusShown('ip')) {
+              @if (rightTab() === null && (visibleOrders().length > 0 || draftOrders().length > 0)) {
+              <h3 class="pf-wsec">In progress <span class="pf-wsec__n nd-num">{{ visibleOrders().length + draftOrders().length }}</span></h3>
+              }
               @if (shownDrafts().length > 0) {
               <ul class="pf-cards pf-cards--drafts pf-wlist" [class.pf-wlist--sel]="workSelectable()">
                 @for (d of shownDrafts(); track d.patientId) {
@@ -854,6 +863,7 @@
               @if (ordersSkel() && visibleOrders().length === 0 && draftOrders().length === 0) {
               <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
               } @else if (visibleOrders().length === 0 && draftOrders().length === 0) {
+              @if (rightTab() !== null) {
               <div class="pf-empty-tile nd-empty" data-empty="ip">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -869,6 +879,7 @@
                 <button type="button" class="nd-btn nd-btn--secondary nd-empty__action press"
                   (click)="openRegister()">New patient</button>
               </div>
+              }
               } @else {
               <ul class="pf-cards pf-wlist" data-list="ip" [class.pf-wlist--sel]="workSelectable()"
                 [class.pf-wlist--selecting]="workSel.count() > 0">
@@ -1025,10 +1036,14 @@
               }
 
               <!-- COMPLETED TAB -->
-              @if (rightTab() === 'done') {
+              @if (statusShown('done')) {
+              @if (rightTab() === null && completedOrders().length > 0) {
+              <h3 class="pf-wsec">Completed <span class="pf-wsec__n nd-num">{{ completedOrders().length }}</span></h3>
+              }
               @if (ordersSkel() && completedOrders().length === 0) {
               <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
               } @else if (completedOrders().length === 0) {
+              @if (rightTab() !== null) {
               <div class="pf-empty-tile nd-empty" data-empty="done">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -1040,6 +1055,7 @@
                 <p class="nd-empty__title">Nothing to deliver yet</p>
                 <p class="nd-empty__body">Reports show up here the moment validation is complete.</p>
               </div>
+              }
               } @else {
               <ul class="pf-cards pf-wlist" data-list="done">
                 @if (workQuery() && shownCompleted().length === 0) {
@@ -1136,13 +1152,20 @@
                    header search narrows the list (classic keeps its filters). -->
               @if (rightTab() === 'out') {
               <pf-outsourced-list [showFilters]="!theme.isNewDesign()"></pf-outsourced-list>
+              } @else if (rightTab() === null && outsourcing.visible().length > 0) {
+              <h3 class="pf-wsec">Outsourced <span class="pf-wsec__n nd-num">{{ outsourcing.visible().length }}</span></h3>
+              <pf-outsourced-list [showFilters]="false"></pf-outsourced-list>
               }
 
               <!-- PAYMENTS DUE TAB -->
-              @if (rightTab() === 'billing' && showPaymentsDue()) {
+              @if (statusShown('billing') && showPaymentsDue()) {
+              @if (rightTab() === null && shownPaymentsDueOnly().length > 0) {
+              <h3 class="pf-wsec">Payments due <span class="pf-wsec__n nd-num">{{ shownPaymentsDueOnly().length }}</span></h3>
+              }
               @if (billsSkel() && paymentsDueOrders().length === 0) {
               <pf-skeleton-rows [rows]="4" label="Loading payments due…"></pf-skeleton-rows>
               } @else if (paymentsDueOrders().length === 0) {
+              @if (rightTab() !== null) {
               <div class="pf-empty-tile nd-empty" data-empty="due">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -1155,12 +1178,13 @@
                 <p class="nd-empty__title">No pending payments</p>
                 <p class="nd-empty__body">All registered orders have been fully paid.</p>
               </div>
+              }
               } @else {
               <ul class="pf-cards pf-wlist" data-list="due">
                 @if (workQuery() && shownPaymentsDue().length === 0) {
                 <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
                 }
-                @for (o of shownPaymentsDue(); track o.id) {
+                @for (o of shownPaymentsDueOnly(); track o.id) {
                 <li>
                   <div class="pf-wrow" [attr.data-priority]="o.priority" [attr.data-order-id]="o.id" tabindex="0"
                     (click)="openOrder(o)" (keydown.enter)="$event.target === $event.currentTarget && openOrder(o)">
@@ -1191,6 +1215,21 @@
                 }
               </ul>
               }
+              }
+
+              <!-- ALL STATUSES (no chip on) with nothing in the chosen dates. -->
+              @if (rightTab() === null && !ordersSkel() && allStatusesEmpty()) {
+              <div class="pf-empty-tile nd-empty" data-empty="all">
+                <span class="nd-empty__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                </span>
+                <p class="nd-empty__title">No orders for these dates</p>
+                <p class="nd-empty__body">Pick another day or range above.</p>
+              </div>
               }
             </section>
           </div>

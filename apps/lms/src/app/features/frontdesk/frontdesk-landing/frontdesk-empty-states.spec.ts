@@ -25,7 +25,7 @@ const tiles = () => [...root.querySelectorAll<HTMLElement>('[data-empty]')];
 
 describe('Frontdesk landing — ND empty states', () => {
   it('every tab empty state is the kit\'s nd-empty (appointments, home, in progress, completed, payments due)', () => {
-    expect(tiles().map(t => t.dataset['empty']).sort()).toEqual(['appt', 'done', 'due', 'home', 'ip']);
+    expect(tiles().map(t => t.dataset['empty']).sort()).toEqual(['all', 'appt', 'done', 'due', 'home', 'ip']);
     for (const t of tiles()) {
       expect(t.classList).toContain('nd-empty');
       expect(t.querySelector('.nd-empty__icon svg')).not.toBeNull();

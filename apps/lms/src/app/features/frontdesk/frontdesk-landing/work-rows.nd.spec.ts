@@ -239,7 +239,8 @@ describe('Frontdesk selection clears on Esc, tab switch and search change', () =
     const none = () => null;
     return {
       workSel,
-      _rightTab: signal<'ip' | 'done' | 'billing' | 'out'>('ip'),
+      _rightTab: signal<'ip' | 'done' | 'billing' | 'out' | null>('ip'),
+      applyRightTab: proto['applyRightTab'],
       workQuery: signal(''),
       refreshDrafts: () => undefined,
       selectedOrder: none, activePackage: none, selectedHc: none, selectedBill: none,

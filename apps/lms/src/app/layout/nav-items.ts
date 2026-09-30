@@ -1,6 +1,7 @@
 import { ProcessWorkflowConfig, catalogFor, normalizeWorkflow, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
 import { ADMIN_PERMS, ROUTE_ACCESS, RouteAccessCtx, canOpenRoute, routeAccess, routePerms } from '../core/auth/route-access';
+import { actionAvailable, workflowActionOn } from '../core/modules/lab-features';
 
 export { FRONTDESK_PERMS } from '../core/auth/route-access';
 
@@ -196,14 +197,15 @@ export interface WorkflowNavCtx {
    *  hasAnyPermission. */
   hasAnyRawPermission?: (perms: string[]) => boolean;
   isSuper: boolean;
+  /** Tenant module entitlement — an action whose module is off (Home Visits ⇒
+   *  homeCollection) doesn't make its area accessible. Omit = not evaluated. */
+  moduleEnabled?: (m: ModuleKey) => boolean;
 }
 
-/** The workflow's own "is this action on" (fail-open when the workflow doesn't
- *  mention it) — identical to ProcessWorkflowService.isEnabled. */
+/** The workflow's own "is this action on" — THE rule (core/modules/lab-features
+ *  workflowActionOn), identical to ProcessWorkflowService.isEnabled. */
 export function workflowActionEnabled(cfg: ProcessWorkflowConfig | null | undefined, type: string): boolean {
-  if (!cfg) return true;
-  const copies = (cfg.actions ?? []).filter(a => a.type === type);
-  return copies.length ? copies.some(a => a.enabled) : true;
+  return workflowActionOn(cfg, type);
 }
 
 /**
@@ -254,6 +256,7 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // permissions — the exact "works by role name" bug we want gone.
     const accessible = (cfg.actions ?? [])
       .filter(a => a.categoryId === area.id && a.enabled)
+      .filter(a => !ctx.moduleEnabled || actionAvailable({ workflow: wf, moduleEnabled: ctx.moduleEnabled }, a.type))
       .sort((a, b) => a.order - b.order)
       .filter(a => {
         const e = catalogFor(a.type);

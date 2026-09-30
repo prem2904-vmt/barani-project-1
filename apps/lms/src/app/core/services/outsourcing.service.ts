@@ -29,10 +29,18 @@ export class OutsourcingService {
   readonly status = signal<OutsourcedStatusFilter>('outsourced');
   readonly partnerId = signal<string | null>(null);
 
+  /** The front desk's DATE filter (work card range) — null = every row. Status
+   *  and date are independent filters; counts follow the date range. */
+  readonly dateWindow = signal<((t: OutsourcedTube) => boolean) | null>(null);
+  private readonly windowed = computed(() => {
+    const w = this.dateWindow();
+    return w ? this._rows().filter(w) : this._rows();
+  });
+
   readonly visible = computed(() =>
-    filterOutsourced(this._rows(), { query: this.query(), status: this.status(), partnerId: this.partnerId() }));
+    filterOutsourced(this.windowed(), { query: this.query(), status: this.status(), partnerId: this.partnerId() }));
   readonly partners = computed(() => partnerOptions(this._rows()));
-  readonly counts = computed(() => countByStatus(this._rows()));
+  readonly counts = computed(() => countByStatus(this.windowed()));
 
   get apiBase(): string { return this.platform.getApiUrl(); }
 

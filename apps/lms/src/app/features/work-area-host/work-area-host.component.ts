@@ -5,6 +5,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../core/services/lab-features.service';
 import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
 import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
@@ -84,6 +85,7 @@ export class WorkAreaHostComponent {
   private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
+  private readonly features = inject(LabFeaturesService);
 
   private readonly menuId = toSignal(this.route.paramMap.pipe(map(p => p.get('menuId') ?? '')), { initialValue: '' });
   readonly menu = computed(() => this.process.active()?.categories.find(c => c.id === this.menuId()) ?? null);
@@ -97,7 +99,8 @@ export class WorkAreaHostComponent {
     if (!cfg || !menu) return [] as Omit<HostItem, 'cmp'>[];
     const isSuper = this.auth.permissions().includes('*');
     return cfg.actions
-      .filter(a => a.categoryId === menu.id && a.enabled)
+      // Enabled here AND its module entitled (Home Visits ⇒ home collection).
+      .filter(a => a.categoryId === menu.id && a.enabled && this.features.actionAvailable(a.type))
       .sort((a, b) => a.order - b.order)
       .map(a => ({ a, e: catalogFor(a.type) }))
       .filter(x => !!x.e && (!x.e.permissions?.length || isSuper || this.auth.hasAnyPermission(x.e.permissions)))

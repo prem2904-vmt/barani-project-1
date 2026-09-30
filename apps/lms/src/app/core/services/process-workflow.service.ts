@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
+import { workflowActionOn } from '../modules/lab-features';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -43,16 +44,13 @@ export class ProcessWorkflowService {
    * Is an action (treated as a placeable component) switched on in the active
    * workflow? Screens use this to show/hide their sub-components — e.g. the
    * Frontdesk "Appointments" tab is gated on `appointment`. Safe defaults:
-   * no active workflow, or an action the workflow doesn't mention, ⇒ true
-   * (never hide a component just because the workflow is silent about it).
+   * no active workflow ⇒ true; an action the workflow doesn't mention ⇒ true,
+   * EXCEPT the opt-in `appointment` / `home_visits` (absent = the admin removed
+   * them ⇒ off). Repeatable actions (sample_collection) are on while ANY copy
+   * is on. The ONE rule lives in core/modules/lab-features (workflowActionOn).
    */
   isEnabled(type: string): boolean {
-    const cfg = this._active();
-    if (!cfg) return true;
-    // Repeatable actions (sample_collection) may sit in several areas: the
-    // feature is on while ANY copy is on.
-    const copies = (cfg.actions ?? []).filter(x => x.type === type);
-    return copies.length ? copies.some(x => x.enabled) : true;
+    return workflowActionOn(this._active(), type);
   }
 
   /**

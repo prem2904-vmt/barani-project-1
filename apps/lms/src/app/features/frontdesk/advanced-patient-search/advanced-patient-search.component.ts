@@ -15,6 +15,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { phoneLast10 } from '../../../shared/utils/indian-phone';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -384,6 +385,7 @@ const PAGE_SIZE = 20;
                               </svg>
                               Order
                             </button>
+                            @if (features.appointmentsEnabled()) {
                             <button type="button" class="pf-aps-row-btn"
                                     title="Book appointment" (click)="onBookAppointment(h.patient)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -393,6 +395,7 @@ const PAGE_SIZE = 20;
                               </svg>
                               Book
                             </button>
+                            }
                           </td>
                         </tr>
                       }
@@ -1147,6 +1150,8 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   /** "34y" (infants "8m" / "12d") — the shared patient-age helper, DOB first. */
   ageLabel(p: { age?: number | null; dateOfBirth?: string | null } | null | undefined): string { return formatAge(p, 'y', '—'); }
   private readonly api = inject(ApiService);
+  /** Appointments on? (the ONE lab-feature rule) — hides the Book button. */
+  protected readonly features = inject(LabFeaturesService);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly document = inject(DOCUMENT);
   // Whether we've moved this component's host element to <body>. We do this

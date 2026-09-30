@@ -5,7 +5,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -22,6 +22,8 @@ import { BillingEventsService } from '../../../core/services/billing-events.serv
 import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -310,11 +312,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Placement-aware: the appointment UI lives on Frontdesk only while the action
   // is placed in the frontdesk work-area. Drag it to Lab in /admin/process and it
   // leaves here and renders on the Lab screen instead (no active workflow ⇒ native).
+  // THE lab-feature rule (core/modules/lab-features): Home collection needs the
+  // tenant entitlement AND the workflow's Home Visits action; Appointments the
+  // workflow's Appointment action. Never check either switch on its own here.
+  private readonly features = inject(LabFeaturesService);
   readonly showAppt = computed(() => {
+    if (!this.features.appointmentsEnabled()) return false;
     const cfg = this.process.active();
     return !cfg ? true : this.process.placedIn('appointment') === 'frontdesk';
   });
-  readonly showHome = computed(() => this.process.isEnabled('home_visits'));
+  readonly showHome = computed(() => this.features.homeCollectionEnabled());
   /** The left pane only exists if at least one of its tabs (Appointments /
    *  Home collection) is enabled — otherwise it's hidden and the work pane
    *  fills the row. */
@@ -326,6 +333,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const appt = this.showAppt(), home = this.showHome();
     if (!appt && home && this._leftTab() === 'appt') this._leftTab.set('home');
     else if (!home && appt && this._leftTab() === 'home') this._leftTab.set('appt');
+    // Neither left tab exists: the phone list must not sit on a hidden pane.
+    else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
   setLeftTab(t: 'appt' | 'home') {
     this._leftTab.set(t);
@@ -339,8 +348,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing' | 'out'>(this.loadRightTab());
+  // STATUS chip of the work card — null = no chip on (every status). Status and
+  // the date range are independent, combined filters (work-status-filter.ts).
+  private readonly _rightTab = signal<WorkStatusFilter>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
+  /** Does the list for this status render (its chip on, or no chip on)? */
+  statusShown(s: WorkStatus): boolean { return workStatusShown(this._rightTab(), s); }
 
   // ── Outsourced tab ─────────────────────────────────────────
   // Outsourced tests never enter the lab's queues; the front desk tracks
@@ -361,18 +374,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The Outsourced tab shares the same field (its service holds the query). */
   private readonly _workQueryToOutsourced = effect(() => this.outsourcing.query.set(this.workQuery()));
 
-  setRightTab(t: 'ip' | 'done' | 'billing' | 'out') {
-    if (t !== this._rightTab()) this.workSel.clear();
-    this._rightTab.set(t);
-    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
-    // when that tab is opened to catch any saved from a prior order-create visit.
-    if (t === 'ip') this.refreshDrafts();
-    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
+  /** Tap a status chip: filter to it; tap the SAME chip again: clear the status
+   *  filter (all statuses). The date range is untouched either way. */
+  setRightTab(t: WorkStatus) {
+    this.applyRightTab(toggleWorkStatus(this._rightTab(), t));
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' | 'out' {
+  private applyRightTab(next: WorkStatusFilter) {
+    if (next !== this._rightTab()) this.workSel.clear();
+    this._rightTab.set(next);
+    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
+    // when that list is shown to catch any saved from a prior order-create visit.
+    if (next === 'ip' || next === null) this.refreshDrafts();
+    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, workStatusStoreValue(next)); } catch { /* ignore */ }
+  }
+  private loadRightTab(): WorkStatusFilter {
     try {
-      const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : raw === 'out' ? 'out' : 'ip';
+      return parseWorkStatus(localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY));
     } catch { return 'ip'; }
   }
 
@@ -456,7 +473,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  back to In progress so the pane never renders an empty/absent tab. */
   private readonly _rightTabGuard = effect(() => {
     if (!this.showPaymentsDue() && this._rightTab() === 'billing') {
-      this._rightTab.set('ip');
+      this._rightTab.set(null);
     }
   });
 
@@ -466,8 +483,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out'>(() =>
-    this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out' | 'all'>(() =>
+    this.expandedPane() === 'appt' ? this.leftTab() : (this.rightTab() ?? 'all'));
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
@@ -475,6 +492,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
       case 'out': return 'Outsourced';
+      case 'all': return 'All statuses';
       default: return 'Completed';
     }
   });
@@ -482,9 +500,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);
-    } else {
+    } else if (this._expandedPane() !== 'work') {
+      // Coming from the appointments list: show this status (never toggle it off).
       this._expandedPane.set('work');
-      this.setRightTab(v);
+      this.applyRightTab(v);
+    } else {
+      this.setRightTab(v);   // same chip again ⇒ all statuses
     }
     this.mobileListOpen.set(false);
   }
@@ -820,18 +841,41 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const map = this._billingOrdersMap();
     const ordersToday = this._orders();
     const pendingBills = this._bills().filter(b => b.balance > 0);
+    const bounds = this.workBounds(); const feed = this._feedIds();
     const list: Order[] = [];
     for (const b of pendingBills) {
       let o = ordersToday.find(ord => ord.id === b.orderId);
       if (!o) {
         o = map[b.orderId];
       }
-      if (o) {
+      // The date range applies to every status (work-status-filter.ts).
+      if (o && inWorkWindow(o.createdAt, bounds, feed.has(o.id))) {
         list.push(o);
       }
     }
     return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   });
+  /** Ids of the orders in the current work feed (today's feed / the range). */
+  private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
+  /** The Outsourced list follows the same date range (its own tube rows). */
+  private readonly _outsourcedWindow = effect(() => {
+    const bounds = this.workBounds(); const feed = this._feedIds();
+    this.outsourcing.dateWindow.set(t => inWorkWindow(t.createdAt, bounds, feed.has(t.orderId)));
+  });
+  private readonly _clearOutsourcedWindow = inject(DestroyRef).onDestroy(() => this.outsourcing.dateWindow.set(null));
+  /** "All statuses" (no chip on): the same combined list, deduped — an
+   *  in-progress order with a balance is listed once, under In progress. */
+  readonly shownPaymentsDueOnly = computed(() => {
+    if (this._rightTab() !== null) return this.shownPaymentsDue();
+    const ip = new Set(this.shownInProgress().map(o => o.id));
+    return this.shownPaymentsDue().filter(o => !ip.has(o.id));
+  });
+  /** Nothing at all for the chosen dates (the all-statuses empty state). */
+  readonly allStatusesEmpty = computed(() =>
+    this.visibleOrders().length === 0 && this.draftOrders().length === 0
+    && this.completedOrders().length === 0
+    && (!this.showPaymentsDue() || this.paymentsDueOrders().length === 0)
+    && this.outsourcing.visible().length === 0);
 
   /** The active list, narrowed by the work card's header search. */
   readonly shownDrafts = computed(() => {
@@ -1289,11 +1333,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       error: () => { this.billsHold.done(); /* endpoint may not exist; silently ignore */ }
     });
 
-    // Fetch open home-collection requests for the Home Collection tab.
-    this.api.get<Appointment[]>('/api/home-collection/all').pipe(finalize(() => this.homeHold.done())).subscribe({
-      next: l => this._homeCollections.set(l ?? []),
-      error: () => this._homeCollections.set([])
-    });
+    // Fetch open home-collection requests for the Home Collection tab — only
+    // while home collection is on (the API answers 403 module_disabled else).
+    if (this.showHome()) {
+      this.api.get<Appointment[]>('/api/home-collection/all').pipe(finalize(() => this.homeHold.done())).subscribe({
+        next: l => this._homeCollections.set(l ?? []),
+        error: () => this._homeCollections.set([])
+      });
+    } else {
+      this._homeCollections.set([]);
+      this.homeHold.done();
+    }
 
     // Test catalogue (once) — used to show requested-test names in the
     // home-collection detail. Only for users the /api/tests read admits
