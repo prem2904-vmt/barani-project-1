@@ -4,7 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { OPD_API } from '../shared/opd-api';
 import type {
   DrugForm, DrugSchedule, OpdDiagnosis, OpdFormDoc, OpdNoteVisibility, OpdPatientAllergy,
-  OpdRxLineDto, OpdVisitStatus, OpdVitals,
+  OpdPregnancy, OpdRxLineDto, OpdVisitStatus, OpdVitals,
 } from '../shared/opd.models';
 import type { RxSchedule } from '../shared/rx-schedule';
 import { HttpClient } from '@angular/common/http';
@@ -74,6 +74,10 @@ export interface ConsultWorkspace {
   conditions: { label: string; code?: string | null; since: string; doctorName?: string | null; count: number }[];
   pastVisits: { visitId: string; visitDate: string; doctorName?: string | null; departmentName?: string | null; diagnoses: OpdDiagnosis[] }[];
   noteVisibilityDefault: OpdNoteVisibility;
+  // Pregnancy appended at the END (night/safety brief — never inserted
+  // mid-list, so a concurrent edit to this interface never collides).
+  /** Pregnancy-safety guard (critic P0 #1b) — null when neither pregnant nor lactating. */
+  pregnancy?: OpdPregnancy | null;
 }
 
 export interface ConsultDraftBody {
@@ -94,6 +98,8 @@ export interface ConsultDrug {
   form: DrugForm; unit?: string | null; schedule: DrugSchedule | string; aliases?: string | null; isMaster: boolean;
   /** Integrator (pharmacy_drugs): topical site kind + the usual Rx for favourites. */
   siteKind?: string | null; usual?: Record<string, unknown> | null;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1a). */
+  pregnancyRisk?: 'safe' | 'caution' | 'avoid' | 'contraindicated' | null; pregnancyNote?: string | null;
 }
 
 /** A stored consult file (POST /api/opd/consult/{visitId}/media). */
