@@ -52,7 +52,7 @@ type Section = 'allergies' | 'conditions' | 'meds' | 'results' | 'last' | 'follo
       @if (pregnancy(); as p) {
         <div class="gl__preg" [class.gl__preg--lact]="p.status === 'lactating'" role="status">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5c0 2.5 2 4.5 5 8 3-3.5 5-5.5 5-8a5 5 0 0 0-5-5Z"/><path d="M8 18c-2 1-3 2-3 3M16 18c2 1 3 2 3 3"/></svg>
-          <span>{{ p.status === 'pregnant' ? 'Pregnant' : 'Lactating' }}@if (p.since) { · since {{ p.since | date:'MMM d, y' }}}@if (p.source) { <em>(from {{ p.source }})</em>}</span>
+          <span>{{ p.status === 'pregnant' ? 'Pregnant' : 'Lactating' }}@if (p.since) { · since {{ p.since | date:'MMM d, y' }}}@if (p.source) { <em>&nbsp;(from {{ p.source }})</em>}</span>
         </div>
       }
 

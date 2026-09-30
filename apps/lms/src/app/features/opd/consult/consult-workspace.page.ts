@@ -288,7 +288,9 @@ const EMPTY: ConsultEditState = {
                           @if (editable()) {
                             <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
                                                     (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
-                          } @else if (t.specimen) { <span class="cw__muted">{{ t.specimen }}</span> }
+                          } @else if (t.specimen) {
+                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen" [readonly]="true"></pf-opd-specimen-picker>
+                          }
                           @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
                           @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
                         </div>

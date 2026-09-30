@@ -380,7 +380,9 @@ export class PharmacyDispensePage {
   /** Secondary line under the generic-first drug name (critic #8): the brand + strength, when there's a generic to lead with. */
   protected brandLine(drug: DrugBrief | null): string {
     if (!drug?.generic) return '';
-    return drug.name + (drug.strength ? ' ' + drug.strength : '');
+    // The name often already carries the strength ("Paracetamol 650 mg") — never print it twice.
+    const st = (drug.strength ?? '').trim();
+    return st && !drug.name.toLowerCase().includes(st.toLowerCase()) ? `${drug.name} ${st}` : drug.name;
   }
   /** Ceiling for a corrected quantity (critic #4): 5× the Rx quantity, never
    *  more than the sellable stock. */
