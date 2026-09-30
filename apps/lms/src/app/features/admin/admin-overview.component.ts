@@ -11,6 +11,7 @@ import { ThemeService } from '../../core/services/theme.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
+import { OpdGateService } from "../opd/shared/opd-gate.service";
 import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
 import { ApiError } from "../../shared/models/api-response.model";
@@ -946,6 +947,8 @@ export class AdminOverviewComponent implements OnInit {
   /** Design gate: new design hides the big overview title. */
   readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
+  /** OPD dark build: the OPD module card shows only when the OPD gate is open. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly toasts = inject(ToastService);
 
   readonly today = new Date();
@@ -1046,7 +1049,8 @@ export class AdminOverviewComponent implements OnInit {
     return canOpenRoute(href, { hasAny: (p) => this.auth.hasAnyPermission(p) });
   }
   private openable<T extends { href?: string }>(items: T[]): T[] {
-    return items.filter((i) => !i.href || this.canOpen(i.href));
+    return items.filter((i) => (!i.href || this.canOpen(i.href))
+      && (!i.href?.startsWith('/admin/opd') || this.opdGate.visible()));
   }
 
   readonly groups: Array<{
@@ -1366,7 +1370,7 @@ export class AdminOverviewComponent implements OnInit {
       g: "automation",
       hint: "Enable products & their features",
       icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
-      kw: "module extension enable disable feature lab opd ipd pharmacy radiology inventory payroll insurance entitlement product plan",
+      kw: "module extension enable disable feature lab ipd pharmacy radiology inventory payroll insurance entitlement product plan",
     },
     {
       label: "Settings hub",

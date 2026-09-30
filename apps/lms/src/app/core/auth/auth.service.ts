@@ -28,6 +28,11 @@ interface MeResponse {
   registrationId?: string;
   /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
   isDoctor?: boolean;
+  /** OPD dark build: the server admits this user's OPD calls (tenant explicitly
+   *  entitled OR owner-preview allowlist). See OpdGateService. */
+  opdAccess?: boolean;
+  /** The tenant EXPLICITLY has OPD on — visible without the console flag. */
+  opdEntitled?: boolean;
 }
 
 /**
@@ -1042,7 +1047,10 @@ export class AuthService {
       hasPin: data.hasPin ?? false,
       signatureDataUrl: data.signatureDataUrl ?? undefined,
       registrationId: data.registrationId ?? undefined,
-      isDoctor: data.isDoctor ?? false
+      isDoctor: data.isDoctor ?? false,
+      // OPD dark build — older servers omit both → OPD stays hidden.
+      opdAccess: data.opdAccess ?? false,
+      opdEntitled: data.opdEntitled ?? false
     };
     this.applyProfile(user, { fromCache: false });
     this.cacheProfile(user);

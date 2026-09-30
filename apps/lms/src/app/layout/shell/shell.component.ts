@@ -430,6 +430,10 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
          html.pf-collect-immersive; bottom-nav hides itself in its own stylesheet. */
       :host-context(html.pf-collect-immersive) .pf-chrome { display: none !important; }
       :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
+      /* OPD dark build: the full-screen consult (features/opd/consult) toggles
+         html.pf-opd-immersive while open — same chrome hide as collection. */
+      :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
 
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
