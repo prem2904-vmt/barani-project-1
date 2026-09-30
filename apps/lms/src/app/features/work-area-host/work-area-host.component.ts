@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, Type, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Type, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -9,7 +9,7 @@ import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
 import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
 import { SkeletonCardComponent } from '../../shared/primitives/skeleton-kit.component';
-import { RouteProgressService } from '../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../core/navigation/page-open.service';
 
 interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; cmp: Type<unknown> | null; }
 
@@ -34,10 +34,14 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
                header's right (ND §1), general queue. -->
           <span class="wah-hd__actions"><pf-collect-band-button [area]="m.id" /></span>
         </header>
-        @if (items().length === 0) {
+        @if (items() === null) {
+          <!-- The area's panels are still loading (lazy code): their shape,
+               never "No actions…" first. -->
+          <pf-skeleton-card [lines]="3" label="Loading work area…"></pf-skeleton-card>
+        } @else if (items()!.length === 0) {
           <p class="wah-empty">No actions you can access in this area.</p>
         } @else {
-          @for (it of items(); track it.type) {
+          @for (it of items()!; track it.type) {
             <section class="wah-block">
               <header class="wah-block__hd"><span class="wah-dot" [style.background]="m.color"></span>{{ it.label }}</header>
               @if (it.cmp) {
@@ -77,14 +81,15 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
 export class WorkAreaHostComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly routeProgress = inject(RouteProgressService);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
 
   private readonly menuId = toSignal(this.route.paramMap.pipe(map(p => p.get('menuId') ?? '')), { initialValue: '' });
   readonly menu = computed(() => this.process.active()?.categories.find(c => c.id === this.menuId()) ?? null);
 
-  private readonly _items = signal<HostItem[]>([]);
+  /** null = the panels are still resolving (first open / area switch). */
+  private readonly _items = signal<HostItem[] | null>(null);
   readonly items = this._items.asReadonly();
 
   private readonly wanted = computed(() => {
@@ -101,20 +106,25 @@ export class WorkAreaHostComponent {
 
   constructor() {
     this.process.loadActive();
+    let gen = 0;
     effect(() => {
       const want = this.wanted();
+      const g = ++gen;
+      if (!want.length) { this._items.set(this.menu() ? [] : null); return; }
+      untracked(() => this._items.set(null));
       Promise.all(want.map(async w => {
         const p = portablePanel(w.type);
         const cmp = p ? await p.load() : null;
         return { ...w, cmp } as HostItem;
-      })).then(list => this._items.set(list)).catch(() => this._items.set([]));
+      })).then(list => { if (g === gen) this._items.set(list); })
+        .catch(() => { if (g === gen) this._items.set([]); });
     });
   }
 
   /** The pressed launcher turns "held" the same frame until its (lazy)
-   *  screen arrives; the global top bar covers the rest. */
+   *  screen arrives; the destination frame (PageOpenService) covers the rest. */
   go(route: string, ev?: Event) {
-    this.routeProgress.markSource(ev?.currentTarget as HTMLElement | null);
+    this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     this.router.navigate([route]);
   }
 }

@@ -8,7 +8,7 @@ import { MonoTypeOperatorFunction, Observable, defer, finalize } from 'rxjs';
  *
  *   1. INSTANT press feedback, always: the control that was pressed turns
  *      busy (aria-busy, dimmed, not clickable again) in the same frame.
- *   2. The MOVING indicator (busy dots, top progress bar) appears only when
+ *   2. The MOVING indicator (busy dots) appears only when
  *      the wait passes {@link BUSY_SHOW_AFTER_MS} — a fast answer never
  *      flickers a spinner.
  *   3. Once it has appeared it stays for at least {@link BUSY_MIN_SHOW_MS},
@@ -19,8 +19,9 @@ import { MonoTypeOperatorFunction, Observable, defer, finalize } from 'rxjs';
  *   prefersReducedMotion()   the OS "reduce motion" setting, read safely
  *
  * Skeletons for regions use the skeleton kit + `heldFlag` (min-duration.ts);
- * buttons use the `[pfBusy]` directive; route changes use the global
- * `<pf-route-progress>` bar. See docs/ND-PATTERN.md "Loading feedback".
+ * buttons use the `[pfBusy]` directive; route changes OPEN the destination
+ * (its frame + skeleton, then a view transition — PageOpenService). See
+ * docs/ND-PATTERN.md "Loading feedback".
  */
 
 /** Waits shorter than this show no moving indicator (no flicker). */

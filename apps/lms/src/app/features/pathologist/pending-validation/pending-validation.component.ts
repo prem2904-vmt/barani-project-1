@@ -266,10 +266,10 @@ type Tab = 'mine' | 'all';
 
             <p class="pv-side__h">Today</p>
             <dl class="pv-stats">
-              <div class="pv-stat"><dt>Pending</dt><dd class="nd-num">{{ stats().pending }}</dd></div>
-              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="nd-num">{{ stats().overdue }}</dd></div>
-              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="nd-num">{{ stats().critical }}</dd></div>
-              <div class="pv-stat"><dt>Assigned to you</dt><dd class="nd-num">{{ stats().mine }}</dd></div>
+              <div class="pv-stat"><dt>Pending</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().pending }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().overdue }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().critical }}}</dd></div>
+              <div class="pv-stat"><dt>Assigned to you</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().mine }}}</dd></div>
               @if (scope(); as s) {
                 <div class="pv-stat"><dt>Validated today</dt><dd class="nd-num">{{ s.validatedToday }}</dd></div>
                 <div class="pv-stat"><dt>By you</dt><dd class="nd-num">{{ s.validatedTodayByMe }}</dd></div>
@@ -281,7 +281,7 @@ type Tab = 'mine' | 'all';
             <button type="button" class="nd-btn nd-span pv-next"
                     [class.nd-btn--primary]="!!next()" [class.nd-btn--secondary]="!next()"
                     [disabled]="!next()" (click)="reviewNext()">
-              {{ next() ? 'Review next · ' + next()!.sampleLabel : 'Nothing to review' }}
+              {{ next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review') }}
             </button>
           </footer>
         </aside>
@@ -728,6 +728,8 @@ export class PendingValidationComponent implements OnInit {
 
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
+  /** First load: the side card's numbers are placeholders, not zeros. */
+  readonly statsSkel = computed(() => this._loading() && this._rows().length === 0);
 
   /** Hero-band query — filters the queue by patient, MRN, sample ID, or test. */
   readonly query = signal('');

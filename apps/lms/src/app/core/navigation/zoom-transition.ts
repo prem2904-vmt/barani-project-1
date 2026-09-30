@@ -243,6 +243,13 @@ export class ZoomTransitionService {
 
   disarm(): void { this.arm = null; }
 
+  /** A tap has armed a zoom that has not run yet (PageOpenService holds its
+   *  destination frame back: the zoom is this navigation's motion). */
+  armed(): boolean {
+    const a = this.arm;
+    return !!a && a.el.isConnected && (a.bound || this.now() - a.at <= ARM_MS);
+  }
+
   private takeArm(): Arm | null {
     const a = this.arm;
     this.arm = null;
