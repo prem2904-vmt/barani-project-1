@@ -159,6 +159,29 @@ describe('UploadsService', () => {
     }
   });
 
+  it('open(): a 503 storage_error/storage_unavailable/storage_unconfigured closes the tab with a friendly toast, never the raw error code or exception text, and is not marked missing', async () => {
+    for (const code of ['storage_error', 'storage_unavailable', 'storage_unconfigured']) {
+      const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      const down = new HttpErrorResponse({ status: 503, error: { success: false, error: code, message: 'File storage is unavailable. Try again shortly.' } });
+      try {
+        const { svc } = setup(vi.fn(() => throwError(() => down)));
+        const toasts = TestBed.inject(ToastService);
+        const err = vi.spyOn(toasts, 'error');
+        expect(await svc.open(PATH)).toBe('failed');
+        expect(tab.close).toHaveBeenCalled();
+        expect(svc.isMissing(PATH)).toBe(false);        // a 503 is transient — never remembered as gone
+        expect(err).toHaveBeenCalled();
+        const shown = err.mock.calls[0][0] as string;
+        expect(shown).not.toContain(code);
+        expect(shown).not.toMatch(/Amazon|Exception|System\./);
+      } finally {
+        open.mockRestore();
+        TestBed.resetTestingModule();
+      }
+    }
+  });
+
   it('blob(): one request per file per session — concurrent and later callers share it (PDF renders re-use logos / signatures)', async () => {
     const { svc, get } = setup();
     const [a, b] = await Promise.all([svc.blob(PATH), svc.blob(PATH)]);
