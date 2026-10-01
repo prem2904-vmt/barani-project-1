@@ -2450,14 +2450,34 @@ export class SampleResultEntryComponent {
   printPickerEnabled(t: { id: string }): boolean {
     return this._printPickerByTest().has(t.id);
   }
+  /** Parameter names CRITICAL on this line (owner 2026-10-01: live-typed OR
+   *  already saved — the same single check {@link isCriticalValue} the red
+   *  input treatment uses). They always print, whatever the picker says (see
+   *  {@link reportHiddenFor}). The saved-only mirror of mw's
+   *  `PrintPickerRules.CriticalNames` ({@link criticalNames} from
+   *  shared/utils/print-picker) agrees once the value is saved — what the
+   *  server will actually print reads the SAME saved snapshot. */
+  private criticalFor(t: OrderTest): string[] {
+    return this.parametersFor(t).filter(p => this.isCriticalValue(t, p)).map(p => p.name);
+  }
   /** Hidden value names as the tech sees them: this session's pick, else
    *  the SAVED pick (even "[]" — a saved choice is never reset on reload),
-   *  else the resolved "Start with": 'none' → every value unticked. */
+   *  else the resolved "Start with": 'none' → every value unticked. A
+   *  CRITICAL value is never in this set — it always prints (owner
+   *  2026-10-01), whatever the picker / saved hide-list says. */
   private reportHiddenFor(t: OrderTest): string[] {
+    const critical = this.criticalFor(t);
     const local = this._reportHidden()[t.id];
-    if (local) return local;
-    const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
-    return effectiveHidden(raw, resolvePrintPickerDefault(t), this.parametersFor(t).map(p => p.name));
+    let hidden: string[];
+    if (local) {
+      hidden = local;
+    } else {
+      const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
+      return effectiveHidden(raw, resolvePrintPickerDefault(t), this.parametersFor(t).map(p => p.name), critical);
+    }
+    if (critical.length === 0) return hidden;
+    const crit = new Set(critical.map((c) => c.toLowerCase()));
+    return hidden.filter((n) => !crit.has(n.toLowerCase()));
   }
   isValuePrinted(t: OrderTest, p: { name: string }): boolean {
     return !this.reportHiddenFor(t).includes(p.name);
@@ -2487,6 +2507,8 @@ export class SampleResultEntryComponent {
     });
   }
   toggleValuePrinted(t: OrderTest, p: { name: string }) {
+    // Critical always prints — nothing to toggle (owner 2026-10-01).
+    if (this.criticalFor(t).some(n => n.toLowerCase() === p.name.toLowerCase())) return;
     const cur = this.reportHiddenFor(t);
     const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
     // A hand tick / untick makes the row the tech's own choice: clearing its

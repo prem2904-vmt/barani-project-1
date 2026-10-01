@@ -104,3 +104,18 @@ export function errText(e: unknown, fallback = 'Something went wrong.'): string 
   const m = (e as { message?: string } | null)?.message;
   return m && m.trim() ? m : fallback;
 }
+
+/** Friendly text for the server's coded Schedule H / H1 / X errors (mirror of
+ *  PharmacyDispenseService.EnforceSchedules / PharmacyRules.EnsurePrescriptionUploaded,
+ *  owner 2026-10-01) — any other code, or none, falls back to errText. */
+const SCHEDULE_ERROR_MESSAGES: Record<string, string> = {
+  prescription_required: 'Enter the prescribing doctor’s name to sell this drug.',
+  prescriber_regno_required: 'Enter the prescribing doctor’s registration number to sell this drug.',
+  buyer_required: 'Schedule H1 / X sales go in the register — enter the customer’s name.',
+  h1_address_required: 'Schedule H1 / X sales go in the register — enter the customer’s address.',
+  prescription_upload_required: 'Upload the prescription before you can take payment for this Schedule H1 / X sale.',
+};
+export function scheduleErrorText(e: unknown, fallback = 'Something went wrong.'): string {
+  const code = (e as { code?: string } | null)?.code;
+  return (code && SCHEDULE_ERROR_MESSAGES[code]) || errText(e, fallback);
+}
