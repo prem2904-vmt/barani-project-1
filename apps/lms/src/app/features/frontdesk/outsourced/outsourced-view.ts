@@ -1,7 +1,7 @@
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
 import { Order } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
-import { AnnotateBucket, MergedWorkRow, WorkBucket, buildMergedWork } from '../frontdesk-landing/work-merge';
+import { AnnotateBucket, AnnotateItem, MergedWorkRow, WorkBucket, buildMergedWork } from '../frontdesk-landing/work-merge';
 /**
  * Frontdesk "Outsourced" tab — pure view logic (unit-tested). Outsourced tests
  * never enter the lab's own queues; the front desk tracks them here and, when
@@ -258,11 +258,17 @@ export function partnerReportShareLine(reports: readonly PartnerReport[]): strin
  * everything the frontdesk merged work row needs to RENDER (patient name,
  * order number, daily no, the earliest tube's created time) — never the
  * fields that drive the rich in-progress/completed/payments-due actions
- * (a real `status`, `samples`, `priority`); callers must treat a row built
- * from this as `source: 'synthetic'` (work-merge.ts) and hide those actions,
- * showing only the outsourced tube's own (pf-outsourced-actions).
+ * (`samples`, `priority`); callers must treat a row built from this as
+ * `source: 'synthetic'` (work-merge.ts) and hide those actions, showing only
+ * the outsourced tube's own (pf-outsourced-actions). `status` is a label
+ * only here (no samples/priority to act on it with) — 'created' while a tube
+ * is still pending, 'validated' once every tube on the order is completed
+ * (so FrontdeskLandingComponent.mergedStatusText reads it as "Completed",
+ * never a stale "Outsourced").
  */
-export function syntheticOrderFromOutsourcedTubes(orderId: string, tubes: readonly OutsourcedTube[]): Order {
+export function syntheticOrderFromOutsourcedTubes(
+  orderId: string, tubes: readonly OutsourcedTube[], status: 'created' | 'validated' = 'created',
+): Order {
   const first = tubes[0];
   const createdAt = tubes.reduce((min, t) => (t.createdAt < min ? t.createdAt : min), first.createdAt);
   const patient: Patient = {
@@ -271,7 +277,7 @@ export function syntheticOrderFromOutsourcedTubes(orderId: string, tubes: readon
   };
   return {
     id: orderId, orderNumber: first.orderNumber ?? null, dailyNo: first.dailyNo ?? null, dailyNoDay: first.dailyNoDay ?? null,
-    patientId: first.patientId, branchId: '', priority: 'Normal', source: 'walkin', status: 'created',
+    patientId: first.patientId, branchId: '', priority: 'Normal', source: 'walkin', status,
     collectionType: 'walkin', createdAt, samples: [], patient,
   };
 }
@@ -280,32 +286,63 @@ export function syntheticOrderFromOutsourcedTubes(orderId: string, tubes: readon
  * The frontdesk merged work list's outsourced wiring (owner, 2026-10-01) —
  * pulled out of FrontdeskLandingComponent so it's unit-testable without
  * constructing that (huge, heavily-injected) component. Groups the
- * outsourced tubes within the work date window by order id, then feeds them
- * into {@link buildMergedWork} as an annotate bucket: a tube whose order is
- * already in `ip` / `done` / `billing` gets an 'out' status added to that
- * row; a tube whose order is in NONE of them gets its own synthetic row
- * (confirmed real, not just theoretical: outsourced lines are excluded from
- * the lab's own work/status machinery, so a fully-outsourced order may never
- * reach ip/done/billing at all — see outsourced-view.spec.ts /
- * work-merge.spec.ts for the mechanism, this function for the wiring).
+ * outsourced tubes within the work date window (already narrowed by the work
+ * card's search — callers filter `outsourcedInWindow` with `filterOutsourced`
+ * BEFORE calling this, same as the ip/done/billing lists) by order id, then
+ * feeds them into {@link buildMergedWork} as TWO annotate buckets:
+ *
+ *  - 'out', for an order with at least one PENDING ('outsourced') tube: adds
+ *    'out' to an existing row, or synthesizes one for an order with none at
+ *    all (outsourced lines are excluded from the lab's own work/status
+ *    machinery, so a fully-outsourced order may never reach ip/done/billing —
+ *    confirmed real, not just theoretical). The data carried is EVERY tube on
+ *    the order (pending + completed), so inline actions show all of them.
+ *  - 'done', for an order whose outsourced tubes are ALL completed:
+ *    `synthesizeOnly` — it only ever builds a NEW row for an order with no
+ *    ip/done/billing row at all; a completed outsourced tube never makes an
+ *    order that's still genuinely active for other reasons "done" (P1-5: it
+ *    used to leave such an order stuck reading "Outsourced" forever instead).
+ *
+ * An order can never be in both buckets (pending vs completed-only is a
+ * partition), so a row only ever gets ONE of the two — see
+ * outsourced-view.spec.ts for the "outsourced-only" scenarios this proves.
  */
 export function buildFrontdeskMergedWork(
   ip: readonly Order[], done: readonly Order[], billing: readonly Order[], outsourcedInWindow: readonly OutsourcedTube[],
 ): MergedWorkRow<Order>[] {
-  const byOrder = new Map<string, OutsourcedTube[]>();
+  const allByOrder = new Map<string, OutsourcedTube[]>();
+  const pendingOrderIds = new Set<string>();
   for (const t of outsourcedInWindow) {
-    const list = byOrder.get(t.orderId);
-    if (list) list.push(t); else byOrder.set(t.orderId, [t]);
+    const list = allByOrder.get(t.orderId);
+    if (list) list.push(t); else allByOrder.set(t.orderId, [t]);
+    if (t.status === 'outsourced') pendingOrderIds.add(t.orderId);
   }
+
   const buckets: WorkBucket<Order>[] = [
     { status: 'ip', orders: ip },
     { status: 'done', orders: done },
     { status: 'billing', orders: billing },
   ];
-  const annotate: AnnotateBucket<Order, OutsourcedTube[]>[] = [{
-    status: 'out',
-    items: [...byOrder].map(([orderId, tubes]) => ({ orderId, data: tubes })),
-    synthesize: item => syntheticOrderFromOutsourcedTubes(item.orderId, item.data),
-  }];
+
+  const pendingItems: AnnotateItem<OutsourcedTube[]>[] = [];
+  const completedOnlyItems: AnnotateItem<OutsourcedTube[]>[] = [];
+  for (const [orderId, tubes] of allByOrder) {
+    if (pendingOrderIds.has(orderId)) pendingItems.push({ orderId, data: tubes });
+    else completedOnlyItems.push({ orderId, data: tubes });
+  }
+
+  const annotate: AnnotateBucket<Order, OutsourcedTube[]>[] = [
+    {
+      status: 'out',
+      items: pendingItems,
+      synthesize: item => syntheticOrderFromOutsourcedTubes(item.orderId, item.data, 'created'),
+    },
+    {
+      status: 'done',
+      items: completedOnlyItems,
+      synthesize: item => syntheticOrderFromOutsourcedTubes(item.orderId, item.data, 'validated'),
+      synthesizeOnly: true,
+    },
+  ];
   return buildMergedWork(buckets, annotate);
 }

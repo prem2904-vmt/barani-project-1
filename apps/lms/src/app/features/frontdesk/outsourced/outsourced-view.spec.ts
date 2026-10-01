@@ -222,6 +222,11 @@ describe('buildFrontdeskMergedWork — an order that is ONLY in the outsourced b
     expect(rows.length).toBe(1);
     expect(rows[0].order.id).toBe('out-only-2');
     expect(rows[0].source).toBe('synthetic');
+    // P1-5: a completed-only outsourced-only order synthesizes a 'done' row
+    // (never 'out' — it has nothing pending to lead with "Outsourced" for).
+    expect(rows[0].primary).toBe('done');
+    expect(rows[0].statuses).toEqual(['done']);
+    expect(rows[0].annotateData.done).toEqual([tube]); // inline actions (View etc.) still have the tube
   });
 
   it('an order with BOTH an ip row and an outsourced tube: ONE row, annotated (not synthetic), tube available for inline actions', () => {
@@ -253,5 +258,90 @@ describe('buildFrontdeskMergedWork — an order that is ONLY in the outsourced b
     expect(rows.length).toBe(4);
     expect(rows.find(r => r.order.id === 'out-only-4')?.source).toBe('synthetic');
     expect(rows.filter(r => r.source === 'order').map(r => r.order.id).sort()).toEqual(['billing-1', 'done-1', 'ip-1']);
+  });
+
+  it('P1-5: an order with BOTH a pending and a completed tube still leads with "out" (pending outranks), carrying BOTH tubes for inline actions', () => {
+    const pending = row({ sampleId: 's1', orderId: 'out-only-5', status: 'outsourced' });
+    const completed = row({ sampleId: 's2', orderId: 'out-only-5', status: 'completed', hasReport: true });
+    const rows = buildFrontdeskMergedWork([], [], [], [pending, completed]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].primary).toBe('out');
+    expect(rows[0].statuses).toEqual(['out']); // never ALSO 'done' — see the next test for why
+    expect((rows[0].annotateData.out as OutsourcedTube[]).map(t => t.sampleId).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('P1-5: a completed-only outsourced tube on an order that is genuinely ACTIVE for other reasons never marks it "done"', () => {
+    // An order still 'ip' (other in-house tests pending) that also happens
+    // to have a completed outsourced line: it must stay exactly 'ip' — a
+    // completed outsourced tube never implies the WHOLE order is done.
+    const ip = [minimalOrder('mixed-1')];
+    const completedTube = row({ orderId: 'mixed-1', status: 'completed', hasReport: true });
+    const rows = buildFrontdeskMergedWork(ip, [], [], [completedTube]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].statuses).toEqual(['ip']); // 'done' never added
+    expect(rows[0].primary).toBe('ip');
+    expect(rows[0].source).toBe('order');
+    expect(rows[0].annotateData.done).toBeUndefined();
+  });
+});
+
+describe('buildFrontdeskMergedWork — search (P1-6: the work card query must narrow synthesized rows too)', () => {
+  const minimalOrder = (id: string): Order => ({
+    id, patientId: 'p-other', branchId: 'b1', priority: 'Normal', source: 'walkin', status: 'created',
+    collectionType: 'walkin', createdAt: '2026-09-30T01:00:00Z', samples: [],
+  });
+
+  it('a query that matches no tube never synthesizes a row for it', () => {
+    const tube = row({ orderId: 'out-only-9', patientName: 'Mr. Arun Kumar' });
+    const matched = filterOutsourced([tube], { query: 'arun' });
+    const unmatched = filterOutsourced([tube], { query: 'zzz-no-match' });
+    expect(buildFrontdeskMergedWork([], [], [], matched).length).toBe(1);
+    expect(buildFrontdeskMergedWork([], [], [], unmatched).length).toBe(0); // "No matches" — not a stray row
+  });
+
+  it('a query narrows which tubes annotate a REAL row too (never shows an unrelated tube\'s data)', () => {
+    const ip = [minimalOrder('shared-2')];
+    const matching = row({ sampleId: 's1', orderId: 'shared-2', patientName: 'Ms. Target Patient' });
+    const other = row({ sampleId: 's2', orderId: 'other-order', patientName: 'Mr. Someone Else' });
+    const filtered = filterOutsourced([matching, other], { query: 'target' });
+    const rows = buildFrontdeskMergedWork(ip, [], [], filtered);
+    expect(rows.length).toBe(1); // only shared-2 (a real ip row) — 'other-order' never synthesized
+    expect(rows[0].order.id).toBe('shared-2');
+    expect(rows[0].statuses).toEqual(['ip', 'out']);
+  });
+});
+
+describe('buildFrontdeskMergedWork — a part-paid order that is ALSO in progress (regression, 2026-10-01 E2E)', () => {
+  // The reported bug: an in-progress order with an outstanding balance
+  // rendered its real order.status (e.g. "Billed", green) with no
+  // payment-due cue at all — it had silently fallen out of the 'billing'
+  // bucket. Root cause: FrontdeskLandingComponent.mergedWork fed
+  // `shownPaymentsDueOnly()` (which excludes an order that's ALSO
+  // in-progress — a dedup that belonged to the OLD sectioned no-chip view)
+  // into the 'billing' bucket instead of the plain `shownPaymentsDue()`.
+  // buildFrontdeskMergedWork/mergeWorkRows already does the union+precedence
+  // correctly — this pins that an order present in BOTH `ip` and `billing`
+  // comes out as ONE row, led by 'billing' (not silently 'ip' only).
+  const billedButUnpaid = (id: string): Order => ({
+    id, patientId: 'p1', branchId: 'b1', priority: 'Normal', source: 'walkin', status: 'billed',
+    collectionType: 'walkin', createdAt: '2026-09-30T01:00:00Z', samples: [],
+  });
+
+  it('an order in BOTH ip and billing: ONE row, primary "billing", "In progress" as the secondary badge', () => {
+    const order = billedButUnpaid('part-paid-1');
+    const rows = buildFrontdeskMergedWork([order], [], [order], []);
+    expect(rows.length).toBe(1); // never two rows for the same order
+    expect(rows[0].order).toBe(order); // the real order — its own status ('billed') is still there to read
+    expect(new Set(rows[0].statuses)).toEqual(new Set(['ip', 'billing']));
+    expect(rows[0].primary).toBe('billing'); // never left as plain 'ip' (which read as green "Billed")
+    expect(rows[0].secondary).toEqual(['ip']);
+    expect(rows[0].source).toBe('order');
+  });
+
+  it('an order ONLY in ip (fully paid, no balance) stays "ip" — the fix never force-adds billing', () => {
+    const order = billedButUnpaid('paid-in-full');
+    const rows = buildFrontdeskMergedWork([order], [], [], []);
+    expect(rows[0].statuses).toEqual(['ip']);
+    expect(rows[0].primary).toBe('ip');
   });
 });

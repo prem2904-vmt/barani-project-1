@@ -1256,8 +1256,8 @@
                 <li>
                   <div class="pf-wrow" [attr.data-priority]="row.order.priority" [attr.data-order-id]="row.order.id"
                     [class.pf-wrow--menu]="activeShareMenuOrderId() === row.order.id" tabindex="0"
-                    (click)="onWorkRowClick(row.order)"
-                    (keydown.enter)="$event.target === $event.currentTarget && openOrder(row.order)">
+                    (click)="openMergedRow(row)"
+                    (keydown.enter)="$event.target === $event.currentTarget && openMergedRow(row)">
                     <div class="pf-wrow__body">
                       <p class="pf-wrow__name"><pf-daily-no [of]="row.order" />{{ drawerName(row.order.patient) }}</p>
                       <p class="pf-wrow__meta nd-num">
@@ -1267,7 +1267,7 @@
                         <span class="pf-wrow__mi">{{ row.order.createdAt | date:'shortTime' }}</span>
                       </p>
                     </div>
-                    <span class="pf-wrow__status pf-wrow__status--merged" [attr.data-tone]="mergedTone(row)">
+                    <span class="pf-wrow__status pf-wrow__status--merged nd-num" [attr.data-tone]="mergedTone(row)">
                       <span class="pf-wrow__dot" aria-hidden="true"></span>
                       @if (row.primary === 'billing') {
                       {{ getBillBalance(row.order.id) | inr }} due

@@ -157,6 +157,34 @@ describe('OutsourcingService — server paging', () => {
       ctl.verify();
     });
 
+    it('P0-1 regression — a SHIFTING window (a new tube inserted ahead of the offset) never loops forever', async () => {
+      // total never reaches what _rows().length counts, because every "later"
+      // page the server returns is entirely rows we already have (the window
+      // shifted under us) — the OLD bug derived hasMore from rows().length <
+      // total, which this would make permanently true. The server's own
+      // `hasMore` is what must end the loop instead.
+      const p = svc.loadAll();
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 5, 1, true) });
+      // page 2 comes back FULL (pageSize items) but entirely duplicates of
+      // page 1 — a real shift would never duplicate ALL of them, but this is
+      // the worst case: 0 NEW rows from a full-size page.
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 5, 2, true) });
+      await p;
+      expect(svc.rows().map(r => r.sampleId)).toEqual(['1', '2']); // nothing new was added
+      ctl.verify(); // exactly 2 requests — it did NOT keep fetching page 3, 4, 5…
+    });
+
+    it('P0-1 regression — an EMPTY "more" page (rawCount 0) stops the loop, however hasMore reads', async () => {
+      const p = svc.loadAll();
+      (await nextRequest()).flush({ success: true, data: page([tube('1')], 5, 1, true) });
+      // The server still (perhaps wrongly) claims hasMore, but hands back
+      // nothing — loadAll must not spin fetching empty pages forever.
+      (await nextRequest()).flush({ success: true, data: page([], 5, 2, true) });
+      await p;
+      expect(svc.rows().map(r => r.sampleId)).toEqual(['1']);
+      ctl.verify(); // exactly 2 requests
+    });
+
     it('is a no-op once already fully loaded for the current status/partnerId — no request at all', async () => {
       const p1 = svc.loadAll();
       (await nextRequest()).flush({ success: true, data: page([tube('1')], 1, 1, false) });
