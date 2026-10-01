@@ -6,6 +6,7 @@ import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.comp
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { labToday } from '../../../shared/utils/lab-clock';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
@@ -82,11 +83,17 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
                   <div class="nd-field"><label class="nd-field__lbl" for="ph-rpr">Reason</label><input id="ph-rpr" class="nd-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Dose changed" /></div>
                 </div>
                 <div class="nd-field"><span class="nd-field__lbl">Refund by</span>
-                  <div class="nd-seg" role="radiogroup" aria-label="Refund by">
-                    @for (m of refundModes; track m.v) {
-                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="refundMode() === m.v" [attr.aria-pressed]="refundMode() === m.v" (click)="refundMode.set(m.v)">{{ m.l }}</button>
-                    }
-                  </div>
+                  @if (!billPaid()) {
+                    <p class="ph-sub">Nothing was paid on this bill — the return just reduces it, no refund.</p>
+                  } @else if (canRefund()) {
+                    <div class="nd-seg" role="radiogroup" aria-label="Refund by">
+                      @for (m of refundModes; track m.v) {
+                        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="refundMode() === m.v" [attr.aria-pressed]="refundMode() === m.v" (click)="refundMode.set(m.v)">{{ m.l }}</button>
+                      }
+                    </div>
+                  } @else {
+                    <p class="ph-sub">This sale was paid — ask someone with refund permission to record the return.</p>
+                  }
                 </div>
                 @if (refund() != null) {
                   <div class="ph-note" role="status"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -108,6 +115,9 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
               }
             }
           </div>
+          @if (kind() === 'patient' && refundBlocked()) {
+            <p class="ph-sub" role="alert">You don't have permission to process a refund on this paid sale — ask someone who does.</p>
+          }
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--secondary" (click)="clear()">Clear</button>
             <button type="button" class="nd-btn" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()" [disabled]="!ready() || busy()" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="submit()">Record return</button>
@@ -121,6 +131,7 @@ export class PharmacyReturnsPage {
   private readonly api = inject(PharmacyApi);
   private readonly toast = inject(ToastService);
   private readonly theme = inject(ThemeService);
+  private readonly auth = inject(AuthService, { optional: true });
   protected readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
   protected readonly today = labToday();
   protected readonly inr = inr;
@@ -164,8 +175,19 @@ export class PharmacyReturnsPage {
   protected readonly batchOpts = computed<PfSelectOption<string>[]>(() => this.batches().filter(b => b.qtyOnHand > 0).map(b => ({ value: b.id, label: `${b.batchNo} · exp ${expiryLabel(b.expiryDate)}`, hint: `${b.qtyOnHand} on hand` })));
   protected readonly supplierOpts = computed<PfSelectOption<string>[]>(() => [{ value: '', label: 'The batch supplier' }, ...this.suppliers().map(s => ({ value: s.id, label: s.name }))]);
   protected readonly ready = computed(() => this.kind() === 'patient'
-    ? !!this.sale() && !!this.lineId() && this.qty() > 0 && this.qty() <= this.maxBack()
+    ? !!this.sale() && !!this.lineId() && this.qty() > 0 && this.qty() <= this.maxBack() && !this.refundBlocked()
     : !!this.batchId() && this.qty() > 0 && this.qty() <= (this.batches().find(b => b.id === this.batchId())?.qtyOnHand ?? 0));
+
+  /// A patient-return REFUND needs process_refund (owner 2026-10-01), enforced
+  /// server-side — this just hides/disables the action with a clear message so
+  /// the desk isn't surprised by a 403. Any amount already paid on the sale
+  /// means the return CAN produce a refund (full or part-paid alike); an
+  /// unpaid bill never refunds, so it's never blocked here.
+  protected readonly canRefund = computed(() => {
+    try { return !!this.auth?.hasPermission('process_refund'); } catch { return false; }
+  });
+  protected readonly billPaid = computed(() => (this.sale()?.bill?.totalPaid ?? 0) > 0);
+  protected readonly refundBlocked = computed(() => this.billPaid() && !this.canRefund());
 
   constructor() {
     this.load();
