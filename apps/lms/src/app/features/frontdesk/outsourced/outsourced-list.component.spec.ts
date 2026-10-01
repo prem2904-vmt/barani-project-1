@@ -208,6 +208,58 @@ describe('Frontdesk Outsourced tab', () => {
     expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
   });
 
+  it('new design pins the fetch to "all" on init — Completed tubes are never left unloaded just because there\'s no status control to pick them', () => {
+    const rowsSig = signal<OutsourcedTube[]>([]);
+    const status = signal<'all' | 'outsourced' | 'completed'>('outsourced'); // NOT 'all' — the server paging default
+    const svc = {
+      rows: rowsSig, loading: signal(false), loadingMore: signal(false), status, partnerId: signal<string | null>(null),
+      query: signal(''), visible: computed(() => rowsSig()), partners: computed(() => []),
+      counts: computed(() => ({ outsourced: 0, completed: 0 })), hasMore: signal(false), nextCount: signal(0),
+      apiBase: 'https://api.test', load: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
+      upload: vi.fn(async () => ''), complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
+      setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []), reopen: vi.fn(async () => {}),
+    };
+    TestBed.configureTestingModule({
+      imports: [OutsourcedListComponent],
+      providers: [
+        { provide: OutsourcingService, useValue: svc },
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+        { provide: DialogService, useValue: { confirm: vi.fn(), actions: vi.fn() } },
+      ],
+    });
+    const f = TestBed.createComponent(OutsourcedListComponent);
+    // showFilters defaults false (new design) — never set true, unlike the
+    // classic-design test above, so ngOnInit sees the real new-design value.
+    f.detectChanges();
+    expect(status()).toBe('all');
+    expect(svc.load).toHaveBeenCalled();
+  });
+
+  it('classic design leaves the status alone on init (its own segmented control owns it)', () => {
+    const rowsSig = signal<OutsourcedTube[]>([]);
+    const status = signal<'all' | 'outsourced' | 'completed'>('completed');
+    const svc = {
+      rows: rowsSig, loading: signal(false), loadingMore: signal(false), status, partnerId: signal<string | null>(null),
+      query: signal(''), visible: computed(() => rowsSig()), partners: computed(() => []),
+      counts: computed(() => ({ outsourced: 0, completed: 0 })), hasMore: signal(false), nextCount: signal(0),
+      apiBase: 'https://api.test', load: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
+      upload: vi.fn(async () => ''), complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
+      setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []), reopen: vi.fn(async () => {}),
+    };
+    TestBed.configureTestingModule({
+      imports: [OutsourcedListComponent],
+      providers: [
+        { provide: OutsourcingService, useValue: svc },
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn() } },
+        { provide: DialogService, useValue: { confirm: vi.fn(), actions: vi.fn() } },
+      ],
+    });
+    const f = TestBed.createComponent(OutsourcedListComponent);
+    f.componentRef.setInput('showFilters', true); // bound from the start, like the real template
+    f.detectChanges();
+    expect(status()).toBe('completed'); // untouched
+  });
+
   it('no more pages: no "Load more" button', () => {
     const { el } = setup([row()]);
     expect(el.querySelector('.pf-out__more')).toBeNull();

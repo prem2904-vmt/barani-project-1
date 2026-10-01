@@ -216,7 +216,16 @@ export class OutsourcedListComponent implements OnInit {
   readonly statusOptions = () => outsourcedStatusOptions(this.svc.counts());
   readonly partnerSelectOptions = () => outsourcedPartnerOptions(this.svc.partners());
 
-  ngOnInit(): void { void this.svc.load(); }
+  ngOnInit(): void {
+    // Server paging (release 2026-10-01) now fetches by STATUS (cheaper —
+    // the lean scan narrows before the rich fetch). The new design has no
+    // status control and must still show every status (open tubes first,
+    // then completed — see `shown` above): pin the fetch to "all" so
+    // Completed tubes aren't silently left unloaded. Classic design keeps
+    // whatever `svc.status` already is (its segmented control's own value).
+    if (!this.showFilters()) this.svc.status.set('all');
+    void this.svc.load();
+  }
 
   /** The next page, appended (the service itself no-ops mid-fetch / once
    *  every row for the current filter is loaded). */
