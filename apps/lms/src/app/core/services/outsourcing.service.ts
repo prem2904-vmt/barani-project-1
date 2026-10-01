@@ -1,18 +1,33 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
 import { PlatformService } from './platform.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import {
-  OutsourcedStatusFilter, OutsourcedTube, PartnerReport, PdfParts, countByStatus, filterOutsourced, partnerOptions,
+  OUTSOURCED_PAGE_SIZE, OutsourcedPage, OutsourcedServerCounts, OutsourcedStatusFilter, OutsourcedTube, PartnerReport,
+  PdfParts, countByStatus, filterOutsourced, outsourcedPageUrl, partnerOptions,
 } from '../../features/frontdesk/outsourced/outsourced-view';
+
+/** The lab window the tab covers (DB optimisation: a wide-but-bounded window,
+ *  paged, rather than everything in it loaded at once). */
+const OUTSOURCED_DAYS = 90;
 
 /**
  * The Frontdesk outsourcing desk: the "Outsourced" tab's rows + filters, and
  * the partner-report upload → Completed flow (backend OutsourcingService).
  * The query is set by the work card's header search; status / partner are
  * the classic design's in-list filters (the new design has none).
+ *
+ * Server paging (release 2026-10-01): the unpaged endpoint loaded the WHOLE
+ * 90-day window's relational graph on every call (~125 ms). `load()` now
+ * pulls ONE page (status / partnerId applied server-side — changing either
+ * resets to page 1); `loadMore()` appends the next page. An older server
+ * (or no paging support) still answers a plain array — handled the same way
+ * as the report queue (report-summary.ts / report-queue.component.ts).
+ * The work card's free-text SEARCH stays client-side, over whatever pages
+ * are currently loaded (it never had server support, and still doesn't) —
+ * "Load more" (or narrow by status / partner) before searching an older row.
  */
 @Injectable({ providedIn: 'root' })
 export class OutsourcingService {
@@ -22,8 +37,10 @@ export class OutsourcingService {
 
   private readonly _rows = signal<OutsourcedTube[]>([]);
   private readonly _loading = signal(false);
+  private readonly _loadingMore = signal(false);
   readonly rows = this._rows.asReadonly();
   readonly loading = this._loading.asReadonly();
+  readonly loadingMore = this._loadingMore.asReadonly();
 
   readonly query = signal('');
   readonly status = signal<OutsourcedStatusFilter>('outsourced');
@@ -32,7 +49,14 @@ export class OutsourcingService {
   /** The front desk's DATE filter (work card range) — null = every row. Status
    *  and date are independent filters; counts follow the date range. */
   readonly dateWindow = signal<((t: OutsourcedTube) => boolean) | null>(null);
-  private readonly windowed = computed(() => {
+  /** Every row within the current date window, BOTH statuses — unaffected by
+   *  `status()` / `partnerId()` / `query()` (those layer on top, in
+   *  `visible()`, for the dedicated Outsourced tab). The frontdesk merged
+   *  work list reads this directly: it needs to know about a completed
+   *  outsourced tube too (an order that is ONLY outsourced must still get a
+   *  merged row — work-merge.ts's `synthesize`), not just whichever status
+   *  the Outsourced tab's own filter happens to be showing. */
+  readonly windowed = computed(() => {
     const w = this.dateWindow();
     return w ? this._rows().filter(w) : this._rows();
   });
@@ -40,24 +64,140 @@ export class OutsourcingService {
   readonly visible = computed(() =>
     filterOutsourced(this.windowed(), { query: this.query(), status: this.status(), partnerId: this.partnerId() }));
   readonly partners = computed(() => partnerOptions(this._rows()));
-  readonly counts = computed(() => countByStatus(this.windowed()));
+  /** The server's whole-window totals when paging answered them (cheap, a
+   *  lean scan — see OutsourcingService.CountsAsync, mw); the old
+   *  client-computed-from-what's-loaded count otherwise (unpaged server, or
+   *  before the first page lands). */
+  private readonly _serverCounts = signal<OutsourcedServerCounts | null>(null);
+  readonly counts = computed(() => this._serverCounts() ?? countByStatus(this.windowed()));
+
+  private readonly _total = signal<number | null>(null);
+  private _page = 0;
+  private _seq = 0;
+  /** More pages beyond what's loaded (null total = an unpaged server, or
+   *  nothing fetched yet — no "Load more" either way). */
+  readonly hasMore = computed(() => {
+    const t = this._total();
+    return t != null && this._rows().length < t;
+  });
+  /** Rows the next page brings ("Load 50 more"). */
+  readonly nextCount = computed(() =>
+    Math.max(0, Math.min(OUTSOURCED_PAGE_SIZE, (this._total() ?? 0) - this._rows().length)));
+
+  /** loadAll() stopped at the cap with more rows still on the server — an
+   *  honest "there's more than we're showing" signal (never silently
+   *  dropped). Cleared on the next successful reset-mode fetch. */
+  private readonly _truncated = signal(false);
+  readonly truncated = this._truncated.asReadonly();
+  private static readonly LOAD_ALL_CAP = 1000;
 
   get apiBase(): string { return this.platform.getApiUrl(); }
 
-  async load(): Promise<void> {
-    this._loading.set(true);
+  /** What status/partnerId `_rows()` currently holds (null = nothing fetched
+   *  yet, or the last fetch failed). Set from {@link fetch} on every
+   *  successful reset — lets {@link ensureLoaded} / {@link loadAll} tell
+   *  "we already have this filter's data" from "this is a different filter,
+   *  or nothing at all" without re-fetching just to find out. */
+  private _loadedFor: { status: OutsourcedStatusFilter; partnerId: string | null } | null = null;
+  private matchesLoaded(): boolean {
+    const f = this._loadedFor;
+    return !!f && f.status === this.status() && f.partnerId === this.partnerId() && this._rows().length > 0;
+  }
+
+  /** Page 1 for the current status / partner filter. */
+  async load(): Promise<void> { await this.fetch('reset'); }
+
+  /** Make sure SOMETHING is loaded for the current status / partnerId — a
+   *  no-op when we already have it (same filter, at least one row fetched),
+   *  so the dedicated Outsourced tab never re-fetches page 1 just because it
+   *  mounted, when the frontdesk merged list (or an earlier visit) already
+   *  loaded this exact filter — same status ('all' in the new design, which
+   *  is also what the merged list always uses) and the same partner. */
+  async ensureLoaded(): Promise<void> {
+    if (this.matchesLoaded()) return;
+    await this.fetch('reset');
+  }
+
+  /** The next page, appended. A no-op mid-fetch or once every row is loaded. */
+  async loadMore(): Promise<void> {
+    if (this._loadingMore() || !this.hasMore()) return;
+    await this.fetch('more');
+  }
+
+  /**
+   * EVERY row for the current status / partnerId, not just one page — the
+   * frontdesk merged list needs the whole window (an order that is only
+   * outsourced must still show up, wherever its tube sorts in the window),
+   * unlike the dedicated tab's own "Load more" pacing. Resumes a partial
+   * load for the SAME filter instead of restarting it; capped at
+   * {@link LOAD_ALL_CAP} rows so a pathological tenant's window can't hang
+   * the UI — `truncated()` then reports there's more than we loaded. A
+   * no-op once everything for this filter is already in (no chip toggling
+   * between this and the dedicated tab ever double-fetches the same page).
+   */
+  async loadAll(cap = OutsourcingService.LOAD_ALL_CAP): Promise<void> {
+    if (!this.matchesLoaded()) await this.fetch('reset');
+    while (this.hasMore() && this._rows().length < cap) await this.fetch('more');
+    this._truncated.set(this.hasMore());
+  }
+
+  // status / partnerId are also applied server-side — either changing means
+  // a different page 1, not just a different client-side slice of page 1.
+  private readonly _refetchOnFilterChange = effect(() => {
+    this.status(); this.partnerId(); // tracked
+    untracked(() => {
+      if (this._rows().length === 0 && this._total() === null) return; // nothing loaded yet — load() will do the first fetch
+      void this.fetch('reset');
+    });
+  });
+  private async fetch(mode: 'reset' | 'more'): Promise<void> {
+    const seq = ++this._seq;
+    const page = mode === 'more' ? this._page + 1 : 1;
+    const filter = { status: this.status(), partnerId: this.partnerId() };
+    // A fresh page-1 fetch starts a new story — any earlier loadAll() cap is
+    // stale the moment the filter (or the branch) resets; loadAll() sets its
+    // own truncated() again if THIS fetch also needs more than it gets.
+    if (mode === 'reset') this._truncated.set(false);
+    if (mode === 'more') this._loadingMore.set(true); else this._loading.set(true);
     try {
-      this._rows.set((await firstValueFrom(this.api.get<OutsourcedTube[]>('/api/samples/outsourced?days=90'))) ?? []);
+      const url = outsourcedPageUrl({ days: OUTSOURCED_DAYS, page, pageSize: OUTSOURCED_PAGE_SIZE, ...filter });
+      const res = await firstValueFrom(this.api.get<OutsourcedTube[] | OutsourcedPage | null>(url));
+      if (seq !== this._seq) return;
+      if (!res || Array.isArray(res)) {
+        // No paging support (an older server) — the old unpaged array.
+        this._rows.set(res ?? []);
+        this._total.set(null);
+        this._serverCounts.set(null);
+        this._page = 1;
+        this._loadedFor = filter;
+        return;
+      }
+      const items = res.items ?? [];
+      if (mode === 'more') {
+        const seen = new Set(this._rows().map(r => r.sampleId));
+        this._rows.update(cur => [...cur, ...items.filter(r => !seen.has(r.sampleId))]);
+      } else {
+        this._rows.set(items);
+      }
+      this._total.set(res.total);
+      this._serverCounts.set(res.counts);
+      this._page = page;
+      this._loadedFor = filter;
     } catch {
-      this._rows.set([]);
+      if (mode === 'reset') { this._rows.set([]); this._total.set(null); this._serverCounts.set(null); this._loadedFor = null; }
     } finally {
-      this._loading.set(false);
+      if (seq === this._seq) { this._loading.set(false); this._loadingMore.set(false); }
     }
   }
 
   /** Drop the cached rows (branch switch: they belong to the old branch). */
   reset(): void {
     this._rows.set([]);
+    this._total.set(null);
+    this._serverCounts.set(null);
+    this._truncated.set(false);
+    this._loadedFor = null;
+    this._page = 0;
   }
 
   /** Upload the partner lab's report file; returns its stored URL. */

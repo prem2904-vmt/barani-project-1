@@ -116,9 +116,14 @@ describe('Front desk — status chips + date filter markup', () => {
     expect(html.slice(i, j)).not.toMatch(/@if \(rightTab\(\)/);
   });
 
-  it('each status list renders under statusShown (all when no chip) + an all-statuses empty state', () => {
+  it('each single-status chip still renders its own list under statusShown, gated to that chip', () => {
     for (const s of ['ip', 'done', 'billing']) expect(html).toContain(`@if (statusShown('${s}')`);
-    expect(html).toContain("@else if (rightTab() === null && outsourcing.visible().length > 0)");
+    // The sectioned "all statuses" render (a header + list per feed, incl. a
+    // separate embedded Outsourced list) is gone — replaced by ONE merged
+    // list (work-merge.ts) when no chip is on.
+    expect(html).not.toContain("@else if (rightTab() === null && outsourcing.visible().length > 0)");
+    expect(html).toContain('@if (rightTab() === null) {');
+    expect(html).toContain('data-list="merged"');
     expect(doc.querySelector('[data-empty="all"]')).not.toBeNull();
   });
 });

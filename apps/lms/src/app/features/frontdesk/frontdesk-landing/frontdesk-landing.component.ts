@@ -24,6 +24,8 @@ import { BranchLabConfigService } from '../../../core/services/branch-lab-config
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { MergedWorkRow, WORK_STATUS_LABEL } from './work-merge';
+import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -118,6 +120,8 @@ import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.co
 import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
+import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
+import { OutsourcedTube, buildFrontdeskMergedWork } from '../outsourced/outsourced-view';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
@@ -164,7 +168,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -860,11 +864,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
   /** Ids of the orders in the current work feed (today's feed / the range). */
   private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
-  /** The Outsourced list follows the same date range (its own tube rows). */
-  private readonly _outsourcedWindow = effect(() => {
-    const bounds = this.workBounds(); const feed = this._feedIds();
-    this.outsourcing.dateWindow.set(t => inWorkWindow(t.createdAt, bounds, feed.has(t.orderId)));
-  });
+  /** The Outsourced list follows the same date range (its own tube rows);
+   *  while the merged ("no chip") view is showing, also keeps the WHOLE
+   *  window fully loaded (merged-outsourced-loader.ts — see there for why
+   *  and exactly when it re-fires: init, date-range change, refresh, chip
+   *  toggle). */
+  private readonly _outsourcedWindow = wireMergedOutsourcedLoader(
+    this._rightTab, this.workBounds, this._feedIds, this.outsourcing,
+  );
   private readonly _clearOutsourcedWindow = inject(DestroyRef).onDestroy(() => this.outsourcing.dateWindow.set(null));
   /** "All statuses" (no chip on): the same combined list, deduped — an
    *  in-progress order with a balance is listed once, under In progress. */
@@ -888,6 +895,53 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly shownInProgress = computed(() => filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()));
   readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
   readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+
+  // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
+  // With every status chip off, the four feeds used to render as four
+  // separate sections (an order could repeat across them). Now: ONE list,
+  // each order once, by the day's arrival order (#1, #2 … — work-merge.ts).
+  // A chip still filters to a single status exactly as before — this signal
+  // is only consulted when `rightTab()` is null.
+  readonly WORK_STATUS_LABEL = WORK_STATUS_LABEL;
+  /** The merge itself (grouping outsourced tubes by order, annotating or
+   *  synthesizing a row) is pulled out to `buildFrontdeskMergedWork`
+   *  (outsourced-view.ts) — pure and unit-tested on its own, without this
+   *  (huge, heavily-injected) component. `windowed()` — not `visible()` —
+   *  because the merged list needs BOTH outsourced statuses (an order that
+   *  is only outsourced must still get a row once its tube is completed),
+   *  never just whichever status the dedicated Outsourced tab's own filter
+   *  happens to be showing. */
+  readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
+    if (this._rightTab() !== null) return [];
+    return buildFrontdeskMergedWork(
+      this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDueOnly(), this.outsourcing.windowed(),
+    );
+  });
+  /** The merged row's status text for everything but Payments due (the
+   *  template renders the balance itself via the `inr` pipe, as the
+   *  single-status Payments due rows already do) — the order's own
+   *  detailed status for In progress / Completed, and a fixed label for
+   *  Outsourced (a tube status, not an order one). */
+  mergedStatusText(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'out') return 'Outsourced';
+    return this.effectiveStatusLabel(row.order);
+  }
+  /** Dot colour for the merged row: Payments due / Outsourced read amber
+   *  (the same "needs the desk" amber Payments due already uses); In
+   *  progress / Completed reuse the order's own tone (rowTone) — a
+   *  synthetic (outsourced-only) row has no real order status, so it reads
+   *  amber too (handled by the `source === 'synthetic'` check below, which
+   *  only ever carries primary 'out' anyway). */
+  mergedTone(row: MergedWorkRow<Order>): string {
+    return row.primary === 'billing' || row.primary === 'out' || row.source === 'synthetic'
+      ? 'amber' : this.rowTone(row.order);
+  }
+  /** The order's outsourced tubes within the window, for inline actions
+   *  (pf-outsourced-actions, one per tube) — empty when the row has no
+   *  'out' status. */
+  outsourcedTubesFor(row: MergedWorkRow<Order>): OutsourcedTube[] {
+    return (row.annotateData.out as OutsourcedTube[] | undefined) ?? [];
+  }
 
   getBillBalance(orderId: string): number {
     return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;
