@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 
 interface PatientDocument {
@@ -80,15 +81,16 @@ const DOC_TYPES = [
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           @for (d of docs(); track d.id) {
             <div class="group relative rounded-xl overflow-hidden border border-[var(--glass-border)] bg-[var(--bg-card-solid)]">
-              <a [href]="d.url" target="_blank" rel="noopener" class="block aspect-square bg-[var(--glass-bg)] flex items-center justify-center">
+              <button type="button" (click)="uploads.open(d.url)" [attr.aria-label]="'Open ' + d.fileName"
+                      class="block w-full aspect-square bg-[var(--glass-bg)] flex items-center justify-center">
                 @if (isImage(d)) {
-                  <img [src]="d.url" [alt]="d.fileName" class="w-full h-full object-cover" loading="lazy" />
+                  <img [src]="uploads.src(d.url)" [alt]="d.fileName" class="w-full h-full object-cover" loading="lazy" />
                 } @else {
                   <svg class="w-10 h-10 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>
                   </svg>
                 }
-              </a>
+              </button>
               <div class="p-2">
                 <p class="text-xs font-semibold text-[var(--text-primary)] truncate" [title]="d.fileName">{{ d.fileName }}</p>
                 <p class="text-[10px] text-[var(--text-muted)]">{{ label(d.documentType) }} · {{ kb(d.sizeBytes) }}</p>
@@ -108,6 +110,8 @@ const DOC_TYPES = [
 export class PatientDocumentsComponent {
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  /** Patient files only through the authenticated endpoint (logic audit). */
+  protected readonly uploads = inject(UploadsService);
 
   readonly patientId = input.required<string>();
   protected readonly types = DOC_TYPES;

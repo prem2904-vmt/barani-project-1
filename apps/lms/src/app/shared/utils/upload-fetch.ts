@@ -29,9 +29,22 @@ export function isOpdMediaPath(url: string | null | undefined): url is string {
     || /^\/api\/opd\/pharmacy\/counter\/[^/]+\/prescription\/file$/.test(path);
 }
 
+/** A patient document's authenticated file endpoint
+ *  (`/api/patients/{id}/documents/{docId}/file`) — logic audit: documents were
+ *  presigned links that worked without the session. */
+export function isPatientDocumentPath(url: string | null | undefined): url is string {
+  if (!url) return false;
+  return /^\/api\/patients\/[^/]+\/documents\/[^/]+\/file$/.test(url.split('?')[0]);
+}
+
+/** An API endpoint that IS the file (fetched directly, with the session). */
+export function isApiFileEndpoint(url: string | null | undefined): url is string {
+  return isOpdMediaPath(url) || isPatientDocumentPath(url);
+}
+
 /** Any path that must go through the authenticated fetcher — never a bare `fetch()`. */
 export function isAuthedApiFilePath(url: string | null | undefined): url is string {
-  return isPrivateUploadPath(url) || isOpdMediaPath(url);
+  return isPrivateUploadPath(url) || isApiFileEndpoint(url);
 }
 
 /** A stored reference to one of OUR uploads, as its "/uploads/…" path. Older

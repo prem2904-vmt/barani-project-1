@@ -320,6 +320,16 @@ describe('OPD media paths (consult files, a walk-in prescription — task: authe
     }
   });
 
+  it('a patient document is an authenticated file endpoint: fetched at that exact url with the session (logic audit)', async () => {
+    const DOC = '/api/patients/0b8f5f4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/documents/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f/file';
+    expect(isAuthedApiFilePath(DOC)).toBe(true);
+    expect(isAuthedApiFilePath('/api/patients/p1/documents')).toBe(false);   // the list endpoint, not a file
+    const { svc, get } = setup();
+    const b = await svc.blob(DOC);
+    expect(get).toHaveBeenCalledWith(`https://api.test${DOC}`, { responseType: 'blob' });
+    expect(b).toBeInstanceOf(Blob);
+  });
+
   it('a gone (410) consult file is remembered missing, the same as an /uploads/… file', async () => {
     const gone = new HttpErrorResponse({ status: 410, error: { error: 'file_missing' } });
     const { svc } = setup(vi.fn(() => throwError(() => gone)));

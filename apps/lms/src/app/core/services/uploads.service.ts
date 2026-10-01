@@ -3,7 +3,7 @@ import { Injectable, Injector, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PlatformService } from './platform.service';
 import { ToastService } from './toast.service';
-import { absoluteApiUrl, isAuthedApiFilePath, isOpdMediaPath, isPrivateUploadPath, registerUploadFetcher, uploadPathOf } from '../../shared/utils/upload-fetch';
+import { absoluteApiUrl, isApiFileEndpoint, isAuthedApiFilePath, isPrivateUploadPath, registerUploadFetcher, uploadPathOf } from '../../shared/utils/upload-fetch';
 
 /**
  * Private uploads in the app. "/uploads/…" files are served only to the
@@ -109,7 +109,7 @@ export class UploadsService {
     try {
       // OPD's media endpoints ARE the path (their own query string already
       // on it); "/uploads/…" goes through the one shared file endpoint.
-      const req$ = isOpdMediaPath(path)
+      const req$ = isApiFileEndpoint(path)
         ? this.http.get(absoluteApiUrl(path, this.apiBase), { responseType: 'blob' })
         : this.http.get(`${this.apiBase}/api/uploads/file`, { params: { path }, responseType: 'blob' });
       const b = await firstValueFrom(req$);

@@ -257,6 +257,23 @@ describe('Result entry — entering a value ticks its print box (owner 2026-09-3
     expect(hiddenPuts(api)).toEqual([['PCV'], []]);      // latest state follows
   });
 
+  it('Submit waits for the print choices in flight (the final report reads the SAVED list) — logic audit', async () => {
+    const { el, f, c, api } = await render(sampleFixture());
+    const pending: Subject<{}>[] = [];
+    api.put.mockImplementation(() => { const s = new Subject<{}>(); pending.push(s); return s; });
+    typeInto(f, el, 'Hb', '12');
+    typeInto(f, el, 'PCV', '40');                        // queued behind the first save
+    const submitted = c.submitAll();
+    await new Promise(r => setTimeout(r, 0));
+    expect(api.post.mock.calls.some(([u]) => u === '/api/samples/smp-1/results')).toBe(false);
+    pending[0].next({}); pending[0].complete();          // first lands → the LATEST list goes out
+    await new Promise(r => setTimeout(r, 0));
+    expect(api.post.mock.calls.some(([u]) => u === '/api/samples/smp-1/results')).toBe(false);
+    pending[1].next({}); pending[1].complete();          // every print choice saved
+    await submitted;
+    expect(api.post.mock.calls.some(([u]) => u === '/api/samples/smp-1/results')).toBe(true);
+  });
+
   it('one ticked value anywhere → Submit asks nothing', async () => {
     const { c, api, dialog } = await render(sampleFixture());
     c.setValue('ot1', 'Hb', 13);

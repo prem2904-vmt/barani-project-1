@@ -81,6 +81,9 @@ export function usualsFrom(...sets: (readonly OpdRxLineDto[] | undefined | null)
   return out;
 }
 
+/** Acknowledgements reset on any line copied / swapped into a new Rx. */
+export const FRESH_ACKS = { allergyAck: false, allergyAckNote: null, pregnancyAck: false, pregnancyAckNote: null } as const;
+
 /** Apply a "usual" set: adds its lines (skipping drugs already on the Rx), its
  *  tests (skipping ordered ones) and — a template fallback only (critic §1 #6)
  *  — its advice, but ONLY when the doctor hasn't written any yet. Returns the
@@ -88,7 +91,10 @@ export function usualsFrom(...sets: (readonly OpdRxLineDto[] | undefined | null)
 export function applyUsual(s: ConsultEditState, u: ConsultUsual, drugs: readonly ConsultDrugRef[]):
   { next: ConsultEditState; addedKeys: string[]; addedTests: string[]; addedAdvice: boolean } {
   const have = new Set(s.lines.map(l => l.drug.id));
-  const add = u.rx.map(d => fromDto({ ...d, id: undefined }, drugs)).filter(l => !have.has(l.drug.id));
+  // Never carry an acknowledgement onto a NEW prescription (logic audit P0): a
+  // "usual" can come from another patient's consult — allergy / pregnancy
+  // reviews belong to that patient, not this one.
+  const add = u.rx.map(d => fromDto({ ...d, id: undefined, ...FRESH_ACKS }, drugs)).filter(l => !have.has(l.drug.id));
   const haveT = new Set(s.tests.map(t => t.testId));
   const addT = u.tests.filter(t => !haveT.has(t.testId));
   const addedAdvice = !!u.advice && !s.advice.trim();

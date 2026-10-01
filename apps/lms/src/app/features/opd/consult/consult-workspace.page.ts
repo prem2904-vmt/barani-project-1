@@ -16,7 +16,7 @@ import {
   ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
-  ConsultEditState, ConsultStep, STEP_TITLES, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
+  ConsultEditState, ConsultStep, FRESH_ACKS, STEP_TITLES, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
 } from './consult-state';
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
@@ -653,7 +653,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const lv = this.ws()?.lastVisit;
     if (!lv || !this.editable()) return;
     const have = new Set(this.st().lines.map(l => l.drug.id));
-    const add = lv.rx.map(d => fromDto({ ...d, id: undefined, allergyAck: false }, this.drugList())).filter(l => !have.has(l.drug.id));
+    const add = lv.rx.map(d => fromDto({ ...d, id: undefined, ...FRESH_ACKS }, this.drugList())).filter(l => !have.has(l.drug.id));
     this.patch({ lines: [...this.st().lines, ...add] });
     this.toast.info(`Repeated ${add.length} medicine${add.length === 1 ? '' : 's'} from ${new Date(lv.visitDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
     this.step.set(2);
@@ -662,7 +662,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const old = this.st().lines.find(l => l.key === key);
     if (!old) return;
     const line = newRxLine(alt.id, this.usuals()[alt.id] ?? null);
-    this.patch({ lines: this.st().lines.map(l => (l.key === key ? { ...l, id: undefined, drug: alt, line, allergyAck: false, allergyAckNote: null } : l)) });
+    this.patch({ lines: this.st().lines.map(l => (l.key === key ? { ...l, id: undefined, drug: alt, line, ...FRESH_ACKS } : l)) });
     this.toast.info(`${old.drug.name} swapped for ${alt.name}`);
   }
   seeLine() { this.step.set(2); this.glanceOpen.set(false); }

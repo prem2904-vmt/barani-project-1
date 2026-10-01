@@ -1727,6 +1727,7 @@ export class SampleResultEntryComponent {
     if (!(await this.confirmNothingPrints(targets, "validate"))) return;
     this.submitAct.set('validate');
     this._submitting.set(true);
+    await this.hiddenSettled();
     let ok = 0, lastErr = '';
     for (const t of targets) {
       try { await firstValueFrom(this.api.post(`/api/validation/${t.id}/validate`, { note: null })); ok++; }
@@ -1969,6 +1970,7 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting()) return;
     this.submitAct.set('submit');
     this._submitting.set(true);
+    await this.hiddenSettled();
     const all = this._values();
     // Skip tests that the backend will refuse:
     //   - 'validated' is signed off (must be rejected before re-entry)
@@ -2279,6 +2281,7 @@ export class SampleResultEntryComponent {
     try {
       // 1. The unsaved typing first (local copy + server draft, awaited).
       await this.flushPendingNow();
+      await this.hiddenSettled();
       this.submitAct.set('all');
       this._submitting.set(true);
       this.submitReport.set([]);
@@ -2527,6 +2530,18 @@ export class SampleResultEntryComponent {
    *  quick ticks can never land on the server out of order. */
   private readonly _hiddenInFlight = new Set<string>();
   private readonly _hiddenDirty = new Set<string>();
+  private readonly _hiddenIdle: Array<() => void> = [];
+  /** Resolves once every print-choice save has reached the server (capped).
+   *  Logic audit: Submit / Validate can issue the FINAL report straight away
+   *  (direct flow), and the report reads the SAVED hidden list — a tick still
+   *  in flight left that value off the issued final. */
+  hiddenSettled(maxMs = 10_000): Promise<void> {
+    if (this._hiddenInFlight.size === 0) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      const t = setTimeout(resolve, maxMs);
+      this._hiddenIdle.push(() => { clearTimeout(t); resolve(); });
+    });
+  }
   private setReportHidden(testId: string, next: string[]) {
     this._reportHidden.update(m => ({ ...m, [testId]: next }));
     this.saveReportHidden(testId);
@@ -2538,6 +2553,7 @@ export class SampleResultEntryComponent {
     const done = () => {
       this._hiddenInFlight.delete(testId);
       if (this._hiddenDirty.delete(testId)) this.saveReportHidden(testId);
+      if (this._hiddenInFlight.size === 0) this._hiddenIdle.splice(0).forEach(r => r());
     };
     this.api.put(`/api/results/${testId}/report-hidden`, { hidden }).subscribe({
       complete: done,

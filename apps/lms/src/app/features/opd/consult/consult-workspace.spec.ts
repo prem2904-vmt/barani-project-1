@@ -68,6 +68,12 @@ describe('Consult draft body + usual set', () => {
     expect(u.lines.map(l => l.drug.id)).toEqual(['d-clav']);
     expect(u.tests).toEqual([]);
   });
+  it('applyUsual never carries an allergy / pregnancy acknowledgement onto the new Rx (logic audit P0)', () => {
+    const acked = { ...dto('d-mont', [0, 0, 1]), allergyAck: true, allergyAckNote: 'reviewed', pregnancyAck: true, pregnancyAckNote: 'ok for A' };
+    const r = applyUsual(BASE, { rx: [acked], tests: [] }, [CLAV]);
+    expect(r.next.lines[0]).toMatchObject({ allergyAck: false, pregnancyAck: false });
+    expect(r.next.lines[0].pregnancyAckNote ?? null).toBeNull();
+  });
   it('usualsFrom takes the first set that mentions a drug', () => {
     const u = usualsFrom([dto('a', [0, 0, 1])], [dto('a', [1, 1, 1]), dto('b')]);
     expect(u['a'].sched).toEqual(timesSched([0, 0, 1]));

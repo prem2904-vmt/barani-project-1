@@ -55,6 +55,8 @@ If a rule blocks you, ask the owner. Don't work around it.
   - Background services take a Postgres advisory leader lock per tick (`LeaderGate`) AND are idempotent on their own (once-ever unique keys, stamp-then-send, conditional updates); a tick never runs unguarded.
 - **Time windows:**
   - Day windows are IST days converted to UTC ranges. Never `DateTime.UtcNow.Date`.
+  - Tests too: a business date comes from `LabClock.BusinessDate()` / `labDaysAgo(n)`, never `DateTime.UtcNow.Date` or a literal near "today" (appointment tests failed every night 00:00–05:30 IST; a spec failed on 1 Oct when its literal equalled the 30-day default).
+  - A token is issued for the day of ARRIVAL and must be unique where the unique index says (per doctor), whatever pool it is drawn from (OPD department pool, an off-day appointment checked in today).
   - Store UTC; display IST.
 - **Migrations and data fixes:**
   - Migrations AUTO-APPLY on boot: they must be safe, idempotent, reversible, and never destructive without the owner's approval.
@@ -65,12 +67,14 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A signed report never changes. Stored PDFs are immutable; only Regenerate creates a new version (supersede the old one in the same transaction).
 - One live final report per order. "Delivered" comes from the live final report.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
+- Safety acknowledgements (allergy / pregnancy) belong to ONE line of ONE patient: never copied onto a new line (usual set, repeat, swap); safety gates read the tenant's EFFECTIVE drug (`DrugCatalogResolver`), never the master row.
 - Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
 - A derived delivery file (the combined report + partner PDF) is served from the bytes just built, never only via a storage round-trip; a cache probe treats ANY storage error as a miss (S3-compatible stores may answer a missing key with 403); staff screens say what the SERVED file contains (`GET /api/reports/{id}/pdf-parts`), never infer it from a flag. Test storage failures with the fake store's fault knobs.
 
 ## 5. Auth and security
 - The server decides access; the UI only reflects it (guards + a not-authorised screen, no screen without access).
+- Money powers are the same wherever money moves: a desk fee override follows the role discount cap (`BillingService.DiscountCapFor`), a refund needs `process_refund`; only the consult's Complete finishes an OPD visit.
 - Log out only on a definitive auth failure, never on a network blip. Refresh is single-flight.
 - Notifications are alerts, not records: they have a retention period (read 7 days, unread 30 days). Nothing that must be kept lives only in a notification.
 - Never print, log or commit secrets (DB URLs, tokens, keys) except owner-authorised dev keys. Rotate anything exposed.
