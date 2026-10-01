@@ -6,6 +6,7 @@ import { ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime, distinctUntilChanged, filter, switchMap, of, catchError } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
@@ -385,6 +386,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly doc = inject(DOCUMENT);
   readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   readonly titles = STEP_TITLES;
   readonly steps: ConsultStep[] = [1, 2, 3, 4];
@@ -407,6 +409,15 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private readonly dirty = new Set<DraftSection>();
   /** The last-saved consult.updatedAt — the PATCH's optimistic-concurrency token. */
   private draftUpdatedAt: string | null = null;
+  /** Critic P1-2: a REAL in-flight flag (not saveState — patch() can
+   *  overwrite that with 'dirty' mid-request). While true, saveNow() never
+   *  fires a second PATCH; it just returns, and the one in flight drains
+   *  whatever is left in `dirty` itself once it resolves. */
+  private inFlight = false;
+  /** Consecutive stale_draft hits with no successful save between them — a
+   *  circuit breaker so a draft that keeps changing elsewhere doesn't retry
+   *  forever; past the limit we stop and ask (DialogService) instead. */
+  private staleRetries = 0;
 
   private readonly drugCache = signal<Map<string, ConsultDrugRef>>(new Map());
   readonly drugList = computed(() => [...this.drugCache().values()]);
@@ -605,20 +616,31 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   /** Dirty-section autosave: PATCHes only the sections edited since the last
    *  save (never the whole edit state) and gets a SLIM result back — never
-   *  the whole workspace. Falls back to nothing when nothing is dirty (the
-   *  debounce can fire after a save already drained it). Complete still
-   *  sends the FULL draftBody via the unchanged full endpoint (below). */
+   *  the whole workspace. Complete still sends the FULL draftBody via the
+   *  unchanged full endpoint (below).
+   *  <p>Critic P1-2: guarded by the REAL in-flight flag, not `saveState`
+   *  (`patch()` can stomp that to 'dirty' mid-request while the doctor keeps
+   *  typing). A call that lands while one is already in flight is a no-op —
+   *  it doesn't need to do anything, because the in-flight request's own
+   *  completion handler unconditionally calls `saveNow()` again, which drains
+   *  whatever is left in `dirty` (including edits made during the request)
+   *  with the FRESH `baseUpdatedAt`. So edits during a save are QUEUED, never
+   *  sent as a second concurrent PATCH against the same stale base.</p> */
   saveNow() {
     const w = this.ws();
-    if (!w || !this.editable() || this.saveState() === 'saving') return;
+    if (!w || !this.editable()) return;
+    if (this.inFlight) return;
     if (this.dirty.size === 0) { this.saveState.set('saved'); return; }
     const sections = new Set(this.dirty);
     this.dirty.clear();
+    this.inFlight = true;
     this.saveState.set('saving');
     const body = draftPatchBody(sections, this.st(), this.followUpIso(), this.visitDay());
     body.baseUpdatedAt = this.draftUpdatedAt;
     this.consultApi.patchDraft(w.visit.id, body).subscribe({
       next: res => {
+        this.inFlight = false;
+        this.staleRetries = 0;
         this.savedAt.set(res.updatedAt ?? new Date().toISOString());
         this.draftUpdatedAt = res.updatedAt ?? this.draftUpdatedAt;
         // Learn the server-assigned ids a touched section echoed back —
@@ -626,22 +648,73 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
         if (res.rx) this.st.update(s => ({ ...s, lines: reconcileRxIds(s.lines, res.rx!) }));
         if (res.procedures && this.st().procedures)
           this.st.update(s => ({ ...s, procedures: reconcileProcedureIds(s.procedures!, res.procedures!) }));
-        this.saveState.set(this.saveState() === 'dirty' ? 'dirty' : 'saved');
-        if (this.saveState() === 'dirty') this.save$.next();
+        this.saveState.set(this.dirty.size > 0 ? 'dirty' : 'saved');
+        this.saveNow();   // drain anything that piled up while this one was in flight (no-op if nothing dirty)
       },
       error: e => {
+        this.inFlight = false;
         // Put the sections back so nothing this patch would have saved is lost.
         for (const sec of sections) this.dirty.add(sec);
+        if (e?.code === 'stale_draft') { this.handleStaleDraft(w.visit.id); return; }
         this.saveState.set('error');
-        if (e?.code === 'stale_draft') {
-          // Someone else (another device, Complete) saved meanwhile — reload
-          // instead of retrying the same stale base, which would just fail again.
-          this.toast.error('This draft changed elsewhere — reloading the latest version.');
-          this.dirty.clear();
-          this.consultApi.workspace(w.visit.id).subscribe({ next: fresh => this.hydrate(fresh), error: () => undefined });
-          return;
+        setTimeout(() => { if (this.saveState() === 'error') { this.saveState.set('dirty'); this.saveNow(); } }, 4000);
+      },
+    });
+  }
+
+  /** Critic P1-2: a stale_draft NEVER silently discards what the doctor
+   *  typed. Re-fetch the latest workspace, then re-apply (overlay) whatever
+   *  sections are STILL dirty from the local copy onto it — a section not
+   *  dirty takes the fresh server value, a section still dirty keeps the
+   *  doctor's unsaved edit — and re-PATCH with the fresh base. If the same
+   *  visit keeps going stale (another device / process saving concurrently,
+   *  not just one race), stop auto-retrying after a couple of attempts and
+   *  ask via DialogService instead of looping forever. */
+  private handleStaleDraft(visitId: string): void {
+    const stillDirty = new Set(this.dirty);
+    const localState = this.st();
+    this.staleRetries++;
+    if (this.staleRetries > 2) {
+      this.saveState.set('error');
+      this.dialog.confirm({
+        title: 'This draft keeps changing elsewhere',
+        message: 'Someone else (another device, or Complete) keeps saving this consult while you type.',
+        question: 'Keep your unsaved changes and try again, or reload the latest version from the server?',
+        confirmLabel: 'Keep my changes', cancelLabel: 'Reload latest', tone: 'danger',
+      }).then(keepLocal => {
+        this.staleRetries = 0;
+        if (keepLocal) {
+          for (const sec of stillDirty) this.dirty.add(sec);
+          this.consultApi.workspace(visitId).subscribe({
+            next: fresh => { this.draftUpdatedAt = fresh.consult?.updatedAt ?? this.draftUpdatedAt; this.saveState.set('dirty'); this.saveNow(); },
+            error: () => { this.saveState.set('dirty'); this.saveNow(); },
+          });
+        } else {
+          this.consultApi.workspace(visitId).subscribe({ next: fresh => this.hydrate(fresh), error: () => undefined });
         }
-        setTimeout(() => { if (this.saveState() === 'error') { this.saveState.set('dirty'); this.save$.next(); } }, 4000);
+      });
+      return;
+    }
+    this.toast.error('This draft changed elsewhere — merging your unsaved edits with the latest version.');
+    this.consultApi.workspace(visitId).subscribe({
+      next: fresh => {
+        this.hydrate(fresh);
+        if (stillDirty.size === 0) return;
+        const overlay: Partial<ConsultEditState> = {};
+        (Object.keys(SECTION_OF) as (keyof ConsultEditState)[]).forEach(key => {
+          if (stillDirty.has(SECTION_OF[key])) (overlay as Record<string, unknown>)[key] = localState[key];
+        });
+        this.st.update(s => ({ ...s, ...overlay }));
+        for (const sec of stillDirty) this.dirty.add(sec);
+        this.saveState.set('dirty');
+        this.saveNow();
+      },
+      error: () => {
+        // Couldn't even refetch — never discard: keep the edits locally and
+        // let the next debounce tick retry once the connection recovers.
+        for (const sec of stillDirty) this.dirty.add(sec);
+        this.saveState.set('dirty');
+        this.toast.error('Could not reload the latest draft — your edits are kept; will retry.');
       },
     });
   }
