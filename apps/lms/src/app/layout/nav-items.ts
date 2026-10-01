@@ -112,6 +112,20 @@ export const EXPENSES_NAV: NavItem = withRoutePerms([{
   iconPath: ['M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4', 'M21 11h-5a2 2 0 0 0 0 4h5a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1Z', 'M7 8h5'],
 }])[0];
 
+/** Analytics / Lab Insights (Phase 1, owner 2026-10-01): charts (Overview /
+ *  Patients & Volume / Revenue) + Operations Insights lists, one filter band
+ *  shared by both. PRIMARY nav (owner decision, 2026-10-01) — top-level like
+ *  Expenses, visible purely by permission via its route's own gate
+ *  (ROUTE_ACCESS['/insights'] = view_analytics), same 'reports' module gate
+ *  as the TAT board. A role without view_analytics never sees it. */
+export const INSIGHTS_NAV: NavItem = withRoutePerms([{
+  id: 'insights',
+  label: 'Insights',
+  href: '/insights',
+  iconPath: ['M3 3v18h18', 'M7 15l4-5 3 3 5-7'],
+  module: 'reports',
+}])[0];
+
 export const ADMIN_NAV: NavItem = {
   id: 'admin',
   label: 'Settings',
@@ -190,6 +204,9 @@ export const PRIMARY_NAV: NavItem[] = withRoutePerms([
   // Expenses — after the lab work, before Settings (the admin icon). Shown
   // only to holders of an expense_* permission (the route's own gate).
   EXPENSES_NAV,
+  // Insights — same tier as Expenses: PRIMARY nav, shown only to holders of
+  // view_analytics (the route's own gate).
+  INSIGHTS_NAV,
   // ── Secondary / role-specific tabs (scroll right to reach) ───────────
   {
     // Live collection queue (token / walk-up / home-collection).
@@ -404,6 +421,25 @@ export function withExpenses(items: NavItem[], canShow: (i: NavItem) => boolean)
   return [...items, EXPENSES_NAV];
 }
 
+/**
+ * INSIGHTS in the live nav — same treatment as {@link withExpenses}, right
+ * after it (so the PRIMARY-nav order Expenses → Insights holds even on the
+ * workflow-driven nav, which never contains either on its own). Shown ONLY
+ * when `canShow(INSIGHTS_NAV)` — the route guard's own view_analytics check.
+ */
+export function withInsights(items: NavItem[], canShow: (i: NavItem) => boolean): NavItem[] {
+  if (items.some(i => i.id === INSIGHTS_NAV.id || i.href === INSIGHTS_NAV.href)) return items;
+  if (!canShow(INSIGHTS_NAV)) return items;
+  const afterExpenses = items.findIndex(i => i.id === EXPENSES_NAV.id || i.href === EXPENSES_NAV.href);
+  if (afterExpenses >= 0) return [...items.slice(0, afterExpenses + 1), INSIGHTS_NAV, ...items.slice(afterExpenses + 1)];
+  const labOrder = ['/reports', '/pathologist', '/lab/my-work', '/sample-collection', '/frontdesk'];
+  for (const href of labOrder) {
+    const at = items.findIndex(i => i.href === href);
+    if (at >= 0) return [...items.slice(0, at + 1), INSIGHTS_NAV, ...items.slice(at + 1)];
+  }
+  return [...items, INSIGHTS_NAV];
+}
+
 export const MORE_NAV: NavItem[] = withRoutePerms([
   // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
   // the module toggle IS the gate (no per-module roles yet). Shown here in More
@@ -458,15 +494,6 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
   },
   {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
-    module: 'reports'
-  },
-  {
-    // Analytics / Lab Insights (Phase 1, owner 2026-10-01): charts (Overview /
-    // Patients & Volume / Revenue) + Operations Insights lists, one filter
-    // band shared by both. Same 'reports' module gate as the TAT board;
-    // its own perms come from ROUTE_ACCESS['/insights'] (view_analytics).
-    id: 'insights', label: 'Insights', href: '/insights',
-    iconPath: ['M3 3v18h18', 'M7 15l4-5 3 3 5-7'],
     module: 'reports'
   },
   {
