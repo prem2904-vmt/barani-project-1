@@ -24,6 +24,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Counter collections (cash drawer, day closing, daily statement, dashboard):** `CashDrawer.CollectionsAsync` — lab payments / refunds AND OPD + pharmacy `opd_payments` / `opd_refunds`, merged per mode; never a second payments query in a controller.
   - **Procedure price in the consult:** `OpdFeeRules.ResolvePrice` (the rule) + `ProcedureRules.CheckPrice` under the OPD setting `procedurePricing` (doctor change off by default; optional ± % cap); every doctor price change is audit-logged.
   - **Daily patient number (#12 before the name on lab screens):** `daily_patient_numbers` via `DailyPatientNumbers` (branch × IST day, row-locked, reused by the patient's later orders that day), stamped once on `orders.DailyNo` / `DailyNoDay`; the UI shows it only through `pf-daily-no` / `utils/daily-no.ts`. An on-screen aid ONLY — never printed (labels, slips, bills, reports, messages, exports).
+  - **Front-desk work list with no status chip:** ONE list, each order once (deduped by order id; `work-merge.ts` holds the status precedence and the business-day → #N sort); a row keeps every action of every status it belongs to, using the SAME action components as the single-status views, never a re-implementation.
   - **Which tube / pot a line is drawn into:** ONE key, `OutsourcingRules.VialKey` + `ColourKey` (`TubeType`: blank container = sterile pot) — destination + space + tube type, and for a non-blood pot the line's specimen (fixed / chosen, else the Test Master text). Create, add-tests and outsourcing reconcile all use it, in-house and outsourced alike: same specimen + same container = one pot, never one pot per test.
   - **Partner report in the patient's PDF:** the `attachToReport` flag on the line's `external_report` attachment; the combined PDF is DERIVED on read (`CombinedReportPdf`, content-addressed cache) from the immutable stored report — never written into the stored report, never a second copy of the flag.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
@@ -45,11 +46,15 @@ If a rule blocks you, ask the owner. Don't work around it.
 ## 3. Database and queries
 - **Queries:**
   - No unbounded lists: page or cap every list endpoint, and clamp page size.
+  - A list whose row status is computed (JSON / per-row rules) filters and pages on a LEAN projection first, then builds the rich rows for that page only; chip totals come from the lean pass (`OutsourcingService.ListPageAsync` / `CountsAsync`), never from the rich fetch.
   - No N+1: project in one query (`Select` to a DTO), `AsNoTracking` for reads, summary projections for grids.
   - Every new filter / sort / FK column gets an index. Check with `EXPLAIN` on realistic data.
+  - A new raw-SQL index gets a plan test that drops the table's OTHER indexes inside a rolled-back transaction (`IndexAudit3IndexTests`) — never a "which index does the planner prefer on an empty table" assertion (flaky). A batch / sweep query never sorts what it doesn't need sorted (an ORDER BY over an OR no index serves reads every match), and a background sweep never re-evaluates the same unresolved rows every tick — stamp a re-check time.
+  - Patient text search (name / MRN / phone / ABHA `LIKE '%…%'`) is served by `pg_trgm` GIN indexes on the EXACT expressions EF emits (`lower("FirstName")`, the normalised phone, …; `PatientSearchTrigram`); a newly searched column gets its trigram index in the same change. The extension is created inside a guarded `DO` block: a missing extension / privilege skips the indexes, never fails boot.
 - **Concurrency:**
   - Counters / numbers (MRN, sample ID, invoice) use atomic `INSERT … ON CONFLICT … RETURNING`, never `MAX+1`.
   - Check-then-insert needs a unique index. Money / stock changes run in one transaction under a row lock.
+  - An autosave sends only the DIRTY sections (`PATCH …/draft`: omitted = untouched, present = replace), checks the client's last-seen `UpdatedAt` under the row lock (`stale_draft`), returns a slim result, and shares every validate / write helper with the full save — never a second validation path for the partial save.
   - A money helper called from inside a caller's transaction JOINS it (`CurrentTransaction != null`), never nests one; the caller's totals and the helper's rows commit together, and the bells go out after the commit.
   - Never fire side effects inside a batch transaction (auto-report / anything that opens its own transaction, bells, device pushes): the batch runs through `AfterCommit.InTransactionAsync` and side effects go through `AfterCommit.RunOrDeferAsync` — they run after the commit, never on a rollback or a retried attempt, keyed so one batch fires them once (a nested report transaction threw, was swallowed, and a submitted tube got no final report).
   - `ExecuteUpdate` / `ExecuteDelete` bypass the audit interceptor: an audited entity written set-based writes its own rows (`Auditing.AuditTrail`) in the same transaction.
@@ -69,7 +74,9 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A signed report never changes. Stored PDFs are immutable; only Regenerate creates a new version (supersede the old one in the same transaction).
 - One live final report per order. "Delivered" comes from the live final report.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
+- A value flagged CRITICAL always prints: it is never in the hidden set, whatever the print picker's "start with", auto-tick or a saved hide-list says (abnormal-not-critical stays the tech's choice). One enforcement point: `PrintPickerRules.EffectiveHidden` and its TS mirror `effectiveHidden()`.
 - Safety acknowledgements (allergy / pregnancy) belong to ONE line of ONE patient: never copied onto a new line (usual set, repeat, swap); safety gates read the tenant's EFFECTIVE drug (`DrugCatalogResolver`), never the master row.
+- Walk-in sale of a scheduled drug: H needs the prescriber's name AND registration number; H1 and X also need an UPLOADED prescription before payment. Checked in one fixed order (buyer, prescriber, reg no, address, upload) by `PharmacyDispenseService.EnforceSchedules` / `PharmacyRules.EnsurePrescriptionUploaded` and the UI mirror `counterGate()`, kept in lockstep.
 - Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
 - A derived delivery file (the combined report + partner PDF) is served from the bytes just built, never only via a storage round-trip; a cache probe treats ANY storage error as a miss (S3-compatible stores may answer a missing key with 403); staff screens say what the SERVED file contains (`GET /api/reports/{id}/pdf-parts`), never infer it from a flag. Test storage failures with the fake store's fault knobs.
@@ -94,6 +101,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 ## 7. Process: definition of done
 1. Fetch and merge the latest remote before starting.
 2. Write tests for the change (and one that pins the single source).
+   - Test helpers that need "a test to order / enter" go through `StableTestCatalog.OrderableIndividuals` (deterministic code order; never outsourced or specimen-required) — never `OrderBy(t => t.Id).First()` (another class's row can sort first and flip the scenario). A negative SignalR assertion sleeps only when the absence isn't already proven by an awaited rejection. Two full runs on one DB wait for the first process to EXIT, not just its summary line.
 3. Run the FULL suites after the last commit:
    - backend unit + integration;
    - `NODE_OPTIONS=--max-old-space-size=6144 npx nx test lms` + build.
