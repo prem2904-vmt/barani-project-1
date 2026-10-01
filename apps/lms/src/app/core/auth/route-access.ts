@@ -72,6 +72,18 @@ export const WA_BILLING_VIEW_PERMS = ['manage_tenant', 'manage_notifications'];
 /** Payment rules on the branch lab config (payment gate, payments-due tab). */
 export const PAYMENT_RULE_PERMS = ['manage_tenant', 'manage_billing_config'];
 
+/** Analytics / Lab Insights (Phase 1, owner 2026-10-01). view_analytics opens
+ *  the whole area (charts + non-PII operations lists); view_financial_analytics
+ *  additionally reveals money (withheld server-side when absent — the UI mirrors
+ *  it, it doesn't enforce it); export_patient_data additionally covers the
+ *  Patients list (every column is PII) and exporting any list with patient
+ *  name/phone/DOB. The route itself only needs view_analytics — the two money/
+ *  PII tiers are checked per-surface inside the feature, same pattern as
+ *  TEST_PRICING_PERMS gating a view inside Test Master rather than the route. */
+export const ANALYTICS_PERMS = ['view_analytics'];
+export const FINANCIAL_ANALYTICS_PERMS = ['view_financial_analytics'];
+export const PATIENT_DATA_EXPORT_PERMS = ['export_patient_data'];
+
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
   '/frontdesk':                  { perms: FRONTDESK_PERMS },
@@ -111,6 +123,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/messages':           { workflow: ['messages'] },
   '/stores':             { perms: INVENTORY_WORK_PERMS, module: 'inventory' },
   '/dashboard':          { perms: ['view_tat_dashboard', 'view_dashboard'], module: 'reports' },
+  '/insights':           { perms: ANALYTICS_PERMS, module: 'reports' },
   '/finance':            { perms: FINANCE_PERMS },
   '/finance/daily':      { perms: FINANCE_PERMS },
   // (/finance/expenses is a plain redirect to /expenses — no entry of its own.)

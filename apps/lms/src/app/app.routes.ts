@@ -597,6 +597,11 @@ export const appRoutes: Route[] = [
         canActivate: [...routeGuards('/dashboard')],
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
+      {
+        path: 'insights',
+        canActivate: [...routeGuards('/insights')],
+        loadComponent: () => import('./features/insights/insights.component').then(m => m.InsightsComponent)
+      },
 
       // Finance — hub (end-to-end money in/out by product line) + daily statement.
       {

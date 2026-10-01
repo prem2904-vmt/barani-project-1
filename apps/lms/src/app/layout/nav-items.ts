@@ -461,6 +461,15 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'reports'
   },
   {
+    // Analytics / Lab Insights (Phase 1, owner 2026-10-01): charts (Overview /
+    // Patients & Volume / Revenue) + Operations Insights lists, one filter
+    // band shared by both. Same 'reports' module gate as the TAT board;
+    // its own perms come from ROUTE_ACCESS['/insights'] (view_analytics).
+    id: 'insights', label: 'Insights', href: '/insights',
+    iconPath: ['M3 3v18h18', 'M7 15l4-5 3 3 5-7'],
+    module: 'reports'
+  },
+  {
     id: 'users', label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
   },
   {
