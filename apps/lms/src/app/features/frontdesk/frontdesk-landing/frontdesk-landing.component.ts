@@ -24,7 +24,7 @@ import { BranchLabConfigService } from '../../../core/services/branch-lab-config
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
-import { AnnotateBucket, MergedWorkRow, WORK_STATUS_LABEL, WorkBucket, buildMergedWork } from './work-merge';
+import { MergedWorkRow, WORK_STATUS_LABEL } from './work-merge';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -119,6 +119,8 @@ import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.co
 import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
+import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
+import { OutsourcedTube, buildFrontdeskMergedWork } from '../outsourced/outsourced-view';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
@@ -165,7 +167,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -897,21 +899,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // A chip still filters to a single status exactly as before — this signal
   // is only consulted when `rightTab()` is null.
   readonly WORK_STATUS_LABEL = WORK_STATUS_LABEL;
+  /** The merge itself (grouping outsourced tubes by order, annotating or
+   *  synthesizing a row) is pulled out to `buildFrontdeskMergedWork`
+   *  (outsourced-view.ts) — pure and unit-tested on its own, without this
+   *  (huge, heavily-injected) component. `windowed()` — not `visible()` —
+   *  because the merged list needs BOTH outsourced statuses (an order that
+   *  is only outsourced must still get a row once its tube is completed),
+   *  never just whichever status the dedicated Outsourced tab's own filter
+   *  happens to be showing. */
   readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
     if (this._rightTab() !== null) return [];
-    // Outsourced is per-TUBE, not per-order (its upload / attach UI has ONE
-    // home, OutsourcedListComponent) — it only ANNOTATES a row that already
-    // exists from another feed; it never introduces one on its own.
-    const outIds = new Set(
-      this.outsourcing.visible().filter(t => t.status === 'outsourced').map(t => t.orderId)
+    return buildFrontdeskMergedWork(
+      this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDueOnly(), this.outsourcing.windowed(),
     );
-    const buckets: WorkBucket<Order>[] = [
-      { status: 'ip', orders: this.shownInProgress() },
-      { status: 'done', orders: this.shownCompleted() },
-      { status: 'billing', orders: this.shownPaymentsDueOnly() },
-    ];
-    const annotate: AnnotateBucket[] = [{ status: 'out', ids: outIds }];
-    return buildMergedWork(buckets, annotate);
   });
   /** The merged row's status text for everything but Payments due (the
    *  template renders the balance itself via the `inr` pipe, as the
@@ -924,16 +924,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   /** Dot colour for the merged row: Payments due / Outsourced read amber
    *  (the same "needs the desk" amber Payments due already uses); In
-   *  progress / Completed reuse the order's own tone (rowTone). */
+   *  progress / Completed reuse the order's own tone (rowTone) — a
+   *  synthetic (outsourced-only) row has no real order status, so it reads
+   *  amber too (handled by the `source === 'synthetic'` check below, which
+   *  only ever carries primary 'out' anyway). */
   mergedTone(row: MergedWorkRow<Order>): string {
-    return row.primary === 'billing' || row.primary === 'out' ? 'amber' : this.rowTone(row.order);
+    return row.primary === 'billing' || row.primary === 'out' || row.source === 'synthetic'
+      ? 'amber' : this.rowTone(row.order);
   }
-  /** Jump to the Outsourced chip, pre-filtered to this one order — the
-   *  upload / attach / view flow has ONE home (OutsourcedListComponent); a
-   *  merged row never duplicates it inline. */
-  openOutsourcedFor(o: Order) {
-    this.setWorkQuery(o.orderNumber ?? '');
-    this.applyRightTab('out');
+  /** The order's outsourced tubes within the window, for inline actions
+   *  (pf-outsourced-actions, one per tube) — empty when the row has no
+   *  'out' status. */
+  outsourcedTubesFor(row: MergedWorkRow<Order>): OutsourcedTube[] {
+    return (row.annotateData.out as OutsourcedTube[] | undefined) ?? [];
   }
 
   getBillBalance(orderId: string): number {

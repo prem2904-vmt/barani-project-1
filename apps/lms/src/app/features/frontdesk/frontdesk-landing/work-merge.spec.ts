@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import {
   AnnotateBucket, MinimalWorkOrder, WorkBucket, buildMergedWork, mergeWorkRows, primaryWorkStatus, sortMergedWork,
 } from './work-merge';
@@ -47,11 +48,11 @@ describe('work-merge — mergeWorkRows (dedupe by order id)', () => {
     expect(rows.map(r => r.order.id).sort()).toEqual(['o1', 'o2']);
   });
 
-  it('an annotate feed (outsourced) adds its status to an EXISTING row only — never creates a new one', () => {
+  it('an annotate feed with NO synthesize adds its status to an EXISTING row only — never creates one', () => {
     const o1 = order('o1', '2026-09-30T04:00:00Z');
     const buckets: WorkBucket<O>[] = [{ status: 'ip', orders: [o1] }];
-    const annotate: AnnotateBucket[] = [
-      { status: 'out', ids: ['o1', 'orphan-not-in-any-bucket'] },
+    const annotate: AnnotateBucket<O>[] = [
+      { status: 'out', items: [{ orderId: 'o1', data: 'tube-1' }, { orderId: 'orphan-not-in-any-bucket', data: 'tube-2' }] },
     ];
     const rows = mergeWorkRows(buckets, annotate);
     expect(rows.length).toBe(1); // the orphan id never became a row
@@ -59,12 +60,54 @@ describe('work-merge — mergeWorkRows (dedupe by order id)', () => {
     expect(new Set(rows[0].statuses)).toEqual(new Set(['ip', 'out']));
     expect(rows[0].primary).toBe('out'); // outsourced outranks in-progress
     expect(rows[0].secondary).toEqual(['ip']);
+    expect(rows[0].source).toBe('order');
+    expect(rows[0].annotateData.out).toBe('tube-1');
   });
 
-  it('an annotate feed accepts a plain array of ids as well as a Set', () => {
+  it('every row from a WorkBucket has source "order"', () => {
     const o1 = order('o1', '2026-09-30T04:00:00Z');
-    const rows = mergeWorkRows([{ status: 'done', orders: [o1] }], [{ status: 'out', ids: ['o1'] }]);
+    expect(mergeWorkRows([{ status: 'done', orders: [o1] }])[0].source).toBe('order');
+  });
+
+  it('an annotate feed WITH synthesize creates a row for an order with no WorkBucket row at all', () => {
+    const annotate: AnnotateBucket<O, string>[] = [{
+      status: 'out',
+      items: [{ orderId: 'only-outsourced', data: 'tube-9' }],
+      synthesize: item => order(item.orderId, '2026-09-30T04:00:00Z', 7, '2026-09-30'),
+    }];
+    const rows = mergeWorkRows([], annotate);
+    expect(rows.length).toBe(1);
+    expect(rows[0].order.id).toBe('only-outsourced');
+    expect(rows[0].order.dailyNo).toBe(7);
+    expect(rows[0].statuses).toEqual(['out']);
     expect(rows[0].primary).toBe('out');
+    expect(rows[0].secondary).toEqual([]);
+    expect(rows[0].source).toBe('synthetic');
+    expect(rows[0].annotateData.out).toBe('tube-9');
+  });
+
+  it('synthesize is only consulted for an order with no existing row — a real row is never replaced', () => {
+    const o1 = order('o1', '2026-09-30T04:00:00Z', 1, '2026-09-30');
+    const synthesize = vi.fn(() => order('o1', '2026-09-30T04:00:00Z', 99, '2026-09-30'));
+    const rows = mergeWorkRows(
+      [{ status: 'ip', orders: [o1] }],
+      [{ status: 'out', items: [{ orderId: 'o1', data: 'tube' }], synthesize }],
+    );
+    expect(synthesize).not.toHaveBeenCalled();
+    expect(rows[0].order).toBe(o1); // the REAL order, not a synthetic stand-in
+    expect(rows[0].source).toBe('order');
+  });
+
+  it('two annotate items for the same new order keep ONE row with both statuses', () => {
+    const annotateOut: AnnotateBucket<O, string> = {
+      status: 'out', items: [{ orderId: 'x', data: 'tube' }],
+      synthesize: item => order(item.orderId, '2026-09-30T04:00:00Z'),
+    };
+    const annotateBilling: AnnotateBucket<O, number> = { status: 'billing', items: [{ orderId: 'x', data: 500 }] };
+    const rows = mergeWorkRows([], [annotateOut, annotateBilling]);
+    expect(rows.length).toBe(1);
+    expect(new Set(rows[0].statuses)).toEqual(new Set(['out', 'billing']));
+    expect(rows[0].annotateData).toEqual({ out: 'tube', billing: 500 });
   });
 });
 

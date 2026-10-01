@@ -1,8 +1,9 @@
 import {
   OutsourcedTube, absoluteFileUrl, actionLines, countByStatus, filterOutsourced, partnerFileProblem,
   partnerOptions, partnerReportShareLine, rowReport, attachState, firstAttachProblem, ATTACH_DEFAULT,
-  partnerWhere, PartnerReport, PdfParts, outsourcedPageUrl,
+  partnerWhere, PartnerReport, PdfParts, outsourcedPageUrl, syntheticOrderFromOutsourcedTubes, buildFrontdeskMergedWork,
 } from './outsourced-view';
+import { Order } from '../../../shared/models/order.model';
 
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
   sampleId: 's1', barcode: 'OUT-0001', sampleStatus: 'dispatched', orderId: 'o1', orderNumber: 'LAB-2609-000001',
@@ -144,5 +145,113 @@ describe('Outsourced tab — paged URL (DB optimisation, release 2026-10-01)', (
       .toBe('/api/samples/outsourced?days=90&page=1&pageSize=50&status=completed&partnerLabId=a%20b%2Fc');
     expect(outsourcedPageUrl({ days: 90, page: 1, pageSize: 50, status: 'completed', partnerId: null }))
       .not.toContain('partnerLabId');
+  });
+});
+
+describe('Outsourced tab — synthetic order (an order that is ONLY outsourced, release 2026-10-01)', () => {
+  it('builds a display-ready Order + Patient from the tube(s)', () => {
+    const o = syntheticOrderFromOutsourcedTubes('o1', [row()]);
+    expect(o.id).toBe('o1');
+    expect(o.orderNumber).toBe('LAB-2609-000001');
+    expect(o.patient?.displayName).toBe('Ms. Paravai Munusamy');
+    expect(o.patientId).toBe('p1');
+    expect(o.samples).toEqual([]);
+  });
+
+  it('uses the EARLIEST tube\'s createdAt when an order has more than one outsourced tube', () => {
+    const later = row({ sampleId: 's2', createdAt: '2026-09-26T00:00:00Z' });
+    const earlier = row({ sampleId: 's3', createdAt: '2026-09-20T00:00:00Z' });
+    const o = syntheticOrderFromOutsourcedTubes('o1', [later, earlier]);
+    expect(o.createdAt).toBe('2026-09-20T00:00:00Z');
+  });
+
+  it('carries dailyNo / dailyNoDay through for the merged list\'s sort + #N chip', () => {
+    const o = syntheticOrderFromOutsourcedTubes('o1', [row({ dailyNo: 4, dailyNoDay: '2026-09-25' })]);
+    expect(o.dailyNo).toBe(4);
+    expect(o.dailyNoDay).toBe('2026-09-25');
+  });
+
+  it('never a real in-progress/completed/payments-due status — "created" + no samples, so a merged row must hide those actions', () => {
+    const o = syntheticOrderFromOutsourcedTubes('o1', [row()]);
+    expect(o.status).toBe('created');
+    expect(o.samples.length).toBe(0);
+  });
+});
+
+/**
+ * The reviewer's exact scenario (owner, 2026-10-01): outsourced lines are
+ * excluded from the lab's own work queues (OutsourcingRules) — so an order
+ * every one of whose tests is outsourced never reaches an in-house status
+ * the ip/done/billing feeds would pick up. Depending on when the front desk
+ * looks, such an order is EITHER:
+ *  - still "created"/"collected" (physically drawn, not yet dispatched to
+ *    the partner, nothing resulted) — which IS an active status, so it
+ *    normally WOULD show in shownInProgress; but the ip/done/billing feeds
+ *    are scoped to the work date range / "today" feed, and a long-outstanding
+ *    outsourced order (or a test added later to an older order) can fall
+ *    outside that scope while its tube is still within the Outsourced tab's
+ *    own (wider) window — or
+ *  - fully "validated"/"delivered" once every outsourced line completes,
+ *    which WOULD show in shownCompleted/shownPaymentsDueOnly — EXCEPT the
+ *    desk may be looking at a date range that doesn't include the order's
+ *    own creation day at all.
+ * Either way, `buildFrontdeskMergedWork`'s caller only ever hands it orders
+ * that ARE in the ip/done/billing feeds for the CURRENT view — so an order
+ * absent from all three (outsourced-only for this view) is a real,
+ * non-theoretical input this function must still turn into exactly one row.
+ */
+describe('buildFrontdeskMergedWork — an order that is ONLY in the outsourced bucket', () => {
+  const minimalOrder = (id: string): Order => ({
+    id, patientId: 'p-other', branchId: 'b1', priority: 'Normal', source: 'walkin', status: 'created',
+    collectionType: 'walkin', createdAt: '2026-09-30T01:00:00Z', samples: [],
+  });
+
+  it('a PENDING outsourced tube, order absent from ip/done/billing entirely: one synthetic row', () => {
+    const tube = row({ orderId: 'out-only-1', status: 'outsourced' });
+    const rows = buildFrontdeskMergedWork([], [], [], [tube]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].order.id).toBe('out-only-1');
+    expect(rows[0].source).toBe('synthetic');
+    expect(rows[0].primary).toBe('out');
+    expect(rows[0].order.patient?.displayName).toBe('Ms. Paravai Munusamy');
+  });
+
+  it('a COMPLETED outsourced tube (within the window), order still absent from ip/done/billing: STILL one row — never dropped', () => {
+    const tube = row({ orderId: 'out-only-2', status: 'completed', hasReport: true });
+    const rows = buildFrontdeskMergedWork([], [], [], [tube]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].order.id).toBe('out-only-2');
+    expect(rows[0].source).toBe('synthetic');
+  });
+
+  it('an order with BOTH an ip row and an outsourced tube: ONE row, annotated (not synthetic), tube available for inline actions', () => {
+    const ip = [minimalOrder('shared-1')];
+    const tube = row({ orderId: 'shared-1' });
+    const rows = buildFrontdeskMergedWork(ip, [], [], [tube]);
+    expect(rows.length).toBe(1);
+    expect(rows[0].source).toBe('order');
+    expect(rows[0].order).toBe(ip[0]); // the REAL order, not a synthetic stand-in
+    expect(new Set(rows[0].statuses)).toEqual(new Set(['ip', 'out']));
+    expect(rows[0].primary).toBe('out'); // outsourced still outranks in-progress
+    expect(rows[0].annotateData.out).toEqual([tube]);
+  });
+
+  it('two outsourced tubes on the SAME outsourced-only order: still one row, both tubes attached', () => {
+    const t1 = row({ sampleId: 's1', orderId: 'out-only-3' });
+    const t2 = row({ sampleId: 's2', orderId: 'out-only-3', status: 'completed', hasReport: true });
+    const rows = buildFrontdeskMergedWork([], [], [], [t1, t2]);
+    expect(rows.length).toBe(1);
+    expect((rows[0].annotateData.out as OutsourcedTube[]).map(t => t.sampleId).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('an outsourced tube for an order NOT in range, alongside unrelated ip/done/billing orders: no cross-contamination', () => {
+    const ip = [minimalOrder('ip-1')];
+    const done = [minimalOrder('done-1')];
+    const billing = [minimalOrder('billing-1')];
+    const tube = row({ orderId: 'out-only-4' });
+    const rows = buildFrontdeskMergedWork(ip, done, billing, [tube]);
+    expect(rows.length).toBe(4);
+    expect(rows.find(r => r.order.id === 'out-only-4')?.source).toBe('synthetic');
+    expect(rows.filter(r => r.source === 'order').map(r => r.order.id).sort()).toEqual(['billing-1', 'done-1', 'ip-1']);
   });
 });

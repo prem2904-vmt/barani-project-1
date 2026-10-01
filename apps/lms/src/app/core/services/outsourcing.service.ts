@@ -49,7 +49,14 @@ export class OutsourcingService {
   /** The front desk's DATE filter (work card range) — null = every row. Status
    *  and date are independent filters; counts follow the date range. */
   readonly dateWindow = signal<((t: OutsourcedTube) => boolean) | null>(null);
-  private readonly windowed = computed(() => {
+  /** Every row within the current date window, BOTH statuses — unaffected by
+   *  `status()` / `partnerId()` / `query()` (those layer on top, in
+   *  `visible()`, for the dedicated Outsourced tab). The frontdesk merged
+   *  work list reads this directly: it needs to know about a completed
+   *  outsourced tube too (an order that is ONLY outsourced must still get a
+   *  merged row — work-merge.ts's `synthesize`), not just whichever status
+   *  the Outsourced tab's own filter happens to be showing. */
+  readonly windowed = computed(() => {
     const w = this.dateWindow();
     return w ? this._rows().filter(w) : this._rows();
   });

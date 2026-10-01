@@ -8,6 +8,15 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { OutsourcedTube, countByStatus, filterOutsourced, partnerOptions } from './outsourced-view';
 
+/**
+ * The row ACTIONS themselves (upload/complete, attach/detach, undo, view) are
+ * pinned in outsourced-actions.component.spec.ts (OutsourcedActionsComponent
+ * — extracted owner 2026-10-01 so the frontdesk merged list can show the same
+ * buttons inline). This file keeps the LIST's own concerns: which rows show,
+ * in what order, the status / attach / "file missing" chips, filters, search
+ * and paging — and that each row delegates its actions to the real child
+ * component (rendered here with the same fakes, so its buttons still appear).
+ */
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
   sampleId: 's1', barcode: 'OUT-0001', sampleStatus: 'dispatched', orderId: 'o1', orderNumber: 'LAB-2609-000001',
   patientId: 'p1', patientName: 'Ms. Paravai Munusamy', partnerLabId: 'a', partnerLabName: 'Apollo Diagnostics',
@@ -70,10 +79,17 @@ describe('Frontdesk Outsourced tab', () => {
     expect(chip.classList).toContain('nd-chip');
     expect(chip.textContent?.trim()).toBe('Outsourced');
     expect(chip.querySelector('.pf-out__check')).toBeNull();
-    expect([...r.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toContain('Upload report');
   });
 
-  it('Completed = neutral chip with a violet check (no green)', () => {
+  it('each row delegates its actions to pf-outsourced-actions (ONE home — outsourced-actions.component.spec.ts)', () => {
+    const { el } = setup([row()]);
+    const r = el.querySelector('.pf-out__row') as HTMLElement;
+    expect(r.querySelector('pf-outsourced-actions')).not.toBeNull();
+    // The real child renders for this tube's state — Upload report, no report yet.
+    expect([...r.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toEqual(['Upload report']);
+  });
+
+  it('Completed = neutral chip with a violet check (no green); the childs buttons for a completed tube', () => {
     const { el } = setup([row({ status: 'completed', hasReport: true, tests: [
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] })]);
@@ -102,84 +118,29 @@ describe('Frontdesk Outsourced tab', () => {
     }
   });
 
-  it('upload → complete: uploads the file then marks the open lines Completed', async () => {
-    const { c, svc, toasts } = setup([row()]);
-    const file = new File(['%PDF'], 'vitd.pdf', { type: 'application/pdf' });
-    await c.uploadAndComplete(row(), file);
-    expect(svc.upload).toHaveBeenCalledWith(file);
-    expect(svc.complete).toHaveBeenCalledWith(['t1'], { url: '/uploads/t/p.pdf', name: 'vitd.pdf', type: 'application/pdf' }, true);
-    expect(toasts.success).toHaveBeenCalled();
-  });
-
-  it('upload asks "Attach to our report" (default ON) and passes the choice; cancel uploads nothing', async () => {
-    const { c, svc, dialog } = setup([row()]);
-    const file = new File(['%PDF'], 'vitd.pdf', { type: 'application/pdf' });
-    const input = { files: [file], value: 'x' } as unknown as HTMLInputElement;
-    c.pick(row());
-    dialog.actions.mockResolvedValueOnce({ action: 'upload', checked: false });
-    await c.onFile({ target: input } as unknown as Event);
-    const req = dialog.actions.mock.calls[0] as unknown as [{ checkbox: { initial: boolean; label: string } }];
-    expect(req[0].checkbox.initial).toBe(true);
-    expect(req[0].checkbox.label).toContain('Attach to our report');
-    expect(svc.complete).toHaveBeenCalledWith(['t1'], expect.objectContaining({ url: '/uploads/t/p.pdf' }), false);
-
-    svc.upload.mockClear();
-    c.pick(row());
-    dialog.actions.mockResolvedValueOnce({ action: null, checked: true });
-    await c.onFile({ target: { files: [file], value: 'x' } } as unknown as Event);
-    expect(svc.upload).not.toHaveBeenCalled();
-  });
-
-  it('a partner file that can\'t be joined is flagged with a dialog (no window.confirm) and a chip', async () => {
+  it('a partner file that can\'t be joined shows the "Separate file" problem chip', () => {
     const problem = 'This PDF is password-protected, so it can’t be joined to our report. It will be sent as a separate file.';
     const locked = row({ status: 'completed', hasReport: true, tests: [
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: true, attachProblem: problem, inReport: false } },
     ] });
-    const { c, el, svc, dialog } = setup([locked]);
-    svc.complete.mockResolvedValueOnce([locked]);
-    await c.uploadAndComplete(row(), new File(['%PDF'], 'v.pdf', { type: 'application/pdf' }));
-    expect(dialog.actions).toHaveBeenCalledWith(expect.objectContaining({ message: problem }));
+    const { el } = setup([locked]);
     const chip = el.querySelector('.pf-out__attach') as HTMLElement;
     expect(chip.textContent?.trim()).toBe('Separate file');
     expect(chip.getAttribute('data-attach')).toBe('problem');
   });
 
-  it('attach / detach later from the row', async () => {
+  it('the attach chip reflects "In our report" / "Separate file" per row', () => {
     const withReport = (attach: boolean) => row({ status: 'completed', hasReport: true, tests: [
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: attach, inReport: attach } },
     ] });
     const a = setup([withReport(true)]);
     expect(a.el.querySelector('.pf-out__attach')?.textContent?.trim()).toBe('In our report');
-    expect(a.el.querySelector('.pf-out__attach-btn')?.textContent).toContain('Detach from report');
-    await a.c.toggleAttach(withReport(true));
-    expect(a.svc.setAttachToReport).toHaveBeenCalledWith(['t1'], false);
-    expect(a.toasts.success).toHaveBeenCalled();
+    expect(a.el.textContent).toContain('Detach from report'); // the child's own button label
     TestBed.resetTestingModule();
     const b = setup([withReport(false)]);
-    expect(b.el.querySelector('.pf-out__attach-btn')?.textContent).toContain('Attach to report');
-    await b.c.toggleAttach(withReport(false));
-    expect(b.svc.setAttachToReport).toHaveBeenCalledWith(['t1'], true);
-  });
-
-  it('rejects a non-PDF / non-image file before uploading', async () => {
-    const { c, svc, toasts } = setup([row()]);
-    await c.uploadAndComplete(row(), new File(['x'], 'x.txt', { type: 'text/plain' }));
-    expect(svc.upload).not.toHaveBeenCalled();
-    expect(toasts.error).toHaveBeenCalled();
-  });
-
-  it('undo Completed asks for confirmation first (DialogService), and respects cancel', async () => {
-    const done = row({ status: 'completed', hasReport: true });
-    const a = setup([done], false);
-    await a.c.undo(done);
-    expect(a.dialog.confirm).toHaveBeenCalled();
-    expect(a.svc.reopen).not.toHaveBeenCalled();
-    TestBed.resetTestingModule();
-    const b = setup([done], true);
-    await b.c.undo(done);
-    expect(b.svc.reopen).toHaveBeenCalledWith(['t1']);
+    expect(b.el.textContent).toContain('Attach to report');
   });
 
   it('classic design shows status + partner filters; the search narrows the list', () => {

@@ -1273,6 +1273,16 @@
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()"
                       (pointerdown)="$event.stopPropagation()">
+                      <!-- Outsourced tube(s) — ONE home (pf-outsourced-actions), shown
+                           inline whatever ELSE the row is (owner, 2026-10-01: not a
+                           link to the Outsourced chip). A 'synthetic' row (an order
+                           that is ONLY outsourced — never reached ip/done/billing the
+                           normal way) has NOTHING else to show here: the whole
+                           ip/done/billing action set below needs real order state. -->
+                      @for (t of outsourcedTubesFor(row); track t.sampleId) {
+                      <pf-outsourced-actions [tube]="t" />
+                      }
+                      @if (row.source === 'order') {
                       <!-- Same action set as the single-status rows above, gated on
                            the ORDER's own state — never on which feed it came from. -->
                       @if (row.order.status === 'created' && showCreateBillOn(row.order)) {
@@ -1438,17 +1448,6 @@
                           }</span>
                       </button>
                       }
-                      @if (row.statuses.includes('out')) {
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
-                        (click)="openOutsourcedFor(row.order)" aria-label="Outsourced — manage partner report">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                          <path d="M12 16V4" />
-                          <path d="m7 9 5-5 5 5" />
-                          <path d="M4 20h16" />
-                        </svg>
-                        <span class="nd-rowact__t">Outsourced</span>
-                      </button>
                       }
                     </div>
                   </div>

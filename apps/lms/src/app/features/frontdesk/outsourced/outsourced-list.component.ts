@@ -1,20 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, input, signal } from '@angular/core';
-import { DialogService } from '../../../core/services/dialog.service';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input } from '@angular/core';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { UploadsService } from '../../../core/services/uploads.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { ApiError } from '../../../shared/models/api-response.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
-  ATTACH_DEFAULT, ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
-  attachState, filterOutsourced, firstAttachProblem, partnerFileProblem, rowReport,
+  ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, STATUS_LABEL, attachState, filterOutsourced, rowReport,
 } from './outsourced-view';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { OutsourcedActionsComponent } from './outsourced-actions.component';
 
 /**
  * Frontdesk "Outsourced" tab body. One row per outsourced tube: sample ID,
@@ -33,7 +29,7 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
 @Component({
   selector: 'pf-outsourced-list',
   standalone: true,
-  imports: [DatePipe, SegmentedComponent, SelectComponent, BusyDirective, SkeletonRowsComponent, DailyNoComponent],
+  imports: [DatePipe, SegmentedComponent, SelectComponent, SkeletonRowsComponent, DailyNoComponent, OutsourcedActionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showFilters()) {
@@ -44,8 +40,6 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
                    placeholder="All partner labs" (valueChange)="svc.partnerId.set($event || null)"></pf-select>
       </div>
     }
-
-    <input #file type="file" class="pf-out__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
 
     @if (svc.loading() && svc.rows().length === 0) {
       <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading outsourced tests…"></pf-skeleton-rows>
@@ -90,57 +84,7 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
               }
             </div>
             <div class="pf-out__acts">
-              @if (rowReport(r); as rep) {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()"
-                        [attr.aria-label]="'View partner report for ' + (r.barcode ?? 'this tube')" (click)="view(rep.url)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <span class="nd-rowact__t">View</span>
-                </button>
-              }
-              @if (rowReport(r)) {
-                <button type="button" class="nd-rowact pf-out__attach-btn" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                        [pfBusy]="busy() === r.sampleId && busyAct() === 'attach'" pfBusyLabel="Saving…"
-                        [attr.aria-label]="(attachState(r) === 'separate' ? 'Attach partner report to our report for ' : 'Detach partner report from our report for ') + (r.barcode ?? 'this tube')"
-                        (click)="toggleAttach(r)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/>
-                  </svg>
-                  <span class="nd-rowact__t">{{ attachState(r) === 'separate' ? 'Attach to report' : 'Detach from report' }}</span>
-                </button>
-              }
-              @if (r.status === 'completed') {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                        [pfBusy]="busy() === r.sampleId && busyAct() === 'undo'" pfBusyLabel="Undoing…"
-                        [attr.aria-label]="'Undo completed for ' + (r.barcode ?? 'this tube')" (click)="undo(r)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
-                  </svg>
-                  <span class="nd-rowact__t">Undo</span>
-                </button>
-              } @else if (r.hasReport) {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                        [pfBusy]="busy() === r.sampleId && busyAct() === 'complete'" pfBusyLabel="Completing…"
-                        [attr.aria-label]="'Mark completed for ' + (r.barcode ?? 'this tube')" (click)="markCompleted(r)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
-                  <span class="nd-rowact__t">Mark completed</span>
-                </button>
-              }
-              <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                      [pfBusy]="busy() === r.sampleId && busyAct() === 'upload'" pfBusyLabel="Uploading…"
-                      [attr.aria-label]="(r.hasReport ? 'Replace partner report for ' : 'Upload partner report for ') + (r.barcode ?? 'this tube')"
-                      (click)="pick(r)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>
-                </svg>
-                <span class="nd-rowact__t">{{ busy() === r.sampleId ? 'Uploading…' : (r.hasReport ? 'Replace report' : 'Upload report') }}</span>
-              </button>
+              <pf-outsourced-actions [tube]="r" />
             </div>
           </li>
         }
@@ -162,7 +106,6 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
     :host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .pf-out__none { min-height: 200px; }
     .pf-out__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
-    .pf-out__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-out__empty { margin: 0; padding: 24px 12px; text-align: center; font-size: 13px; color: var(--text-muted); }
     .pf-out__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .pf-out__row { flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 12px; }
@@ -186,8 +129,6 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
 })
 export class OutsourcedListComponent implements OnInit {
   readonly svc = inject(OutsourcingService);
-  private readonly toasts = inject(ToastService);
-  private readonly dialog = inject(DialogService);
 
   /** Classic design renders the status / partner filters here; the new design has none. */
   readonly showFilters = input(false);
@@ -201,17 +142,10 @@ export class OutsourcedListComponent implements OnInit {
   });
 
   readonly web = webPointerSignal();
-  readonly busy = signal<string | null>(null);
-  /** Which row action holds `busy` (only that button shows the dots). */
-  readonly busyAct = signal<'upload' | 'complete' | 'undo' | 'attach'>('upload');
   readonly statusLabel = STATUS_LABEL;
   readonly attachLabel = ATTACH_LABEL;
   readonly attachState = attachState;
-  readonly accept = PARTNER_REPORT_ACCEPT;
   readonly rowReport = rowReport;
-
-  @ViewChild('file') private fileInput?: ElementRef<HTMLInputElement>;
-  private target: OutsourcedTube | null = null;
 
   readonly statusOptions = () => outsourcedStatusOptions(this.svc.counts());
   readonly partnerSelectOptions = () => outsourcedPartnerOptions(this.svc.partners());
@@ -236,125 +170,6 @@ export class OutsourcedListComponent implements OnInit {
   testNames(r: OutsourcedTube): string { return r.tests.map(t => t.testName).join(', '); }
 
   protected readonly uploads = inject(UploadsService);
-  /** Partner files are private uploads — opened through a signed URL. */
-  /** Open the partner file; one the server no longer has (410) toasts
-   *  "upload it again" and flags the row (see isMissing in the template). */
-  view(url: string) { void this.uploads.open(url); }
-
-  pick(r: OutsourcedTube) {
-    this.target = r;
-    const el = this.fileInput?.nativeElement;
-    if (el) { el.value = ''; el.click(); }
-  }
-
-  async onFile(ev: Event) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    const r = this.target;
-    this.target = null;
-    if (!file || !r) return;
-    const problem = partnerFileProblem(file);
-    if (problem) { this.toasts.error(problem); return; }
-    const attach = await this.askAttach(r, file);
-    if (attach === null) return;
-    await this.uploadAndComplete(r, file, attach);
-  }
-
-  /** The upload step's one question: join the partner report to ours (one
-   *  PDF for the patient — default ON) or keep it a separate file. Null =
-   *  cancelled. */
-  async askAttach(r: OutsourcedTube, file: File): Promise<boolean | null> {
-    const res = await this.dialog.actions({
-      title: r.hasReport ? 'Replace partner report' : 'Upload partner report',
-      message: `${file.name} — ${this.testNames(r)}${r.partnerLabName ? ` (${r.partnerLabName})` : ''}.`,
-      checkbox: { label: 'Attach to our report — the patient gets one PDF (our report, then these pages)', initial: ATTACH_DEFAULT },
-      actions: [{ value: 'upload', label: r.hasReport ? 'Replace & complete' : 'Upload & complete', variant: 'primary' }],
-    });
-    return res.action === 'upload' ? res.checked : null;
-  }
-
-  /** Upload the partner report and mark the tube's outsourced tests Completed. */
-  async uploadAndComplete(r: OutsourcedTube, file: File, attachToReport = ATTACH_DEFAULT) {
-    const problem = partnerFileProblem(file);
-    if (problem) { this.toasts.error(problem); return; }
-    this.busyAct.set('upload');
-    this.busy.set(r.sampleId);
-    try {
-      const url = await this.svc.upload(file);
-      const updated = await this.svc.complete(actionLines(r), { url, name: file.name, type: file.type }, attachToReport);
-      this.toasts.success(`${r.hasReport ? 'Report replaced' : 'Report uploaded'} — ${this.testNames(r)} completed`);
-      await this.warnIfNotJoinable(updated);
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  async markCompleted(r: OutsourcedTube) {
-    this.busyAct.set('complete');
-    this.busy.set(r.sampleId);
-    try {
-      await this.svc.complete(actionLines(r), null);
-      this.toasts.success(`${this.testNames(r)} completed`);
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  /** Attach to / detach from our report, later. */
-  async toggleAttach(r: OutsourcedTube) {
-    const attach = attachState(r) === 'separate';
-    this.busyAct.set('attach');
-    this.busy.set(r.sampleId);
-    try {
-      const updated = await this.svc.setAttachToReport(r.tests.filter(t => t.report).map(t => t.orderTestId), attach);
-      if (attach && firstAttachProblem(updated)) await this.warnIfNotJoinable(updated);
-      else this.toasts.success(attach
-        ? 'Attached — the patient gets one PDF with the partner report'
-        : 'Detached — the partner report is sent as a separate file');
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  /** A partner file that can't be joined (password-protected / unreadable):
-   *  say so — it goes to the patient as a separate file instead. */
-  private async warnIfNotJoinable(updated: OutsourcedTube[] | null | undefined) {
-    const problem = firstAttachProblem(updated);
-    if (!problem) return;
-    await this.dialog.actions({
-      title: 'Partner report kept as a separate file',
-      message: problem,
-      actions: [],
-      cancelLabel: 'OK',
-    });
-  }
-
-  async undo(r: OutsourcedTube) {
-    const ok = await this.dialog.confirm({
-      title: 'Undo Completed?',
-      message: `${this.testNames(r)} goes back to Outsourced. The uploaded report stays attached; a report already released is not changed.`,
-      confirmLabel: 'Undo completed',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    this.busyAct.set('undo');
-    this.busy.set(r.sampleId);
-    try {
-      await this.svc.reopen(r.tests.map(t => t.orderTestId));
-      this.toasts.success('Moved back to Outsourced');
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
 }
 
 /** Status segmented options with counts (shared by the band pill). */

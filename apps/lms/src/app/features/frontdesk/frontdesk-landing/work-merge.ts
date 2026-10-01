@@ -32,19 +32,33 @@ export interface WorkBucket<T extends MinimalWorkOrder> {
   orders: readonly T[];
 }
 
-/** A feed that only ANNOTATES rows that already exist from a `WorkBucket` —
- *  it never introduces a new row on its own. Outsourced is per-TUBE, not
- *  per-order (one order can have several outsourced tubes, and the tube
- *  carries its own upload/attach UI — ONE home, `OutsourcedListComponent`);
- *  an order with a pending outsourced tube is, in practice, always ALSO
- *  in-progress or completed, so it already has a row from a `WorkBucket`.
- *  The rare order that is outsourced-only for the chosen range (no row from
- *  any other feed) is intentionally left off the merged list — it still
- *  lists in full under the Outsourced chip — rather than render a
- *  field-sparse row built from tube data alone. */
-export interface AnnotateBucket {
+/** One item an {@link AnnotateBucket} carries for an order: which order it
+ *  belongs to, plus whatever payload the caller wants back on the merged row
+ *  (e.g. the outsourced tube(s) themselves, for inline actions). */
+export interface AnnotateItem<D = unknown> {
+  orderId: string;
+  data: D;
+}
+
+/**
+ * A feed that is per-SOMETHING-OTHER-THAN-an-order (outsourced is per TUBE —
+ * one order can have several), carried alongside the real `WorkBucket`
+ * feeds. Default behaviour is annotate-only: add its status (and `data`) to
+ * a row that already exists from a `WorkBucket`, touching nothing else.
+ *
+ * `synthesize`, when given, additionally builds a stand-in row for an order
+ * that has NO row from any `WorkBucket` at all — e.g. an order every one of
+ * whose tests is outsourced never reaches "in progress" the normal way
+ * (outsourced lines are excluded from the lab's own work/status machinery),
+ * so it may never surface through ip/done/billing. Without `synthesize`
+ * such an order is silently left off the merged list (still fully listed
+ * under its own chip) — WITH it, the order gets exactly one row, built from
+ * the annotate data alone (source: 'synthetic').
+ */
+export interface AnnotateBucket<T extends MinimalWorkOrder, D = unknown> {
   status: WorkStatus;
-  ids: ReadonlySet<string> | readonly string[];
+  items: readonly AnnotateItem<D>[];
+  synthesize?: (item: AnnotateItem<D>) => T;
 }
 
 export interface MergedWorkRow<T extends MinimalWorkOrder> {
@@ -57,6 +71,16 @@ export interface MergedWorkRow<T extends MinimalWorkOrder> {
   primary: WorkStatus;
   /** The rest — rendered as small secondary badges, never a second row. */
   secondary: readonly WorkStatus[];
+  /** 'order' = a real row from a `WorkBucket`; 'synthetic' = built purely
+   *  from an annotate bucket's `synthesize` (no ip/done/billing row exists
+   *  for this order) — callers should hide actions that need real order
+   *  state (Bill / Collect / Dispatch / …) for a synthetic row; it has none
+   *  to act on beyond what the annotate data itself offers. */
+  source: 'order' | 'synthetic';
+  /** The annotate `data` carried for each status this row picked up (keyed
+   *  by status) — e.g. `annotateData.out` = the order's outsourced tubes,
+   *  for inline actions. Empty for a row with no annotate-bucket status. */
+  annotateData: Partial<Record<WorkStatus, unknown>>;
 }
 
 /**
@@ -84,13 +108,18 @@ export function primaryWorkStatus(statuses: Iterable<WorkStatus>): WorkStatus {
 }
 
 /** Dedupe by order id across every status feed (annotate feeds included),
- *  each row carrying the UNION of statuses it was found under. */
+ *  each row carrying the UNION of statuses it was found under. An annotate
+ *  bucket with `synthesize` can ALSO create a row on its own, for an order
+ *  with no `WorkBucket` row at all (see {@link AnnotateBucket}). */
 export function mergeWorkRows<T extends MinimalWorkOrder>(
   buckets: readonly WorkBucket<T>[],
-  annotate: readonly AnnotateBucket[] = [],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each bucket's own D can differ; callers get full type safety on their own AnnotateBucket<T, D> value.
+  annotate: readonly AnnotateBucket<T, any>[] = [],
 ): MergedWorkRow<T>[] {
   const orders = new Map<string, T>();
   const statusesById = new Map<string, WorkStatus[]>();
+  const sourceById = new Map<string, 'order' | 'synthetic'>();
+  const annotateDataById = new Map<string, Partial<Record<WorkStatus, unknown>>>();
 
   const addStatus = (id: string, status: WorkStatus) => {
     const list = statusesById.get(id);
@@ -100,21 +129,35 @@ export function mergeWorkRows<T extends MinimalWorkOrder>(
 
   for (const b of buckets) {
     for (const o of b.orders) {
-      if (!orders.has(o.id)) orders.set(o.id, o);
+      if (!orders.has(o.id)) { orders.set(o.id, o); sourceById.set(o.id, 'order'); }
       addStatus(o.id, b.status);
     }
   }
-  // Annotate-only feeds never create a row by themselves.
   for (const a of annotate) {
-    for (const id of a.ids) {
-      if (statusesById.has(id)) addStatus(id, a.status);
+    for (const item of a.items) {
+      if (!statusesById.has(item.orderId)) {
+        if (!a.synthesize) continue; // annotate-only: no existing row, no row created
+        orders.set(item.orderId, a.synthesize(item));
+        sourceById.set(item.orderId, 'synthetic');
+      }
+      addStatus(item.orderId, a.status);
+      const data = annotateDataById.get(item.orderId) ?? {};
+      data[a.status] = item.data;
+      annotateDataById.set(item.orderId, data);
     }
   }
 
   const rows: MergedWorkRow<T>[] = [];
   for (const [id, statuses] of statusesById) {
     const primary = primaryWorkStatus(statuses);
-    rows.push({ order: orders.get(id)!, statuses, primary, secondary: statuses.filter(s => s !== primary) });
+    rows.push({
+      order: orders.get(id)!,
+      statuses,
+      primary,
+      secondary: statuses.filter(s => s !== primary),
+      source: sourceById.get(id) ?? 'order',
+      annotateData: annotateDataById.get(id) ?? {},
+    });
   }
   return rows;
 }
@@ -147,7 +190,8 @@ export function sortMergedWork<T extends MinimalWorkOrder>(rows: readonly Merged
 /** {@link mergeWorkRows} + {@link sortMergedWork} — what the component calls. */
 export function buildMergedWork<T extends MinimalWorkOrder>(
   buckets: readonly WorkBucket<T>[],
-  annotate: readonly AnnotateBucket[] = [],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see mergeWorkRows
+  annotate: readonly AnnotateBucket<T, any>[] = [],
 ): MergedWorkRow<T>[] {
   return sortMergedWork(mergeWorkRows(buckets, annotate));
 }
