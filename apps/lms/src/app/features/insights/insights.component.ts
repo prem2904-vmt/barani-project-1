@@ -25,7 +25,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
 });
 
 type InsightsTab = 'analytics' | 'operations';
-type AnalyticsSubTab = 'overview' | 'volume' | 'revenue' | 'tests-depts' | 'referrals' | 'lab-ops';
+type AnalyticsSubTab = 'overview' | 'volume' | 'revenue' | 'tests-depts' | 'referrals' | 'lab-ops' | 'outsourcing' | 'profitability';
 
 interface OverviewDto {
   patients: number; patientsDeltaPct?: number | null;
@@ -55,6 +55,13 @@ interface RejectionReasonRow { reason: string; count: number; }
 interface StaffProductivityRow { userName: string; entered: number; validated: number; }
 interface ReportDeliveryRow { status: string; count: number; }
 interface CriticalValuesSummary { count: number; medianMinutesToAcknowledge: number | null; medianMinutesToCommunicate: number | null; }
+
+// Phase 3
+interface OutsourcedVolumeTrendPoint { bucket: string; count: number; }
+interface TestsByVendorRow { vendorName: string; count: number; revenue: number; }
+interface OutsourcingCostResult { revenue: number; cost: number; noPriceCount: number; lineCount: number; }
+interface OutsourcingCostTrendPoint { bucket: string; revenue: number; cost: number; noPriceCount: number; }
+interface ProfitabilityRow { name: string; revenue: number; cost: number | null; margin: number | null; hasOutsourcedLines: boolean; noPriceCount: number; }
 
 /** A Phase-1 KPI card: value + optional Δ, with a money flag so the template
  *  hides the whole tile (never a blank/garbled number) when the field was
@@ -354,7 +361,7 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
                 </div>
               </div>
             </div>
-          } @else {
+          } @else if (analyticsSubTab() === 'lab-ops') {
             <!-- Lab Operations (reuses the SAME calculation layer as Overview/TAT board — never a second definition). -->
             <div class="ins-chart-grid">
               <div class="nd-card">
@@ -440,6 +447,99 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
                 </div>
               </div>
             </div>
+          } @else if (analyticsSubTab() === 'outsourcing') {
+            <div class="ins-chart-grid">
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Outsourced volume trend</span></div>
+                <div class="nd-card__body">
+                  <div class="ins-chart-host" #outsourcedVolumeHost></div>
+                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('outsourced-tests')">View list →</button>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Outsourcing cost trend</span></div>
+                <div class="nd-card__body">
+                  @if (!canSeeMoney()) {
+                    <p class="ins-note">Needs view_financial_analytics.</p>
+                  } @else {
+                    <div class="ins-chart-host" #outsourcingCostHost></div>
+                  }
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Outsourced revenue vs vendor cost</span></div>
+                <div class="nd-card__body">
+                  @if (!canSeeMoney()) {
+                    <p class="ins-note">Needs view_financial_analytics.</p>
+                  } @else if (outsourcedRevenueVsCost(); as r) {
+                    <p class="ins-stat">{{ rupee(r.revenue - r.cost) }}
+                      <span style="font-size:13px;font-weight:400;color:var(--text-tertiary);">margin</span></p>
+                    <table class="ins-table">
+                      <tbody>
+                        <tr><td>Revenue</td><td>{{ rupee(r.revenue) }}</td></tr>
+                        <tr><td>Vendor cost</td><td>{{ rupee(r.cost) }}</td></tr>
+                        <tr><td>Lines without a priced partner rate</td><td>{{ r.noPriceCount }} / {{ r.lineCount }}</td></tr>
+                      </tbody>
+                    </table>
+                    @if (r.noPriceCount > 0) {
+                      <p class="ins-note">Cost is understated — {{ r.noPriceCount }} outsourced line(s) have no partner price on record for their order date. Add them in Partners → Partner Prices.</p>
+                    }
+                  }
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Tests by vendor</span></div>
+                <div class="nd-card__body">
+                  @if (!canSeeMoney()) {
+                    <p class="ins-note">Needs view_financial_analytics.</p>
+                  } @else {
+                    <table class="ins-table">
+                      <thead><tr><th>Vendor</th><th>Count</th><th>Revenue</th></tr></thead>
+                      <tbody>
+                        @for (v of testsByVendor(); track v.vendorName) {
+                          <tr><td>{{ v.vendorName }}</td><td>{{ v.count }}</td><td>{{ rupee(v.revenue) }}</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              </div>
+            </div>
+          } @else {
+            <!-- Profitability (final catch-all): per test / per department. In-house
+                 rows show revenue only (cost/margin stay null); an outsourced line
+                 resolves cost from the partner price effective on the order's OWN
+                 date — never the latest price (ProfitabilityRow.HasOutsourcedLines
+                 is what the template keys the dash-vs-number on, never a null check
+                 alone, since a priced row can still legitimately be 0). -->
+            @if (!canSeeMoney()) {
+              <div class="nd-card"><div class="nd-card__body" style="padding: 24px;">
+                <p style="color: var(--text-secondary);">Profitability needs the view_financial_analytics permission.</p>
+              </div></div>
+            } @else {
+              <div class="ins-tabs">
+                <pf-segmented size="sm" [options]="profitabilityViewOptions" [value]="profitabilityView()" (valueChange)="profitabilityView.set($event)"></pf-segmented>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Profitability by {{ profitabilityView() === 'test' ? 'test' : 'department' }}</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>{{ profitabilityView() === 'test' ? 'Test' : 'Department' }}</th><th>Revenue</th><th>Outsourcing cost</th><th>Margin</th></tr></thead>
+                    <tbody>
+                      @for (r of (profitabilityView() === 'test' ? profitabilityByTest() : profitabilityByDepartment()); track r.name) {
+                        <tr>
+                          <td>{{ r.name }}</td>
+                          <td>{{ rupee(r.revenue) }}</td>
+                          <td>{{ r.hasOutsourcedLines ? rupee(r.cost) : '—' }}</td>
+                          <td>{{ r.hasOutsourcedLines ? rupee(r.margin) : '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                  <p class="ins-note">In-house work shows revenue only — margin applies only where a line was outsourced to a priced partner.</p>
+                </div>
+              </div>
+            }
           }
         } @else {
           <!-- Operations Insights: 9 lists, one filter band, one calculation layer. -->
@@ -590,8 +690,16 @@ export class InsightsComponent {
     { value: 'tests-depts', label: 'Tests & Departments' },
     { value: 'referrals', label: 'Referrals' },
     { value: 'lab-ops', label: 'Lab Operations' },
+    { value: 'outsourcing', label: 'Outsourcing' },
+    { value: 'profitability', label: 'Profitability' },
   ];
   readonly analyticsSubTab = signal<AnalyticsSubTab>('overview');
+
+  readonly profitabilityViewOptions: SegmentedOption<'test' | 'department'>[] = [
+    { value: 'test', label: 'By test' },
+    { value: 'department', label: 'By department' },
+  ];
+  readonly profitabilityView = signal<'test' | 'department'>('test');
 
   readonly opsListOptions: SegmentedOption<string>[] = OPS_LISTS.map(c => ({ value: c.key, label: c.label }));
   readonly opsKey = signal<string>('patients');
@@ -652,6 +760,14 @@ export class InsightsComponent {
   readonly homeCollectionVolume = signal(0);
   readonly reportDelivery = signal<ReportDeliveryRow[]>([]);
   readonly criticalValues = signal<CriticalValuesSummary | null>(null);
+
+  // Phase 3
+  readonly outsourcedVolumeTrend = signal<OutsourcedVolumeTrendPoint[]>([]);
+  readonly testsByVendor = signal<TestsByVendorRow[]>([]);
+  readonly outsourcingCostTrend = signal<OutsourcingCostTrendPoint[]>([]);
+  readonly outsourcedRevenueVsCost = signal<OutsourcingCostResult | null>(null);
+  readonly profitabilityByTest = signal<ProfitabilityRow[]>([]);
+  readonly profitabilityByDepartment = signal<ProfitabilityRow[]>([]);
 
   readonly revenueSeriesKeys = REVENUE_SERIES;
   readonly revenueSeriesLabel = REVENUE_SERIES_LABEL;
@@ -753,6 +869,31 @@ export class InsightsComponent {
       this.api.get<CriticalValuesSummary>(`/api/analytics/ops/critical-values${q}`).subscribe({ next: d => this.criticalValues.set(d ?? null) });
     });
 
+    // Phase 3: Outsourcing — fetched only while that sub-tab is open. The
+    // volume trend needs only view_analytics; every money-bearing endpoint
+    // here needs view_financial_analytics (same gate the server enforces).
+    effect(() => {
+      const q = this.query();
+      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'outsourcing') return;
+      this.api.get<{ bucketUnit: string; points: OutsourcedVolumeTrendPoint[] }>(`/api/analytics/trends/outsourced-volume${q}`)
+        .subscribe({ next: d => this.outsourcedVolumeTrend.set(d?.points ?? []) });
+      if (this.canSeeMoney()) {
+        this.api.get<TestsByVendorRow[]>(`/api/analytics/tests-by-vendor${q}`).subscribe({ next: d => this.testsByVendor.set(d ?? []) });
+        this.api.get<{ bucketUnit: string; points: OutsourcingCostTrendPoint[] }>(`/api/analytics/trends/outsourcing-cost${q}`)
+          .subscribe({ next: d => this.outsourcingCostTrend.set(d?.points ?? []) });
+        this.api.get<OutsourcingCostResult>(`/api/analytics/outsourced-revenue-vs-cost${q}`).subscribe({ next: d => this.outsourcedRevenueVsCost.set(d ?? null) });
+      }
+    });
+
+    // Phase 3: Profitability — fetched only while that sub-tab is open (the
+    // whole tab is money, gated client AND server side).
+    effect(() => {
+      const q = this.query();
+      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'profitability' || !this.canSeeMoney()) return;
+      this.api.get<ProfitabilityRow[]>(`/api/analytics/profitability/by-test${q}`).subscribe({ next: d => this.profitabilityByTest.set(d ?? []) });
+      this.api.get<ProfitabilityRow[]>(`/api/analytics/profitability/by-department${q}`).subscribe({ next: d => this.profitabilityByDepartment.set(d ?? []) });
+    });
+
     // Paint (and repaint) the charts whenever their tab is on screen, their
     // data changes, or the theme flips — effects track every signal read
     // during their run, including ones made inside the painters below, so
@@ -783,6 +924,13 @@ export class InsightsComponent {
         this.theme.isDark();
         void this.paintReferralVolumeChart();
         if (this.canSeeMoney()) void this.paintSourceTypeChart();
+      }
+    });
+    effect(() => {
+      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'outsourcing') {
+        this.theme.isDark();
+        void this.paintOutsourcedVolumeChart();
+        if (this.canSeeMoney()) void this.paintOutsourcingCostChart();
       }
     });
 
@@ -861,6 +1009,8 @@ export class InsightsComponent {
   private readonly testsByDeptHost = viewChild<ElementRef<HTMLElement>>('testsByDeptHost');
   private readonly referralVolumeHost = viewChild<ElementRef<HTMLElement>>('referralVolumeHost');
   private readonly sourceTypeHost = viewChild<ElementRef<HTMLElement>>('sourceTypeHost');
+  private readonly outsourcedVolumeHost = viewChild<ElementRef<HTMLElement>>('outsourcedVolumeHost');
+  private readonly outsourcingCostHost = viewChild<ElementRef<HTMLElement>>('outsourcingCostHost');
 
   private _echarts: typeof import('echarts') | null = null;
   private async ec(): Promise<typeof import('echarts')> {
@@ -950,6 +1100,29 @@ export class InsightsComponent {
     const rows = this.sourceTypeRevenue();
     void this.paintTo(this.sourceTypeHost, 'source-type', buildHorizontalBarOption(ec, {
       categories: rows.map(r => r.sourceType), values: rows.map(r => r.revenue), theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
+    }));
+  }
+
+  private async paintOutsourcedVolumeChart() {
+    const ec = await this.ec();
+    const dark = this.theme.isDark();
+    const points = this.outsourcedVolumeTrend();
+    void this.paintTo(this.outsourcedVolumeHost, 'outsourced-volume', buildBusinessLineOption(ec, {
+      categories: points.map(p => p.bucket), series: [{ name: 'Outsourced tests', data: points.map(p => p.count) }], theme: dark ? 'dark' : 'light',
+    }));
+  }
+
+  private async paintOutsourcingCostChart() {
+    const ec = await this.ec();
+    const dark = this.theme.isDark();
+    const points = this.outsourcingCostTrend();
+    void this.paintTo(this.outsourcingCostHost, 'outsourcing-cost', buildBusinessLineOption(ec, {
+      categories: points.map(p => p.bucket),
+      series: [
+        { name: 'Revenue', data: points.map(p => p.revenue) },
+        { name: 'Vendor cost', data: points.map(p => p.cost) },
+      ],
+      theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
     }));
   }
 }

@@ -147,6 +147,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/branches':          { perms: ['manage_branches'] },
   '/admin/vendors':           { perms: ['manage_tenant'] },
   '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
+  '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },
   '/admin/lab-settings':      { perms: ['manage_lab_settings'] },
   '/admin/organization':      { perms: ['manage_tenant'] },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.

@@ -224,6 +224,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/admin/referral-labs/referral-labs.component').then(m => m.ReferralLabsComponent)
       },
       {
+        // Outsourcing partner prices — what each referral lab charges per
+        // test, effective-dated; the single cost source Analytics' Phase 3
+        // Outsourcing/Profitability tabs read from.
+        path: 'admin/partner-prices',
+        canActivate: [...routeGuards('/admin/partner-prices')],
+        loadComponent: () => import('./features/admin/partner-test-prices/partner-test-prices.component').then(m => m.PartnerTestPricesComponent)
+      },
+      {
         path: 'admin/lab-settings',
         canActivate: [...routeGuards('/admin/lab-settings')],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
