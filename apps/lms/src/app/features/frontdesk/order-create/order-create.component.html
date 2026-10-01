@@ -263,6 +263,17 @@
   </div>
   }
 
+  <!-- Analytics / Lab Insights Phase 2 (owner 2026-10-01): optional referral
+       source, purely additive — never required, never blocks Confirm. Shown
+       only while actively creating/editing (never on a read-only view). -->
+  @if (!isReadOnly() && !opening()) {
+  <div class="pf-oc-refsrc">
+    <span class="pf-oc-refsrc__label">Referral source</span>
+    <pf-select class="pf-oc-refsrc__select" size="sm" [options]="referralSourceTypeOptions" [value]="referralSourceType()"
+               (valueChange)="referralSourceType.set($event)"></pf-select>
+  </div>
+  }
+
   <!-- Zoom target: a tapped draft row / shelf chip / order tile morphs into
        this body (core/navigation/zoom-transition.ts); back reverses it. -->
   <div class="pf-page__body pf-oc-body" [class.pf-oc-body--split]="isLg()"

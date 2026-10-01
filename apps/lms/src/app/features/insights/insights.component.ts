@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, Signal, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, ModuleRegistry, colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community';
@@ -24,7 +25,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
 });
 
 type InsightsTab = 'analytics' | 'operations';
-type AnalyticsSubTab = 'overview' | 'volume' | 'revenue';
+type AnalyticsSubTab = 'overview' | 'volume' | 'revenue' | 'tests-depts' | 'referrals' | 'lab-ops';
 
 interface OverviewDto {
   patients: number; patientsDeltaPct?: number | null;
@@ -41,6 +42,19 @@ interface VolumeTrendPoint { bucket: string; patients: number; newPatients: numb
 interface RevenueTrendPoint { bucket: string; gross: number; discount: number; refund: number; net: number; collected: number; avgBillValue: number; }
 interface DeptRevenueRow { departmentName: string; revenue: number; }
 interface TopTestRow { testName: string; orders: number; revenue: number; }
+
+// Phase 2
+interface TestVolumeByDeptRow { departmentName: string; inHouse: number; outsourced: number; }
+interface TopTestVolumeRow { testName: string; count: number; pctOfTotal: number; }
+interface ReferralVolumeTrendPoint { bucket: string; orders: number; }
+interface TopReferringDoctorRow { doctorName: string; patients: number; orders: number; revenue: number; }
+interface SourceTypeRevenueRow { sourceType: string; revenue: number; }
+interface TatByDeptRow { departmentName: string; medianMinutes: number; p90Minutes: number; pctWithinTarget: number; count: number; }
+interface PendingByStageRow { stage: string; count: number; overdue: number; }
+interface RejectionReasonRow { reason: string; count: number; }
+interface StaffProductivityRow { userName: string; entered: number; validated: number; }
+interface ReportDeliveryRow { status: string; count: number; }
+interface CriticalValuesSummary { count: number; medianMinutesToAcknowledge: number | null; medianMinutesToCommunicate: number | null; }
 
 /** A Phase-1 KPI card: value + optional Δ, with a money flag so the template
  *  hides the whole tile (never a blank/garbled number) when the field was
@@ -115,7 +129,7 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [HeroBandComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, SkeletonTableComponent, SkeletonTilesComponent, AgGridAngular],
+  imports: [HeroBandComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, SkeletonTableComponent, SkeletonTilesComponent, AgGridAngular, DecimalPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="nd-page px-4 md:px-8 pt-6">
@@ -216,11 +230,12 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
                 </div>
               </div>
             </div>
-          } @else if (!canSeeMoney()) {
+          } @else if (analyticsSubTab() === 'revenue') {
+            @if (!canSeeMoney()) {
             <div class="nd-card"><div class="nd-card__body" style="padding: 24px;">
               <p style="color: var(--text-secondary);">Revenue needs the view_financial_analytics permission.</p>
             </div></div>
-          } @else {
+            } @else {
             <div class="ins-chart-grid">
               <div class="nd-card" style="grid-column: 1 / -1;">
                 <div class="nd-card__head">
@@ -259,6 +274,169 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
                     </tbody>
                   </table>
                   <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
+                </div>
+              </div>
+            </div>
+            }
+          } @else if (analyticsSubTab() === 'tests-depts') {
+            <div class="ins-chart-grid">
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Test volume by department (in-house vs outsourced)</span></div>
+                <div class="nd-card__body">
+                  <div class="ins-chart-host" #testsByDeptHost></div>
+                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Top tests by volume</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Test</th><th>Count</th><th>% of total</th></tr></thead>
+                    <tbody>
+                      @for (t of topTestsByVolume(); track t.testName) {
+                        <tr><td>{{ t.testName }}</td><td>{{ t.count }}</td><td>{{ t.pctOfTotal }}%</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Test mix — in-house vs outsourced</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Department</th><th>In-house</th><th>Outsourced</th></tr></thead>
+                    <tbody>
+                      @for (d of testVolumeByDept(); track d.departmentName) {
+                        <tr><td>{{ d.departmentName }}</td><td>{{ d.inHouse }}</td><td>{{ d.outsourced }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                  <p class="ins-note">No Routine vs Specialised split — Test Master carries no such classification today.</p>
+                </div>
+              </div>
+            </div>
+          } @else if (analyticsSubTab() === 'referrals') {
+            <div class="ins-chart-grid">
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Referral volume trend</span></div>
+                <div class="nd-card__body">
+                  <div class="ins-chart-host" #referralVolumeHost></div>
+                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('referrals')">View list →</button>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Top referring doctors</span></div>
+                <div class="nd-card__body">
+                  @if (!canSeeMoney()) {
+                    <p class="ins-note">Needs view_financial_analytics.</p>
+                  } @else {
+                    <table class="ins-table">
+                      <thead><tr><th>Doctor</th><th>Patients</th><th>Orders</th><th>Revenue</th></tr></thead>
+                      <tbody>
+                        @for (d of topReferringDoctors(); track d.doctorName) {
+                          <tr><td>{{ d.doctorName }}</td><td>{{ d.patients }}</td><td>{{ d.orders }}</td><td>{{ rupee(d.revenue) }}</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('referrals')">View list →</button>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Revenue by referral source type</span></div>
+                <div class="nd-card__body">
+                  @if (!canSeeMoney()) {
+                    <p class="ins-note">Needs view_financial_analytics.</p>
+                  } @else {
+                    <div class="ins-chart-host" #sourceTypeHost></div>
+                  }
+                </div>
+              </div>
+            </div>
+          } @else {
+            <!-- Lab Operations (reuses the SAME calculation layer as Overview/TAT board — never a second definition). -->
+            <div class="ins-chart-grid">
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">TAT by department</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Department</th><th>Median (min)</th><th>P90 (min)</th><th>% within target</th><th>N</th></tr></thead>
+                    <tbody>
+                      @for (r of tatByDept(); track r.departmentName) {
+                        <tr><td>{{ r.departmentName }}</td><td>{{ r.medianMinutes | number:'1.0-0' }}</td><td>{{ r.p90Minutes | number:'1.0-0' }}</td><td>{{ r.pctWithinTarget }}%</td><td>{{ r.count }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Pending / overdue, by stage (live)</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Stage</th><th>Pending</th><th>Overdue</th></tr></thead>
+                    <tbody>
+                      @for (r of pendingByStage(); track r.stage) {
+                        <tr><td>{{ r.stage }}</td><td>{{ r.count }}</td><td>{{ r.overdue }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Sample rejection rate</span></div>
+                <div class="nd-card__body">
+                  <p class="ins-stat">{{ rejectionRate() }}%</p>
+                  <table class="ins-table">
+                    <thead><tr><th>Reason</th><th>Count</th></tr></thead>
+                    <tbody>
+                      @for (r of rejectionReasons(); track r.reason) {
+                        <tr><td>{{ r.reason }}</td><td>{{ r.count }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Staff productivity</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Staff</th><th>Entered</th><th>Validated</th></tr></thead>
+                    <tbody>
+                      @for (r of staffProductivity(); track r.userName) {
+                        <tr><td>{{ r.userName }}</td><td>{{ r.entered }}</td><td>{{ r.validated }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Home collection volume</span></div>
+                <div class="nd-card__body"><p class="ins-stat">{{ homeCollectionVolume() }}</p></div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Report delivery (WhatsApp)</span></div>
+                <div class="nd-card__body">
+                  <table class="ins-table">
+                    <thead><tr><th>Status</th><th>Count</th></tr></thead>
+                    <tbody>
+                      @for (r of reportDelivery(); track r.status) {
+                        <tr><td>{{ r.status }}</td><td>{{ r.count }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="nd-card">
+                <div class="nd-card__head"><span class="nd-card__label">Critical values</span></div>
+                <div class="nd-card__body">
+                  @if (criticalValues(); as cv) {
+                    <p class="ins-stat">{{ cv.count }}</p>
+                    <p class="ins-note">
+                      Median time to acknowledge: {{ cv.medianMinutesToAcknowledge != null ? (cv.medianMinutesToAcknowledge | number:'1.0-0') + ' min' : '—' }}
+                      · Median time to inform: {{ cv.medianMinutesToCommunicate != null ? (cv.medianMinutesToCommunicate | number:'1.0-0') + ' min' : '—' }}
+                    </p>
+                  }
                 </div>
               </div>
             </div>
@@ -346,6 +524,8 @@ const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
     .ins-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .ins-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px; }
     .ins-table td { padding: 6px 8px; border-top: 1px solid var(--nd-line, var(--border-default)); }
+    .ins-note { font-size: 12px; color: var(--text-tertiary); padding: 8px 2px 0; }
+    .ins-stat { font-size: 28px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; margin: 4px 0; }
     @media (max-width: 640px) {
       .ins-kpi-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 8px; }
       .ins-chart-grid { grid-template-columns: 1fr; }
@@ -407,6 +587,9 @@ export class InsightsComponent {
     { value: 'overview', label: 'Overview' },
     { value: 'volume', label: 'Patients & Volume' },
     { value: 'revenue', label: 'Revenue' },
+    { value: 'tests-depts', label: 'Tests & Departments' },
+    { value: 'referrals', label: 'Referrals' },
+    { value: 'lab-ops', label: 'Lab Operations' },
   ];
   readonly analyticsSubTab = signal<AnalyticsSubTab>('overview');
 
@@ -454,6 +637,21 @@ export class InsightsComponent {
   readonly revenueLoading = signal(false);
   readonly deptRevenue = signal<DeptRevenueRow[]>([]);
   readonly topTests = signal<TopTestRow[]>([]);
+
+  // Phase 2
+  readonly testVolumeByDept = signal<TestVolumeByDeptRow[]>([]);
+  readonly topTestsByVolume = signal<TopTestVolumeRow[]>([]);
+  readonly referralVolumeTrend = signal<ReferralVolumeTrendPoint[]>([]);
+  readonly topReferringDoctors = signal<TopReferringDoctorRow[]>([]);
+  readonly sourceTypeRevenue = signal<SourceTypeRevenueRow[]>([]);
+  readonly tatByDept = signal<TatByDeptRow[]>([]);
+  readonly pendingByStage = signal<PendingByStageRow[]>([]);
+  readonly rejectionRate = signal(0);
+  readonly rejectionReasons = signal<RejectionReasonRow[]>([]);
+  readonly staffProductivity = signal<StaffProductivityRow[]>([]);
+  readonly homeCollectionVolume = signal(0);
+  readonly reportDelivery = signal<ReportDeliveryRow[]>([]);
+  readonly criticalValues = signal<CriticalValuesSummary | null>(null);
 
   readonly revenueSeriesKeys = REVENUE_SERIES;
   readonly revenueSeriesLabel = REVENUE_SERIES_LABEL;
@@ -520,6 +718,41 @@ export class InsightsComponent {
       this.api.get<TopTestRow[]>(`/api/analytics/top-tests${q}`).subscribe({ next: d => this.topTests.set(d ?? []) });
     });
 
+    // Phase 2: Tests & Departments — fetched only while that sub-tab is open.
+    effect(() => {
+      const q = this.query();
+      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'tests-depts') return;
+      this.api.get<TestVolumeByDeptRow[]>(`/api/analytics/tests-by-department${q}`).subscribe({ next: d => this.testVolumeByDept.set(d ?? []) });
+      this.api.get<TopTestVolumeRow[]>(`/api/analytics/top-tests-by-volume${q}`).subscribe({ next: d => this.topTestsByVolume.set(d ?? []) });
+    });
+
+    // Phase 2: Referrals — fetched only while that sub-tab is open.
+    effect(() => {
+      const q = this.query();
+      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'referrals') return;
+      this.api.get<{ bucketUnit: string; points: ReferralVolumeTrendPoint[] }>(`/api/analytics/trends/referrals${q}`)
+        .subscribe({ next: d => this.referralVolumeTrend.set(d?.points ?? []) });
+      if (this.canSeeMoney()) {
+        this.api.get<TopReferringDoctorRow[]>(`/api/analytics/top-referring-doctors${q}`).subscribe({ next: d => this.topReferringDoctors.set(d ?? []) });
+        this.api.get<SourceTypeRevenueRow[]>(`/api/analytics/revenue-by-source-type${q}`).subscribe({ next: d => this.sourceTypeRevenue.set(d ?? []) });
+      }
+    });
+
+    // Phase 2: Lab Operations — fetched only while that sub-tab is open.
+    effect(() => {
+      const q = this.query();
+      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'lab-ops') return;
+      this.api.get<TatByDeptRow[]>(`/api/analytics/ops/tat-by-department${q}`).subscribe({ next: d => this.tatByDept.set(d ?? []) });
+      const branchQ = this.branchId() ? `?branchId=${this.branchId()}` : '';
+      this.api.get<PendingByStageRow[]>(`/api/analytics/ops/pending-by-stage${branchQ}`).subscribe({ next: d => this.pendingByStage.set(d ?? []) });
+      this.api.get<{ ratePct: number; topReasons: RejectionReasonRow[] }>(`/api/analytics/ops/rejections${q}`)
+        .subscribe({ next: d => { this.rejectionRate.set(d?.ratePct ?? 0); this.rejectionReasons.set(d?.topReasons ?? []); } });
+      this.api.get<StaffProductivityRow[]>(`/api/analytics/ops/staff-productivity${q}`).subscribe({ next: d => this.staffProductivity.set(d ?? []) });
+      this.api.get<{ volume: number }>(`/api/analytics/ops/home-collection-volume${q}`).subscribe({ next: d => this.homeCollectionVolume.set(d?.volume ?? 0) });
+      this.api.get<ReportDeliveryRow[]>(`/api/analytics/ops/report-delivery${q}`).subscribe({ next: d => this.reportDelivery.set(d ?? []) });
+      this.api.get<CriticalValuesSummary>(`/api/analytics/ops/critical-values${q}`).subscribe({ next: d => this.criticalValues.set(d ?? null) });
+    });
+
     // Paint (and repaint) the charts whenever their tab is on screen, their
     // data changes, or the theme flips — effects track every signal read
     // during their run, including ones made inside the painters below, so
@@ -537,6 +770,19 @@ export class InsightsComponent {
         this.theme.isDark();
         void this.paintRevenueChart();
         void this.paintDeptChart();
+      }
+    });
+    effect(() => {
+      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'tests-depts') {
+        this.theme.isDark();
+        void this.paintTestsByDeptChart();
+      }
+    });
+    effect(() => {
+      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'referrals') {
+        this.theme.isDark();
+        void this.paintReferralVolumeChart();
+        if (this.canSeeMoney()) void this.paintSourceTypeChart();
       }
     });
 
@@ -612,6 +858,9 @@ export class InsightsComponent {
   private readonly testsPerPatientHost = viewChild<ElementRef<HTMLElement>>('testsPerPatientHost');
   private readonly revenueHost = viewChild<ElementRef<HTMLElement>>('revenueHost');
   private readonly deptRevenueHost = viewChild<ElementRef<HTMLElement>>('deptRevenueHost');
+  private readonly testsByDeptHost = viewChild<ElementRef<HTMLElement>>('testsByDeptHost');
+  private readonly referralVolumeHost = viewChild<ElementRef<HTMLElement>>('referralVolumeHost');
+  private readonly sourceTypeHost = viewChild<ElementRef<HTMLElement>>('sourceTypeHost');
 
   private _echarts: typeof import('echarts') | null = null;
   private async ec(): Promise<typeof import('echarts')> {
@@ -669,6 +918,38 @@ export class InsightsComponent {
     const rows = this.deptRevenue();
     void this.paintTo(this.deptRevenueHost, 'dept-revenue', buildHorizontalBarOption(ec, {
       categories: rows.map(r => r.departmentName), values: rows.map(r => r.revenue), theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
+    }));
+  }
+
+  private async paintTestsByDeptChart() {
+    const ec = await this.ec();
+    const dark = this.theme.isDark();
+    const rows = this.testVolumeByDept();
+    void this.paintTo(this.testsByDeptHost, 'tests-by-dept', buildStackedBarOption(ec, {
+      categories: rows.map(r => r.departmentName),
+      series: [
+        { name: 'In-house', data: rows.map(r => r.inHouse) },
+        { name: 'Outsourced', data: rows.map(r => r.outsourced) },
+      ],
+      theme: dark ? 'dark' : 'light',
+    }));
+  }
+
+  private async paintReferralVolumeChart() {
+    const ec = await this.ec();
+    const dark = this.theme.isDark();
+    const points = this.referralVolumeTrend();
+    void this.paintTo(this.referralVolumeHost, 'referral-volume', buildBusinessLineOption(ec, {
+      categories: points.map(p => p.bucket), series: [{ name: 'Referred orders', data: points.map(p => p.orders) }], theme: dark ? 'dark' : 'light',
+    }));
+  }
+
+  private async paintSourceTypeChart() {
+    const ec = await this.ec();
+    const dark = this.theme.isDark();
+    const rows = this.sourceTypeRevenue();
+    void this.paintTo(this.sourceTypeHost, 'source-type', buildHorizontalBarOption(ec, {
+      categories: rows.map(r => r.sourceType), values: rows.map(r => r.revenue), theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
     }));
   }
 }

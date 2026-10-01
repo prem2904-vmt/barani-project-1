@@ -2167,6 +2167,15 @@
 .pf-oc-errs { width: 100%; max-width: 1123px; margin: 0 auto; padding: 0 20px 4px; box-sizing: border-box; }
 .pf-oc-errs .pf-field-error { margin: 2px 0 0; }
 
+/* Analytics / Lab Insights Phase 2: optional referral-source picker — one
+   quiet row, never competing with the band/pill for attention. */
+.pf-oc-refsrc {
+  width: 100%; max-width: 1123px; margin: 0 auto; padding: 2px 20px 6px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px;
+}
+.pf-oc-refsrc__label { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.pf-oc-refsrc__select { min-width: 140px; }
+
 /* ── Page body: catalogue card + billing card, inner panes scroll ── */
 .pf-oc-body {
   display: flex;

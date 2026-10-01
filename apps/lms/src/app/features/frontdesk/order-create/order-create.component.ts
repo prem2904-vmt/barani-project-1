@@ -542,6 +542,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly refHospitalSuggestions = signal<string[]>([]);
   private refHospitalDebounce: ReturnType<typeof setTimeout> | null = null;
 
+  /** Analytics / Lab Insights Phase 2 (owner 2026-10-01): where this order's
+   *  referral came from — purely optional (blank = "Not set", the same as an
+   *  order placed before this field existed). Unobtrusive by design: its own
+   *  small pf-select, not woven into the doctor/hospital search pill — never
+   *  required, never blocks Confirm. */
+  readonly referralSourceType = signal<string>('');
+  readonly referralSourceTypeOptions: PfSelectOption<string>[] = [
+    { value: '', label: 'Not set' },
+    { value: 'Doctor', label: 'Doctor' },
+    { value: 'Hospital', label: 'Hospital' },
+    { value: 'Walk-in', label: 'Walk-in' },
+    { value: 'Corporate', label: 'Corporate' },
+    { value: 'Camp', label: 'Camp' },
+    { value: 'Online', label: 'Online' },
+  ];
+
   readonly refDoctorName = signal<string>('');
   /** Doctor matches — one per (doctor, hospital) affiliation, or one
    *  hospital-less row for an independent doctor. */
@@ -1257,6 +1273,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refDoctorName.set('');
     this.refDoctorSuggestions.set([]);
     this.refDoctorError.set(null);
+    this.referralSourceType.set('');
     this.viewOrderId.set(null);
     this.editOrderId.set(null);
     this._order.set(null);
@@ -1990,6 +2007,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           patientId: p.id,
           refDoctorName: this.refDoctorName().trim() || null,
           refHospitalName: this.refHospitalName().trim() || null,
+          referralSourceType: this.referralSourceType() || null,
           priority: this._priority(),
           source: appointmentId ? 'appointment' : 'walkin',
           collectionType: 'walkin',
@@ -2188,6 +2206,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refDoctorName.set('');
     this.refDoctorSuggestions.set([]);
     this.refDoctorError.set(null);
+    this.referralSourceType.set('');
     this.setPriority('Normal');
     this.router.navigateByUrl('/frontdesk/order');
     setTimeout(() => this.selectScope('patient'), 0);
@@ -2413,6 +2432,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       patientId: p.id,
       refDoctorName: this.refDoctorName().trim() || null,
       refHospitalName: this.refHospitalName().trim() || null,
+      referralSourceType: this.referralSourceType() || null,
       priority: this._priority(),
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
