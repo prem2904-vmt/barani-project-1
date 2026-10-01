@@ -4,7 +4,9 @@
  */
 import type { OpdDiagnosis, OpdNoteVisibility } from '../shared/opd.models';
 import type { RxUsual } from '../shared/rx-schedule';
-import type { ConsultDraftBody, ConsultInvestigationItem, ConsultProcedureDraft, ConsultProcedureDto, ConsultUsual } from './consult.api';
+import type {
+  ConsultDraftBody, ConsultDraftPatchBody, ConsultInvestigationItem, ConsultProcedureDraft, ConsultProcedureDto, ConsultUsual,
+} from './consult.api';
 import { proceduresBody } from './procedure-rules';
 import { ConsultDrugRef, ConsultRxLine, fromDto, toDto, unresolvedAllergies } from './rx/rx-model';
 import type { OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
@@ -75,6 +77,60 @@ export function draftBody(s: ConsultEditState, followUpDate: string | null, star
     investigationItems: s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) })),
     ...(s.procedures ? { procedures: proceduresBody(s.procedures) } : {}),
   };
+}
+
+// ── Dirty-section autosave (owner 2026-10-01) ───────────────────────────────
+// Mirrors mw DraftPatchBody's sections. Every ConsultEditState FIELD maps to
+// exactly one section; chiefComplaint/advice/privateNotes/privateNotesVisibility
+// and the follow-up are bundled as "notes" (same grouping as mw's
+// DraftNotesPatch), so autosave sends only what actually changed since the
+// last save instead of the whole edit state on every tick.
+export type DraftSection = 'answers' | 'diagnoses' | 'rx' | 'investigations' | 'procedures' | 'notes';
+export const SECTION_OF: Record<keyof ConsultEditState, DraftSection> = {
+  answers: 'answers', chiefComplaint: 'notes', diagnoses: 'diagnoses', advice: 'notes',
+  privateNotes: 'notes', privateNotesVisibility: 'notes', lines: 'rx', tests: 'investigations',
+  followUpDays: 'notes', procedures: 'procedures',
+};
+
+/** The PATCH body for only the given dirty sections — the UI mirror of mw's
+ *  ApplyPatchAsync null-section-skipping. A section not in `dirty` is simply
+ *  left off the body (server: untouched). */
+export function draftPatchBody(dirty: ReadonlySet<DraftSection>, s: ConsultEditState, followUpDate: string | null, start?: Date): ConsultDraftPatchBody {
+  const body: ConsultDraftPatchBody = {};
+  if (dirty.has('answers')) body.answers = s.answers;
+  if (dirty.has('diagnoses')) body.diagnoses = s.diagnoses;
+  if (dirty.has('rx')) body.rx = s.lines.map(l => toDto(l, start));
+  if (dirty.has('investigations'))
+    body.investigationItems = s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) }));
+  if (dirty.has('procedures') && s.procedures) body.procedures = proceduresBody(s.procedures);
+  if (dirty.has('notes'))
+    body.notes = {
+      chiefComplaint: s.chiefComplaint.trim() || null, advice: s.advice.trim() || null,
+      privateNotes: s.privateNotes.trim() || null, privateNotesVisibility: s.privateNotesVisibility,
+      followUpDate, followUpNote: null,
+    };
+  return body;
+}
+
+/** Learn the server-assigned ids a Rx PATCH echoed back, by POSITION (the
+ *  server returns the lines in the SAME order they were sent/sorted) — a
+ *  line that already carried an id is left alone. A length mismatch is
+ *  never guessed at: the lines are returned as-is (the next full load, or a
+ *  later patch, settles it). */
+export function reconcileRxIds(lines: readonly ConsultRxLine[], serverRx: readonly OpdRxLineDto[]): ConsultRxLine[] {
+  if (lines.length !== serverRx.length) return [...lines];
+  return lines.map((l, i) => (l.id || !serverRx[i]?.id ? l : { ...l, id: serverRx[i].id! }));
+}
+
+/** Same idea for procedures, but positional against the DRAFT (non-billed)
+ *  subset only — proceduresBody() already drops billed rows before sending,
+ *  so the server never sees (or echoes) them. */
+export function reconcileProcedureIds(procedures: readonly ConsultProcedureDraft[], serverRows: readonly ConsultProcedureDto[]): ConsultProcedureDraft[] {
+  const draftIdx = procedures.map((p, i) => ({ p, i })).filter(x => x.p.status !== 'billed');
+  if (draftIdx.length !== serverRows.length) return [...procedures];
+  const next = [...procedures];
+  draftIdx.forEach(({ p, i }, k) => { if (!p.id && serverRows[k]?.id) next[i] = { ...p, id: serverRows[k].id }; });
+  return next;
 }
 
 let procSeq = 0;

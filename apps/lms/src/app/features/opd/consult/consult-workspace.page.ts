@@ -16,7 +16,8 @@ import {
   ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
-  ConsultEditState, ConsultStep, FRESH_ACKS, STEP_TITLES, applyUsual, daysBetween, draftBody, procedureDraftOf, stepDone, stepSummary, undoUsual, usualsFrom,
+  ConsultEditState, ConsultStep, DraftSection, FRESH_ACKS, SECTION_OF, STEP_TITLES, applyUsual, daysBetween, draftBody, draftPatchBody,
+  procedureDraftOf, reconcileProcedureIds, reconcileRxIds, stepDone, stepSummary, undoUsual, usualsFrom,
 } from './consult-state';
 import { ConsultProceduresComponent } from './procedure-editor.component';
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
@@ -401,6 +402,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly completing = signal(false);
   readonly saveState = signal<SaveState>('idle');
   readonly savedAt = signal<string | null>(null);
+  /** Autosave (owner 2026-10-01): only the sections edited since the last
+   *  save ride the PATCH — set by patch(), drained by saveNow(). */
+  private readonly dirty = new Set<DraftSection>();
+  /** The last-saved consult.updatedAt — the PATCH's optimistic-concurrency token. */
+  private draftUpdatedAt: string | null = null;
 
   private readonly drugCache = signal<Map<string, ConsultDrugRef>>(new Map());
   readonly drugList = computed(() => [...this.drugCache().values()]);
@@ -529,6 +535,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       procedures: w.procedures ? w.procedures.map(procedureDraftOf) : undefined,
     });
     this.savedAt.set(c?.updatedAt ?? null);
+    this.draftUpdatedAt = c?.updatedAt ?? null;
+    this.dirty.clear();
     this.saveState.set('idle');
     this.consultApi.labTrends(w.patient.id).subscribe({ next: t => this.results.set(recentResultsOf(t)), error: () => this.results.set([]) });
   }
@@ -582,7 +590,12 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   patch(p: Partial<ConsultEditState>) {
     if (!this.editable() && !('followUpDays' in p)) return;
     this.st.update(s => ({ ...s, ...p }));
-    if (this.editable()) { this.saveState.set('dirty'); this.save$.next(); }
+    if (this.editable()) {
+      // Dirty-section autosave (owner 2026-10-01): remember exactly which
+      // sections this edit touched — saveNow() PATCHes only those.
+      for (const k of Object.keys(p) as (keyof ConsultEditState)[]) this.dirty.add(SECTION_OF[k]);
+      this.saveState.set('dirty'); this.save$.next();
+    }
   }
 
   private followUpIso(): string | null {
@@ -590,29 +603,46 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     return d == null ? null : addDaysIso(this.visitDay(), d);
   }
 
+  /** Dirty-section autosave: PATCHes only the sections edited since the last
+   *  save (never the whole edit state) and gets a SLIM result back — never
+   *  the whole workspace. Falls back to nothing when nothing is dirty (the
+   *  debounce can fire after a save already drained it). Complete still
+   *  sends the FULL draftBody via the unchanged full endpoint (below). */
   saveNow() {
     const w = this.ws();
     if (!w || !this.editable() || this.saveState() === 'saving') return;
+    if (this.dirty.size === 0) { this.saveState.set('saved'); return; }
+    const sections = new Set(this.dirty);
+    this.dirty.clear();
     this.saveState.set('saving');
-    this.consultApi.saveDraft(w.visit.id, draftBody(this.st(), this.followUpIso(), this.visitDay())).subscribe({
-      next: saved => {
-        this.savedAt.set(saved?.consult?.updatedAt ?? new Date().toISOString());
-        // Keep the line ids the server assigned (a later save replaces the set).
-        if (saved?.rx?.length === this.st().lines.length) {
-          this.st.update(s => ({ ...s, lines: s.lines.map((l, i) => ({ ...l, id: saved.rx[i]?.id ?? l.id })) }));
-        }
-        // Same for procedures: keep the ids (and who set a price) the server assigned.
-        const sp = (saved?.procedures ?? []).filter(p => p.status !== 'billed');
-        const mine = this.st().procedures;
-        if (mine && sp.length === mine.filter(p => p.status !== 'billed').length) {
-          let i = 0;
-          this.st.update(s => ({ ...s, procedures: (s.procedures ?? []).map(p => p.status === 'billed' ? p
-            : (r => ({ ...p, id: r?.id ?? p.id, priceSetByName: r?.priceSetByName ?? p.priceSetByName }))(sp[i++])) }));
-        }
+    const body = draftPatchBody(sections, this.st(), this.followUpIso(), this.visitDay());
+    body.baseUpdatedAt = this.draftUpdatedAt;
+    this.consultApi.patchDraft(w.visit.id, body).subscribe({
+      next: res => {
+        this.savedAt.set(res.updatedAt ?? new Date().toISOString());
+        this.draftUpdatedAt = res.updatedAt ?? this.draftUpdatedAt;
+        // Learn the server-assigned ids a touched section echoed back —
+        // undefined when that section wasn't part of THIS patch.
+        if (res.rx) this.st.update(s => ({ ...s, lines: reconcileRxIds(s.lines, res.rx!) }));
+        if (res.procedures && this.st().procedures)
+          this.st.update(s => ({ ...s, procedures: reconcileProcedureIds(s.procedures!, res.procedures!) }));
         this.saveState.set(this.saveState() === 'dirty' ? 'dirty' : 'saved');
         if (this.saveState() === 'dirty') this.save$.next();
       },
-      error: () => { this.saveState.set('error'); setTimeout(() => { if (this.saveState() === 'error') { this.saveState.set('dirty'); this.save$.next(); } }, 4000); },
+      error: e => {
+        // Put the sections back so nothing this patch would have saved is lost.
+        for (const sec of sections) this.dirty.add(sec);
+        this.saveState.set('error');
+        if (e?.code === 'stale_draft') {
+          // Someone else (another device, Complete) saved meanwhile — reload
+          // instead of retrying the same stale base, which would just fail again.
+          this.toast.error('This draft changed elsewhere — reloading the latest version.');
+          this.dirty.clear();
+          this.consultApi.workspace(w.visit.id).subscribe({ next: fresh => this.hydrate(fresh), error: () => undefined });
+          return;
+        }
+        setTimeout(() => { if (this.saveState() === 'error') { this.saveState.set('dirty'); this.save$.next(); } }, 4000);
+      },
     });
   }
 

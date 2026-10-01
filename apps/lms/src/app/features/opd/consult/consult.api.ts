@@ -120,6 +120,43 @@ export interface ConsultDraftBody {
   procedures?: { id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null }[];
 }
 
+/** The free-text / follow-up section of a draft PATCH — bundled so "clear the
+ *  follow-up date" (a null `followUpDate`) is still distinguishable from
+ *  "don't touch the follow-up date" (the whole `notes` section omitted from
+ *  {@link ConsultDraftPatchBody}). Mirror of mw `DraftNotesPatch`. */
+export interface ConsultNotesPatch {
+  chiefComplaint?: string | null; advice?: string | null; privateNotes?: string | null;
+  privateNotesVisibility?: OpdNoteVisibility; followUpDate?: string | null; followUpNote?: string | null;
+}
+
+/** Dirty-section autosave PATCH (owner 2026-10-01, mirror of mw `DraftPatchBody`):
+ *  a section OMITTED = untouched (every other saved value — and every OTHER
+ *  section — stays exactly as it was); present = replace it (a list, even
+ *  empty, clears it — the SAME convention `ConsultDraftBody.procedures`
+ *  already used). `baseUpdatedAt` is the client's last-seen
+ *  `consult.updatedAt` (optimistic concurrency, see {@link ConsultDraftPatchResult}). */
+export interface ConsultDraftPatchBody {
+  answers?: Record<string, unknown>;
+  diagnoses?: OpdDiagnosis[];
+  rx?: OpdRxLineDto[];
+  investigationItems?: { testId: string; name: string; specimen?: string | null }[];
+  procedures?: { id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null }[];
+  notes?: ConsultNotesPatch;
+  baseUpdatedAt?: string | null;
+}
+
+/** Slim result of a draft PATCH — NOT the whole workspace: `updatedAt` (the
+ *  next patch's concurrency token) plus, ONLY for a section the patch
+ *  actually touched, its server-derived rows (a new Rx line / procedure's
+ *  server-assigned id, so the NEXT patch can reference it instead of
+ *  duplicating it). A section the patch didn't touch stays undefined. */
+export interface ConsultDraftPatchResult {
+  consultId: string;
+  updatedAt: string;
+  rx?: OpdRxLineDto[] | null;
+  procedures?: ConsultProcedureDto[] | null;
+}
+
 export interface ConsultDrug {
   id: string; catalogKey: string; name: string; generic?: string | null; strength?: string | null;
   form: DrugForm; unit?: string | null; schedule: DrugSchedule | string; aliases?: string | null; isMaster: boolean;
@@ -171,6 +208,12 @@ export class ConsultApi {
   workspace(visitId: string): Observable<ConsultWorkspace> { return this.api.get<ConsultWorkspace>(`${CONSULT_API}/${visitId}`); }
   start(visitId: string): Observable<ConsultWorkspace> { return this.api.post<ConsultWorkspace>(`${CONSULT_API}/${visitId}/start`, {}); }
   saveDraft(visitId: string, body: ConsultDraftBody): Observable<ConsultWorkspace> { return this.api.put<ConsultWorkspace>(`${CONSULT_API}/${visitId}/draft`, body); }
+  /** Dirty-section autosave (owner 2026-10-01) — only the sections that
+   *  changed; a slim result back, never the whole workspace. The full
+   *  `saveDraft` above is unchanged (used by Complete / back-compat). */
+  patchDraft(visitId: string, body: ConsultDraftPatchBody): Observable<ConsultDraftPatchResult> {
+    return this.api.patch<ConsultDraftPatchResult>(`${CONSULT_API}/${visitId}/draft`, body);
+  }
   complete(visitId: string, body: ConsultDraftBody): Observable<ConsultWorkspace> { return this.api.post<ConsultWorkspace>(`${CONSULT_API}/${visitId}/complete`, body); }
   allergies(patientId: string): Observable<OpdPatientAllergy[]> { return this.api.get<OpdPatientAllergy[]>(`${CONSULT_API}/patients/${patientId}/allergies`); }
   addAllergy(patientId: string, a: Partial<OpdPatientAllergy>): Observable<OpdPatientAllergy> { return this.api.post<OpdPatientAllergy>(`${CONSULT_API}/patients/${patientId}/allergies`, a); }

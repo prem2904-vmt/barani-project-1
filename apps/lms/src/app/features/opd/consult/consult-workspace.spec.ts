@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import type { OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
 import { timesSched } from '../shared/rx-schedule';
 import {
-  ConsultEditState, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
+  ConsultEditState, applyUsual, daysBetween, draftBody, draftPatchBody, procedureDraftOf, reconcileProcedureIds, reconcileRxIds,
+  SECTION_OF, stepDone, stepSummary, undoUsual, usualsFrom,
 } from './consult-state';
 import { ConsultCompleteSheetComponent, addDaysIso, followUpFeeText } from './complete-sheet.component';
 import { bmiOf, vitalFlag } from './vitals-strip.component';
@@ -82,6 +83,76 @@ describe('Consult draft body + usual set', () => {
   it('dates', () => {
     expect(daysBetween('2026-09-30', '2026-10-07')).toBe(7);
     expect(addDaysIso(new Date(2026, 8, 30), 14)).toBe('2026-10-14');
+  });
+});
+
+describe('Dirty-section autosave PATCH (owner 2026-10-01)', () => {
+  const S = { ...BASE, chiefComplaint: 'Nasal block', diagnoses: [{ label: 'Acute rhinosinusitis' }], advice: 'Steam', privateNotes: 'Seed',
+    lines: [LINE], tests: [{ testId: 't1', name: 'AEC' }], followUpDays: 7, procedures: undefined as ConsultEditState['procedures'] };
+
+  it('every ConsultEditState field maps to exactly one PATCH section', () => {
+    expect(new Set(Object.values(SECTION_OF))).toEqual(new Set(['answers', 'diagnoses', 'rx', 'investigations', 'procedures', 'notes']));
+    expect(SECTION_OF.chiefComplaint).toBe('notes');
+    expect(SECTION_OF.advice).toBe('notes');
+    expect(SECTION_OF.privateNotes).toBe('notes');
+    expect(SECTION_OF.privateNotesVisibility).toBe('notes');
+    expect(SECTION_OF.followUpDays).toBe('notes');
+    expect(SECTION_OF.lines).toBe('rx');
+    expect(SECTION_OF.tests).toBe('investigations');
+    expect(SECTION_OF.procedures).toBe('procedures');
+    expect(SECTION_OF.answers).toBe('answers');
+    expect(SECTION_OF.diagnoses).toBe('diagnoses');
+  });
+
+  it('only the dirty sections ride the PATCH body — the rest are simply absent', () => {
+    const b = draftPatchBody(new Set(['rx']), S, '2026-10-07');
+    expect(b.rx?.[0]).toMatchObject({ drugId: 'd-clav' });
+    expect(b.diagnoses).toBeUndefined();
+    expect(b.investigationItems).toBeUndefined();
+    expect(b.notes).toBeUndefined();
+    expect(b.answers).toBeUndefined();
+    expect(b.procedures).toBeUndefined();
+  });
+
+  it('"notes" bundles chiefComplaint/advice/privateNotes/visibility/follow-up together', () => {
+    const b = draftPatchBody(new Set(['notes']), S, '2026-10-07');
+    expect(b.notes).toEqual({ chiefComplaint: 'Nasal block', advice: 'Steam', privateNotes: 'Seed', privateNotesVisibility: 'doctor', followUpDate: '2026-10-07', followUpNote: null });
+    expect(b.rx).toBeUndefined();
+  });
+
+  it('a section not in the dirty set is omitted even when its own value is empty/falsy', () => {
+    const b = draftPatchBody(new Set(['diagnoses']), { ...S, diagnoses: [] }, null);
+    expect(b.diagnoses).toEqual([]);          // dirty + empty → an explicit clear
+    expect(b.notes).toBeUndefined();          // untouched → not even sent
+  });
+
+  it('procedures are sent only when dirty AND loaded (undefined procedures never force-create the section)', () => {
+    expect(draftPatchBody(new Set(['procedures']), S, null).procedures).toBeUndefined();
+    const withProcs = { ...S, procedures: [procedureDraftOf({ id: 'p1', serviceId: 'svc1', name: 'Dressing', qty: 1, rulePrice: 100, price: 100, overridden: false, status: 'draft' as const })] };
+    expect(draftPatchBody(new Set(['procedures']), withProcs, null).procedures).toEqual([{ id: 'p1', serviceId: 'svc1', qty: 1, price: null, priceReason: null, side: null, note: null }]);
+  });
+
+  it('reconcileRxIds learns the server id for a new line, by position, leaving an existing id alone', () => {
+    const local: ConsultRxLine[] = [{ ...LINE, id: undefined }, { ...LINE, key: 'k2', id: 'already-saved' }];
+    const serverRx = [dto('d-clav'), dto('d-clav')].map((d, i) => ({ ...d, id: i === 0 ? 'new-server-id' : 'different-id-ignored' }));
+    const next = reconcileRxIds(local, serverRx);
+    expect(next[0].id).toBe('new-server-id');
+    expect(next[1].id).toBe('already-saved');   // never overwritten once saved
+  });
+
+  it('reconcileRxIds never guesses on a length mismatch — the next load/patch settles it', () => {
+    const local: ConsultRxLine[] = [{ ...LINE, id: undefined }];
+    expect(reconcileRxIds(local, [])).toEqual(local);
+  });
+
+  it('reconcileProcedureIds is positional against the non-billed subset only (billed rows are never sent or echoed)', () => {
+    const billed = procedureDraftOf({ id: 'billed-1', serviceId: 'svcB', name: 'Billed thing', qty: 1, rulePrice: 50, price: 50, overridden: false, status: 'billed' });
+    const draftNew = procedureDraftOf({ id: '', serviceId: 'svcD', name: 'New procedure', qty: 1, rulePrice: 80, price: 80, overridden: false, status: 'draft' });
+    const local = [billed, { ...draftNew, id: undefined }];
+    const serverRows = [{ id: 'server-assigned', serviceId: 'svcD', name: 'New procedure', qty: 1, rulePrice: 80, price: 80, overridden: false, status: 'draft' as const }];
+    const next = reconcileProcedureIds(local, serverRows);
+    expect(next[0].id).toBe('billed-1');            // untouched
+    expect(next[1].id).toBe('server-assigned');      // learned
   });
 });
 
