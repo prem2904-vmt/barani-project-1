@@ -17,7 +17,7 @@ import { DEFAULT_PHARMACY_CONFIG } from '../shared/opd.models';
 import {
   PharmacyApi, type CounterBody, type DispenseSummary, type DispenseView, type PayMode, type PharmacyDrugRow, type PickBatch,
 } from './pharmacy.api';
-import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords } from './pharmacy-math';
+import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleErrorText, scheduleLabel, unitWords } from './pharmacy-math';
 import { previewFefo, type Take } from './dispense.page';
 import { printPharmacySheet } from './pharmacy-print';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
@@ -28,17 +28,25 @@ export interface CounterItem { drug: PharmacyDrugRow; qty: number; batchId: stri
 
 /** The cart's schedule gate (mirror of PharmacyDispenseService.EnforceSchedules):
  *  null = OK, else what is missing. `address` is the buyer's postal address,
- *  required only for an H1 / X line when schedules are enforced (critic #1). */
-export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: string, buyer: string, enforce: boolean, address = ''): string | null {
+ *  required only for an H1 / X line when schedules are enforced (critic #1).
+ *  `regNo` is the prescriber's registration number — owner 2026-10-01: a name
+ *  alone isn't a prescription on record, for Schedule H too. The register
+ *  (H1 / X) checks buyer FIRST: with no buyer named there's no register row
+ *  to write at all, whatever else is missing. */
+export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: string, buyer: string, enforce: boolean, address = '', regNo = ''): string | null {
   const restricted = items.filter(i => needsPrescription(i.drug.schedule));
   if (!restricted.length) return null;
-  if (enforce && !prescriber.trim())
-    return `${restricted.map(i => i.drug.name).join(', ')} ${restricted.length === 1 ? 'is' : 'are'} prescription-only — enter the prescription to sell.`;
   if (items.some(i => needsRegister(i.drug.schedule))) {
     if (!buyer.trim()) return 'Schedule H1 / X sales go in the register — enter the customer’s name.';
     if (!prescriber.trim()) return 'Schedule H1 / X sales go in the register — enter the prescribing doctor.';
+    if (!regNo.trim()) return 'Schedule H1 / X sales go in the register — enter the prescribing doctor’s registration number.';
     if (enforce && !address.trim()) return 'Schedule H1 / X sales go in the register — enter the customer’s address.';
+    return null;
   }
+  if (enforce && !prescriber.trim())
+    return `${restricted.map(i => i.drug.name).join(', ')} ${restricted.length === 1 ? 'is' : 'are'} prescription-only — enter the prescription to sell.`;
+  if (enforce && !regNo.trim())
+    return `${restricted.map(i => i.drug.name).join(', ')} ${restricted.length === 1 ? 'is' : 'are'} prescription-only — enter the prescribing doctor’s registration number.`;
   return null;
 }
 
@@ -109,7 +117,7 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                     <input id="ph-pr" class="nd-input" [value]="prescriber()" (input)="prescriber.set($any($event.target).value)" placeholder="Dr. name on the prescription" [disabled]="locked()" />
                   </div>
                   <div class="nd-field">
-                    <label class="nd-field__lbl" for="ph-rg">Registration no.</label>
+                    <label class="nd-field__lbl" for="ph-rg">Registration no. <span class="nd-dot-unpriced" aria-hidden="true"></span></label>
                     <input id="ph-rg" class="nd-input nd-num" [value]="regNo()" (input)="regNo.set($any($event.target).value)" placeholder="e.g. TNMC 12345" [disabled]="locked()" />
                   </div>
                   <p class="nd-field__hint ph-span">Check the original prescription before selling a Schedule H / H1 / X drug. It is recorded on the bill{{ h1() ? ' and in the H1 register' : '' }}.</p>
@@ -200,7 +208,7 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                   @for (m of modes; track m.v) { <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button> }
                 </div>
               </div>
-              @if (gate(); as g) {
+              @if (payGate(); as g) {
                 <div class="ph-note" data-tone="bad" role="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 8v4M12 16h.01"/></svg><span>{{ g }}</span></div>
               } @else if (rxNeeded()) {
                 <div class="ph-note" role="note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><span>Prescription-only drugs covered by {{ prescriber() || 'the prescription' }}.</span></div>
@@ -234,8 +242,8 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
               }
               <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!ready() || saving() || locked()" (click)="save()">Save bill</button>
               @if (!isPhone()) {
-                <button type="button" class="nd-btn nd-span" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()"
-                        [disabled]="!ready() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment {{ inr(totals().payable, false) }}</button>
+                <button type="button" class="nd-btn nd-span" [class.nd-btn--primary]="canPay()" [class.nd-btn--secondary]="!canPay()"
+                        [disabled]="!canPay() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment {{ inr(totals().payable, false) }}</button>
               }
             }
           </div>
@@ -243,8 +251,8 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
         @if (isPhone() && !paid()) {
           <div class="nd-bottombar" role="region" aria-label="Payment">
             <span class="nd-bottombar__info nd-num">{{ inr(totals().payable, false) }} · {{ items().length }} {{ items().length === 1 ? 'item' : 'items' }}</span>
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()"
-                    [disabled]="!ready() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment</button>
+            <button type="button" class="nd-btn" [class.nd-btn--primary]="canPay()" [class.nd-btn--secondary]="!canPay()"
+                    [disabled]="!canPay() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment</button>
           </div>
         }
       </div>
@@ -298,11 +306,18 @@ export class PharmacyWalkInCounterPage {
   protected readonly locked = computed(() => !!this.editingId() && !this.editable());
   protected readonly rxNeeded = computed(() => this.items().some(i => needsPrescription(i.drug.schedule)));
   protected readonly h1 = computed(() => this.items().some(i => needsRegister(i.drug.schedule)));
-  protected readonly gate = computed(() => counterGate(this.items(), this.prescriber(), this.name() || this.patient()?.name || '', this.cfg().enforceSchedules, this.address()));
+  protected readonly gate = computed(() => counterGate(this.items(), this.prescriber(), this.name() || this.patient()?.name || '', this.cfg().enforceSchedules, this.address(), this.regNo()));
   protected readonly totals = computed(() => cartTotals(this.items().flatMap(it =>
     this.takes(it).map(t => ({ qty: t.qty, mrp: t.mrp, taxSlab: it.drug.taxSlab }))), this.discount()));
   protected readonly ready = computed(() => this.items().length > 0 && !this.gate()
     && this.items().every(it => this.takes(it).reduce((a, t) => a + t.qty, 0) === it.qty));
+  /** Schedule H1 / X additionally need the prescription UPLOADED before
+   *  PAYMENT (owner 2026-10-01; mirrors PharmacyRules.EnsurePrescriptionUploaded)
+   *  — never before Save: the upload needs a saved bill id to attach to. */
+  protected readonly uploadMissing = computed(() => this.h1() && !this.rxFile());
+  protected readonly payGate = computed(() => this.gate() ?? (this.uploadMissing()
+    ? 'Schedule H1 / X sales need the prescription uploaded before you can take payment.' : null));
+  protected readonly canPay = computed(() => this.ready() && !this.uploadMissing());
 
   protected takes(it: CounterItem): Take[] {
     if (this.cfg().batchPick === 'pharmacist') {
@@ -384,22 +399,22 @@ export class PharmacyWalkInCounterPage {
     this.saving.set(true);
     this.upsert().subscribe({
       next: v => { this.saving.set(false); this.toast.success(`Bill saved · ${inr(v.bill?.totalPayable ?? 0, false)} — open it again to take payment`); this.reset(); this.loadOpen(); },
-      error: e => { this.saving.set(false); this.toast.error(errText(e)); },
+      error: e => { this.saving.set(false); this.toast.error(scheduleErrorText(e)); },
     });
   }
 
   protected pay(): void {
-    if (!this.ready()) return;
+    if (!this.canPay()) return;
     this.saving.set(true);
     this.upsert().subscribe({
       next: draft => {
         const amount = draft.bill?.totalPayable ?? 0;
         this.api.counterPay(draft.id, { mode: this.mode(), amount }).subscribe({
           next: v => { this.saving.set(false); this.paid.set(v); this.editingId.set(null); this.toast.success(`${inr(amount, false)} received`); this.loadOpen(); },
-          error: e => { this.saving.set(false); this.editingId.set(draft.id); this.editable.set(draft.editable); this.toast.error(errText(e)); },
+          error: e => { this.saving.set(false); this.editingId.set(draft.id); this.editable.set(draft.editable); this.toast.error(scheduleErrorText(e)); },
         });
       },
-      error: e => { this.saving.set(false); this.toast.error(errText(e)); },
+      error: e => { this.saving.set(false); this.toast.error(scheduleErrorText(e)); },
     });
   }
 

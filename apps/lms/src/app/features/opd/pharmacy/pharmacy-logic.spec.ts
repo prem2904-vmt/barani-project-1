@@ -81,18 +81,28 @@ describe('picking and gates', () => {
   it('counter gate mirrors EnforceSchedules', () => {
     expect(counterGate([d('none')], '', '', true)).toBeNull();
     expect(counterGate([d('H')], '', '', true)).toMatch(/prescription-only/);
-    expect(counterGate([d('H')], 'Dr. Rao', '', true)).toBeNull();
+    expect(counterGate([d('H')], 'Dr. Rao', '', true)).toMatch(/registration number/);
+    expect(counterGate([d('H')], 'Dr. Rao', '', true, '', 'TN123')).toBeNull();
     expect(counterGate([d('H')], '', '', false)).toBeNull();
-    expect(counterGate([d('H1')], 'Dr. Rao', '', false)).toMatch(/customer/);
+    // The register (H1 / X) checks buyer FIRST — before name or reg no.
+    expect(counterGate([d('H1')], 'Dr. Rao', '', false, '', 'TN123')).toMatch(/customer/);
     expect(counterGate([d('H1')], '', 'Anand', false)).toMatch(/prescribing doctor/);
-    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road')).toBeNull();
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false)).toMatch(/registration number/);
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road', 'TN123')).toBeNull();
+  });
+
+  it('counter gate: Schedule H / H1 / X also need the prescribing doctor\'s registration number (owner 2026-10-01)', () => {
+    expect(counterGate([d('H')], 'Dr. Rao', '', true)).toMatch(/registration number/);
+    expect(counterGate([d('H')], 'Dr. Rao', '', false)).toBeNull(); // enforcement off → H alone needs nothing more
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false)).toMatch(/registration number/); // register always needs it
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false, '', 'TN123')).toBeNull();
   });
 
   it('counter gate: H1 / X needs the buyer\'s address too, only when schedules are enforced (critic #1)', () => {
-    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '')).toMatch(/address/);
-    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road')).toBeNull();
-    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false, '')).toBeNull(); // enforcement off
-    expect(counterGate([d('H')], 'Dr. Rao', '', true, '')).toBeNull(); // plain Schedule H never needs an address
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '', 'TN123')).toMatch(/address/);
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road', 'TN123')).toBeNull();
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false, '', 'TN123')).toBeNull(); // enforcement off
+    expect(counterGate([d('H')], 'Dr. Rao', '', true, '', 'TN123')).toBeNull(); // plain Schedule H never needs an address
   });
 
   it('quantity-correction ceiling + reason gate (critic #4)', () => {

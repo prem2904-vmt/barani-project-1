@@ -236,26 +236,37 @@ describe('Pharmacy screens', () => {
     expect(c.takes(RX.lines[0])).toEqual([expect.objectContaining({ batchNo: 'AC-LATE', qty: 10 })]);
   });
 
-  it('counter: OTC sells freely; an H1 drug blocks payment until the prescription + buyer are entered', async () => {
+  it('counter: OTC sells freely; an H1 drug blocks payment until the prescription + buyer + upload are entered', async () => {
     const { el, f, c } = render(PharmacyWalkInCounterPage);
     await f.whenStable(); f.detectChanges();
     const batches = [{ id: 'b1', batchNo: 'AZ1', expiryDate: '2099-01-28', mrp: 23.8, qtyOnHand: 30 }];
     c.items.set([{ drug: { ...DRUG_AMC, id: 'azi', name: 'Azithro-PF 500', rowId: 'azi', catalogKey: 'k', origin: 'master', isMaster: true, aliases: [], isActive: true }, qty: 3, batchId: null, batches }]);
     f.detectChanges();
-    expect(c.gate()).toMatch(/prescription-only/);
+    // The register (H1) checks the BUYER first, before the prescriber's name.
+    expect(c.gate()).toMatch(/customer/);
     expect(c.ready()).toBe(false);
     expect(primaries(el).length).toBe(0);
-    expect(el.querySelector('[role="alert"]')?.textContent).toContain('prescription-only');
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('customer');
+    c.name.set('Anand');
+    f.detectChanges();
+    expect(c.gate()).toMatch(/prescribing doctor/);
     c.prescriber.set('Dr. Menon');
     f.detectChanges();
-    expect(c.gate()).toMatch(/customer/);
-    c.name.set('Anand');
+    expect(c.gate()).toMatch(/registration number/);
+    c.regNo.set('TN12345');
     f.detectChanges();
     expect(c.gate()).toMatch(/address/); // H1 register still needs the customer's address (critic #1)
     c.address.set('12 MG Road, Chennai');
     f.detectChanges();
     expect(c.gate()).toBeNull();
     expect(c.ready()).toBe(true);
+    // The prescription must also be UPLOADED before payment (owner 2026-10-01) — Save stays available.
+    expect(c.canPay()).toBe(false);
+    expect(c.payGate()).toMatch(/upload/i);
+    expect(primaries(el).length).toBe(0);
+    c.rxFile.set('prescription.jpg');
+    f.detectChanges();
+    expect(c.canPay()).toBe(true);
     expect(c.totals().payable).toBe(71); // 3 × 23.80 = 71.40 → 71
     expect(primaries(el).length).toBe(1);
     noNative(el);
