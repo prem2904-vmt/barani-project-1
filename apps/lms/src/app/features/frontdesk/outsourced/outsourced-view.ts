@@ -104,6 +104,34 @@ export function countByStatus(rows: readonly OutsourcedTube[]): Record<Outsource
   };
 }
 
+/** Outsourced/Completed tab counts, server shape (OutsourcingService.OutsourcedCounts,
+ *  mw). Always for the WHOLE date window — never narrowed by the status /
+ *  partner filter that's also on screen (the chip reads the total). */
+export interface OutsourcedServerCounts { outsourced: number; completed: number }
+
+/** One page of `GET /api/samples/outsourced?days=…&page=…` (DB optimisation,
+ *  release 2026-10-01). An older server ignores the paging params and
+ *  answers the whole window as an array — callers accept both shapes. */
+export interface OutsourcedPage {
+  items: OutsourcedTube[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  counts: OutsourcedServerCounts;
+}
+
+export const OUTSOURCED_PAGE_SIZE = 50;
+
+export function outsourcedPageUrl(o: {
+  days: number; page: number; pageSize: number; status: OutsourcedStatusFilter; partnerId?: string | null;
+}): string {
+  let url = `/api/samples/outsourced?days=${o.days}&page=${o.page}&pageSize=${o.pageSize}`
+    + `&status=${encodeURIComponent(o.status || 'all')}`;
+  if (o.partnerId) url += `&partnerLabId=${encodeURIComponent(o.partnerId)}`;
+  return url;
+}
+
 /** Lines the row's actions act on: upload/complete targets the lines not yet
  *  completed (all of them when every line is done — a replace). */
 export function actionLines(r: OutsourcedTube): string[] {

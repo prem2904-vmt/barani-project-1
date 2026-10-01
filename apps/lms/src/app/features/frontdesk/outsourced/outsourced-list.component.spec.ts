@@ -22,12 +22,16 @@ function setup(rows: OutsourcedTube[], confirm = true) {
   const partnerId = signal<string | null>(null);
   const query = signal('');
   const svc = {
-    rows: rowsSig, loading: signal(false), status, partnerId, query,
+    rows: rowsSig, loading: signal(false), loadingMore: signal(false), status, partnerId, query,
     visible: computed(() => filterOutsourced(rowsSig(), { status: status(), partnerId: partnerId(), query: query() })),
     partners: computed(() => partnerOptions(rowsSig())),
     counts: computed(() => countByStatus(rowsSig())),
+    // Server paging (release 2026-10-01) — overridden per-test below.
+    hasMore: signal(false),
+    nextCount: signal(0),
     apiBase: 'https://api.test',
     load: vi.fn(async () => {}),
+    loadMore: vi.fn(async () => {}),
     upload: vi.fn(async () => '/uploads/t/p.pdf'),
     complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
     setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []),
@@ -202,5 +206,34 @@ describe('Frontdesk Outsourced tab', () => {
     svc.query.set('arun');
     f.detectChanges();
     expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
+  });
+
+  it('no more pages: no "Load more" button', () => {
+    const { el } = setup([row()]);
+    expect(el.querySelector('.pf-out__more')).toBeNull();
+  });
+
+  it('server paging: "Load more" appears with the next page\'s count and calls svc.loadMore()', () => {
+    const { f, el, svc } = setup([row()]);
+    (svc.hasMore as ReturnType<typeof signal<boolean>>).set(true);
+    (svc.nextCount as ReturnType<typeof signal<number>>).set(23);
+    f.detectChanges();
+    const btn = el.querySelector('.pf-out__more-btn') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent?.trim()).toBe('Load 23 more');
+    expect(btn.disabled).toBe(false);
+    btn.click();
+    expect(svc.loadMore).toHaveBeenCalled();
+  });
+
+  it('"Load more" shows a busy state and disables while loadingMore', () => {
+    const { f, el, svc } = setup([row()]);
+    (svc.hasMore as ReturnType<typeof signal<boolean>>).set(true);
+    (svc.loadingMore as ReturnType<typeof signal<boolean>>).set(true);
+    f.detectChanges();
+    const btn = el.querySelector('.pf-out__more-btn') as HTMLButtonElement;
+    expect(btn.textContent?.trim()).toBe('Loading…');
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-busy')).toBe('true');
   });
 });

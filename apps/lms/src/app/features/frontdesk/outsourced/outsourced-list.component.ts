@@ -145,6 +145,16 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
           </li>
         }
       </ul>
+      @if (svc.hasMore()) {
+      <!-- Server paging (release 2026-10-01): the next page, appended — same
+           pattern as the report queue (report-queue.component.html). -->
+      <div class="pf-out__more">
+        <button type="button" class="nd-btn nd-btn--secondary pf-out__more-btn press"
+                [disabled]="svc.loadingMore()" [attr.aria-busy]="svc.loadingMore()" (click)="loadMore()">
+          @if (svc.loadingMore()) { Loading… } @else { Load {{ svc.nextCount() }} more }
+        </button>
+      </div>
+      }
     }
   `,
   styles: [`
@@ -171,6 +181,7 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
     @media (max-width: 640px) {
       .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }
     }
+    .pf-out__more { display: flex; justify-content: center; padding: 12px 0 2px; }
   `],
 })
 export class OutsourcedListComponent implements OnInit {
@@ -206,6 +217,10 @@ export class OutsourcedListComponent implements OnInit {
   readonly partnerSelectOptions = () => outsourcedPartnerOptions(this.svc.partners());
 
   ngOnInit(): void { void this.svc.load(); }
+
+  /** The next page, appended (the service itself no-ops mid-fetch / once
+   *  every row for the current filter is loaded). */
+  loadMore(): void { void this.svc.loadMore(); }
 
   setStatus(v: string) { this.svc.status.set(v as OutsourcedStatusFilter); }
 

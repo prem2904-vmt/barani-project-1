@@ -1,7 +1,7 @@
 import {
   OutsourcedTube, absoluteFileUrl, actionLines, countByStatus, filterOutsourced, partnerFileProblem,
   partnerOptions, partnerReportShareLine, rowReport, attachState, firstAttachProblem, ATTACH_DEFAULT,
-  partnerWhere, PartnerReport, PdfParts,
+  partnerWhere, PartnerReport, PdfParts, outsourcedPageUrl,
 } from './outsourced-view';
 
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
@@ -125,5 +125,24 @@ describe('Report viewer — where a partner report goes (the served PDF wins ove
   it('no answer yet: the flag\'s wording, never "In this PDF"', () => {
     expect(partnerWhere(rep({ attachToReport: true, inReport: true }), null).text).toBe('Attached — joined after our report');
     expect(partnerWhere(rep({ attachToReport: true }), { stored: false, combined: false, parts: [] }).text).toBe('Attached — joined after our report');
+  });
+});
+
+describe('Outsourced tab — paged URL (DB optimisation, release 2026-10-01)', () => {
+  it('builds days / page / pageSize / status', () => {
+    expect(outsourcedPageUrl({ days: 90, page: 1, pageSize: 50, status: 'outsourced' }))
+      .toBe('/api/samples/outsourced?days=90&page=1&pageSize=50&status=outsourced');
+    expect(outsourcedPageUrl({ days: 90, page: 2, pageSize: 50, status: 'all' }))
+      .toBe('/api/samples/outsourced?days=90&page=2&pageSize=50&status=all');
+  });
+  it('blank / missing status defaults to "all"', () => {
+    expect(outsourcedPageUrl({ days: 90, page: 1, pageSize: 50, status: '' as never }))
+      .toBe('/api/samples/outsourced?days=90&page=1&pageSize=50&status=all');
+  });
+  it('a partner id is appended, URL-encoded; none = omitted entirely', () => {
+    expect(outsourcedPageUrl({ days: 90, page: 1, pageSize: 50, status: 'completed', partnerId: 'a b/c' }))
+      .toBe('/api/samples/outsourced?days=90&page=1&pageSize=50&status=completed&partnerLabId=a%20b%2Fc');
+    expect(outsourcedPageUrl({ days: 90, page: 1, pageSize: 50, status: 'completed', partnerId: null }))
+      .not.toContain('partnerLabId');
   });
 });
