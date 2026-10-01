@@ -10,6 +10,8 @@
  * value, falling back to the test's own flag when a line was not annotated
  * (an older server), which was the behaviour before profiles had the switch.
  */
+import { isCriticalFlag, parseResultSnapshot } from './result-flag';
+
 export function printPickerFlag(parametersJson: string | null | undefined): boolean {
   if (!parametersJson) return false;
   try { return JSON.parse(parametersJson)?.printPicker === true; } catch { return false; }
@@ -54,17 +56,44 @@ export function resolvePrintPickerDefault(t: PrintPickerLine): PrintPickerDefaul
  * them: a SAVED pick (`reportHiddenJson` present — even `[]`) always wins;
  * never picked + 'none' → every value hidden (all boxes unticked); never
  * picked + 'all' → nothing hidden. Mirrors mw `PrintPickerRules.EffectiveHidden`.
+ *
+ * Owner 2026-10-01: a CRITICAL value always prints. Whatever the saved pick
+ * / "start with" says, a name in {@link criticalNames} is removed from the
+ * hidden set here — the ONE place every report-preview / print-choice screen
+ * reads before it treats a value as hidden. Only critical is mandatory; a
+ * merely abnormal value stays the tech's choice.
  */
 export function effectiveHidden(
   saved: string | null | undefined,
   start: PrintPickerDefault,
   allNames: readonly string[],
+  critical: readonly string[] = [],
 ): string[] {
+  let hidden: string[];
   if (saved != null && saved.trim() !== '') {
-    try { const a = JSON.parse(saved); return Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : []; }
-    catch { return []; }
+    try {
+      const a = JSON.parse(saved);
+      hidden = Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : [];
+    } catch { hidden = []; }
+  } else {
+    hidden = start === 'none' ? [...allNames] : [];
   }
-  return start === 'none' ? [...allNames] : [];
+  if (critical.length === 0) return hidden;
+  const crit = new Set(critical.map((c) => c.toLowerCase()));
+  return hidden.filter((n) => !crit.has(n.toLowerCase()));
+}
+
+/**
+ * Parameter names flagged CRITICAL (CL / CH, or legacy C) on a line's saved
+ * result snapshot (`currentResult`'s `flagged` map, written by mw
+ * `ResultFlaggingService` at save time — analyzer-prefilled values are saved
+ * through the same path, so they're covered without a separate check).
+ * Mirrors mw `PrintPickerRules.CriticalNames`.
+ */
+export function criticalNames(currentResult: string | null | undefined): string[] {
+  const flagged = parseResultSnapshot(currentResult)?.flagged;
+  if (!flagged) return [];
+  return Object.keys(flagged).filter((name) => isCriticalFlag(flagged[name]?.flag));
 }
 
 /**

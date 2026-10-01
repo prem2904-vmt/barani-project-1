@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveHidden, hasEnteredValue, printPickerDefaultOf, printPickerFlag, resolvePrintPicker, resolvePrintPickerDefault } from './print-picker';
+import { criticalNames, effectiveHidden, hasEnteredValue, printPickerDefaultOf, printPickerFlag, resolvePrintPicker, resolvePrintPickerDefault } from './print-picker';
 
 const ON = JSON.stringify({ printPicker: true, parameters: [] });
 const OFF = JSON.stringify({ parameters: [] });
@@ -54,6 +54,40 @@ describe('print picker "Start with" (all | none)', () => {
     expect(effectiveHidden('["PCV"]', 'none', names)).toEqual(['PCV']);
     expect(effectiveHidden(null, 'all', names)).toEqual([]);
     expect(effectiveHidden('["Hb"]', 'all', names)).toEqual(['Hb']);
+  });
+});
+
+describe('a CRITICAL value always prints (owner 2026-10-01)', () => {
+  const snap = (flagged: Record<string, string>) =>
+    JSON.stringify({ values: {}, flagged: Object.fromEntries(Object.entries(flagged).map(([k, f]) => [k, { flag: f }])) });
+
+  it('criticalNames reads the flagged map, ignoring non-critical flags', () => {
+    expect(criticalNames(snap({ Hb: 'CH', PCV: 'N' }))).toEqual(['Hb']);
+    expect(criticalNames(snap({ K: 'C' }))).toEqual(['K']);     // legacy direction-less critical still counts
+    expect(criticalNames(snap({ Hb: 'H', PCV: 'L' }))).toEqual([]);
+  });
+
+  it('criticalNames is empty for no/unusable snapshot', () => {
+    expect(criticalNames(null)).toEqual([]);
+    expect(criticalNames(undefined)).toEqual([]);
+    expect(criticalNames('not json')).toEqual([]);
+    expect(criticalNames(JSON.stringify({ values: { Hb: 12 } }))).toEqual([]);
+  });
+
+  it('effectiveHidden never hides a critical name — a saved pick is overridden', () => {
+    const names = ['Hb', 'PCV'];
+    expect(effectiveHidden('["Hb","PCV"]', 'all', names, ['Hb'])).toEqual(['PCV']);
+  });
+
+  it('effectiveHidden never hides a critical name — "start with none", never picked', () => {
+    const names = ['Hb', 'PCV'];
+    expect(effectiveHidden(null, 'none', names, ['Hb'])).toEqual(['PCV']);
+  });
+
+  it('no critical names leaves effectiveHidden unchanged (default param, backward compatible)', () => {
+    const names = ['Hb', 'PCV'];
+    expect(effectiveHidden(null, 'none', names)).toEqual(names);
+    expect(effectiveHidden(null, 'none', names, [])).toEqual(names);
   });
 });
 

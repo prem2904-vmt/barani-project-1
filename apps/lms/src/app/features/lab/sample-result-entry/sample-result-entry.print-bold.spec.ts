@@ -133,6 +133,31 @@ describe('Result entry — print picker "Start with: None ticked"', () => {
     expect(picks(el)).toEqual([false, false]);
   });
 
+  // ── A CRITICAL value always prints (owner 2026-10-01) ─────────────────
+  const criticalResult = () => JSON.stringify({
+    values: { Hb: 20, PCV: 40 },
+    flagged: { Hb: { value: 20, flag: 'CH' }, PCV: { value: 40, flag: 'N' } },
+  });
+
+  it('never picked + none, but Hb is CRITICAL → Hb still starts ticked; PCV (not critical) stays unticked', async () => {
+    const { el } = await render(sampleFixture({ currentResult: criticalResult() }));
+    expect(picks(el)).toEqual([true, false]);
+  });
+
+  it('a SAVED pick hiding BOTH is overridden for the critical one', async () => {
+    const { el } = await render(sampleFixture({ currentResult: criticalResult(), reportHiddenJson: '["Hb","PCV"]' }));
+    expect(picks(el)).toEqual([true, false]);
+  });
+
+  it('the critical checkbox is disabled — the tech cannot untick it, and no request is sent', async () => {
+    const { el, api } = await render(sampleFixture({ currentResult: criticalResult() }));
+    const boxes = Array.from(el.querySelectorAll<HTMLInputElement>('input.pf-sre__printpick'));
+    expect(boxes[0].disabled).toBe(true);
+    expect(boxes[1].disabled).toBe(false);
+    boxes[0].dispatchEvent(new Event('change'));
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
   it('submitting when NOTHING at all prints asks once (DialogService); Go back sends nothing', async () => {
     const { el, f, c, api, dialog } = await render(sampleFixture());
     c.setValue('ot1', 'Hb', 13);
