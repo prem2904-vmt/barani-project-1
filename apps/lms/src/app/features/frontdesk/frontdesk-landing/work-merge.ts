@@ -59,6 +59,14 @@ export interface AnnotateBucket<T extends MinimalWorkOrder, D = unknown> {
   status: WorkStatus;
   items: readonly AnnotateItem<D>[];
   synthesize?: (item: AnnotateItem<D>) => T;
+  /** When true, this bucket NEVER annotates an order that already has a row
+   *  from a `WorkBucket` — it only ever synthesizes a new one. For a status
+   *  that would be misleading as a secondary badge on a real row (e.g. a
+   *  completed outsourced tube doesn't make an order that's still actively
+   *  'ip' for other reasons "done" — it should only ever BECOME a 'done' row
+   *  when that's the order's only status at all). Ignored without
+   *  `synthesize` (there would be nothing to do either way). */
+  synthesizeOnly?: boolean;
 }
 
 export interface MergedWorkRow<T extends MinimalWorkOrder> {
@@ -135,6 +143,8 @@ export function mergeWorkRows<T extends MinimalWorkOrder>(
   }
   for (const a of annotate) {
     for (const item of a.items) {
+      const hasRealRow = sourceById.get(item.orderId) === 'order';
+      if (hasRealRow && a.synthesizeOnly) continue; // this bucket only ever creates a row, never annotates a real one
       if (!statusesById.has(item.orderId)) {
         if (!a.synthesize) continue; // annotate-only: no existing row, no row created
         orders.set(item.orderId, a.synthesize(item));
@@ -169,7 +179,10 @@ function businessDayOf(o: MinimalWorkOrder): string {
 /**
  * THE sort for the merged list: group by business day, newest day first;
  * within a day, ascending by the daily serial (#1, #2 … today's order of
- * arrival); a row with no serial for its day (shouldn't normally happen —
+ * arrival) — two rows that somehow share one serial (e.g. the same patient
+ * registered twice the same day, a data anomaly rather than the ordinary
+ * case) break the tie by createdAt rather than leaving their relative order
+ * to chance; a row with no serial for its day (shouldn't normally happen —
  * every order gets one on creation — but an older, pre-feature order might
  * lack one) sorts after the numbered rows of that day, oldest-created first.
  */
@@ -180,10 +193,11 @@ export function sortMergedWork<T extends MinimalWorkOrder>(rows: readonly Merged
     if (da !== db) return da < db ? 1 : -1; // newest day first
     const sa = a.order.dailyNo ?? null;
     const sb = b.order.dailyNo ?? null;
-    if (sa != null && sb != null) return sa - sb;
+    const byCreatedAt = () => new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime();
+    if (sa != null && sb != null) return sa !== sb ? sa - sb : byCreatedAt();
     if (sa != null) return -1; // numbered rows before un-numbered ones
     if (sb != null) return 1;
-    return new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime();
+    return byCreatedAt();
   });
 }
 

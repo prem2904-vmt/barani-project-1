@@ -121,7 +121,7 @@ import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
-import { OutsourcedTube, buildFrontdeskMergedWork } from '../outsourced/outsourced-view';
+import { OutsourcedTube, buildFrontdeskMergedWork, filterOutsourced } from '../outsourced/outsourced-view';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
@@ -910,37 +910,74 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  because the merged list needs BOTH outsourced statuses (an order that
    *  is only outsourced must still get a row once its tube is completed),
    *  never just whichever status the dedicated Outsourced tab's own filter
-   *  happens to be showing. */
+   *  happens to be showing. The work card's free-text search is applied to
+   *  the tubes HERE (P1-6) — same as shownInProgress / shownCompleted /
+   *  shownPaymentsDue already do for orders — so a search never synthesizes
+   *  a row for an unrelated outsourced-only order, and "No matches" still
+   *  shows when the query clears every feed.
+   *
+   *  `shownPaymentsDue()` — NOT `shownPaymentsDueOnly()` — feeds the
+   *  'billing' bucket: `shownPaymentsDueOnly()` drops an order that's ALSO
+   *  in-progress (it existed for the OLD sectioned no-chip view, where that
+   *  dedup had to happen by hand). Feeding it here silently dropped the
+   *  'billing' status off an in-progress-with-a-balance order — it fell
+   *  back to its real order.status (e.g. "Billed", green) with no
+   *  payment-due cue at all. mergeWorkRows already does the union/dedup
+   *  properly (precedence puts 'billing' ahead of 'ip', with 'In progress'
+   *  as the secondary badge) — exactly what the merged list is FOR. */
   readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
     if (this._rightTab() !== null) return [];
-    return buildFrontdeskMergedWork(
-      this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDueOnly(), this.outsourcing.windowed(),
-    );
+    const tubes = filterOutsourced(this.outsourcing.windowed(), { query: this.workQuery() });
+    return buildFrontdeskMergedWork(this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDue(), tubes);
   });
   /** The merged row's status text for everything but Payments due (the
    *  template renders the balance itself via the `inr` pipe, as the
    *  single-status Payments due rows already do) — the order's own
-   *  detailed status for In progress / Completed, and a fixed label for
-   *  Outsourced (a tube status, not an order one). */
+   *  detailed status for In progress / Completed, a fixed label for
+   *  Outsourced (a tube status, not an order one), and a fixed label for a
+   *  SYNTHETIC Completed row (its fake order.status is a stand-in, never
+   *  read through effectiveStatusLabel — see syntheticOrderFromOutsourcedTubes). */
   mergedStatusText(row: MergedWorkRow<Order>): string {
     if (row.primary === 'out') return 'Outsourced';
+    if (row.primary === 'done' && row.source === 'synthetic') return 'Completed';
     return this.effectiveStatusLabel(row.order);
   }
   /** Dot colour for the merged row: Payments due / Outsourced read amber
-   *  (the same "needs the desk" amber Payments due already uses); In
-   *  progress / Completed reuse the order's own tone (rowTone) — a
-   *  synthetic (outsourced-only) row has no real order status, so it reads
-   *  amber too (handled by the `source === 'synthetic'` check below, which
-   *  only ever carries primary 'out' anyway). */
+   *  (the same "needs the desk" amber Payments due already uses); a
+   *  SYNTHETIC row (no real order state to read a tone from) is green once
+   *  its only status is 'done' (every outsourced tube completed), amber for
+   *  'out' (pending) — covered by the first check since synthetic never
+   *  carries 'billing'/'ip'. Everything else (a real order) uses its own
+   *  tone (rowTone). */
   mergedTone(row: MergedWorkRow<Order>): string {
-    return row.primary === 'billing' || row.primary === 'out' || row.source === 'synthetic'
-      ? 'amber' : this.rowTone(row.order);
+    if (row.primary === 'billing' || row.primary === 'out') return 'amber';
+    if (row.source === 'synthetic') return 'green'; // only reachable for primary 'done' here
+    return this.rowTone(row.order);
   }
   /** The order's outsourced tubes within the window, for inline actions
-   *  (pf-outsourced-actions, one per tube) — empty when the row has no
-   *  'out' status. */
+   *  (pf-outsourced-actions, one per tube) — 'out' carries every tube
+   *  (pending + completed) for an order with at least one pending tube;
+   *  'done' carries the (all-completed) tubes for an outsourced-only order
+   *  whose tubes are all done (buildFrontdeskMergedWork). Empty for a row
+   *  with neither. */
   outsourcedTubesFor(row: MergedWorkRow<Order>): OutsourcedTube[] {
-    return (row.annotateData.out as OutsourcedTube[] | undefined) ?? [];
+    return (row.annotateData.out as OutsourcedTube[] | undefined)
+      ?? (row.annotateData.done as OutsourcedTube[] | undefined)
+      ?? [];
+  }
+  /** Opens the drawer for a merged row. A SYNTHETIC row's `order` is a
+   *  display-only stand-in (no real status/samples) — opening it directly
+   *  would show nonsense like "not collected" (P2-10), so fetch the REAL
+   *  order by id first and open that instead. */
+  openMergedRow(row: MergedWorkRow<Order>) {
+    if (this.swallowClick) { this.swallowClick = false; return; }
+    if (row.source === 'synthetic') {
+      this.api.get<Order>(`/api/orders/${row.order.id}`).subscribe({
+        next: full => { if (full) this.openOrder(full); },
+      });
+      return;
+    }
+    this.openOrder(row.order);
   }
 
   getBillBalance(orderId: string): number {

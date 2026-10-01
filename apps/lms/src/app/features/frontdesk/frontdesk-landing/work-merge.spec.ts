@@ -109,6 +109,56 @@ describe('work-merge — mergeWorkRows (dedupe by order id)', () => {
     expect(new Set(rows[0].statuses)).toEqual(new Set(['out', 'billing']));
     expect(rows[0].annotateData).toEqual({ out: 'tube', billing: 500 });
   });
+
+  describe('synthesizeOnly (an annotate bucket that must never touch a real row)', () => {
+    it('synthesizes a row for an order with NO WorkBucket row, same as a plain synthesize bucket', () => {
+      const bucket: AnnotateBucket<O, string> = {
+        status: 'done', items: [{ orderId: 'only-done', data: 'tube' }],
+        synthesize: item => order(item.orderId, '2026-09-30T04:00:00Z'),
+        synthesizeOnly: true,
+      };
+      const rows = mergeWorkRows([], [bucket]);
+      expect(rows.length).toBe(1);
+      expect(rows[0].order.id).toBe('only-done');
+      expect(rows[0].primary).toBe('done');
+      expect(rows[0].source).toBe('synthetic');
+    });
+
+    it('does NOTHING for an order that already has a real row — no status added, no annotateData', () => {
+      const o1 = order('o1', '2026-09-30T04:00:00Z');
+      const bucket: AnnotateBucket<O, string> = {
+        status: 'done', items: [{ orderId: 'o1', data: 'tube' }],
+        synthesize: item => order(item.orderId, '2026-09-30T04:00:00Z'),
+        synthesizeOnly: true,
+      };
+      const rows = mergeWorkRows([{ status: 'ip', orders: [o1] }], [bucket]);
+      expect(rows.length).toBe(1);
+      expect(rows[0].statuses).toEqual(['ip']); // 'done' never added
+      expect(rows[0].primary).toBe('ip');
+      expect(rows[0].annotateData.done).toBeUndefined();
+      expect(rows[0].source).toBe('order');
+    });
+
+    it('does nothing for an order ALREADY synthesized by an earlier bucket, either (still a "real" synthetic row by then)', () => {
+      // Two synthesizeOnly buckets targeting the same order: the first wins,
+      // the second must not also touch it (it already has A row, just not
+      // from a WorkBucket) — mirrors "only an outsourced-only order gets a
+      // 'done' row" never double-synthesizing from two annotate sources.
+      const first: AnnotateBucket<O, string> = {
+        status: 'out', items: [{ orderId: 'x', data: 'a' }],
+        synthesize: item => order(item.orderId, '2026-09-30T04:00:00Z'),
+      };
+      const second: AnnotateBucket<O, string> = {
+        status: 'done', items: [{ orderId: 'x', data: 'b' }],
+        synthesize: () => order('x', '2026-09-30T05:00:00Z'),
+        synthesizeOnly: true,
+      };
+      const rows = mergeWorkRows([], [first, second]);
+      expect(rows.length).toBe(1);
+      expect(rows[0].statuses).toEqual(['out', 'done']); // still annotates a SYNTHETIC row — only 'order' rows are off-limits
+      expect(rows[0].source).toBe('synthetic');
+    });
+  });
 });
 
 describe('work-merge — sortMergedWork', () => {
@@ -152,6 +202,13 @@ describe('work-merge — sortMergedWork', () => {
     const withDay = order('wd', '2026-09-30T04:00:00Z', 1, '2026-09-30');
     const sorted = sortMergedWork([row(withDay), row(noDay)]);
     expect(sorted.map(r => r.order.id)).toEqual(['nd', 'wd']); // 1 Oct IST sorts before 30 Sep IST
+  });
+
+  it('two rows sharing the SAME daily serial (a data anomaly) break the tie by createdAt, oldest first', () => {
+    const later = order('later', '2026-09-30T06:00:00Z', 4, '2026-09-30');
+    const earlier = order('earlier', '2026-09-30T03:00:00Z', 4, '2026-09-30'); // same #4
+    const sorted = sortMergedWork([row(later), row(earlier)]);
+    expect(sorted.map(r => r.order.id)).toEqual(['earlier', 'later']);
   });
 });
 
