@@ -17,7 +17,7 @@ import {
   signal,
   viewChild,
 } from "@angular/core";
-import { effectiveHidden, hasEnteredValue, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
+import { criticalNames, effectiveHidden, hasEnteredValue, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
@@ -2456,9 +2456,23 @@ export class SampleResultEntryComponent {
    *  {@link reportHiddenFor}). The saved-only mirror of mw's
    *  `PrintPickerRules.CriticalNames` ({@link criticalNames} from
    *  shared/utils/print-picker) agrees once the value is saved — what the
-   *  server will actually print reads the SAME saved snapshot. */
+   *  server will actually print reads the SAME saved snapshot.
+   *  Critic P1-4: a per-PARAMETER flag isn't the only way a line is critical
+   *  — the Conditions engine can mark the whole result critical with no
+   *  single value carrying CL/CH (e.g. a qualitative "Positive"). When no
+   *  parameter resolves critical this way, fall back to the saved
+   *  snapshot's OVERALL `flags.critical` — every name on the line counts,
+   *  same as mw's EffectiveHidden. */
   private criticalFor(t: OrderTest): string[] {
-    return this.parametersFor(t).filter(p => this.isCriticalValue(t, p)).map(p => p.name);
+    const perParam = this.parametersFor(t).filter(p => this.isCriticalValue(t, p)).map(p => p.name);
+    return perParam.length ? perParam : criticalNames(t.currentResult, this.parametersFor(t).map(p => p.name));
+  }
+  /** The print-picker checkbox's own critical check (template): per-parameter
+   *  OR the whole-line fallback (critic P1-4) — wider than {@link isCriticalValue}
+   *  (red-input styling stays pinned to an actual per-parameter flag; it never
+   *  reddens every input just because the line's overall flag is critical). */
+  isCriticalForPrint(t: OrderTest, p: TestParameter): boolean {
+    return this.criticalFor(t).some(n => n.toLowerCase() === p.name.toLowerCase());
   }
   /** Hidden value names as the tech sees them: this session's pick, else
    *  the SAVED pick (even "[]" — a saved choice is never reset on reload),

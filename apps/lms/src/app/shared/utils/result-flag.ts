@@ -43,10 +43,15 @@ export interface SavedFlag {
   allRanges?: string[] | null;
 }
 
-/** The parts of a result snapshot (`OrderTest.currentResult`) flags read. */
+/** The parts of a result snapshot (`OrderTest.currentResult`) flags read.
+ *  `flags.critical` is the line's OVERALL critical flag (mw ResultService —
+ *  a reference-range CL/CH OR a Conditions-engine rule), independent of
+ *  which — if any — single parameter in `flagged` carries CL/CH; the
+ *  print-picker's whole-line fallback reads it (owner 2026-10-01, critic P1-4). */
 export interface ResultSnapshotLike {
   values?: Record<string, unknown>;
   flagged?: Record<string, SavedFlag>;
+  flags?: { critical?: boolean; hasAbnormal?: boolean };
 }
 
 let lastJson: string | null = null;

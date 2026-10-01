@@ -89,11 +89,22 @@ export function effectiveHidden(
  * `ResultFlaggingService` at save time — analyzer-prefilled values are saved
  * through the same path, so they're covered without a separate check).
  * Mirrors mw `PrintPickerRules.CriticalNames`.
+ *
+ * Critic P1-4: a per-PARAMETER flag isn't the only way a line is critical —
+ * the Conditions engine can mark the whole result critical
+ * (`currentResult.flags.critical`, e.g. a qualitative "Positive") with no
+ * single value carrying CL/CH. When that overall flag is true and no
+ * individual name resolved as critical, EVERY name in `allNames` counts as
+ * critical — hiding nothing is safer than hiding a critical result because
+ * it can't be pinned to one value.
  */
-export function criticalNames(currentResult: string | null | undefined): string[] {
-  const flagged = parseResultSnapshot(currentResult)?.flagged;
-  if (!flagged) return [];
-  return Object.keys(flagged).filter((name) => isCriticalFlag(flagged[name]?.flag));
+export function criticalNames(currentResult: string | null | undefined, allNames: readonly string[] = []): string[] {
+  const snap = parseResultSnapshot(currentResult);
+  const flagged = snap?.flagged;
+  const names = flagged ? Object.keys(flagged).filter((name) => isCriticalFlag(flagged[name]?.flag)) : [];
+  if (names.length === 0 && snap?.flags?.critical && allNames.length)
+    return [...new Set(allNames.filter((n) => n && n.trim()))];
+  return names;
 }
 
 /**

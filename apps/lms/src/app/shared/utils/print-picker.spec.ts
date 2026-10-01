@@ -74,6 +74,29 @@ describe('a CRITICAL value always prints (owner 2026-10-01)', () => {
     expect(criticalNames(JSON.stringify({ values: { Hb: 12 } }))).toEqual([]);
   });
 
+  // ── Critic P1-4: a whole-line critical with no per-parameter flag ───────
+  it('falls back to every name when the OVERALL flags.critical is true and no parameter resolved critical', () => {
+    const withOverall = (flagged: Record<string, string>, critical: boolean) =>
+      JSON.stringify({ values: {}, flagged: Object.fromEntries(Object.entries(flagged).map(([k, f]) => [k, { flag: f }])), flags: { critical } });
+    // The Conditions engine marked the whole result critical (e.g. a qualitative "Positive") — no CL/CH anywhere.
+    expect(criticalNames(withOverall({ Result: 'A' }, true), ['Result'])).toEqual(['Result']);
+    // No allNames supplied → nothing to fall back to.
+    expect(criticalNames(withOverall({ Result: 'A' }, true))).toEqual([]);
+    // flags.critical false → no fallback, normal behaviour.
+    expect(criticalNames(withOverall({ Hb: 'N' }, false), ['Hb'])).toEqual([]);
+    // A real per-parameter critical still wins over (and skips) the fallback.
+    expect(criticalNames(withOverall({ Hb: 'CH', PCV: 'N' }, true), ['Hb', 'PCV'])).toEqual(['Hb']);
+  });
+
+  it('effectiveHidden hides nothing on a line whose overall critical flag has no per-parameter flag to pin it to', () => {
+    const names = ['Result', 'Note'];
+    const critical = criticalNames(
+      JSON.stringify({ values: {}, flagged: { Result: { flag: 'A' }, Note: { flag: '' } }, flags: { critical: true } }),
+      names,
+    );
+    expect(effectiveHidden(null, 'none', names, critical)).toEqual([]);
+  });
+
   it('effectiveHidden never hides a critical name — a saved pick is overridden', () => {
     const names = ['Hb', 'PCV'];
     expect(effectiveHidden('["Hb","PCV"]', 'all', names, ['Hb'])).toEqual(['PCV']);

@@ -385,9 +385,9 @@
                               @if (printPickerEnabled(t)) {
                                 <input type="checkbox" class="pf-sre__printpick"
                                        [checked]="isValuePrinted(t, p)"
-                                       [disabled]="isCriticalValue(t, p)"
+                                       [disabled]="isCriticalForPrint(t, p)"
                                        (change)="toggleValuePrinted(t, p)"
-                                       [title]="isCriticalValue(t, p) ? 'Critical value — always prints' : (isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print')" />
+                                       [title]="isCriticalForPrint(t, p) ? 'Critical value — always prints' : (isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print')" />
                               }
                               <span class="pf-sre__gname">{{ parametersFor(t).length > 1 ? p.title || p.name : t.test?.name || p.title || p.name }}
                                 @if (hasOpenComment(t.id, p.name)) {
@@ -816,9 +816,9 @@
                             @if (printPickerEnabled(t)) {
                               <input type="checkbox" class="pf-sre__printpick"
                                      [checked]="isValuePrinted(t, p)"
-                                     [disabled]="isCriticalValue(t, p)"
+                                     [disabled]="isCriticalForPrint(t, p)"
                                      (change)="toggleValuePrinted(t, p)"
-                                     [title]="isCriticalValue(t, p) ? 'Critical value — always prints' : (isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print')" />
+                                     [title]="isCriticalForPrint(t, p) ? 'Critical value — always prints' : (isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print')" />
                             }
                             <span class="pf-sre__gname">{{ p.title || p.name }}
                               @if (hasOpenComment(t.id, p.name)) {

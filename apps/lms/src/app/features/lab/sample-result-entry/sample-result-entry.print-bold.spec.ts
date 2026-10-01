@@ -158,6 +158,22 @@ describe('Result entry — print picker "Start with: None ticked"', () => {
     expect(api.put).not.toHaveBeenCalled();
   });
 
+  // Critic P1-4: the Conditions engine can mark the WHOLE result critical
+  // (flags.critical) with no single parameter carrying CL/CH (e.g. a
+  // qualitative "Positive") — every value on the line must still print.
+  const overallCriticalResult = () => JSON.stringify({
+    values: { Hb: 20, PCV: 40 },
+    flagged: { Hb: { value: 20, flag: 'A' }, PCV: { value: 40, flag: 'N' } },
+    flags: { critical: true },
+  });
+
+  it('a whole-line critical with no per-parameter CL/CH prints every value and disables every checkbox', async () => {
+    const { el } = await render(sampleFixture({ currentResult: overallCriticalResult() }));
+    expect(picks(el)).toEqual([true, true]);
+    const boxes = Array.from(el.querySelectorAll<HTMLInputElement>('input.pf-sre__printpick'));
+    expect(boxes.every(b => b.disabled)).toBe(true);
+  });
+
   it('submitting when NOTHING at all prints asks once (DialogService); Go back sends nothing', async () => {
     const { el, f, c, api, dialog } = await render(sampleFixture());
     c.setValue('ot1', 'Hb', 13);
