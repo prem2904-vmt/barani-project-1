@@ -839,9 +839,6 @@
               <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
                    list (parked carts, localStorage), then live in-progress orders. -->
               @if (statusShown('ip')) {
-              @if (rightTab() === null && (visibleOrders().length > 0 || draftOrders().length > 0)) {
-              <h3 class="pf-wsec">In progress <span class="pf-wsec__n nd-num">{{ visibleOrders().length + draftOrders().length }}</span></h3>
-              }
               @if (shownDrafts().length > 0) {
               <ul class="pf-cards pf-cards--drafts pf-wlist" [class.pf-wlist--sel]="workSelectable()">
                 @for (d of shownDrafts(); track d.patientId) {
@@ -888,8 +885,7 @@
               }
               @if (ordersSkel() && visibleOrders().length === 0 && draftOrders().length === 0) {
               <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
-              } @else if (visibleOrders().length === 0 && draftOrders().length === 0) {
-              @if (rightTab() !== null) {
+              } @else if (rightTab() !== null && visibleOrders().length === 0 && draftOrders().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="ip">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -905,8 +901,7 @@
                 <button type="button" class="nd-btn nd-btn--secondary nd-empty__action press"
                   (click)="openRegister()">New patient</button>
               </div>
-              }
-              } @else {
+              } @else if (rightTab() !== null) {
               <ul class="pf-cards pf-wlist" data-list="ip" [class.pf-wlist--sel]="workSelectable()"
                 [class.pf-wlist--selecting]="workSel.count() > 0">
                 @if (workQuery() && shownInProgress().length === 0 && shownDrafts().length === 0) {
@@ -1063,13 +1058,9 @@
 
               <!-- COMPLETED TAB -->
               @if (statusShown('done')) {
-              @if (rightTab() === null && completedOrders().length > 0) {
-              <h3 class="pf-wsec">Completed <span class="pf-wsec__n nd-num">{{ completedOrders().length }}</span></h3>
-              }
               @if (ordersSkel() && completedOrders().length === 0) {
               <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
-              } @else if (completedOrders().length === 0) {
-              @if (rightTab() !== null) {
+              } @else if (rightTab() !== null && completedOrders().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="done">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -1081,8 +1072,7 @@
                 <p class="nd-empty__title">Nothing to deliver yet</p>
                 <p class="nd-empty__body">Reports show up here the moment validation is complete.</p>
               </div>
-              }
-              } @else {
+              } @else if (rightTab() !== null) {
               <ul class="pf-cards pf-wlist" data-list="done">
                 @if (workQuery() && shownCompleted().length === 0) {
                 <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
@@ -1178,20 +1168,13 @@
                    header search narrows the list (classic keeps its filters). -->
               @if (rightTab() === 'out') {
               <pf-outsourced-list [showFilters]="!theme.isNewDesign()"></pf-outsourced-list>
-              } @else if (rightTab() === null && outsourcing.visible().length > 0) {
-              <h3 class="pf-wsec">Outsourced <span class="pf-wsec__n nd-num">{{ outsourcing.visible().length }}</span></h3>
-              <pf-outsourced-list [showFilters]="false"></pf-outsourced-list>
               }
 
               <!-- PAYMENTS DUE TAB -->
               @if (statusShown('billing') && showPaymentsDue()) {
-              @if (rightTab() === null && shownPaymentsDueOnly().length > 0) {
-              <h3 class="pf-wsec">Payments due <span class="pf-wsec__n nd-num">{{ shownPaymentsDueOnly().length }}</span></h3>
-              }
               @if (billsSkel() && paymentsDueOrders().length === 0) {
               <pf-skeleton-rows [rows]="4" label="Loading payments due…"></pf-skeleton-rows>
-              } @else if (paymentsDueOrders().length === 0) {
-              @if (rightTab() !== null) {
+              } @else if (rightTab() !== null && paymentsDueOrders().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="due">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -1204,8 +1187,7 @@
                 <p class="nd-empty__title">No pending payments</p>
                 <p class="nd-empty__body">All registered orders have been fully paid.</p>
               </div>
-              }
-              } @else {
+              } @else if (rightTab() !== null) {
               <ul class="pf-cards pf-wlist" data-list="due">
                 @if (workQuery() && shownPaymentsDue().length === 0) {
                 <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
@@ -1235,6 +1217,239 @@
                         </svg>
                         <span class="nd-rowact__t">Pay now</span>
                       </button>
+                    </div>
+                  </div>
+                </li>
+                }
+              </ul>
+              }
+              }
+
+              <!-- MERGED WORK LIST (no chip on) — owner, 2026-10-01: the four
+                   feeds used to render as four separate sections, an order
+                   possibly repeated across them. Now ONE list, each order
+                   exactly once (dedup by id — work-merge.ts), sorted by the
+                   day's arrival order (newest business day first, then the
+                   daily serial #1, #2 … ascending). A chip still filters to a
+                   single status via the sections above; this only renders
+                   when every chip is off. Each row shows its leading status
+                   (Outsourced pending > Payments due > In progress >
+                   Completed — work-merge.ts) and keeps every action it would
+                   have had under any status it belongs to; a second status
+                   is a small badge, never a second row. -->
+              @if (rightTab() === null) {
+              @if (ordersSkel() && mergedWork().length === 0 && !allStatusesEmpty()) {
+              <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
+              } @else if (!allStatusesEmpty()) {
+              <ul class="pf-cards pf-wlist" data-list="merged">
+                @if (workQuery() && mergedWork().length === 0) {
+                <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
+                }
+                @for (row of mergedWork(); track row.order.id; let idx = $index) {
+                <li>
+                  <div class="pf-wrow" [attr.data-priority]="row.order.priority" [attr.data-order-id]="row.order.id"
+                    [class.pf-wrow--menu]="activeShareMenuOrderId() === row.order.id" tabindex="0"
+                    (click)="onWorkRowClick(row.order)"
+                    (keydown.enter)="$event.target === $event.currentTarget && openOrder(row.order)">
+                    <div class="pf-wrow__body">
+                      <p class="pf-wrow__name"><pf-daily-no [of]="row.order" />{{ drawerName(row.order.patient) }}</p>
+                      <p class="pf-wrow__meta nd-num">
+                        @if (drawerAgeSex(row.order.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
+                        <span class="pf-wrow__mi">{{ row.order.patient?.mrn || '—' }}</span>
+                        <span class="pf-wrow__mi">{{ sampleLine(row.order) }}</span>
+                        <span class="pf-wrow__mi">{{ row.order.createdAt | date:'shortTime' }}</span>
+                      </p>
+                    </div>
+                    <span class="pf-wrow__status pf-wrow__status--merged" [attr.data-tone]="mergedTone(row)">
+                      <span class="pf-wrow__dot" aria-hidden="true"></span>
+                      @if (row.primary === 'billing') {
+                      {{ getBillBalance(row.order.id) | inr }} due
+                      } @else {
+                      {{ mergedStatusText(row) }}
+                      }
+                      @for (s of row.secondary; track s) {
+                      <span class="pf-wrow__badge">{{ WORK_STATUS_LABEL[s] }}</span>
+                      }
+                    </span>
+                    <div class="pf-wrow__acts" (click)="$event.stopPropagation()"
+                      (pointerdown)="$event.stopPropagation()">
+                      <!-- Same action set as the single-status rows above, gated on
+                           the ORDER's own state — never on which feed it came from. -->
+                      @if (row.order.status === 'created' && showCreateBillOn(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="goToBilling(row.order)" aria-label="Bill">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+                          <path d="M9 8h6M9 12h6" />
+                        </svg>
+                        <span class="nd-rowact__t">Bill</span>
+                      </button>
+                      }
+                      @if (showRecollectOn(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="recollecting() === row.order.id" [pfBusy]="recollecting() === row.order.id"
+                        pfBusyLabel="Reopening…" (click)="recollectOrder(row.order)" aria-label="Recollect">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg>
+                        <span class="nd-rowact__t">@if (recollecting() === row.order.id) { Reopening… } @else { Recollect
+                          }</span>
+                      </button>
+                      } @else if (sampleStatus(row.order) === 'partially_collected' || showCollectOn(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="collectSample(row.order)" aria-label="Collect">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />
+                        </svg>
+                        <span class="nd-rowact__t">Collect</span>
+                      </button>
+                      } @else if (showDispatchOn(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="dispatchingId() === row.order.id" [pfBusy]="dispatchingId() === row.order.id"
+                        pfBusyLabel="Dispatching…" (click)="markDispatched(row.order)" aria-label="Dispatch">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M5 12h14m-5-6 6 6-6 6" />
+                        </svg>
+                        <span class="nd-rowact__t">Dispatch</span>
+                      </button>
+                      } @else if (showBillInsteadOfDispatch(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="goToBilling(row.order)" aria-label="Bill">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+                          <path d="M9 8h6M9 12h6" />
+                        </svg>
+                        <span class="nd-rowact__t">Bill</span>
+                      </button>
+                      } @else if (row.order.status === 'billed') {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="reprintLoading()" [pfBusy]="reprintLoading() && reprintOrderId() === row.order.id"
+                        pfBusyLabel="Printing labels…" (click)="reprintLabels(row.order)" aria-label="Reprint labels">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M6 9V3h12v6" />
+                          <rect x="6" y="14" width="12" height="7" rx="1" />
+                          <path
+                            d="M6 18H4.5A1.5 1.5 0 0 1 3 16.5V11a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 1-1.5 1.5H18" />
+                        </svg>
+                        <span class="nd-rowact__t">Reprint labels</span>
+                      </button>
+                      }
+                      @if (isSeriesOrder(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="openSeriesSheet(row.order)" title="Series schedule and time-point status"
+                        aria-label="Series status">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                        <span class="nd-rowact__t">Status</span>
+                      </button>
+                      }
+                      @if (row.order.status === 'partially_validated' && sampleStatus(row.order) !== 'partially_collected' &&
+                      !showCollectOn(row.order)) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="downloadingReport() !== null" [pfBusy]="downloadingReport() === row.order.id"
+                        pfBusyLabel="Preparing report…" (click)="downloadReport(row.order)"
+                        aria-label="Download report">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" />
+                        </svg>
+                        <span class="nd-rowact__t">@if (downloadingReport() === row.order.id) { Preparing… } @else { Download
+                          }</span>
+                      </button>
+                      }
+                      @if (row.primary === 'billing') {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="openPaymentDrawer(row.order)" aria-label="Pay now">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <rect x="3" y="6" width="18" height="12" rx="2" />
+                          <path d="M3 10h18M7 15h3" />
+                        </svg>
+                        <span class="nd-rowact__t">Pay now</span>
+                      </button>
+                      }
+                      @if (row.order.status === 'validated' || row.order.status === 'delivered' || row.order.status === 'completed') {
+                      @if (row.order.status !== 'delivered') {
+                      <div class="pf-share-wrapper relative inline-block text-left">
+                        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                          aria-label="Share report"
+                          (click)="activeShareMenuOrderId.set(activeShareMenuOrderId() === row.order.id ? null : row.order.id)">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3" />
+                            <circle cx="6" cy="12" r="3" />
+                            <circle cx="18" cy="19" r="3" />
+                            <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+                          </svg>
+                          <span class="nd-rowact__t">Share</span>
+                        </button>
+
+                        @if (activeShareMenuOrderId() === row.order.id) {
+                        <div class="pf-share-menu" [class.pf-share-menu--down]="idx < 2">
+                          <button type="button" class="pf-share-menu__item"
+                            (click)="shareReportSMS(row.order); activeShareMenuOrderId.set(null)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                            </svg>
+                            <span>SMS</span>
+                          </button>
+                          <button type="button" class="pf-share-menu__item"
+                            (click)="shareReportWhatsapp(row.order); activeShareMenuOrderId.set(null)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                              <path
+                                d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                            </svg>
+                            <span>WhatsApp</span>
+                          </button>
+                          <button type="button" class="pf-share-menu__item"
+                            (click)="shareReportEmail(row.order); activeShareMenuOrderId.set(null)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                              <polyline points="22,6 12,13 2,6" />
+                            </svg>
+                            <span>Email</span>
+                          </button>
+                        </div>
+                        }
+                      </div>
+                      }
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        aria-label="Download report" [disabled]="downloadingReport() !== null"
+                        [pfBusy]="downloadingReport() === row.order.id" pfBusyLabel="Preparing report…"
+                        (click)="downloadReport(row.order)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" />
+                        </svg>
+                        <span class="nd-rowact__t">@if (downloadingReport() === row.order.id) { Preparing… } @else { Download
+                          }</span>
+                      </button>
+                      }
+                      @if (row.statuses.includes('out')) {
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        (click)="openOutsourcedFor(row.order)" aria-label="Outsourced — manage partner report">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M12 16V4" />
+                          <path d="m7 9 5-5 5 5" />
+                          <path d="M4 20h16" />
+                        </svg>
+                        <span class="nd-rowact__t">Outsourced</span>
+                      </button>
+                      }
                     </div>
                   </div>
                 </li>

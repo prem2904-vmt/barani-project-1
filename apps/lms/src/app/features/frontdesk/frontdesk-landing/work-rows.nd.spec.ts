@@ -42,7 +42,7 @@ const row = (id: string, ...statuses: string[]): Row =>
 describe('Frontdesk work rows — anatomy', () => {
   it('has no department code chips (BIO / MIC / MOL) or their dots in any tab', () => {
     expect(work).not.toMatch(/pf-card__dept|pf-card__dot|deptPillLabel|department\?\.code/);
-    expect(rows().length).toBe(4); // draft, in progress, completed, payments due
+    expect(rows().length).toBe(5); // draft, in progress, completed, payments due, merged (no-chip)
   });
 
   it('uses no monospace (template or row styles)', () => {

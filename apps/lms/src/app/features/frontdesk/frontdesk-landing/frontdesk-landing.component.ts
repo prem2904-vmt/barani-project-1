@@ -24,6 +24,7 @@ import { BranchLabConfigService } from '../../../core/services/branch-lab-config
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { AnnotateBucket, MergedWorkRow, WORK_STATUS_LABEL, WorkBucket, buildMergedWork } from './work-merge';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -888,6 +889,52 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly shownInProgress = computed(() => filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()));
   readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
   readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+
+  // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
+  // With every status chip off, the four feeds used to render as four
+  // separate sections (an order could repeat across them). Now: ONE list,
+  // each order once, by the day's arrival order (#1, #2 … — work-merge.ts).
+  // A chip still filters to a single status exactly as before — this signal
+  // is only consulted when `rightTab()` is null.
+  readonly WORK_STATUS_LABEL = WORK_STATUS_LABEL;
+  readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
+    if (this._rightTab() !== null) return [];
+    // Outsourced is per-TUBE, not per-order (its upload / attach UI has ONE
+    // home, OutsourcedListComponent) — it only ANNOTATES a row that already
+    // exists from another feed; it never introduces one on its own.
+    const outIds = new Set(
+      this.outsourcing.visible().filter(t => t.status === 'outsourced').map(t => t.orderId)
+    );
+    const buckets: WorkBucket<Order>[] = [
+      { status: 'ip', orders: this.shownInProgress() },
+      { status: 'done', orders: this.shownCompleted() },
+      { status: 'billing', orders: this.shownPaymentsDueOnly() },
+    ];
+    const annotate: AnnotateBucket[] = [{ status: 'out', ids: outIds }];
+    return buildMergedWork(buckets, annotate);
+  });
+  /** The merged row's status text for everything but Payments due (the
+   *  template renders the balance itself via the `inr` pipe, as the
+   *  single-status Payments due rows already do) — the order's own
+   *  detailed status for In progress / Completed, and a fixed label for
+   *  Outsourced (a tube status, not an order one). */
+  mergedStatusText(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'out') return 'Outsourced';
+    return this.effectiveStatusLabel(row.order);
+  }
+  /** Dot colour for the merged row: Payments due / Outsourced read amber
+   *  (the same "needs the desk" amber Payments due already uses); In
+   *  progress / Completed reuse the order's own tone (rowTone). */
+  mergedTone(row: MergedWorkRow<Order>): string {
+    return row.primary === 'billing' || row.primary === 'out' ? 'amber' : this.rowTone(row.order);
+  }
+  /** Jump to the Outsourced chip, pre-filtered to this one order — the
+   *  upload / attach / view flow has ONE home (OutsourcedListComponent); a
+   *  merged row never duplicates it inline. */
+  openOutsourcedFor(o: Order) {
+    this.setWorkQuery(o.orderNumber ?? '');
+    this.applyRightTab('out');
+  }
 
   getBillBalance(orderId: string): number {
     return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;

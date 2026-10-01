@@ -122,6 +122,24 @@
   background: var(--pf-tone);
 }
 
+/* Merged "all statuses" list (owner, 2026-10-01): an order's SECOND status
+   (e.g. also has a balance due) gets a small neutral badge next to the
+   primary status — never a second row. The status line wraps to fit them. */
+.pf-wrow__status--merged { flex-wrap: wrap; justify-content: flex-end; }
+.pf-wrow__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--nd-line);
+  background: var(--nd-chip-bg);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* Row actions: the kit's .nd-rowact, right-aligned in a fixed-width slot so
    the action lines up in every row. */
 .pf-wrow__acts {
