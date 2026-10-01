@@ -13,8 +13,11 @@ import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { ApiService } from '../../../core/services/api.service';
+import { InlinePaymentPanelComponent, type InlinePaymentResult } from '../../frontdesk/order-create/inline-payment-panel.component';
+import { collectDiscountProblem, collectPreview, paymentParts } from './desk-rules';
 import { OpdDeskApi } from './desk-api.service';
-import type { DeskDoctor, OpdVisitDetail } from './desk.models';
+import type { DeskDoctor, OpdBillView, OpdVisitDetail } from './desk.models';
 import { printTokenSlip } from './token-slip';
 import { statusWord } from './visit-status';
 
@@ -36,7 +39,7 @@ export const REFUND_CHOICES: { value: RefundChoice; label: string; hint?: string
 @Component({
   selector: 'pf-opd-visit-detail',
   standalone: true,
-  imports: [RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonDetailComponent, CurrencyInrPipe, BusyDirective],
+  imports: [RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonDetailComponent, CurrencyInrPipe, BusyDirective, InlinePaymentPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './visit-detail.page.html',
   styleUrls: ['./opd-b.scss', './visit-detail.page.scss'],
@@ -50,9 +53,46 @@ export class OpdVisitDetailPage {
   private readonly toasts = inject(ToastService);
   private readonly work = inject(WorkEventsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly api = inject(ApiService);
   protected readonly theme = inject(ThemeService);
 
   readonly visit = signal<OpdVisitDetail | null>(null);
+  /** Every OPD bill of the visit (older servers: just the consult bill). */
+  readonly bills = computed<OpdBillView[]>(() => { const v = this.visit(); return v?.bills?.length ? v.bills : v?.bill ? [v.bill] : []; });
+  /** The first bill with something to collect (consult first). */
+  readonly dueBill = computed(() => this.bills().find(b => (b.status === 'pending' || b.status === 'partial') && b.balance > 0) ?? null);
+  readonly due = computed(() => this.visit()?.due ?? this.bills().filter(b => b.status === 'pending' || b.status === 'partial').reduce((a, b) => a + b.balance, 0));
+  /** Collecting: the desk's ₹ discount (blank = none / keep), reason, amount now. */
+  readonly collecting = signal(false);
+  readonly discountRaw = signal('');
+  readonly discountReason = signal('');
+  readonly amountRaw = signal('');
+  private readonly maxDiscountPct = signal(100);
+  private readonly overrideDiscountPct = signal(100);
+  /** The role's discount cap — same rule as the lab bill (override → Level 2, give → Level 1, else 0). */
+  readonly discountCapPct = computed(() => this.auth.hasPermission('override_discount') ? this.overrideDiscountPct()
+    : this.auth.hasPermission('give_discount') ? this.maxDiscountPct() : 0);
+  readonly discountNum = computed(() => { const t = this.discountRaw().trim(); if (!t) return null; const n = Number(t.replace(/[₹,\s]/g, '')); return Number.isFinite(n) ? n : NaN; });
+  readonly preview = computed(() => { const b = this.dueBill(); return b ? collectPreview(b, this.discountNum() == null || Number.isNaN(this.discountNum()!) ? null : this.discountNum()) : null; });
+  readonly discountErr = computed(() => {
+    const b = this.dueBill(); const d = this.discountNum();
+    if (!b || d == null) return null;
+    if (Number.isNaN(d)) return 'Type the discount in rupees.';
+    return d === (b.discount || 0) ? null : collectDiscountProblem(b, d, this.discountCapPct());
+  });
+  /** What is taken now (partial allowed): blank = the whole balance. */
+  readonly amountNow = computed(() => {
+    const bal = this.preview()?.balance ?? 0;
+    const t = this.amountRaw().trim();
+    if (!t) return bal;
+    const n = Math.round(Number(t.replace(/[₹,\s]/g, '')) * 100) / 100;
+    return Number.isFinite(n) ? n : NaN;
+  });
+  readonly amountErr = computed(() => {
+    const a = this.amountNow(), bal = this.preview()?.balance ?? 0;
+    if (Number.isNaN(a) || a <= 0) return 'Type the amount taken now.';
+    return a > bal + 0.005 ? `Only ₹${bal} is due on this bill.` : null;
+  });
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
   readonly printing = signal(false);
@@ -72,7 +112,38 @@ export class OpdVisitDetailPage {
       this.load();
     });
     this.work.on('consults').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing/visibility').subscribe({
+      next: c => {
+        if (typeof c?.maxDiscountPct === 'number') this.maxDiscountPct.set(c.maxDiscountPct);
+        if (typeof c?.overrideDiscountPct === 'number') this.overrideDiscountPct.set(c.overrideDiscountPct);
+      },
+      error: () => { /* caps stay at the role default */ },
+    });
   }
+
+  startCollect(): void { this.discountRaw.set(''); this.discountReason.set(''); this.amountRaw.set(''); this.collecting.set(true); }
+
+  /** The inline payment panel confirmed: post the tender (and any discount) against the due bill. */
+  async collect(r: InlinePaymentResult): Promise<void> {
+    const v = this.visit(), b = this.dueBill();
+    if (!v || !b || this.discountErr() || this.amountErr()) return;
+    const parts = paymentParts(r, this.amountNow());
+    if (parts === null) { this.toasts.error('Take cash, UPI or card at the OPD desk.'); return; }
+    const d = this.discountNum();
+    this.busy.set(true);
+    try {
+      const after = await firstValueFrom(this.desk.pay(v.id, b.id, {
+        discount: d == null || Number.isNaN(d) ? null : d, discountReason: this.discountReason().trim() || null, payments: parts,
+      }));
+      this.visit.set(after);
+      this.collecting.set(false);
+      const left = after.due ?? 0;
+      this.toasts.success(left > 0 ? `₹${parts.reduce((a, p) => a + p.amount, 0)} collected · ₹${left} still due` : 'Paid in full');
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
+    finally { this.busy.set(false); }
+  }
+
+  kindWord(k: string): string { return k === 'procedure' ? 'Procedures' : k === 'consult' ? 'Consultation' : k; }
 
   load(): void {
     if (!this.id) return;

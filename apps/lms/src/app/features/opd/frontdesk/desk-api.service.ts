@@ -3,7 +3,7 @@ import type { Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { OPD_API } from '../shared/opd-api';
 import type {
-  CheckoutRequest, DeskData, DeskQuote, DoctorUnavailableResult, OpdVisitDetail, OpdVisitRow, OpdVitalsRow, QueueDoctor, VitalsInput,
+  CheckoutRequest, CollectRequest, DeskData, DeskQuote, DoctorUnavailableResult, OpdVisitDetail, OpdVisitRow, OpdVitalsRow, PaymentDue, QueueDoctor, VitalsInput,
 } from './desk.models';
 
 /** The OPD desk / vitals / queue endpoints (Agent B), through the app's ONE
@@ -29,6 +29,12 @@ export class OpdDeskApi {
     return this.api.get(`${OPD_API.visits}${s ? `?${s}` : ''}`);
   }
   visit(id: string): Observable<OpdVisitDetail> { return this.api.get(`${OPD_API.visits}/${id}`); }
+  /** Open visit bills to collect (consult after the consult, procedures). */
+  paymentsDue(): Observable<PaymentDue[]> { return this.api.get(`${OPD_API.visits}/payments-due`); }
+  /** Collect (part of) one visit bill — discount within the role cap, partial allowed. */
+  pay(visitId: string, billId: string, body: CollectRequest): Observable<OpdVisitDetail> {
+    return this.api.post(`${OPD_API.visits}/${visitId}/bills/${billId}/pay`, body);
+  }
   move(id: string, to: string, reason?: string | null, refund?: { refund: boolean; refundMode: string; refundReference?: string | null }): Observable<OpdVisitDetail> {
     return this.api.post(`${OPD_API.visits}/${id}/status`, { to, reason: reason ?? null, ...(refund ?? {}) });
   }

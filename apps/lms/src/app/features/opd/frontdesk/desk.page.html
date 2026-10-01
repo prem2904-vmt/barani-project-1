@@ -67,6 +67,29 @@
         <div class="nd-card__body">
           @if (error(); as err) {
             <div class="nd-empty"><p class="nd-empty__title">Today's visits could not load</p><p class="nd-empty__body">{{ err }}</p></div>
+          } @else if (filter() === 'due') {
+            <!-- Payments due: pay-after-consult fees and procedures from the consult (any day). -->
+            <ul class="pf-ob-list" aria-label="Payments due">
+              @for (r of shownDues(); track r.billId) {
+                <li>
+                  <button type="button" class="pf-ob-row" (click)="openDue(r)" [attr.data-due]="r.billId">
+                    <span class="pf-ob-token">{{ r.tokenLabel }}</span>
+                    <span class="pf-ob-row__txt">
+                      <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                      <span class="pf-ob-row__meta nd-num">{{ r.patientMeta }} · {{ r.doctorName }} · {{ dueWhat(r) }} · {{ day(r.visitDate) }}</span>
+                    </span>
+                    <span class="pf-ob-row__side">
+                      <span class="pf-ob-status pf-ob-status--due">{{ r.status === 'partial' ? 'Part paid' : 'To collect' }}</span>
+                      <span class="nd-num"><b>{{ r.balance | inr }}</b>@if (r.totalPaid > 0) { of {{ r.totalPayable | inr }} }</span>
+                    </span>
+                  </button>
+                </li>
+              } @empty {
+                <li><div class="nd-empty nd-empty--compact"><p class="nd-empty__title">Nothing to collect</p>
+                  <p class="nd-empty__body">Pay-after-consult fees and procedures appear here when the doctor completes the consult.</p></div></li>
+              }
+            </ul>
+            @if (shownDues().length) { <p class="pf-dk-duesum nd-num">{{ shownDues().length }} bill{{ shownDues().length === 1 ? '' : 's' }} · {{ dueTotal() | inr }} to collect</p> }
           } @else if (rows() === null) {
             <pf-skeleton-rows [rows]="6" label="Loading today's visits…"></pf-skeleton-rows>
           } @else {

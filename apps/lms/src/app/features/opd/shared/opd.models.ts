@@ -4,8 +4,13 @@
  * import from here; a change here is a CONTRACT change — coordinate through the
  * integrator (and change the C# side in the same PR).
  */
-import type { RxSchedule } from './rx-schedule';
+import type { RxSchedule, DrugForm } from './rx-schedule';
 import type { OpdFormDoc } from '../admin/forms/form-schema';
+
+// DrugForm is a SHARED wire vocabulary — the ONE definition is rx-schedule.ts
+// FORMS (mirrored server-side by RxScheduleMath.AllForms); re-exported here
+// so every OPD/pharmacy contract importing from opd.models.ts stays in sync.
+export type { DrugForm };
 
 // Form schema v2 (Agent A) is THE consult-form contract — it superseded the
 // foundation's v1 OpdFormSchema / OpdFormField (integrator). Types + pure
@@ -35,7 +40,6 @@ export type OpdBillKind = 'consult' | 'pharmacy';
 export type OpdBillStatus = 'draft' | 'pending' | 'partial' | 'paid' | 'cancelled';
 export type PharmacyDispenseKind = 'rx' | 'walk_in';
 export type DrugSchedule = 'none' | 'G' | 'H' | 'H1' | 'X';
-export type DrugForm = 'tab' | 'sachet' | 'syrup' | 'drops' | 'spray' | 'inhaler' | 'cream';
 
 // ── Admin masters (Agent A) ──────────────────────────────────────────────
 export interface OpdDepartment { id: string; name: string; code: string; defaultFormId?: string | null; sortOrder: number; isActive: boolean; }
@@ -141,9 +145,16 @@ export interface OpdRxLineDto {
   schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
   quantity?: number; allergyAck?: boolean; allergyAckNote?: string | null; notes?: string | null;
   dispenseStatus?: 'pending' | 'partial' | 'dispensed' | 'not_dispensed';
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — mirrors allergyAck/allergyAckNote. */
+  pregnancyAck?: boolean; pregnancyAckNote?: string | null;
 }
 export interface OpdInvestigation { id?: string; items: { testId: string; name: string }[]; labOrderId?: string | null; status: 'draft' | 'ordered' | 'cancelled'; }
 export interface OpdPatientAllergy { id?: string; patientId: string; allergen: string; drugId?: string | null; generic?: string | null; reaction?: string | null; severity?: 'mild' | 'moderate' | 'severe' | null; status: 'active' | 'inactive'; }
+
+/** Pregnancy-safety guard (night/safety, critic P0 #1b) — the resolved status
+ *  the server computes (Services/Opd/Consult/PregnancyStatus.cs). `source` is
+ *  a short human label ("form answer", "diagnosis O80", "today's consult"…). */
+export interface OpdPregnancy { status: 'pregnant' | 'lactating'; source?: string | null; since?: string | null; }
 
 // ── Pharmacy (Agent D) ───────────────────────────────────────────────────
 export interface PharmacyDrug {
@@ -154,5 +165,7 @@ export interface PharmacyDrug {
   siteKind?: string | null;
   /** The usual prescription (doctor favourites): { dose, schedule, durationDays, food } — integrator. */
   usual?: Record<string, unknown> | null;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1a). */
+  pregnancyRisk?: 'safe' | 'caution' | 'avoid' | 'contraindicated' | null; pregnancyNote?: string | null;
 }
 export interface PharmacyBatch { id: string; drugId: string; batchNo: string; expiryDate: string; mrp: number; purchasePrice: number; qtyOnHand: number; }

@@ -32,7 +32,8 @@ import {
 } from "../../core/services/draft-shelf.service";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { ZoomSourceDirective } from "../../core/navigation/zoom.directive";
-import { Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { filter } from "rxjs/operators";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../core/auth/auth.service";
 import { OpdGateService } from "../../features/opd/shared/opd-gate.service";
@@ -59,19 +60,23 @@ import {
 import { SessionService } from "../../core/auth/session.service";
 import {
   DOCTOR_NAV,
+  OPD_NAV,
+  opdNavActive,
   ADMIN_NAV,
   MORE_NAV,
   NavItem,
   PRIMARY_NAV,
   WorkflowNavCtx,
   menusFromWorkflow,
+  withExpenses,
   NavVisibilityCtx,
   navItemVisible,
   withCollectionFallback,
 } from "../nav-items";
+import { opdAreasFor } from "../../features/opd/shared/opd-nav";
 import { RouteAccessCtx } from "../../core/auth/route-access";
 import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
-import { pickLanding } from "../../core/auth/landing.guard";
+import { isOpdOnly, pickLanding } from "../../core/auth/landing.guard";
 import { DesktopWindowService } from "../../core/services/desktop-window.service";
 import { DesktopClockComponent } from "./desktop-clock.component";
 
@@ -348,9 +353,14 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.gateModules(
       this.withCollection(
         this.withInventory(
-          this.visible(
-            menusFromWorkflow(this.process.active(), this.navCtx()) ??
-              PRIMARY_NAV,
+          // Expenses: a primary screen for anyone holding expense_* (same rule
+          // as its route guard), placed after the lab work items.
+          withExpenses(
+            this.visible(
+              menusFromWorkflow(this.process.active(), this.navCtx()) ??
+                PRIMARY_NAV,
+            ),
+            (i) => this.visible([i]).length > 0,
           ),
         ),
       ),
@@ -363,12 +373,27 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // windows), never a page — drop its work area from the nav.
     if (this.themeService.isNewDesign())
       items = items.filter((i) => !TopStripComponent.isMessagesItem(i));
-    // OPD: doctors get "Consults" — only when the OPD gate is open (tenant
-    // explicitly entitled, or the owner's pf.opd() preview). OPD dark build.
-    return this.auth.isDoctor() && this.opdGate.visible()
-      ? [...items, DOCTOR_NAV]
-      : items;
+    // OPD: doctors get "Consults"; anyone who can open at least one OPD area
+    // gets the general "OPD" tab — both only while the OPD gate is open
+    // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
+    // build. "Can open an OPD area" reuses the hub's own rule (opdAreasFor).
+    if (!this.opdGate.visible()) return items;
+    const out = this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    return opdAreasFor((p) => this.auth.hasAnyPermission(p)).length
+      ? [...out, OPD_NAV]
+      : out;
   });
+
+  /** Router-driven URL signal — the Angular `routerLinkActive` directive
+   *  can't cross from '/opd' into '/admin/opd', and can't EXCLUDE the
+   *  '/opd/consult' subtree from the general OPD tab, so the two OPD tabs'
+   *  active state is computed manually (opdNavActive) from this instead. */
+  private readonly currentUrl = signal("");
+  private routerSub?: { unsubscribe(): void };
+  /** Is `n` (OPD or Consults) the active tab for the current URL? */
+  opdActive(n: NavItem): boolean {
+    return opdNavActive(n, this.currentUrl());
+  }
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
    *  can draw samples when the tenant has no process workflow (PRIMARY_NAV).
@@ -525,9 +550,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.labCfg.ensureLoaded();
     this.entitlements.ensureLoaded();
     this.process.loadActive();
+    this.currentUrl.set(this.router.url);
+    this.routerSub = this.router.events
+      .pipe(filter((e) => e instanceof NavigationEnd))
+      .subscribe(() => this.currentUrl.set(this.router.url));
   }
   ngOnDestroy() {
-    /* no-op */
+    this.routerSub?.unsubscribe();
   }
 
   toggleBranch() {
@@ -704,6 +733,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return pickLanding({
       ...this.routeCtx(),
       moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+      opdDoctor: this.auth.isDoctor() && this.opdGate.visible(),
+      opdOnlyDoctor: isOpdOnly(this.auth.user()?.modules),
     });
   }
 

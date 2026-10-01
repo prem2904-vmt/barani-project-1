@@ -40,6 +40,7 @@ import { Order, OrderSample } from '../../../shared/models/order.model';
 import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printTubeLabels } from '../../../shared/utils/print-label';
@@ -124,6 +125,7 @@ import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../..
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -162,7 +164,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -176,6 +178,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly labelPrint = inject(LabelPrintService);
   private readonly dialog = inject(DialogService);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
@@ -1751,12 +1754,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/patients', o.patientId]);
   }
   newOrderFor(p: Patient) {
-    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
     void this.orderEntry.startNewOrder(p.id);
   }
-  /** The "Create order" (+) button — no patient preselected. */
+  /** The "Create order" (+) button — no patient preselected. Always LAB. */
   newOrder() {
     void this.orderEntry.startNewOrder();
+  }
+  /** OPD dark build: the stethoscope icon next to the cart — only rendered
+   *  when {@link OpdGateService.visible} is true. */
+  newConsultFor(p: Patient) {
+    void this.orderEntry.startConsult(p.id);
+  }
+  newConsult() {
+    void this.orderEntry.startConsult();
   }
   bookAppointmentFor(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });

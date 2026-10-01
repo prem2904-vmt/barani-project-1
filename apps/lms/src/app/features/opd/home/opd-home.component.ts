@@ -5,7 +5,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ThemeService } from '../../../core/services/theme.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { bandFilter } from '../../../shared/utils/band-search';
-import { OPD_AREAS } from '../shared/opd-nav';
+import { opdAreasFor, orderOpdAreas } from '../shared/opd-nav';
 
 /**
  * OPD home (/opd) — the OPD section's hub, owned by the FOUNDATION (OPD dark
@@ -79,7 +79,9 @@ export class OpdHomeComponent {
   readonly q = signal('');
   private readonly allowed = computed(() => {
     this.auth.user(); // re-evaluate when the profile loads
-    return OPD_AREAS.filter(a => !a.permissions?.length || this.auth.hasAnyPermission(a.permissions));
+    return opdAreasFor(p => this.auth.hasAnyPermission(p));
   });
-  readonly tiles = computed(() => bandFilter(this.allowed(), this.q(), a => [a.title, a.subtitle]));
+  /** Doctors see Consults first — their main reason to be in OPD. */
+  private readonly ordered = computed(() => orderOpdAreas(this.allowed(), this.auth.isDoctor()));
+  readonly tiles = computed(() => bandFilter(this.ordered(), this.q(), a => [a.title, a.subtitle]));
 }

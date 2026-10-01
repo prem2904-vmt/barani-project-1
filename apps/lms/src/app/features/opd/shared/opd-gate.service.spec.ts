@@ -116,12 +116,18 @@ describe('New order with OPD hidden = today\'s lab flow', () => {
     expect(navigate).toHaveBeenCalledWith(['/frontdesk/order'], {});
   });
 
-  it('console preview: lab user gets the lab / consult choice (OPD → /opd/visit/new)', async () => {
+  it('console preview: the cart is still lab, always — no dialog, even with OPD visible', async () => {
     const { navigate, confirm } = setup({ flag: true });
-    confirm.mockResolvedValueOnce(true);
-    expect(TestBed.inject(ModuleScopeService).mode()).toBe('choose');
+    expect(TestBed.inject(ModuleScopeService).mode()).toBe('choose'); // cartMode is unused by the service now
     await TestBed.inject(OrderEntryService).startNewOrder('p9');
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { patientId: 'p9' } });
+  });
+
+  it('OPD dark build (2026-09-30): startConsult is the SEPARATE consult entry point, never a fork off the cart', async () => {
+    const { navigate, confirm } = setup({ flag: true });
+    await TestBed.inject(OrderEntryService).startConsult('p9');
+    expect(confirm).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(['/opd/visit/new'], { queryParams: { patientId: 'p9' } });
   });
 });

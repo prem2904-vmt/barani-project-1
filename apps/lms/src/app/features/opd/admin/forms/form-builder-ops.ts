@@ -5,9 +5,14 @@ import { AUDIOMETRY, ParsedQuestion } from './sentence-parser';
 
 /**
  * Form builder operations — PURE and immutable (every op returns a new list),
- * so the page keeps one signal and undo is a value. The builder edits the
- * first section's questions (the mockup's single "Findings" list); other
- * sections, when a stored form has them, are kept as they are.
+ * so the page keeps one signal and undo is a value. The builder now edits
+ * EVERY section: structural ops (add / move / duplicate / delete / insert)
+ * take a single section's `fields` and return a new one for that section;
+ * `withQuestions` takes the FLAT, form-wide list (as fed to / returned by the
+ * inspector, always the same length and order as `allQuestions(doc)`) and
+ * redistributes it back across sections by each section's original question
+ * count — safe because the inspector only ever patches attributes on
+ * existing questions, never reorders / adds / removes across that flat list.
  */
 
 export type BuilderAction = 'up' | 'down' | 'dup' | 'req' | 'del';
@@ -26,6 +31,9 @@ const TYPE_DEFAULTS: Record<OpdQType | 'lr', Partial<OpdQuestion> & { label: str
   media: { label: 'Nasal endoscopy' },
   diagram: { label: 'Ear drum', shape: 'ear' },
   table: { label: 'Audiometry by frequency', unit: 'dB', cols: AUDIOMETRY.cols, rows: AUDIOMETRY.rows },
+  // critic §1 #6 — read-only, computed from another question (edd/pog/pta); the
+  // admin picks the source question in the inspector after adding it.
+  calc: { label: 'Estimated date of delivery (EDD)', formula: 'edd' },
 };
 
 /** A new question from a gallery type (keyed uniquely against `taken`). */
@@ -51,6 +59,47 @@ export function fromParsed(p: ParsedQuestion, taken: string[]): OpdQuestion {
 }
 
 export function keysOf(list: OpdQuestion[]): string[] { return list.map((q) => q.key); }
+
+// ── Sections ─────────────────────────────────────────────────────────────
+/** Which section a question key lives in (null if not found). */
+export function sectionIndexOfKey(doc: OpdFormDoc, key: string | null): number | null {
+  if (!key) return null;
+  const i = doc.sections.findIndex((s) => s.fields.some((q) => q.key === key));
+  return i < 0 ? null : i;
+}
+
+/** Replace one section's `fields`, leaving the rest untouched. */
+export function replaceSectionFields(doc: OpdFormDoc, si: number, fields: OpdQuestion[]): OpdFormDoc {
+  if (!doc.sections[si]) return doc;
+  return { ...doc, schemaVersion: 2, sections: doc.sections.map((s, i) => (i === si ? { ...s, fields } : s)) };
+}
+
+export function renameSection(doc: OpdFormDoc, si: number, title: string): OpdFormDoc {
+  const t = String(title ?? '').trim();
+  if (!t || !doc.sections[si]) return doc;
+  return { ...doc, schemaVersion: 2, sections: doc.sections.map((s, i) => (i === si ? { ...s, title: t } : s)) };
+}
+
+/** Reorder section `si` by `dir` (-1 up, +1 down); a no-op at either end. */
+export function moveSection(doc: OpdFormDoc, si: number, dir: -1 | 1): OpdFormDoc {
+  const j = si + dir;
+  if (si < 0 || si >= doc.sections.length || j < 0 || j >= doc.sections.length) return doc;
+  const sections = doc.sections.slice();
+  [sections[si], sections[j]] = [sections[j], sections[si]];
+  return { ...doc, schemaVersion: 2, sections };
+}
+
+export function addSection(doc: OpdFormDoc, title: string): OpdFormDoc {
+  const t = String(title ?? '').trim() || 'Section';
+  const key = slugKey(t, doc.sections.map((s) => s.key));
+  return { ...doc, schemaVersion: 2, sections: [...doc.sections, { key, title: t, fields: [] }] };
+}
+
+/** Drop section `si`. Never drops the form's last section. */
+export function removeSection(doc: OpdFormDoc, si: number): OpdFormDoc {
+  if (doc.sections.length <= 1 || !doc.sections[si]) return doc;
+  return { ...doc, schemaVersion: 2, sections: doc.sections.filter((_, i) => i !== si) };
+}
 
 export function insertAt(list: OpdQuestion[], q: OpdQuestion, at?: number | null): OpdQuestion[] {
   const i = at == null || at < 0 || at > list.length ? list.length : at;
@@ -143,10 +192,24 @@ export function patchQuestion(list: OpdQuestion[], key: string, patch: Partial<O
   return 'choices' in patch || 'type' in patch ? fixConditions(out) : out;
 }
 
-/** The builder edits the first section; the doc is rebuilt around it. */
-export function withQuestions(doc: OpdFormDoc, list: OpdQuestion[]): OpdFormDoc {
-  const [first, ...rest] = doc.sections.length ? doc.sections : [{ key: 'findings', title: 'Findings', fields: [] }];
-  return { ...doc, schemaVersion: 2, sections: [{ ...first, fields: list }, ...rest] };
+/** Redistribute a FLAT, form-wide list (same length + order as
+ *  `allQuestions(doc)`) back into each section, by that section's ORIGINAL
+ *  question count. Any leftover (a caller passed more items than the doc
+ *  had) lands in the last section rather than being dropped. */
+export function withQuestions(doc: OpdFormDoc, flatList: OpdQuestion[]): OpdFormDoc {
+  const base = doc.sections.length ? doc.sections : [{ key: 'findings', title: 'Findings', fields: [] }];
+  let i = 0;
+  const sections = base.map((s) => {
+    const n = s.fields.length;
+    const fields = flatList.slice(i, i + n);
+    i += n;
+    return { ...s, fields };
+  });
+  if (i < flatList.length) {
+    const extra = flatList.slice(i);
+    sections[sections.length - 1] = { ...sections[sections.length - 1], fields: [...sections[sections.length - 1].fields, ...extra] };
+  }
+  return { ...doc, schemaVersion: 2, sections };
 }
 
 // ── Versioning (the band's chip + Publish label) ─────────────────────────

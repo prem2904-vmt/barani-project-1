@@ -61,6 +61,8 @@ import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from
 import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import { formatAge } from "../../../shared/utils/patient-age";
 import { BusyDirective } from "../../../shared/directives/busy.directive";
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -68,6 +70,7 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
   selector: "pf-report-queue",
   standalone: true,
   imports: [
+    DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
     DatePipe,
@@ -537,6 +540,7 @@ export class ReportQueueComponent implements OnInit {
         // short report id — covers every reasonable lookup reception
         // runs from a paper slip.
         return (
+          matchesDailyNo(q, r.order) ||
           name.includes(q) ||
           phone.includes(q) ||
           mrn.includes(q) ||
@@ -674,7 +678,7 @@ export class ReportQueueComponent implements OnInit {
   readonly visiblePartials = computed<PrelimOrder[]>(() => {
     const q = this._query().trim().toLowerCase();
     const l = this.partialOrders();
-    return q ? l.filter((po) => po.searchText.includes(q)) : l;
+    return q ? l.filter((po) => matchesDailyNo(q, po) || po.searchText.includes(q)) : l;
   });
 
   /** Preliminary values with the flag + range mw SAVED with the result

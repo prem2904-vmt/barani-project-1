@@ -6,7 +6,7 @@
  * (timing presets in doctor words, "then…" presets) and the inline allergy
  * check (a tested TS mirror of the server's AllergyCheck).
  */
-import type { DrugForm, OpdPatientAllergy, OpdRxLineDto } from '../../shared/opd.models';
+import type { DrugForm, OpdPatientAllergy, OpdPregnancy, OpdRxLineDto } from '../../shared/opd.models';
 import {
   FORMS, RxDrugRef, RxLine, RxSchedule, SCHED_DEFAULTS, SiteKind, SITES, formOf, rxQty, timesSched, totalDays,
 } from '../../shared/rx-schedule';
@@ -18,6 +18,9 @@ export interface ConsultDrugRef extends RxDrugRef {
   schedule?: string | null;
   /** Free-text drug typed by the doctor (no master row). */
   free?: boolean;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1a). */
+  pregnancyRisk?: 'safe' | 'caution' | 'avoid' | 'contraindicated' | null;
+  pregnancyNote?: string | null;
 }
 
 const DRUG_FORMS = Object.keys(FORMS) as DrugForm[];
@@ -39,6 +42,7 @@ export function drugRefOf(d: ConsultDrug): ConsultDrugRef {
     id: d.id, name: d.name, form, unit: d.unit ?? undefined, generic: d.generic ?? undefined,
     aliases: d.aliases ?? undefined, strength: d.strength, schedule: d.schedule,
     siteKind: siteKindOf(form, `${d.name} ${d.generic ?? ''}`),
+    pregnancyRisk: d.pregnancyRisk, pregnancyNote: d.pregnancyNote,
   };
 }
 
@@ -54,6 +58,9 @@ export interface ConsultRxLine {
   line: RxLine;
   allergyAck?: boolean;
   allergyAckNote?: string | null;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — mirrors allergyAck/allergyAckNote. */
+  pregnancyAck?: boolean;
+  pregnancyAckNote?: string | null;
   notes?: string | null;
   id?: string;
   dispenseStatus?: OpdRxLineDto['dispenseStatus'];
@@ -70,6 +77,7 @@ export function toDto(l: ConsultRxLine, start?: Date): OpdRxLineDto {
     // Display only — the SERVER computes the stored quantity (RxScheduleMath).
     quantity: rxQty(l.line, l.drug, start),
     allergyAck: !!l.allergyAck, allergyAckNote: l.allergyAckNote ?? null, notes: l.notes ?? null,
+    pregnancyAck: !!l.pregnancyAck, pregnancyAckNote: l.pregnancyAckNote ?? null,
   };
 }
 
@@ -84,6 +92,7 @@ export function fromDto(d: OpdRxLineDto, drugs: readonly ConsultDrugRef[] = []):
     key: lineKey(), id: d.id, drug,
     line: { drugId: drug.id, dose: Number(d.dose) || 1, site: d.site ?? undefined, sched, dur: sched.type === 'steps' || sched.type === 'cycle' ? 0 : d.durationDays, food: d.food ?? undefined },
     allergyAck: !!d.allergyAck, allergyAckNote: d.allergyAckNote, notes: d.notes, dispenseStatus: d.dispenseStatus,
+    pregnancyAck: !!d.pregnancyAck, pregnancyAckNote: d.pregnancyAckNote,
   };
 }
 
@@ -227,4 +236,25 @@ export function swapCandidate(line: ConsultRxLine, drugs: readonly ConsultDrugRe
     return { d, score };
   }).sort((a, b) => a.score - b.score);
   return antibiotic ? (ranked.find(r => r.score <= 2)?.d ?? null) : (ranked[0]?.d ?? null);
+}
+
+// ── Pregnancy-safety guard (night/safety, critic P0 #1c) ───────────────────
+// Server mirror: Services/Opd/Consult/PregnancyStatus.cs + the pregnancy gate
+// in ConsultService.CompleteAsync — keep in sync.
+
+export interface PregnancyHit { risk: 'avoid' | 'contraindicated'; reason: string; }
+
+/** Does prescribing `drug` to this patient's CURRENT pregnancy status need a
+ *  warning? Only "avoid" / "contraindicated" hit, and only when pregnant
+ *  (never lactating — the drug master doesn't distinguish the two yet). */
+export function pregnancyHit(drug: Pick<ConsultDrugRef, 'name' | 'pregnancyRisk' | 'pregnancyNote'>, pregnancy: OpdPregnancy | null | undefined): PregnancyHit | null {
+  if (pregnancy?.status !== 'pregnant') return null;
+  if (drug.pregnancyRisk !== 'avoid' && drug.pregnancyRisk !== 'contraindicated') return null;
+  const word = drug.pregnancyRisk === 'contraindicated' ? 'contraindicated' : 'best avoided';
+  return { risk: drug.pregnancyRisk, reason: drug.pregnancyNote || `${drug.name} is ${word} in pregnancy.` };
+}
+
+/** Lines whose pregnancy-safety warning has not been reviewed (blocks Complete). */
+export function unresolvedPregnancyRisks(lines: readonly ConsultRxLine[], pregnancy: OpdPregnancy | null | undefined): ConsultRxLine[] {
+  return lines.filter(l => !l.pregnancyAck && !!pregnancyHit(l.drug, pregnancy));
 }

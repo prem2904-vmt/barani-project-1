@@ -126,6 +126,64 @@ describe('OpdFormRendererComponent', () => {
     expect(q('smell')!.textContent).toContain("Doctor's own");
   });
 
+  it('calc: read-only, live-updating, and persisted alongside its source (critic §1 #6)', () => {
+    const CALC_DOC: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [{ key: 'findings', title: 'Findings', fields: [
+        { key: 'lmp', label: 'LMP', type: 'date' },
+        { key: 'edd', label: 'EDD', type: 'calc', formula: 'edd', from: 'lmp' },
+      ] }],
+    };
+    const { f, q, emitted } = render('edit', {}, { schema: CALC_DOC, visitDate: '2026-09-30' });
+    expect(q('edd')!.textContent).toContain('—');             // no LMP yet ⇒ blank
+    expect(q('edd')!.querySelector('input')).toBeNull();       // never an editable control
+
+    // Answering the source (as the pf-nd-date picker's (valueChange) would) recomputes
+    // AND persists the calc value in the SAME emitted answers object.
+    const lmp = f.componentInstance.list()[0];
+    f.componentInstance.set(lmp, null, '2026-01-01');
+    expect(emitted.at(-1)).toEqual({ lmp: '2026-01-01', edd: '2026-10-08' });
+    f.detectChanges();
+    expect(q('edd')!.textContent).toContain('2026-10-08');
+  });
+
+  it('groups a multi-section doc under a heading per section; a single-section doc (the builder) shows none', () => {
+    const MULTI: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [
+        { key: 'hist', title: 'History', fields: [{ key: 'chief', label: 'Chief complaint', type: 'short', print: true }] },
+        { key: 'exam', title: 'Examination', fields: [{ key: 'bp', label: 'BP', type: 'short', print: true }] },
+      ],
+    };
+    const { el } = render('edit', {}, { schema: MULTI });
+    const heads = Array.from(el.querySelectorAll('.ofr-sec-head')).map((h) => h.textContent?.trim());
+    expect(heads).toEqual(['History', 'Examination']);
+    expect(el.querySelector('[data-q="chief"]')).toBeTruthy();
+    expect(el.querySelector('[data-q="bp"]')).toBeTruthy();
+
+    // Single section (the builder passes one section per renderer instance) — no headers.
+    TestBed.resetTestingModule();
+    expect(render('design', {}, { schema: DOC }).el.querySelectorAll('.ofr-sec-head').length).toBe(0);
+  });
+
+  it('a section heading collapses its own questions, not the others', () => {
+    const MULTI: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [
+        { key: 'hist', title: 'History', fields: [{ key: 'chief', label: 'Chief complaint', type: 'short', print: true }] },
+        { key: 'exam', title: 'Examination', fields: [{ key: 'bp', label: 'BP', type: 'short', print: true }] },
+      ],
+    };
+    const { el, f } = render('edit', {}, { schema: MULTI });
+    const head = Array.from(el.querySelectorAll<HTMLButtonElement>('.ofr-sec-head')).find((h) => h.textContent?.includes('History'))!;
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+    head.click();
+    f.detectChanges();
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('[data-q="chief"]')).toBeNull();
+    expect(el.querySelector('[data-q="bp"]')).toBeTruthy();   // the OTHER section stays open
+  });
+
   it('reads a foundation v1 schema', () => {
     TestBed.configureTestingModule({ imports: [OpdFormRendererComponent] });
     const f = TestBed.createComponent(OpdFormRendererComponent);

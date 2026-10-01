@@ -50,6 +50,7 @@ import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab
 import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -87,7 +88,7 @@ const COUNTERS: CounterSpec[] = [
 @Component({
   selector: 'pf-my-work',
   standalone: true,
-  imports: [BusyDirective, 
+  imports: [DailyNoComponent, BusyDirective, 
     PfKeysDirective,
     SamplePresetDirective,
     TileGridDirective, ZoomSourceDirective,
@@ -668,7 +669,7 @@ const COUNTERS: CounterSpec[] = [
                     </span>
                   </div>
                   <p class="pf-tq__sub">
-                    <span class="pf-tq__who">{{ tube.patientName }}</span>
+                    <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
                     <span class="pf-tq__extra">
                       @if (tube.patientMeta) {
                         <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
@@ -769,7 +770,7 @@ const COUNTERS: CounterSpec[] = [
                       <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <!-- Line 1: standard patient format — Name(≤15 chars)+.. | age/sex | P-ID -->
-                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientInfo }}</p>
+                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientInfo }}</p>
                         <!-- Line 2: TAT urgency + how many tests ride on this card.
                              Expand the card (or open the tube) for test names + barcodes. -->
                         <div class="flex items-center gap-2 flex-wrap mt-1">
@@ -947,7 +948,7 @@ const COUNTERS: CounterSpec[] = [
                         }
                       </div>
                       <p class="pf-tq__sub">
-                        <span class="pf-tq__who">{{ tube.patientName }}</span>
+                        <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
                         @if (tube.patientMeta) {
                           <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
                         }
@@ -1022,7 +1023,7 @@ const COUNTERS: CounterSpec[] = [
                         </div>
                         <p class="text-[12px] font-mono mt-0.5"
                            style="color: var(--text-tertiary);">
-                          {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
+                          <pf-daily-no [of]="t.subOrder" />{{ t.subOrder?.order?.patient?.displayName ?? '—' }}
                           · {{ t.test?.department?.name ?? '—' }}
                           · rec'd {{ t.subOrder?.receivedAtLab ? (t.subOrder?.receivedAtLab | date:'shortTime') : '—' }}
                         </p>

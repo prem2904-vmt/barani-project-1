@@ -2,7 +2,7 @@ import { Route } from '@angular/router';
 import { appRoutes } from '../../app.routes';
 import { ADMIN_NAV, MORE_NAV, NavItem, NavVisibilityCtx, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, navItemVisible } from '../../layout/nav-items';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
-import { pickLanding } from './landing.guard';
+import { isOpdOnly, pickLanding } from './landing.guard';
 import { ROUTE_ACCESS, RouteAccessCtx, canOpenRoute } from './route-access';
 
 /**
@@ -271,6 +271,49 @@ describe('RBAC matrix — landing after login', () => {
     const w = who('Billing Counter');
     expect(pickLanding({ hasAny: p => has(w)(p), isEnabled: () => true })).toBe('/frontdesk');
   });
+});
+
+describe('RBAC matrix — OPD-only doctor lands on the queue first', () => {
+  const ctxFor = (perms: string[]): RouteAccessCtx => ({ hasAny: p => p.some(c => perms.includes(c)), isEnabled: () => true });
+  it('an OPD-only doctor lands on /opd/consult even with a lab read permission', () => {
+    const ctx = ctxFor(['view_report', 'view_order', 'view_test']);
+    expect(pickLanding(ctx)).not.toBe('/opd/consult');
+    expect(pickLanding({ ...ctx, opdDoctor: true, opdOnlyDoctor: true })).toBe('/opd/consult');
+  });
+  it('opdOnlyDoctor alone (OPD hidden / not a doctor) changes nothing', () => {
+    const ctx = ctxFor(['view_report']);
+    expect(pickLanding({ ...ctx, opdOnlyDoctor: true })).toBe(pickLanding(ctx));
+  });
+  it('isOpdOnly: only when every role is OPD-scoped', () => {
+    expect(isOpdOnly(['opd'])).toBe(true);
+    expect(isOpdOnly(['lab', 'opd'])).toBe(false);
+    expect(isOpdOnly(['lab'])).toBe(false);
+    expect(isOpdOnly([])).toBe(false);
+    expect(isOpdOnly(undefined)).toBe(false);
+  });
+});
+
+describe('RBAC matrix — OPD doctor landing (opdDoctor)', () => {
+  // A user with NO permission that matches any LANDINGS row — the exact case
+  // that used to fall through to '/403'.
+  const NO_LANDING: RouteAccessCtx = { hasAny: () => false, isEnabled: () => true };
+
+  it('a doctor with no other landing lands on /opd/consult when opdDoctor is set', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: true })).toBe('/opd/consult');
+  });
+
+  it('lab behaviour is IDENTICAL when opdDoctor is false or omitted (still /403)', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: false })).toBe('/403');
+    expect(pickLanding(NO_LANDING)).toBe('/403');
+  });
+
+  for (const role of Object.keys(ROLES)) {
+    it(`${role}: opdDoctor never changes an already-admitted landing (an admin who is also a doctor keeps /admin)`, () => {
+      const w = who(role);
+      const ctx: RouteAccessCtx = { hasAny: p => has(w)(p), hasAnyEffective: p => hasEffective(w)(p), isEnabled: () => true, isSuper: w.perms.includes('*') };
+      expect(pickLanding({ ...ctx, opdDoctor: true })).toBe(pickLanding(ctx));
+    });
+  }
 });
 
 describe('canOpenRoute', () => {

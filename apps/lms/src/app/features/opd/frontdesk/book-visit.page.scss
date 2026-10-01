@@ -1,10 +1,55 @@
-// New visit (Agent B) — only what the shared opd-b.scss doesn't lay out.
+// New visit — only what the shared opd-b.scss doesn't lay out.
+//
+// Band (order-create shell parity): chips (Consultation / patient) + a
+// search field, same structural idea as order-create's unified-search pill
+// (scope tiles + field) without duplicating its dropdown engine — book-visit
+// only ever searches ONE thing at a time (patient, then the catalogue), so a
+// plain field does the job. `.pf-ov-labsearch` (icon + `.nd-input`) is
+// reused verbatim for the catalogue field: same look as the Lab tests tab's
+// own search, just re-targeted.
+.pf-bv-pill { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-bv-chips { display: flex; align-items: center; gap: 6px; flex: none; }
+.pf-bv-chip--type { color: var(--text-tertiary); }
+.pf-bv-chip--patient { gap: 6px; color: var(--text-primary); font-weight: 600; }
+.pf-bv-chip__t { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.pf-bv-chip__x {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none;
+  border: 0; border-radius: 50%; background: transparent; color: var(--text-tertiary); cursor: pointer; padding: 0;
+}
+.pf-bv-chip__x:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+.pf-bv-patientsearch { flex: 1 1 240px; min-width: 0; }
+.pf-bv-catsearch { flex: 1 1 240px; min-width: 0; margin: 0; }
+@media (max-width: 640px) {
+  .pf-bv-pill { flex-direction: column; align-items: stretch; }
+  .pf-bv-patientsearch, .pf-bv-catsearch { flex-basis: auto; }
+  .pf-bv-catsearch .pf-ov-labsearch__in { height: 44px; font-size: 16px; }
+}
+
+// Catalogue tabs (Doctors / Departments / Lab tests) — the segmented
+// control already used for the old By-doctor/By-department toggle.
+.pf-ov-tabs { margin-bottom: 4px; }
+@media (max-width: 640px) {
+  .pf-ov-tabs { width: 100%; }
+  .pf-ov-tabs .nd-seg__item { flex: 1; height: 40px; }
+}
+
+// Department filter chips (Doctors tab) — global `.nd-chip`, just the row layout.
+.pf-ov-deptpills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+
+// "Any doctor in <department>" — the EXPLICIT row (never a silent auto-pick).
+.pf-ov-anydept { width: 100%; margin-bottom: 4px; }
+
+.pf-ov-purposeblock { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--nd-line); }
+.pf-ov-purposeblock__t { display: block; margin: 0 0 10px; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.pf-ov-purposeblock__t .pf-ov-muted { font-size: 13px; font-weight: 400; }
+
+.pf-ov-vitalsbox__t { display: block; margin-bottom: 8px; }
+
 .pf-ov-classic-search { margin-bottom: 12px; }
 .pf-ov-date { font-size: 13px; color: var(--text-tertiary); }
 .pf-ov-body { padding: 4px 18px 12px; gap: 0; }
 .pf-ov-muted { margin: 0; font-size: 13px; color: var(--text-tertiary); }
 .pf-ov-muted strong { color: var(--text-primary); font-weight: 600; }
-.pf-ov-seg { margin-left: auto; }
 .pf-ov-register { height: 36px; gap: 6px; text-decoration: none; }
 .pf-ov-patient {
   display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--nd-radius, 12px);
@@ -46,8 +91,6 @@
   .pf-ov-body { padding: 0 12px 8px; }
   .pf-ov-patient { flex-wrap: wrap; }
   .pf-ov-change { height: 44px; }
-  .pf-ov-seg { margin-left: 0; width: 100%; }
-  .pf-ov-seg .nd-seg__item { flex: 1; height: 40px; }
   .pf-ov-override { grid-template-columns: 1fr; }
   .pf-ov-labsearch__in, .pf-ov-override .nd-input, .pf-ov-purpose .nd-input { height: 44px; font-size: 16px; }
 }
@@ -57,3 +100,11 @@
   // Room for the docked bar at the end of the scroller.
   .pf-ob-split { padding-bottom: 84px; }
 }
+
+.pf-ov-dup { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45;
+  background: color-mix(in srgb, var(--amber-text, #b45309) 10%, transparent); color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--amber-text, #b45309) 30%, transparent); }
+.pf-ov-duplink { display: inline-block; margin-left: 6px; font-weight: 600; color: var(--brand); min-height: 44px; line-height: 44px; }
+
+.pf-ob-tile--away { opacity: 0.62; }
+.pf-ob-dot--away { background: var(--text-tertiary); }

@@ -110,24 +110,54 @@
           @if (v.bill?.invoiceNumber) { <span class="pf-vd-muted nd-num">{{ v.bill!.invoiceNumber }}</span> }
         </header>
         <div class="nd-card__body">
-          @if (v.bill; as b) {
-            <div class="pf-ob-lines">
-              @for (l of b.lines; track $index) {
-                <div class="pf-ob-line">
-                  <span class="pf-ob-line__txt"><span class="pf-ob-line__name">{{ l.description }}</span>
-                    @if (l.taxSlab > 0) { <span class="pf-ob-line__meta nd-num">GST {{ l.taxSlab }}%</span> }</span>
-                  <span class="pf-ob-line__amt nd-num">{{ l.unitPrice | inr }}</span>
-                </div>
+          @for (b of bills(); track b.id; let first = $first) {
+            <div class="pf-vd-bill" [attr.data-bill]="b.kind">
+              @if (bills().length > 1 || b.kind !== 'consult') {
+                <div class="pf-ob-box__row"><span class="pf-ob-box__t">{{ kindWord(b.kind) }}</span><span class="nd-card__spacer"></span>
+                  @if (!first && b.invoiceNumber) { <span class="pf-vd-muted nd-num">{{ b.invoiceNumber }}</span> }</div>
               }
+              <div class="pf-ob-lines">
+                @for (l of b.lines; track $index) {
+                  <div class="pf-ob-line">
+                    <span class="pf-ob-line__txt"><span class="pf-ob-line__name">{{ l.description }}</span>
+                      @if (l.qty > 1) { <span class="pf-ob-line__meta nd-num">{{ l.qty }} × {{ l.unitPrice | inr }}</span> }
+                      @if (l.taxSlab > 0) { <span class="pf-ob-line__meta nd-num">GST {{ l.taxSlab }}%</span> }</span>
+                    <span class="pf-ob-line__amt nd-num">{{ l.unitPrice * l.qty | inr }}</span>
+                  </div>
+                }
+              </div>
+              @if (first && v.feeOverrideReason) { <p class="pf-vd-muted">Set at the desk: {{ v.feeOverrideReason }}</p> }
+              <div class="pf-vd-sums nd-num">
+                @if (b.discount > 0) { <div><span>Discount</span><span>−{{ b.discount | inr }}</span></div> }
+                @if (b.tax > 0) { <div><span>GST</span><span>{{ b.tax | inr }}</span></div> }
+                @if (b.roundOff !== 0) { <div><span>Round-off</span><span>{{ b.roundOff | inr }}</span></div> }
+                <div class="pf-vd-sums__total"><span>{{ b.kind === 'procedure' ? 'Procedure bill' : 'OPD bill' }}</span><span>{{ b.totalPayable | inr }}</span></div>
+                @for (p of b.payments; track $index) { <div><span>Paid · {{ modeWord(p.mode) }}</span><span>{{ p.amount | inr }}</span></div> }
+                @for (r of b.refunds ?? []; track r.id) { <div><span>Refunded · {{ modeWord(r.mode) }} · {{ r.creditNoteNumber }}</span><span>−{{ r.amount | inr }}</span></div> }
+                <div [class.pf-vd-due]="b.balance > 0 && (b.status === 'pending' || b.status === 'partial')"><span>Balance</span><span>{{ b.balance | inr }}</span></div>
+              </div>
             </div>
-            @if (v.feeOverrideReason) { <p class="pf-vd-muted">Set at the desk: {{ v.feeOverrideReason }}</p> }
-            <div class="pf-vd-sums nd-num">
-              @if (b.tax > 0) { <div><span>GST</span><span>{{ b.tax | inr }}</span></div> }
-              @if (b.roundOff !== 0) { <div><span>Round-off</span><span>{{ b.roundOff | inr }}</span></div> }
-              <div class="pf-vd-sums__total"><span>OPD bill</span><span>{{ b.totalPayable | inr }}</span></div>
-              @for (p of b.payments; track $index) { <div><span>Paid · {{ modeWord(p.mode) }}</span><span>{{ p.amount | inr }}</span></div> }
-              @for (r of b.refunds ?? []; track r.id) { <div><span>Refunded · {{ modeWord(r.mode) }} · {{ r.creditNoteNumber }}</span><span>−{{ r.amount | inr }}</span></div> }
-              <div><span>Balance</span><span>{{ b.balance | inr }}</span></div>
+          }
+          @if (collecting() && dueBill(); as b) {
+            <div class="pf-ob-box pf-vd-collect" data-box="collect">
+              <div class="pf-ob-box__row"><span class="pf-ob-box__t">Collect · {{ b.invoiceNumber ?? kindWord(b.kind) }}</span><span class="nd-card__spacer"></span>
+                <button type="button" class="nd-btn nd-btn--tertiary pf-vd-mini" (click)="collecting.set(false)">Cancel</button></div>
+              <div class="pf-vd-collect__row">
+                <label class="nd-field"><span class="nd-field__lbl">Discount (₹)@if (discountCapPct() < 100) { <em class="pf-vd-muted"> max {{ discountCapPct() }}%</em> }</span>
+                  <input class="nd-input nd-num" type="text" inputmode="decimal" [value]="discountRaw()" (input)="discountRaw.set($any($event.target).value)"
+                         [placeholder]="b.discount > 0 ? '' + b.discount : '0'" [class.nd-input--error]="!!discountErr()" aria-label="Discount in rupees" [disabled]="discountCapPct() <= 0 && !b.discount" /></label>
+                <label class="nd-field"><span class="nd-field__lbl">Take now (₹)</span>
+                  <input class="nd-input nd-num" type="text" inputmode="decimal" [value]="amountRaw()" (input)="amountRaw.set($any($event.target).value)"
+                         [placeholder]="'' + (preview()?.balance ?? 0)" [class.nd-input--error]="!!amountErr()" aria-label="Amount taken now" /></label>
+              </div>
+              @if ((discountNum() ?? 0) > 0) {
+                <input class="nd-input" type="text" maxlength="300" [value]="discountReason()" (input)="discountReason.set($any($event.target).value)" placeholder="Why the discount (optional)" aria-label="Discount reason" />
+              }
+              @if (discountErr(); as e) { <p class="pf-vd-err" role="alert">{{ e }}</p> }
+              @else if (amountErr(); as e) { <p class="pf-vd-err" role="alert">{{ e }}</p> }
+              <p class="pf-vd-muted nd-num">Bill {{ preview()?.payable | inr }} · due {{ preview()?.balance | inr }}@if (!amountErr() && amountNow() < (preview()?.balance ?? 0)) { · {{ (preview()?.balance ?? 0) - amountNow() | inr }} stays due }</p>
+              <pf-inline-payment-panel [amount]="amountErr() ? 0 : amountNow()" [allowLater]="false" [busy]="busy()" [blocked]="!!discountErr() || !!amountErr()"
+                                       [patientPhone]="v.patient.phone ?? undefined" (confirm)="collect($event)"></pf-inline-payment-panel>
             </div>
           }
           @if (v.labOrder; as lab) {
@@ -146,8 +176,13 @@
               <a class="nd-btn nd-btn--secondary" routerLink="/opd/desk">Today's visits</a>
             }
           </div>
-          @if (issued() || !open()) {
+          @if (due() > 0 && dueBill() && !collecting()) {
+            <button type="button" class="nd-btn nd-btn--primary" data-cta="collect" (click)="startCollect()">Collect {{ due() | inr }}</button>
+          }
+          @if ((issued() || !open()) && !(due() > 0 && dueBill())) {
             <button type="button" class="nd-btn nd-btn--primary" (click)="nextPatient()">Next patient</button>
+          } @else if (issued() || !open()) {
+            <button type="button" class="nd-btn nd-btn--secondary" (click)="nextPatient()">Next patient</button>
           }
           @if (open()) {
             <div class="pf-vd-danger">

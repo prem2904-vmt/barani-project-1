@@ -25,7 +25,8 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { SessionService } from '../../core/auth/session.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
+import { DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses } from '../nav-items';
+import { opdAreasFor } from '../../features/opd/shared/opd-nav';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { BranchSwitchService } from '../../core/services/branch-switch.service';
@@ -535,10 +536,18 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
   readonly primary = computed(() => {
-    const items = this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)));
-    // OPD: doctors get "Consults" — only when the OPD gate is open (tenant
-    // explicitly entitled, or the owner's pf.opd() preview). OPD dark build.
-    return this.auth.isDoctor() && this.opdGate.visible() ? [...items, DOCTOR_NAV] : items;
+    // Expenses: a primary tab for anyone holding expense_* (the route guard's
+    // rule), after the lab work items; the scrollable pill keeps every tab
+    // reachable (no overflow menu).
+    const base = this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV);
+    const items = this.withCollection(this.withInventory(withExpenses(base, i => this.visible([i]).length > 0)));
+    // OPD: doctors get "Consults"; anyone who can open at least one OPD area
+    // gets the general "OPD" tab — both only while the OPD gate is open
+    // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
+    // build. Mirrors the top strip (nav-items.ts opdAreasFor).
+    if (!this.opdGate.visible()) return items;
+    const out = this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    return opdAreasFor(p => this.auth.hasAnyPermission(p)).length ? [...out, OPD_NAV] : out;
   });
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
@@ -761,6 +770,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   private matches(url: string, n: NavItem): boolean {
+    // The OPD tabs need cross-prefix + exclusion rules a plain href-prefix
+    // check can't express (OPD owns /admin/opd/** too, minus the Consults
+    // subtree) — see nav-items.ts opdNavActive.
+    if (n.id === 'opd' || n.id === 'doctor') return opdNavActive(n, url);
     if (n.exact) return url === n.href;
     return url === n.href || url.startsWith(n.href + '/');
   }

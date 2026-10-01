@@ -113,10 +113,13 @@ describe('CriticalResultsComponent (register)', () => {
   it('a typed custom date switches the quick pick to Custom and reloads', () => {
     const { f, c } = render();
     svc.list.mockClear();
-    c.setFrom('2026-09-01');
+    // Never a literal date: on 1 Oct the literal '2026-09-01' WAS the default
+    // 30-day From (labDaysAgo(30)), so "typing" it changed nothing (test-clock bug).
+    const typed = labDaysAgo(45);
+    c.setFrom(typed);
     f.detectChanges();
     expect(c.quick()).toBe('custom');
-    expect(svc.list).toHaveBeenLastCalledWith(expect.objectContaining({ from: '2026-09-01', to: labToday() }));
+    expect(svc.list).toHaveBeenLastCalledWith(expect.objectContaining({ from: typed, to: labToday() }));
   });
 
   it('Acknowledge from a row posts via "register", updates the row and the open count', () => {

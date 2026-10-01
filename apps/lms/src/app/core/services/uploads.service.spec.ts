@@ -7,7 +7,7 @@ import { FILE_MISSING_MESSAGE, UploadsService, brandingSrc } from './uploads.ser
 import { ToastService } from './toast.service';
 import { PlatformService } from './platform.service';
 import {
-  absoluteApiUrl, fetchAssetBlob, isPrivateUploadPath, registerUploadFetcher, uploadPathOf,
+  absoluteApiUrl, fetchAssetBlob, isAuthedApiFilePath, isOpdMediaPath, isPrivateUploadPath, registerUploadFetcher, uploadPathOf,
 } from '../../shared/utils/upload-fetch';
 
 /** Private uploads: "/uploads/…" is served only to the session (GET
@@ -159,6 +159,29 @@ describe('UploadsService', () => {
     }
   });
 
+  it('open(): a 503 storage_error/storage_unavailable/storage_unconfigured closes the tab with a friendly toast, never the raw error code or exception text, and is not marked missing', async () => {
+    for (const code of ['storage_error', 'storage_unavailable', 'storage_unconfigured']) {
+      const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      const down = new HttpErrorResponse({ status: 503, error: { success: false, error: code, message: 'File storage is unavailable. Try again shortly.' } });
+      try {
+        const { svc } = setup(vi.fn(() => throwError(() => down)));
+        const toasts = TestBed.inject(ToastService);
+        const err = vi.spyOn(toasts, 'error');
+        expect(await svc.open(PATH)).toBe('failed');
+        expect(tab.close).toHaveBeenCalled();
+        expect(svc.isMissing(PATH)).toBe(false);        // a 503 is transient — never remembered as gone
+        expect(err).toHaveBeenCalled();
+        const shown = err.mock.calls[0][0] as string;
+        expect(shown).not.toContain(code);
+        expect(shown).not.toMatch(/Amazon|Exception|System\./);
+      } finally {
+        open.mockRestore();
+        TestBed.resetTestingModule();
+      }
+    }
+  });
+
   it('blob(): one request per file per session — concurrent and later callers share it (PDF renders re-use logos / signatures)', async () => {
     const { svc, get } = setup();
     const [a, b] = await Promise.all([svc.blob(PATH), svc.blob(PATH)]);
@@ -240,6 +263,78 @@ describe('absolute links to our own /uploads (older stored rows)', () => {
     } finally {
       createUrl.mockRestore();
     }
+  });
+});
+
+describe('OPD media paths (consult files, a walk-in prescription — task: authed display)', () => {
+  const VISIT = 'a1b2c3d4-0000-0000-0000-000000000001';
+  const SALE = 'a1b2c3d4-0000-0000-0000-000000000002';
+  const MEDIA = `/api/opd/consult/${VISIT}/media/file?key=tenants%2Ft%2Fopd%2Fconsult%2Fabc.jpg&type=image%2Fjpeg`;
+  const RX = `/api/opd/pharmacy/counter/${SALE}/prescription/file`;
+
+  it('isOpdMediaPath recognises the consult and prescription file endpoints only', () => {
+    expect(isOpdMediaPath(MEDIA)).toBe(true);
+    expect(isOpdMediaPath(RX)).toBe(true);
+    expect(isOpdMediaPath(`/api/opd/consult/${VISIT}/media`)).toBe(false);          // the JSON-url endpoint, not the stream
+    expect(isOpdMediaPath(`/api/opd/pharmacy/counter/${SALE}/prescription`)).toBe(false);
+    expect(isOpdMediaPath('/uploads/x.png')).toBe(false);
+    expect(isOpdMediaPath(null)).toBe(false);
+  });
+
+  it('isAuthedApiFilePath covers both /uploads/… and the OPD media endpoints', () => {
+    expect(isAuthedApiFilePath(MEDIA)).toBe(true);
+    expect(isAuthedApiFilePath(RX)).toBe(true);
+    expect(isAuthedApiFilePath(PATH)).toBe(true);
+    expect(isAuthedApiFilePath('https://cdn/x.png')).toBe(false);
+  });
+
+  it('blob(): an OPD media path is fetched at that EXACT url (not wrapped in /api/uploads/file) — HttpClient, so auth interceptors apply', async () => {
+    const { svc, get } = setup();
+    const b = await svc.blob(MEDIA);
+    expect(get).toHaveBeenCalledWith(`https://api.test${MEDIA}`, { responseType: 'blob' });
+    expect(b).toBeInstanceOf(Blob);
+  });
+
+  it('blob(): one request per OPD media path per session — concurrent and later callers share it', async () => {
+    const { svc, get } = setup();
+    const [a, b] = await Promise.all([svc.blob(MEDIA), svc.blob(MEDIA)]);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(a).toBe(b);
+  });
+
+  it('open(): the prescription viewer fetches through the authenticated endpoint, never a bare window.open of the raw path', async () => {
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rx');
+    try {
+      const { svc, get } = setup();
+      expect(await svc.open(RX)).toBe('opened');
+      expect(get).toHaveBeenCalledWith(`https://api.test${RX}`, { responseType: 'blob' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(tab.location.href).toBe('blob:rx');
+    } finally {
+      open.mockRestore();
+      fetchSpy.mockRestore();
+      createUrl.mockRestore();
+    }
+  });
+
+  it('a patient document is an authenticated file endpoint: fetched at that exact url with the session (logic audit)', async () => {
+    const DOC = '/api/patients/0b8f5f4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/documents/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f/file';
+    expect(isAuthedApiFilePath(DOC)).toBe(true);
+    expect(isAuthedApiFilePath('/api/patients/p1/documents')).toBe(false);   // the list endpoint, not a file
+    const { svc, get } = setup();
+    const b = await svc.blob(DOC);
+    expect(get).toHaveBeenCalledWith(`https://api.test${DOC}`, { responseType: 'blob' });
+    expect(b).toBeInstanceOf(Blob);
+  });
+
+  it('a gone (410) consult file is remembered missing, the same as an /uploads/… file', async () => {
+    const gone = new HttpErrorResponse({ status: 410, error: { error: 'file_missing' } });
+    const { svc } = setup(vi.fn(() => throwError(() => gone)));
+    expect(await svc.blob(MEDIA)).toBeNull();
+    expect(svc.isMissing(MEDIA)).toBe(true);
   });
 });
 

@@ -12,6 +12,10 @@ export interface DeskQueueCfg { organise: 'per_doctor' | 'per_room' | 'per_depar
 export interface DeskDoctor {
   id: string; name: string; department?: string | null; departmentIds: string[];
   waiting: number; estWaitMinutes: number; fee?: number | null; tokenPrefix: string; nowServing?: string | null;
+  /** False when the doctor doesn't sit today (admin Doctors → days); older servers omit it. */
+  sitsToday?: boolean;
+  /** Next sitting day ('thu') when not in today. */
+  nextSitting?: string | null;
 }
 export interface DeskDepartment { id: string; name: string; code: string; waiting: number; doctorIds: string[]; }
 export interface DeskData { today: string; config: { workflow: DeskWorkflow; queue: DeskQueueCfg }; doctors: DeskDoctor[]; departments: DeskDepartment[]; }
@@ -46,6 +50,10 @@ export interface CheckoutRequest {
   patientId: string; doctorUserId?: string | null; departmentId?: string | null; serviceId?: string | null;
   purpose?: string | null; feeOverride?: number | null; feeOverrideReason?: string | null;
   labTestIds?: string[]; urgent?: boolean; vitals?: VitalsInput | null; payments?: PaymentPart[];
+  /** testId → the picked specimen (choose-mode tests only) — see
+   *  `features/opd/shared/opd-specimen.ts`. Missing for a choose-mode test →
+   *  400 `specimen_required`, thrown before anything OPD is written. */
+  labTestSpecimens?: Record<string, string> | null;
 }
 
 export interface OpdBillLineRow { sourceType: string; sourceId?: string | null; description: string; qty: number; unitPrice: number; discount: number; taxSlab: number; total: number; }
@@ -69,7 +77,20 @@ export interface OpdVisitDetail {
   service?: { id: string; name: string; code?: string | null } | null;
   bill?: OpdBillView | null; labOrder?: LabOrderBrief | null; latestVitals?: OpdVitalsRow | null;
   timeline: TimelineStep[]; reassignedFromDoctorUserId?: string | null; cancelReason?: string | null; createdAt: string;
+  /** Every OPD bill of the visit — the consult bill (first) and a procedure bill
+   *  from the consult; `due` = what is still to collect on them. Older servers omit both. */
+  bills?: OpdBillView[] | null; due?: number;
 }
+
+/** One open visit bill on the desk's "Payments due" (pay after consult / procedures). */
+export interface PaymentDue {
+  visitId: string; billId: string; kind: 'consult' | 'procedure'; invoiceNumber?: string | null; patientId: string; patientName: string; patientMeta?: string | null;
+  doctorUserId: string; doctorName: string; tokenLabel: string; visitNumber?: string | null; visitDate: string; visitStatus: OpdVisitStatus; completedAt?: string | null;
+  lines: OpdBillLineRow[]; totalPayable: number; totalPaid: number; balance: number; status: 'pending' | 'partial';
+}
+
+/** POST /api/opd/visits/{id}/bills/{billId}/pay. `discount` = the whole bill's ₹ discount (omit = keep). */
+export interface CollectRequest { discount?: number | null; discountReason?: string | null; payments: PaymentPart[]; }
 
 export interface OpdVisitRow {
   id: string; patientId: string; patientName: string; patientMeta?: string | null; doctorUserId: string; doctorName: string;

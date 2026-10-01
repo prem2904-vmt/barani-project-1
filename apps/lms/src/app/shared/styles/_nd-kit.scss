@@ -224,6 +224,15 @@
   color: inherit; font: inherit; text-align: left;
 }
 .nd-row__check { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--nd-line); color: var(--nd-card-bg); }
+/* Daily patient number (#12) before a patient's name — a quiet rounded chip,
+   never violet (sample IDs / codes) or monospace (barcodes, order numbers). */
+.nd-dayno {
+  display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px; margin-right: 6px;
+  border-radius: 999px; border: 1px solid var(--nd-line); background: var(--nd-chip-bg);
+  color: var(--text-secondary); font-family: 'Noto Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px; font-style: normal; font-weight: 600; line-height: 1; text-transform: none;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em; white-space: nowrap; vertical-align: 0.1em;
+}
 .nd-row__code { flex: none; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--violet-text, #7c3aed); }
 .nd-row__name { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text-primary); @include nd.no-truncate; }
 .nd-row__meta { flex: none; font-size: 11.5px; color: var(--text-muted); }

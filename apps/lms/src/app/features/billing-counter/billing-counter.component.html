@@ -148,7 +148,7 @@
                   <button type="button" class="pf-bc-qrow" [pfZoomSource]="r.orderId" [attr.data-since]="r.since"
                           [attr.aria-pressed]="selectedOrderId() === r.orderId" (click)="selectRow(r)">
                     <span class="pf-bc-qrow__text">
-                      <span class="pf-bc-qrow__name">{{ r.name }}</span>
+                      <span class="pf-bc-qrow__name"><pf-daily-no [of]="r" />{{ r.name }}</span>
                       <span class="pf-bc-qrow__meta">
                         @if (r.orderLabel) { <span class="nd-num">{{ r.orderLabel }}</span> }
                         @if (r.orderLabel && r.tests != null) { · }
@@ -224,7 +224,7 @@
               <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading the order…"></pf-skeleton-card>
             } @else if (selectedOrder(); as o) {
               <div class="pf-bc-subject">
-                <p class="pf-bc-subject__name">{{ orderPatientName(o) }}</p>
+                <p class="pf-bc-subject__name"><pf-daily-no [of]="o" />{{ orderPatientName(o) }}</p>
                 <p class="pf-bc-subject__meta">
                   <span class="nd-num">{{ orderLabel(o) }}</span>
                   · {{ o.createdAt | date:'d MMM, h:mm a' }}

@@ -8,6 +8,9 @@ import {
   navLabel,
   WorkflowNavCtx,
   MORE_NAV,
+  DOCTOR_NAV,
+  OPD_NAV,
+  opdNavActive,
 } from './nav-items';
 import { ProcessWorkflowConfig } from '../shared/models/process-workflow.model';
 
@@ -457,6 +460,49 @@ describe('menusFromWorkflow', () => {
     const result = menusFromWorkflow(cfg, permCtx);
     expect(result).not.toBeNull();
     // Actions within category should be sorted by order (1 before 2)
+  });
+});
+
+describe('OPD_NAV', () => {
+  it('points at the OPD home hub and carries no permissions/module (gated by the shells, like DOCTOR_NAV)', () => {
+    expect(OPD_NAV.id).toBe('opd');
+    expect(OPD_NAV.href).toBe('/opd');
+    expect(OPD_NAV.permissions).toBeUndefined();
+    expect(OPD_NAV.module).toBeUndefined();
+    expect(OPD_NAV.iconPath.length).toBeGreaterThan(0);
+  });
+
+  it('is a SEPARATE item from PRIMARY_NAV / MORE_NAV, exactly like DOCTOR_NAV', () => {
+    expect(PRIMARY_NAV.some(i => i.id === 'opd')).toBe(false);
+    expect(MORE_NAV.some(i => i.id === 'opd')).toBe(false);
+  });
+});
+
+describe('opdNavActive — the two OPD tabs never light up together', () => {
+  it('Consults (doctor) is active only for /opd/consult and its subtree', () => {
+    expect(opdNavActive(DOCTOR_NAV, '/opd/consult')).toBe(true);
+    expect(opdNavActive(DOCTOR_NAV, '/opd/consult/abc-123')).toBe(true);
+    expect(opdNavActive(DOCTOR_NAV, '/opd/desk')).toBe(false);
+    expect(opdNavActive(DOCTOR_NAV, '/opd')).toBe(false);
+  });
+
+  it('OPD is active for every other /opd/** route and /admin/opd/**', () => {
+    expect(opdNavActive(OPD_NAV, '/opd')).toBe(true);
+    expect(opdNavActive(OPD_NAV, '/opd/desk')).toBe(true);
+    expect(opdNavActive(OPD_NAV, '/opd/pharmacy/stock')).toBe(true);
+    expect(opdNavActive(OPD_NAV, '/admin/opd')).toBe(true);
+    expect(opdNavActive(OPD_NAV, '/admin/opd/departments')).toBe(true);
+  });
+
+  it('OPD is NOT active on /opd/consult/** — Consults owns that subtree exclusively', () => {
+    expect(opdNavActive(OPD_NAV, '/opd/consult')).toBe(false);
+    expect(opdNavActive(OPD_NAV, '/opd/consult/abc-123')).toBe(false);
+  });
+
+  it('ignores query strings, and is false for an unrelated route', () => {
+    expect(opdNavActive(OPD_NAV, '/opd/desk?tab=vitals')).toBe(true);
+    expect(opdNavActive(OPD_NAV, '/frontdesk')).toBe(false);
+    expect(opdNavActive(DOCTOR_NAV, '/frontdesk')).toBe(false);
   });
 });
 

@@ -174,7 +174,15 @@
 .pf-dk-search__in::placeholder { color: var(--text-muted); }
 .pf-dk-seg { margin-left: auto; overflow-x: auto; max-width: 100%; }
 .pf-dk-n { color: var(--text-tertiary); margin-left: 4px; }
+/* Five filters (incl. Payments due): never wrap a label — the strip scrolls on a phone. */
+.pf-dk-seg { flex-wrap: nowrap; scrollbar-width: none; }
+.pf-dk-seg .nd-seg__item { flex: none; white-space: nowrap; }
 @media (max-width: 640px) {
   .pf-dk-search__in { font-size: 16px; height: 44px; }
   .pf-dk-seg { margin-left: 0; width: 100%; }
 }
+
+/* Desk "Payments due" (consult procedures). */
+.pf-ob-status--due { color: #b45309; }
+:host-context(.dark) .pf-ob-status--due { color: #fbbf24; }
+.pf-dk-duesum { margin: 10px 2px 0; font-size: 13px; color: var(--text-secondary); text-align: right; }

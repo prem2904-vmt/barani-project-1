@@ -9,6 +9,8 @@ import { reportByOrderSummaryUrl } from '../../../shared/utils/report-summary';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { UploadsService } from '../../../core/services/uploads.service';
+import { isAuthedApiFilePath } from '../../../shared/utils/upload-fetch';
 
 interface TimelineDoc {
   id: string; fileName: string; contentType: string; url: string; uploadedAt: string; isImage: boolean;
@@ -129,7 +131,7 @@ interface TimelineItem {
                       [class.picked]="isPicked(it)"
                       (click)="onItem(it)">
                 @if (it.kind === 'image') {
-                  <img class="pf-tl__item-thumb" [src]="it.url" [alt]="it.name" loading="lazy" />
+                  <img class="pf-tl__item-thumb" [src]="uploads.src(it.url)" [alt]="it.name" loading="lazy" />
                 } @else {
                   <span class="pf-tl__item-ico" [class.report]="it.kind === 'report'">
                     @if (busyItem() === it.id) { <span class="pf-tl__spin pf-tl__spin--sm"></span> }
@@ -490,6 +492,7 @@ export class PatientTimelineComponent implements OnDestroy {
   private readonly injector = inject(Injector);
   private readonly toasts = inject(ToastService);
   private readonly svc = inject(PatientTimelineService);
+  protected readonly uploads = inject(UploadsService);
 
   readonly patientId = input.required<string>();
   /** Embedded mode (Consult Room): the journey lives INSIDE a host layout —
@@ -952,7 +955,11 @@ export class PatientTimelineComponent implements OnDestroy {
   private async ensureUrl(it: TimelineItem) {
     if (this.urlCache()[it.id]) return;
     if (it.kind !== 'report') {
-      if (it.url) this.urlCache.update(m => ({ ...m, [it.id]: it.url! }));
+      if (!it.url) return;
+      // A patient document is an AUTHENTICATED file path (logic audit) — its
+      // bytes come through the session, never a bare link.
+      const url = isAuthedApiFilePath(it.url) ? await this.uploads.objectUrl(it.url) : it.url;
+      if (url) this.urlCache.update(m => ({ ...m, [it.id]: url }));
       return;
     }
     if (!it.report) return;

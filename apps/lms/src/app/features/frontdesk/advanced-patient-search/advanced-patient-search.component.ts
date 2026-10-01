@@ -385,6 +385,17 @@ const PAGE_SIZE = 20;
                               </svg>
                               Order
                             </button>
+                            @if (showConsult) {
+                            <button type="button" class="pf-aps-row-btn"
+                                    title="New consultation" (click)="onConsult(h.patient)">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                   stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/>
+                                <path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/>
+                              </svg>
+                              Consult
+                            </button>
+                            }
                             @if (features.appointmentsEnabled()) {
                             <button type="button" class="pf-aps-row-btn"
                                     title="Book appointment" (click)="onBookAppointment(h.patient)">
@@ -1171,10 +1182,14 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
    * navigation so the user lands back on their last result set.
    */
   @Input() preset: AdvancedFilters | null = null;
+  /** OPD dark build: show the row's "Consult" action. Parent gates this on
+   *  OpdGateService.visible() — the modal itself stays OPD-unaware. */
+  @Input() showConsult = false;
 
   @Output() closed = new EventEmitter<void>();
   @Output() picked = new EventEmitter<Patient>();
   @Output() newOrder = new EventEmitter<Patient>();
+  @Output() consult = new EventEmitter<Patient>();
   @Output() bookAppointment = new EventEmitter<Patient>();
   /** Fires whenever a search executes successfully — parent uses this to
    *  serialise the active filters into the URL for back-button restoration. */
@@ -1531,6 +1546,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   // back-button restore.
   onView(p: Patient)            { this.picked.emit(p); }
   onNewOrder(p: Patient)        { this.newOrder.emit(p); }
+  onConsult(p: Patient)         { this.consult.emit(p); }
   onBookAppointment(p: Patient) { this.bookAppointment.emit(p); }
 
   // ── Local utilities ────────────────────────────────────────

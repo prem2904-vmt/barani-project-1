@@ -1,5 +1,5 @@
 import {
-  RX_USUAL_EXAMPLES, RxDrugRef, RxLine, RxSchedule, bestDrug, dayInfo, doseShort, isComplex, lineShort,
+  FORMS, RX_USUAL_EXAMPLES, RxDrugRef, RxLine, RxSchedule, bestDrug, dayInfo, doseShort, isComplex, lineShort,
   newRxLine, parseRx, perDaySched, qtyWords, rxQty, sayRx, shortSched, stripDays, totalDays, whenShort,
 } from './rx-schedule';
 
@@ -57,6 +57,28 @@ describe('rx-schedule · quantity fixtures (mirrored in RxScheduleTests.cs)', ()
   ];
   for (const [name, l, d, q] of cases) {
     it(name + ' → ' + q, () => expect(rxQty(l, d, MON)).toBe(q));
+  }
+});
+
+// Mirrors RxScheduleTests.cs "Form_vocabulary_has_one_home_and_matches_the_pack_partition" (critic §1 #5).
+describe('rx-schedule · dose-form vocabulary (ENT/Derm/Gynae)', () => {
+  const COUNTABLE = ['tab', 'cap', 'sachet', 'vaginal_tab', 'pessary', 'injection'] as const;
+  const PACK = ['syrup', 'drops', 'spray', 'inhaler', 'cream', 'gel', 'ointment', 'lotion', 'solution',
+    'shampoo', 'soap', 'powder', 'gargle', 'mouthwash'] as const;
+
+  it('has exactly the countable + pack forms, matching the server list', () => {
+    expect(Object.keys(FORMS).sort()).toEqual([...COUNTABLE, ...PACK].sort());
+  });
+  for (const f of COUNTABLE) it(f + ' is countable (not a pack)', () => expect(FORMS[f].pack).toBeFalsy());
+  for (const f of PACK) it(f + ' dispenses as one pack', () => expect(FORMS[f].pack).toBe(true));
+
+  for (const f of ['cap', 'vaginal_tab', 'pessary', 'injection'] as const) {
+    it('new countable form ' + f + ' dispenses in units', () =>
+      expect(rxQty(line(T([1, 0, 1]), 5), { form: f }, MON)).toBe(10));
+  }
+  for (const f of ['gel', 'ointment', 'lotion', 'shampoo', 'soap', 'powder', 'gargle', 'mouthwash'] as const) {
+    it('new pack form ' + f + ' dispenses as one pack', () =>
+      expect(rxQty(line(T([1, 0, 1]), 14), { form: f }, MON)).toBe(1));
   }
 });
 

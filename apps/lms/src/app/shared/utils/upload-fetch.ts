@@ -17,6 +17,36 @@ export function isPrivateUploadPath(url: string | null | undefined): url is stri
   return !!url && url.startsWith('/uploads/') && !/[?&]sig=/.test(url);
 }
 
+/** OPD's own authenticated file endpoints (consult media, a walk-in's
+ *  prescription) — a DIFFERENT url shape from "/uploads/…" (the endpoint
+ *  IS the path, already carrying its own query string), but the SAME rule:
+ *  never a bare `fetch()`, always through the app's authenticated fetcher
+ *  (the X-PF-OPD / auth interceptors only run on HttpClient requests). */
+export function isOpdMediaPath(url: string | null | undefined): url is string {
+  if (!url) return false;
+  const path = url.split('?')[0];
+  return /^\/api\/opd\/consult\/[^/]+\/media\/file$/.test(path)
+    || /^\/api\/opd\/pharmacy\/counter\/[^/]+\/prescription\/file$/.test(path);
+}
+
+/** A patient document's authenticated file endpoint
+ *  (`/api/patients/{id}/documents/{docId}/file`) — logic audit: documents were
+ *  presigned links that worked without the session. */
+export function isPatientDocumentPath(url: string | null | undefined): url is string {
+  if (!url) return false;
+  return /^\/api\/patients\/[^/]+\/documents\/[^/]+\/file$/.test(url.split('?')[0]);
+}
+
+/** An API endpoint that IS the file (fetched directly, with the session). */
+export function isApiFileEndpoint(url: string | null | undefined): url is string {
+  return isOpdMediaPath(url) || isPatientDocumentPath(url);
+}
+
+/** Any path that must go through the authenticated fetcher — never a bare `fetch()`. */
+export function isAuthedApiFilePath(url: string | null | undefined): url is string {
+  return isPrivateUploadPath(url) || isApiFileEndpoint(url);
+}
+
 /** A stored reference to one of OUR uploads, as its "/uploads/…" path. Older
  *  rows (e.g. a tenant logo) may hold the resolved absolute link on the API
  *  host ("https://api…/uploads/…"), which the server now refuses unsigned —

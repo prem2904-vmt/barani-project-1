@@ -14,9 +14,11 @@
  * too, and the server normalises v1 → v2 on save.
  */
 
-export type OpdQType = 'short' | 'long' | 'yn' | 'one' | 'many' | 'num' | 'scale' | 'date' | 'media' | 'diagram' | 'table';
+export type OpdQType = 'short' | 'long' | 'yn' | 'one' | 'many' | 'num' | 'scale' | 'date' | 'media' | 'diagram' | 'table' | 'calc';
 export type DiagramShape = 'ear' | 'nose' | 'body';
 export type Side = 'r' | 'l';
+/** edd/pog read a `date` field; pta averages a `table` field's row. */
+export type CalcFormula = 'edd' | 'pog' | 'pta';
 
 export interface OpdCondition { key: string; value: string; }
 
@@ -44,6 +46,13 @@ export interface OpdQuestion {
   wide?: boolean;
   /** Sample answer for the builder's sample patient. */
   sample?: unknown;
+  /** type 'calc' only: edd | pog | pta (critic §1 #6). */
+  formula?: CalcFormula;
+  /** type 'calc' only: the source question's key (a `date` field for edd/pog,
+   *  a `table` field for pta). */
+  from?: string;
+  /** type 'calc', formula 'pta' only: which row of the source table to average. */
+  row?: string;
 }
 
 export interface OpdFormDocSection { key: string; title: string; fields: OpdQuestion[]; }
@@ -81,8 +90,16 @@ export const Q_TYPES: Record<OpdQType | 'lr', [string, string, string]> = {
   media: ['Images & video', 'Endoscope, camera or upload — any format', 'Nasal endoscopy'],
   diagram: ['Body diagram marker', 'Tap an outline to mark a spot', 'Ear drum'],
   table: ['Table', 'Rows × columns of values', 'Audiometry by frequency'],
+  calc: ['Calculated', 'Worked out from another answer — read-only', 'EDD from LMP'],
 };
-export const Q_TYPE_ORDER: (OpdQType | 'lr')[] = ['short', 'long', 'yn', 'one', 'many', 'num', 'lr', 'scale', 'date', 'media', 'diagram', 'table'];
+export const Q_TYPE_ORDER: (OpdQType | 'lr')[] = ['short', 'long', 'yn', 'one', 'many', 'num', 'lr', 'scale', 'date', 'media', 'diagram', 'table', 'calc'];
+
+/** The formulas a calc question can use, for the builder's picker. */
+export const CALC_FORMULAS: Record<CalcFormula, [string, string]> = {
+  edd: ['Estimated date of delivery', 'LMP + 280 days (Naegele) — pick a date question'],
+  pog: ['Period of gestation', 'Weeks + days from LMP to today — pick a date question'],
+  pta: ['Pure tone average', 'Mean of the 500/1000/2000 Hz cells of a row — pick a table question'],
+};
 
 /** The consult's built-in sections, shown LOCKED in the builder. */
 export const BUILT_INS: { key: string; title: string; hint: string; icon: string }[] = [
@@ -96,7 +113,8 @@ export const BUILT_IN_KEYS = ['vitals', 'diagnosis', 'diagnoses', 'rx', 'prescri
 
 // ── Schema reading ───────────────────────────────────────────────────────
 const LEGACY: Record<string, OpdQType> = { text: 'short', textarea: 'long', number: 'num', select: 'one', multiselect: 'many', boolean: 'yn' };
-const TYPES = new Set<string>(['short', 'long', 'yn', 'one', 'many', 'num', 'scale', 'date', 'media', 'diagram', 'table']);
+const TYPES = new Set<string>(['short', 'long', 'yn', 'one', 'many', 'num', 'scale', 'date', 'media', 'diagram', 'table', 'calc']);
+const CALC_FORMULA_SET = new Set<string>(['edd', 'pog', 'pta']);
 
 export function emptyDoc(): OpdFormDoc {
   return { schemaVersion: 2, allowAddons: true, sections: [{ key: 'findings', title: 'Findings', fields: [] }] };
@@ -136,6 +154,13 @@ export function normalizeQuestion(raw: unknown): OpdQuestion | null {
   if (q.type === 'scale') { q.min = num(f['min'], 0); q.max = num(f['max'], 10); }
   if (q.type === 'diagram') q.shape = (['ear', 'nose', 'body'].includes(String(f['shape'])) ? f['shape'] : 'body') as DiagramShape;
   if (q.type === 'table') { q.rows = strs(f['rows']); q.cols = strs(f['cols']); }
+  if (q.type === 'calc') {
+    const formula = String(f['formula'] ?? '');
+    q.formula = (CALC_FORMULA_SET.has(formula) ? formula : 'edd') as CalcFormula;
+    if (typeof f['from'] === 'string') q.from = f['from'];
+    if (q.formula === 'pta' && typeof f['row'] === 'string') q.row = f['row'];
+    q.required = false; // a calculated field is read-only — never required
+  }
   const w = f['when'] as { key?: string; value?: string; id?: string; v?: string } | null | undefined;
   if (w && (w.key || w.id)) q.when = { key: String(w.key ?? w.id), value: String(w.value ?? w.v ?? '') };
   if (typeof f['hint'] === 'string') q.hint = f['hint'] as string;
@@ -245,6 +270,67 @@ export function formatDate(iso: string): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${+m[3]} ${months[+m[2] - 1] ?? m[2]} ${m[1]}`;
 }
+
+// ── Calc (critic §1 #6 — EDD/POG for Gynae, PTA for ENT) ────────────────────
+// Server mirror: OpdFormSchemaRules.cs validates the wiring; the client
+// computes and displays the value live (dates as local calendar days, no ms
+// arithmetic — same convention as rx-schedule.ts addDays/totalDays).
+
+function parseIsoDate(s: unknown): Date | null {
+  if (typeof s !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function isoDateOf(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+/** Whole calendar days between two local dates (b − a), DST-safe. */
+function daysBetweenDates(a: Date, b: Date): number {
+  return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+}
+
+/** The computed value of a `calc` field (mirrors OpdFormSchemaRules.cs'
+ *  wiring rules — the arithmetic itself is server-free, client-only). `source`
+ *  is the `from` question's definition (a date field for edd/pog, a table
+ *  field for pta). `visitDateIso` is the anchor "today" for pog (else the
+ *  real today). Returns '' when the source has no value yet, or a cell a pta
+ *  average needs is missing. */
+export function computeCalc(field: OpdQuestion, source: OpdQuestion | undefined, answers: OpdAnswers, visitDateIso?: string): string {
+  if (field.type !== 'calc' || !field.formula || !field.from) return '';
+  if (field.formula === 'edd' || field.formula === 'pog') {
+    const lmp = parseIsoDate(answers[field.from]);
+    if (!lmp) return '';
+    if (field.formula === 'edd') return isoDateOf(addCalendarDays(lmp, 280));
+    const ref = (visitDateIso && parseIsoDate(visitDateIso)) || new Date();
+    const days = daysBetweenDates(lmp, ref);
+    if (days < 0) return '';
+    return `${Math.floor(days / 7)}w ${days % 7}d`;
+  }
+  if (field.formula === 'pta') {
+    if (!source || source.type !== 'table' || !field.row) return '';
+    const rows = source.rows ?? [], cols = source.cols ?? [];
+    const ri = rows.indexOf(field.row);
+    if (ri < 0) return '';
+    const colIdx = ['500', '1000', '2000'].map(hz => cols.findIndex(c => c.replace(/[^0-9]/g, '') === hz));
+    if (colIdx.some(i => i < 0)) return '';
+    const table = answers[field.from] as unknown;
+    const cells = Array.isArray(table) ? (table as unknown[][]) : [];
+    const vals: number[] = [];
+    for (const ci of colIdx) {
+      const raw = cells[ri]?.[ci];
+      const n = raw === '' || raw == null ? NaN : Number(raw);
+      if (!Number.isFinite(n)) return ''; // a missing cell ⇒ blank, never a partial average
+      vals.push(n);
+    }
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return String(Math.round(avg * 10) / 10);
+  }
+  return '';
+}
+function addCalendarDays(d: Date, n: number): Date { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 
 /** A printed row of the consult summary. */
 export interface PrintRow { key: string; label: string; text?: string; sides?: { r: string; l: string }; table?: { rows: string[]; cols: string[]; cells: string[][]; unit?: string }; files?: number; }

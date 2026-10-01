@@ -24,31 +24,40 @@ import {
   InlinePaymentPanelComponent, type InlinePaymentResult,
 } from '../../frontdesk/order-create/inline-payment-panel.component';
 import { OpdVitalsFormComponent } from '../vitals/vitals-form.component';
+import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
+import { missingSpecimens, specimenPayload, type OpdInvestigationItem, type OpdTestLookup } from '../shared/opd-specimen';
 import { OpdDeskApi } from './desk-api.service';
+import type { OpdVisitRow } from './desk.models';
 import type { DeskData, DeskDepartment, DeskDoctor, DeskQuote, ServiceQuote } from './desk.models';
 import {
   type LabLine, deskBillPreview, draftKey, feeLineLabel, paymentParts, parseOverride, readDraft, waitLabel, waitTone, writeDraft,
 } from './desk-rules';
 
 type PickMode = 'doctor' | 'department';
+type CatalogTab = 'doctors' | 'departments' | 'labs';
 
 /**
- * OPD → New visit (`/opd/visit/new?patientId=`) — AGENT B. Where the lab
- * front desk's new-order choice lands for OPD. Five aligned steps in the main
- * card (Patient · Doctor or department · Visit purpose · Lab tests · Vitals)
- * and the BILLING side card that follows every choice: the consult line (with
- * the follow-up rule and an exact desk override), the lab tests' own lab bill,
- * one total and ONE primary — Continue to payment. The draft saves itself
- * (per user × branch). Payment reuses Order & Payments' inline payment panel;
- * the server books, bills and issues the token in one call, then the visit
- * screen shows the token.
+ * OPD → New visit (`/opd/visit/new?patientId=`). SAME shell as the lab's
+ * Order & Payments (`features/frontdesk/order-create`): a band with chips
+ * (Consultation / patient) + a catalogue search, a left catalogue card with
+ * tabs (Doctors / Departments / Lab tests) and department filter chips, and
+ * a right BILLING card that follows every choice — the consult line (with
+ * the follow-up rule and an exact desk override), the lab tests' own lab
+ * bill, one total and Save as draft + Continue to payment. The draft saves
+ * itself (per user × branch). Payment reuses Order & Payments' inline
+ * payment panel; the server books, bills and issues the token in one call,
+ * then the visit screen shows the token.
+ *
+ * "Any doctor in <department>" is always an EXPLICIT tile the receptionist
+ * taps (never a silent auto-pick on choosing the department) — see
+ * {@link pickAnyInDepartment}.
  */
 @Component({
   selector: 'pf-opd-book-visit',
   standalone: true,
   imports: [
     RouterLink, HeroBandComponent, PatientSearchComponent, ScreenHeaderComponent, SkeletonRowsComponent,
-    CurrencyInrPipe, BusyDirective, InlinePaymentPanelComponent, OpdVitalsFormComponent,
+    CurrencyInrPipe, BusyDirective, InlinePaymentPanelComponent, OpdVitalsFormComponent, OpdSpecimenPickerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './book-visit.page.html',
@@ -82,6 +91,15 @@ export class OpdBookVisitPage {
   readonly mode = signal<PickMode>('doctor');
   readonly doctorId = signal<string | null>(null);
   readonly departmentId = signal<string | null>(null);
+  /** Catalogue card (order-create shell): Doctors / Departments / Lab tests. */
+  readonly catalogTab = signal<CatalogTab>('doctors');
+  /** Department filter chip selected in the Doctors tab (also the expanded
+   *  row in the Departments tab) — `null` = all departments. */
+  readonly deptFilterId = signal<string | null>(null);
+  /** Band search once a patient is picked: "Search doctors, departments or
+   *  services" — filters the Doctors / Departments tabs only (Lab tests
+   *  keeps its own search, unchanged). */
+  readonly catalogQuery = signal('');
   readonly serviceId = signal<string | null | undefined>(undefined); // undefined = not picked; null = plain consultation
   readonly purpose = signal('');
   readonly overrideRaw = signal('');
@@ -89,6 +107,11 @@ export class OpdBookVisitPage {
   readonly overrideOpen = signal(false);
   readonly labIds = signal<string[]>([]);
   readonly labQuery = signal('');
+  /** testId → the picked specimen (choose-mode tests only) — see
+   *  `features/opd/shared/opd-specimen.ts` / `pf-opd-specimen-picker`. */
+  readonly labSpecimens = signal<Record<string, string>>({});
+  /** Cart rows a blocked Checkout must point at (cleared as each is picked). */
+  readonly specimenErr = signal<Record<string, true>>({});
   readonly urgent = signal(false);
   readonly vitalsHere = signal(false);
 
@@ -101,7 +124,28 @@ export class OpdBookVisitPage {
   readonly doctors = computed(() => this.data()?.doctors ?? []);
   readonly departments = computed(() => this.data()?.departments ?? []);
   readonly doctor = computed<DeskDoctor | null>(() => this.doctors().find(d => d.id === this.doctorId()) ?? null);
+  /** Today's open visits of the picked patient (duplicate-visit nudge). */
+  readonly patientToday = signal<OpdVisitRow[]>([]);
+  /** An open visit today with the SAME doctor — the desk should reopen it, not book twice. */
+  readonly duplicateVisit = computed<OpdVisitRow | null>(() =>
+    sameDoctorOpenVisit(this.patientToday(), this.doctorId()));
   readonly department = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.departmentId()) ?? null);
+  /** Doctors tab: department chip filter, then the band's catalogue search. */
+  readonly deptFilter = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.deptFilterId()) ?? null);
+  readonly filteredDoctors = computed(() => {
+    const dep = this.deptFilter();
+    const q = this.catalogQuery().trim().toLowerCase();
+    return this.doctors().filter(d => {
+      if (dep && !dep.doctorIds.includes(d.id)) return false;
+      if (!q) return true;
+      return d.name.toLowerCase().includes(q) || (d.department ?? '').toLowerCase().includes(q);
+    });
+  });
+  readonly filteredDepartments = computed(() => {
+    const q = this.catalogQuery().trim().toLowerCase();
+    if (!q) return this.departments();
+    return this.departments().filter(d => d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q));
+  });
   readonly services = computed(() => this.quote()?.services ?? []);
   readonly service = computed<ServiceQuote | null>(() => {
     const id = this.serviceId();
@@ -113,8 +157,9 @@ export class OpdBookVisitPage {
     return v != null && Number.isNaN(v) ? null : v;
   });
   readonly overrideInvalid = computed(() => Number.isNaN(parseOverride(this.overrideRaw()) as number));
+  readonly testById = computed<Map<string, Test>>(() => new Map(this.tests().map(t => [t.id, t])));
   readonly labTests = computed<LabLine[]>(() => {
-    const byId = new Map(this.tests().map(t => [t.id, t]));
+    const byId = this.testById();
     return this.labIds().map(id => byId.get(id)).filter((t): t is Test => !!t)
       .map(t => ({ id: t.id, name: t.name, price: t.price ?? 0, slab: this.gstOn() ? t.taxSlab ?? 0 : 0 }));
   });
@@ -138,7 +183,8 @@ export class OpdBookVisitPage {
   readonly nextStepText = computed(() => {
     const d = this.doctor(); const who = d ? d.name : 'the doctor';
     const pron = this.pronoun();
-    if (this.takeVitalsHere() || this.workflow().vitals === 'off') return `then ${pron} goes to ${who}'s queue.`;
+    if (this.workflow().vitals === 'off') return `then ${pron} goes to ${who}'s queue.`;
+    if (this.takeVitalsHere() || this.workflow().vitals === 'desk') return `record ${pron === 'they' ? 'their' : pron === 'she' ? 'her' : 'his'} vitals here, then ${pron} goes to ${who}'s queue.`;
     return `then ${pron} goes to the vitals station.`;
   });
   readonly pronoun = computed(() => {
@@ -183,6 +229,11 @@ export class OpdBookVisitPage {
 
     // Re-quote whenever the doctor or the patient changes.
     effect(() => {
+      const pid = this.patient()?.id ?? null;
+      if (!pid) { this.patientToday.set([]); return; }
+      this.desk.visits({}).subscribe({ next: rows => this.patientToday.set((rows ?? []).filter(r => r.patientId === pid)), error: () => this.patientToday.set([]) });
+    });
+    effect(() => {
       const doc = this.doctorId();
       const pid = this.patient()?.id ?? null;
       untracked(() => this.loadQuote(doc, pid));
@@ -215,7 +266,7 @@ export class OpdBookVisitPage {
       this.restoring = true;
       this.doctorId.set(draft.doctorId ?? null);
       this.departmentId.set(draft.departmentId ?? null);
-      if (draft.departmentId && !draft.doctorId) this.mode.set('department');
+      if (draft.departmentId) { this.mode.set('department'); this.deptFilterId.set(draft.departmentId); }
       this.serviceId.set(draft.serviceId === null && draft.doctorId ? null : draft.serviceId ?? undefined);
       this.purpose.set(draft.purpose ?? '');
       this.overrideRaw.set(draft.override ?? '');
@@ -284,23 +335,37 @@ export class OpdBookVisitPage {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   }
 
+  // ── Catalogue tabs ───────────────────────────────────────────────────
+  setCatalogTab(t: CatalogTab): void { this.catalogTab.set(t); }
+  /** Department chip / tile: only FILTERS the Doctors tab — picking a
+   *  doctor is always its own, separate, explicit click (never silent). */
+  filterByDepartment(dep: DeskDepartment | null): void {
+    this.deptFilterId.set(dep?.id ?? null);
+    this.catalogTab.set('doctors');
+  }
   // ── Doctor / department ──────────────────────────────────────────────
-  setMode(m: PickMode): void { this.mode.set(m); }
   pickDoctor(d: DeskDoctor): void {
     if (this.doctorId() !== d.id) { this.serviceId.set(undefined); this.clearOverride(); }
     this.doctorId.set(d.id);
-    if (this.mode() === 'doctor') this.departmentId.set(null);
+    const dep = this.deptFilterId();
+    if (dep) { this.mode.set('department'); this.departmentId.set(dep); } else { this.mode.set('doctor'); this.departmentId.set(null); }
   }
-  /** By department: the least-waiting doctor of the department (the server's rule). */
-  pickDepartment(dep: DeskDepartment): void {
-    this.departmentId.set(dep.id);
+  /** The EXPLICIT "Any doctor in <department>" tile — the least-waiting
+   *  doctor of the department (the server's rule), never picked silently
+   *  just because the department was selected. */
+  pickAnyInDepartment(dep: DeskDepartment): void {
     const docs = this.doctors().filter(d => dep.doctorIds.includes(d.id))
       .sort((a, b) => a.waiting - b.waiting || a.name.localeCompare(b.name));
-    if (!docs.length) { this.toasts.info(`No doctor is set up in ${dep.name} yet.`); this.doctorId.set(null); return; }
+    if (!docs.length) { this.toasts.info(`No doctor is set up in ${dep.name} yet.`); return; }
     if (this.doctorId() !== docs[0].id) { this.serviceId.set(undefined); this.clearOverride(); }
     this.doctorId.set(docs[0].id);
+    this.mode.set('department');
+    this.departmentId.set(dep.id);
+    this.deptFilterId.set(dep.id);
+    this.catalogTab.set('doctors');
   }
-  waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
+  dayName(k: string): string { return DAY_NAMES[k] ?? k; }
+    waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   waitClass(d: { waiting: number; estWaitMinutes?: number }): string { return 'pf-ob-dot--' + waitTone(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   deptDoctorsText(dep: DeskDepartment): string {
     const n = dep.doctorIds.length;
@@ -334,17 +399,57 @@ export class OpdBookVisitPage {
 
   // ── Lab tests ────────────────────────────────────────────────────────
   addLab(t: Test): void { this.labIds.update(l => (l.includes(t.id) ? l : [...l, t.id])); this.labQuery.set(''); }
-  removeLab(id: string): void { this.labIds.update(l => l.filter(x => x !== id)); }
-  clearLabs(): void { this.labIds.set([]); }
+  removeLab(id: string): void {
+    this.labIds.update(l => l.filter(x => x !== id));
+    this.labSpecimens.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
+    this.specimenErr.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  clearLabs(): void { this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); }
   onLabKey(ev: KeyboardEvent): void {
     if (ev.key === 'Enter' && this.labResults().length) { ev.preventDefault(); this.addLab(this.labResults()[0]); }
     if (ev.key === 'Escape') this.labQuery.set('');
   }
   testCode(t: Test): string { return t.shortName || t.testCode || ''; }
 
+  // ── Specimen (choose-mode lab tests) ────────────────────────────────────
+  testForPicker(id: string): { id: string; name: string; parameters?: string | null } {
+    const t = this.testById().get(id);
+    return { id, name: t?.name ?? '', parameters: t?.parameters ?? null };
+  }
+  specimenOf(id: string): string | null { return this.labSpecimens()[id] ?? null; }
+  specimenInvalid(id: string): boolean { return !!this.specimenErr()[id]; }
+  setSpecimen(id: string, v: string): void {
+    this.labSpecimens.update(m => ({ ...m, [id]: v }));
+    if (v) this.specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  /** Picked lab tests as `opd-specimen.ts` items — the same shape Complete
+   *  (consult) will build from `ItemDto`. */
+  private specimenItems(): OpdInvestigationItem[] {
+    return this.labTests().map(l => ({ testId: l.id, name: l.name, specimen: this.labSpecimens()[l.id] }));
+  }
+  /** Blocks Checkout the same way `order-create`'s `requireSpecimens()`
+   *  blocks Save/Pay — a choose-mode test with nothing picked yet would
+   *  otherwise make the server refuse the WHOLE booking (400
+   *  `specimen_required`, thrown before anything OPD is written). */
+  private requireLabSpecimens(): boolean {
+    const byId = this.testById();
+    const testsById: OpdTestLookup = {};
+    for (const l of this.labTests()) { const t = byId.get(l.id); if (t) testsById[l.id] = t; }
+    const missing = missingSpecimens(this.specimenItems(), testsById);
+    if (!missing.length) return true;
+    this.specimenErr.set(Object.fromEntries(missing.map(m => [m.testId, true as const])));
+    this.catalogTab.set('labs');
+    setTimeout(() => {
+      const host = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('.pf-opd-spec--err') : null;
+      host?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    return false;
+  }
+
   // ── Checkout ─────────────────────────────────────────────────────────
   continueToPayment(): void {
     if (!this.ready()) { this.toasts.info(this.missing()); return; }
+    if (!this.requireLabSpecimens()) { this.toasts.error('Choose the specimen for the highlighted lab test(s).'); return; }
     if (this.phone()) queueMicrotask(() => document.querySelector('.pf-ov-bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     if (this.takeVitalsHere()) {
       const f = this.vitalsForm();
@@ -372,7 +477,8 @@ export class OpdBookVisitPage {
         patientId: p.id, doctorUserId: d.id, departmentId: this.mode() === 'department' ? this.departmentId() : null,
         serviceId: s.serviceId, purpose: this.purpose().trim() || null,
         feeOverride: this.override(), feeOverrideReason: this.overrideReason().trim() || null,
-        labTestIds: this.labIds(), urgent: this.urgent(), vitals, payments,
+        labTestIds: this.labIds(), labTestSpecimens: specimenPayload(this.specimenItems()) ?? undefined,
+        urgent: this.urgent(), vitals, payments,
       }));
       writeDraft(this.draftStorage, this.key(), null);
       this.toasts.success(`Token ${v.tokenLabel} issued for ${v.patient.name}`);
@@ -387,7 +493,25 @@ export class OpdBookVisitPage {
   discardDraft(): void {
     writeDraft(this.draftStorage, this.key(), null);
     this.patient.set(null); this.doctorId.set(null); this.departmentId.set(null); this.serviceId.set(undefined);
-    this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.urgent.set(false);
+    this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); this.urgent.set(false);
+    this.deptFilterId.set(null); this.catalogQuery.set(''); this.catalogTab.set('doctors');
     this.vitalsForm()?.reset(); this.stage.set('build');
   }
+
+  /** Footer "Save as draft" (order-create parity): the draft already
+   *  autosaves on every change — this just confirms it and sends the
+   *  receptionist back to the OPD desk to pick up the next patient. */
+  saveDraftAndExit(): void {
+    if (!this.patient()) { this.toasts.warning('Pick a patient first'); return; }
+    this.toasts.success('Saved as draft');
+    void this.router.navigateByUrl('/opd/desk');
+  }
 }
+
+/** Pure: an open (not cancelled / no-show / completed) visit today with this doctor. */
+export function sameDoctorOpenVisit(rows: readonly OpdVisitRow[], doctorId: string | null): OpdVisitRow | null {
+  if (!doctorId) return null;
+  return rows.find(r => r.doctorUserId === doctorId && !['cancelled', 'no_show', 'completed'].includes(r.status)) ?? null;
+}
+
+const DAY_NAMES: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };

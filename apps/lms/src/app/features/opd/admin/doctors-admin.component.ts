@@ -136,7 +136,8 @@ export class DoctorsAdminComponent {
 
   readonly colDefs = computed<ColDef<DoctorRow>[]>(() => [
     { field: 'name', headerName: 'Doctor', flex: 1.4, minWidth: 170, pinned: 'left' },
-    { headerName: 'Department', minWidth: 140, valueGetter: (p) => p.data?.specializations?.[0] || p.data?.department || '—' },
+    { headerName: 'Department', minWidth: 140, valueGetter: (p) => p.data?.department || '—' },
+    { headerName: 'Qualifications', minWidth: 160, valueGetter: (p) => (p.data?.specializations ?? []).join(', ') || '—' },
     // The ONE registration number (users.RegistrationId) — what prints under the signature.
     { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'nd-num',
       valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' },

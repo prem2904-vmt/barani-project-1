@@ -19,8 +19,11 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Critical-value acknowledgement / communication:** `critical_result_events` (one row per critical result version), never the bell row.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
-  - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text.
+  - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text. Every NEW caller of `OrderService.CreateAsync` (OPD consult Complete, OPD desk Checkout, any future one) MUST thread its picked specimens into `CreateOrderInput.Specimens` — omitting it isn't a no-op, it makes `PlanSpecimensAsync` throw `specimen_required` for every choose-mode test and fail the WHOLE order; catch `CodedValidationException` ahead of any generic `ArgumentException` handler so that coded error reaches the UI instead of a flattened message.
   - **Paid (patient release):** `PatientReleaseGate`.
+  - **Counter collections (cash drawer, day closing, daily statement, dashboard):** `CashDrawer.CollectionsAsync` — lab payments / refunds AND OPD + pharmacy `opd_payments` / `opd_refunds`, merged per mode; never a second payments query in a controller.
+  - **Procedure price in the consult:** `OpdFeeRules.ResolvePrice` (the rule) + `ProcedureRules.CheckPrice` under the OPD setting `procedurePricing` (doctor change off by default; optional ± % cap); every doctor price change is audit-logged.
+  - **Daily patient number (#12 before the name on lab screens):** `daily_patient_numbers` via `DailyPatientNumbers` (branch × IST day, row-locked, reused by the patient's later orders that day), stamped once on `orders.DailyNo` / `DailyNoDay`; the UI shows it only through `pf-daily-no` / `utils/daily-no.ts`. An on-screen aid ONLY — never printed (labels, slips, bills, reports, messages, exports).
   - **Which tube / pot a line is drawn into:** ONE key, `OutsourcingRules.VialKey` + `ColourKey` (`TubeType`: blank container = sterile pot) — destination + space + tube type, and for a non-blood pot the line's specimen (fixed / chosen, else the Test Master text). Create, add-tests and outsourcing reconcile all use it, in-house and outsourced alike: same specimen + same container = one pot, never one pot per test.
   - **Partner report in the patient's PDF:** the `attachToReport` flag on the line's `external_report` attachment; the combined PDF is DERIVED on read (`CombinedReportPdf`, content-addressed cache) from the immutable stored report — never written into the stored report, never a second copy of the flag.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
@@ -29,6 +32,8 @@ If a rule blocks you, ask the owner. Don't work around it.
 - User files live only in Spaces via the storage service — never on the container disk (wiped on every deploy).
 - Patient files (reports, partner PDFs, attachments, plate photos, chat / voice, documents, bills, signature scans) are served ONLY through the authenticated, tenant-checked API — never a bearer / presigned URL that works without the session (the verified public report link keeps its own model). Make that path fast instead: stream from storage (never buffer the whole file first), ETag + `Cache-Control: private` (+ `Vary: Authorization`) so a revalidation is a 304 with no storage trip, remember a missing file, and fetch each file ONCE per session in the UI (no HEAD pre-check, no refetch per render, no read-back when nothing changed).
 - A tenant's storage folder has ONE home: `tenants.StoragePrefix`, set once by `TenantStorageKeys` (handle, else `<name>-<id8>`) — every storage key is built through it; authorization is always by tenant ID, never by folder name.
+- A storage write failure is never a bare 500: `UploadStore.SaveAsync` wraps it as `StorageWriteException` and the API answers 503 `storage_error` (the global handler maps any `AmazonServiceException` the same way); log the S3 error code + request id, never keys, never SDK text in the UI.
+- Every storage path is covered by the MinIO end-to-end suite (`Prefrontal.Tests.Integration/StorageE2E`: the real Spaces client against MinIO, with injected S3 faults); a new storage call site needs a test there — the in-memory fake alone is not coverage.
 - A feature switch has ONE resolver (UI lab-features / server LabFeatureGate); never gate a surface on the workflow or the entitlement alone.
 
 ## 2. Tenant and branch isolation
@@ -52,6 +57,8 @@ If a rule blocks you, ask the owner. Don't work around it.
   - Background services take a Postgres advisory leader lock per tick (`LeaderGate`) AND are idempotent on their own (once-ever unique keys, stamp-then-send, conditional updates); a tick never runs unguarded.
 - **Time windows:**
   - Day windows are IST days converted to UTC ranges. Never `DateTime.UtcNow.Date`.
+  - Tests too: a business date comes from `LabClock.BusinessDate()` / `labDaysAgo(n)`, never `DateTime.UtcNow.Date` or a literal near "today" (appointment tests failed every night 00:00–05:30 IST; a spec failed on 1 Oct when its literal equalled the 30-day default).
+  - A token is issued for the day of ARRIVAL and must be unique where the unique index says (per doctor), whatever pool it is drawn from (OPD department pool, an off-day appointment checked in today).
   - Store UTC; display IST.
 - **Migrations and data fixes:**
   - Migrations AUTO-APPLY on boot: they must be safe, idempotent, reversible, and never destructive without the owner's approval.
@@ -62,12 +69,14 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A signed report never changes. Stored PDFs are immutable; only Regenerate creates a new version (supersede the old one in the same transaction).
 - One live final report per order. "Delivered" comes from the live final report.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
+- Safety acknowledgements (allergy / pregnancy) belong to ONE line of ONE patient: never copied onto a new line (usual set, repeat, swap); safety gates read the tenant's EFFECTIVE drug (`DrugCatalogResolver`), never the master row.
 - Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
 - A derived delivery file (the combined report + partner PDF) is served from the bytes just built, never only via a storage round-trip; a cache probe treats ANY storage error as a miss (S3-compatible stores may answer a missing key with 403); staff screens say what the SERVED file contains (`GET /api/reports/{id}/pdf-parts`), never infer it from a flag. Test storage failures with the fake store's fault knobs.
 
 ## 5. Auth and security
 - The server decides access; the UI only reflects it (guards + a not-authorised screen, no screen without access).
+- Money powers are the same wherever money moves: a desk fee override follows the role discount cap (`BillingService.DiscountCapFor`), a refund needs `process_refund`; only the consult's Complete finishes an OPD visit.
 - Log out only on a definitive auth failure, never on a network blip. Refresh is single-flight.
 - Notifications are alerts, not records: they have a retention period (read 7 days, unread 30 days). Nothing that must be kept lives only in a notification.
 - Never print, log or commit secrets (DB URLs, tokens, keys) except owner-authorised dev keys. Rotate anything exposed.

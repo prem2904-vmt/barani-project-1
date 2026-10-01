@@ -258,7 +258,7 @@
         <button type="button" class="pf-rq-card__head pf-rq-card__toggle" (click)="toggle(po.id)"
                 [attr.aria-expanded]="open" [attr.aria-controls]="'pf-rq-po-' + po.id">
           <span class="pf-rq-card__who">
-            <span class="pf-rq-card__name">{{ po.patientName }}</span>
+            <span class="pf-rq-card__name"><pf-daily-no [of]="po" />{{ po.patientName }}</span>
             <span class="pf-rq-card__meta nd-num">{{ po.patientMeta }}</span>
             <span class="pf-rq-card__meta pf-rq-card__count nd-num">{{ po.countLabel }}</span>
           </span>
@@ -381,7 +381,7 @@
       <li class="pf-rq-card pf-rq-card--report" [attr.data-status]="r.deliveryStatus" [pfZoomSource]="[r.id, r.orderId]">
         <div class="pf-rq-card__head">
           <div class="pf-rq-card__who">
-            <p class="pf-rq-card__name">{{ reportPatientName(r) }}</p>
+            <p class="pf-rq-card__name"><pf-daily-no [of]="r.order" />{{ reportPatientName(r) }}</p>
             <p class="pf-rq-card__meta nd-num">{{ reportMeta(r) }}</p>
           </div>
           <!-- ONE status: dot + coloured word, no chip, in a fixed right column
@@ -500,7 +500,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <p class="font-semibold text-[15px] truncate max-w-full" style="color: var(--text-primary);"
               [title]="patientTitle">
-              {{ patientTitle }}
+              <pf-daily-no [of]="r.order" />{{ patientTitle }}
             </p>
             <span class="pf-rq-row__badge">
               <pf-chip [tone]="chipTone(r.deliveryStatus)" size="sm">{{

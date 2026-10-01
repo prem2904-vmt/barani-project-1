@@ -38,6 +38,7 @@ import { NumpadService } from '../../../shared/components/numpad/numpad.service'
 import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patient-age';
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -89,6 +90,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
   selector: 'pf-result-entry',
   standalone: true,
   imports: [
+    DailyNoComponent,
     BarcodeScannerModalComponent,
     TatIndicatorComponent,
     AvatarComponent,
@@ -207,7 +209,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               <div class="pf-patient-bar">
                 <pf-avatar [name]="patientName()" [size]="40"></pf-avatar>
                 <div class="pf-patient-bar__id">
-                  <p class="pf-patient-bar__name">{{ patientInfoString() }}</p>
+                  <p class="pf-patient-bar__name"><pf-daily-no [of]="dailyNoSrc()" />{{ patientInfoString() }}</p>
                   <p class="pf-patient-bar__meta">
                     {{ t.test?.department?.name ?? '—' }}
                     <span class="pf-patient-bar__sep">·</span> TAT {{ t.test?.tatHours }}h
@@ -2888,6 +2890,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   private readonly _ot = signal<OrderTest | null>(null);
+  /** The line's tube (carries its order's daily patient number). */
+  readonly dailyNoSrc = computed(() => this._ot()?.subOrder ?? null);
   /** First-load skeleton for the result (ND-PATTERN "Loading feedback"). */
   private readonly recordHold = createLoadHold(true);
   readonly recordSkeleton = this.recordHold.active;

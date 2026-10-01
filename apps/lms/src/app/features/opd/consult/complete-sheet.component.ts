@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { DatePipe } from '@angular/common';
 import type { OpdDiagnosis } from '../shared/opd.models';
 import { lineShort } from '../shared/rx-schedule';
-import type { ConsultInvestigationItem } from './consult.api';
+import type { ConsultBilling, ConsultInvestigationItem, ConsultProcedureDraft } from './consult.api';
+import { proceduresTotal } from './procedure-rules';
+import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import type { ConsultRxLine } from './rx/rx-model';
 
 /** Follow-up quick picks (days; null = none). */
@@ -24,17 +26,29 @@ export function addDaysIso(start: Date, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** What the front desk collects after this consult (the sheet's money line). Pure. */
+export function deskDueText(billing: ConsultBilling | null, procTotal: number): string | null {
+  const after = billing?.mode === 'after_consult';
+  const fee = after ? Math.max(0, billing?.consultBalance ?? 0) : 0;
+  const total = fee + procTotal;
+  if (total <= 0) return after ? 'Nothing to collect at the desk.' : null;
+  const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  if (after && procTotal > 0 && fee > 0) return `${inr(total)} at the front desk — consultation ${inr(fee)} + procedures ${inr(procTotal)}, one bill.`;
+  if (after && fee > 0) return `${inr(fee)} consultation at the front desk (pay after consult).`;
+  return `${inr(procTotal)} for procedures at the front desk${after ? '' : ' — the consultation is already paid'}.`;
+}
+
 /**
  * "Complete consult" — the summary of everything the consult sends out
  * (Agent C): diagnosis, pharmacy lines, lab tests + price, follow-up (quick
  * picks + the fee rule), an unresolved-allergy warning (blocks sending), and
- * the next-phase outputs shown as not built yet. A right-side sheet on
+ * (no roadmap copy for unbuilt outputs). A right-side sheet on
  * desktop, a bottom sheet on phones.
  */
 @Component({
   selector: 'pf-consult-complete-sheet',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, CurrencyInrPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="cs-back" (click)="cancel.emit()" aria-hidden="true"></div>
@@ -55,6 +69,20 @@ export function addDaysIso(start: Date, days: number): string {
           <div class="cs__warn" role="alert">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
             <span>{{ unresolved() }} medicine{{ unresolved() === 1 ? '' : 's' }} conflict{{ unresolved() === 1 ? 's' : '' }} with a recorded allergy. Swap it or mark it "Keep, reviewed" on the prescription first.</span>
+          </div>
+        }
+        <!-- Pregnancy-safety guard (night/safety, critic P0 #1c) -->
+        @if (pregnancyUnresolved() > 0) {
+          <div class="cs__warn" role="alert">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            <span>{{ pregnancyUnresolved() }} medicine{{ pregnancyUnresolved() === 1 ? '' : 's' }} should be avoided in pregnancy. Swap it or mark it "Keep, reviewed" on the prescription first.</span>
+          </div>
+        }
+        <!-- Required fields (night/safety, critic P1 #2) -->
+        @if (missingRequired().length) {
+          <div class="cs__warn" role="alert">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            <span>Please answer: {{ missingRequired().join(', ') }}.</span>
           </div>
         }
 
@@ -90,6 +118,22 @@ export function addDaysIso(start: Date, days: number): string {
           </div>
         </section>
 
+        @if (procedures().length || deskText()) {
+          <section class="cs__row" data-row="procedures">
+            <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
+            <div class="cs__c">
+              <span class="cs__k">Procedures &amp; front desk</span>
+              @if (procedures().length) {
+                <b>{{ procedures().length }} procedure{{ procedures().length === 1 ? '' : 's' }} · {{ procTotal() | inr }}</b>
+                @for (p of procedures(); track p.key) {
+                  <span class="cs__line"><b>{{ p.name }}</b>@if (p.side) { · {{ p.side }} }@if (p.qty > 1) { · × {{ p.qty }} } · {{ p.price * p.qty | inr }}@if (p.price !== p.rulePrice) { <em class="cs__ovr"> (rule {{ p.rulePrice | inr }})</em> }</span>
+                }
+              }
+              @if (deskText(); as t) { <span class="cs__m">{{ t }}</span> }
+            </div>
+          </section>
+        }
+
         <section class="cs__row">
           <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
           <div class="cs__c">
@@ -105,18 +149,11 @@ export function addDaysIso(start: Date, days: number): string {
           </div>
         </section>
 
-        <section class="cs__row cs__row--later">
-          <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <div class="cs__c">
-            <span class="cs__k">Next phase</span>
-            <span class="cs__m">Procedure note · Referral · IPD admission · Certificate · Consent — not built yet.</span>
-          </div>
-        </section>
       </div>
 
       <footer class="cs__foot">
         <button type="button" class="nd-btn nd-btn--secondary" (click)="cancel.emit()">Keep editing</button>
-        <button type="button" class="nd-btn nd-btn--primary" [disabled]="busy() || unresolved() > 0" (click)="confirm.emit()">
+        <button type="button" class="nd-btn nd-btn--primary" [disabled]="busy() || unresolved() > 0 || pregnancyUnresolved() > 0 || missingRequired().length > 0" (click)="confirm.emit()">
           {{ busy() ? 'Sending…' : 'Complete & send' }}
         </button>
       </footer>
@@ -151,6 +188,7 @@ export function addDaysIso(start: Date, days: number): string {
     .cs__m { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.45; }
     .cs__line { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
     .cs__line b { color: var(--text-primary); font-weight: 600; }
+    .cs__ovr { font-style: normal; color: var(--amber-text, #b45309); }
     .cs__seg { display: flex; width: 100%; margin: 4px 0 2px; }
     .cs__pick { flex: 1; justify-content: center; min-height: 40px; border: 0; background: transparent; }
     .cs__pick.on { background: var(--nd-card-bg); box-shadow: var(--nd-shadow-sm); font-weight: 600; color: var(--text-primary); }
@@ -166,14 +204,21 @@ export function addDaysIso(start: Date, days: number): string {
 })
 export class ConsultCompleteSheetComponent {
   readonly patientName = input('');
-  readonly token = input<number | string>('');
+  /** The desk's doctor-prefixed token label ("E5") — never the bare number. */
+  readonly token = input('');
   readonly diagnoses = input<OpdDiagnosis[]>([]);
   readonly lines = input<ConsultRxLine[]>([]);
   readonly tests = input<ConsultInvestigationItem[]>([]);
+  readonly procedures = input<ConsultProcedureDraft[]>([]);
+  readonly billing = input<ConsultBilling | null>(null);
   readonly followUpDays = input<number | null>(null);
   readonly followUpRule = input<{ withinDays: number; fee?: number | null } | null>(null);
   readonly visitDate = input<Date>(new Date());
   readonly unresolved = input(0);
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c). */
+  readonly pregnancyUnresolved = input(0);
+  /** Required fields (night/safety, critic P1 #2) — labels still unanswered. */
+  readonly missingRequired = input<string[]>([]);
   readonly busy = input(false);
 
   readonly followUpDaysChange = output<number | null>();
@@ -184,6 +229,8 @@ export class ConsultCompleteSheetComponent {
   readonly dxText = computed(() => this.diagnoses().map(d => d.label).join(', '));
   readonly testNames = computed(() => this.tests().map(t => t.name).join(', '));
   readonly testTotal = computed(() => this.tests().reduce((a, t) => a + (Number(t.price) || 0), 0));
+  readonly procTotal = computed(() => proceduresTotal(this.procedures()));
+  readonly deskText = computed(() => deskDueText(this.billing(), this.procTotal()));
   readonly feeText = computed(() => followUpFeeText(this.followUpDays(), this.followUpRule()));
   readonly followUpDate = computed(() => { const d = this.followUpDays(); return d == null ? null : addDaysIso(this.visitDate(), d); });
   short(l: ConsultRxLine) { return lineShort(l.line, l.drug); }

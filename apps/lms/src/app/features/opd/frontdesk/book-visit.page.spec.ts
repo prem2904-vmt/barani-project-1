@@ -1,23 +1,33 @@
+import { sameDoctorOpenVisit } from './book-visit.page';
 import { TestBed } from '@angular/core/testing';
 import { OpdBookVisitPage } from './book-visit.page';
 import { DESK, PATIENT, QUOTE_D1, TESTS, VISIT, flush, harness, memoryStorage } from './opd-b.spec-helpers';
 import { draftKey } from './desk-rules';
 
 /**
- * OPD → New visit: five aligned steps + the BILLING card that follows every
- * choice, ONE primary, follow-up rule + exact override, lab tests on their own
- * lab bill, workflow-driven vitals, the auto-saving draft and the one checkout.
+ * OPD → New visit: the order-create shell (band chips + a catalogue card
+ * with Doctors / Departments / Lab tests tabs) + the BILLING card that
+ * follows every choice, ONE primary, follow-up rule + exact override, lab
+ * tests on their own lab bill, workflow-driven vitals, the auto-saving draft
+ * and the one checkout. "Any doctor in <department>" is always an explicit
+ * tap — never a silent auto-pick from choosing the department.
  */
-function render(opts: { query?: Record<string, string>; desk?: any; post?: (u: string, b: any) => unknown } = {}) {
+function render(opts: {
+  query?: Record<string, string>; desk?: any; post?: (u: string, b: any) => unknown;
+  tests?: any[]; specimens?: any[]; specimenMaster?: any[];
+} = {}) {
   const h = harness({
     query: opts.query,
     get: url => {
       if (url === '/api/opd/visits/desk') return opts.desk ?? DESK;
       if (url.startsWith('/api/opd/visits/quote?doctorId=d1')) return QUOTE_D1;
       if (url.startsWith('/api/opd/visits/quote')) return { doctorId: 'x', services: [{ serviceId: 's9', name: 'General consultation', category: 'consultation', priceSource: 'common', price: 500, taxSlab: 0, isFollowUp: false, quoted: 500 }] };
-      if (url.startsWith('/api/tests/')) return TESTS;
+      if (url.startsWith('/api/tests/')) return opts.tests ?? TESTS;
       if (url.startsWith('/api/patients/')) return { patient: PATIENT, history: [] };
       if (url === '/api/config/billing/visibility') return { gstEnabled: false };
+      // The specimen picker (choose-mode lab tests) — see opd-specimen-picker.component.ts.
+      if (url.startsWith('/api/microbiology/test-specimens')) return opts.specimens ?? [];
+      if (url === '/api/microbiology/specimens') return opts.specimenMaster ?? [];
       return null;
     },
     post: opts.post ?? ((u: string) => (u === '/api/opd/visits' ? VISIT : {})),
@@ -33,29 +43,48 @@ const cta = (el: HTMLElement) => el.querySelector('[data-cta]') as HTMLButtonEle
 beforeEach(() => Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true }));
 afterEach(() => TestBed.resetTestingModule());
 
-describe('New visit — steps', () => {
-  it('shows the five steps in order when the workflow has lab tests and vitals', () => {
-    const { el } = render();
-    expect([...el.querySelectorAll('.pf-ob-step')].map(s => s.getAttribute('data-step'))).toEqual(['patient', 'doctor', 'purpose', 'lab', 'vitals']);
-    expect([...el.querySelectorAll('.pf-ob-step__n')].map(n => n.textContent!.trim())).toEqual(['1', '2', '3', '4', '5']);
-  });
-
-  it('drops the lab and vitals steps when the workflow turns them off', () => {
-    const { el } = render({ desk: { ...DESK, config: { ...DESK.config, workflow: { vitals: 'off', labTestsAtDesk: false, billing: 'before_consult' } } } });
-    expect([...el.querySelectorAll('.pf-ob-step')].map(s => s.getAttribute('data-step'))).toEqual(['patient', 'doctor', 'purpose']);
-  });
-
-  it('opens the patient from ?patientId= (the new-order fork) and shows full name + ids', () => {
+describe('New visit — band chips + catalogue tabs (order-create shell)', () => {
+  it('shows a static "Consultation" chip, then the patient as a removable chip once picked', () => {
     const { el } = render({ query: { patientId: 'p1' } });
-    const card = el.querySelector('.pf-ov-patient')!;
-    expect(card.textContent).toContain('Mrs. Kavitha Ramesh');
-    expect(card.textContent).toContain('AA0112');
-    expect(card.textContent).toContain('ABHA linked');
+    expect(el.querySelector('.pf-bv-chip--type')!.textContent!.trim()).toBe('Consultation');
+    const chip = el.querySelector('.pf-bv-chip--patient')!;
+    expect(chip.textContent).toContain('Mrs. Kavitha Ramesh');
+    expect(chip.querySelector('.pf-bv-chip__x')).toBeTruthy();
   });
 
-  it('lists doctors as tiles with wait and fee; picking one quotes its services and pre-picks the follow-up', async () => {
+  it('before a patient is picked the band searches patients; once picked it becomes the catalogue search', () => {
+    const before = render();
+    expect(before.el.querySelector('.pf-bv-patientsearch')).toBeTruthy();
+    expect(before.el.querySelector('.pf-bv-catsearch')).toBeNull();
+    TestBed.resetTestingModule();
+    const after = render({ query: { patientId: 'p1' } });
+    expect(after.el.querySelector('.pf-bv-patientsearch')).toBeNull();
+    const field = after.el.querySelector('.pf-bv-catsearch input')!;
+    expect(field.getAttribute('placeholder')).toBe('Search doctors, departments or services');
+  });
+
+  it('clearing the patient chip clears the patient', () => {
+    const { el, f, c } = render({ query: { patientId: 'p1' } });
+    (el.querySelector('.pf-bv-chip__x') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(c.patient()).toBeNull();
+  });
+
+  it('shows three catalogue tabs — Doctors / Departments / Lab tests — when the workflow has lab tests', () => {
+    const { el } = render();
+    const tabs = [...el.querySelectorAll('.pf-ov-tabs .nd-seg__item')].map(t => t.textContent!.replace(/\s+/g, ' ').trim());
+    expect(tabs).toEqual(['Doctors', 'Departments', 'Lab tests']);
+  });
+
+  it('drops the Lab tests tab when the workflow turns it off', () => {
+    const { el } = render({ desk: { ...DESK, config: { ...DESK.config, workflow: { vitals: 'off', labTestsAtDesk: false, billing: 'before_consult' } } } });
+    const tabs = [...el.querySelectorAll('.pf-ov-tabs .nd-seg__item')].map(t => t.textContent!.trim());
+    expect(tabs).toEqual(['Doctors', 'Departments']);
+  });
+
+  it('Doctors tab: lists doctors as tiles with wait and fee; picking one quotes its services and pre-picks the follow-up', async () => {
     const { el, f, c, api } = render({ query: { patientId: 'p1' } });
-    const tiles = el.querySelectorAll('[data-step="doctor"] .pf-ob-tile');
+    const tiles = el.querySelectorAll('.pf-ov-main .pf-ob-tile');
     expect(tiles.length).toBe(3);
     expect(tiles[0].textContent).toContain('3 waiting · ~36 min');
     expect(tiles[0].textContent).toContain('₹600');
@@ -64,16 +93,50 @@ describe('New visit — steps', () => {
     expect(api.get).toHaveBeenCalledWith('/api/opd/visits/quote?doctorId=d1&patientId=p1');
     expect(tiles[0].getAttribute('aria-checked')).toBe('true');
     expect(c.serviceId()).toBe('s1'); // the follow-up
-    const choice = el.querySelector('[data-step="purpose"] .pf-ob-choice[aria-checked="true"]')!;
+    const choice = el.querySelector('.pf-ov-purposeblock .pf-ob-choice[aria-checked="true"]')!;
     expect(choice.textContent).toContain('ENT consultation (follow-up)');
     expect(choice.textContent).toContain('₹300');
   });
 
-  it('by department picks the least-waiting doctor of the department', () => {
+  it('Doctors tab: department chips filter the tile list', () => {
+    const { el, f, c } = render();
+    const gmChip = [...el.querySelectorAll('.pf-ov-deptpills .nd-chip')].find(b => b.textContent === 'General Medicine') as HTMLButtonElement;
+    gmChip.click(); f.detectChanges();
+    const tiles = el.querySelectorAll('.pf-ov-main .pf-ob-tile');
+    expect(tiles.length).toBe(1);
+    expect(tiles[0].textContent).toContain('Dr. Rohan Mehta');
+    expect(c.deptFilterId()).toBe('gm');
+  });
+
+  it('"Any doctor in <department>" is an EXPLICIT row — picking a department alone never picks a doctor', () => {
+    const { el, f, c } = render();
+    c.filterByDepartment(DESK.departments[0]); // ENT
+    f.detectChanges();
+    expect(c.doctorId()).toBeNull(); // filtering ≠ picking
+    const anyRow = el.querySelector('.pf-ov-anydept') as HTMLButtonElement;
+    expect(anyRow.textContent).toContain('Any doctor in ENT');
+    anyRow.click(); f.detectChanges();
+    expect(c.doctorId()).toBe('d2'); // least-waiting of ENT
+    expect(c.mode()).toBe('department');
+    expect(c.departmentId()).toBe('ent');
+  });
+
+  it('Departments tab: picking a department switches to the Doctors tab, filtered (never auto-picks)', () => {
+    const { el, f, c } = render();
+    c.setCatalogTab('departments'); f.detectChanges();
+    const depTile = el.querySelector('.pf-ov-main .pf-ob-tile') as HTMLButtonElement;
+    expect(depTile.textContent).toContain('ENT');
+    depTile.click(); f.detectChanges();
+    expect(c.catalogTab()).toBe('doctors');
+    expect(c.doctorId()).toBeNull();
+    expect(el.querySelector('.pf-ov-anydept')!.textContent).toContain('Any doctor in ENT');
+  });
+
+  it('picking a specific doctor directly (no department filter) does not set departmentId', () => {
     const { c } = render();
-    c.setMode('department');
-    c.pickDepartment(DESK.departments[0]);
-    expect(c.doctorId()).toBe('d2');
+    c.pickDoctor(DESK.doctors[2]); // Dr. Rohan Mehta, General Medicine
+    expect(c.mode()).toBe('doctor');
+    expect(c.departmentId()).toBeNull();
   });
 });
 
@@ -109,6 +172,7 @@ describe('New visit — BILLING card', () => {
 
   it('lab tests found by short name go on their own lab bill; the total adds both', async () => {
     const { el, f, c } = await ready();
+    c.setCatalogTab('labs'); f.detectChanges();
     c.labQuery.set('aec'); f.detectChanges();
     const res = el.querySelectorAll('.pf-ov-labrow');
     expect(res.length).toBe(1);
@@ -156,11 +220,34 @@ describe('New visit — BILLING card', () => {
 });
 
 describe('New visit — vitals + draft', () => {
+  it('station workflow: "Take vitals here" lives in the BILLING header, like Urgent', () => {
+    const { el } = render();
+    const header = el.querySelector('.pf-ov-bill .nd-card__head')!;
+    expect(header.textContent).toContain('Take vitals here');
+  });
+
   it('station workflow: "Take vitals here" toggles the inline form', async () => {
     const { el, f, c } = render();
     expect(el.querySelector('pf-opd-vitals-form')).toBeNull();
     c.vitalsHere.set(true); f.detectChanges();
     expect(el.querySelector('pf-opd-vitals-form')).toBeTruthy();
+  });
+
+  it('the footer has Save as draft (secondary) next to the primary CTA', async () => {
+    const { el, f, c } = render({ query: { patientId: 'p1' } });
+    c.pickDoctor(DESK.doctors[0]); f.detectChanges(); await flush(); f.detectChanges();
+    const draftBtn = [...el.querySelectorAll('.pf-ob-foot .nd-btn')].find(b => b.textContent!.trim() === 'Save as draft') as HTMLButtonElement;
+    expect(draftBtn).toBeTruthy();
+    expect(draftBtn.classList).toContain('nd-btn--secondary');
+    expect(cta(el).textContent!.trim()).toBe('Continue to payment');
+  });
+
+  it('Save as draft confirms and returns to the OPD desk', () => {
+    const { el, f, c, toasts, router } = render({ query: { patientId: 'p1' } });
+    const draftBtn = [...el.querySelectorAll('.pf-ob-foot .nd-btn')].find(b => b.textContent!.trim() === 'Save as draft') as HTMLButtonElement;
+    draftBtn.click(); f.detectChanges();
+    expect(toasts.success).toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/opd/desk');
   });
 
   it('saves the draft per user × branch and restores it on the next open', async () => {
@@ -176,5 +263,87 @@ describe('New visit — vitals + draft', () => {
     expect(r2.c.patient()?.id).toBe('p1');
     r2.c.discardDraft(); r2.f.detectChanges();
     expect(localStorage.getItem(draftKey('u1', 'b1'))).toBeNull();
+  });
+});
+
+/** A choose-mode lab test (KOH Mount) — Test Master's own row carries
+ *  `specimenMode: 'choose'`, exactly what a real "KOH Mount" / "Bacterial
+ *  Culture & Sensitivity" catalogue row has. The fix under test: booking
+ *  with one of these picked, but no specimen chosen, must be BLOCKED on the
+ *  screen (never sent), and once chosen, `labTestSpecimens` rides the
+ *  checkout call the same way the server's `CreateOrderInput.Specimens`
+ *  expects it. */
+const KOH = {
+  id: 'tKoh', name: 'KOH Mount', shortName: 'KOH', testCode: 'MIC030', price: 300, taxSlab: 0, type: 'individual', isActive: true,
+  parameters: JSON.stringify({ specimenMode: 'choose' }),
+};
+const KOH_SPECIMENS = [{ testId: 'tKoh', specimens: [{ code: 'SKN', name: 'Skin scraping', isDefault: false }, { code: 'NAIL', name: 'Nail clipping', isDefault: false }] }];
+
+describe('New visit — choose-mode specimen (the KOH Mount / C&S fix)', () => {
+  async function readyWithKoh() {
+    const r = render({ query: { patientId: 'p1' }, tests: [...TESTS, KOH], specimens: KOH_SPECIMENS });
+    r.c.pickDoctor(DESK.doctors[0]);
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    r.c.setCatalogTab('labs'); r.f.detectChanges();
+    r.c.labQuery.set('KOH'); r.f.detectChanges();
+    const res = r.el.querySelectorAll('.pf-ov-labrow');
+    (res[0] as HTMLButtonElement).click();
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    return r;
+  }
+
+  it('shows a specimen picker (pf-select, never a native select) for the picked choose-mode test', async () => {
+    const { el } = await readyWithKoh();
+    const picker = el.querySelector('pf-opd-specimen-picker');
+    expect(picker).toBeTruthy();
+    expect(picker!.querySelector('select')).toBeNull();
+    expect(el.querySelector('pf-select')).toBeTruthy();
+  });
+
+  it('Continue to payment is BLOCKED (no server call) while the specimen is unchosen, and errors the toast', async () => {
+    const { el, f, c, api, toasts } = await readyWithKoh();
+    api.post.mockClear();
+    cta(el).click(); f.detectChanges();
+    expect(c.stage()).toBe('build'); // never advanced to pay
+    expect(toasts.error).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalledWith('/api/opd/visits', expect.anything());
+    expect(c.specimenInvalid('tKoh')).toBe(true);
+  });
+
+  it('choosing the specimen clears the block and the booking carries labTestSpecimens', async () => {
+    const { el, f, c, api, router } = await readyWithKoh();
+    c.setSpecimen('tKoh', 'SKN');
+    f.detectChanges();
+    expect(c.specimenInvalid('tKoh')).toBe(false);
+    cta(el).click(); f.detectChanges();
+    expect(c.stage()).toBe('pay');
+    c.onPaid({ mode: 'upi' });
+    await flush();
+    const call = api.post.mock.calls.find((x: any[]) => x[0] === '/api/opd/visits');
+    expect(call[1]).toMatchObject({ labTestIds: ['tKoh'], labTestSpecimens: { tKoh: 'SKN' } });
+    expect(router.navigate).toHaveBeenCalled();
+  });
+
+  it('a "none"-mode test (no parameters, like the existing fixtures) never shows a picker and never blocks', async () => {
+    const r = render({ query: { patientId: 'p1' } });
+    r.c.pickDoctor(DESK.doctors[0]);
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    r.c.labIds.set(['t1']); r.f.detectChanges();
+    expect(r.el.querySelector('pf-opd-specimen-picker pf-select')).toBeNull();
+    r.c.onPaid({ mode: 'upi' });
+    await flush();
+    expect(r.router.navigate).toHaveBeenCalled();
+  });
+});
+
+describe('sameDoctorOpenVisit (duplicate-visit nudge)', () => {
+  const row = (o: Partial<import('./desk.models').OpdVisitRow>) => ({ id: 'v', patientId: 'p', patientName: 'P', doctorUserId: 'd1', doctorName: 'Dr. A',
+    visitDate: '2026-09-30', token: 3, tokenLabel: 'E3', status: 'waiting', isFollowUp: false, charged: 0, hasLabOrder: false, createdAt: '', vitalsFlagged: false, ...o }) as import('./desk.models').OpdVisitRow;
+  it('finds an open visit with the same doctor', () => expect(sameDoctorOpenVisit([row({})], 'd1')?.tokenLabel).toBe('E3'));
+  it('ignores other doctors, closed visits and no doctor', () => {
+    expect(sameDoctorOpenVisit([row({ doctorUserId: 'd2' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({ status: 'completed' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({ status: 'cancelled' })], 'd1')).toBeNull();
+    expect(sameDoctorOpenVisit([row({})], null)).toBeNull();
   });
 });

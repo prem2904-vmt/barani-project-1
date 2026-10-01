@@ -9,8 +9,10 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { installPdfTextSanitizer } from '../../../shared/utils/pdf-text';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
-import type { BillView, DispenseLineView } from './pharmacy.api';
+import { numberToWordsINR } from '../../frontdesk/billing/invoice-pdf';
+import type { BillView, DispenseLineView, PharmacyInvoiceHeader } from './pharmacy.api';
 import type { InstructionLine } from './pharmacy-instructions';
+import { taxableFromMrp } from './pharmacy-math';
 
 export interface PharmacyPrintInput {
   clinic: string;
@@ -24,25 +26,63 @@ export interface PharmacyPrintInput {
   instructions: InstructionLine[];
   lines: DispenseLineView[];
   bill?: BillView | null;
+  /** night/money (critic item #4): the GST tax invoice letterhead — name /
+   *  address / phone off the branch, GSTIN off the branch's GST config (the
+   *  ONE GST home). When given, the bill section prints as a proper tax
+   *  invoice: letterhead + drug-licence line, amount in words, a pharmacist
+   *  sign line. Omit it for the plain "instructions only" print. */
+  practice?: PharmacyInvoiceHeader | null;
+  /** A4 or A5 (default A5, the counter/dispense print size). */
+  format?: 'a4' | 'a5';
 }
 
 const rs = (n: number) => 'Rs. ' + (Number(n) || 0).toFixed(2);
 
+/** A line's taxable value + CGST/SGST split, derived from its (post-discount,
+ *  GST-inclusive) total the SAME way the server extracts tax from an
+ *  inclusive MRP (`taxableFromMrp` — never a second tax rule). */
+export function lineTaxSplit(l: Pick<DispenseLineView, 'total' | 'taxSlab'>): { taxable: number; cgst: number; sgst: number } {
+  const taxable = taxableFromMrp(l.total, l.taxSlab ?? 0);
+  const half = Math.round((l.total - taxable) * 50) / 100;
+  return { taxable, cgst: half, sgst: half };
+}
+
+/** "Generic (Brand) strength form" — generic first, NMC 2002 Reg 1.5
+ *  (critic #8). Falls back to the brand alone when there is no generic. */
+export function itemLabel(l: Pick<DispenseLineView, 'drugName' | 'generic' | 'strength' | 'form'>): string {
+  if (!l.generic) return l.drugName + (l.strength ? ' ' + l.strength : '') + ' ' + l.form;
+  return `${l.generic} (${l.drugName}) ${l.strength ? l.strength + ' ' : ''}${l.form}`;
+}
+
 /** Build the PDF document (exported for tests). */
 export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
-  const doc = new jsPDF({ unit: 'mm', format: 'a5' });
+  const doc = new jsPDF({ unit: 'mm', format: input.format ?? 'a5' });
   installPdfTextSanitizer(doc);
   const W = doc.internal.pageSize.getWidth();
   const M = 10;
   let y = 12;
+  const p = input.practice;
+  const isTaxInvoice = !!p && !!input.bill;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
   doc.text(input.clinic, M, y);
+  if (isTaxInvoice) { doc.setFontSize(9); doc.text('TAX INVOICE', W - M, y, { align: 'right' }); }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
   doc.text(input.title ?? 'Your medicines and how to take them', M, (y += 5));
   if (input.number) doc.text(input.number, W - M, 12, { align: 'right' });
   doc.text((input.at ?? new Date()).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }), W - M, 17, { align: 'right' });
   y += 6;
+  // The letterhead (critic item #4): address / phone / GSTIN off the branch
+  // (the ONE GST home); no drug-licence field exists anywhere yet, so a
+  // clearly-marked placeholder prints instead of inventing one.
+  if (p) {
+    doc.setFontSize(8); doc.setTextColor(90);
+    const bits = [p.address, p.phone ? 'Ph: ' + p.phone : null, p.gstin ? 'GSTIN: ' + p.gstin : null].filter(Boolean).join('  ·  ');
+    if (bits) doc.text(bits, M, y);
+    doc.text('Drug Licence No.: [not on file — add under Branch settings]', M, (y += 4));
+    doc.setTextColor(0);
+    y += 3;
+  }
   doc.setDrawColor(200); doc.line(M, y, W - M, y);
   y += 5;
   doc.setFontSize(10); doc.setFont('helvetica', 'bold');
@@ -85,16 +125,33 @@ export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
   });
   if (input.instructions.length) y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
 
-  // Bill.
+  // Bill — generic-first (critic #8 / NMC 2002 Reg 1.5): "Generic (Brand)
+  // strength form", batch, expiry MM/YY, qty, MRP, GST%; a substituted line
+  // says what was actually prescribed.
   if (input.lines.length) {
+    // A tax invoice needs HSN + the per-line taxable / CGST / SGST split
+    // (critic item #4); the plain instructions sheet keeps the shorter GST% column.
+    const head = isTaxInvoice
+      ? [['Item', 'HSN', 'Batch · Exp', 'Qty', 'MRP', 'Taxable', 'CGST', 'SGST', 'Amount']]
+      : [['Item', 'Batch · Exp', 'Qty', 'MRP', 'GST%', 'Amount']];
     autoTable(doc, {
       startY: y,
       margin: { left: M, right: M },
-      head: [['Item', 'Batch · Exp', 'Qty', 'MRP', 'Amount']],
-      body: input.lines.map(l => [l.drugName, `${l.batchNo} · ${l.expiryDate.slice(5, 7)}/${l.expiryDate.slice(0, 4)}`, String(l.qty), rs(l.mrp), rs(l.total)]),
-      styles: { fontSize: 8.5, cellPadding: 1.5 },
+      head,
+      body: input.lines.map(l => {
+        const item = itemLabel(l) + (l.rxDrugName ? `\nSubstituted for ${l.rxDrugName}` : '');
+        const batchExp = `${l.batchNo} · ${l.expiryDate.slice(5, 7)}/${l.expiryDate.slice(0, 4)}`;
+        if (isTaxInvoice) {
+          const t = lineTaxSplit(l);
+          return [item, l.hsnCode || '—', batchExp, String(l.qty), rs(l.mrp), rs(t.taxable), rs(t.cgst), rs(t.sgst), rs(l.total)];
+        }
+        return [item, batchExp, String(l.qty), rs(l.mrp), `${l.taxSlab ?? 0}%`, rs(l.total)];
+      }),
+      styles: { fontSize: isTaxInvoice ? 7.5 : 8.5, cellPadding: 1.5, overflow: 'linebreak' },
       headStyles: { fillColor: [245, 245, 245], textColor: 40 },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+      columnStyles: isTaxInvoice
+        ? { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } }
+        : { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
       rowPageBreak: 'avoid',
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
@@ -103,7 +160,10 @@ export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
   if (b) {
     const rows: [string, string][] = [['Taxable value', rs(b.totalTaxable)]];
     if (b.discount > 0) rows.unshift(['Discount', '- ' + rs(b.discount)]);
-    rows.push(['GST (CGST ' + rs(b.totalCgst) + ' + SGST ' + rs(b.totalSgst) + ')', rs(b.totalTax)]);
+    rows.push(isTaxInvoice
+      ? ['CGST', rs(b.totalCgst)]
+      : ['GST (CGST ' + rs(b.totalCgst) + ' + SGST ' + rs(b.totalSgst) + ')', rs(b.totalTax)]);
+    if (isTaxInvoice) rows.push(['SGST', rs(b.totalSgst)]);
     if (b.roundOff) rows.push(['Round-off', (b.roundOff > 0 ? '+ ' : '- ') + rs(Math.abs(b.roundOff))]);
     rows.push(['Total', rs(b.totalPayable)]);
     rows.push(['Paid', rs(b.totalPaid)]);
@@ -114,7 +174,17 @@ export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
       doc.text(k, W - M - 60, y); doc.text(v, W - M, y, { align: 'right' });
       y += 4.5;
     }
-    if (b.invoiceNumber) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('Invoice ' + b.invoiceNumber + ' · MRP includes GST', M, y); }
+    if (isTaxInvoice) {
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
+      doc.text(`(Amount in words: Rupees ${numberToWordsINR(Math.round(b.totalPayable))} Only)`, M, (y += 3), { maxWidth: W - 2 * M });
+      y += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Pharmacist\'s signature: ______________________', W - M - 70, (y += 6));
+    }
+    if (b.invoiceNumber) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text('Invoice ' + b.invoiceNumber + ' · MRP includes GST', M, y);
+    }
   }
   return doc;
 }

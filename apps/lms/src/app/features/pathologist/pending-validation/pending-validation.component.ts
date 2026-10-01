@@ -36,6 +36,7 @@ import {
   Enriched, QueueTile, ValidationScope,
   departmentsIn, enrich, groupBySample, isCritical, matchesQuery, nextTile, tileStatus,
 } from './pending-validation.logic';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 type Tab = 'mine' | 'all';
 
@@ -57,7 +58,7 @@ type Tab = 'mine' | 'all';
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [BusyDirective, 
+  imports: [DailyNoComponent, BusyDirective, 
     ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
@@ -185,7 +186,7 @@ type Tab = 'mine' | 'all';
                               <span class="pv-status__dot" aria-hidden="true"></span>{{ st.label }}
                             </span>
                           </div>
-                          <p class="pv-tile__who">{{ g.patientName }}</p>
+                          <p class="pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
                           <p class="pv-tile__meta nd-num">{{ tileMeta(g) }}</p>
                           <p class="pv-tile__tests">{{ g.testNames.join(' · ') }}</p>
                           <div class="pv-tile__foot">
@@ -376,7 +377,7 @@ type Tab = 'mine' | 'all';
                     <pf-avatar [name]="g.displayName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
                         <span class="pv-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
                         @if (g.mine) { <pf-chip tone="violet" size="sm">Assigned to you</pf-chip> }
                         @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }

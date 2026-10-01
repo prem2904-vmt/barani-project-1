@@ -16,16 +16,22 @@ import {
   ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
-  ConsultEditState, ConsultStep, STEP_TITLES, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
+  ConsultEditState, ConsultStep, FRESH_ACKS, STEP_TITLES, applyUsual, daysBetween, draftBody, procedureDraftOf, stepDone, stepSummary, undoUsual, usualsFrom,
 } from './consult-state';
+import { ConsultProceduresComponent } from './procedure-editor.component';
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
-import { OpdFormRendererComponent, normalizeSchema, type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest } from '../admin/forms/renderer';
+import {
+  OpdFormRendererComponent, allQuestions, missingRequired, normalizeSchema,
+  type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest,
+} from '../admin/forms/renderer';
 import { RxEditorComponent } from './rx/rx-editor.component';
-import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies } from './rx/rx-model';
+import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
 import { newRxLine } from '../shared/rx-schedule';
 import { buildRxPdf } from './rx-print';
+import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
+import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -49,7 +55,7 @@ const EMPTY: ConsultEditState = {
 @Component({
   selector: 'pf-opd-consult-workspace',
   standalone: true,
-  imports: [
+  imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent, 
     DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
     RxEditorComponent, PatientTimelineComponent,
   ],
@@ -151,7 +157,7 @@ const EMPTY: ConsultEditState = {
                       @if (w.form) {
                         <!-- Agent A's ONE form renderer (schema v2); media questions upload through the consult. -->
                         <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
-                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'"
+                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [visitDate]="w.visit.visitDate"
                                               (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
                         <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
                         @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
@@ -178,7 +184,7 @@ const EMPTY: ConsultEditState = {
                             <div id="cw-dx-list" class="cw__dxlist" role="listbox">
                               @for (o of dxSuggest(); track o.label; let i = $index) {
                                 <button type="button" role="option" class="cw__dxopt" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
-                                  <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours }</em>
+                                  <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
                                 </button>
                               }
                               @if (dxQuery().trim()) {
@@ -194,7 +200,7 @@ const EMPTY: ConsultEditState = {
                             @if (!usualApplied()) {
                               <button type="button" class="cw__usual" (click)="applyUsualSet()">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-                                <span><b>Usual for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
+                                <span><b>{{ u.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
                               </button>
                             }
                           }
@@ -235,15 +241,16 @@ const EMPTY: ConsultEditState = {
                       </div>
                     } @else if (editable() && usual() && !st().lines.length) {
                       <button type="button" class="cw__usual" (click)="applyUsualSet()">
-                        <span><b>Usual for {{ primaryDx() }}</b> — add {{ usual()!.rx.length }} medicine{{ usual()!.rx.length === 1 ? '' : 's' }} in one tap</span>
+                        <span><b>{{ usual()!.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — add {{ usual()!.rx.length }} medicine{{ usual()!.rx.length === 1 ? '' : 's' }} in one tap</span>
                       </button>
                     }
                     <pf-rx-editor [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
+                                  [pregnant]="ws()?.pregnancy ?? null"
                                   [readonly]="!editable()" [start]="visitDay()" [usuals]="usuals()" [preferIds]="preferIds()"
                                   (search)="drugSearch$.next($event)" (notice)="toast.info($event)"></pf-rx-editor>
                   }
                   @case (3) {
-                    <div class="cw__h"><h2>Investigations</h2><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult.</span></div>
+                    <div class="cw__h"><h2>Tests &amp; procedures</h2><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult; procedures go to the front desk's bill.</span></div>
                     @if (suggested().length) {
                       <div class="cw__sec">
                         <div class="cw__seck cw__seck--row">Suggested for {{ primaryDx() }}
@@ -279,12 +286,26 @@ const EMPTY: ConsultEditState = {
                       @for (t of st().tests; track t.testId) {
                         <div class="nd-row cw__ordered">
                           <span class="nd-row__name">{{ t.name }}</span>
+                          @if (editable()) {
+                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
+                                                    (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
+                          } @else if (t.specimen) {
+                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen" [readonly]="true"></pf-opd-specimen-picker>
+                          }
                           @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
                           @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
                         </div>
-                      } @empty { <p class="cw__muted">No tests yet.</p> }
-                      @if (w.visit.labOrderId && !editable()) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
+                      } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
+                      @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
                     </div>
+                    @if (st().procedures; as procs) {
+                      <div class="cw__sec" id="cw-procedures">
+                        <div class="cw__seck">Procedures <span>{{ procs.length ? procs.length + ' added' : (editable() ? 'Did you do one? Add it here — it is billed at the desk.' : '') }}</span></div>
+                        <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
+                                               [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'"
+                                               (itemsChange)="patch({ procedures: $event })"></pf-consult-procedures>
+                      </div>
+                    }
                   }
                   @case (4) {
                     <div class="cw__h"><h2>Notes</h2></div>
@@ -336,9 +357,9 @@ const EMPTY: ConsultEditState = {
         </section>
 
         @if (completeOpen()) {
-          <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.token" [diagnoses]="st().diagnoses" [lines]="st().lines"
-                                     [tests]="st().tests" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
-                                     [unresolved]="unresolved().length" [busy]="completing()"
+          <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
+                                     [tests]="st().tests" [procedures]="st().procedures ?? []" [billing]="w.billing ?? null" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
+                                     [unresolved]="unresolved().length" [pregnancyUnresolved]="pregnancyUnresolved().length" [missingRequired]="requiredMissing()" [busy]="completing()"
                                      (followUpDaysChange)="patch({ followUpDays: $event })" (cancel)="completeOpen.set(false)" (confirm)="complete()"></pf-consult-complete-sheet>
         }
       </div>
@@ -386,7 +407,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly drugSearch$ = new Subject<string>();
 
   readonly usual = signal<ConsultUsual | null>(null);
-  readonly usualApplied = signal<{ dx: string; keys: string[]; tests: string[] } | null>(null);
+  readonly usualApplied = signal<{ dx: string; keys: string[]; tests: string[]; advice: boolean } | null>(null);
 
   readonly testCatalog = signal<LabTestRow[]>([]);
   readonly testLoadError = signal(false);
@@ -422,6 +443,10 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly visitDay = computed(() => { const d = this.ws()?.visit.visitDate; return d ? new Date(d.slice(0, 10) + 'T00:00:00') : new Date(); });
   readonly primaryDx = computed(() => this.st().diagnoses[0]?.label ?? '');
   readonly unresolved = computed(() => unresolvedAllergies(this.st().lines, this.allergies()));
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — blocks Complete like unresolved allergies. */
+  readonly pregnancyUnresolved = computed(() => unresolvedPregnancyRisks(this.st().lines, this.ws()?.pregnancy ?? null));
+  /** Required fields (night/safety, critic P1 #2) — visible, required consult-form questions with no answer. */
+  readonly requiredMissing = computed(() => missingRequired(allQuestions(this.formSchema()), this.st().answers));
   readonly usuals = computed(() => usualsFrom(this.usual()?.rx, this.ws()?.lastVisit?.rx, this.ws()?.rx));
   readonly preferIds = computed(() => (this.usual()?.rx ?? []).map(r => r.drugId).filter((x): x is string => !!x));
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
@@ -436,7 +461,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const w = this.ws();
     if (!w) return '';
     return [w.patient.ageDisplay && w.patient.sex ? `${w.patient.ageDisplay} ${w.patient.sex.charAt(0).toUpperCase()}` : w.patient.ageDisplay,
-      w.patient.mrn, 'Token ' + w.visit.token, w.visit.departmentName, w.visit.doctorName].filter(Boolean).join(' · ');
+      w.patient.mrn, 'Token ' + w.visit.tokenLabel, w.visit.departmentName, w.visit.doctorName].filter(Boolean).join(' · ');
   });
   readonly visibilityText = computed(() => {
     const v = this.st().privateNotesVisibility;
@@ -501,6 +526,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       lines: w.rx.map(d => fromDto(d, this.drugList())),
       tests: (w.investigations ?? []).flatMap(i => i.items).map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })),
       followUpDays,
+      procedures: w.procedures ? w.procedures.map(procedureDraftOf) : undefined,
     });
     this.savedAt.set(c?.updatedAt ?? null);
     this.saveState.set('idle');
@@ -575,6 +601,14 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
         if (saved?.rx?.length === this.st().lines.length) {
           this.st.update(s => ({ ...s, lines: s.lines.map((l, i) => ({ ...l, id: saved.rx[i]?.id ?? l.id })) }));
         }
+        // Same for procedures: keep the ids (and who set a price) the server assigned.
+        const sp = (saved?.procedures ?? []).filter(p => p.status !== 'billed');
+        const mine = this.st().procedures;
+        if (mine && sp.length === mine.filter(p => p.status !== 'billed').length) {
+          let i = 0;
+          this.st.update(s => ({ ...s, procedures: (s.procedures ?? []).map(p => p.status === 'billed' ? p
+            : (r => ({ ...p, id: r?.id ?? p.id, priceSetByName: r?.priceSetByName ?? p.priceSetByName }))(sp[i++])) }));
+        }
         this.saveState.set(this.saveState() === 'dirty' ? 'dirty' : 'saved');
         if (this.saveState() === 'dirty') this.save$.next();
       },
@@ -621,22 +655,23 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const u = this.usual();
     if (!u || !this.editable()) return;
     const r = applyUsual(this.st(), u, this.drugList());
-    this.patch({ lines: r.next.lines, tests: r.next.tests.map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })) });
-    this.usualApplied.set({ dx: this.primaryDx(), keys: r.addedKeys, tests: r.addedTests });
-    this.toast.info(`Usual prescription added · ${r.addedKeys.length} medicine${r.addedKeys.length === 1 ? '' : 's'}`);
+    this.patch({ lines: r.next.lines, tests: r.next.tests.map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })), advice: r.next.advice });
+    this.usualApplied.set({ dx: this.primaryDx(), keys: r.addedKeys, tests: r.addedTests, advice: r.addedAdvice });
+    const from = u.source === 'template' ? 'Template' : 'Usual prescription';
+    this.toast.info(`${from} added · ${r.addedKeys.length} medicine${r.addedKeys.length === 1 ? '' : 's'}`);
   }
   undoUsualSet() {
     const a = this.usualApplied();
     if (!a) return;
-    const s = undoUsual(this.st(), a.keys, a.tests);
-    this.patch({ lines: s.lines, tests: s.tests });
+    const s = undoUsual(this.st(), a.keys, a.tests, a.advice);
+    this.patch({ lines: s.lines, tests: s.tests, advice: s.advice });
     this.usualApplied.set(null);
   }
   repeatLast() {
     const lv = this.ws()?.lastVisit;
     if (!lv || !this.editable()) return;
     const have = new Set(this.st().lines.map(l => l.drug.id));
-    const add = lv.rx.map(d => fromDto({ ...d, id: undefined, allergyAck: false }, this.drugList())).filter(l => !have.has(l.drug.id));
+    const add = lv.rx.map(d => fromDto({ ...d, id: undefined, ...FRESH_ACKS }, this.drugList())).filter(l => !have.has(l.drug.id));
     this.patch({ lines: [...this.st().lines, ...add] });
     this.toast.info(`Repeated ${add.length} medicine${add.length === 1 ? '' : 's'} from ${new Date(lv.visitDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
     this.step.set(2);
@@ -645,13 +680,32 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const old = this.st().lines.find(l => l.key === key);
     if (!old) return;
     const line = newRxLine(alt.id, this.usuals()[alt.id] ?? null);
-    this.patch({ lines: this.st().lines.map(l => (l.key === key ? { ...l, id: undefined, drug: alt, line, allergyAck: false, allergyAckNote: null } : l)) });
+    this.patch({ lines: this.st().lines.map(l => (l.key === key ? { ...l, id: undefined, drug: alt, line, ...FRESH_ACKS } : l)) });
     this.toast.info(`${old.drug.name} swapped for ${alt.name}`);
   }
   seeLine() { this.step.set(2); this.glanceOpen.set(false); }
 
   // ── Tests ──────────────────────────────────────────────────────────
   hasTest(id: string) { return this.st().tests.some(t => t.testId === id); }
+
+  // ── Specimen for a Test Master "choose" test (shared/opd-specimen.ts) ──
+  readonly specimenErr = signal<Record<string, boolean>>({});
+  testForPicker(id: string): { id: string; name: string; parameters?: string | null } {
+    const t = this.testCatalog().find(x => x.id === id);
+    return { id, name: t?.name ?? '', parameters: t?.parameters ?? null };
+  }
+  specimenInvalid(id: string): boolean { return !!this.specimenErr()[id]; }
+  setSpecimen(id: string, v: string): void {
+    this.patch({ tests: this.st().tests.map(t => (t.testId === id ? { ...t, specimen: v || null } : t)) });
+    if (v) this.specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  /** Tests still needing a specimen; flags their rows. Empty = Complete may go. */
+  private missingSpecimenTests(): string[] {
+    const byId: OpdTestLookup = Object.fromEntries(this.testCatalog().map(t => [t.id, t]));
+    const miss = missingSpecimens(this.st().tests, byId);
+    this.specimenErr.set(Object.fromEntries(miss.map(m => [m.testId, true])));
+    return miss.map(m => m.name);
+  }
   toggleTest(t: ConsultInvestigationItem) {
     if (!this.editable()) return;
     this.patch({ tests: this.hasTest(t.testId) ? this.st().tests.filter(x => x.testId !== t.testId) : [...this.st().tests, t] });
@@ -686,19 +740,35 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   openComplete() { if (this.editable()) this.completeOpen.set(true); }
   complete() {
     const w = this.ws();
-    if (!w || this.completing() || this.unresolved().length) return;
+    if (!w || this.completing() || this.unresolved().length || this.pregnancyUnresolved().length) return;
+    if (this.requiredMissing().length) {
+      this.toast.error(`Please answer: ${this.requiredMissing().join(', ')}.`);
+      return;
+    }
+    const noSpecimen = this.missingSpecimenTests();
+    if (noSpecimen.length) {
+      this.completeOpen.set(false);
+      this.step.set(3);
+      this.toast.error(`Choose the specimen for: ${noSpecimen.join(', ')}.`);
+      return;
+    }
     this.completing.set(true);
     this.consultApi.complete(w.visit.id, draftBody(this.st(), this.followUpIso(), this.visitDay())).subscribe({
       next: done => {
         this.completing.set(false);
         this.completeOpen.set(false);
-        const nRx = this.st().lines.length, nT = this.st().tests.length;
+        const nRx = this.st().lines.length, nT = this.st().tests.length, nP = this.st().procedures?.length ?? 0;
         this.hydrate(done);
-        this.toast.success(['Consult completed', nRx ? `${nRx} medicine${nRx === 1 ? '' : 's'} to pharmacy` : '', nT ? `${nT} test${nT === 1 ? '' : 's'} to the lab` : ''].filter(Boolean).join(' · '));
+        this.toast.success(['Consult completed', nRx ? `${nRx} medicine${nRx === 1 ? '' : 's'} to pharmacy` : '', nT ? `${nT} test${nT === 1 ? '' : 's'} to the lab` : '',
+          nP ? `${nP} procedure${nP === 1 ? '' : 's'} to the front desk` : ''].filter(Boolean).join(' · '));
       },
       error: e => {
         this.completing.set(false);
-        this.toast.error(e?.code === 'allergy_unacknowledged' ? 'A medicine conflicts with an allergy — review it first.' : (e?.message || 'Could not complete the consult'));
+        const msg = e?.code === 'allergy_unacknowledged' ? 'A medicine conflicts with an allergy — review it first.'
+          : e?.code === 'pregnancy_unacknowledged' ? 'A medicine should be avoided in pregnancy — review it first.'
+          : e?.code === 'required_missing' ? (e?.message || 'Please answer the required questions first.')
+          : (e?.message || 'Could not complete the consult');
+        this.toast.error(msg);
       },
     });
   }
@@ -719,9 +789,10 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       practice: { name: tpl?.labName || user?.tenantName, address: tpl?.address, phone: tpl?.phone, email: tpl?.email },
       patient: { name: w.patient.name, ageSex: [w.patient.ageDisplay, w.patient.sex].filter(Boolean).join(' '), mrn: w.patient.mrn, phone: w.patient.phone },
       doctor: { name: w.visit.doctorName, department: w.visit.departmentName, regNo: w.visit.doctorUserId === user?.id ? user?.registrationId : null },
-      visit: { date: this.visitDay(), token: w.visit.token, visitNumber: w.visit.visitNumber },
+      visit: { date: this.visitDay(), tokenLabel: w.visit.tokenLabel, visitNumber: w.visit.visitNumber },
       vitals: vit, chiefComplaint: this.st().chiefComplaint, diagnoses: this.st().diagnoses,
       lines: this.st().lines, tests: this.st().tests, advice: this.st().advice, followUp: fu,
+      procedures: (this.st().procedures ?? []).map(p => ({ name: p.name, side: p.side ?? null, qty: p.qty, note: p.note ?? null })),
     });
     return doc.output('blob');
   }

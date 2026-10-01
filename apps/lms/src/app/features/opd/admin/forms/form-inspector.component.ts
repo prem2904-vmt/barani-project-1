@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
-import { BUILT_INS, OpdQuestion, Q_TYPES, answersOf, conditionSources, typeName } from './form-schema';
+import { BUILT_INS, CALC_FORMULAS, CalcFormula, OpdQuestion, Q_TYPES, answersOf, conditionSources, typeName } from './form-schema';
 import { patchQuestion, setSides } from './form-builder-ops';
 
 export type InspectorMode = 'form' | 'question' | 'print' | 'try';
@@ -117,7 +117,24 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
             @if (f.type === 'media') {
               <p class="fi-note"><b>Decided:</b> any image or video format — captured, from the endoscope, or uploaded.</p>
             }
-            @if (f.type !== 'media' && f.type !== 'table') {
+            @if (f.type === 'calc') {
+              <div class="fi-fld"><span class="fi-lbl">Works out</span>
+                <pf-select size="sm" [options]="calcFormulas" [value]="f.formula ?? 'edd'" (valueChange)="setCalcFormula($event)"></pf-select>
+                <span class="fi-note">{{ calcFormulaHint(f.formula) }}</span></div>
+              <div class="fi-fld"><span class="fi-lbl">From</span>
+                @if (calcSourceOptions().length) {
+                  <pf-select size="sm" [options]="calcSourceOptions()" [value]="f.from ?? ''" (valueChange)="patch({ from: $event, row: undefined })"></pf-select>
+                } @else {
+                  <span class="fi-note">Add a {{ f.formula === 'pta' ? 'table' : 'date' }} question above this one first.</span>
+                }
+              </div>
+              @if (f.formula === 'pta' && f.from && calcRowOptions().length) {
+                <div class="fi-fld"><span class="fi-lbl">Row</span>
+                  <pf-select size="sm" [options]="calcRowOptions()" [value]="f.row ?? ''" (valueChange)="patch({ row: $event })"></pf-select></div>
+              }
+              <p class="fi-note">Read-only — the doctor never types it; it updates as the answer above changes.</p>
+            }
+            @if (f.type !== 'media' && f.type !== 'table' && f.type !== 'calc') {
               <div class="fi-fld">
                 <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!f.sides" (click)="emit(setSides(list(), f.key, !f.sides))">
                   <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Left &amp; right sides?</button>
@@ -144,9 +161,11 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
               <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="f.print !== false" (click)="patch({ print: f.print === false })">
                 <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Print on the report?</button>
               <span class="fi-note">On the consult summary and prescription the patient takes home.</span>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!f.required" (click)="patch({ required: !f.required })">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Required</button>
-              <span class="fi-note">The doctor must answer before completing the consult.</span>
+              @if (f.type !== 'calc') {
+                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!f.required" (click)="patch({ required: !f.required })">
+                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Required</button>
+                <span class="fi-note">The doctor must answer before completing the consult.</span>
+              }
             </div>
           }
         }
@@ -208,6 +227,8 @@ export class OpdFormInspectorComponent {
   readonly shapes: { value: 'ear' | 'nose' | 'body'; label: string }[] = [
     { value: 'ear', label: 'Ear drum' }, { value: 'nose', label: 'Nasal cavity' }, { value: 'body', label: 'Body' },
   ];
+  readonly calcFormulas: PfSelectOption<string>[] = (Object.keys(CALC_FORMULAS) as CalcFormula[]).map((k) => ({ value: k, label: CALC_FORMULAS[k][0] }));
+  calcFormulaHint(f?: CalcFormula): string { return CALC_FORMULAS[f ?? 'edd'][1]; }
 
   readonly index = computed(() => this.list().findIndex((x) => x.key === this.selectedKey()));
   readonly q = computed(() => this.list()[this.index()] ?? null);
@@ -225,6 +246,20 @@ export class OpdFormInspectorComponent {
     if (this.mode() === 'form') return `${n} ${n === 1 ? 'question' : 'questions'}`;
     return '';
   });
+
+  readonly calcSourceOptions = computed<PfSelectOption<string>[]>(() => {
+    const f = this.q();
+    if (!f || f.type !== 'calc') return [];
+    const wantType = f.formula === 'pta' ? 'table' : 'date';
+    return this.list().slice(0, this.index()).filter((x) => x.type === wantType).map((x) => ({ value: x.key, label: x.label }));
+  });
+  readonly calcRowOptions = computed<PfSelectOption<string>[]>(() => {
+    const f = this.q();
+    if (!f || f.type !== 'calc' || f.formula !== 'pta' || !f.from) return [];
+    const src = this.list().find((x) => x.key === f.from);
+    return (src?.rows ?? []).map((r) => ({ value: r, label: r }));
+  });
+  setCalcFormula(formula: string): void { this.patch({ formula: formula as CalcFormula, from: undefined, row: undefined }); }
 
   srcOf(f: OpdQuestion | null): OpdQuestion | undefined { return f?.when ? this.list().find((x) => x.key === f.when!.key) : undefined; }
   srcLabel(): string { return (this.srcOf(this.q())?.label ?? '').replace(/\?$/, ''); }

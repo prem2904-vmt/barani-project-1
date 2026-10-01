@@ -46,6 +46,16 @@
 }
 .ph-sch[data-rx='true'] { border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); color: var(--red-text, #dc2626); background: transparent; }
 
+// Pregnancy-safety guard chip (night/safety, critic P0 #1d) — same shape as .ph-sch.
+.ph-preg {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap;
+  border: 1px solid var(--nd-line); color: var(--text-tertiary); background: var(--nd-chip-bg);
+}
+.ph-preg[data-tone='avoid'] { border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); color: var(--red-text, #dc2626); background: transparent; }
+.ph-preg[data-tone='caution'] { border-color: color-mix(in srgb, #d97706 45%, transparent); color: #b45309; background: transparent; }
+:host-context(html.dark) .ph-preg[data-tone='caution'] { color: #fbbf24; }
+
 // Rows (queue / lists).
 .ph-row {
   display: flex; align-items: center; gap: 12px; min-height: 56px; width: 100%; padding: 10px 12px;
@@ -67,6 +77,11 @@
 .ph-dot[data-tone='warn']::before { background: var(--amber-text, #d97706); }
 .ph-dot[data-tone='bad']::before { background: var(--red-text, #dc2626); }
 
+// Expiry chip (critic #10) — batch pickers + stock: expired / <30d red, <90d amber.
+.pf-exp-red { color: var(--red-text, #dc2626); font-weight: 600; }
+.pf-exp-amber { color: var(--amber-text, #d97706); font-weight: 600; }
+.pf-exp-ok { color: var(--text-tertiary); }
+
 // Totals block (side card foot).
 .ph-sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; color: var(--text-secondary); grid-column: 1 / -1; }
 .ph-sum > :nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; }
@@ -83,6 +98,8 @@
 .ph-note > svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
 .ph-note[data-tone='bad'] { background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--nd-card-bg)); }
 .ph-note[data-tone='bad'] > svg { color: var(--red-text, #dc2626); }
+.ph-note[data-tone='warn'] { background: color-mix(in srgb, var(--amber-text, #d97706) 8%, var(--nd-card-bg)); }
+.ph-note[data-tone='warn'] > svg { color: var(--amber-text, #d97706); }
 
 // Qty stepper.
 .ph-qty { display: inline-flex; align-items: center; border: 1px solid var(--nd-line); border-radius: 10px; overflow: hidden; background: var(--nd-card-bg); }

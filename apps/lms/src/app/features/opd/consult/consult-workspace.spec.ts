@@ -47,6 +47,11 @@ describe('Consult stepper summaries + ticks', () => {
 });
 
 describe('Consult draft body + usual set', () => {
+  it('draftBody carries a chosen specimen for a "choose" test, and none for the rest', () => {
+    const b = draftBody({ ...BASE, tests: [{ testId: 'k1', name: 'KOH Mount', specimen: 'SKIN' }, { testId: 't2', name: 'CBC' }] }, '2026-10-07');
+    expect(b.investigationItems).toEqual([{ testId: 'k1', name: 'KOH Mount', specimen: 'SKIN' }, { testId: 't2', name: 'CBC' }]);
+  });
+
   it('draftBody sends the Rx in the shared schedule model and the tests as ids', () => {
     const b = draftBody({ ...BASE, lines: [LINE], tests: [{ testId: 't1', name: 'AEC', price: 150 }], chiefComplaint: '  x ' }, '2026-10-07');
     expect(b.rx[0]).toMatchObject({ drugId: 'd-clav', schedule: { type: 'times', pat: [1, 0, 1] }, durationDays: 5 });
@@ -62,6 +67,12 @@ describe('Consult draft body + usual set', () => {
     const u = undoUsual(r.next, r.addedKeys, r.addedTests);
     expect(u.lines.map(l => l.drug.id)).toEqual(['d-clav']);
     expect(u.tests).toEqual([]);
+  });
+  it('applyUsual never carries an allergy / pregnancy acknowledgement onto the new Rx (logic audit P0)', () => {
+    const acked = { ...dto('d-mont', [0, 0, 1]), allergyAck: true, allergyAckNote: 'reviewed', pregnancyAck: true, pregnancyAckNote: 'ok for A' };
+    const r = applyUsual(BASE, { rx: [acked], tests: [] }, [CLAV]);
+    expect(r.next.lines[0]).toMatchObject({ allergyAck: false, pregnancyAck: false });
+    expect(r.next.lines[0].pregnancyAckNote ?? null).toBeNull();
   });
   it('usualsFrom takes the first set that mentions a drug', () => {
     const u = usualsFrom([dto('a', [0, 0, 1])], [dto('a', [1, 1, 1]), dto('b')]);
@@ -86,7 +97,7 @@ describe('Complete consult sheet', () => {
     TestBed.configureTestingModule({ imports: [ConsultCompleteSheetComponent] });
     const f = TestBed.createComponent(ConsultCompleteSheetComponent);
     f.componentRef.setInput('patientName', 'Kavitha Ramesh');
-    f.componentRef.setInput('token', 3);
+    f.componentRef.setInput('token', 'E3');
     f.componentRef.setInput('diagnoses', [{ label: 'Acute rhinosinusitis' }]);
     f.componentRef.setInput('lines', [LINE]);
     f.componentRef.setInput('tests', [{ testId: 't1', name: 'AEC (eosinophils)', price: 150 }, { testId: 't2', name: 'Total IgE', price: 900 }]);
@@ -99,11 +110,12 @@ describe('Complete consult sheet', () => {
   it('summarises the outputs and sends on confirm', () => {
     const f = sheet(0);
     const el: HTMLElement = f.nativeElement;
+    expect(el.textContent).toContain('Token E3'); // the desk's doctor-prefixed label, never the bare token number
     expect(el.textContent).toContain('Acute rhinosinusitis');
     expect(el.textContent).toContain('Clavumox 625');
     expect(el.textContent).toContain('1 tab · 1-0-1 · 5 days · after food');
     expect(el.textContent).toContain('₹1050');
-    expect(el.textContent).toContain('not built yet');
+    expect(el.textContent).not.toContain('not built yet');   // no roadmap copy in front of doctors
     let sent = 0; f.componentInstance.confirm.subscribe(() => sent++);
     const btn = [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Complete & send')) as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
@@ -142,7 +154,7 @@ describe('Vitals strip rules', () => {
 
 describe('My patients queue', () => {
   const row = (token: number, status: ConsultQueueRow['status']): ConsultQueueRow => ({
-    visitId: 'v' + token, patientId: 'p', patientName: 'P' + token, token, status, isFollowUp: false, hasVitals: true, allergyCount: 0, doctorUserId: 'd',
+    visitId: 'v' + token, patientId: 'p', patientName: 'P' + token, token, tokenLabel: 'T' + token, status, isFollowUp: false, hasVitals: true, allergyCount: 0, doctorUserId: 'd',
   });
   it('buckets statuses and calls the lowest waiting token next', () => {
     expect([tabOf('booked'), tabOf('vitals'), tabOf('waiting'), tabOf('in_consult'), tabOf('completed'), tabOf('cancelled')])

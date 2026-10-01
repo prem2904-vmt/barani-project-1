@@ -60,6 +60,37 @@ export function monthsToExpiry(iso: string, todayIso: string): number {
   return (y - ty) * 12 + (m - tm) + (d < td ? -1 : 0);
 }
 
+/** Calendar days from `todayIso` to the expiry (negative = already past). */
+export function daysToExpiry(iso: string, todayIso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const [ty, tm, td] = todayIso.slice(0, 10).split('-').map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
+}
+
+export type ExpiryBand = 'expired' | 'soon30' | 'soon90' | 'ok';
+
+/**
+ * Expiry chip band (critic #10) — mirror of the server's
+ * PharmacyRules.IsExpired (sellable up to AND INCLUDING the expiry date):
+ * expired (red, not pickable) · < 30 days (red) · < 90 days (amber) · ok.
+ * Used by the batch pickers (dispense, walk-in counter) and the stock page.
+ */
+export function expiryBand(iso: string, todayIso: string): ExpiryBand {
+  const days = daysToExpiry(iso, todayIso);
+  if (days < 0) return 'expired';
+  if (days < 30) return 'soon30';
+  if (days < 90) return 'soon90';
+  return 'ok';
+}
+
+/** MM/YYYY + a CSS class for an expiry band (the "exp …" prefix is the
+ *  caller's — this never repeats the word "expired"). */
+export function expiryChip(iso: string, todayIso: string): { label: string; cls: string } {
+  const band = expiryBand(iso, todayIso);
+  const cls = band === 'expired' || band === 'soon30' ? 'pf-exp-red' : band === 'soon90' ? 'pf-exp-amber' : 'pf-exp-ok';
+  return { label: expiryLabel(iso), cls };
+}
+
 /** "10 tabs" / "1 bottle" for a stock quantity. */
 export function unitWords(qty: number, unit: string | null | undefined, form?: string | null): string {
   const u = unit || (form === 'tab' ? 'tab' : form === 'sachet' ? 'sachet' : 'pack');

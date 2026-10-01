@@ -7,6 +7,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import type { Patient } from '../../../shared/models/patient.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { labToday } from '../../../shared/utils/lab-clock';
@@ -16,7 +17,7 @@ import { DEFAULT_PHARMACY_CONFIG } from '../shared/opd.models';
 import {
   PharmacyApi, type CounterBody, type DispenseSummary, type DispenseView, type PayMode, type PharmacyDrugRow, type PickBatch,
 } from './pharmacy.api';
-import { cartTotals, errText, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords } from './pharmacy-math';
+import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords } from './pharmacy-math';
 import { previewFefo, type Take } from './dispense.page';
 import { printPharmacySheet } from './pharmacy-print';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
@@ -26,8 +27,9 @@ import { phoneSignal } from './phone';
 export interface CounterItem { drug: PharmacyDrugRow; qty: number; batchId: string | null; batches: PickBatch[] }
 
 /** The cart's schedule gate (mirror of PharmacyDispenseService.EnforceSchedules):
- *  null = OK, else what is missing. */
-export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: string, buyer: string, enforce: boolean): string | null {
+ *  null = OK, else what is missing. `address` is the buyer's postal address,
+ *  required only for an H1 / X line when schedules are enforced (critic #1). */
+export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: string, buyer: string, enforce: boolean, address = ''): string | null {
   const restricted = items.filter(i => needsPrescription(i.drug.schedule));
   if (!restricted.length) return null;
   if (enforce && !prescriber.trim())
@@ -35,6 +37,7 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
   if (items.some(i => needsRegister(i.drug.schedule))) {
     if (!buyer.trim()) return 'Schedule H1 / X sales go in the register — enter the customer’s name.';
     if (!prescriber.trim()) return 'Schedule H1 / X sales go in the register — enter the prescribing doctor.';
+    if (enforce && !address.trim()) return 'Schedule H1 / X sales go in the register — enter the customer’s address.';
   }
   return null;
 }
@@ -110,6 +113,12 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                     <input id="ph-rg" class="nd-input nd-num" [value]="regNo()" (input)="regNo.set($any($event.target).value)" placeholder="e.g. TNMC 12345" [disabled]="locked()" />
                   </div>
                   <p class="nd-field__hint ph-span">Check the original prescription before selling a Schedule H / H1 / X drug. It is recorded on the bill{{ h1() ? ' and in the H1 register' : '' }}.</p>
+                  @if (h1()) {
+                    <div class="nd-field ph-span">
+                      <label class="nd-field__lbl" for="ph-cust-addr">Customer's address <span class="ph-muted">· required for the H1 / X register</span></label>
+                      <input id="ph-cust-addr" class="nd-input" [value]="address()" (input)="address.set($any($event.target).value)" placeholder="House no., street, city" [disabled]="locked()" />
+                    </div>
+                  }
                   <div class="ph-span ph-rxfile">
                     @if (editingId()) {
                       <label class="nd-btn nd-btn--quiet ph-rxfile__btn" [class.is-busy]="uploadingRx()">
@@ -132,14 +141,14 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                     @for (it of items(); track it.drug.id; let i = $index) {
                       <tr>
                         <td style="min-width:200px">
-                          <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ it.drug.name }} <span class="ph-sch" [attr.data-rx]="isRx(it.drug.schedule)">{{ schLabel(it.drug.schedule) }}</span></div>
-                          <div class="ph-sub">{{ it.drug.generic }}{{ it.drug.strength ? ' · ' + it.drug.strength : '' }}</div>
+                          <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ it.drug.generic || it.drug.name }} <span class="ph-sch" [attr.data-rx]="isRx(it.drug.schedule)">{{ schLabel(it.drug.schedule) }}</span></div>
+                          <div class="ph-sub">{{ it.drug.generic ? it.drug.name + (it.drug.strength ? ' ' + it.drug.strength : '') : (it.drug.strength || '') }}</div>
                         </td>
                         <td class="nd-num" data-l="Batch">
                           @if (cfg().batchPick === 'pharmacist') {
                             <pf-select size="sm" [options]="batchOpts(it)" [value]="it.batchId ?? ''" (valueChange)="setBatch(i, $event)" placeholder="Pick a batch" [disabled]="locked()"></pf-select>
                           } @else {
-                            @for (t of takes(it); track t.batchId) { <div>{{ t.batchNo }} <span class="ph-sub">exp {{ exp(t.expiryDate) }}{{ $first ? ' · earliest' : '' }}</span></div> }
+                            @for (t of takes(it); track t.batchId) { <div>{{ t.batchNo }} <span class="ph-sub" [class]="expChip(t.expiryDate).cls">exp {{ expChip(t.expiryDate).label }}{{ $first ? ' · earliest' : '' }}</span></div> }
                             @if (!takes(it).length) { <span class="ph-low">Not enough stock</span> }
                           }
                         </td>
@@ -248,6 +257,7 @@ export class PharmacyWalkInCounterPage {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly uploads = inject(UploadsService);
   private readonly auth = inject(AuthService);
   private readonly tenant = inject(TenantStateService);
 
@@ -258,6 +268,8 @@ export class PharmacyWalkInCounterPage {
   protected readonly phone = signal('');
   protected readonly prescriber = signal('');
   protected readonly regNo = signal('');
+  /** Schedule H1 / X register (critic #1) — the buyer's postal address. */
+  protected readonly address = signal('');
   protected readonly patient = signal<{ id: string; name: string; meta: string } | null>(null);
   protected readonly discount = signal(0);
   protected readonly mode = signal<PayMode>('upi');
@@ -286,7 +298,7 @@ export class PharmacyWalkInCounterPage {
   protected readonly locked = computed(() => !!this.editingId() && !this.editable());
   protected readonly rxNeeded = computed(() => this.items().some(i => needsPrescription(i.drug.schedule)));
   protected readonly h1 = computed(() => this.items().some(i => needsRegister(i.drug.schedule)));
-  protected readonly gate = computed(() => counterGate(this.items(), this.prescriber(), this.name() || this.patient()?.name || '', this.cfg().enforceSchedules));
+  protected readonly gate = computed(() => counterGate(this.items(), this.prescriber(), this.name() || this.patient()?.name || '', this.cfg().enforceSchedules, this.address()));
   protected readonly totals = computed(() => cartTotals(this.items().flatMap(it =>
     this.takes(it).map(t => ({ qty: t.qty, mrp: t.mrp, taxSlab: it.drug.taxSlab }))), this.discount()));
   protected readonly ready = computed(() => this.items().length > 0 && !this.gate()
@@ -305,11 +317,16 @@ export class PharmacyWalkInCounterPage {
   protected left(it: CounterItem) { return it.batches.reduce((a, b) => a + b.qtyOnHand, 0) - it.qty; }
   protected units(n: number, d: PharmacyDrugRow) { return unitWords(n, d.unit, d.form); }
   protected exp(iso: string) { return expiryLabel(iso); }
+  protected expChip(iso: string) { return expiryChip(iso, this.today); }
   protected isRx(s: string) { return needsPrescription(s); }
   protected schLabel(s: string) { return scheduleLabel(s); }
   protected time(iso: string) { return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }); }
   protected batchOpts(it: CounterItem): PfSelectOption<string>[] {
-    return it.batches.map((b, i) => ({ value: b.id, label: `${b.batchNo} · exp ${expiryLabel(b.expiryDate)}${i === 0 ? ' · earliest' : ''}`, hint: `${b.qtyOnHand} left · ${inr(b.mrp)}` }));
+    return it.batches.map((b, i) => {
+      const band = expiryBand(b.expiryDate, this.today);
+      const warn = band === 'expired' ? ' · EXPIRED' : band === 'soon30' ? ' · expires <30d' : band === 'soon90' ? ' · expires <90d' : '';
+      return { value: b.id, label: `${b.batchNo} · exp ${expiryLabel(b.expiryDate)}${i === 0 ? ' · earliest' : ''}${warn}`, hint: `${b.qtyOnHand} left · ${inr(b.mrp)}` };
+    });
   }
 
   // ── Cart ──────────────────────────────────────────────────────────────────
@@ -351,6 +368,7 @@ export class PharmacyWalkInCounterPage {
       patientId: this.patient()?.id ?? null, walkInName: this.name().trim() || null, walkInPhone: this.phone().trim() || null,
       prescriberName: this.prescriber().trim() || null, prescriberRegNo: this.regNo().trim() || null, discount: this.discount(),
       lines: this.items().map(it => ({ drugId: it.drug.id, qty: it.qty, batchId: this.cfg().batchPick === 'pharmacist' ? it.batchId : null })),
+      patientAddress: this.address().trim() || null,
     };
   }
 
@@ -395,6 +413,7 @@ export class PharmacyWalkInCounterPage {
         this.phone.set(v.customerPhone ?? '');
         this.prescriber.set(v.prescriberName ?? '');
         this.regNo.set(v.prescriberRegNo ?? '');
+        this.address.set(v.patientAddress ?? '');
         this.rxFile.set(v.prescriptionFileName ?? null);
         this.patient.set(v.patientId ? { id: v.patientId, name: v.customerName ?? 'Patient', meta: '' } : null);
         this.discount.set(v.bill?.discount ?? 0);
@@ -433,7 +452,7 @@ export class PharmacyWalkInCounterPage {
   }
 
   protected reset(): void {
-    this.items.set([]); this.name.set(''); this.phone.set(''); this.prescriber.set(''); this.regNo.set('');
+    this.items.set([]); this.name.set(''); this.phone.set(''); this.prescriber.set(''); this.regNo.set(''); this.address.set('');
     this.patient.set(null); this.discount.set(0); this.editingId.set(null); this.editable.set(true); this.paid.set(null);
     this.rxFile.set(null);
   }
@@ -451,11 +470,15 @@ export class PharmacyWalkInCounterPage {
     });
   }
 
+  /** The prescription is served only through the authenticated API (never a
+   *  presigned link): fetch its bytes through UploadsService's authed cache
+   *  and open/download them from a local blob: URL — never window.open of
+   *  the raw API path (no Authorization header would reach it). */
   protected viewRx(): void {
     const id = this.editingId();
     if (!id) return;
     this.api.prescriptionUrl(id).subscribe({
-      next: url => window.open(url, '_blank', 'noopener'),
+      next: url => { void this.uploads.open(url); },
       error: e => this.toast.error(errText(e)),
     });
   }

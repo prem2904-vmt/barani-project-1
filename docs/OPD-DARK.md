@@ -396,8 +396,11 @@ behind `OpdAccess` / `[RequireOpd]` (server) and `OpdGateService` /
 3. Explicit doctor → OPD department link (replace the text derivation).
 4. Admin console per-tenant OPD toggle (defaults off) + LMS `SetFeatures`
    writing only an explicit `opd: true` (§2 open question).
-5. Finance: roll `opd_bills` / `opd_payments` / `opd_refunds` into the Finance
-   hub and day closure (today they are separate from lab bills by design).
+5. Finance: ~~roll `opd_payments` / `opd_refunds` into day closure~~ DONE
+   (consult procedures, 2026-10-01): `CashDrawer` — the Daily statement,
+   Finance summary, dashboard and Day closing — counts OPD + pharmacy
+   collections, OPD bills and open OPD balances. Still to do: an OPD / pharmacy
+   segment in the Finance hub UI (a per-source split of the same figures).
 6. Refund UI polish: a credit-note PDF / print; partial refunds at the desk.
 7. Consult: use `pharmacy_drugs.UsualJson` for doctor favourites in the Rx
    picker and `SiteKind` for the site picker (the data + API are in place).

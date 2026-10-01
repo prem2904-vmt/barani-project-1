@@ -3,9 +3,56 @@ import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ADMIN_PERMS, FRONTDESK_PERMS } from '../../../core/auth/route-access';
+import { OpdAdminApi, OpdDoctorLite } from '../admin/opd-admin.api';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ConsultApi, ConsultQueueRow } from './consult.api';
 
 export type QueueTab = 'waiting' | 'in_consult' | 'completed';
+
+/** Shows the doctor filter to anyone who isn't PURELY a doctor: front desk /
+ *  admin staff always get it (today's "all doctors mixed" view needs a way to
+ *  narrow it); a plain doctor keeps the unchanged own-queue-only view; a
+ *  "staff doctor" (a doctor who ALSO holds front-desk/admin permissions —
+ *  e.g. an admin who is also a doctor) gets it too, so they may switch to a
+ *  colleague's queue. Pure — no Angular DI. */
+export function showsDoctorFilter(isDoctor: boolean, hasAnyPermission: (perms: string[]) => boolean): boolean {
+  return !isDoctor || hasAnyPermission([...FRONTDESK_PERMS, ...ADMIN_PERMS]);
+}
+
+/** Per-row "Dr X" only makes sense while the rows are a genuine MIX of
+ *  doctors: the default ('' = no doctorId filter) for a non-doctor viewer.
+ *  A doctor's own default queue is single-doctor by construction, and an
+ *  explicit single-doctor pick already reads as one doctor via the filter
+ *  chip, so neither needs the per-row label. Pure. */
+export function showsDoctorName(isDoctor: boolean, selectedDoctorId: string): boolean {
+  return !isDoctor && !selectedDoctorId;
+}
+
+/** Turn the doctor list (+ the caller's own-queue default) into pf-select
+ *  options. Pure — the default option's label is the only thing that differs
+ *  by caller (a doctor's blank filter is "My queue"; staff's is "All
+ *  doctors"), matching what an omitted `doctorId` means server-side for each. */
+export function doctorFilterOptions(doctors: readonly OpdDoctorLite[], isDoctor: boolean): PfSelectOption<string>[] {
+  return [
+    { value: '', label: isDoctor ? 'My queue' : 'All doctors' },
+    ...doctors.map(d => ({ value: d.id, label: d.name })),
+  ];
+}
+
+/** Fallback doctor list when `/api/doctors` isn't readable for this caller
+ *  (or the call fails): derive the distinct doctors from the queue rows
+ *  themselves (doctorUserId/doctorName), so the filter still works once at
+ *  least one row has loaded. */
+export function doctorsFromRows(rows: readonly ConsultQueueRow[]): OpdDoctorLite[] {
+  const seen = new Map<string, OpdDoctorLite>();
+  for (const r of rows) {
+    if (!r.doctorUserId || seen.has(r.doctorUserId)) continue;
+    seen.set(r.doctorUserId, { id: r.doctorUserId, name: r.doctorName || r.doctorUserId, specializations: [], fee: 0 });
+  }
+  return [...seen.values()];
+}
 
 /** Which tab a visit status belongs to (booked / at vitals count as waiting). */
 export function tabOf(status: string): QueueTab | null {
@@ -30,7 +77,7 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
 @Component({
   selector: 'pf-opd-my-patients',
   standalone: true,
-  imports: [DatePipe, HeroBandComponent],
+  imports: [DatePipe, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page mp">
@@ -42,7 +89,7 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
         </div>
         <div band-actions>
           <button type="button" class="nd-btn nd-btn--primary mp__call" [disabled]="!next()" (click)="callNext()">
-            @if (next(); as n) { Call next · Token {{ n.token }} } @else { No one waiting }
+            @if (next(); as n) { Call next · Token {{ n.tokenLabel }} } @else { No one waiting }
           </button>
         </div>
       </pf-hero-band>
@@ -52,6 +99,12 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
           <div class="nd-card__head">
             <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v6a4 4 0 0 0 8 0V3"/><path d="M8 15a5 5 0 0 0 5 5h1a4 4 0 0 0 4-4v-2"/><circle cx="19" cy="10" r="2"/></svg></span>
             <span class="nd-card__label">Queue</span>
+            @if (showFilter()) {
+              <span class="mp__docfilter">
+                <pf-select [options]="doctorOptions()" [value]="selectedDoctorId()" size="sm"
+                           placeholder="All doctors" (valueChange)="onDoctorChange($event)"></pf-select>
+              </span>
+            }
             <span class="nd-card__spacer"></span>
             <div class="nd-tabs mp__tabs" role="tablist">
               @for (t of tabs; track t.id) {
@@ -67,11 +120,11 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
             } @else {
               @for (r of visible(); track r.visitId) {
                 <button type="button" class="nd-row mp__row" [class.nd-row--in]="r.status === 'in_consult'" (click)="open(r)">
-                  <span class="mp__token">{{ r.token }}</span>
+                  <span class="mp__token">{{ r.tokenLabel }}</span>
                   <span class="mp__main">
                     <span class="mp__name">{{ r.patientName }} @if (r.ageSex) { <em>{{ r.ageSex }}</em> } @if (r.isFollowUp) { <span class="mp__tag">Follow-up</span> }
                       @if (r.allergyCount) { <span class="mp__tag mp__tag--warn">Allergy</span> }</span>
-                    <span class="mp__sub">{{ r.purpose || 'No purpose noted' }}@if (r.departmentName) { · {{ r.departmentName }}}@if (r.serviceName) { · {{ r.serviceName }}}</span>
+                    <span class="mp__sub">{{ r.purpose || 'No purpose noted' }}@if (r.departmentName) { · {{ r.departmentName }}}@if (r.serviceName) { · {{ r.serviceName }}}@if (showDoctorName() && r.doctorName) { · {{ r.doctorName }}}</span>
                   </span>
                   <span class="mp__side">
                     <span class="mp__status" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
@@ -103,6 +156,8 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
     .mp__body { flex: 1; min-height: 0; display: flex; padding: 16px 20px 20px; }
     .mp__card { flex: 1; max-width: 1080px; margin: 0 auto; width: 100%; }
     .mp__tabs { flex: 0 1 auto; }
+    .mp__docfilter { flex: 0 0 auto; width: 168px; margin-left: 4px; }
+    @media (max-width: 640px) { .mp__docfilter { width: 100%; order: 3; } }
     .mp__cnt { font-variant-numeric: tabular-nums; color: var(--text-tertiary); font-weight: 500; }
     .mp__call { min-width: 180px; }
     .mp__row { width: 100%; cursor: pointer; min-height: 64px; gap: 14px; }
@@ -135,6 +190,8 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   private readonly api = inject(ConsultApi);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly adminApi = inject(OpdAdminApi);
 
   readonly today = new Date();
   readonly tabs: { id: QueueTab; label: string }[] = [
@@ -144,6 +201,16 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   readonly loading = signal(true);
   readonly tab = signal<QueueTab>('waiting');
   private timer: ReturnType<typeof setInterval> | null = null;
+
+  /** Doctor filter (Task C, staff/staff-doctor only — showFilter()). '' = the
+   *  caller's own default (own queue for a doctor, every doctor's visits for
+   *  staff — the server's existing `doctorId`-omitted behaviour). */
+  readonly isDoctor = computed(() => this.auth.isDoctor());
+  readonly showFilter = computed(() => showsDoctorFilter(this.isDoctor(), p => this.auth.hasAnyPermission(p)));
+  readonly showDoctorName = computed(() => showsDoctorName(this.isDoctor(), this.selectedDoctorId()));
+  readonly doctors = signal<OpdDoctorLite[]>([]);
+  readonly selectedDoctorId = signal('');
+  readonly doctorOptions = computed(() => doctorFilterOptions(this.doctors(), this.isDoctor()));
 
   readonly counts = computed(() => {
     const c: Record<QueueTab, number> = { waiting: 0, in_consult: 0, completed: 0 };
@@ -155,18 +222,36 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   readonly emptyText = computed(() => ({ waiting: 'No one waiting', in_consult: 'No one in consult', completed: 'No consults completed yet' })[this.tab()]);
 
   ngOnInit() {
+    if (this.showFilter()) this.loadDoctors();
     this.load();
     this.timer = setInterval(() => this.load(), 30_000);
   }
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
 
+  /** The doctor picker list. Falls back to the doctors already seen in the
+   *  queue rows when /api/doctors isn't readable for this caller (or errors). */
+  private loadDoctors() {
+    this.adminApi.doctorList().subscribe({
+      next: docs => this.doctors.set(docs ?? []),
+      error: () => this.doctors.set(doctorsFromRows(this.rows())),
+    });
+  }
+
+  onDoctorChange(id: string) {
+    this.selectedDoctorId.set(id);
+    this.load();
+  }
+
   load() {
-    this.api.myQueue().subscribe({
+    this.api.myQueue(undefined, this.selectedDoctorId() || undefined).subscribe({
       next: rows => {
         this.rows.set(rows ?? []);
         this.loading.set(false);
         // Someone already in consult → show that tab first.
         if (this.loading() === false && this.counts().in_consult && this.tab() === 'waiting' && !this.counts().waiting) this.tab.set('in_consult');
+        // Fallback doctor list never got a first fetch (or it failed before
+        // any row existed) — top it up now that rows are in.
+        if (this.showFilter() && !this.doctors().length && rows?.length) this.doctors.set(doctorsFromRows(rows));
       },
       error: e => { this.loading.set(false); this.toast.error(e?.message || 'Could not load your patients'); },
     });

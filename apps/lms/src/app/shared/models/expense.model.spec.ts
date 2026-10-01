@@ -1,5 +1,5 @@
 import {
-  EXPENSE_PERMS, ExpenseEntry, expenseAbilities, expenseHaystack, expenseKindLabel, expenseModeLabel, validExpenseAmount,
+  EXPENSE_PERMS, ExpenseEntry, cashVariance, expectedCash, expenseAbilities, expenseTabs, expenseHaystack, expenseKindLabel, expenseModeLabel, validExpenseAmount,
 } from './expense.model';
 import { ROUTE_ACCESS, canOpenRoute } from '../../core/auth/route-access';
 
@@ -35,9 +35,26 @@ describe('expense model', () => {
     for (const w of ['Toner', 'Stationery', 'Ravi Stores', 'HP 88A', 'Anand', 'UPI', '1250']) expect(hay).toContain(w);
   });
 
-  it('opens /finance/expenses for any of the three permissions only', () => {
-    expect(ROUTE_ACCESS['/finance/expenses'].perms).toEqual(EXPENSE_PERMS);
-    for (const p of EXPENSE_PERMS) expect(canOpenRoute('/finance/expenses', { hasAny: (list: string[]) => list.includes(p) })).toBe(true);
-    expect(canOpenRoute('/finance/expenses', { hasAny: (list: string[]) => list.includes('collect_payment') })).toBe(false);
+  it('opens /expenses for any of the three permissions only', () => {
+    expect(ROUTE_ACCESS['/expenses'].perms).toEqual(EXPENSE_PERMS);
+    for (const p of EXPENSE_PERMS) expect(canOpenRoute('/expenses', { hasAny: (list: string[]) => list.includes(p) })).toBe(true);
+    expect(canOpenRoute('/expenses', { hasAny: (list: string[]) => list.includes('collect_payment') })).toBe(false);
+  });
+
+  it('tabs by permission: My expenses (enters), All expenses (sees all), Day closing (cashier)', () => {
+    expect(expenseTabs(expenseAbilities(has('expense_modifier')))).toEqual(['mine']);
+    expect(expenseTabs(expenseAbilities(has('expense_viewer')))).toEqual(['all']);
+    expect(expenseTabs(expenseAbilities(has('expense_admin')))).toEqual(['mine', 'all', 'closing']);
+    expect(expenseTabs(expenseAbilities(has('expense_viewer', 'expense_modifier')))).toEqual(['mine', 'all']);
+    expect(expenseTabs(expenseAbilities(has()))).toEqual([]);
+    expect(ROUTE_ACCESS['/expenses'].perms).toEqual(EXPENSE_PERMS);
+  });
+
+  it('mirrors the server drawer math: opening + cash in − refunds − cash expenses + top-ups; counted − expected', () => {
+    expect(expectedCash(0, 500, 20, 70, 100)).toBe(510);
+    expect(expectedCash(1000, 500, 20)).toBe(1480);
+    expect(expectedCash(0.1, 0.2, 0)).toBe(0.3);
+    expect(cashVariance(500, 510)).toBe(-10);
+    expect(cashVariance(510.05, 510)).toBe(0.05);
   });
 });

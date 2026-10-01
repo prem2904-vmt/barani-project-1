@@ -40,6 +40,7 @@ import { CriticalResultsService } from '../../../core/services/critical-results.
 import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -90,7 +91,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
+  imports: [DailyNoComponent, FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
   // Technician report notes: the reviewer sees what will print (and, while
   // a line awaits validation, may adjust it — the server decides).
   providers: [ReportNotesStore],
@@ -293,7 +294,7 @@ interface ValueRow {
                 <div class="pf-railpat">
                   <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
                   <div class="pf-railpat__id">
-                    <p class="pf-railpat__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
+                    <p class="pf-railpat__name"><pf-daily-no [of]="t.subOrder" />{{ formatPatient(t.subOrder?.order?.patient) }}</p>
                     <p class="pf-railpat__meta">{{ t.test?.department?.name ?? '—' }} · {{ sampleLabel() }}</p>
                   </div>
                   @if (hasSampleCritical()) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }

@@ -115,6 +115,70 @@ describe('Pharmacy screens', () => {
     noNative(el);
   });
 
+  it("Rx queue Today card: Collect payment on an unpaid dispensed sale (night/money #1)", async () => {
+    const today = [
+      { id: 's1', kind: 'rx', number: 'PD-1', status: 'completed', createdAt: '', customerName: 'Kavitha', total: 300, paid: 0, lines: 1 },
+      { id: 's2', kind: 'walk_in', number: 'PD-2', status: 'completed', createdAt: '', customerName: 'Anand', total: 200, paid: 200, lines: 1 },
+    ];
+    const api = apiMock({
+      dispenses: vi.fn(() => of(today)),
+      payDispense: vi.fn(() => of({ id: 's1', kind: 'rx', status: 'completed', createdAt: '', editable: false, lines: [],
+        bill: { id: 'b', totalPayable: 300, totalPaid: 300, balance: 0, status: 'paid', payments: [] } })),
+    });
+    const dialog = { choose: vi.fn(async () => 'cash'), confirm: vi.fn(async () => true), prompt: vi.fn(async () => null) };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [PharmacyRxQueuePage],
+      providers: [
+        provideRouter([]),
+        { provide: PharmacyApi, useValue: api },
+        { provide: ApiService, useValue: { get: vi.fn(() => of([])) } },
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
+        { provide: DialogService, useValue: dialog },
+        { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World Clinic' }) } },
+        { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World Clinic' }) } },
+        { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
+        { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
+      ],
+    });
+    const f = TestBed.createComponent(PharmacyRxQueuePage);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    await f.whenStable(); f.detectChanges();
+    const btn = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Collect payment')) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    await flush(); f.detectChanges();
+    expect(dialog.choose).toHaveBeenCalled();
+    expect(api.payDispense).toHaveBeenCalledWith('s1', { mode: 'cash', amount: 300 });
+  });
+
+  it('dispense: "bill later" shows the due amount with an inline Collect payment control', async () => {
+    const api = apiMock({
+      dispenseRx: vi.fn(() => of({
+        id: 'x1', kind: 'rx', number: 'PD-2609-00001', status: 'completed', createdAt: '', editable: false,
+        lines: [{ id: 'l1', rxLineId: 'r1', drugId: 'amc', drugName: 'Amoclav-PF 625', form: 'tab', schedule: 'H1', batchId: 'b-soon', batchNo: 'AC-SOON', expiryDate: '2099-01-28', qty: 10, mrp: 22.4, total: 224, returnedQty: 0 }],
+        bill: { id: 'bill', invoiceNumber: 'PH-2609-00001', subTotal: 200, discount: 0, totalTaxable: 200, totalCgst: 12, totalSgst: 12, totalTax: 24, roundOff: 0, totalPayable: 224, totalPaid: 0, balance: 224, status: 'pending', payments: [] },
+      })),
+      payDispense: vi.fn(() => of({
+        id: 'x1', kind: 'rx', number: 'PD-2609-00001', status: 'completed', createdAt: '', editable: false, lines: [],
+        bill: { id: 'bill', invoiceNumber: 'PH-2609-00001', subTotal: 200, discount: 0, totalTaxable: 200, totalCgst: 12, totalSgst: 12, totalTax: 24, roundOff: 0, totalPayable: 224, totalPaid: 224, balance: 0, status: 'paid', payments: [] },
+      })),
+    });
+    const { el, f, c } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    c.give(false); // "Give, bill later"
+    await flush(); f.detectChanges();
+    expect(el.textContent).toContain('still due');
+    expect(el.textContent).toContain('Collect ₹224');
+    (el.querySelector('.nd-btn--primary') as HTMLButtonElement).click();
+    await flush(); f.detectChanges();
+    expect(api.payDispense).toHaveBeenCalledWith('x1', { mode: 'upi', amount: 224 });
+    expect(el.textContent).not.toContain('still due');
+  });
+
   it('dispense: the Rx arrives with its quantity + earliest batch, prices like the server, ONE primary', async () => {
     const { el, f, c, api } = render(PharmacyDispensePage);
     await f.whenStable(); f.detectChanges();
@@ -124,6 +188,9 @@ describe('Pharmacy screens', () => {
     expect(el.textContent).toContain('Take payment ₹224');
     expect(el.textContent).toContain('covered by this prescription');
     expect(el.textContent).toContain('H1 register');
+    expect(primaries(el).length).toBe(0); // H1 register needs the patient's address first (critic #1)
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
     expect(primaries(el).length).toBe(1);
     noNative(el);
 
@@ -136,7 +203,7 @@ describe('Pharmacy screens', () => {
     c.give(true);
     await flush(); f.detectChanges();
     expect(api.dispenseRx).toHaveBeenCalledWith('v1', expect.objectContaining({
-      lines: [{ rxLineId: 'r1', drugId: 'amc', qty: 4, batchId: null }],
+      lines: [{ rxLineId: 'r1', drugId: 'amc', qty: 4, batchId: null, overrideReason: null }],
       payment: expect.objectContaining({ mode: 'upi' }),
     }));
     expect(el.textContent).toContain('Instructions');
@@ -163,6 +230,8 @@ describe('Pharmacy screens', () => {
     await f.whenStable(); f.detectChanges();
     expect(c.canGive()).toBe(false);
     c.setBatch(RX.lines[0], 'b-late');
+    expect(c.canGive()).toBe(false); // H1 register still needs the patient's address (critic #1)
+    c.patientAddress.set('12 MG Road, Chennai');
     expect(c.canGive()).toBe(true);
     expect(c.takes(RX.lines[0])).toEqual([expect.objectContaining({ batchNo: 'AC-LATE', qty: 10 })]);
   });
@@ -181,6 +250,9 @@ describe('Pharmacy screens', () => {
     f.detectChanges();
     expect(c.gate()).toMatch(/customer/);
     c.name.set('Anand');
+    f.detectChanges();
+    expect(c.gate()).toMatch(/address/); // H1 register still needs the customer's address (critic #1)
+    c.address.set('12 MG Road, Chennai');
     f.detectChanges();
     expect(c.gate()).toBeNull();
     expect(c.ready()).toBe(true);
@@ -206,6 +278,19 @@ describe('Pharmacy screens', () => {
     expect((f.nativeElement as HTMLElement).textContent).toContain('New sale');
   });
 
+  it('dispense: a draft consult shows "waiting on the doctor" with no editable lines (night/money #3)', async () => {
+    const api = apiMock({ rx: vi.fn(() => of({ ...RX, consultStatus: 'draft' })) });
+    const { el, f, c } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    expect(el.textContent).toContain("hasn't completed this consult yet");
+    expect(el.textContent).toContain('Waiting on the doctor');
+    expect(el.querySelector('input[type="number"]')).toBeNull(); // no qty stepper
+    expect(el.querySelector('pf-select')).toBeNull();              // no drug / batch picker
+    expect(el.textContent).not.toContain('Billing');
+    expect(c.canGive()).toBe(false);
+    noNative(el);
+  });
+
   it('settings: switching Schedule enforcement OFF asks first; Save is the one primary once changed', async () => {
     const { el, f, c, dialog, api } = render(PharmacySettingsPage, apiMock(), false);
     await f.whenStable(); f.detectChanges();
@@ -219,5 +304,56 @@ describe('Pharmacy screens', () => {
     c.save();
     expect(api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ batchPick: 'pharmacist', enforceSchedules: true }));
     noNative(el);
+  });
+});
+
+// ── Pregnancy-safety guard (night/safety, critic P0 #1d) ───────────────────
+const DRUG_CONTRA = { ...DRUG_AMC, id: 'contra', name: 'Itrazole 100', pregnancyRisk: 'contraindicated' as const };
+const RX_PREGNANT: RxDetail = {
+  ...RX,
+  pregnancy: { status: 'pregnant', source: 'form answer', since: '2026-08-01' },
+  lines: [{ ...RX.lines[0], drugId: 'contra', drugName: 'Itrazole 100', drug: DRUG_CONTRA as never, substitutes: [] }],
+};
+
+describe('Pharmacy screens — pregnancy-safety guard', () => {
+  it('dispense: a contraindicated drug on a pregnant patient shows the chip', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { el, f } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    expect(el.querySelector('.ph-preg')).toBeTruthy();
+    expect(el.querySelector('.ph-preg')!.textContent).toContain('Contraindicated');
+  });
+
+  it('dispensing a contraindicated drug to a pregnant patient asks the pharmacist first — accepted proceeds', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, true);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contraindicated in pregnancy', tone: 'danger' }));
+    expect(api.dispenseRx).toHaveBeenCalled();
+  });
+
+  it('declining the confirmation never dispenses', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, false);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(api.dispenseRx).not.toHaveBeenCalled();
+  });
+
+  it('a non-pregnant patient never asks, even for a contraindicated-tagged drug', async () => {
+    const api = apiMock({ rx: vi.fn(() => of({ ...RX_PREGNANT, pregnancy: undefined })) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, true);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.dispenseRx).toHaveBeenCalled();
   });
 });
