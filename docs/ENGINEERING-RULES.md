@@ -100,6 +100,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Desktop (Electron): the page ALWAYS reports `document.visibilityState === 'visible'` (background throttling is off so sockets live in the tray). "Is the user looking" comes from the main window's state (`pageShown()` / `desktopInFront()` in `desktop-notify.service.ts`), never from document visibility; native notification assets resolve via `path.join(__dirname, …)` in main, never a root-absolute URL.
 - Report PDF typography: every text draw takes font / size / weight from the report-theme token table (`report-theme.ts`), never a literal size; the Classic table is pinned byte-for-byte by golden hashes (`report-theme-classic.spec.ts`, `report-header-legacy.spec.ts`). An embedded theme font loads lazily in `preloadReportImages`, never in the bundle.
 - Report print order has ONE home: the template's `sequencing` (applyReportSequencing) — never re-sort report sections elsewhere.
+- A report block that signs off BELOW another marker ("****End of Report****" + a deferred signature block) is ONE pagination decision, reserved together before either is drawn — never two separate page-break checks in sequence, which can let the first marker draw fine while the second block alone jumps to a near-empty next page (owner's report 2026-10-01, `report-pdf.ts`).
 
 ## 7. Process: definition of done
 1. Fetch and merge the latest remote before starting.

@@ -1237,8 +1237,25 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     cursorY = drawTechNoteBlock(doc, snap.techNotes!.order!, 'Overall note:', cursorY + 8, practice);
   }
 
-  // ── "****End of Report****" line ────
-  if (cursorY > A4.h - MARGIN_BOTTOM - 26) { cursorY = newPage(doc, practice); }
+  // ── "****End of Report****" line, plus — when the final department
+  // defers its sign-off to below it — that signature block, decided as ONE
+  // unit (owner's report 2026-10-01: a chart-and-table page with room to
+  // spare still sent the sign-off alone to an almost-empty page 2, because
+  // the marker's own 26pt reserve said yes while the signatures' separate,
+  // later check said no — "****End of Report****" was left stranded on
+  // page 1 instead of moving WITH its signatures). Reserving both up front
+  // means a page break (when genuinely needed) carries the marker along,
+  // and when the block fits — as it does whenever real free space remains —
+  // nothing moves at all (no over-reservation on the common case). ────
+  // drawEndOfReport always advances cursorY by exactly 12 (startY + 12, the
+  // marker's own baseline step) — so the EXACT follow-on space it needs is
+  // 12 + the signature block's measured height, plus the same SIGN_OFF_SLACK
+  // every other sign-off reserve already carries (never a second, bigger
+  // "just in case" buffer stacked on top — that would send reports to a
+  // needless extra page on the common, fits-fine case).
+  const deferredSigH = finalSigs.sigs?.length ? signatureBlockHeight(finalSigs.sigs) : 0;
+  const eorReserve = deferredSigH > 0 ? 12 + deferredSigH + SIGN_OFF_SLACK : 26;
+  if (cursorY > A4.h - MARGIN_BOTTOM - eorReserve) { cursorY = newPage(doc, practice); }
   cursorY = drawEndOfReport(doc, snap, cursorY);
 
   // The final department's signatories sign BELOW the End-of-Report marker —
@@ -1252,8 +1269,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // Ends flush on the footer band — directly above the disclaimer line.
     // Height comes from the block itself (only the signatories present:
     // 1-4 are one row, 5-7 wrap into balanced rows) and the anchor rises to
-    // fit them so the LAST row still lands on the footer band.
-    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - signatureBlockHeight(finalSigs.sigs));
+    // fit them so the LAST row still lands on the footer band. The reserve
+    // above already guarantees this fits on the CURRENT page — the guard
+    // inside drawInlineSignatures is a last-resort only.
+    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - deferredSigH);
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
