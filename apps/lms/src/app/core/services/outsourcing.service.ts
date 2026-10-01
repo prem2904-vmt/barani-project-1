@@ -84,15 +84,61 @@ export class OutsourcingService {
   readonly nextCount = computed(() =>
     Math.max(0, Math.min(OUTSOURCED_PAGE_SIZE, (this._total() ?? 0) - this._rows().length)));
 
+  /** loadAll() stopped at the cap with more rows still on the server — an
+   *  honest "there's more than we're showing" signal (never silently
+   *  dropped). Cleared on the next successful reset-mode fetch. */
+  private readonly _truncated = signal(false);
+  readonly truncated = this._truncated.asReadonly();
+  private static readonly LOAD_ALL_CAP = 1000;
+
   get apiBase(): string { return this.platform.getApiUrl(); }
+
+  /** What status/partnerId `_rows()` currently holds (null = nothing fetched
+   *  yet, or the last fetch failed). Set from {@link fetch} on every
+   *  successful reset — lets {@link ensureLoaded} / {@link loadAll} tell
+   *  "we already have this filter's data" from "this is a different filter,
+   *  or nothing at all" without re-fetching just to find out. */
+  private _loadedFor: { status: OutsourcedStatusFilter; partnerId: string | null } | null = null;
+  private matchesLoaded(): boolean {
+    const f = this._loadedFor;
+    return !!f && f.status === this.status() && f.partnerId === this.partnerId() && this._rows().length > 0;
+  }
 
   /** Page 1 for the current status / partner filter. */
   async load(): Promise<void> { await this.fetch('reset'); }
+
+  /** Make sure SOMETHING is loaded for the current status / partnerId — a
+   *  no-op when we already have it (same filter, at least one row fetched),
+   *  so the dedicated Outsourced tab never re-fetches page 1 just because it
+   *  mounted, when the frontdesk merged list (or an earlier visit) already
+   *  loaded this exact filter — same status ('all' in the new design, which
+   *  is also what the merged list always uses) and the same partner. */
+  async ensureLoaded(): Promise<void> {
+    if (this.matchesLoaded()) return;
+    await this.fetch('reset');
+  }
 
   /** The next page, appended. A no-op mid-fetch or once every row is loaded. */
   async loadMore(): Promise<void> {
     if (this._loadingMore() || !this.hasMore()) return;
     await this.fetch('more');
+  }
+
+  /**
+   * EVERY row for the current status / partnerId, not just one page — the
+   * frontdesk merged list needs the whole window (an order that is only
+   * outsourced must still show up, wherever its tube sorts in the window),
+   * unlike the dedicated tab's own "Load more" pacing. Resumes a partial
+   * load for the SAME filter instead of restarting it; capped at
+   * {@link LOAD_ALL_CAP} rows so a pathological tenant's window can't hang
+   * the UI — `truncated()` then reports there's more than we loaded. A
+   * no-op once everything for this filter is already in (no chip toggling
+   * between this and the dedicated tab ever double-fetches the same page).
+   */
+  async loadAll(cap = OutsourcingService.LOAD_ALL_CAP): Promise<void> {
+    if (!this.matchesLoaded()) await this.fetch('reset');
+    while (this.hasMore() && this._rows().length < cap) await this.fetch('more');
+    this._truncated.set(this.hasMore());
   }
 
   // status / partnerId are also applied server-side — either changing means
@@ -107,11 +153,14 @@ export class OutsourcingService {
   private async fetch(mode: 'reset' | 'more'): Promise<void> {
     const seq = ++this._seq;
     const page = mode === 'more' ? this._page + 1 : 1;
+    const filter = { status: this.status(), partnerId: this.partnerId() };
+    // A fresh page-1 fetch starts a new story — any earlier loadAll() cap is
+    // stale the moment the filter (or the branch) resets; loadAll() sets its
+    // own truncated() again if THIS fetch also needs more than it gets.
+    if (mode === 'reset') this._truncated.set(false);
     if (mode === 'more') this._loadingMore.set(true); else this._loading.set(true);
     try {
-      const url = outsourcedPageUrl({
-        days: OUTSOURCED_DAYS, page, pageSize: OUTSOURCED_PAGE_SIZE, status: this.status(), partnerId: this.partnerId(),
-      });
+      const url = outsourcedPageUrl({ days: OUTSOURCED_DAYS, page, pageSize: OUTSOURCED_PAGE_SIZE, ...filter });
       const res = await firstValueFrom(this.api.get<OutsourcedTube[] | OutsourcedPage | null>(url));
       if (seq !== this._seq) return;
       if (!res || Array.isArray(res)) {
@@ -120,6 +169,7 @@ export class OutsourcingService {
         this._total.set(null);
         this._serverCounts.set(null);
         this._page = 1;
+        this._loadedFor = filter;
         return;
       }
       const items = res.items ?? [];
@@ -132,8 +182,9 @@ export class OutsourcingService {
       this._total.set(res.total);
       this._serverCounts.set(res.counts);
       this._page = page;
+      this._loadedFor = filter;
     } catch {
-      if (mode === 'reset') { this._rows.set([]); this._total.set(null); this._serverCounts.set(null); }
+      if (mode === 'reset') { this._rows.set([]); this._total.set(null); this._serverCounts.set(null); this._loadedFor = null; }
     } finally {
       if (seq === this._seq) { this._loading.set(false); this._loadingMore.set(false); }
     }
@@ -144,6 +195,8 @@ export class OutsourcingService {
     this._rows.set([]);
     this._total.set(null);
     this._serverCounts.set(null);
+    this._truncated.set(false);
+    this._loadedFor = null;
     this._page = 0;
   }
 

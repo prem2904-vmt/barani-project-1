@@ -39,7 +39,7 @@ function setup(rows: OutsourcedTube[], confirm = true) {
     hasMore: signal(false),
     nextCount: signal(0),
     apiBase: 'https://api.test',
-    load: vi.fn(async () => {}),
+    load: vi.fn(async () => {}), ensureLoaded: vi.fn(async () => {}),
     loadMore: vi.fn(async () => {}),
     upload: vi.fn(async () => '/uploads/t/p.pdf'),
     complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
@@ -67,7 +67,7 @@ function setup(rows: OutsourcedTube[], confirm = true) {
 describe('Frontdesk Outsourced tab', () => {
   it('lists each outsourced tube: sample, full patient name, order, tests, partner, dispatched date, status chip', () => {
     const { el, svc } = setup([row()]);
-    expect(svc.load).toHaveBeenCalled();
+    expect(svc.ensureLoaded).toHaveBeenCalled();
     const r = el.querySelector('.pf-out__row') as HTMLElement;
     expect(r.querySelector('.pf-out__sample')?.textContent).toContain('OUT-0001');
     expect(r.querySelector('.pf-out__who')?.textContent).toContain('Ms. Paravai Munusamy');
@@ -176,7 +176,7 @@ describe('Frontdesk Outsourced tab', () => {
       rows: rowsSig, loading: signal(false), loadingMore: signal(false), status, partnerId: signal<string | null>(null),
       query: signal(''), visible: computed(() => rowsSig()), partners: computed(() => []),
       counts: computed(() => ({ outsourced: 0, completed: 0 })), hasMore: signal(false), nextCount: signal(0),
-      apiBase: 'https://api.test', load: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
+      apiBase: 'https://api.test', load: vi.fn(async () => {}), ensureLoaded: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
       upload: vi.fn(async () => ''), complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
       setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []), reopen: vi.fn(async () => {}),
     };
@@ -193,7 +193,7 @@ describe('Frontdesk Outsourced tab', () => {
     // classic-design test above, so ngOnInit sees the real new-design value.
     f.detectChanges();
     expect(status()).toBe('all');
-    expect(svc.load).toHaveBeenCalled();
+    expect(svc.ensureLoaded).toHaveBeenCalled();
   });
 
   it('classic design leaves the status alone on init (its own segmented control owns it)', () => {
@@ -203,7 +203,7 @@ describe('Frontdesk Outsourced tab', () => {
       rows: rowsSig, loading: signal(false), loadingMore: signal(false), status, partnerId: signal<string | null>(null),
       query: signal(''), visible: computed(() => rowsSig()), partners: computed(() => []),
       counts: computed(() => ({ outsourced: 0, completed: 0 })), hasMore: signal(false), nextCount: signal(0),
-      apiBase: 'https://api.test', load: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
+      apiBase: 'https://api.test', load: vi.fn(async () => {}), ensureLoaded: vi.fn(async () => {}), loadMore: vi.fn(async () => {}),
       upload: vi.fn(async () => ''), complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
       setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []), reopen: vi.fn(async () => {}),
     };

@@ -158,7 +158,12 @@ export class OutsourcedListComponent implements OnInit {
     // Completed tubes aren't silently left unloaded. Classic design keeps
     // whatever `svc.status` already is (its segmented control's own value).
     if (!this.showFilters()) this.svc.status.set('all');
-    void this.svc.load();
+    // ensureLoaded (not load): the frontdesk merged list already fully loads
+    // status='all' for the window on its own (FrontdeskLandingComponent) —
+    // visiting this tab right after must not re-fetch page 1 of data we
+    // already have. A genuinely different filter (classic design narrowed
+    // to 'completed', say) still fetches, same as before.
+    void this.svc.ensureLoaded();
   }
 
   /** The next page, appended (the service itself no-ops mid-fetch / once

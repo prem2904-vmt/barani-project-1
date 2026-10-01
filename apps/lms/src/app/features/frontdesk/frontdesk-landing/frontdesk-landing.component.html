@@ -1238,6 +1238,13 @@
                    have had under any status it belongs to; a second status
                    is a small badge, never a second row. -->
               @if (rightTab() === null) {
+              @if (outsourcing.truncated()) {
+              <!-- loadAll() capped at 1000 outsourced rows for this window
+                   (OutsourcingService) — honest, never a silent drop. -->
+              <p class="pf-wsec-note" role="status">
+                Showing the first 1000 outsourced rows for this date range — narrow it to see the rest.
+              </p>
+              }
               @if (ordersSkel() && mergedWork().length === 0 && !allStatusesEmpty()) {
               <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
               } @else if (!allStatusesEmpty()) {

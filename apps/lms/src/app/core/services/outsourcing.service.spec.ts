@@ -119,4 +119,115 @@ describe('OutsourcingService — server paging', () => {
     expect(svc.rows()).toEqual([]);
     expect(svc.hasMore()).toBe(false);
   });
+
+  /** Polls for the next outstanding request a few microtasks out — `fetch()`
+   *  awaits the previous one's whole async chain (seq check, signal writes)
+   *  before `loadAll()`'s while-loop issues the next, so the next HTTP call
+   *  doesn't exist yet on the very same microtask as the previous flush. */
+  async function nextRequest(tries = 20) {
+    for (let i = 0; i < tries; i++) {
+      const [req] = ctl.match(r => r.urlWithParams.includes('/api/samples/outsourced'));
+      if (req) return req;
+      await Promise.resolve();
+    }
+    throw new Error('no further /api/samples/outsourced request appeared');
+  }
+
+  describe('loadAll() — the frontdesk merged list needs the WHOLE window, not one page', () => {
+    it('fetches every page until hasMore() is false, merging them in order', async () => {
+      const p = svc.loadAll();
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 5, 1, true) });
+      (await nextRequest()).flush({ success: true, data: page([tube('3'), tube('4')], 5, 2, true) });
+      (await nextRequest()).flush({ success: true, data: page([tube('5')], 5, 3, false) });
+      await p;
+      expect(svc.rows().map(r => r.sampleId)).toEqual(['1', '2', '3', '4', '5']);
+      expect(svc.hasMore()).toBe(false);
+      expect(svc.truncated()).toBe(false);
+      ctl.verify();
+    });
+
+    it('stops at the cap and reports truncated() — never silently drops the "more exist" fact', async () => {
+      const p = svc.loadAll(3); // cap of 3 for this test, well under a real window
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 10, 1, true) });
+      (await nextRequest()).flush({ success: true, data: page([tube('3'), tube('4')], 10, 2, true) });
+      await p;
+      expect(svc.rows().length).toBe(4); // stopped once length >= cap (3), not mid-page
+      expect(svc.hasMore()).toBe(true); // the server still has more
+      expect(svc.truncated()).toBe(true);
+      ctl.verify();
+    });
+
+    it('is a no-op once already fully loaded for the current status/partnerId — no request at all', async () => {
+      const p1 = svc.loadAll();
+      (await nextRequest()).flush({ success: true, data: page([tube('1')], 1, 1, false) });
+      await p1;
+      ctl.verify(); // exactly one request so far
+
+      await svc.loadAll(); // same filter, already fully loaded — must not hit the network
+      ctl.verify();
+    });
+
+    it('resumes a PARTIAL load for the same filter instead of restarting from page 1', async () => {
+      // ensureLoaded() (or load()) leaves page 1 only…
+      const p1 = svc.load();
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 5, 1, true) });
+      await p1;
+
+      // …loadAll() continues from page 2, not a fresh reset.
+      const p2 = svc.loadAll();
+      const req2 = await nextRequest();
+      expect(req2.request.urlWithParams).toContain('page=2');
+      req2.flush({ success: true, data: page([tube('3'), tube('4')], 5, 2, true) });
+      (await nextRequest()).flush({ success: true, data: page([tube('5')], 5, 3, false) });
+      await p2;
+      expect(svc.rows().map(r => r.sampleId)).toEqual(['1', '2', '3', '4', '5']);
+    });
+
+    it('a status change after loadAll() clears truncated() on the next load (fetch resets it)', async () => {
+      const p1 = svc.loadAll(2);
+      (await nextRequest()).flush({ success: true, data: page([tube('1'), tube('2')], 5, 1, true) });
+      await p1;
+      expect(svc.truncated()).toBe(true);
+
+      svc.status.set('completed');
+      TestBed.tick();
+      (await nextRequest()).flush({ success: true, data: page([tube('9')], 1, 1, false) });
+      await Promise.resolve();
+      expect(svc.truncated()).toBe(false);
+    });
+  });
+
+  describe('ensureLoaded() — the dedicated Outsourced tab must not re-fetch what the merged list already loaded', () => {
+    it('fetches when nothing is loaded yet', async () => {
+      const p = svc.ensureLoaded();
+      (await nextRequest()).flush({ success: true, data: page([tube('1')], 1, 1, false) });
+      await p;
+      expect(svc.rows().map(r => r.sampleId)).toEqual(['1']);
+    });
+
+    it('is a no-op when the SAME status/partnerId is already loaded', async () => {
+      const p1 = svc.ensureLoaded();
+      (await nextRequest()).flush({ success: true, data: page([tube('1')], 1, 1, false) });
+      await p1;
+      ctl.verify();
+
+      await svc.ensureLoaded(); // same filter ('outsourced', no partner) — no request
+      ctl.verify();
+    });
+
+    it('still fetches for a DIFFERENT status/partnerId (a real filter change, e.g. classic design narrowing)', async () => {
+      const p1 = svc.ensureLoaded();
+      (await nextRequest()).flush({ success: true, data: page([tube('1')], 1, 1, false) });
+      await p1;
+
+      svc.status.set('completed');
+      TestBed.tick(); // the refetch-on-filter-change effect already fetches once…
+      (await nextRequest()).flush({ success: true, data: page([tube('2')], 1, 1, false) });
+      await Promise.resolve();
+
+      // …so by the time ensureLoaded() is asked, 'completed' is already current — no second request.
+      await svc.ensureLoaded();
+      ctl.verify();
+    });
+  });
 });

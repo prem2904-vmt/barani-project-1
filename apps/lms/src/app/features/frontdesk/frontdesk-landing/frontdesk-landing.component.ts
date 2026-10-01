@@ -25,6 +25,7 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
 import { MergedWorkRow, WORK_STATUS_LABEL } from './work-merge';
+import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -863,11 +864,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
   /** Ids of the orders in the current work feed (today's feed / the range). */
   private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
-  /** The Outsourced list follows the same date range (its own tube rows). */
-  private readonly _outsourcedWindow = effect(() => {
-    const bounds = this.workBounds(); const feed = this._feedIds();
-    this.outsourcing.dateWindow.set(t => inWorkWindow(t.createdAt, bounds, feed.has(t.orderId)));
-  });
+  /** The Outsourced list follows the same date range (its own tube rows);
+   *  while the merged ("no chip") view is showing, also keeps the WHOLE
+   *  window fully loaded (merged-outsourced-loader.ts — see there for why
+   *  and exactly when it re-fires: init, date-range change, refresh, chip
+   *  toggle). */
+  private readonly _outsourcedWindow = wireMergedOutsourcedLoader(
+    this._rightTab, this.workBounds, this._feedIds, this.outsourcing,
+  );
   private readonly _clearOutsourcedWindow = inject(DestroyRef).onDestroy(() => this.outsourcing.dateWindow.set(null));
   /** "All statuses" (no chip on): the same combined list, deduped — an
    *  in-progress order with a balance is listed once, under In progress. */
