@@ -4,7 +4,7 @@ import {
   CBC_DEFAULT_MAPS, DEFAULT_TEXT_LINE_PATTERN, applyDetectProposal, buildInstrumentConfig, buildUpsert, codesFromMessages,
   connectionSummary, controlCharsText, emptyCodeMapRow, emptyInstrumentForm, formFromInstrument, mergeUnmappedCodes,
   previewLine, previewRows, renderControlChars, statusWord, toCodeMapUpserts, validateCodeMaps, validateInstrumentForm,
-  withCbcDefaults,
+  withCbcDefaults, withM51Defaults, M51_HL7_MAPS,
 } from './instrument-config';
 import { messagesUrl } from './instruments-api.service';
 
@@ -117,6 +117,23 @@ describe('instrument config — code maps', () => {
     expect(rows.find((r) => r.analyzerCode === 'wbc')!.testCatalogKey).toBe('CUSTOM');
     expect(rows.find((r) => r.analyzerCode === 'HGB')!.testCatalogKey).toBe('HEM011');
     expect(rows).toHaveLength(20);
+  });
+
+  it('Medonic M51 (HL7, OBX-3 comp 1 = LOINC): 22 analytes, WBC/PLT ×1000, codes from a real Arun-lab run', () => {
+    // NM codes the M51 sent on 2026-10-01 (sample 10614), excluding ones with no Test Master test.
+    const sent = ['6690-2', '770-8', '736-9', '5905-5', '713-8', '706-2', '751-8', '731-0', '742-7', '711-2', '704-7',
+      '789-8', '718-7', '4544-3', '787-2', '785-6', '786-4', '788-0', '777-3', '32623-1', '32207-3', '11003'];
+    const rows = withM51Defaults([]);
+    expect(M51_HL7_MAPS).toHaveLength(22);
+    expect(rows.map((r) => r.analyzerCode).sort()).toEqual([...sent].sort());
+    expect(new Set(rows.map((r) => r.testCatalogKey)).size).toBe(22);
+    expect(rows.find((r) => r.analyzerCode === '6690-2')).toMatchObject({ testCatalogKey: 'HEM019', factor: 1000, decimals: 0 });
+    expect(rows.find((r) => r.analyzerCode === '777-3')).toMatchObject({ testCatalogKey: 'HEM030', factor: 1000, decimals: 0 });
+    expect(rows.find((r) => r.analyzerCode === '751-8')).toMatchObject({ testCatalogKey: 'HEM025', factor: 1, decimals: 2 });
+    // Same never-override rule as the CBC defaults.
+    const kept = withM51Defaults([{ ...emptyCodeMapRow('6690-2'), testCatalogKey: 'CUSTOM', factor: 1 }]);
+    expect(kept.find((r) => r.analyzerCode === '6690-2')!.testCatalogKey).toBe('CUSTOM');
+    expect(kept).toHaveLength(22);
   });
 
   it('unmapped-code merge: new codes only, case-insensitive, blanks + dupes dropped', () => {

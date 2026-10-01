@@ -322,6 +322,7 @@
               <span class="nd-card__note">Each analyzer code → the Test Master test it fills. Saved with the band Save.</span>
               <span class="pf-ie-headacts">
                 <button type="button" class="nd-btn nd-btn--quiet press" (click)="loadCbc()">Load CBC defaults</button>
+                <button type="button" class="nd-btn nd-btn--quiet press" (click)="loadM51()">Load Medonic M51</button>
                 <button type="button" class="nd-btn nd-btn--quiet press" [disabled]="!unmappedCandidates().length" (click)="addUnmapped()">
                   Add unmapped codes{{ unmappedCandidates().length ? ' (' + unmappedCandidates().length + ')' : '' }}
                 </button>

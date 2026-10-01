@@ -329,8 +329,12 @@ export const CBC_DEFAULT_MAPS: ReadonlyArray<Omit<CodeMapRow, 'parameterName' | 
  *  mapped yet. Existing rows (and their edits) always win. A blank row with
  *  a CBC code is filled in place. */
 export function withCbcDefaults(rows: readonly CodeMapRow[]): CodeMapRow[] {
+  return withPreset(rows, CBC_DEFAULT_MAPS);
+}
+
+function withPreset(rows: readonly CodeMapRow[], preset: ReadonlyArray<Omit<CodeMapRow, 'parameterName' | 'offset' | 'testName'>>): CodeMapRow[] {
   const out = rows.map((r) => ({ ...r }));
-  for (const d of CBC_DEFAULT_MAPS) {
+  for (const d of preset) {
     const hit = out.find((r) => codeKey(r.analyzerCode) === codeKey(d.analyzerCode));
     if (hit) {
       if (!hit.testCatalogKey) Object.assign(hit, { ...d, analyzerCode: hit.analyzerCode, parameterName: hit.parameterName ?? '', offset: hit.offset ?? 0 });
@@ -339,6 +343,40 @@ export function withCbcDefaults(rows: readonly CodeMapRow[]): CodeMapRow[] {
     out.push({ ...d, parameterName: '', offset: 0 });
   }
   return out;
+}
+
+/** Medonic M51 (Boule) / Mindray-style HL7: OBX-3 component 1 is the LOINC
+ *  code (99MRC for PCT), so the rows map those codes. Units as the M51 sends
+ *  them: counts in 10^3/µL (→ ×1000 for cells/µL), RBC 10^6/µL. First
+ *  installed at Arun lab (2026-10-01). */
+export const M51_HL7_MAPS: ReadonlyArray<Omit<CodeMapRow, 'parameterName' | 'offset' | 'testName'>> = [
+  { analyzerCode: '6690-2', testCatalogKey: 'HEM019', factor: 1000, decimals: 0, unit: 'cells/µL' },   // WBC
+  { analyzerCode: '789-8', testCatalogKey: 'HEM012', factor: 1, decimals: 2, unit: 'million/µL' },    // RBC
+  { analyzerCode: '718-7', testCatalogKey: 'HEM011', factor: 1, decimals: 1, unit: 'g/dL' },          // HGB
+  { analyzerCode: '4544-3', testCatalogKey: 'HEM013', factor: 1, decimals: 1, unit: '%' },            // HCT
+  { analyzerCode: '787-2', testCatalogKey: 'HEM014', factor: 1, decimals: 1, unit: 'fL' },            // MCV
+  { analyzerCode: '785-6', testCatalogKey: 'HEM015', factor: 1, decimals: 1, unit: 'pg' },            // MCH
+  { analyzerCode: '786-4', testCatalogKey: 'HEM016', factor: 1, decimals: 1, unit: 'g/dL' },          // MCHC
+  { analyzerCode: '788-0', testCatalogKey: 'HEM017', factor: 1, decimals: 1, unit: '%' },             // RDW-CV
+  { analyzerCode: '777-3', testCatalogKey: 'HEM030', factor: 1000, decimals: 0, unit: 'cells/µL' },   // PLT
+  { analyzerCode: '32623-1', testCatalogKey: 'HEM031', factor: 1, decimals: 1, unit: 'fL' },          // MPV
+  { analyzerCode: '32207-3', testCatalogKey: 'HEM032', factor: 1, decimals: 1, unit: 'fL' },          // PDW
+  { analyzerCode: '11003', testCatalogKey: 'HEM033', factor: 1, decimals: 3, unit: '%' },             // PCT
+  { analyzerCode: '770-8', testCatalogKey: 'HEM020', factor: 1, decimals: 1, unit: '%' },             // NEU%
+  { analyzerCode: '736-9', testCatalogKey: 'HEM021', factor: 1, decimals: 1, unit: '%' },             // LYM%
+  { analyzerCode: '5905-5', testCatalogKey: 'HEM022', factor: 1, decimals: 1, unit: '%' },            // MON%
+  { analyzerCode: '713-8', testCatalogKey: 'HEM023', factor: 1, decimals: 1, unit: '%' },             // EOS%
+  { analyzerCode: '706-2', testCatalogKey: 'HEM024', factor: 1, decimals: 1, unit: '%' },             // BAS%
+  { analyzerCode: '751-8', testCatalogKey: 'HEM025', factor: 1, decimals: 2, unit: '×10⁹/L' },        // NEU#
+  { analyzerCode: '731-0', testCatalogKey: 'HEM026', factor: 1, decimals: 2, unit: '×10⁹/L' },        // LYM#
+  { analyzerCode: '742-7', testCatalogKey: 'HEM027', factor: 1, decimals: 2, unit: '×10⁹/L' },        // MON#
+  { analyzerCode: '711-2', testCatalogKey: 'HEM028', factor: 1, decimals: 2, unit: '×10⁹/L' },        // EOS#
+  { analyzerCode: '704-7', testCatalogKey: 'HEM029', factor: 1, decimals: 2, unit: '×10⁹/L' },        // BAS#
+];
+
+/** "Load Medonic M51": same merge rule as {@link withCbcDefaults}. */
+export function withM51Defaults(rows: readonly CodeMapRow[]): CodeMapRow[] {
+  return withPreset(rows, M51_HL7_MAPS);
 }
 
 /** "Add unmapped codes": one blank row per code not already on the grid

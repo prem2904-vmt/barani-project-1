@@ -22,7 +22,7 @@ import {
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, buildInstrumentConfig, buildUpsert,
   codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
   mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, statusWord, toCodeMapUpserts, validateCodeMaps,
-  validateInstrumentForm, withCbcDefaults,
+  validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
   ConnectorStatus, DetectResult, Hl7SampleIdField, InstrumentDto, InstrumentMessage, ListenEvent, MessageSummaryDto,
@@ -379,6 +379,12 @@ export class InstrumentEditorComponent {
     this.setMaps(withCbcDefaults(this.maps()));
     const added = this.maps().filter((r) => r.testCatalogKey).length - before;
     this.toasts.success(added > 0 ? `${plural(added, 'CBC code')} added` : 'CBC codes are already mapped');
+  }
+  loadM51() {
+    const before = this.maps().filter((r) => r.testCatalogKey).length;
+    this.setMaps(withM51Defaults(this.maps()));
+    const added = this.maps().filter((r) => r.testCatalogKey).length - before;
+    this.toasts.success(added > 0 ? `${plural(added, 'Medonic M51 code')} added` : 'Medonic M51 codes are already mapped');
   }
   readonly unmappedCandidates = computed(() => {
     const onGrid = new Set(this.maps().map((r) => r.analyzerCode.trim().toUpperCase()));
