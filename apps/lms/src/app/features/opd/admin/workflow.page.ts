@@ -12,7 +12,8 @@ interface Opt<T extends string> { value: T; label: string; hint: string; }
 
 export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
   workflow: { vitals: 'desk', vitalsBy: 'nurse', labTestsAtDesk: true, billing: 'before_consult',
-    prefill: { purposeToComplaint: true, vitalsToHeader: true }, pharmacy: { enabled: true }, privateNotesVisibility: 'doctor' },
+    prefill: { purposeToComplaint: true, vitalsToHeader: true }, pharmacy: { enabled: true }, privateNotesVisibility: 'doctor',
+    procedurePricing: { doctorCanChange: false, maxChangePercent: null } },
   queue: { organise: 'per_doctor', tokenPrefix: null, doctorUnavailable: 'manual', showOnScreen: true },
   pharmacy: { batchPick: 'earliest_expiry' },
 };
@@ -160,6 +161,24 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
               </div>
             </section>
 
+            <section class="nd-card" data-card="procedure-prices">
+              <header class="nd-card__head"><span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>
+                <span class="nd-card__label">Procedure prices</span></header>
+              <div class="nd-card__body wf-row">
+                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="s().workflow.procedurePricing.doctorCanChange" (click)="toggleProcedurePricing()">
+                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Doctors can change procedure prices</button>
+                <span class="wf-step__h">{{ s().workflow.procedurePricing.doctorCanChange
+                  ? 'In the consult, the doctor can type the exact amount for a procedure. The front desk sees "set by Dr … (rule ₹…)" on the bill, and every change is in the audit log.'
+                  : 'Off — doctors see the OPD Master price and cannot change it. The front desk can still give a discount within their limit.' }}</span>
+                @if (s().workflow.procedurePricing.doctorCanChange) {
+                  <label class="oa-field"><span class="oa-field__lbl">Most a doctor can change it (%)</span>
+                    <input class="nd-input nd-num wf-prefix" type="text" inputmode="numeric" maxlength="3" [value]="s().workflow.procedurePricing.maxChangePercent ?? ''"
+                           placeholder="No limit" aria-label="Most a doctor can change a procedure price, in percent" (change)="setProcedureCap($any($event.target).value)">
+                    <span class="oa-field__hint">Up or down from the OPD Master price, e.g. 20 lets ₹1,500 go from ₹1,200 to ₹1,800. Blank = any amount.</span></label>
+                }
+              </div>
+            </section>
+
             <section class="nd-card">
               <header class="nd-card__head"><span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                 <span class="nd-card__label">Who reads private notes</span></header>
@@ -284,6 +303,20 @@ export class OpdWorkflowPage {
     this.put({ workflow: { prefill: { ...p, [k]: !p[k] } } });
   }
 
+  toggleProcedurePricing(): void {
+    const p = this.s().workflow.procedurePricing;
+    this.put({ workflow: { procedurePricing: { ...p, doctorCanChange: !p.doctorCanChange } } });
+  }
+
+  /** The cap: a whole percent 1–100, blank = no cap. */
+  setProcedureCap(v: string): void {
+    const t = String(v ?? '').trim().replace(/%$/, '');
+    const cap = t === '' ? null : Number(t);
+    if (cap !== null && (!Number.isInteger(cap) || cap < 1 || cap > 100)) { this.toasts.error('The limit is a whole percent from 1 to 100 (blank = no limit)'); return; }
+    const p = this.s().workflow.procedurePricing;
+    if (cap !== p.maxChangePercent) this.put({ workflow: { procedurePricing: { ...p, maxChangePercent: cap } } });
+  }
+
   setPrefix(v: string): void {
     const p = String(v ?? '').trim().toUpperCase();
     if (!/^[A-Z0-9]{0,4}$/.test(p)) { this.toasts.error('A token prefix is up to 4 letters or digits'); return; }
@@ -296,7 +329,8 @@ export function mergeSettings(w: Partial<OpdWorkflowSettings> | null | undefined
   const d = DEFAULT_WORKFLOW_SETTINGS;
   return {
     workflow: { ...d.workflow, ...(w?.workflow ?? {}), prefill: { ...d.workflow.prefill, ...(w?.workflow?.prefill ?? {}) },
-      pharmacy: { ...d.workflow.pharmacy, ...(w?.workflow?.pharmacy ?? {}) } },
+      pharmacy: { ...d.workflow.pharmacy, ...(w?.workflow?.pharmacy ?? {}) },
+      procedurePricing: { ...d.workflow.procedurePricing, ...(w?.workflow?.procedurePricing ?? {}) } },
     queue: { ...d.queue, ...(w?.queue ?? {}) },
     pharmacy: { ...d.pharmacy, ...(w?.pharmacy ?? {}) },
   };

@@ -7,6 +7,7 @@ import type { OpdRxLineDto } from '../shared/opd.models';
 import { ConsultApi, ConsultPastConsult } from './consult.api';
 import { OpdFormRendererComponent } from '../admin/forms/renderer';
 import { fromDto } from './rx/rx-model';
+import { procedurePrintText } from './rx-print';
 
 /**
  * `/opd/patient/:patientId` — the patient's past OPD consults (Agent C), each
@@ -52,6 +53,7 @@ import { fromDto } from './rx/rx-model';
                 }
               }
               @if (tests(c)) { <p class="ph__t"><b>Investigations:</b> {{ tests(c) }}</p> }
+              @if (c.procedures?.length) { <p class="ph__t"><b>Procedures:</b> {{ procs(c) }}</p> }
               @if (c.advice) { <p class="ph__t"><b>Advice:</b> {{ c.advice }}</p> }
             </div>
           </article>
@@ -94,6 +96,7 @@ export class OpdPatientHistoryPage implements OnInit {
     });
   }
   dx(c: ConsultPastConsult) { return c.diagnoses.map(d => d.label).join(', '); }
+  procs(c: ConsultPastConsult) { return (c.procedures ?? []).map(procedurePrintText).join(', '); }
   tests(c: ConsultPastConsult) { return (c.investigations ?? []).flatMap(i => i.items).map(t => t.name).join(', '); }
   short(r: OpdRxLineDto) { const l = fromDto(r); return lineShort(l.line, l.drug); }
   say(r: OpdRxLineDto) { const l = fromDto(r); return sayRx(l.line, l.drug); }

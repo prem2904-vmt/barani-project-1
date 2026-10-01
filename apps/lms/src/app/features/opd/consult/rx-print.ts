@@ -23,6 +23,8 @@ export interface RxPrintInput {
   diagnoses: OpdDiagnosis[];
   lines: ConsultRxLine[];
   tests: { name: string }[];
+  /** Procedures done in the consult (no prices — the bill is the desk's). */
+  procedures?: { name: string; side?: string | null; qty?: number; note?: string | null }[];
   advice?: string | null;
   followUp?: string | null;
   lang?: string;
@@ -38,6 +40,12 @@ export function rxPrintRows(lines: readonly ConsultRxLine[], start: Date, lang =
     lineShort(l.line, l.drug, lang) + '\n' + sayRx(l.line, l.drug, lang),
     qtyWords(l.line, l.drug, start),
   ]);
+}
+
+/** "Diagnostic nasal endoscopy (left) — Polyp seen", "Ear syringing × 2". */
+export function procedurePrintText(p: { name: string; side?: string | null; qty?: number; note?: string | null }): string {
+  const side = p.side === 'both' ? 'both sides' : p.side ? p.side : null;
+  return p.name + (side ? ` (${side})` : '') + ((p.qty ?? 1) > 1 ? ` × ${p.qty}` : '') + (p.note?.trim() ? ` — ${p.note.trim()}` : '');
 }
 
 export function buildRxPdf(inp: RxPrintInput): jsPDF {
@@ -96,6 +104,7 @@ export function buildRxPdf(inp: RxPrintInput): jsPDF {
     y = ((doc as any).lastAutoTable?.finalY ?? y) + 16;
   }
   block('Investigations', inp.tests.map(t => t.name).join(', '));
+  block('Procedures done', (inp.procedures ?? []).map(procedurePrintText).join('\n'));
   block('Advice', inp.advice);
   block('Follow-up', inp.followUp);
 

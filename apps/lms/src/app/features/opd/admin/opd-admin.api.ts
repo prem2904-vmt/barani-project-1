@@ -64,6 +64,9 @@ export interface OpdWorkflowSettings {
     vitals: 'desk' | 'station' | 'off'; vitalsBy: 'nurse' | 'front_desk'; labTestsAtDesk: boolean;
     billing: 'before_consult' | 'after_consult'; prefill: { purposeToComplaint: boolean; vitalsToHeader: boolean };
     pharmacy: { enabled: boolean }; privateNotesVisibility: 'doctor' | 'department' | 'all_doctors';
+    /** May the doctor change a procedure's price in the consult (off by default), and by
+     *  at most how many % of the rule price, up or down (null = any amount). */
+    procedurePricing: { doctorCanChange: boolean; maxChangePercent: number | null };
   };
   queue: { organise: 'per_doctor' | 'per_room' | 'per_department'; tokenPrefix?: string | null; doctorUnavailable: 'manual' | 'auto_move' | 'reschedule'; showOnScreen: boolean };
   pharmacy: { batchPick: 'earliest_expiry' | 'pharmacist' };

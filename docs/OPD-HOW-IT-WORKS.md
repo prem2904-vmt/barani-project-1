@@ -86,6 +86,7 @@ POG, antenatal, P/A · P/S · P/V, USG).
 | Token numbers (per doctor per IST day) / visit & invoice numbers | `opd_token_counters`, `opd_sequences` (atomic counters) |
 | Vitals | `opd_vitals` (BP, pulse, SpO₂, temp °F, RR, weight, height, GRBS, pain, `ExtraJson`) |
 | Consult bill, lines, payments, refunds / credit notes | `opd_bills`, `opd_bill_lines`, `opd_payments`, `opd_refunds` |
+| Procedures done in the consult (service, qty, side, note, rule price, charged price, who changed it + why) | `opd_consult_procedures` (`Status` draft → billed, `BillId`) |
 | Form answers | `opd_consult_records.AnswersJson` (keyed by field key; `{ r, l }` for left/right; media answers keep only the storage key) |
 | Pinned form version | `opd_consult_records.FormVersionId` → `opd_form_versions` |
 | Chief complaint, diagnoses (ICD-10 + label + primary), advice | `opd_consult_records.ChiefComplaint`, `DiagnosisJson`, `Advice` |
@@ -129,6 +130,49 @@ anything is written:
   lab order: it shows in the front desk's orders, the sample-collection queue,
   results, validation and reports exactly like any other. Nothing in the lab
   knows about OPD.
+
+## 5a. Procedures and paying after the consult
+
+1. **Add procedure (doctor).** Step 3 of the consult ("Tests & procedures")
+   lists the procedures the visit's doctor offers: OPD Master services with
+   `Category = procedure` in the visit's department, plus any the doctor has
+   their own price for. The price comes from the ONE resolver
+   (`OpdFeeRules.ResolvePrice`). Several procedures, quantity, side (left /
+   right / both) and a note per line. Saved with the draft
+   (`DraftBody.Procedures`; omitted = left as they are) in
+   `opd_consult_procedures`.
+2. **Price change.** OPD workflow → "Procedure prices" →
+   `WorkflowJson.procedurePricing = { doctorCanChange, maxChangePercent }`
+   (one reader: `OpdSettingsJson.ProcedurePricing`). Off by default: the price
+   is read-only (`procedure_price_locked`). On: the doctor types the exact unit
+   price; with a cap (1–100 %) it must stay within that % of the rule price,
+   up or down (`procedure_price_over_cap`; a ₹0 rule with a cap can't move).
+   No cap = any amount. Pure rule: `ProcedureRules.CheckPrice` (TS mirror
+   `consult/procedure-rules.ts`, same fixtures). Every change is an audit-log
+   row (`OpdConsultProcedureEntity`, old → new unit price, rule, reason, visit).
+3. **Complete → the desk.** Complete bills the draft procedures in the same
+   transaction (`OpdVisitBilling.BillProceduresAsync`): if the visit's consult
+   bill is untouched (nothing paid or refunded — "pay after consult") the
+   procedure lines JOIN it (one bill: consultation + procedures); otherwise
+   (paid at booking / part-paid) a separate `Kind = procedure` bill
+   (`OPB-…` number) — a paid invoice is never rewritten. Lines read
+   "Name · Side — set by Dr X (rule ₹Y)" when the doctor changed the price.
+4. **Payments due (desk).** `GET /api/opd/visits/payments-due` — open
+   consult / procedure bills of completed visits (any day, newest first, 200
+   max); the desk's "Payments due" filter and the visit page list them. The
+   visit page shows every visit bill (`VisitDetailDto.Bills`, `Due`).
+5. **Collect.** `POST /api/opd/visits/{id}/bills/{billId}/pay`
+   `{ discount?, discountReason?, payments[] }` — cash / UPI / card / other,
+   partial allowed (never above the balance), a whole-bill ₹ discount within
+   the role cap (`BillingService.DiscountCapFor`; never below what is paid; not
+   on a bill with a credit note), recomputed through `BillMath` (discount before
+   GST, rupee round-off). Needs `collect_payment` or `create_order`.
+6. **Cash drawer.** `CashDrawer.CollectionsAsync` (Finance → Daily statement,
+   Finance summary, the admin dashboard and Expenses → Day closing) adds
+   `opd_payments` / `opd_refunds` to the lab's payments / refunds, merged per
+   mode — consult fees, procedures AND pharmacy sales (credit notes as
+   refunds). `CashDrawer.BilledAsync` counts issued OPD bills (not drafts /
+   cancelled); `CashDrawer.OutstandingAsync` adds open OPD balances.
 
 ## 6. How it flows to the pharmacy
 

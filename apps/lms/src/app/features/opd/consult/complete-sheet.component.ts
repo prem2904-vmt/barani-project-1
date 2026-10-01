@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { DatePipe } from '@angular/common';
 import type { OpdDiagnosis } from '../shared/opd.models';
 import { lineShort } from '../shared/rx-schedule';
-import type { ConsultInvestigationItem } from './consult.api';
+import type { ConsultBilling, ConsultInvestigationItem, ConsultProcedureDraft } from './consult.api';
+import { proceduresTotal } from './procedure-rules';
+import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import type { ConsultRxLine } from './rx/rx-model';
 
 /** Follow-up quick picks (days; null = none). */
@@ -24,6 +26,18 @@ export function addDaysIso(start: Date, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** What the front desk collects after this consult (the sheet's money line). Pure. */
+export function deskDueText(billing: ConsultBilling | null, procTotal: number): string | null {
+  const after = billing?.mode === 'after_consult';
+  const fee = after ? Math.max(0, billing?.consultBalance ?? 0) : 0;
+  const total = fee + procTotal;
+  if (total <= 0) return after ? 'Nothing to collect at the desk.' : null;
+  const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  if (after && procTotal > 0 && fee > 0) return `${inr(total)} at the front desk — consultation ${inr(fee)} + procedures ${inr(procTotal)}, one bill.`;
+  if (after && fee > 0) return `${inr(fee)} consultation at the front desk (pay after consult).`;
+  return `${inr(procTotal)} for procedures at the front desk${after ? '' : ' — the consultation is already paid'}.`;
+}
+
 /**
  * "Complete consult" — the summary of everything the consult sends out
  * (Agent C): diagnosis, pharmacy lines, lab tests + price, follow-up (quick
@@ -34,7 +48,7 @@ export function addDaysIso(start: Date, days: number): string {
 @Component({
   selector: 'pf-consult-complete-sheet',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, CurrencyInrPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="cs-back" (click)="cancel.emit()" aria-hidden="true"></div>
@@ -104,6 +118,22 @@ export function addDaysIso(start: Date, days: number): string {
           </div>
         </section>
 
+        @if (procedures().length || deskText()) {
+          <section class="cs__row" data-row="procedures">
+            <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
+            <div class="cs__c">
+              <span class="cs__k">Procedures &amp; front desk</span>
+              @if (procedures().length) {
+                <b>{{ procedures().length }} procedure{{ procedures().length === 1 ? '' : 's' }} · {{ procTotal() | inr }}</b>
+                @for (p of procedures(); track p.key) {
+                  <span class="cs__line"><b>{{ p.name }}</b>@if (p.side) { · {{ p.side }} }@if (p.qty > 1) { · × {{ p.qty }} } · {{ p.price * p.qty | inr }}@if (p.price !== p.rulePrice) { <em class="cs__ovr"> (rule {{ p.rulePrice | inr }})</em> }</span>
+                }
+              }
+              @if (deskText(); as t) { <span class="cs__m">{{ t }}</span> }
+            </div>
+          </section>
+        }
+
         <section class="cs__row">
           <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
           <div class="cs__c">
@@ -158,6 +188,7 @@ export function addDaysIso(start: Date, days: number): string {
     .cs__m { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.45; }
     .cs__line { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
     .cs__line b { color: var(--text-primary); font-weight: 600; }
+    .cs__ovr { font-style: normal; color: var(--amber-text, #b45309); }
     .cs__seg { display: flex; width: 100%; margin: 4px 0 2px; }
     .cs__pick { flex: 1; justify-content: center; min-height: 40px; border: 0; background: transparent; }
     .cs__pick.on { background: var(--nd-card-bg); box-shadow: var(--nd-shadow-sm); font-weight: 600; color: var(--text-primary); }
@@ -178,6 +209,8 @@ export class ConsultCompleteSheetComponent {
   readonly diagnoses = input<OpdDiagnosis[]>([]);
   readonly lines = input<ConsultRxLine[]>([]);
   readonly tests = input<ConsultInvestigationItem[]>([]);
+  readonly procedures = input<ConsultProcedureDraft[]>([]);
+  readonly billing = input<ConsultBilling | null>(null);
   readonly followUpDays = input<number | null>(null);
   readonly followUpRule = input<{ withinDays: number; fee?: number | null } | null>(null);
   readonly visitDate = input<Date>(new Date());
@@ -196,6 +229,8 @@ export class ConsultCompleteSheetComponent {
   readonly dxText = computed(() => this.diagnoses().map(d => d.label).join(', '));
   readonly testNames = computed(() => this.tests().map(t => t.name).join(', '));
   readonly testTotal = computed(() => this.tests().reduce((a, t) => a + (Number(t.price) || 0), 0));
+  readonly procTotal = computed(() => proceduresTotal(this.procedures()));
+  readonly deskText = computed(() => deskDueText(this.billing(), this.procTotal()));
   readonly feeText = computed(() => followUpFeeText(this.followUpDays(), this.followUpRule()));
   readonly followUpDate = computed(() => { const d = this.followUpDays(); return d == null ? null : addDaysIso(this.visitDate(), d); });
   short(l: ConsultRxLine) { return lineShort(l.line, l.drug); }

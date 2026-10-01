@@ -7,7 +7,7 @@
  * round-off.
  */
 import { computeBill, type BillTotals } from '../../../shared/utils/bill-math';
-import type { PaymentPart, ServiceQuote } from './desk.models';
+import type { OpdBillView, PaymentPart, ServiceQuote } from './desk.models';
 import type { InlinePaymentResult } from '../../frontdesk/order-create/inline-payment-panel.component';
 
 /** What is charged: the exact desk override, else the rule's quote. */
@@ -112,4 +112,27 @@ export function writeDraft(storage: Pick<Storage, 'setItem' | 'removeItem'> | nu
     if (!storage) return;
     if (!d) storage.removeItem(key); else storage.setItem(key, JSON.stringify(d));
   } catch { /* private mode — the draft is a convenience only */ }
+}
+
+// ── Collecting a visit bill (consult after the consult, procedures) ───────
+/** The bill re-run with the desk's whole-bill ₹ discount — mirror of the
+ *  server's OpdVisitBilling.Recompute (BillMath: discount before GST, rupee
+ *  round-off). Null discount = the bill as it stands. */
+export function collectPreview(bill: Pick<OpdBillView, 'lines' | 'discount' | 'totalPayable' | 'totalPaid'>, discount: number | null): { payable: number; balance: number; discount: number; gross: number } {
+  const t = computeBill(bill.lines.map(l => ({ price: Math.round(l.unitPrice * l.qty * 100) / 100, slab: l.taxSlab || 0 })), discount ?? bill.discount ?? 0);
+  return { payable: t.payable, balance: Math.max(0, t.payable - (bill.totalPaid || 0)), discount: t.discount, gross: t.gross };
+}
+
+/** A discount the desk may give: within the role cap (% of the pre-discount
+ *  gross) and never taking the bill below what is already paid. Null = fine. */
+export function collectDiscountProblem(bill: Pick<OpdBillView, 'lines' | 'discount' | 'totalPayable' | 'totalPaid'>, discount: number, capPct: number): string | null {
+  if (!Number.isFinite(discount) || discount < 0) return "Discount can't be negative.";
+  if (discount === 0) return null;
+  const p = collectPreview(bill, discount);
+  const sub = bill.lines.reduce((a, l) => a + l.unitPrice * l.qty, 0);
+  if (discount > sub + 0.005) return "Discount can't be more than the bill.";
+  const pct = p.gross > 0 ? (discount / p.gross) * 100 : 0;
+  if (pct > capPct + 0.01) return `Discount ${Math.round(pct * 10) / 10}% exceeds your limit of ${capPct}%.`;
+  if (p.payable < (bill.totalPaid || 0)) return "The bill can't go below what has already been paid.";
+  return null;
 }

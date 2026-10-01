@@ -48,6 +48,25 @@ export interface ConsultRecordDto {
 export interface ConsultInvestigationItem { testId: string; name: string; price?: number | null; /** Chosen specimen for a Test Master "choose" test (see shared/opd-specimen.ts). */ specimen?: string | null; }
 export interface ConsultInvestigation { id?: string; items: ConsultInvestigationItem[]; labOrderId?: string | null; status: 'draft' | 'ordered' | 'cancelled'; }
 
+/** A procedure on the consult (prefrontal-mw ConsultDtos.WsProcedure). `price` is
+ *  the unit price charged; `rulePrice` the OPD Master's. */
+export interface ConsultProcedureDto {
+  id: string; serviceId: string; name: string; code?: string | null; qty: number; rulePrice: number; price: number; overridden: boolean;
+  priceReason?: string | null; priceSetByName?: string | null; side?: 'left' | 'right' | 'both' | null; note?: string | null;
+  status: 'draft' | 'billed'; billId?: string | null;
+}
+/** The editor's row (a DTO, or a new pick not saved yet — `id` null). */
+export interface ConsultProcedureDraft {
+  key: string; id?: string | null; serviceId: string; name: string; code?: string | null; qty: number; rulePrice: number; price: number;
+  priceReason?: string | null; priceSetByName?: string | null; side?: 'left' | 'right' | 'both' | null; note?: string | null; status?: 'draft' | 'billed';
+}
+/** A procedure the visit's doctor offers (department procedures + the doctor's own-priced ones). */
+export interface ConsultProcedureOption { serviceId: string; name: string; code?: string | null; price: number; taxSlab: number; departmentName?: string | null; }
+/** OPD workflow → "Doctors can change procedure prices" (+ optional ± % cap). */
+export interface ProcedurePricing { doctorCanChange: boolean; maxChangePercent?: number | null; }
+/** How the visit is paid and what is still due on its consult bill. */
+export interface ConsultBilling { mode: 'before_consult' | 'after_consult'; consultCharged: number; consultBalance: number; }
+
 export interface ConsultCurrentMedicine {
   drugName: string; form: DrugForm; dose: number; schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
   prescribedOn: string; doctorName?: string | null; endsOn?: string | null;
@@ -79,6 +98,11 @@ export interface ConsultWorkspace {
   // mid-list, so a concurrent edit to this interface never collides).
   /** Pregnancy-safety guard (critic P0 #1b) — null when neither pregnant nor lactating. */
   pregnancy?: OpdPregnancy | null;
+  // Consult procedures — appended at the END (older servers omit them).
+  procedures?: ConsultProcedureDto[] | null;
+  procedureOptions?: ConsultProcedureOption[] | null;
+  procedurePricing?: ProcedurePricing | null;
+  billing?: ConsultBilling | null;
 }
 
 export interface ConsultDraftBody {
@@ -92,6 +116,8 @@ export interface ConsultDraftBody {
   followUpNote?: string | null;
   rx: OpdRxLineDto[];
   investigationItems: { testId: string; name: string }[];
+  /** Omitted = the server leaves the saved procedures as they are. */
+  procedures?: { id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null }[];
 }
 
 export interface ConsultDrug {
@@ -124,6 +150,7 @@ export interface ConsultPastConsult {
   diagnoses: OpdDiagnosis[]; chiefComplaint?: string | null; advice?: string | null;
   form: ConsultFormRef | null; answers?: Record<string, unknown> | null;
   rx: OpdRxLineDto[]; investigations: ConsultInvestigation[];
+  procedures?: ConsultProcedureDto[] | null;
 }
 
 /** A lab test as the order screen's catalogue lists it (/api/tests/?view=summary). */

@@ -16,8 +16,9 @@ import {
   ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
-  ConsultEditState, ConsultStep, FRESH_ACKS, STEP_TITLES, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
+  ConsultEditState, ConsultStep, FRESH_ACKS, STEP_TITLES, applyUsual, daysBetween, draftBody, procedureDraftOf, stepDone, stepSummary, undoUsual, usualsFrom,
 } from './consult-state';
+import { ConsultProceduresComponent } from './procedure-editor.component';
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
@@ -54,7 +55,7 @@ const EMPTY: ConsultEditState = {
 @Component({
   selector: 'pf-opd-consult-workspace',
   standalone: true,
-  imports: [OpdSpecimenPickerComponent, 
+  imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent, 
     DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
     RxEditorComponent, PatientTimelineComponent,
   ],
@@ -249,7 +250,7 @@ const EMPTY: ConsultEditState = {
                                   (search)="drugSearch$.next($event)" (notice)="toast.info($event)"></pf-rx-editor>
                   }
                   @case (3) {
-                    <div class="cw__h"><h2>Investigations</h2><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult.</span></div>
+                    <div class="cw__h"><h2>Tests &amp; procedures</h2><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult; procedures go to the front desk's bill.</span></div>
                     @if (suggested().length) {
                       <div class="cw__sec">
                         <div class="cw__seck cw__seck--row">Suggested for {{ primaryDx() }}
@@ -297,6 +298,14 @@ const EMPTY: ConsultEditState = {
                       } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
                       @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
                     </div>
+                    @if (st().procedures; as procs) {
+                      <div class="cw__sec" id="cw-procedures">
+                        <div class="cw__seck">Procedures <span>{{ procs.length ? procs.length + ' added' : (editable() ? 'Did you do one? Add it here — it is billed at the desk.' : '') }}</span></div>
+                        <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
+                                               [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'"
+                                               (itemsChange)="patch({ procedures: $event })"></pf-consult-procedures>
+                      </div>
+                    }
                   }
                   @case (4) {
                     <div class="cw__h"><h2>Notes</h2></div>
@@ -349,7 +358,7 @@ const EMPTY: ConsultEditState = {
 
         @if (completeOpen()) {
           <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
-                                     [tests]="st().tests" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
+                                     [tests]="st().tests" [procedures]="st().procedures ?? []" [billing]="w.billing ?? null" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
                                      [unresolved]="unresolved().length" [pregnancyUnresolved]="pregnancyUnresolved().length" [missingRequired]="requiredMissing()" [busy]="completing()"
                                      (followUpDaysChange)="patch({ followUpDays: $event })" (cancel)="completeOpen.set(false)" (confirm)="complete()"></pf-consult-complete-sheet>
         }
@@ -517,6 +526,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       lines: w.rx.map(d => fromDto(d, this.drugList())),
       tests: (w.investigations ?? []).flatMap(i => i.items).map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })),
       followUpDays,
+      procedures: w.procedures ? w.procedures.map(procedureDraftOf) : undefined,
     });
     this.savedAt.set(c?.updatedAt ?? null);
     this.saveState.set('idle');
@@ -590,6 +600,14 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
         // Keep the line ids the server assigned (a later save replaces the set).
         if (saved?.rx?.length === this.st().lines.length) {
           this.st.update(s => ({ ...s, lines: s.lines.map((l, i) => ({ ...l, id: saved.rx[i]?.id ?? l.id })) }));
+        }
+        // Same for procedures: keep the ids (and who set a price) the server assigned.
+        const sp = (saved?.procedures ?? []).filter(p => p.status !== 'billed');
+        const mine = this.st().procedures;
+        if (mine && sp.length === mine.filter(p => p.status !== 'billed').length) {
+          let i = 0;
+          this.st.update(s => ({ ...s, procedures: (s.procedures ?? []).map(p => p.status === 'billed' ? p
+            : (r => ({ ...p, id: r?.id ?? p.id, priceSetByName: r?.priceSetByName ?? p.priceSetByName }))(sp[i++])) }));
         }
         this.saveState.set(this.saveState() === 'dirty' ? 'dirty' : 'saved');
         if (this.saveState() === 'dirty') this.save$.next();
@@ -739,9 +757,10 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       next: done => {
         this.completing.set(false);
         this.completeOpen.set(false);
-        const nRx = this.st().lines.length, nT = this.st().tests.length;
+        const nRx = this.st().lines.length, nT = this.st().tests.length, nP = this.st().procedures?.length ?? 0;
         this.hydrate(done);
-        this.toast.success(['Consult completed', nRx ? `${nRx} medicine${nRx === 1 ? '' : 's'} to pharmacy` : '', nT ? `${nT} test${nT === 1 ? '' : 's'} to the lab` : ''].filter(Boolean).join(' · '));
+        this.toast.success(['Consult completed', nRx ? `${nRx} medicine${nRx === 1 ? '' : 's'} to pharmacy` : '', nT ? `${nT} test${nT === 1 ? '' : 's'} to the lab` : '',
+          nP ? `${nP} procedure${nP === 1 ? '' : 's'} to the front desk` : ''].filter(Boolean).join(' · '));
       },
       error: e => {
         this.completing.set(false);
@@ -773,6 +792,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       visit: { date: this.visitDay(), tokenLabel: w.visit.tokenLabel, visitNumber: w.visit.visitNumber },
       vitals: vit, chiefComplaint: this.st().chiefComplaint, diagnoses: this.st().diagnoses,
       lines: this.st().lines, tests: this.st().tests, advice: this.st().advice, followUp: fu,
+      procedures: (this.st().procedures ?? []).map(p => ({ name: p.name, side: p.side ?? null, qty: p.qty, note: p.note ?? null })),
     });
     return doc.output('blob');
   }

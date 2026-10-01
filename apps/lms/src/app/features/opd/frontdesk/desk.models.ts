@@ -77,7 +77,20 @@ export interface OpdVisitDetail {
   service?: { id: string; name: string; code?: string | null } | null;
   bill?: OpdBillView | null; labOrder?: LabOrderBrief | null; latestVitals?: OpdVitalsRow | null;
   timeline: TimelineStep[]; reassignedFromDoctorUserId?: string | null; cancelReason?: string | null; createdAt: string;
+  /** Every OPD bill of the visit — the consult bill (first) and a procedure bill
+   *  from the consult; `due` = what is still to collect on them. Older servers omit both. */
+  bills?: OpdBillView[] | null; due?: number;
 }
+
+/** One open visit bill on the desk's "Payments due" (pay after consult / procedures). */
+export interface PaymentDue {
+  visitId: string; billId: string; kind: 'consult' | 'procedure'; invoiceNumber?: string | null; patientId: string; patientName: string; patientMeta?: string | null;
+  doctorUserId: string; doctorName: string; tokenLabel: string; visitNumber?: string | null; visitDate: string; visitStatus: OpdVisitStatus; completedAt?: string | null;
+  lines: OpdBillLineRow[]; totalPayable: number; totalPaid: number; balance: number; status: 'pending' | 'partial';
+}
+
+/** POST /api/opd/visits/{id}/bills/{billId}/pay. `discount` = the whole bill's ₹ discount (omit = keep). */
+export interface CollectRequest { discount?: number | null; discountReason?: string | null; payments: PaymentPart[]; }
 
 export interface OpdVisitRow {
   id: string; patientId: string; patientName: string; patientMeta?: string | null; doctorUserId: string; doctorName: string;

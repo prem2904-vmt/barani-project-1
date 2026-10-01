@@ -85,4 +85,22 @@ describe('OPD workflow settings', () => {
     expect(el.querySelectorAll('[role="radio"]').length).toBeGreaterThan(8);
     expect(Array.from(el.querySelectorAll('.wf-step__t')).map((x) => x.textContent?.trim())).toEqual(['Front desk', 'Vitals', 'Doctor', 'Pharmacy', 'Exit']);
   });
+
+  it('procedure prices: locked by default; the doctor switch + cap save as a merge-patch', () => {
+    expect(DEFAULT_WORKFLOW_SETTINGS.workflow.procedurePricing).toEqual({ doctorCanChange: false, maxChangePercent: null });
+    const { c, api, el, f, toasts } = render();
+    const card = el.querySelector('[data-card="procedure-prices"]')!;
+    expect(card.textContent).toContain('Doctors can change procedure prices');
+    expect(card.querySelector('input')).toBeNull(); // no cap field while off
+    c.toggleProcedurePricing();
+    expect(api.saveWorkflow).toHaveBeenCalledWith({ workflow: { procedurePricing: { doctorCanChange: true, maxChangePercent: null } } });
+    f.detectChanges();
+    expect(el.querySelector('[data-card="procedure-prices"] input')).toBeTruthy();
+    c.setProcedureCap('150');
+    expect(toasts.error).toHaveBeenCalled();
+    c.setProcedureCap('20');
+    expect(api.saveWorkflow).toHaveBeenLastCalledWith({ workflow: { procedurePricing: { doctorCanChange: true, maxChangePercent: 20 } } });
+    c.setProcedureCap('');
+    expect(api.saveWorkflow).toHaveBeenLastCalledWith({ workflow: { procedurePricing: { doctorCanChange: true, maxChangePercent: null } } });
+  });
 });
