@@ -4,7 +4,7 @@
   <pf-hero-band [back]="true" [placeholder]="listKey() ? 'Search these rows…' : 'Search tests, departments, doctors…'"
                 [value]="q()" (valueChange)="q.set($event)">
     <ng-container band-tools>
-      @if (narrow()) {
+      @if (narrow() && !phone()) {
         <button type="button" class="nd-chip pf-ins-navchip press" (click)="navSheet.set(true)"
                 aria-haspopup="dialog" [attr.aria-expanded]="navSheet()" [attr.aria-label]="'Sections · ' + navLabel()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.sections)"></svg>
@@ -13,23 +13,33 @@
       }
       <pf-select class="pf-ins-bandsel pf-ins-bandsel--period" size="sm" [options]="periodOptions" [value]="period()"
                  (valueChange)="setPeriod($event)" aria-label="Period"></pf-select>
-      @if (period() === 'custom') {
-        <span class="pf-ins-dates">
-          <pf-nd-date label="From" inputId="pf-ins-from" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-nd-date>
-          <span class="pf-ins-dates__sep" aria-hidden="true">–</span>
-          <pf-nd-date label="To" inputId="pf-ins-to" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-nd-date>
-        </span>
+      @if (phone()) {
+        <!-- Phones: no sideways-scrolling filter row — period + one Filters button (bottom sheet). -->
+        <button type="button" class="nd-chip pf-ins-filtersbtn press" (click)="openFilters()" aria-haspopup="dialog"
+                [attr.aria-expanded]="filtersSheet()" [attr.aria-pressed]="dimCount() > 0"
+                [attr.aria-label]="dimCount() ? 'Filters, ' + dimCount() + ' on' : 'Filters'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+          <span>Filters{{ dimCount() || period() === 'custom' ? ' (' + (dimCount() + (period() === 'custom' ? 1 : 0)) + ')' : '' }}</span>
+        </button>
+      } @else {
+        @if (period() === 'custom') {
+          <span class="pf-ins-dates">
+            <pf-nd-date label="From" inputId="pf-ins-from" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-nd-date>
+            <span class="pf-ins-dates__sep" aria-hidden="true">–</span>
+            <pf-nd-date label="To" inputId="pf-ins-to" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-nd-date>
+          </span>
+        }
+        @if (branchOptions().length > 2) {
+          <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
+                     (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
+        }
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="departmentOptions()" [value]="departmentId()" [searchable]="true"
+                   (valueChange)="setFilter('department', $event)" aria-label="Department"></pf-select>
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="testOptions()" [value]="testId()" [searchable]="true"
+                   (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
+                   (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
       }
-      @if (branchOptions().length > 2) {
-        <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
-                   (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
-      }
-      <pf-select class="pf-ins-bandsel" size="sm" [options]="departmentOptions()" [value]="departmentId()" [searchable]="true"
-                 (valueChange)="setFilter('department', $event)" aria-label="Department"></pf-select>
-      <pf-select class="pf-ins-bandsel" size="sm" [options]="testOptions()" [value]="testId()" [searchable]="true"
-                 (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
-      <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
-                 (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
     </ng-container>
     <ng-container band-actions>
       @if (dimsActive()) {
@@ -106,7 +116,16 @@
           <span class="nd-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(navIcon())"></svg>
           </span>
-          <h2 class="nd-card__label pf-ins-main__title">{{ navLabel() }}</h2>
+          @if (phone()) {
+            <!-- Phones: the section switcher lives on the card title (opens the Sections sheet). -->
+            <button type="button" class="pf-ins-main__switch press" (click)="navSheet.set(true)" aria-haspopup="dialog"
+                    [attr.aria-expanded]="navSheet()" [attr.aria-label]="'Section: ' + navLabel() + '. Change section'">
+              <h2 class="nd-card__label pf-ins-main__title">{{ navLabel() }}</h2>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          } @else {
+            <h2 class="nd-card__label pf-ins-main__title">{{ navLabel() }}</h2>
+          }
           @if (listKey()) {
             @if (drill(); as d) {
               <button type="button" class="nd-chip pf-ins-drillchip" (click)="clearDrill()" [attr.aria-label]="'Remove filter ' + d.label">
@@ -200,6 +219,46 @@
           </div>
         }
       </section>
+
+      @if (phone() && filtersSheet()) {
+        <div class="nd-sheet-backdrop pf-ins-sheet-backdrop" (click)="filtersSheet.set(false)"></div>
+        <aside class="nd-card pf-ins-ctx pf-ins-ctx--sheet pf-ins-filters" role="dialog" aria-modal="true" aria-label="Filters">
+          <span class="pf-ins-sheet-handle pf-ins-ctx__handle" aria-hidden="true"></span>
+          <header class="nd-card__head">
+            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg></span>
+            <h2 class="nd-card__label">Filters</h2>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="filtersSheet.set(false)" aria-label="Close filters">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
+          <div class="nd-card__body pf-ins-filters__body">
+            @if (period() === 'custom') {
+              <div class="nd-field">
+                <span class="nd-field__lbl">Dates (IST)</span>
+                <div class="pf-ins-filters__dates">
+                  <pf-nd-date label="From" inputId="pf-ins-from-m" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-nd-date>
+                  <pf-nd-date label="To" inputId="pf-ins-to-m" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-nd-date>
+                </div>
+              </div>
+            }
+            @if (branchOptions().length > 2) {
+              <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-branch">Branch</label>
+                <pf-select id="pf-ins-f-branch" [options]="branchOptions()" [value]="draft().branch" (valueChange)="setDraft('branch', $event)"></pf-select></div>
+            }
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-dept">Department</label>
+              <pf-select id="pf-ins-f-dept" [options]="departmentOptions()" [value]="draft().department" [searchable]="true" (valueChange)="setDraft('department', $event)"></pf-select></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-test">Test</label>
+              <pf-select id="pf-ins-f-test" [options]="testOptions()" [value]="draft().test" [searchable]="true" (valueChange)="setDraft('test', $event)"></pf-select></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-ref">Referrer</label>
+              <pf-select id="pf-ins-f-ref" [options]="referrerOptions()" [value]="draft().referrer" [searchable]="true" (valueChange)="setDraft('referrer', $event)"></pf-select></div>
+          </div>
+          <footer class="nd-card__foot">
+            <button type="button" class="nd-btn nd-btn--secondary" (click)="clearDraft()">Clear</button>
+            <button type="button" class="nd-btn nd-btn--primary" (click)="applyFilters()">Apply</button>
+          </footer>
+        </aside>
+      }
 
       <!-- ── RIGHT: DETAILS (what the main card doesn't show + the primary) ── -->
       @if (ctxSide()) {

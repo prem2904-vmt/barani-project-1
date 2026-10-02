@@ -162,3 +162,26 @@ describe('Insights — owner review 2026-10-02 (rail + details sheet)', () => {
     expect(sheet.textContent).toContain('Export CSV');
   });
 });
+
+describe('Insights — phone band (owner 2026-10-02: no sideways scroll)', () => {
+  it('phones get period + one Filters button; the dimensions apply from a sheet', () => {
+    const p = render();
+    p.c.phone.set(true);
+    p.c.narrow.set(true);
+    p.f.detectChanges();
+    const tools = p.tools()!;
+    expect(tools.querySelectorAll('pf-select').length).toBe(1); // period only
+    expect(tools.querySelector('.pf-ins-navchip')).toBeNull();  // sections live on the card title
+    expect(p.el.querySelector('.pf-ins-main__switch')).not.toBeNull();
+    tools.querySelector<HTMLButtonElement>('.pf-ins-filtersbtn')!.click();
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-ins-filters')).not.toBeNull();
+    p.c.setDraft('department', 'dep-3');
+    expect(p.c.departmentId()).toBe(''); // nothing applies until Apply
+    p.el.querySelector<HTMLButtonElement>('.pf-ins-filters .nd-btn--primary')!.click();
+    p.f.detectChanges();
+    expect(p.c.departmentId()).toBe('dep-3');
+    expect(p.c.filtersSheet()).toBe(false);
+    expect(tools.querySelector('.pf-ins-filtersbtn')!.textContent).toContain('Filters (1)');
+  });
+});
