@@ -8,7 +8,10 @@ native dialog.
 
 ## Bucket layout
 
-Bucket `prefrontalupdates` (public base `https://prefrontalupdates.sgp1.digitaloceanspaces.com`):
+Bucket `prefrontal-updates` (blr1 — public base
+`https://prefrontal-updates.blr1.digitaloceanspaces.com`). This is the ONLY
+public Spaces bucket in the account; any other bucket is firewall-restricted,
+so updates must never be pointed anywhere else:
 
 ```
 /<channel>/<os>/latest(-mac).yml        ← ACTIVE manifest (what the app polls)
@@ -160,34 +163,49 @@ back to at any time.
     `electron` + `electron-updater` (IPC wiring, a safe restart calling
     `quitAndInstall` exactly once, a busy restart deferring and never calling
     it, state pushed to the renderer).
-- **Real round trip (dev channel only; 2026-10-02)**: built `1.0.0`, "installed"
-  it (copied the signed `.app` out, ran the binary directly), pointed it at a
-  local static server mirroring the exact bucket layout via the test-only
-  `PF_UPDATE_BASE` env override (`electron/updater.js` — never set in a real
-  release), confirmed `update-not-available` against its own version. Then
-  built & published `1.0.1` to that same local layout and relaunched: log
-  showed `Found version 1.0.1` → downloaded → `falling back to full download`
-  (correct — no prior blockmap) → **`update 1.0.1 downloaded + verified,
-  ready to install`**. On quit, electron-updater's real Squirrel.Mac /
-  ShipIt path applied it — the installed `.app`'s `CFBundleShortVersionString`
-  read back as **`1.0.1`**, confirming the full download → sha512-verify →
-  apply → relaunch cycle for real, not just unit-tested.
-  `--rollback` was exercised as pure logic (manifest round-trip) but not
-  against the real bucket this session — see **Known gaps** below.
-- Windows: built once with `-c.win.icon=…` (see `--win-icon`); the generated
-  `latest.yml` and sha512 were inspected and are correct. No Windows machine
-  was rebooted to actually install it this session.
+- **Real round trip against the live bucket, dev channel only (2026-10-02,
+  bucket `prefrontal-updates`/blr1 — the account's one public bucket, others
+  are firewall-restricted)**:
+  1. `release --mac --win` published real `1.0.0` to
+     `.../dev/mac/latest-mac.yml` and `.../dev/windows/latest.yml`. Confirmed
+     anonymously fetchable (plain `curl`, no auth) and every object
+     `public-read` with the right `Content-Type` / `Cache-Control` (`curl -I`).
+  2. Ran the real signed `1.0.0.app` directly (no `PF_UPDATE_BASE` override —
+     this used the actual baked-in default base URL): `update-not-available`
+     against itself, exactly as it should.
+  3. `release --mac --win --version 1.0.1` published `1.0.1`. Relaunching the
+     installed `1.0.0` app: found `1.0.1`, attempted a **differential**
+     download (electron-updater compared blockmaps, found 3279 changed
+     blocks) — DO Spaces doesn't support the multi-range response
+     (`multipart/byteranges`) electron-updater's differential downloader
+     needs, so it logged the mismatch and **fell back to a full download
+     automatically** (electron-updater's own documented behaviour, not a bug
+     here) → `update 1.0.1 downloaded + verified, ready to install`. On quit,
+     the real Squirrel.Mac/ShipIt path applied it — the installed app's
+     `CFBundleShortVersionString` read back as **`1.0.1`**.
+  4. `--rollback 1.0.0 --mac --win` against the real bucket: both manifests
+     confirmed back to `1.0.0` (anonymous `curl`).
+  5. Both `1.0.0` and `1.0.1` mac builds were really notarized (submit →
+     Accepted) and `--finish 1.0.0` stapled + republished it — verified by
+     downloading the PUBLISHED zip fresh from the bucket and running
+     `spctl -a -vvv -t install` (**accepted, Notarized Developer ID**) +
+     `xcrun stapler validate` (**worked**) on it.
+  - **Bug found and fixed during this**: `--finish` was reading
+    `dist/electron/latest-mac.yml` to know which files to re-upload — but
+    that's a SHARED, overwritten-every-build file, and `--finish` can run
+    long after a NEWER version was built in the same tree (by design — it
+    never blocks on Apple). It briefly published a stale/wrong-version
+    manifest once. Fixed: `--finish` now builds the manifest from scratch
+    (state file's own filenames + freshly hashed bytes), never from that
+    file. Caught and corrected on the live bucket before leaving it (final
+    state: dev channel rolled back to the genuine, stapled, verified `1.0.0`).
+- Windows: real `1.0.0` + `1.0.1` built and published (`-c.win.icon=…`, see
+  `--win-icon`) and rolled back, all against the live bucket; manifests/sha512
+  verified both by anonymous `curl` and local recomputation. No Windows
+  machine was rebooted to actually install it.
 
 ## Known gaps / needs the owner
 
-- **DigitalOcean Spaces credentials in `~/.config/prefrontal/release-spaces.env`
-  return `403 InvalidAccessKeyId`** on every endpoint/region/path-style
-  combination tried (confirmed with a minimal `HeadBucketCommand`, unrelated
-  to this script). The key looks like the right *kind* of credential (DO
-  Spaces format, `DO00…` prefix) but isn't accepted — it needs to be
-  verified/rotated in the DO control panel before any real publish/rollback
-  can run. Everything up to and including the S3 call was exercised for
-  real (see above); the actual bucket upload was not.
 - `prod`'s Nx build configuration is a placeholder (reuses `electron-stage`)
   until a real production backend exists.
 - Windows code signing isn't wired up (out of scope here — only macOS

@@ -369,23 +369,34 @@ async function rollback(s3, creds, { channel, osName, version }) {
   log(`rolled back ${channel}/${osName} → ${version}`);
 }
 
-// ── sha512/size recompute after stapling changes the zip's bytes ─────────
-function fixManifestAfterStaple(localYmlPath, zipName) {
-  const doc = yamlLoad(fs.readFileSync(localYmlPath, 'utf8'));
+// ── manifest for --finish, built fresh (never from dist/electron/latest-
+// mac.yml) ─────────────────────────────────────────────────────────────────
+// `dist/electron/` is a SHARED build-output directory reused release after
+// release — by the time `--finish` runs (possibly hours later, after a
+// NEWER version has already been built in the same tree, per the async
+// notarization design), `latest-mac.yml` there almost certainly describes a
+// DIFFERENT version than the one being finished. Trusting it silently
+// published the wrong bytes under the right version's path once already
+// (2026-10-02) — never read it here. Build the manifest from only what we
+// actually know: the state file's own filenames + freshly hashed bytes.
+function hashFile(p) {
+  const buf = fs.readFileSync(p);
+  return { sha512: crypto.createHash('sha512').update(buf).digest('base64'), size: buf.length };
+}
+
+function buildFinishManifest(version, zipName, dmgName) {
   const zipPath = path.join(OUT_DIR, zipName);
-  const buf = fs.readFileSync(zipPath);
-  const sha512 = crypto.createHash('sha512').update(buf).digest('base64');
-  const size = buf.length;
-  if (doc.path === zipName) { doc.sha512 = sha512; doc.size = size; }
-  if (Array.isArray(doc.files)) {
-    doc.files = doc.files.map((f) => (f.url === zipName ? { ...f, sha512, size } : f));
+  const entries = [{ url: zipName, ...hashFile(zipPath) }];
+  if (dmgName) {
+    const dmgPath = path.join(OUT_DIR, dmgName);
+    if (fs.existsSync(dmgPath)) entries.push({ url: dmgName, ...hashFile(dmgPath) });
   }
-  fs.writeFileSync(localYmlPath, yamlDump(doc));
-  // The old blockmap was computed from the pre-staple bytes — it no longer
-  // matches. Remove it rather than ship a wrong one; electron-updater falls
-  // back to a full download when there's no (or a mismatching) blockmap.
+  // The old blockmap was computed from the pre-staple zip bytes — it no
+  // longer matches. Remove it rather than ship a wrong one; electron-updater
+  // falls back to a full download when there's no (or a mismatching) blockmap.
   const bm = `${zipPath}.blockmap`;
   if (fs.existsSync(bm)) fs.rmSync(bm);
+  return yamlDump({ version, files: entries, path: entries[0].url, sha512: entries[0].sha512, releaseDate: new Date().toISOString() });
 }
 
 // ── actions ────────────────────────────────────────────────────────────────
@@ -451,17 +462,21 @@ async function actionFinish(a) {
 
   const zipPath = path.join(OUT_DIR, state.zipName);
   const dmgPath = path.join(OUT_DIR, state.dmgName);
+  if (!fs.existsSync(zipPath)) fail(`${zipPath} is gone (dist/electron was cleaned since the release?) — rebuild ${version} with --mac first, then --finish again.`);
   const { appPath, cleanup } = stapleAndRezipMac(zipPath, dmgPath);
-  fixManifestAfterStaple(path.join(OUT_DIR, 'latest-mac.yml'), state.zipName);
+  const manifestYml = buildFinishManifest(version, state.zipName, state.dmgName);
+  const tmpYml = path.join(os.tmpdir(), `pf-finish-${a.channel}-mac-${version}.yml`);
+  fs.writeFileSync(tmpYml, manifestYml);
   assertNoLeakedSecrets('mac', creds);
 
   const check = verifyMacNotarization(appPath);
   cleanup();
   log(`spctl: ${check.spctl.ok ? 'accepted' : 'REJECTED'} — ${check.spctl.output.split('\n')[0] || ''}`);
   log(`stapler validate: ${check.stapler.ok ? 'ok' : 'FAILED'} — ${check.stapler.output.split('\n')[0] || ''}`);
-  if (!check.spctl.ok || !check.stapler.ok) fail('post-staple verification failed — not publishing.');
+  if (!check.spctl.ok || !check.stapler.ok) { fs.rmSync(tmpYml, { force: true }); fail('post-staple verification failed — not publishing.'); }
 
-  await publishVersion(s3, creds, { channel: a.channel, osName: 'mac', version, localYmlPath: path.join(OUT_DIR, 'latest-mac.yml'), skipBlockmaps: true });
+  await publishVersion(s3, creds, { channel: a.channel, osName: 'mac', version, localYmlPath: tmpYml, skipBlockmaps: true });
+  fs.rmSync(tmpYml, { force: true });
   saveState(a.channel, 'mac', version, { ...state, published: true, publishedUnstapled: false, finishedAt: new Date().toISOString() });
   log(`${a.channel} mac ${version}: stapled, verified, published.`);
 }

@@ -1,7 +1,8 @@
 'use strict';
 /**
  * Desktop self-update — electron-updater, generic provider, DigitalOcean
- * Spaces bucket `prefrontalupdates`. See docs/DESKTOP-RELEASES.md for the
+ * Spaces bucket `prefrontal-updates` (blr1, the one public bucket — others
+ * are firewall-restricted). See docs/DESKTOP-RELEASES.md for the
  * bucket layout and the release script that fills it.
  *
  * Behaviour (owner's design): check at launch + every 4h, download in the

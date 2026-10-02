@@ -17,7 +17,7 @@
  * (today's real shipped app has no profile at all and must keep its default
  * userData folder) — see the comment there.
  */
-const DEFAULT_BASE = 'https://prefrontalupdates.sgp1.digitaloceanspaces.com';
+const DEFAULT_BASE = 'https://prefrontal-updates.blr1.digitaloceanspaces.com';
 
 /** electron-updater / electron-builder os folder names we publish to. */
 const OS_MAP = { darwin: 'mac', win32: 'windows' };
