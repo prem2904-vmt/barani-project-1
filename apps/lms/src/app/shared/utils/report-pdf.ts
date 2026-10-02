@@ -3,6 +3,7 @@ import { drawTextWithSuperscripts, hasSuperscript, installPdfTextSanitizer, pdfS
 import autoTable, { __createTable, __drawTable } from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
+  type PageLayoutBox,
   DEFAULT_RESULT_COLUMNS,
   ReportColumn,
   ResolvedReportLayout,
@@ -35,7 +36,7 @@ import {
   bodyArea, collapseMissingAnalyzerBoxes, printableBoxes, readPageLayout, type BodyArea as ProfileBodyArea,
 } from './report-profile-layout';
 import {
-  drawAnalyzerImageBox, drawNotesBox, drawProfileTableBox, drawSignaturesBox, type ProfileTableRow,
+  drawAnalyzerImageBox, drawNotesBox,
 } from './report-profile-layout.pdf';
 
 /**
@@ -61,7 +62,10 @@ export interface ReportPdfInput {
    *  and page each one-page profile's boxes were placed in, so the designer
    *  lays its draggable outlines over the very pixels the PDF drew. Never
    *  set by a real report path. */
-  onOnePageBody?: (info: { pkg: string; page: number; body: { top: number; bottom: number; left: number; right: number; w: number; h: number } }) => void;
+  onOnePageBody?: (info: { pkg: string; page: number; body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
+    /** Where the results table really ended (pt), when it ended on this page;
+     *  null = it ran onto the next page. */
+    tableBottom?: number | null }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -1218,7 +1222,14 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // The Test Master's Images block is the print switch: hidden (all image
   // sections invisible) = lab-only traceability, nothing on the PDF.
   for (const t of tabular) {
-    const imgs = (t as { images?: string[] | null }).images ?? [];
+    let imgs = (t as { images?: string[] | null }).images ?? [];
+    // A one-page-layout profile's analyzer graphs print in their own boxes —
+    // never a second time in this images block.
+    const bundle = t.profileTestId ?? (t.packageType === 'profile' ? t.packageTestId : null) ?? (t.packageType == null ? t.packageTestId : null);
+    if (bundle && onePagePkgs.has(bundle) && t.analyzerImages) {
+      const graphs = new Set(Object.values(t.analyzerImages));
+      imgs = imgs.filter(u => !graphs.has(u));
+    }
     if (!imgs.length) continue;
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     const imgSecs = layout?.sections.filter(s => s.type === 'image') ?? [];
@@ -3323,18 +3334,15 @@ function profileAnalyzerImages(snap: ReportSnapshot, pkg: string): Record<string
   return out;
 }
 
-/** A PanelGroup row → the one-page table's own (simpler) row shape. */
-function toProfileTableRows(rows: PanelRowData[]): ProfileTableRow[] {
-  return rows.map(r => {
-    if (r.kind === 'note') {
-      const text = r.techNote ? `${r.techLabel ?? ''} ${r.techNote}`.trim() : (r.note ?? '');
-      return { cells: {}, isNote: true, noteText: text };
-    }
-    return {
-      name: r.name, flag: r.flag ?? null, bold: !!(r.bold || r.printBold), color: r.color ?? null,
-      cells: { result: r.result ?? '', unit: r.unit ?? '', range: r.range ?? '', ...(r.texts ?? {}) },
-    };
-  });
+/** The one-page table box's columns: the SAME effective set the continuous
+ *  report would print for this profile (its own override, else its
+ *  department's — `effectiveColumns` / `deptColumns`), minus the ones the lab
+ *  switched off in the designer (by column name or type). The name and
+ *  result columns always print. */
+function onePageTableColumns(group: PanelGroup, box: PageLayoutBox): ReportColumn[] {
+  const base = group.columnsOverridden && group.columns?.length ? effectiveColumns(group.columns) : deptColumns([group]);
+  const off = new Set((box.columns ?? []).filter(c => !c.visible).map(c => c.name));
+  return base.filter(c => c.type === 'name' || c.type === 'result' || !(off.has(c.name) || off.has(c.type)));
 }
 
 /** Render one profile's one-page layout: the designer's boxes (table /
@@ -3392,27 +3400,33 @@ function renderOnePageProfile(
   // height minus that reserve.
   const floor = A4.h - footerFloor(LAYOUT);
   const body: ProfileBodyArea = bodyArea(y, floor);
-  try { ON_ONE_PAGE_BODY?.({ pkg, page: doc.getNumberOfPages(), body: { ...body } }); } catch { /* a designer hook never breaks a render */ }
+  const bodyPage = doc.getNumberOfPages();
+  try { ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, body: { ...body } }); } catch { /* a designer hook never breaks a render */ }
 
   const images = profileAnalyzerImages(snap, pkg);
   const availCodes = new Set(Object.keys(images));
   // Hidden boxes (the designer's "Hide") stay in the layout but never print.
   const { boxes } = collapseMissingAnalyzerBoxes(printableBoxes(pl.boxes), availCodes, body);
-  const rows = toProfileTableRows(group.rows);
-
-  const tableTheme = {
-    font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, headFill: '#f1f5f9', headText: BLACK, bodyText: TEXT,
-    dimText: TEXT_DIM, hair: HAIR, abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
-    zebra: theme.zebraRows, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
-  };
-  for (const box of boxes) {
+  const labelFont = EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT;
+  let tableBottom = 0;
+  // The table goes LAST: a long one continues onto the next page, and every
+  // other box must already be on this one.
+  const ordered = [...boxes.filter(b => b.kind !== 'table'), ...boxes.filter(b => b.kind === 'table')];
+  for (const box of ordered) {
     switch (box.kind) {
-      case 'table':
-        drawProfileTableBox(doc, box, body, layout.columns ?? [], rows, tableTheme);
+      case 'table': {
+        // The report's OWN results table (theme fonts, header style, rules,
+        // flags, superscript units — renderColumnarTable), drawn inside the
+        // box: the designer only places it, never restyles it.
+        const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM };
+        tableBottom = renderColumnarTable(doc, [group], onePageTableColumns(group, box), r.y, practice, null, 0, false,
+          { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true });
+        try { ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, body: { ...body }, tableBottom: doc.getNumberOfPages() === bodyPage ? tableBottom - 6 : null }); } catch { /* designer hook only */ }
         break;
+      }
       case 'analyzer': {
         const url = box.ref ? images[box.ref] : undefined;
-        drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, tableTheme.font);
+        drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, labelFont);
         break;
       }
       case 'chart': {
@@ -3425,11 +3439,11 @@ function renderOnePageProfile(
         break;
       }
       case 'signatures':
-        drawSignaturesBox(doc, box, body, deptSigs, IMG_CACHE, BLACK, tableTheme.font);
+        drawInlineSignatures(doc, deptSigs, body.top + box.y * MM, practice, { x: body.left + box.x * MM, w: box.w * MM });
         break;
       case 'notes': {
         const text = (box.text ?? box.label ?? '').trim();
-        if (text) drawNotesBox(doc, box, body, text, TEXT, tableTheme.font);
+        if (text) drawNotesBox(doc, box, body, text, TEXT, labelFont);
         break;
       }
     }
@@ -3442,7 +3456,10 @@ function renderOnePageProfile(
   // room is really left, instead of always reading "full".
   const contentBottomMm = boxes.filter(b => b.kind !== 'signatures')
     .reduce((m, b) => Math.max(m, b.y + b.h), 0);
-  return contentBottomMm > 0 ? body.top + contentBottomMm * MM : floor;
+  const boxesBottom = contentBottomMm > 0 ? body.top + contentBottomMm * MM : floor;
+  // A table that ran longer than its box (or onto a next page) — the End of
+  // Report goes under what was actually printed.
+  return tableBottom > 0 && doc.getNumberOfPages() === bodyPage ? Math.max(boxesBottom, tableBottom) : boxesBottom;
 }
 
 // ── Technician report notes (owner 2026-09-30) ───────────────────
@@ -3551,14 +3568,18 @@ function drawInlineSignatures(
   doc: jsPDF,
   sigs: ReportSignature[],
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  /** Profile one-page layout: the same sign-off, inside the signatures box
+   *  (left `x`, width `w`) — never moved to another page. */
+  region: { x: number; w: number } | null = null,
 ): number {
-  const usable = A4.w - 2 * MARGIN_X;
-  const probe = layoutSignatureBlock(sigs, MARGIN_X, usable, 0);
+  const left = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
+  const probe = layoutSignatureBlock(sigs, left, usable, 0);
   if (probe.rows.length === 0) return startY;
   let top = startY;
-  if (top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
-  const block = layoutSignatureBlock(sigs, MARGIN_X, usable, top);
+  if (!region && top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
+  const block = layoutSignatureBlock(sigs, left, usable, top);
   const textW = block.slotW - 6;
   for (const row of block.rows) {
     const baseY = row.top + SIG_ROW.base;
@@ -3757,12 +3778,20 @@ function renderColumnarTable(
    *  run): configured columns print exactly as arranged — even empty ones —
    *  and every group gets its heading band so the odd-width table reads as
    *  its own titled block. */
-  overriddenRun = false
+  overriddenRun = false,
+  /** Profile one-page layout: draw this SAME table (theme, fonts, rules,
+   *  flags, superscripts — nothing restyled) inside a box instead of across
+   *  the page: left edge `x`, width `w`, rows stop at `bottom` (overflow
+   *  still continues on the next page — never cut). `hideBand` leaves out
+   *  the panel band (the one-page block prints it full width above);
+   *  `dropEmpty` drops columns with no content even in the admin preview. */
+  region: { x: number; w: number; bottom: number; hideBand?: boolean; dropEmpty?: boolean } | null = null,
 ): number {
   if (groups.length === 0) return startY;
-  if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
+  if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
-  const usable = A4.w - 2 * MARGIN_X;
+  const LEFT = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
   let vcols: VCol[] = [];
   for (let i = 0; i < cfg.length; i++) {
@@ -3802,7 +3831,7 @@ function renderColumnarTable(
   // visible (structure fidelity beats economy — an override's just-added
   // column must show even before it has data); the department's shared
   // table still drops empties.
-  if (!PREVIEW_KEEP_EMPTY_COLS && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
+  if ((!PREVIEW_KEEP_EMPTY_COLS || region?.dropEmpty) && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
   const hasMethodCol = vcols.some(c => c.members.some(m => m.type === 'method'));
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
@@ -3855,7 +3884,7 @@ function renderColumnarTable(
     const compact = coreRows.length === 1 && coreRows[0].kind === 'param' && !g.referralLab;
     const groupStart = body.length;
 
-    if (!compact) {
+    if (!compact && !region?.hideBand) {
       // Panel / profile header band — bold, full width.
       bandRowOf.set(groups.indexOf(g), body.length);
       body.push([{
@@ -4084,7 +4113,9 @@ function renderColumnarTable(
   // the repeated column header — otherwise a reader on page 2 can't tell which
   // department the rows belong to.
   let tablePagesSeen = 0;
-  const margin = tablePageMargins();
+  const margin = region
+    ? { ...tablePageMargins(), left: region.x, right: A4.w - region.x - region.w, bottom: Math.max(MARGIN_BOTTOM, A4.h - region.bottom) }
+    : tablePageMargins();
 
   // ── Panel heading on continuation pages ──────────────────────────
   // A page that opens MID-panel repeats the band as "<PANEL> — CONTINUED"
@@ -4119,11 +4150,11 @@ function renderColumnarTable(
       // hook returns — so the band's paint state is put back afterwards.
       const fill = doc.getFillColor(), font = doc.getFont(), size = doc.getFontSize(), color = doc.getTextColor();
       doc.setFillColor('#eef2f7');
-      doc.rect(MARGIN_X, top, usable, contH, 'F');
+      doc.rect(LEFT, top, usable, contH, 'F');
       const bandSize = typeset(doc, 'panelContinued');
       doc.setTextColor(theme.primary);
       // autotable's own top-aligned first baseline for the band's font.
-      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, MARGIN_X + 6, top + 4 + bandSize * 0.85);
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, LEFT + 6, top + 4 + bandSize * 0.85);
       doc.setFillColor(fill);
       doc.setFont(font.fontName, font.fontStyle);
       doc.setFontSize(size);
@@ -4152,10 +4183,10 @@ function renderColumnarTable(
       if (tablePagesSeen > 1 && deptLabel) {
         typeset(doc, 'deptContinued');
         doc.setTextColor(theme.primary);
-        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, margin.top - 14);
+        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, LEFT, margin.top - 14);
         doc.setDrawColor(HAIR);
         doc.setLineWidth(0.5);
-        doc.line(MARGIN_X, margin.top - 10, A4.w - MARGIN_X, margin.top - 10);
+        doc.line(LEFT, margin.top - 10, LEFT + usable, margin.top - 10);
       }
     },
     columnStyles: Object.fromEntries(
@@ -4218,7 +4249,7 @@ function renderColumnarTable(
   // The header and the first glued chain (a panel band, its sub-line and
   // its first result) open the table together — keepRowsTogether only
   // looks ahead from a row already drawn, so row 0 is decided here.
-  if (table.body.length > 0) {
+  if (!region && table.body.length > 0) {
     const lead = headH + table.body[0].height + chainAfter(table.body, 0, keepWithNext);
     if (startY + lead > floor && lead <= floor - margin.top) {
       startY = table.settings.startY = newPage(doc, practice);

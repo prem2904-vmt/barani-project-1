@@ -276,7 +276,13 @@ export function applyLivePageLayout(
       const tests: Array<Record<string, unknown>> = (snap.tests ?? []).map(t => ({ ...t, analyzerImages: null }));
       const first = tests.findIndex(t => t['profileTestId'] === testId || t['packageTestId'] === testId);
       if (first >= 0 && Object.keys(imgs).length) tests[first] = { ...tests[first], analyzerImages: imgs };
-      data = JSON.stringify({ ...snap, tests });
+      // The sample sign-off for the signatures box (a real report prints the
+      // department's own signatories).
+      const dept = String(tests[first >= 0 ? first : 0]?.['department'] ?? '');
+      const sigs = (snap as { deptSignatures?: unknown[] }).deptSignatures?.length ? {} : { deptSignatures: [{ department: dept, signatures: [
+        { name: 'Lab Technologist', title: 'Sample signatory' }, { name: 'Consultant Pathologist', title: 'Sample signatory' },
+      ] }] };
+      data = JSON.stringify({ ...snap, ...sigs, tests });
     } catch { /* malformed sample snapshot — no sample graphs */ }
   }
   return { ...input, report: { ...input.report, data }, resolvedLayouts: layouts } as ReportPdfInput;

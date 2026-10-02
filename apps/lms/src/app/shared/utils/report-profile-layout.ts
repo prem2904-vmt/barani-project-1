@@ -147,8 +147,10 @@ const CBC_DEFAULT_ROW_COUNT = 14;
  *  the "does it fit" check and the shipped default's own sizing can never
  *  silently diverge. */
 function estimateTableHeightPt(rowCount: number, fontPt: number, extraWrappedLines = 0): number {
-  const padding = 10; // header row + top/bottom cell padding, pt
-  return padding + rowCount * fontPt * 1.5 + extraWrappedLines * fontPt * 1.3;
+  // The report's own results table (renderColumnarTable): 4 pt top + bottom
+  // cell padding around a ~1.15 line; header row ≈ one row.
+  const row = fontPt * 1.15 + 8;
+  return row + rowCount * row + extraWrappedLines * fontPt * 1.3;
 }
 
 /** The shipped default for the CBC profile (master catalogue only — a
@@ -426,7 +428,13 @@ export interface DefaultLayoutInput {
    *  turning the layout on never silently drops a chart the lab built. */
   chartIds?: ReadonlyArray<{ id: string; label?: string | null }>;
   labelFor?: (code: string) => string;
+  /** The table's REAL printed height (mm) at the default width, measured by
+   *  the renderer — beats the row estimate (wrapped names / ranges). */
+  tableHeightMm?: number | null;
 }
+
+/** The table's share of the body width when graphs / charts sit beside it. */
+export const DEFAULT_TABLE_SHARE = 0.62;
 
 /**
  * The sensible starting arrangement for ANY profile (owner 2026-10-02:
@@ -450,8 +458,8 @@ export function buildDefaultLayout(input: DefaultLayoutInput): PageLayoutBox[] {
     })),
   ];
   const tableNatural = ptToMm(estimateTableHeightPt(Math.max(1, input.rowCount), DEFAULT_BODY_FONT_PT) + 14);
-  const tableW = side.length ? round1(wMm * 0.58) : wMm;
-  const tableH = round1(Math.min(avail, Math.max(30, tableNatural)));
+  const tableW = side.length ? round1(wMm * DEFAULT_TABLE_SHARE) : wMm;
+  const tableH = round1(Math.min(hMm - sigH - gap, Math.max(30, input.tableHeightMm ? input.tableHeightMm + 1 : tableNatural)));
   const boxes: PageLayoutBox[] = [{
     id: 'table', kind: 'table', x: 0, y: 0, w: tableW, h: tableH, fontSize: DEFAULT_BODY_FONT_PT,
     columns: [
@@ -473,6 +481,7 @@ export function buildDefaultLayout(input: DefaultLayoutInput): PageLayoutBox[] {
     });
     bottom = Math.max(bottom, rows * cellH + (rows - 1) * gap);
   }
+  // End of Report prints under the content, then the sign-off.
   const sigY = round1(Math.min(bottom + gap + eorGap, hMm - sigH));
   boxes.push({ id: 'signatures', kind: 'signatures', x: 0, y: Math.max(0, sigY), w: wMm, h: sigH });
   return boxes;
