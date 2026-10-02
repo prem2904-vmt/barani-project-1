@@ -1,3 +1,4 @@
+import type { ReportSignature } from '../../shared/models/report.model';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
@@ -82,6 +83,19 @@ export class ReportLayoutService {
       return { linked: !!res?.linked, instruments: res?.instruments ?? [], images: res?.images ?? [] };
     } catch {
       return { linked: false, instruments: [], images: [] };
+    }
+  }
+
+  /** A department's sign-off AS THE REPORT PRINTS IT (configured
+   *  signatories, their designations, reg. nos and signature images — the
+   *  signed-in user standing in for "whoever tests / validates"). Null when
+   *  unavailable — the sample report then keeps its generic sign-off. */
+  async signoffPreview(departmentId: string): Promise<{ department: string | null; signatures: ReportSignature[] } | null> {
+    try {
+      return await firstValueFrom(this.api.get<{ department: string | null; signatures: ReportSignature[] }>(
+        `/api/report-layout/department/${departmentId}/signoff-preview`));
+    } catch {
+      return null;
     }
   }
 

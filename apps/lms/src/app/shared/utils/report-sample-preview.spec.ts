@@ -45,4 +45,16 @@ describe('report-sample-preview — the ONE sample report (designer + Live previ
     // The input itself is untouched (the designer re-applies on every drag).
     expect(readPageLayout(input.resolvedLayouts!['pkg'].sections)).toBeNull();
   });
+
+  it('the sample report signs with the department\'s REAL sign-off when given (same list the real snapshot carries)', async () => {
+    const { buildSamplePreviewInput } = await import('./report-sample-preview');
+    const signatures = [{ name: 'Dr. Rajesh Iyer', title: 'Consultant Pathologist', regNo: 'TN-2' }];
+    const input = await buildSamplePreviewInput({
+      testId: 't1', testName: 'Hb', department: 'Haematology', sampleType: '', parameters: ['Hb'], members: [],
+      template: null, apiUrl: '', signoff: { signatures },
+      preview: async () => ({ testId: 't1', testName: 'Hb', departmentName: 'Haematology', columns: [], sections: [] }) as never,
+    });
+    const snap = JSON.parse(input!.report.data!);
+    expect(snap.deptSignatures).toEqual([{ department: 'Haematology', signatures }]);
+  });
 });

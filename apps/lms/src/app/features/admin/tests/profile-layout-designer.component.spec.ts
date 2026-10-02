@@ -3,6 +3,8 @@ import { NEVER } from 'rxjs';
 import { ProfileLayoutDesignerComponent } from './profile-layout-designer.component';
 import type { PageLayoutBox, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
 import { readPageLayout } from '../../../shared/utils/report-profile-layout';
+import { layoutSignatureBlock } from '../../../shared/utils/report-signatures';
+import { ptToMm } from '../../../shared/utils/report-header-layout';
 import type { PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -26,6 +28,7 @@ const CBC_MEMBERS = [member('m1', 'HEM011', 'Haemoglobin'), member('m2', 'HEM019
 
 interface Opts {
   sections?: ReportSection[]; name?: string; members?: PreviewProfileMember[];
+  departmentId?: string; signoff?: { department: string | null; signatures: Array<{ name?: string; title?: string; regNo?: string; signatureUrl?: string }> } | null;
   images?: ProfileAnalyzerImages; restore?: { sections: ReportSection[] } | null; confirm?: boolean;
 }
 
@@ -36,6 +39,7 @@ function make(o: Opts = {}) {
   const layoutSvc = {
     analyzerImages: vi.fn(async () => o.images ?? { linked: false, instruments: [], images: [] }),
     restorePageLayoutDefault: vi.fn(async () => o.restore ?? null),
+    signoffPreview: vi.fn(async () => o.signoff ?? null),
     preview: vi.fn(),
   };
   const toasts = { success: vi.fn(), info: vi.fn(), error: vi.fn() };
@@ -56,6 +60,7 @@ function make(o: Opts = {}) {
   f.componentRef.setInput('profileTestId', 'pkg-1');
   f.componentRef.setInput('profileName', o.name ?? 'Liver panel');
   f.componentRef.setInput('members', o.members ?? []);
+  if (o.departmentId) f.componentRef.setInput('departmentId', o.departmentId);
   f.detectChanges();
   const emitted: ReportSection[][] = [];
   f.componentInstance.sectionsChange.subscribe(s => emitted.push(s));
@@ -133,6 +138,22 @@ describe('ProfileLayoutDesignerComponent — starts from a sensible default', ()
     const pl = readPageLayout(emitted[0])!;
     expect(pl.enabled).toBe(true);
     expect(pl.boxes.map(b => b.kind)).toEqual(['table', 'signatures']);
+  });
+});
+
+describe('ProfileLayoutDesignerComponent — the REAL sign-off', () => {
+  it('the signatures box is sized to the department\'s real sign-off block — the SAME geometry the report draws', async () => {
+    const signatures = [
+      { name: 'Ms. Priya Natarajan', title: 'Lab Technologist', regNo: 'TN-1' },
+      { name: 'Dr. Rajesh Iyer', title: 'Consultant Pathologist', regNo: 'TN-2' },
+      { name: 'Dr. Anita K', title: 'Microbiologist', regNo: 'TN-3' },
+    ];
+    const { f, c, layoutSvc } = make({ departmentId: 'dept-h', signoff: { department: 'Haematology', signatures } });
+    await flush(f);
+    expect(layoutSvc.signoffPreview).toHaveBeenCalledWith('dept-h');
+    const sig = c.boxes().find(b => b.kind === 'signatures')!;
+    const real = layoutSignatureBlock(signatures, 0, c.body().w, 0).height;   // what drawInlineSignatures lays out
+    expect(sig.h).toBeCloseTo(Math.round(ptToMm(real) * 10) / 10 + 1, 1);
   });
 });
 

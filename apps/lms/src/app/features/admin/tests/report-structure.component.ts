@@ -262,6 +262,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
               [members]="profileMembers()"
               [columnsOverride]="columnsOverride()"
               [chartContext]="chartContext()"
+              [departmentId]="profileDepartmentId()"
               (sectionsChange)="onPageLayoutChange($event)"
               (liveChange)="pageLayoutLive.emit($event)" />
           </section>
@@ -419,6 +420,7 @@ export class ReportStructureComponent {
   readonly profileName = input<string>('');
   readonly profileCatalogKey = input<string | null>(null);
   readonly profileDepartment = input<string>('');
+  readonly profileDepartmentId = input<string | null>(null);
   readonly profileSampleType = input<string>('');
   readonly profileMembers = input<PreviewProfileMember[]>([]);
   readonly columnsOverride = input<ReportColumn[] | null>(null);
