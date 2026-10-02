@@ -193,6 +193,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       id: 'fd:' + d.patientId,
       label: d.patient?.displayName || 'Patient',
       sub: d.testIds.length + (d.testIds.length === 1 ? ' test' : ' tests'),
+      verb: 'Resume order for',
+      at: d.savedAt,
       link: '/frontdesk/order',
       queryParams: { patientId: d.patientId },
     })));

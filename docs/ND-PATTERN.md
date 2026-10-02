@@ -673,6 +673,21 @@ Timing rules (`shared/utils/busy.ts`):
   `core/services/report-actions.service.ts` (patient link = `/track/{token}`,
   fallback `/reports/public/{qrToken}`; share ladder in `shared/utils/report-share.ts`).
 
+### Draft tray (bottom bar)
+
+- The docked bar's "work you left unfinished" tray (`layout/top-strip`,
+  rules in `draft-tray.ts`): a quiet "Drafts N" caption, then compact SOLID
+  chips (nd chip radius, hairline, small violet dot = unsubmitted) that show
+  ONLY the sample number (front desk: the patient) in tabular figures. The
+  patient name lives in the tooltip / `aria-label` ("Resume result for 26123 ·
+  Mr. Sathish Kumar") and the overflow menu — never on the chip.
+- Chip count = the width ceiling (`draftCap`: 3/4/5/6), then MEASURED: a chip
+  is dropped while the chips overflow; with no room for one the tray collapses
+  to a "Drafts N" chip. The rest sit behind "+N", which opens `pf-actions-menu`
+  (every draft: number, patient · time; the on-stage one `current`).
+- Selection is ARIA (`aria-current` / `data-current`), never a `--on` class.
+  Phones (<768px) don't show the tray (owner).
+
 ## 11. Scanner
 
 One shared modal (`shared/components/barcode-scanner/barcode-scanner-modal.component.ts`)

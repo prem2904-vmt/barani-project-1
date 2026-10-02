@@ -1367,16 +1367,23 @@ a.pf-ts-tenant:hover {
   box-shadow: none;
 }
 
-/* ── Draft shelf (bottom bar): divider + resume chips ─────────────── */
+/* ── Draft tray (bottom bar): divider · "Drafts N" · resume chips ─────
+   Owner 2026-10-02: the old outlined name pills read as clutter. Now a calm,
+   intentional tray — a quiet label, then compact SOLID chips holding only
+   the sample number (tabular figures), each with a small violet dot = work
+   not yet submitted. Neutral at rest (nd chip surface + hairline), lifts on
+   hover / focus, and the draft on stage takes the app's quiet selected look
+   (violet tint + ink + hairline ring, same as the active work area). */
 .pf-draftshelf {
   display: none; /* only meaningful when the bar is docked (rule below) */
   align-items: center;
   gap: 6px;
   min-width: 0;
   flex: 0 1 auto;
+  /* sits right after the nav's own end-of-work-areas hairline */
+  margin-left: 6px;
 }
-/* Chips scroll here; the +N popover lives OUTSIDE this clipper so the
-   upward dropdown isn't swallowed by the scroll container. */
+/* Chips scroll here when the bar is tight; the +N chip stays outside. */
 .pf-draftshelf__scroll {
   display: flex;
   align-items: center;
@@ -1384,6 +1391,9 @@ a.pf-ts-tenant:hover {
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  /* room for the hover lift + focus ring inside the clipper */
+  padding: 4px 2px;
+  margin: -4px -2px;
 }
 .pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
 :host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
@@ -1394,85 +1404,115 @@ a.pf-ts-tenant:hover {
   :host-context(.design-new.nav-bottom) .pf-draftshelf { display: none; }
 }
 
-.pf-draftshelf__rule {
-  width: 1px; height: 22px; flex-shrink: 0;
-  background: var(--border-muted, #e5e7eb);
-  margin: 0 4px 0 8px;
+/* "Drafts 5" — a quiet caption, not a control. */
+.pf-draftshelf__head {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  flex-shrink: 0; margin-right: 2px;
+  font-size: 11.5px; font-weight: 500; line-height: 1;
+  color: var(--text-tertiary, var(--text-muted));
+  white-space: nowrap;
 }
+.pf-draftshelf__count {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--text-secondary);
+}
+/* Tablets: the label yields first; the count is in the group's name. */
+@media (max-width: 1023px) {
+  .pf-draftshelf__head { display: none; }
+}
+
 .pf-draftshelf__chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 30px; padding: 0 10px; border-radius: 9999px;
-  background: var(--bg-card-solid, #fff);
-  border: 1px dashed rgba(124, 58, 237, 0.45);
-  color: var(--text-secondary);
-  font-size: 12px; font-weight: 500;
-  text-decoration: none; white-space: nowrap;
-  transition: background 140ms ease, border-color 140ms ease;
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px;
+  flex-shrink: 0;
+  height: 28px; padding: 0 10px 0 9px;
+  border-radius: var(--nd-radius-chip, 8px);
+  background: var(--nd-card-bg, var(--bg-card-solid, #fff));
+  border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  color: var(--text-primary);
+  font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition:
+    transform var(--nd-dur-fast, 200ms) var(--nd-spring, ease),
+    box-shadow var(--nd-dur-fast, 200ms) ease,
+    border-color var(--nd-dur-fast, 200ms) ease,
+    background-color var(--nd-dur-fast, 200ms) ease;
 }
-.pf-draftshelf__chip:hover { background: rgba(124, 58, 237, 0.08); border-color: #7c3aed; }
-.pf-draftshelf__chip svg { color: #7c3aed; flex-shrink: 0; }
-.pf-draftshelf__lbl { color: var(--text-primary); max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-.pf-draftshelf__sub { color: var(--text-muted); font-size: 11px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
-.pf-draftshelf__more {
-  display: inline-flex; align-items: center; justify-content: center;
-  height: 30px; min-width: 34px; padding: 0 8px; border-radius: 9999px;
-  background: transparent; border: 1px dashed var(--border-muted, #d1d5db);
-  color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer;
+:host-context(.dark) .pf-draftshelf__chip {
+  background: var(--nd-chip-bg, rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: none;
 }
-.pf-draftshelf__more:hover { border-color: #7c3aed; color: #7c3aed; }
-.pf-draftshelf__bd { position: fixed; inset: 0; z-index: 39; }
-.pf-draftshelf__pop {
-  position: absolute;
-  bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
-  min-width: 220px; max-height: 320px; overflow-y: auto;
-  padding: 6px; border-radius: 14px;
-  background: var(--bg-card-solid);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
-  z-index: 40;
+.pf-draftshelf__lbl { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+/* Unsaved work: the one accent at rest. */
+.pf-draftshelf__dot {
+  width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%;
+  background: var(--color-primary, #7c3aed);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
-.pf-draftshelf__pop-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 10px; border-radius: 9px;
-  font-size: 12.5px; text-decoration: none;
-  color: var(--text-secondary);
-}
-.pf-draftshelf__pop-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+:host-context(.dark) .pf-draftshelf__dot { background: #a78bfa; box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.18); }
 
-/* SELECTED draft — the draft whose screen is on stage (DraftShelfService
-   .activeId: path + identifying query, updated on every navigation). The
-   `--on` modifier opts the chip, the "+N" button and the popover row into
-   the app's ONE selected look (styles.scss "PRIMARY COLOUR AUDIT": quiet
-   violet tint + violet ink + hairline ring, light and dark) — the same
-   treatment as this bar's active work area. Here we only add what that
-   rule can't know: the dashed "unfinished" border goes solid (ring), the
-   label/sub inks, and no pointer (the selected chip is not a link). */
-.pf-draftshelf__chip--on,
-.pf-draftshelf__pop-item--on { font-weight: 600; cursor: default; }
-.pf-draftshelf__chip--on { border-style: solid; }
-.pf-draftshelf__chip--on .pf-draftshelf__lbl,
-.pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #6d28d9; }
-.pf-draftshelf__chip--on .pf-draftshelf__sub,
-.pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #7c3aed; opacity: 0.8; }
-:host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__lbl,
-:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #ede9fe; }
-:host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__sub,
-:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #c4b5fd; opacity: 1; }
-:host-context(.dark) .pf-draftshelf__chip--on svg { color: #c4b5fd; }
-.pf-draftshelf__chip:focus-visible,
-.pf-draftshelf__more:focus-visible,
-.pf-draftshelf__pop-item:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+@media (hover: hover) {
+  .pf-draftshelf__chip:hover:not([aria-current]) {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--nd-line, #e5e7eb));
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+  :host-context(.dark) .pf-draftshelf__chip:hover:not([aria-current]) {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(167, 139, 250, 0.40);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+}
+.pf-draftshelf__chip:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px;
+  transform: translateY(-1px);
+}
 
-/* Touch devices: 44px hit area without growing the 30px pill (the bar's
+/* The draft on stage (aria-current) — and the "+N" chip when that draft
+   is one of the hidden ones. Not a link (no pointer). */
+.pf-draftshelf__chip[aria-current],
+.pf-draftshelf__more[data-current] {
+  background: rgba(124, 58, 237, 0.10);
+  border-color: rgba(124, 58, 237, 0.30);
+  color: #6d28d9; font-weight: 600;
+  box-shadow: none;
+}
+.pf-draftshelf__chip[aria-current] { cursor: default; }
+:host-context(.dark) .pf-draftshelf__chip[aria-current],
+:host-context(.dark) .pf-draftshelf__more[data-current] {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: rgba(168, 85, 247, 0.38);
+  color: #ede9fe;
+}
+
+/* "+N" — same chip, neutral ink, an up-chevron (the menu opens upward). */
+.pf-draftshelf__menu { flex-shrink: 0; }
+.pf-draftshelf__more { gap: 4px; padding: 0 8px 0 10px; color: var(--text-secondary); font-weight: 600; }
+.pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { flex-shrink: 0; opacity: 0.7; transition: transform var(--nd-dur-fast, 200ms) var(--nd-spring, ease); }
+.pf-draftshelf__more[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--nd-line, #e5e7eb));
+  color: var(--text-primary);
+}
+.pf-draftshelf__more[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-draftshelf__chip, .pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { transition: none; }
+  .pf-draftshelf__chip:hover, .pf-draftshelf__chip:focus-visible { transform: none !important; }
+}
+
+/* Touch devices: 44px hit area without growing the 28px chip (the bar's
    height is fixed) — an invisible, taller hit box around each chip. */
 @media (pointer: coarse) {
-  .pf-draftshelf__chip, .pf-draftshelf__more { position: relative; }
-  .pf-draftshelf__chip::after, .pf-draftshelf__more::after {
+  .pf-draftshelf__chip::after {
     content: ''; position: absolute; left: 0; right: 0; top: 50%;
     height: 44px; transform: translateY(-50%);
   }
-  .pf-draftshelf__more { min-width: 44px; }
-  .pf-draftshelf__pop-item { min-height: 44px; }
+  .pf-draftshelf__more { min-width: 44px; justify-content: center; }
 }
 
 /* Chat entry (new design): messenger icon after the bell + unread badge. */

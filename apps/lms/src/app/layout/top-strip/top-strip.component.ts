@@ -7,9 +7,12 @@ import {
   Injector,
   OnDestroy,
   OnInit,
+  afterNextRender,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from "@angular/core";
 import { PeopleDrawerService } from "../../core/services/people-drawer.service";
 import { ChatWindowsService } from "../../core/services/chat-windows.service";
@@ -32,6 +35,12 @@ import {
 } from "../../core/services/draft-shelf.service";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { ZoomSourceDirective } from "../../core/navigation/zoom.directive";
+import { ZoomTransitionService } from "../../core/navigation/zoom-transition";
+import {
+  ActionsMenuComponent,
+  ActionsMenuTriggerDirective,
+} from "../../shared/components/actions-menu/actions-menu.component";
+import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { filter } from "rxjs/operators";
 import { FormsModule } from "@angular/forms";
@@ -92,6 +101,8 @@ import { DesktopClockComponent } from "./desktop-clock.component";
     PresenceAvatarComponent,
     ZoomSourceDirective,
     DesktopClockComponent,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -101,7 +112,48 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
-  readonly draftsOpen = signal(false);
+  private readonly zoom = inject(ZoomTransitionService);
+  /** Viewport width — drives how many draft chips sit inline (draftCap). */
+  private readonly viewportW = signal(typeof window !== "undefined" ? window.innerWidth : 1440);
+  @HostListener("window:resize")
+  onViewportResize(): void {
+    this.viewportW.set(window.innerWidth);
+  }
+  /** Measured fit: the width rule is the ceiling, but the work-area tabs
+   *  share the bar, so after each layout the tray drops one chip at a time
+   *  until its chips stop overflowing (null = not measured yet). */
+  private readonly draftFit = signal<number | null>(null);
+  private readonly _draftFitReset = effect(() => {
+    this.draftShelf.items();
+    this.viewportW();
+    untracked(() => {
+      this.draftFit.set(null);
+      this.fitDraftsSoon();
+    });
+  });
+  private fitDraftsSoon(): void {
+    afterNextRender(() => {
+      const box = this.host.nativeElement.querySelector(".pf-draftshelf__scroll") as HTMLElement | null;
+      if (!box) return;
+      const cap = this.draftSplit().shown.length;
+      if (box.scrollWidth > box.clientWidth + 1 && cap > 0) {
+        this.draftFit.set(cap - 1);
+        this.fitDraftsSoon();
+      }
+    }, { injector: this.injector });
+  }
+  /** Inline chips + how many sit behind "+N". */
+  readonly draftSplit = computed(() => {
+    const fit = this.draftFit();
+    const cap = Math.min(draftCap(this.viewportW()), fit ?? Infinity);
+    return draftSplit(this.draftShelf.items(), cap, fit !== null);
+  });
+  /** The "+N" menu: every draft (sample number · patient · time). */
+  readonly draftMenu = computed(() => draftMenuActions(this.draftShelf.items(), this.draftShelf.activeId()));
+  /** Tooltip + accessible name (carries the patient name the chip omits). */
+  draftTitle(d: DraftChip, on: boolean): string {
+    return draftTitle(d, on);
+  }
   /** A draft chip zooms into the screen it resumes: it answers to its own id
    *  ("fd:<patientId>", "lab:<sampleId>") and the bare record id the
    *  destination's zoom target carries. */
@@ -109,11 +161,22 @@ export class TopStripComponent implements OnInit, OnDestroy {
     const bare = d.id.includes(":") ? d.id.slice(d.id.indexOf(":") + 1) : "";
     return bare ? [d.id, bare] : [d.id];
   }
-  /** The on-stage draft sits behind the "+N" button (not one of the 3 chips). */
+  /** The on-stage draft sits behind the "+N" chip (not one of the inline chips). */
   readonly activeDraftInOverflow = computed(() => {
     const id = this.draftShelf.activeId();
-    return !!id && this.draftShelf.items().findIndex((d) => d.id === id) >= 3;
+    return !!id && !this.draftSplit().shown.some((d) => d.id === id);
   });
+  /** A draft picked from the "+N" menu: the same navigation a chip makes
+   *  (link + query + slide state). The "+N" chip is the zoom source, so the
+   *  resume still zooms. Picking the draft already on stage is a no-op. */
+  resumeDraft(id: string): void {
+    const d = this.draftShelf.items().find((x) => x.id === id);
+    if (!d || this.draftShelf.activeId() === id) return;
+    const more = this.host.nativeElement.querySelector(".pf-draftshelf__more") as HTMLElement | null;
+    if (more) this.zoom.tap(more, this.chipZoomKeys(d));
+    const cmds = typeof d.link === "string" ? [d.link] : [...d.link];
+    void this.router.navigate(cmds, { queryParams: d.queryParams ?? {}, state: this.draftShelf.swapState(d) });
+  }
   protected readonly designMode = inject(DesignModeService);
   /** Desktop app: full-screen clock on the bar + "Full screen" menu item. */
   protected readonly desktopWindow = inject(DesktopWindowService);

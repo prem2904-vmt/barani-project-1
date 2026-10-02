@@ -196,6 +196,24 @@ describe('pf-actions-menu — projected host trigger', () => {
   });
 });
 
+describe('pf-actions-menu — current row (navigation menus)', () => {
+  it('marks the current row aria-current="page" with the selected look, still pickable', async () => {
+    const { f, el, host } = await mount(HostDefault);
+    host.acts.set([
+      { id: 'a', label: '26121', hint: 'Patient A', current: true },
+      { id: 'b', label: '26122' },
+    ]);
+    f.detectChanges();
+    (el.querySelector('button') as HTMLButtonElement).click(); f.detectChanges(); await tick();
+    const [a, b] = rows();
+    expect(a.getAttribute('aria-current')).toBe('page');
+    expect(a.classList.contains('pf-am-item--current')).toBe(true);
+    expect(b.hasAttribute('aria-current')).toBe(false);
+    a.click(); f.detectChanges();
+    expect(host.picked).toEqual(['a']);
+  });
+});
+
 describe('pf-actions-menu — styles', () => {
   const css = () => ((ActionsMenuComponent as any).ɵcmp.styles as string[]).join('\n');
   it('rows are ≥44px tap targets and motion is off under reduced motion', () => {
