@@ -26,9 +26,28 @@ const LAYOUTS: Record<string, ResolvedReportLayout> = {
   prof1: layout('prof1', 'Lipid Profile', 'PROFILENOTE'),
 };
 
+/** The OTHER shape a note can be authored in: a merged row INSIDE a grid
+ *  section (`isMerged`/`mergeContent`), as written by the test editor's
+ *  rows view rather than the paragraph narrative editor. `buildPanelGroup`
+ *  reaches this shape through a completely different branch (the grid-rows
+ *  loop, not `sentenceRow`), so it needs its own render-and-grep coverage —
+ *  see the module doc above: "the first fix only covered one of them". */
+const gridLayout = (testId: string, testName: string, note: string): ResolvedReportLayout => ({
+  testId, testName, departmentName: 'Biochemistry', columns: [], configured: true,
+  sections: [{
+    id: 'g1', type: 'grid', order: 1, isVisible: true,
+    rows: [{ id: 'row1', isMerged: true, mergeContent: note, cells: {}, isBold: false }],
+  }],
+} as unknown as ResolvedReportLayout);
+
+const GRID_LAYOUTS: Record<string, ResolvedReportLayout> = {
+  member1: gridLayout('member1', 'Total Cholesterol', 'MEMBERNOTE'),
+  prof1: gridLayout('prof1', 'Lipid Profile', 'PROFILENOTE'),
+};
+
 /** Render a report for Total Cholesterol, ordered via `packageTestId` (a
  *  profile) or standalone when null, and return the PDF's raw text. */
-function renderText(packageTestId: string | null): string {
+function renderText(packageTestId: string | null, layouts: Record<string, ResolvedReportLayout> = LAYOUTS): string {
   const snap = {
     patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
     order: { id: 'o1', orderNumber: 'LAB-2608-000001', createdAt: '2026-08-08T00:00:00Z' },
@@ -41,7 +60,7 @@ function renderText(packageTestId: string | null): string {
   };
   const doc = buildReportPdf({
     report: { id: 'r1', createdAt: '2026-08-08T00:00:00Z', data: JSON.stringify(snap) },
-    resolvedLayouts: LAYOUTS,
+    resolvedLayouts: layouts,
     template: null,
   } as never);
   // Standard-14 fonts write literal text into the content stream, so latin1
@@ -64,5 +83,27 @@ describe('report notes follow what was ordered', () => {
 
   it("does not leak a profile's notes onto a standalone test", () => {
     expect(renderText(null)).not.toContain('PROFILENOTE');
+  });
+});
+
+describe('report notes follow what was ordered — the grid-merged-row shape', () => {
+  // Same four assertions, but the note is authored as a merged row inside a
+  // grid section (`isMerged`/`mergeContent`) rather than a paragraph section.
+  // `buildPanelGroup` reaches this through its grid-rows loop, a different
+  // code path from `sentenceRow` — both must independently obey the rule.
+  it("prints the profile's notes when the profile was ordered", () => {
+    expect(renderText('prof1', GRID_LAYOUTS)).toContain('PROFILENOTE');
+  });
+
+  it("suppresses a member's own notes when it arrived through a profile", () => {
+    expect(renderText('prof1', GRID_LAYOUTS)).not.toContain('MEMBERNOTE');
+  });
+
+  it("prints the test's own notes when it was ordered standalone", () => {
+    expect(renderText(null, GRID_LAYOUTS)).toContain('MEMBERNOTE');
+  });
+
+  it("does not leak a profile's notes onto a standalone test", () => {
+    expect(renderText(null, GRID_LAYOUTS)).not.toContain('PROFILENOTE');
   });
 });

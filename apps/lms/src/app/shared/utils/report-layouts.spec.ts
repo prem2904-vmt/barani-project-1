@@ -1,8 +1,45 @@
 import {
   resolveReportLayouts,
+  profileCodeFor,
   LayoutSnapshotTest,
   PreviewFn,
 } from './report-layouts';
+
+// M-A (logic re-review, 2026-10-03): profileCodeFor must read the snapshot's
+// own `profileCode` (a TEST CODE, "BIO004" — exactly what mw's
+// ReportService.ProfileCodeFor stamps onto each row) rather than re-deriving
+// anything from profileTestId/packageTestId, which are GUIDs and would never
+// match a band's profileCode at all.
+describe('profileCodeFor', () => {
+  it('a standalone test (no profile at all): null', () => {
+    expect(profileCodeFor({ testId: 'fbs' })).toBeNull();
+  });
+
+  it('a test ordered under a profile: the profile\'s own code', () => {
+    expect(profileCodeFor({
+      testId: 'fbs', profileTestId: 'guid-of-bio004', packageType: 'profile', profileCode: 'BIO004',
+    })).toBe('BIO004');
+  });
+
+  it('a profile nested inside a package: still just the profile\'s own code', () => {
+    expect(profileCodeFor({
+      testId: 'fbs', profileTestId: 'guid-of-bio004', packageTestId: 'guid-of-some-package',
+      packageType: 'profile', profileCode: 'BIO004',
+    })).toBe('BIO004');
+  });
+
+  it('a package\'s DIRECT member (not under any profile): null — a package is billing vocabulary, never profile-scoped', () => {
+    expect(profileCodeFor({
+      testId: 'fbs', packageTestId: 'guid-of-some-package', packageType: 'package', profileCode: null,
+    })).toBeNull();
+  });
+
+  it('never falls back to the GUID id fields when profileCode is absent', () => {
+    expect(profileCodeFor({
+      testId: 'fbs', profileTestId: 'guid-of-bio004', packageTestId: 'guid-of-some-package',
+    })).toBeNull();
+  });
+});
 
 describe('resolveReportLayouts', () => {
   const mockPreview: PreviewFn = async (
@@ -375,6 +412,23 @@ describe('resolveReportLayouts', () => {
     expect(layouts['TEST001']).toMatchObject({
       patient: { sex: 'F' },
     });
+  });
+
+  it('threads each test\'s own profileCode through to preview as the 5th argument', async () => {
+    const calledWith: Array<{ testId: string; profileCode?: string | null }> = [];
+    const preview: PreviewFn = async (testId, _v, _c, _p, profileCode) => {
+      calledWith.push({ testId, profileCode });
+      return { testId };
+    };
+    const tests: LayoutSnapshotTest[] = [
+      { testId: 'fbs', profileTestId: 'guid1', packageType: 'profile', profileCode: 'BIO004', result: { values: {} } },
+      { testId: 'ldl', result: { values: {} } }, // standalone — no profileCode on the snapshot at all
+    ];
+
+    await resolveReportLayouts(preview, tests);
+
+    expect(calledWith).toContainEqual({ testId: 'fbs', profileCode: 'BIO004' });
+    expect(calledWith).toContainEqual({ testId: 'ldl', profileCode: null });
   });
 
   it('unwraps flagged { value } wrappers so report-time conditions can match', async () => {
