@@ -1,6 +1,21 @@
 import { Injector } from '@angular/core';
 import type { PrintChoiceDialog } from './print-letterhead';
 import type { StoredPdfVariant } from './stored-report-pdf';
+import type { ReportLayoutService } from '../../core/services/report-layout.service';
+import type { PreviewFn } from './report-layouts';
+
+/**
+ * Adapts `ReportLayoutService.preview` to the `PreviewFn` shape
+ * `resolveReportLayouts` calls. Pulled out as its own (directly testable)
+ * function because it used to silently DROP the 5th argument (profileCode) —
+ * M-B, logic re-review, 2026-10-03: the stored-report render path (the ONE
+ * place that produces the file every other entry point then just reads back)
+ * never scoped a profile-tagged band (BIO010's Gestational OGTT <92) to its
+ * own profile at all.
+ */
+export function previewViaService(svc: Pick<ReportLayoutService, 'preview'>): PreviewFn {
+  return (id, values, images, p, profileCode) => svc.preview(id, values, images as never, p, null, profileCode);
+}
 
 /**
  * THE report PDF for a stored report — owner rule (2026-09-29): the report is
@@ -35,7 +50,7 @@ export async function renderReportFromSnapshot(rep: any, api: any, injector: Inj
   const full = await ensureFullReport(api, rep);
   const input = await prepareReportPdfInput(full, {
     api,
-    preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+    preview: previewViaService(svc),
     apiUrl: platform.getApiUrl(),
   });
   return buildReportPdf({ ...input, ...(variant === 'letterpad' ? { blankLetterhead: true } : {}) }).output('blob');
