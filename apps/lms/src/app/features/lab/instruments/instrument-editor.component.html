@@ -396,9 +396,7 @@
                                      [values]="r.profileKeys" [value]="''" placeholder="Map to profiles…" [attr.aria-label]="'Profiles for ' + imageLabel(r)"
                                      (valuesChange)="setImageProfiles(i, $event)"></pf-select>
                           @if (r.profileKeys.length) {
-                            <ul class="pf-ie-img__chips" aria-label="Mapped profiles">
-                              @for (k of r.profileKeys; track k) { <li class="nd-chip nd-chip--static">{{ profileName(k) }}</li> }
-                            </ul>
+                            <p class="pf-ie-img__mapped"><span class="pf-ie-img__mk" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Shows on {{ profileNames(r.profileKeys) }}</p>
                           } @else {
                             <span class="pf-ie-img__none">Not mapped — no profile shows this graph</span>
                           }

@@ -136,6 +136,7 @@ export class InstrumentEditorComponent {
     .filter(t => t.type !== 'individual' && !!t.catalogKey)
     .map(t => ({ value: t.catalogKey!, label: t.name, hint: t.catalogKey! }))
     .sort((a, b) => a.label.localeCompare(b.label)));
+  profileNames(keys: string[]): string { return keys.map(k => this.profileName(k)).join(', '); }
   profileName(key: string): string { return this.profileOptions().find(o => o.value === key)?.label ?? key; }
   imageLabel(r: ImageCodeDto): string { return r.label || analyzerLabel(r.code); }
   /** The newest received graph (session fetch), else a sample look-alike. */

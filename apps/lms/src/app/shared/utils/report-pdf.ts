@@ -1238,7 +1238,15 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   segments.forEach((sg, i) => {
     const isFinal = i === segments.length - 1;
     if (sg.kind === 'groups') {
-      if (i > 0 && segments[i - 1].kind === 'custom') { cursorY = newPage(doc, practice); pageHasContent = false; }
+      if (i > 0 && segments[i - 1].kind === 'custom') {
+        // Blocks after a custom layout open a fresh page that reads like the
+        // layout's own pages: letterhead + patient block, then the results.
+        NEXT_PAGE_IS_FIRST = false;
+        doc.addPage();
+        drawLetterhead(doc);
+        cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+        pageHasContent = false;
+      }
       if (sg.scopeHeading) cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
       cursorY = renderContinuousTable(doc, sg.groups, cursorY, practice, null, sigsOnlyFor(i), isFinal ? finalSigs : undefined);
       pageHasContent = true;

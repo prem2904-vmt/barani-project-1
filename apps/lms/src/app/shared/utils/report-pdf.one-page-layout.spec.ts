@@ -309,6 +309,8 @@ describe('profile one-page layout — PDF render', () => {
     expect(count(text, 'Dr. Technician')).toBe(1);
     expect(pdfText(doc, 1)).not.toContain('Dr. Technician');
     expect(pdfText(doc, doc.getNumberOfPages())).toContain('Dr. Technician');
+    // The page after the layout opens with the patient block, like the layout's own pages.
+    expect(pdfText(doc, doc.getNumberOfPages())).toContain('Test Patient');
   });
 
   it('a signatures box on page 1 while the table CONTINUES on page 2: no early sign-off — the department signs after the table', () => {
