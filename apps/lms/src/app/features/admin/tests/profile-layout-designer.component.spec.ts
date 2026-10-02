@@ -267,59 +267,6 @@ describe('ProfileLayoutDesignerComponent — real box editing', () => {
   });
 });
 
-describe('ProfileLayoutDesignerComponent — multi-select + arrange', () => {
-  const four = (): PageLayoutBox[] => [
-    { id: 'table', kind: 'table', x: 0, y: 0, w: 117, h: 150 },
-    { id: 'g1', kind: 'analyzer', ref: '12003', x: 121, y: 0, w: 60, h: 30 },
-    { id: 'g2', kind: 'analyzer', ref: '12053', x: 125, y: 33, w: 50, h: 30 },
-    { id: 'g3', kind: 'analyzer', ref: '12103', x: 121, y: 80, w: 60, h: 30 },
-    { id: 'g4', kind: 'analyzer', ref: '12153', x: 123, y: 120, w: 60, h: 30 },
-  ];
-  it('Shift-click builds a selection; the side card turns into the arrange tools', () => {
-    const { f, c, el } = make({ sections: saved(four()) });
-    const boxEls = () => Array.from(el.querySelectorAll('.pld-box')) as HTMLElement[];
-    c.onBoxPointerDown(ptr(boxEls()[1], 0, 0), c.boxes()[1]);
-    fire(boxEls()[1], 'pointerup', 0, 0);
-    for (const i of [2, 3, 4]) c.onBoxPointerDown({ ...ptr(boxEls()[i], 0, 0), shiftKey: true } as PointerEvent, c.boxes()[i]);
-    f.detectChanges();
-    expect(c.selection()).toEqual(['g1', 'g2', 'g3', 'g4']);
-    expect(el.textContent).toContain('4 boxes selected');
-    expect(el.querySelectorAll('.pld-box--sel').length).toBe(4);
-    expect(el.querySelector('.pld-handle')).toBeNull();      // handles only for a single box
-  });
-  it('align left + fill the column (table height, equal gaps) — each one undoable step', () => {
-    const { c, emitted } = make({ sections: saved(four()) });
-    c.selection.set(['g1', 'g2', 'g3', 'g4']); c.selected.set('g1');
-    c.align('left');
-    expect(new Set(lastBoxes(emitted).filter(b => b.kind === 'analyzer').map(b => b.x)).size).toBe(1);
-    c.fillColumnSel();
-    const gs = lastBoxes(emitted).filter(b => b.kind === 'analyzer').sort((a, b) => a.y - b.y);
-    expect(gs[0].y).toBe(0);
-    expect(gs[3].y + gs[3].h).toBeCloseTo(150, 0);
-    c.undo(); c.undo();
-    expect(c.boxes().find(b => b.id === 'g2')!.x).toBe(125);
-  });
-  it('arrow keys move the whole selection; Delete removes the selected boxes (never the table)', () => {
-    const { c } = make({ sections: saved(four()) });
-    c.selection.set(['table', 'g1']); c.selected.set('g1');
-    c.onKey(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    expect(c.boxes().find(b => b.id === 'table')!.y).toBe(1);
-    expect(c.boxes().find(b => b.id === 'g1')!.y).toBe(1);
-    c.onKey(new KeyboardEvent('keydown', { key: 'Delete' }));
-    expect(c.boxes().map(b => b.id)).toEqual(['table', 'g2', 'g3', 'g4']);
-  });
-  it('Auto-arrange and the table "Fill" rows setting', () => {
-    const { c, emitted } = make({ sections: saved(four()) });
-    c.autoArrangePage();
-    const out = lastBoxes(emitted);
-    const t = out.find(b => b.id === 'table')!;
-    const gs = out.filter(b => b.kind === 'analyzer').sort((a, b) => a.y - b.y);
-    expect(gs[3].y + gs[3].h).toBeCloseTo(t.y + t.h, 0);
-    c.setVAlign('fill');
-    expect(lastBoxes(emitted).find(b => b.id === 'table')!.vAlign).toBe('fill');
-  });
-});
-
 describe('ProfileLayoutDesignerComponent — palette', () => {
   it('adds a graph, a text box and a manual-code graph, each selected and in free space', () => {
     const { c, emitted } = make();

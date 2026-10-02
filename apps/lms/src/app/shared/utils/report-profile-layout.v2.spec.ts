@@ -1,7 +1,7 @@
 import type { PageLayoutBox } from '../models/report-layout.model';
 import { PAGE, ptToMm } from './report-header-layout';
 import {
-  addPaletteBox, alignBoxes, analyzerSampleAsset, autoArrange, bodyArea, buildDefaultLayout, distributeBoxes, fillColumn, graphGrid, matchSize, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
+  addPaletteBox, analyzerSampleAsset, bodyArea, buildDefaultLayout, graphGrid, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
   KNOWN_ANALYZER_IMAGES, printableBoxes, resizeFromHandle, setBoxHidden,
 } from './report-profile-layout';
 
@@ -164,62 +164,5 @@ describe('palette adds + hide', () => {
   it('sample graph assets: the M51 look-alikes, a neutral stand-in for unknown codes', () => {
     expect(analyzerSampleAsset('12003')).toBe('assets/analyzer-samples/m51-12003.png');
     expect(analyzerSampleAsset('99999')).toBe('assets/analyzer-samples/generic.png');
-  });
-});
-
-describe('arrange tools — align / distribute / match / fill column / auto-arrange', () => {
-  const g = (id: string, x: number, y: number, w = 30, h = 20): PageLayoutBox => ({ id, kind: 'analyzer', ref: id, x, y, w, h });
-  it('align left / bottom / centre line the selection up on the selection\'s own edge', () => {
-    const boxes = [g('a', 10, 0), g('b', 40, 30, 20, 10), g('c', 0, 0, 5, 5)];
-    expect(alignBoxes(boxes, ['a', 'b'], 'left', BODY).filter(b => b.id !== 'c').map(b => b.x)).toEqual([10, 10]);
-    const bottom = alignBoxes(boxes, ['a', 'b'], 'bottom', BODY);
-    expect(bottom[0].y + bottom[0].h).toBe(40);
-    expect(bottom[1].y + bottom[1].h).toBe(40);
-    expect(bottom[2]).toEqual(boxes[2]);                               // unselected untouched
-    const mid = alignBoxes(boxes, ['a', 'b'], 'hcenter', BODY);
-    expect(mid[0].x + mid[0].w / 2).toBeCloseTo(mid[1].x + mid[1].w / 2);
-  });
-  it('distribute: equal gaps, outermost boxes stay put (the owner\'s uneven 4 graphs)', () => {
-    const boxes = [g('a', 120, 0, 60, 30), g('b', 120, 33, 60, 30), g('c', 120, 80, 60, 30), g('d', 120, 120, 60, 30)];
-    const out = distributeBoxes(boxes, ['a', 'b', 'c', 'd'], 'v', BODY);
-    const gaps = [1, 2, 3].map(i => out[i].y - (out[i - 1].y + out[i - 1].h));
-    expect(gaps[0]).toBeCloseTo(gaps[1]); expect(gaps[1]).toBeCloseTo(gaps[2]);
-    expect(out[0].y).toBe(0); expect(out[3].y).toBe(120);
-  });
-  it('match width / height to the reference box', () => {
-    const out = matchSize([g('a', 0, 0, 40, 20), g('b', 50, 0, 25, 33)], ['a', 'b'], 'h', 'b', BODY);
-    expect(out.map(b => b.h)).toEqual([33, 33]);
-  });
-  it('fill column: the selection stacks to EXACTLY the given height with equal 4 mm gaps', () => {
-    const boxes = [g('a', 121, 0, 60, 30), g('b', 125, 40, 50, 20), g('c', 121, 70, 60, 30), g('d', 123, 100, 60, 25)];
-    const out = fillColumn(boxes, ['a', 'b', 'c', 'd'], BODY, { top: 0, height: 150, gap: 4 });
-    expect(out[0].y).toBe(0);
-    expect(out[3].y + out[3].h).toBeCloseTo(150);
-    expect(new Set(out.map(b => b.x)).size).toBe(1);
-    expect(new Set(out.map(b => Math.round(b.h * 100))).size).toBe(1);
-  });
-  it('auto-arrange: table and graph column share one height, graphs evenly spaced, signatures below, 4 mm gutters', () => {
-    const start = [
-      { id: 'table', kind: 'table' as const, x: 0, y: 0, w: 117, h: 120 },
-      g('12003', 125, 3, 30, 20), g('12053', 160, 40, 30, 30), g('12103', 121, 90, 40, 20), g('12153', 150, 120, 30, 30),
-      { id: 'signatures', kind: 'signatures' as const, x: 0, y: 180, w: 188, h: 20 },
-    ];
-    const out = autoArrange(start, BODY, { gutter: 4, tableNaturalMm: 150 });
-    const t = out.find(b => b.id === 'table')!;
-    const gs = out.filter(b => b.kind === 'analyzer').sort((a, b) => a.y - b.y);
-    expect(t.h).toBeCloseTo(150, 0);
-    expect(gs[gs.length - 1].y + gs[gs.length - 1].h).toBeCloseTo(t.y + t.h, 0);   // same height
-    expect(gs[0].x).toBeCloseTo(t.x + t.w + 4, 0);                                  // 4 mm gutter
-    const gaps = gs.slice(1).map((b, i) => b.y - (gs[i].y + gs[i].h));
-    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(0.2);              // evenly spaced
-    expect(out.find(b => b.id === 'signatures')!.y).toBeGreaterThan(t.h);
-    expect(detectLayoutIssues(out, BODY)).toEqual([]);
-  });
-  it('auto-arrange fills the table box when its rows need less than the column', () => {
-    const start = [{ id: 'table', kind: 'table' as const, x: 0, y: 0, w: 117, h: 60 }, g('a', 120, 0), g('b', 120, 30), g('c', 120, 60), g('d', 120, 90)];
-    const out = autoArrange(start, BODY, { gutter: 4, tableNaturalMm: 60 });
-    expect(out.find(b => b.id === 'table')!.vAlign ?? null).toBeNull();          // no spare room → stays top
-    const tall = autoArrange(start, BODY, { gutter: 4, tableNaturalMm: 40 });
-    expect(tall.find(b => b.id === 'table')!.h).toBeGreaterThanOrEqual(40);
   });
 });

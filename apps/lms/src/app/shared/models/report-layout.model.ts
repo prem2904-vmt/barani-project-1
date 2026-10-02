@@ -234,10 +234,6 @@ export interface PageLayoutBox {
   hidden?: boolean;
   /** notes box only: the text it prints (older layouts used `label`). */
   text?: string | null;
-  /** table box only: where the rows sit when the box is taller than they
-   *  need — 'top' (default), 'fill' (rows grow evenly to fill the box) or
-   *  'center'. The report draws exactly this. */
-  vAlign?: 'top' | 'fill' | 'center' | null;
 }
 
 export interface PageLayoutSection extends ReportSectionBase {

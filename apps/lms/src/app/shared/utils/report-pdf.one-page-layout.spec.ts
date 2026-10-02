@@ -198,22 +198,4 @@ describe('profile one-page layout — PDF render', () => {
     const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
     expect(text).not.toContain('IMAGES');
   });
-
-  it('table "Fill": the rows grow to the box\'s height in the REAL render; "Top" leaves them natural', () => {
-    const run = (vAlign: 'top' | 'fill') => {
-      const boxes = defaultCbcLayout(BODY).map(b => (b.kind === 'table' ? { ...b, h: 120, vAlign } : b));
-      const seen: Array<{ body: { top: number }; tableBottom?: number | null; tableNaturalH?: number | null }> = [];
-      buildReportPdf({
-        report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(snapshot()) },
-        resolvedLayouts: { t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true, boxes }) },
-        template: null,
-        onOnePageBody: (i: (typeof seen)[number]) => seen.push(i),
-      } as never);
-      return seen.find(i => i.tableBottom !== undefined)!;
-    };
-    const top = run('top'), fill = run('fill');
-    expect(fill.tableNaturalH).toBeCloseTo(top.tableNaturalH!, 1);                 // same natural height
-    expect(top.tableBottom! - top.body.top).toBeLessThan(120 * 2.8346 - 10);       // natural: well short of the box
-    expect(fill.tableBottom! - fill.body.top).toBeCloseTo(120 * 2.8346, 0);         // filled: exactly the box
-  });
 });
