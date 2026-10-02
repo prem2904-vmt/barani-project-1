@@ -16,6 +16,7 @@ import { OpdGateService } from '../opd/shared/opd-gate.service';
 import { bandFilter } from '../../shared/utils/band-search';
 import { SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 import { labDaysAgo } from '../../shared/utils/lab-clock';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -53,7 +54,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -68,9 +69,9 @@ interface FinanceSummary {
                           [value]="module()" (valueChange)="selectModule($event)"></pf-segmented>
             @if (module() === 'lab' || module() === 'overall') {
               <div class="pf-fin__bandrange" role="group" aria-label="Date range">
-                <input type="date" class="pf-fin__bdate" aria-label="From date" [(ngModel)]="fromDate" (change)="customRange()">
+                <pf-nd-date label="From date" [value]="fromDate" (valueChange)="setFromDateRange($event)"></pf-nd-date>
                 <span class="pf-fin__bdash" aria-hidden="true">–</span>
-                <input type="date" class="pf-fin__bdate" aria-label="To date" [(ngModel)]="toDate" (change)="customRange()">
+                <pf-nd-date label="To date" [value]="toDate" (valueChange)="setToDateRange($event)"></pf-nd-date>
                 <pf-segmented size="sm" [options]="quickOptions" [value]="quickDays()"
                               (valueChange)="quick($event)"></pf-segmented>
               </div>
@@ -129,8 +130,8 @@ interface FinanceSummary {
 
         <!-- Date range (classic; the new design has it in the band pill) -->
         <div class="pf-fin__range pf-classic-only">
-          <label>From <input type="date" [(ngModel)]="fromDate" (change)="load()"></label>
-          <label>To <input type="date" [(ngModel)]="toDate" (change)="load()"></label>
+          <label>From <pf-nd-date label="From" [value]="fromDate" (valueChange)="setFromDateClassic($event)"></pf-nd-date></label>
+          <label>To <pf-nd-date label="To" [value]="toDate" (valueChange)="setToDateClassic($event)"></pf-nd-date></label>
           <div class="pf-fin__quick">
             <button type="button" (click)="quick(7)">7d</button>
             <button type="button" (click)="quick(30)">30d</button>
@@ -422,6 +423,11 @@ export class FinanceHubComponent implements OnInit {
     this.quickDays.set(0);
     this.load();
   }
+
+  setFromDateRange(v: string | null) { if (v) { this.fromDate = v; this.customRange(); } }
+  setToDateRange(v: string | null) { if (v) { this.toDate = v; this.customRange(); } }
+  setFromDateClassic(v: string | null) { if (v) { this.fromDate = v; this.load(); } }
+  setToDateClassic(v: string | null) { if (v) { this.toDate = v; this.load(); } }
 
   quick(days: number) {
     this.quickDays.set(days);

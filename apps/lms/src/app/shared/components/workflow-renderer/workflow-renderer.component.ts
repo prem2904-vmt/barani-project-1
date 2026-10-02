@@ -188,6 +188,7 @@ export interface WorkflowStepCompleteEvent {
                       [value]="valueFor(step, p.name)"
                       [context]="context()"
                       [nd]="nd()"
+                      [enterAdvances]="true"
                       (valueChange)="setValue(step, p.name, $event)"></pf-dynamic-input>
                   </div>
                 }

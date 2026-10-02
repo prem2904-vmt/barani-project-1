@@ -39,6 +39,9 @@ import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patie
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { NdTimeComponent } from '../../../shared/components/nd-time/nd-time.component';
+import { NdDateTimeComponent } from '../../../shared/components/nd-date/nd-datetime.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -104,6 +107,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     BusyDirective,
     SkeletonCardComponent,
     ReportNotesCardComponent,
+    NdDateComponent,
+    NdTimeComponent,
+    NdDateTimeComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -360,47 +366,39 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          placeholder="—"/>
                                 }
                                 @case ('dropdown') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          [attr.data-param]="p.name"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))"
-                                          (keydown.enter)="advanceFrom(p.name)">
-                                    @if (isQualitative(p)) {
-                                      <!-- Qualitative pos/neg results are optional — offer a real empty choice. -->
-                                      <option value="" [selected]="!valueOf(p.name)">—</option>
-                                    } @else {
-                                      <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    }
-                                    @for (opt of optionsFor(p); track opt) {
-                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
-                                    }
-                                  </select>
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="isQualitative(p)
+                                        ? [{ value: '', label: '—' }, ...optionsFor(p).map(o => ({ value: o, label: o }))]
+                                        : optionsFor(p).map(o => ({ value: o, label: o }))"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
                                 }
                                 @case ('radio') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          [attr.data-param]="p.name"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))"
-                                          (keydown.enter)="advanceFrom(p.name)">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    @for (opt of optionsFor(p); track opt) {
-                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
-                                    }
-                                  </select>
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="optionsFor(p).map(o => ({ value: o, label: o }))"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
                                 }
                                 @case ('yesno') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          [attr.data-param]="p.name"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))"
-                                          (keydown.enter)="advanceFrom(p.name)">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    <option value="yes" [selected]="valueOf(p.name) === 'yes'">Yes</option>
-                                    <option value="no"  [selected]="valueOf(p.name) === 'no'">No</option>
-                                  </select>
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
                                 }
                                 @case ('textarea') {
                                   <textarea class="pf-rg__input pf-rg__textarea" rows="1"
@@ -412,12 +410,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                             placeholder="—"></textarea>
                                 }
                                 @case ('date') {
-                                  <input type="date" class="pf-rg__input pf-rg__date"
-                                         [value]="valueOf(p.name) ?? ''"
-                                         [attr.data-param]="p.name"
-                                         (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"
-                                         (keydown.enter)="advanceFrom(p.name)"/>
+                                  <pf-nd-date class="pf-rg__date" [label]="p.title || p.name"
+                                              [value]="valueOf(p.name) || null"
+                                              [attr.data-param]="p.name"
+                                              (focusin)="setActive(p.name)"
+                                              (valueChange)="setValue(p.name, $event ?? '')"
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-nd-date>
                                 }
                                 @case ('phone') {
                                   <input type="tel" inputmode="tel" class="pf-rg__input"
@@ -438,20 +436,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          placeholder="—"/>
                                 }
                                 @case ('time') {
-                                  <input type="time" class="pf-rg__input pf-rg__date"
-                                         [value]="valueOf(p.name) ?? ''"
-                                         [attr.data-param]="p.name"
-                                         (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"
-                                         (keydown.enter)="advanceFrom(p.name)"/>
+                                  <pf-nd-time class="pf-rg__date" [label]="p.title || p.name"
+                                              [value]="valueOf(p.name) || null"
+                                              [attr.data-param]="p.name"
+                                              (focusin)="setActive(p.name)"
+                                              (valueChange)="setValue(p.name, $event ?? '')"
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-nd-time>
                                 }
                                 @case ('datetime') {
-                                  <input type="datetime-local" class="pf-rg__input pf-rg__date"
-                                         [value]="valueOf(p.name) ?? ''"
-                                         [attr.data-param]="p.name"
-                                         (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"
-                                         (keydown.enter)="advanceFrom(p.name)"/>
+                                  <pf-nd-datetime class="pf-rg__date" [label]="p.title || p.name"
+                                                  [value]="valueOf(p.name) || null"
+                                                  [attr.data-param]="p.name"
+                                                  (focusin)="setActive(p.name)"
+                                                  (valueChange)="setValue(p.name, $event ?? '')"
+                                                  (keydown.enter)="advanceFrom(p.name)"></pf-nd-datetime>
                                 }
                                 @default {
                                   <input type="text" class="pf-rg__input"
@@ -510,10 +508,11 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
                         @case ('dropdown') {
-                          <div [attr.data-param]="p.name" (click)="setActive(p.name)">
+                          <div [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
                             <!-- Qualitative pos/neg results are optional — prepend a real empty '—' choice. -->
                             <pf-select
                               placeholder="— Choose —"
+                              [enterAdvances]="true"
                               [options]="isQualitative(p)
                                 ? [{ value: '', label: '—' }, ...optionsFor(p).map(o => ({ value: o, label: o }))]
                                 : optionsFor(p).map(o => ({ value: o, label: o }))"
@@ -564,13 +563,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           </label>
                         }
                         @case ('date') {
-                          <input type="date"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 [attr.data-param]="p.name"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"
-                                 (keydown.enter)="advanceFrom(p.name)"/>
+                          <pf-nd-date class="pf-param__date" [label]="p.title || p.name"
+                                      [value]="valueOf(p.name) || null"
+                                      [attr.data-param]="p.name"
+                                      (focusin)="setActive(p.name)"
+                                      (valueChange)="setValue(p.name, $event ?? '')"
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-nd-date>
                         }
                         @case ('section-header') {
                           <h4 class="pf-section-heading">{{ p.title }}</h4>
@@ -625,22 +623,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  placeholder="name@example.com"/>
                         }
                         @case ('time') {
-                          <input type="time"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 [attr.data-param]="p.name"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"
-                                 (keydown.enter)="advanceFrom(p.name)"/>
+                          <pf-nd-time class="pf-param__date" [label]="p.title || p.name"
+                                      [value]="valueOf(p.name) || null"
+                                      [attr.data-param]="p.name"
+                                      (focusin)="setActive(p.name)"
+                                      (valueChange)="setValue(p.name, $event ?? '')"
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-nd-time>
                         }
                         @case ('datetime') {
-                          <input type="datetime-local"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 [attr.data-param]="p.name"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"
-                                 (keydown.enter)="advanceFrom(p.name)"/>
+                          <pf-nd-datetime class="pf-param__date" [label]="p.title || p.name"
+                                          [value]="valueOf(p.name) || null"
+                                          [attr.data-param]="p.name"
+                                          (focusin)="setActive(p.name)"
+                                          (valueChange)="setValue(p.name, $event ?? '')"
+                                          (keydown.enter)="advanceFrom(p.name)"></pf-nd-datetime>
                         }
                         @case ('duration') {
                           <div class="pf-param__duration">
@@ -1522,6 +1518,49 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       cursor: pointer;
     }
     .pf-param__date { cursor: pointer; }
+
+    /* ── Kit date/time hosts (grid .pf-rg__date, card .pf-param__date) ──
+       pf-nd-date / pf-nd-time / pf-nd-datetime are generic kit components
+       (own box styling elsewhere in the app); here they sit beside a
+       pf-select dropdown (grid: 'dropdown'/'radio'/'yesno'; card:
+       'dropdown') and must look like ONE of that row's fields — same
+       border, height, radius and padding as the pf-select trigger
+       (select.component.ts), never their own separate box. Scoped to
+       THESE two host classes only — pf-nd-date/time elsewhere (vendors,
+       audit log, dynamic-input, …) are untouched. */
+    .pf-rg__date, .pf-param__date { display: block; width: 100%; }
+    .pf-rg__date ::ng-deep .pf-ndd__in,
+    .pf-rg__date ::ng-deep .pf-ndt__in,
+    .pf-param__date ::ng-deep .pf-ndd__in,
+    .pf-param__date ::ng-deep .pf-ndt__in {
+      height: 38px;
+      padding: 0 40px 0 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--input-text);
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .pf-param--active .pf-param__date ::ng-deep .pf-ndd__in,
+    .pf-param--active .pf-param__date ::ng-deep .pf-ndt__in {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(168, 85, 247, 0.45);
+    }
+    /* An invalid typed date/time (nd-date/nd-time's own validation) must
+       still show red — our higher-specificity border override above would
+       otherwise beat the kit's plain .nd-input--error rule. */
+    .pf-rg__date ::ng-deep .pf-ndd__in.nd-input--error,
+    .pf-rg__date ::ng-deep .pf-ndt__in.nd-input--error,
+    .pf-param__date ::ng-deep .pf-ndd__in.nd-input--error,
+    .pf-param__date ::ng-deep .pf-ndt__in.nd-input--error {
+      border-color: var(--red-border, #ef4444);
+    }
+    /* pf-nd-datetime pairs a date + a time box side by side — each inner
+       box still matches the single-field dimensions above; just let the
+       pair share the row width evenly. */
+    .pf-rg__date ::ng-deep .pf-nddt, .pf-param__date ::ng-deep .pf-nddt { width: 100%; }
+    .pf-rg__date ::ng-deep .pf-nddt > *, .pf-param__date ::ng-deep .pf-nddt > * { flex: 1 1 0; }
 
     /* ── Button-select pills (type: buttonSelect) ────────────── */
     .pf-param__btnsel { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2779,6 +2818,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-rg__input,
       .pf-rg__textarea,
       .pf-rg__select { font-size: 16px; }
+      /* The kit date/time boxes aren't .pf-rg__input/.pf-param__input any
+         more (one border, matched to pf-select — see the rule above), so
+         they need their own zoom-guard bump here. */
+      .pf-rg__date ::ng-deep .pf-ndd__in,
+      .pf-rg__date ::ng-deep .pf-ndt__in,
+      .pf-param__date ::ng-deep .pf-ndd__in,
+      .pf-param__date ::ng-deep .pf-ndt__in { font-size: 16px; }
     }
 
     /* Touch sizing: on coarse pointers the header pills + the back button

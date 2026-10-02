@@ -431,7 +431,10 @@ describe('ND audit D — Appointments & queue', () => {
     expect(sw.getAttribute('aria-checked')).toBe('true');
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(p.el.querySelectorAll('input[type="time"].nd-input').length).toBe(2);
+    // Kit time field (pf-nd-time): a typed hh:mm box, never a visible
+    // native time input (one hidden native sits behind it for the picker).
+    expect(p.el.querySelectorAll('pf-nd-time').length).toBe(2);
+    expect(p.el.querySelectorAll('input.pf-ndt__in').length).toBe(2);
     hygiene(p.el);
   });
 });

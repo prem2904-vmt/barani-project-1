@@ -16,6 +16,7 @@ import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { phoneLast10 } from '../../../shared/utils/indian-phone';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -72,7 +73,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent],
+  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -245,13 +246,11 @@ const PAGE_SIZE = 20;
                   </div>
                   @if (filters().dateRange === 'custom') {
                     <div class="pf-aps-custom-range">
-                      <input type="date" class="pf-aps-inp pf-aps-inp--sm" aria-label="From"
-                             [value]="filters().dateFrom"
-                             (input)="setFilter('dateFrom', $any($event.target).value)" />
+                      <pf-nd-date label="From" [value]="filters().dateFrom || null"
+                                  (valueChange)="setFilter('dateFrom', $event ?? '')"></pf-nd-date>
                       <span class="pf-aps-range-sep" aria-hidden="true">→</span>
-                      <input type="date" class="pf-aps-inp pf-aps-inp--sm" aria-label="To"
-                             [value]="filters().dateTo"
-                             (input)="setFilter('dateTo', $any($event.target).value)" />
+                      <pf-nd-date label="To" [value]="filters().dateTo || null"
+                                  (valueChange)="setFilter('dateTo', $event ?? '')"></pf-nd-date>
                     </div>
                   }
                 </div>
