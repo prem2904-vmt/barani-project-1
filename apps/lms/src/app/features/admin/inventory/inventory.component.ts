@@ -6,6 +6,7 @@ import { AllCommunityModule, ModuleRegistry, type ColDef, type GridApi, type Gri
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService, DialogChoice } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
@@ -528,6 +529,7 @@ const TEST_LIST_CAP = 300;
 export class InventoryComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
   protected readonly theme = inject(ThemeService);
   /** Row actions: text on web, icon on touch (ND-PATTERN). */
@@ -792,6 +794,15 @@ export class InventoryComponent implements OnInit {
     this.rcvError.set(null);
     this.receiving.set(true);
     try {
+      // Contract (fix 7 — expiry = end of day IST): send the <input type=date>
+      // / pf-nd-date value as a literal "<YYYY-MM-DD>T00:00:00Z" string —
+      // never through `new Date(...)` first, which would shift the date by
+      // the browser's local timezone. The server stores the date part
+      // VERBATIM and treats it as an IST calendar date: a lot dated 31 Oct is
+      // usable through 23:59:59 IST 31 Oct (InventoryService.ExpiryCutoffUtc).
+      // "Is this expired / in stock" is always read back from the server
+      // (`expired`, `onHand`, `lowStock` — see inventory-view.ts `stockLevel`'s
+      // doc comment) — never recomputed client-side.
       const res: any = await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
         lotNumber: r.lot || null, expiryDate: r.expiry ? r.expiry + 'T00:00:00Z' : null, unitCost: r.cost, qty: r.qty,
       }));
@@ -808,9 +819,33 @@ export class InventoryComponent implements OnInit {
     }
   }
 
+  /** Reason codes for a manual stock adjustment (fix 8) — server-validated;
+   *  the ledger records the code itself rather than always "wastage". No
+   *  native <select>: a DialogService pick (and a follow-up note for "other"). */
+  private static readonly ADJUST_REASONS: DialogChoice[] = [
+    { value: 'wastage', label: 'Wastage' },
+    { value: 'damage', label: 'Damage' },
+    { value: 'qc', label: 'QC' },
+    { value: 'calibration', label: 'Calibration' },
+    { value: 'correction', label: 'Correction' },
+    { value: 'other', label: 'Other' },
+  ];
+
   async adjust(b: InvBatch, delta: number) {
+    const reasonCode = await this.dialog.choose({
+      title: delta < 0 ? 'Reduce stock' : 'Increase stock',
+      message: `${delta < 0 ? 'Remove' : 'Add'} ${Math.abs(delta)} unit from this batch — pick a reason.`,
+      choices: InventoryComponent.ADJUST_REASONS,
+      confirmLabel: delta < 0 ? 'Remove' : 'Add',
+    });
+    if (!reasonCode) return;
+    let note: string | null = null;
+    if (reasonCode === 'other') {
+      note = await this.dialog.prompt({ title: 'What happened?', placeholder: 'Short note…', required: true });
+      if (!note) return;
+    }
     try {
-      await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/adjust`, { delta, reason: delta < 0 ? 'manual decrement' : 'manual increment' }));
+      await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/adjust`, { delta, reasonCode, note }));
       const id = this.expandedId(); if (id) await Promise.all([this.loadBatches(id), this.load(), this.loadAlerts()]);
     } catch (e) { this.toasts.error(ApiError.from(e).message); }
   }
