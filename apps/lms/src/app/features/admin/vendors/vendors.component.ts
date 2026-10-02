@@ -416,6 +416,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vn-card { padding: 16px 18px; overflow: visible; }
     .pf-vn-lbl { display: block; margin-bottom: 6px; }
     .pf-vn-hint { margin-top: 4px; }
+    /* pf-nd-date defaults to inline-block (shrink to content) so it sits
+     * next to other inline controls elsewhere; here it's the sole control
+     * in its grid cell and must fill it exactly like the Amount / Note
+     * inputs beside it. */
+    .pf-topup pf-nd-date { display: block; width: 100%; }
 
     /* Inline top-up panel */
     .pf-topup {
