@@ -87,7 +87,28 @@ function parseHl7(text, cfg = {}) {
     }
     if (name === 'OBX') {
       if (!cur) { cur = emptyMessage('hl7', text); cur.instrumentSerial = serial; cur.runAt = msgTs; cur.sampleId = pid3; out.push(cur); }
-      const code = comp(fld('OBX', parts, 3), 1) || comp(fld('OBX', parts, 3), 2);
+      const obxType = (fld('OBX', parts, 2) || '').trim().toUpperCase();
+      const codeField = fld('OBX', parts, 3);
+      const code = comp(codeField, 1) || comp(codeField, 2);
+      // IS = instrument mode/remark metadata (Take Mode, Blood Mode, Test
+      // Mode, Remark, Ref Group) — never a result, never an image.
+      if (obxType === 'IS') continue;
+      // ED = an embedded document (the histogram/scattergram BMPs). These
+      // carry base64 image bytes, not a clinical value: pull them into
+      // cur.images instead of cur.results (see also redactEdImages below,
+      // which keeps that same base64 out of the `raw` text forwarded to mw).
+      if (obxType === 'ED') {
+        const valueField = fld('OBX', parts, 5);
+        const vcomp = String(valueField).split(e.repeat)[0].split(e.component);
+        const format = (vcomp[2] || '').trim().toLowerCase() || null;
+        const base64 = (vcomp[4] || '').trim();
+        const rawLabel = comp(codeField, 2) || code;
+        const label = unescapeHl7(rawLabel, e).replace(/\.\s*(HS-MS\s*)?BMP\s*$/i, '').trim() || code;
+        if (code) cur.images.push({ code, label, format, base64 });
+        continue;
+      }
+      // NM (and anything else — ST/TX/CE/SN on other analyzers) keeps the
+      // existing behavior: a normal numeric/text result.
       const value = comp(fld('OBX', parts, 5), 1);
       const unit = comp(fld('OBX', parts, 6), 1) || null;
       const flags = normalizeFlags(unescapeHl7(fld('OBX', parts, 8), e), e.repeat);
@@ -121,4 +142,36 @@ function buildAck(text, { code = 'AA', now = new Date() } = {}) {
 
 function safeRe(p) { try { return new RegExp(p, 'i'); } catch { return null; } }
 
-module.exports = { parseHl7, buildAck, encodingOf };
+/**
+ * Replace every ED segment's base64 payload with a short placeholder, so the
+ * `raw` text forwarded to mw never carries embedded image bytes (images
+ * travel in message.images instead — see parseHl7 above). Segment framing
+ * and every other field are left byte-for-byte untouched; only the base64
+ * run itself (OBX-5 component 5, after `^Image^<FMT>^Base64^`) is replaced.
+ *
+ * Generic over ANY ED segment on ANY HL7 instrument — not M51-specific —
+ * so a future analyzer that also sends embedded documents gets this for
+ * free. A no-op (returns the text unchanged) when there's no MSH (not HL7)
+ * or no ED segments.
+ */
+function redactEdImages(text) {
+  const t = String(text);
+  const segs = segmentsOf(t);
+  const mshLine = segs.find((s) => s.startsWith('MSH'));
+  if (!mshLine) return t;
+  const e = encodingOf(mshLine);
+  const esc = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const FS = esc(e.field);
+  const CS = esc(e.component);
+  // OBX|<seq>|ED|<code field>||<4 components>^<base64 data>
+  // Group 1 = everything through "...^Base64^" (kept as-is); group 2 = the
+  // base64 run itself (replaced). Stops at the next field separator/CR/LF
+  // so trailing OBX fields (status, etc.) are untouched.
+  const re = new RegExp(
+    `(OBX${FS}\\d+${FS}ED${FS}([^${CS}${FS}\\r\\n\\x0b\\x1c]*)(?:${CS}[^${FS}\\r\\n\\x0b\\x1c]*)?${FS}${FS}(?:[^${CS}${FS}\\r\\n\\x0b\\x1c]*${CS}){4})([^${FS}\\r\\n\\x0b\\x1c]*)`,
+    'g',
+  );
+  return t.replace(re, (_m, prefix, code, data) => `${prefix}[image ${code || '?'} stored: see images[]]`);
+}
+
+module.exports = { parseHl7, buildAck, encodingOf, redactEdImages };

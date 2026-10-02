@@ -1,10 +1,11 @@
 'use strict';
 /**
  * Parser dispatch. Every parser returns InstrumentMessage[]:
- *   { sampleId, instrumentSerial?, runAt?, qc, results: [{ code, value, unit, flags[], rawRecord }], raw, protocol }
+ *   { sampleId, instrumentSerial?, runAt?, qc, results: [{ code, value, unit, flags[], rawRecord }],
+ *     images: [{ code, label, format, base64 }], raw, protocol }
  */
 const { parseAstm } = require('./astm');
-const { parseHl7, buildAck } = require('./hl7');
+const { parseHl7, buildAck, redactEdImages } = require('./hl7');
 const { parseText, TEXT_DEFAULTS } = require('./text');
 
 /** Guess the message protocol from reassembled text (no link framing). */
@@ -35,4 +36,19 @@ function parseMessage(text, parserCfg = {}, hint = {}) {
   }
 }
 
-module.exports = { parseMessage, sniffProtocol, buildAck, TEXT_DEFAULTS };
+/**
+ * The text that should actually be forwarded to mw as `raw`: every embedded
+ * image's base64 payload redacted to a short placeholder, so a message with
+ * images never blows past the server's raw-size cap (images travel in
+ * message.images instead). Protocol-specific — only HL7 has ED segments
+ * today; ASTM/text pass through unchanged — but dispatched the same way
+ * parseMessage is, so a future embedded-document protocol plugs in here too.
+ * @param {string} text
+ * @param {string} protocol  'hl7' | 'astm' | 'text'
+ */
+function redactForUpload(text, protocol) {
+  if (protocol === 'hl7') return redactEdImages(text);
+  return text;
+}
+
+module.exports = { parseMessage, sniffProtocol, buildAck, redactForUpload, TEXT_DEFAULTS };

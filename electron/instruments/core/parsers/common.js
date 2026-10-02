@@ -32,7 +32,7 @@ function lines(text) {
 }
 
 function emptyMessage(protocol, raw) {
-  return { sampleId: null, instrumentSerial: null, runAt: null, qc: false, results: [], raw, protocol };
+  return { sampleId: null, instrumentSerial: null, runAt: null, qc: false, results: [], images: [], raw, protocol };
 }
 
 module.exports = { normalizeFlags, parseTs, lines, emptyMessage };

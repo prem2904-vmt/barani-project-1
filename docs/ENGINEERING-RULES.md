@@ -36,6 +36,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A storage write failure is never a bare 500: `UploadStore.SaveAsync` wraps it as `StorageWriteException` and the API answers 503 `storage_error` (the global handler maps any `AmazonServiceException` the same way); log the S3 error code + request id, never keys, never SDK text in the UI.
 - Every storage path is covered by the MinIO end-to-end suite (`Prefrontal.Tests.Integration/StorageE2E`: the real Spaces client against MinIO, with injected S3 faults); a new storage call site needs a test there — the in-memory fake alone is not coverage.
 - A feature switch has ONE resolver (UI lab-features / server LabFeatureGate); never gate a surface on the workflow or the entitlement alone.
+- Never inline binary (base64 images, files) into a field the server size-caps: an analyzer's HL7 `ED` segments (histogram/scattergram BMPs) blew mw's `raw` cap at ~300KB — redact the base64 to a placeholder in `raw` and carry the bytes in an additive, optional field (`message.images[]`) instead, which also buys free backward compatibility since an un-upgraded server just ignores the field it doesn't know while `raw` stays small either way.
 
 ## 2. Tenant and branch isolation
 - Every query is tenant-scoped; branch-scoped when the tenant is strict. Rely on the EF global filters; never `IgnoreQueryFilters()` without a comment and a test.

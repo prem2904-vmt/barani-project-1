@@ -193,11 +193,15 @@ export interface SamplePrefillDto { orderSampleId: string; barcode: string; runs
 
 // ── Connector core output ───────────────────────────────────────────────
 export interface InstrumentResult { code: string; value: string; unit?: string | null; flags?: string[]; rawRecord?: string }
+/** An embedded document the analyzer sent (HL7 ED segment — a histogram /
+ *  scattergram BMP). Never a result; additive on the wire contract. */
+export interface InstrumentImage { code: string; label: string; format: string | null; base64: string }
 export interface InstrumentMessage {
   sampleId: string | null;
   instrumentSerial?: string | null;
   runAt?: string | null;
   results: InstrumentResult[];
+  images?: InstrumentImage[];
   qc?: boolean;
   raw?: string;
   protocol?: string;

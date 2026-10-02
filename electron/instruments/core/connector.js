@@ -19,7 +19,7 @@ const os = require('os');
 const { EventEmitter } = require('events');
 const { createTransport } = require('./transports');
 const { createLink } = require('./link');
-const { parseMessage, buildAck } = require('./parsers');
+const { parseMessage, buildAck, redactForUpload } = require('./parsers');
 const { unframeAstm, unframeMllp } = require('./detect');
 const { applyMaps } = require('./mapper');
 const { DiskQueue } = require('./queue');
@@ -272,18 +272,25 @@ class Connector extends EventEmitter {
     const t = this.now();
     msgs.forEach((m, i) => {
       const protocol = m.protocol;
+      // The idempotency key is hashed from the ORIGINAL bytes (unchanged —
+      // redacting `raw` below must never change what a re-sent message
+      // de-dupes against).
       const key = idempotencyKey(this.instrumentId, protocol, text, i);
       const payload = {
         idempotencyKey: key,
         protocol,
         receivedAt: new Date(t).toISOString(),
-        raw: text,
+        // Embedded-image base64 (ED segments) is redacted to a short
+        // placeholder here — it travels in message.images instead — so a
+        // message with images never blows past mw's raw-size cap.
+        raw: redactForUpload(text, protocol),
         message: {
           sampleId: m.sampleId,
           instrumentSerial: m.instrumentSerial || null,
           runAt: m.runAt || null,
           qc: !!m.qc,
           results: m.results.map((r) => ({ code: r.code, value: r.value, unit: r.unit, flags: r.flags, rawRecord: r.rawRecord })),
+          ...(m.images && m.images.length ? { images: m.images.map((im) => ({ code: im.code, label: im.label, format: im.format, base64: im.base64 })) } : {}),
         },
       };
       const { added } = this.queue.add({ key, payload });

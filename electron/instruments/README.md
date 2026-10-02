@@ -142,7 +142,9 @@ Code is needed only for a genuinely new link/framing (e.g. a binary protocol): a
   bidirectional is an addition, not a rewrite.
 - One active connection per link session; a TCP server accepts several analyzers but all share one instrument profile.
 - Analyzer timestamps carry no zone and are read in the host's local zone.
-- Histograms / scattergrams / images are not transferred.
+- Histograms / scattergrams (HL7 OBX type `ED`, e.g. the Medonic M51) are extracted into `message.images[]` (`code`,
+  `label`, `format`, `base64`) and uploaded alongside the results — never inlined into `raw` (see `parsers/hl7.js`
+  `redactEdImages`). There is no UI to view them yet; the server stores/serves them once it has the image-storage feature.
 - QC is stored and listed, not yet charted (no Levey-Jennings / Westgard).
 - Raspberry Pi host: CLI only — no systemd unit, OS keyring or auto-update yet; keys use the 0600 plain codec there.
 - Folder watch reads a whole file as one message set; no archive retention policy.

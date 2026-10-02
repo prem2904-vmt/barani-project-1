@@ -123,6 +123,50 @@ test('idempotency at the server: the same payload posted twice is stored once', 
   } finally { await a.close(); }
 });
 
+test('M51 backward compat: a message with 4 embedded images still uploads to a TODAY-shaped server (raw stays small, numbers still map) (§4)', async () => {
+  // M51_MAPS: a slice of the Arun-lab LOINC preset, enough to prove numeric
+  // prefill still works end to end through a server that has NOT been
+  // upgraded for image storage (fakeApi here never even looks at
+  // `message.images` — exactly like today's deployed mw, which System.Text.Json
+  // on an unknown-shaped DTO silently ignores extra properties for).
+  const M51_MAPS = [
+    { analyzerCode: '6690-2', testCatalogKey: 'HEM019', factor: 1000, decimals: 0 },
+    { analyzerCode: '777-3', testCatalogKey: 'HEM030', factor: 1000, decimals: 0 },
+    { analyzerCode: '770-8', testCatalogKey: 'HEM020', factor: 1, decimals: 1 },
+  ];
+  const a = await fakeApi({ instruments: { [ID]: { key: KEY, name: 'M51', config: { transport: { type: 'tcp-server', port: 0 }, link: { type: 'mllp' }, parser: { type: 'hl7', hl7: { sampleIdField: 'OBR-3' } } }, codeMaps: M51_MAPS } } });
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-inst-m51-'));
+  const fixture = fs.readFileSync(path.join(__dirname, 'fixtures/m51-synthetic.hl7'), 'latin1');
+  try {
+    const c = new Connector({ instrumentId: ID, apiUrl: a.url, deviceKey: KEY, dataDir, transportOverride: { type: 'tcp-server', host: '127.0.0.1', port: 0 }, heartbeatMs: 60000 });
+    await c.start();
+    c._onText(fixture, { type: 'hl7', hl7: { sampleIdField: 'OBR-3' } }, { link: 'mllp' });
+    await c.idle();
+    assert.equal(a.store.messages.length, 1);
+    const row = a.store.messages[0];
+    assert.equal(row.state, 'unmatched');  // no known-barcode list wired here — the point is the server accepted it at all
+    const { payload } = row;
+    // raw never carries the base64 BMP data, and stays small independent of
+    // the number of embedded images (4 here).
+    assert.ok(payload.raw.length < 10 * 1024, `raw should stay under ~10KB, was ${payload.raw.length}`);
+    assert.ok(!/[A-Za-z0-9+/]{40,}/.test(payload.raw), 'no long base64 run leaked into raw');
+    assert.ok(payload.raw.includes('see images[]'), 'raw keeps a human-readable placeholder for each redacted image');
+    // images travel in message.images, additively — a server that has never
+    // heard of this field (this fake, and today's deployed mw) just never
+    // reads it; it does not reject or choke on it.
+    assert.equal(payload.message.images.length, 4);
+    assert.deepEqual(payload.message.images.map((im) => im.code), ['12003', '12053', '12103', '12153']);
+    assert.ok(payload.message.images.every((im) => im.base64.length > 0), 'full image bytes still travel — just not inside raw');
+    // Numeric results still prefill against this (today-shaped) server.
+    assert.equal(row.unmapped.includes('6690-2'), false);
+    const wbc = row.mapped.find((x) => x.catalogKey === 'HEM019');
+    assert.equal(wbc.value, '13290');
+    const plt = row.mapped.find((x) => x.catalogKey === 'HEM030');
+    assert.equal(plt.value, '173000');
+    await c.stop();
+  } finally { await a.close(); }
+});
+
 test('manager: pairing verifies the key with the server; wrong key never pairs', async () => {
   const a = await api('astm-5part');
   const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-inst-mgr-'));

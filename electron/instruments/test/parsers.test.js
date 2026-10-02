@@ -1,11 +1,15 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const { parseAstm } = require('../core/parsers/astm');
-const { parseHl7, buildAck } = require('../core/parsers/hl7');
+const { parseHl7, buildAck, redactEdImages } = require('../core/parsers/hl7');
 const { parseText } = require('../core/parsers/text');
-const { parseMessage } = require('../core/parsers');
+const { parseMessage, redactForUpload } = require('../core/parsers');
 const { astmMessage, hl7Message, textMessage } = require('../sim/dialects');
+
+const M51_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures/m51-synthetic.hl7'), 'latin1');
 
 test('ASTM E1394: H/P/O/R/C/L → one message per O record', () => {
   const text = [
@@ -93,6 +97,71 @@ test('HL7 ORU^R01: OBR-3 sample ID, OBX code/value/unit/flags, SPM QC role', () 
   assert.equal(parseHl7(qc.text)[0].qc, true);
   const spm = parseHl7(`${text}\rSPM|1|SPM-77^F1||BLD`, { sampleIdField: 'SPM-2' });
   assert.equal(spm[0].sampleId, 'SPM-77');
+});
+
+test('HL7 OBX type classification: IS is never a result/image, ED becomes an image not a result', () => {
+  const text = [
+    'MSH|^~\\&|M51|LAB|LIS|PF|20260930104200||ORU^R01|CTL1|P|2.3.1',
+    'PID|1||||^TEST',
+    'OBR|1||10614|01001^Automated Count^99MRC',
+    'OBX|1|IS|02001^Take Mode^99MRC||O||||||F',
+    'OBX|2|IS|09001^Remark^99MRC||||||||F',
+    'OBX|3|NM|6690-2^WBC^LN||13.29|10*3/uL|4.00-10.50|H~A|||F',
+    'OBX|4|ED|12003^WBC Histogram. BMP^99MRC||^Image^BMP^Base64^QkFTRTY0REFUQQ==|||||||F',
+    'OBX|5|ED|12153^WBC DIFF Scattergram. HS-MS BMP^99MRC||^Image^BMP^Base64^QkFTRTY0VFdP|||||||F',
+  ].join('\r');
+  const [m] = parseHl7(text, { sampleIdField: 'OBR-3' });
+  assert.equal(m.sampleId, '10614');
+  // IS segments never become a result or an image.
+  assert.equal(m.results.length, 1);
+  assert.deepEqual(m.results.map((r) => r.code), ['6690-2']);
+  assert.ok(!m.results.some((r) => ['02001', '09001'].includes(r.code)));
+  assert.ok(!m.images.some((im) => ['02001', '09001'].includes(im.code)));
+  // ED segments become images, never results.
+  assert.equal(m.images.length, 2);
+  assert.deepEqual(m.images[0], { code: '12003', label: 'WBC Histogram', format: 'bmp', base64: 'QkFTRTY0REFUQQ==' });
+  assert.deepEqual(m.images[1], { code: '12153', label: 'WBC DIFF Scattergram', format: 'bmp', base64: 'QkFTRTY0VFdP' });
+});
+
+test('redactEdImages: strips ED base64 to a placeholder, keeps everything else (segments, NM results) byte-identical', () => {
+  const text = [
+    'MSH|^~\\&|M51|LAB|LIS|PF|20260930104200||ORU^R01|CTL1|P|2.3.1',
+    'OBR|1||10614|01001^Automated Count^99MRC',
+    'OBX|1|NM|6690-2^WBC^LN||13.29|10*3/uL|4.00-10.50|H~A|||F',
+    'OBX|2|ED|12003^WBC Histogram. BMP^99MRC||^Image^BMP^Base64^QkFTRTY0REFUQQ==|||||||F',
+  ].join('\r');
+  const redacted = redactEdImages(text);
+  assert.ok(!redacted.includes('QkFTRTY0REFUQQ=='), 'base64 payload removed');
+  assert.ok(redacted.includes('[image 12003 stored: see images[]]'));
+  assert.ok(redacted.includes('OBX|1|NM|6690-2^WBC^LN||13.29|10*3/uL|4.00-10.50|H~A|||F'), 'NM segment untouched');
+  assert.ok(redacted.includes('OBX|2|ED|12003^WBC Histogram. BMP^99MRC||^Image^BMP^Base64^[image 12003 stored: see images[]]|||||||F'));
+  // Non-HL7 / no-MSH text and protocols without ED are a no-op.
+  assert.equal(redactEdImages('not hl7 at all'), 'not hl7 at all');
+  assert.equal(redactForUpload(text, 'hl7'), redacted);
+  assert.equal(redactForUpload('R|1|^^^WBC|7.8|x\r', 'astm'), 'R|1|^^^WBC|7.8|x\r');
+});
+
+test('M51 synthetic fixture: 34 NM results (incl. the 2 unmapped histogram-line pairs and Age), 0 from IS, exactly 4 images, sample 10614', () => {
+  const [m] = parseHl7(M51_FIXTURE, { sampleIdField: 'OBR-3' });
+  assert.equal(m.sampleId, '10614');
+  assert.equal(m.results.length, 34, 'all 34 NM segments, none excluded — matches current (no special-case) Age handling');
+  assert.equal(m.images.length, 4);
+  assert.deepEqual(m.images.map((im) => im.code), ['12003', '12053', '12103', '12153']);
+  assert.deepEqual(m.images.map((im) => im.label), ['WBC Histogram', 'RBC Histogram', 'PLT Histogram', 'WBC DIFF Scattergram']);
+  assert.ok(m.images.every((im) => im.format === 'bmp' && im.base64.length > 0));
+  // IS segments (Take Mode, Blood Mode, Test Mode, Remark, Ref Group) contribute nothing.
+  assert.ok(!m.results.some((r) => ['02001', '02002', '02003', '09001', '03001'].includes(r.code)));
+  // The histogram-line NM pairs are legitimate unmapped results (unchanged from before).
+  for (const c of ['12051', '12052', '12101', '12102']) assert.ok(m.results.some((r) => r.code === c));
+  // Age is a plain NM result today (no special-casing exists in the parser) — preserved, not regressed.
+  assert.ok(m.results.some((r) => r.code === '30525-0' && r.value === '19'));
+});
+
+test('M51 synthetic fixture via redactForUpload: raw stays small regardless of the 4 embedded images', () => {
+  const redacted = redactForUpload(M51_FIXTURE, 'hl7');
+  assert.ok(!/[A-Za-z0-9+/]{40,}/.test(redacted.replace(/stored: see images\[\]/g, '')), 'no long base64-looking run survives');
+  assert.ok(redacted.length < 3000, `redacted raw should be well under the original ${M51_FIXTURE.length} bytes`);
+  assert.ok(redacted.length < M51_FIXTURE.length, 'strictly smaller than the original');
 });
 
 test('HL7 ACK echoes the control id in MSA-2 and swaps sender/receiver', () => {

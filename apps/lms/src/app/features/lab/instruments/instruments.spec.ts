@@ -140,7 +140,8 @@ describe('Instrument editor — web vs Electron', () => {
     expect(body.config.parser.type).toBe('auto');
     const [mapUrl, maps] = p.api.put.mock.calls[0] as unknown as [string, any[]];
     expect(mapUrl).toBe('/api/instruments/new-1/code-maps');
-    expect(maps).toHaveLength(20);
+    // CBC_DEFAULT_MAPS = 20 ASTM-style rows + 32 M51/HL7-LOINC rows (22 LOINC-keyed + 10 new display-name rows).
+    expect(maps).toHaveLength(52);
     expect(nav).toHaveBeenCalledWith(['/admin/instruments', 'new-1'], { replaceUrl: true });
   });
 

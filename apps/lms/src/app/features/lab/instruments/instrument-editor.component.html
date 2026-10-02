@@ -204,7 +204,8 @@
                 }
                 @if (form().protocol === 'hl7' || form().protocol === 'auto') {
                   <div class="nd-field pf-ie-span"><span class="nd-field__lbl">HL7 sample ID field</span>
-                    <pf-select [options]="hl7FieldOptions" [value]="form().hl7.sampleIdField" (valueChange)="patchHl7($event)"></pf-select></div>
+                    <pf-select [options]="hl7FieldOptions" [value]="form().hl7.sampleIdField" (valueChange)="patchHl7($event)"></pf-select>
+                    <span class="nd-field__hint">OBR-3 is the analyzer's own running sample number (e.g. 10614) — used as-is, unless your tech types or scans the lab's own sample ID into the analyzer at run time, in which case OBR-3 carries that instead.</span></div>
                 }
                 @if (form().protocol === 'text') {
                   <label class="nd-field pf-ie-span"><span class="nd-field__lbl">Result line pattern</span>

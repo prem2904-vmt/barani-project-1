@@ -15,8 +15,38 @@ const { RawReceiver } = require('../core/link/raw');
 const { createLink } = require('../core/link');
 const { C } = require('../core/bytes');
 const { astmMessage, hl7Message, textMessage } = require('../sim/dialects');
+const { parseHl7 } = require('../core/parsers/hl7');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pf-inst-'));
+const M51_FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures/m51-synthetic.hl7'), 'latin1');
+
+// The "Arun lab" M51/HL7-LOINC default-map preset (mirrors the LOINC-keyed
+// rows added to apps/lms/.../instrument-config.ts CBC_DEFAULT_MAPS — kept as
+// a literal table here so this test doesn't depend on compiling TS).
+const M51_LOINC_MAPS = [
+  { analyzerCode: '6690-2', testCatalogKey: 'HEM019', factor: 1000, decimals: 0 },
+  { analyzerCode: '789-8', testCatalogKey: 'HEM012', factor: 1, decimals: 2 },
+  { analyzerCode: '718-7', testCatalogKey: 'HEM011', factor: 1, decimals: 1 },
+  { analyzerCode: '4544-3', testCatalogKey: 'HEM013', factor: 1, decimals: 1 },
+  { analyzerCode: '787-2', testCatalogKey: 'HEM014', factor: 1, decimals: 1 },
+  { analyzerCode: '785-6', testCatalogKey: 'HEM015', factor: 1, decimals: 1 },
+  { analyzerCode: '786-4', testCatalogKey: 'HEM016', factor: 1, decimals: 1 },
+  { analyzerCode: '788-0', testCatalogKey: 'HEM017', factor: 1, decimals: 1 },
+  { analyzerCode: '777-3', testCatalogKey: 'HEM030', factor: 1000, decimals: 0 },
+  { analyzerCode: '32623-1', testCatalogKey: 'HEM031', factor: 1, decimals: 1 },
+  { analyzerCode: '32207-3', testCatalogKey: 'HEM032', factor: 1, decimals: 1 },
+  { analyzerCode: '11003', testCatalogKey: 'HEM033', factor: 1, decimals: 3 },
+  { analyzerCode: '770-8', testCatalogKey: 'HEM020', factor: 1, decimals: 1 },
+  { analyzerCode: '736-9', testCatalogKey: 'HEM021', factor: 1, decimals: 1 },
+  { analyzerCode: '5905-5', testCatalogKey: 'HEM022', factor: 1, decimals: 1 },
+  { analyzerCode: '713-8', testCatalogKey: 'HEM023', factor: 1, decimals: 1 },
+  { analyzerCode: '706-2', testCatalogKey: 'HEM024', factor: 1, decimals: 1 },
+  { analyzerCode: '751-8', testCatalogKey: 'HEM025', factor: 1, decimals: 2 },
+  { analyzerCode: '731-0', testCatalogKey: 'HEM026', factor: 1, decimals: 2 },
+  { analyzerCode: '742-7', testCatalogKey: 'HEM027', factor: 1, decimals: 2 },
+  { analyzerCode: '711-2', testCatalogKey: 'HEM028', factor: 1, decimals: 2 },
+  { analyzerCode: '704-7', testCatalogKey: 'HEM029', factor: 1, decimals: 2 },
+];
 
 // ── auto-detect ─────────────────────────────────────────────────────────
 test('detect: ASTM E1381 capture → astm + proposal with O.3', () => {
@@ -97,6 +127,33 @@ test('mapper: non-numeric values pass through; rounding is half away from zero',
   assert.equal(convertValue(' 7.80 ', {}), '7.80');                 // identity → as sent
   assert.equal(convertValue('7.80', { factor: 1000 }), '7800');
   assert.equal(convertValue('1e3', { factor: 2 }), '2000');
+});
+
+test('mapper + M51 preset: all 22 LOINC-coded analytes hit with the correct factor; 7 stay deliberately unmapped', () => {
+  const [m] = parseHl7(M51_FIXTURE, { sampleIdField: 'OBR-3' });
+  const { mapped, unmapped } = applyMaps(m, M51_LOINC_MAPS);
+  assert.equal(mapped.length, 22, 'exactly the 22 analytes in the Arun-lab table');
+  const by = (code) => mapped.find((x) => x.analyzerCode === code);
+  // ×1000 counts round to an exact integer.
+  assert.equal(by('6690-2').value, '13290');       // WBC 13.29 → 13290 cells/µL
+  assert.equal(by('6690-2').catalogKey, 'HEM019');
+  assert.equal(by('777-3').value, '173000');        // PLT 173 → 173000 cells/µL
+  assert.equal(by('777-3').catalogKey, 'HEM030');
+  // Spot-check factor-1 analytes stay exact (identity / same-precision round-trip).
+  assert.equal(by('770-8').value, '67.5');          // NEU%
+  assert.equal(by('789-8').value, '4.92');          // RBC
+  assert.equal(by('718-7').value, '13.6');          // HGB
+  assert.equal(by('11003').value, '0.165');         // PCT — decimals:3 keeps plateletcrit precision
+  // The 7 analytes with no catalogue test are deliberately absent from the
+  // preset and so land in `unmapped`, never invented a mapping for.
+  for (const code of ['21000-5', '48386-7', '34167-7', '11032', '11033', '11090', '11091']) {
+    assert.ok(unmapped.includes(code), `${code} should be unmapped`);
+  }
+  // IS-derived codes and ED/image codes never even reach the mapper (they
+  // never entered message.results in the first place, so they can't show up
+  // as mapped OR unmapped).
+  assert.ok(!unmapped.includes('02001') && !unmapped.includes('09001'), 'IS codes never reach the mapper');
+  assert.ok(!unmapped.includes('12003') && !unmapped.includes('12153'), 'ED/image codes never reach the mapper');
 });
 
 // ── queue ───────────────────────────────────────────────────────────────
