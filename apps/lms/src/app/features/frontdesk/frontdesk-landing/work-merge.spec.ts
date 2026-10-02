@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import {
-  AnnotateBucket, MinimalWorkOrder, WorkBucket, buildMergedWork, mergeWorkRows, primaryWorkStatus, sortMergedWork,
+  AnnotateBucket, MinimalWorkOrder, WorkBucket, buildMergedWork, mergeWorkRows, primaryWorkStatus, sortByDailySerial,
+  sortMergedWork,
 } from './work-merge';
 
 interface O extends MinimalWorkOrder { id: string; createdAt: string; dailyNo?: number | null; dailyNoDay?: string | null }
@@ -164,11 +165,11 @@ describe('work-merge — mergeWorkRows (dedupe by order id)', () => {
 describe('work-merge — sortMergedWork', () => {
   const row = (o: O) => mergeWorkRows([{ status: 'ip', orders: [o] }])[0];
 
-  it('newest business day first', () => {
+  it('oldest business day first (owner, 2026-10-02: visit/registration day ascending)', () => {
     const today = order('t', '2026-09-30T06:00:00Z', 1, '2026-09-30');
     const yesterday = order('y', '2026-09-29T06:00:00Z', 1, '2026-09-29');
-    const sorted = sortMergedWork([row(yesterday), row(today)]);
-    expect(sorted.map(r => r.order.id)).toEqual(['t', 'y']);
+    const sorted = sortMergedWork([row(today), row(yesterday)]);
+    expect(sorted.map(r => r.order.id)).toEqual(['y', 't']);
   });
 
   it('within a day, ascending by the daily serial — arrival order', () => {
@@ -187,13 +188,13 @@ describe('work-merge — sortMergedWork', () => {
     expect(sorted.map(r => r.order.id)).toEqual(['n', 'u1', 'u2']);
   });
 
-  it('a multi-day range: groups by day (newest first) THEN serial ascending within each day', () => {
+  it('a multi-day range: groups by day (oldest first) THEN serial ascending within each day', () => {
     const day2n2 = order('d2n2', '2026-09-30T08:00:00Z', 2, '2026-09-30');
     const day2n1 = order('d2n1', '2026-09-30T04:00:00Z', 1, '2026-09-30');
     const day1n2 = order('d1n2', '2026-09-29T08:00:00Z', 2, '2026-09-29');
     const day1n1 = order('d1n1', '2026-09-29T04:00:00Z', 1, '2026-09-29');
     const sorted = sortMergedWork([row(day1n2), row(day2n2), row(day1n1), row(day2n1)]);
-    expect(sorted.map(r => r.order.id)).toEqual(['d2n1', 'd2n2', 'd1n1', 'd1n2']);
+    expect(sorted.map(r => r.order.id)).toEqual(['d1n1', 'd1n2', 'd2n1', 'd2n2']);
   });
 
   it('falls back to the IST calendar day of createdAt when dailyNoDay is missing', () => {
@@ -201,7 +202,7 @@ describe('work-merge — sortMergedWork', () => {
     const noDay = order('nd', '2026-09-30T20:00:00Z', 5, null);
     const withDay = order('wd', '2026-09-30T04:00:00Z', 1, '2026-09-30');
     const sorted = sortMergedWork([row(withDay), row(noDay)]);
-    expect(sorted.map(r => r.order.id)).toEqual(['nd', 'wd']); // 1 Oct IST sorts before 30 Sep IST
+    expect(sorted.map(r => r.order.id)).toEqual(['wd', 'nd']); // 30 Sep IST sorts before 1 Oct IST
   });
 
   it('two rows sharing the SAME daily serial (a data anomaly) break the tie by createdAt, oldest first', () => {
@@ -226,5 +227,30 @@ describe('work-merge — buildMergedWork (merge + sort together)', () => {
     expect(rows[1].primary).toBe('billing');
     expect(rows[1].secondary).toEqual(['ip']);
     expect(rows[0].primary).toBe('done');
+  });
+});
+
+describe('work-merge — sortByDailySerial (the single-status tabs reuse the SAME ledger order)', () => {
+  it('oldest day first, then serial ascending within a day — same rule as sortMergedWork', () => {
+    const today1 = order('t1', '2026-09-30T04:00:00Z', 1, '2026-09-30');
+    const today4 = order('t4', '2026-09-30T09:00:00Z', 4, '2026-09-30');
+    const oct1n1 = order('o1n1', '2026-10-01T04:00:00Z', 1, '2026-10-01');
+    const oct1n4 = order('o1n4', '2026-10-01T09:00:00Z', 4, '2026-10-01');
+    const sorted = sortByDailySerial([today4, oct1n4, today1, oct1n1]);
+    expect(sorted.map(o => o.id)).toEqual(['t1', 't4', 'o1n1', 'o1n4']);
+  });
+
+  it('rows with no serial sort after the numbered rows of their day, oldest-created first', () => {
+    const numbered = order('n', '2026-09-30T04:00:00Z', 1, '2026-09-30');
+    const noSerial = order('ns', '2026-09-30T02:00:00Z', null, '2026-09-30');
+    const sorted = sortByDailySerial([noSerial, numbered]);
+    expect(sorted.map(o => o.id)).toEqual(['n', 'ns']);
+  });
+
+  it('works on a plain order list, not just merged rows — what shownInProgress/Completed/PaymentsDue feed it', () => {
+    const a = order('a', '2026-09-30T06:00:00Z', 3, '2026-09-30');
+    const b = order('b', '2026-09-30T05:00:00Z', 1, '2026-09-30');
+    const c = order('c', '2026-09-30T04:00:00Z', 2, '2026-09-30');
+    expect(sortByDailySerial([a, b, c]).map(o => o.id)).toEqual(['b', 'c', 'a']);
   });
 });
