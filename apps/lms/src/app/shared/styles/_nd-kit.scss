@@ -197,7 +197,7 @@
 /* ── Neutral selected states ────────────────────────────────────────── */
 .nd-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--nd-radius-sm); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
 .nd-seg__item { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
-.nd-seg__item[aria-checked='true'], .nd-seg__item[aria-pressed='true'] {
+.nd-seg__item[aria-checked='true'], .nd-seg__item[aria-pressed='true'], .nd-seg__item[role='tab'][aria-selected='true'] {
   background: var(--nd-card-bg); color: var(--text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
 }
 .nd-chip {

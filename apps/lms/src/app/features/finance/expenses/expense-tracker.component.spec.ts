@@ -13,6 +13,7 @@ import { ExpenseBook, ExpenseEntry, ExpenseFilter } from '../../../shared/models
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { ND_GRID_PARAMS } from '../../../shared/utils/nd-grid-theme';
 
 /**
  * /expenses (primary nav; /finance/expenses redirects) — tabs My expenses ·
@@ -47,7 +48,7 @@ describe('ExpenseTrackerComponent', () => {
   let svc: Record<string, ReturnType<typeof vi.fn>>;
   let dialogs: { prompt: ReturnType<typeof vi.fn>; confirm: ReturnType<typeof vi.fn> };
 
-  function render(opts: { perms?: string[]; book?: ExpenseBook; narrow?: boolean } = {}) {
+  function render(opts: { perms?: string[]; book?: ExpenseBook; narrow?: boolean; classic?: boolean } = {}) {
     (window as any).matchMedia = (q: string) => ({ matches: q.includes('900px') ? !!opts.narrow : false, addEventListener() {}, removeEventListener() {} });
     const perms = opts.perms ?? ['expense_admin'];
     svc = {
@@ -66,7 +67,7 @@ describe('ExpenseTrackerComponent', () => {
       providers: [
         { provide: ExpenseService, useValue: svc },
         { provide: DialogService, useValue: dialogs },
-        { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
+        { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => !opts.classic } },
         { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
         { provide: AuthService, useValue: {
           user: () => ({ id: 'me', branches: [{ id: 'b1', name: 'Salem' }] }),
@@ -86,7 +87,11 @@ describe('ExpenseTrackerComponent', () => {
     const { el } = render();
     // The cashier opens on MY expenses (own entries), with all three tabs.
     expect(svc['book']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null, mine: true });
-    expect([...el.querySelectorAll('.pf-xt__tabs .nd-tabs__item')].map(t => t.textContent?.trim())).toEqual(['My expenses', 'All expenses', 'Day closing']);
+    // The section switch rides the band pill (band-tools), not an orphan row above the cards.
+    const band = el.querySelector('pf-hero-band')!;
+    expect([...band.querySelectorAll('.pf-xt__tabs [role="tab"]')].map(t => t.textContent?.trim())).toEqual(['My expenses', 'All expenses', 'Day closing']);
+    expect(band.querySelector('.pf-xt__tabs [aria-selected="true"]')?.textContent?.trim()).toBe('My expenses');
+    expect(el.querySelector('.pf-xt__tabrow')).toBeNull();
     const panels = el.querySelector('.pf-xt__panels')!;
     expect(panels.children[0].classList.contains('pf-xt__side')).toBe(true);
     expect(panels.children[1].classList.contains('pf-xt__main')).toBe(true);
@@ -101,6 +106,41 @@ describe('ExpenseTrackerComponent', () => {
     expect(el.querySelector('.pf-xt__count')?.textContent).toContain('2 entries');
     // Category totals list in the companion.
     expect(el.querySelector('.pf-xt__totals')?.textContent).toContain('Stationery');
+    // Payment modes are aligned rows (name · count · amount), not loose text.
+    const modes = el.querySelector('.pf-xt__totals--static')!;
+    expect([...modes.querySelectorAll('.pf-xt__totname')].map(n => n.textContent?.trim())).toEqual(['UPI']);
+    expect(modes.querySelector('.pf-xt__totv')?.textContent).toContain('1,250');
+  });
+
+  it('date presets: three equal options (no wrapping Custom button); picking dates reads as a custom range', () => {
+    const { f, el, c } = render();
+    const presets = [...el.querySelectorAll('.pf-xt__seg[aria-labelledby="pf-xt-range-lbl"] [role="radio"]')].map(b => b.textContent?.trim());
+    expect(presets).toEqual(['Today', '7 days', 'This month']);
+    expect(el.querySelector('.pf-xt__custom')).toBeNull();
+    c.setFrom(labDaysAgo(3));
+    f.detectChanges();
+    expect(c.quick()).toBe('custom');
+    expect(el.querySelectorAll('.pf-xt__seg[aria-labelledby="pf-xt-range-lbl"] [aria-checked="true"]').length).toBe(0);
+    expect(el.querySelector('.pf-xt__custom')?.textContent).toContain('Custom range');
+  });
+
+  it('closing below zero is flagged quietly; the grid wears the ND card surface (tokens, not stock grey)', () => {
+    const { el, c } = render({ book: bookOf({ closing: -20 }) });
+    const result = el.querySelector('.pf-xt__stat--result')!;
+    expect(result.getAttribute('data-neg')).toBe('true');
+    expect(result.querySelector('.pf-xt__neg')).not.toBeNull();
+    expect(result.querySelector('.pf-xt__stath')?.textContent).toContain('Below zero');
+    expect(el.querySelectorAll('.pf-xt__op').length).toBe(3);   // + − =
+    expect(ND_GRID_PARAMS.backgroundColor).toBe('var(--nd-card-bg)');
+    expect(ND_GRID_PARAMS.borderColor).toBe('var(--nd-line)');
+    expect(c.share(250, 1000)).toBe(25);
+    expect(c.share(5, 0)).toBe(0);
+  });
+
+  it('classic design (no band) keeps the section switch on its own row', () => {
+    const { el } = render({ classic: true });
+    expect(el.querySelector('pf-hero-band')).toBeNull();
+    expect(el.querySelectorAll('.pf-xt__tabrow [role="tab"]').length).toBe(3);
   });
 
   it('a viewer gets no Add button and no row edit; a modifier (own scope) sees no balances or day book', () => {
