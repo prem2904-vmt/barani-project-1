@@ -118,6 +118,8 @@ export class InsightsComponent {
   readonly ctxSide = signal(this.mq('(min-width: 1280px)', v => this.ctxSide.set(v)));
   readonly navCollapsed = signal<boolean>(readStore(NAV_KEY, false));
   readonly navSheet = signal(false);
+  /** Below 1280px the DETAILS card opens as a sheet. */
+  readonly ctxSheet = signal(false);
   readonly colsOpen = signal(false);
   private readonly mainBody = viewChild<ElementRef<HTMLElement>>('mainBody');
 
@@ -406,6 +408,7 @@ export class InsightsComponent {
       this.q.set('');
     }
     this.navSheet.set(false);
+    this.ctxSheet.set(false);
     this.mainBody()?.nativeElement.scrollTo?.({ top: 0 });
   }
 
@@ -446,6 +449,7 @@ export class InsightsComponent {
   @HostListener('document:keydown.escape', ['$event'])
   onEscape(ev: Event): void {
     if (this.colsOpen()) { this.colsOpen.set(false); ev.preventDefault(); }
+    else if (this.ctxSheet()) { this.ctxSheet.set(false); ev.preventDefault(); }
     else if (this.navSheet()) { this.navSheet.set(false); ev.preventDefault(); }
   }
 
@@ -503,9 +507,7 @@ export class InsightsComponent {
 
   selectKpi(id: string): void {
     this.selectedKpi.set(id);
-    if (!this.ctxSide()) {
-      queueMicrotask(() => this.mainBody()?.nativeElement.querySelector('#pf-ins-ctx')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
-    }
+    if (!this.ctxSide()) this.ctxSheet.set(true);
   }
 
   /** Side card for the selected KPI: what the period looked like inside. */
@@ -850,9 +852,11 @@ export class InsightsComponent {
     const hidden = new Set(this.hiddenCols()[cfg.key] ?? []);
     return this.availableCols().map((c): ColDef => ({
       field: c.field, headerName: c.headerName, hide: hidden.has(c.field),
-      minWidth: (c.flex ?? 1) > 1 ? Math.round((c.minWidth ?? 110) * 0.8) : (c.minWidth ?? 110), flex: c.flex ?? 1,
-      // Names wrap (never cut); codes, dates and amounts stay on one line.
-      wrapText: (c.flex ?? 1) > 1, autoHeight: (c.flex ?? 1) > 1,
+      // Names take the spare width and wrap (never cut); codes, dates and
+      // amounts are sized to their content (autoSizeStrategy) on one line.
+      ...((c.flex ?? 1) > 1
+        ? { flex: c.flex, minWidth: Math.round((c.minWidth ?? 110) * 0.8), wrapText: true, autoHeight: true }
+        : { flex: undefined, minWidth: 72, wrapText: false, autoHeight: false }),
       type: c.money || c.num ? 'rightAligned' : undefined,
       cellClass: c.money || c.num || c.date || c.ref ? 'pf-ins-num' : undefined,
       tooltipValueGetter: c.ref ? (p) => String(p.value ?? '') : undefined,
@@ -861,7 +865,7 @@ export class InsightsComponent {
         : c.money ? (p: { value: unknown }) => (p.value != null ? formatRupee(p.value as number) : '')
         : c.ref ? (p: { value: unknown }) => (p.value ? String(p.value).slice(0, 8).toUpperCase() : '')
         : c.num ? (p: { value: unknown }) => (p.value != null ? formatCount(p.value as number) : '')
-        : undefined,
+        : (p: { value: unknown }) => (p.value == null || p.value === '' ? '—' : String(p.value)),
     }));
   });
   private fmtCell(c: { money?: boolean; date?: boolean; num?: boolean; ref?: boolean }, v: unknown): string {
@@ -897,6 +901,12 @@ export class InsightsComponent {
       },
     };
   }
+
+  /** Fixed-content columns fit their content; the name column flexes. */
+  readonly autoSize = computed(() => ({
+    type: 'fitCellContents' as const,
+    colIds: this.availableCols().filter(c => (c.flex ?? 1) <= 1).map(c => c.field),
+  }));
 
   readonly visibleColCount = computed(() => this.colDefs().filter(c => !c.hide).length);
 

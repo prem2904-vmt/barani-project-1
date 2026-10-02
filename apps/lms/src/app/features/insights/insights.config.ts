@@ -34,6 +34,13 @@ export const ICONS = {
   columns: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
   arrowRight: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  details: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  receipt: '<path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/><path d="M8 8h8M8 12h8"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  percent: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
 } as const;
 
 export const SECTIONS: SectionDef[] = [
@@ -50,6 +57,8 @@ export const SECTIONS: SectionDef[] = [
 export interface OpsColumn { field: string; headerName: string; money?: boolean; date?: boolean; num?: boolean; ref?: boolean; minWidth?: number; flex?: number; }
 export interface OpsListConfig {
   key: OpsListKey; label: string; endpoint: string;
+  /** Stroked SVG path data (collapsed rail). */
+  icon: string;
   /** What the list is, one line (side card). */
   about: string;
   /** Viewing (not just exporting) this list needs export_patient_data — every column is PII (Patients). */
@@ -64,52 +73,52 @@ export interface OpsListConfig {
 }
 
 export const OPS_LISTS: OpsListConfig[] = [
-  { key: 'patients', label: 'Patients', endpoint: 'patients', requiresExportPatientData: true, takes: [],
+  { key: 'patients', label: 'Patients', endpoint: 'patients', icon: ICONS.volume, requiresExportPatientData: true, takes: [],
     about: 'Everyone with an order in the period, with their first-ever order date.', columns: [
-    { field: 'mrn', headerName: 'MRN', minWidth: 120 }, { field: 'firstName', headerName: 'First name', minWidth: 140 },
-    { field: 'lastName', headerName: 'Last name', minWidth: 140 }, { field: 'age', headerName: 'Age', num: true, minWidth: 80, flex: 0.5 },
+    { field: 'mrn', headerName: 'MRN', minWidth: 120 }, { field: 'firstName', headerName: 'First name', minWidth: 140, flex: 1.2 },
+    { field: 'lastName', headerName: 'Last name', minWidth: 140, flex: 1.2 }, { field: 'age', headerName: 'Age', num: true, minWidth: 80, flex: 0.5 },
     { field: 'sex', headerName: 'Sex', minWidth: 80, flex: 0.5 }, { field: 'phone', headerName: 'Phone', minWidth: 140 },
     { field: 'firstOrderAt', headerName: 'First order', date: true, minWidth: 170 },
   ] },
-  { key: 'orders', label: 'Orders', endpoint: 'orders', patientExport: true, takes: [],
+  { key: 'orders', label: 'Orders', endpoint: 'orders', icon: ICONS.receipt, patientExport: true, takes: [],
     about: 'Every order in the period with its billed value (excl. GST).', columns: [
     { field: 'orderNumber', headerName: 'Order', minWidth: 160 }, { field: 'patientName', headerName: 'Patient', minWidth: 180, flex: 1.4 },
     { field: 'mrn', headerName: 'MRN', minWidth: 120 }, { field: 'branchName', headerName: 'Branch', minWidth: 140 },
     { field: 'orderValue', headerName: 'Order value', money: true, minWidth: 130 }, { field: 'createdAt', headerName: 'Created', date: true, minWidth: 170 },
   ] },
-  { key: 'test-volume', label: 'Test volume', endpoint: 'test-volume', takes: ['departmentId', 'testId'],
+  { key: 'test-volume', label: 'Test volume', endpoint: 'test-volume', icon: ICONS.tests, takes: ['departmentId', 'testId'],
     about: 'Each test ordered in the period, per branch, with how often and for how much.', columns: [
     { field: 'testName', headerName: 'Test', minWidth: 220, flex: 1.8 }, { field: 'branchName', headerName: 'Branch', minWidth: 140 },
     { field: 'orders', headerName: 'Orders', num: true, minWidth: 100 }, { field: 'value', headerName: 'Value', money: true, minWidth: 130 },
   ] },
-  { key: 'outsourced-tests', label: 'Outsourced tests', endpoint: 'outsourced-tests', takes: ['departmentId'],
+  { key: 'outsourced-tests', label: 'Outsourced tests', endpoint: 'outsourced-tests', icon: ICONS.outsourcing, takes: ['departmentId'],
     about: 'Lines sent to a partner lab, with the billed value of their order line.', columns: [
     { field: 'testName', headerName: 'Test', minWidth: 200, flex: 1.6 }, { field: 'vendorName', headerName: 'Partner', minWidth: 160 },
     { field: 'branchName', headerName: 'Branch', minWidth: 140 }, { field: 'value', headerName: 'Value', money: true, minWidth: 120 },
     { field: 'orderId', headerName: 'Order ref', ref: true, minWidth: 110 }, { field: 'createdAt', headerName: 'Created', date: true, minWidth: 170 },
   ] },
-  { key: 'referrals', label: 'Referrals', endpoint: 'referrals', takes: ['refDoctorId'],
+  { key: 'referrals', label: 'Referrals', endpoint: 'referrals', icon: ICONS.referrals, takes: ['refDoctorId'],
     about: 'Referring doctors in the period, with their orders and order value.', columns: [
     { field: 'doctorName', headerName: 'Doctor', minWidth: 200, flex: 1.6 }, { field: 'branchName', headerName: 'Branch', minWidth: 140 },
     { field: 'orders', headerName: 'Orders', num: true, minWidth: 100 }, { field: 'orderValue', headerName: 'Order value', money: true, minWidth: 130 },
   ] },
-  { key: 'monthly-financial', label: 'Payments', endpoint: 'monthly-financial', financialOnly: true, takes: [],
+  { key: 'monthly-financial', label: 'Payments', endpoint: 'monthly-financial', icon: ICONS.card, financialOnly: true, takes: [],
     about: 'Every payment and refund taken in the period, by mode.', columns: [
     { field: 'at', headerName: 'Paid at', date: true, minWidth: 170 }, { field: 'value', headerName: 'Amount', money: true, minWidth: 120 },
-    { field: 'paymentMode', headerName: 'Mode', minWidth: 110 }, { field: 'status', headerName: 'Status', minWidth: 110 },
+    { field: 'paymentMode', headerName: 'Mode', minWidth: 110 }, { field: 'status', headerName: 'Status', minWidth: 110, flex: 1.2 },
     { field: 'orderId', headerName: 'Order ref', ref: true, minWidth: 110 },
   ] },
-  { key: 'outstanding', label: 'Outstanding payments', endpoint: 'outstanding', financialOnly: true, patientExport: true, takes: [],
+  { key: 'outstanding', label: 'Outstanding payments', endpoint: 'outstanding', icon: ICONS.clock, financialOnly: true, patientExport: true, takes: [],
     about: 'Orders from the period that still have money to collect.', columns: [
     { field: 'patientName', headerName: 'Patient', minWidth: 180, flex: 1.4 }, { field: 'value', headerName: 'Due', money: true, minWidth: 120 },
     { field: 'at', headerName: 'Order date', date: true, minWidth: 170 }, { field: 'orderId', headerName: 'Order ref', ref: true, minWidth: 110 },
   ] },
-  { key: 'discounts', label: 'Discounts', endpoint: 'discounts', financialOnly: true, patientExport: true, takes: [],
+  { key: 'discounts', label: 'Discounts', endpoint: 'discounts', icon: ICONS.percent, financialOnly: true, patientExport: true, takes: [],
     about: 'Bills in the period that carried a discount.', columns: [
     { field: 'patientName', headerName: 'Patient', minWidth: 180, flex: 1.4 }, { field: 'orderValue', headerName: 'Order value', money: true, minWidth: 130 },
     { field: 'discount', headerName: 'Discount', money: true, minWidth: 120 }, { field: 'orderId', headerName: 'Order ref', ref: true, minWidth: 110 },
   ] },
-  { key: 'refunds', label: 'Refunds', endpoint: 'refunds', financialOnly: true, patientExport: true, takes: [],
+  { key: 'refunds', label: 'Refunds', endpoint: 'refunds', icon: ICONS.undo, financialOnly: true, patientExport: true, takes: [],
     about: 'Money returned to patients in the period.', columns: [
     { field: 'patientName', headerName: 'Patient', minWidth: 180, flex: 1.4 }, { field: 'orderValue', headerName: 'Order value', money: true, minWidth: 130 },
     { field: 'refund', headerName: 'Refund', money: true, minWidth: 120 }, { field: 'refundedAt', headerName: 'Refunded at', date: true, minWidth: 170 },

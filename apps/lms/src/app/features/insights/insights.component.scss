@@ -43,8 +43,8 @@
 .pf-ins-denied { flex: 1 1 auto; }
 
 /* ── Band pill controls ───────────────────────────────────────────── */
-.pf-ins-bandsel { display: block; min-width: 148px; }
-.pf-ins-bandsel--period { min-width: 132px; }
+.pf-ins-bandsel { display: block; min-width: 140px; }
+.pf-ins-bandsel--period { min-width: 128px; }
 .pf-ins-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .pf-ins-dates pf-nd-date { width: 136px; }
 .pf-ins-dates__sep { color: var(--text-tertiary); }
@@ -80,17 +80,25 @@
 .pf-ins-nav__dot::before { content: ''; width: 5px; height: 5px; border-radius: 99px; background: var(--nd-sel-border); }
 .pf-ins-nav__item--list[aria-current='page'] .pf-ins-nav__dot::before { background: var(--violet-text, #7c3aed); }
 
-.pf-ins-strip { min-height: 220px; align-self: start; }
-.pf-ins-strip__btn {
-  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
-  padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; font: inherit; color: var(--text-secondary);
+.pf-ins-strip {
+  min-height: 0; align-items: center; gap: 6px; padding: 10px 0;
+  animation: pf-ins-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
 }
-.pf-ins-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
-.pf-ins-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
-.pf-ins-strip__label {
-  writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-secondary);
+.pf-ins-strip__expand { flex: none; width: 36px !important; height: 36px; min-height: 36px; }
+.pf-ins-strip__list {
+  flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; scrollbar-width: none;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0;
 }
+.pf-ins-strip__list::-webkit-scrollbar { display: none; }
+.pf-ins-strip__item {
+  flex: none; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 10px; background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: background var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 200ms) ease;
+}
+.pf-ins-strip__item:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+.pf-ins-strip__item[aria-current='page'] { background: var(--nd-sel-bg); color: var(--violet-text, #7c3aed); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+.pf-ins-strip__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-ins-strip__sep { flex: none; width: 24px; height: 1px; margin: 6px 0; background: var(--nd-line); }
 
 @keyframes pf-ins-side-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 
@@ -233,10 +241,6 @@
 }
 .pf-ins-pager__info { margin-right: auto; font-size: 12.5px; color: var(--text-tertiary); }
 .pf-ins-pager__btn { width: 36px !important; height: 36px; min-height: 36px; }
-.pf-ins-listctx { flex: none; border-top: 1px solid var(--nd-line); padding: 10px 12px; }
-.pf-ins-listctx__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.pf-ins-listctx__row .pf-ins-side__muted { flex: 1 1 200px; }
-.pf-ins-listctx__btn { min-height: 40px; height: 40px; }
 
 .pf-ins-cols { position: relative; flex: none; }
 .pf-ins-cols__n { color: var(--text-tertiary); font-weight: 500; }
@@ -263,13 +267,26 @@
 @keyframes pf-ins-ctx-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 .pf-ins-ctx__body { gap: 18px; padding: 14px 16px; }
 .pf-ins-ctx .nd-card__foot { grid-template-columns: minmax(0, 1fr); }
-
-.pf-ins-inlinectx {
-  display: flex; flex-direction: column; gap: 16px; margin-top: 4px; padding: 16px 14px 14px;
-  border-radius: 12px; border: 1px solid var(--nd-line); background: color-mix(in srgb, var(--color-primary, #7c3aed) 2%, var(--nd-card-bg));
-  scroll-margin-top: 12px;
+/* Tablet: DETAILS slides in from the right edge, full height above the nav. */
+.pf-ins-ctx.pf-ins-ctx--sheet {
+  position: fixed; z-index: 1002; top: 12px; right: 12px; bottom: calc(var(--nd-nav-h, 0px) + 12px);
+  width: min(380px, calc(100vw - 24px)); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  animation: pf-ins-ctx-in var(--nd-dur-sheet, 360ms) var(--nd-spring, ease) both;
 }
-.pf-ins-inlinectx__cta { align-self: stretch; }
+.pf-ins-ctx__handle { display: none; }
+/* Phones: a bottom sheet above the always-visible navbar. */
+@media (max-width: 640px) {
+  .pf-ins-ctx.pf-ins-ctx--sheet {
+    top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); width: auto;
+    max-height: min(84dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+    border-radius: 20px 20px 0 0; animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+  }
+  .pf-ins-ctx__handle { display: block; }
+  .pf-ins-ctx--sheet .nd-card__foot .nd-btn { min-height: 48px; height: 48px; }
+  .pf-ins-hbt { display: none; }
+  .pf-ins-ctxbtn, .pf-ins-ctxbtn + * { min-width: 44px; }
+}
+
 
 .pf-ins-side__sec { display: flex; flex-direction: column; gap: 6px; }
 .pf-ins-side__title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
@@ -320,13 +337,12 @@
   .pf-ins-banner__acts { width: 100%; }
   .pf-ins-banner__acts .nd-btn { flex: 1 1 0; min-height: 44px; height: 44px; }
   .pf-ins-cols__menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(var(--nd-nav-h, 0px) + 12px); }
-  .pf-ins-listctx__btn { flex: 1 1 100%; min-height: 44px; height: 44px; }
-  .pf-ins-pager__btn { width: 44px !important; height: 44px; min-height: 44px; }
+    .pf-ins-pager__btn { width: 44px !important; height: 44px; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pf-ins__panels { transition: none; }
-  .pf-ins-nav, .pf-ins-ctx, .pf-ins-nav--sheet, .pf-ins-sheet-backdrop, .pf-ins-cols__menu, .pf-ins-rank__bar > span { animation: none; }
+  .pf-ins-nav, .pf-ins-ctx, .pf-ins-nav--sheet, .pf-ins-strip, .pf-ins-sheet-backdrop, .pf-ins-cols__menu, .pf-ins-rank__bar > span { animation: none; }
   .pf-ins-skel { animation: none; }
   .pf-ins-kpi { transition: none; }
 }

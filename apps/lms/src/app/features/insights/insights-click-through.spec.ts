@@ -136,3 +136,29 @@ describe('Insights — click-through to the list', () => {
     expect(p.c.ignoredFilters()).toEqual(['department']);
   });
 });
+
+describe('Insights — owner review 2026-10-02 (rail + details sheet)', () => {
+  it('the collapsed rail is a full icon rail: one labelled target per section and list', () => {
+    const p = render();
+    p.c.navCollapsed.set(true);
+    p.f.detectChanges();
+    const items = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-ins-strip__item'));
+    expect(items.length).toBe(p.c.sections().length + p.c.lists().length);
+    expect(items.every(b => !!b.getAttribute('aria-label') && !!b.title)).toBe(true);
+    items.find(b => b.title === 'Orders list')!.click();
+    p.f.detectChanges();
+    expect(p.c.nav()).toBe('list:orders');
+  });
+
+  it('below 1280px the list panel opens as a sheet from the band, with Export CSV', () => {
+    const p = render();
+    p.c.goList('orders');
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-ins-ctx')).toBeNull();
+    p.el.querySelector<HTMLButtonElement>('.pf-ins-ctxbtn')!.click();
+    p.f.detectChanges();
+    const sheet = p.el.querySelector('.pf-ins-ctx--sheet')!;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.textContent).toContain('Export CSV');
+  });
+});
