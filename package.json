@@ -1,8 +1,8 @@
 {
   "name": "prefrontal",
   "productName": "Prefrontal",
-  "version": "0.0.0",
-  "description": "Prefrontal \u2014 clinical lab workflow.",
+  "version": "1.0.0",
+  "description": "Prefrontal — clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
     "email": "support@prefrontal.in"
@@ -39,7 +39,7 @@
   "build": {
     "appId": "in.prefrontal.app",
     "productName": "Prefrontal",
-    "copyright": "Copyright \u00a9 2026 Prefrontal Inc",
+    "copyright": "Copyright © 2026 Prefrontal Inc",
     "directories": {
       "output": "dist/electron"
     },
@@ -99,6 +99,7 @@
     "@angular/cli": "~21.2.0",
     "@angular/compiler-cli": "~21.2.0",
     "@angular/language-service": "~21.2.0",
+    "@aws-sdk/client-s3": "^3.1145.0",
     "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.8.0",
     "@nx/angular": "^22.6.5",
@@ -126,6 +127,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-playwright": "^1.6.2",
     "fake-indexeddb": "^6.2.5",
+    "js-yaml": "^5.4.2",
     "jsdom": "^27.1.0",
     "nx": "22.6.5",
     "patch-package": "^8.0.0",
@@ -179,6 +181,7 @@
     "date-fns": "^4.1.0",
     "echarts": "^5.6.0",
     "electron-is-dev": "^3.0.1",
+    "electron-updater": "^6.8.9",
     "flatpickr": "^4.6.13",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",

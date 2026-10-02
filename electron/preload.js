@@ -126,5 +126,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),
     print: (opts) => ipcRenderer.invoke('doc:print', opts),
     printPdf: (opts) => ipcRenderer.invoke('doc:printPdf', opts)
+  },
+  // Desktop self-update (electron/updater.js). The renderer owns the
+  // banner; main owns checking, background download and the "is it safe
+  // to restart" call. restartNow() can come back { deferred: true } if an
+  // analyzer looks busy — main itself retries once it isn't.
+  updater: {
+    getState: () => ipcRenderer.invoke('updater:getState'),
+    restartNow: () => ipcRenderer.invoke('updater:restartNow'),
+    onState: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('updater:state', h);
+      return () => ipcRenderer.removeListener('updater:state', h);
+    }
   }
 });

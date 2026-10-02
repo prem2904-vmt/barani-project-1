@@ -97,4 +97,11 @@ async function stop() {
   try { await manager.stopAll(); } catch { /* quitting anyway */ }
 }
 
-module.exports = { register, start, stop, secrets };
+/** Every paired connector's current status() snapshot — [] before start() /
+ *  if nothing is paired. Used by the updater's "don't restart mid-run"
+ *  guard (electron/updater-guard.js); never thrown into the caller. */
+function statusSnapshot() {
+  try { return manager ? manager.status() : []; } catch { return []; }
+}
+
+module.exports = { register, start, stop, secrets, statusSnapshot };

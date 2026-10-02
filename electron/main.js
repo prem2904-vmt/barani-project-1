@@ -11,6 +11,10 @@ const notify = require('./notify');
 // Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
 // under ./instruments/core; this host just wires it to IPC + app lifecycle.
 const instruments = require('./instruments/host-electron');
+// Desktop self-update (electron-updater, generic provider). See
+// docs/DESKTOP-RELEASES.md. Channel comes from the build's own
+// pfDataProfile; a dev run (unpackaged) or a build with none disables it.
+const updater = require('./updater');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -28,7 +32,14 @@ app.setName('Prefrontal');
 {
   let profile = process.env.PF_DATA_PROFILE;
   if (!profile) { try { profile = require('../package.json').pfDataProfile; } catch { profile = undefined; } }
-  if (typeof profile === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(profile)) {
+  // 'prod' is the real shipped app's own channel tag (electron/updater.js
+  // reads this same field to pick its update channel) — NOT a side-by-side
+  // test profile. Today's real build sets no pfDataProfile at all and uses
+  // the default userData folder; isolating it under "Prefrontal (prod)"
+  // the day this field starts being set would silently orphan every real
+  // customer's existing local data on their next update. Only dev/stage
+  // (genuine side-by-side test builds) get an isolated folder.
+  if (typeof profile === 'string' && profile !== 'prod' && /^[A-Za-z0-9-]{1,40}$/.test(profile)) {
     app.setPath('userData', path.join(app.getPath('appData'), `Prefrontal (${profile})`));
   }
 }
@@ -168,6 +179,10 @@ chatNotify.register(() => mainWindow);
 notify.register(() => mainWindow);
 // Analyzer connectors: IPC for the Instruments page (pair / status / listen).
 instruments.register(() => mainWindow);
+// Desktop self-update: IPC for the renderer's update banner. The restart
+// guard reads the SAME instrument manager this registers against, so it
+// never restarts mid-run.
+updater.register(() => mainWindow, instruments.statusSnapshot);
 // Full screen: query / set from the main window only; changes pushed back.
 fullscreen.register(() => mainWindow);
 
@@ -251,6 +266,9 @@ app.whenReady().then(() => {
   notify.start();
   // Paired analyzers start with the app and keep running in the tray.
   instruments.start();
+  // Check at launch, then every 4h (updater.js); no-op outside a packaged,
+  // channel-tagged build.
+  updater.start();
 
   // macOS: re-open / re-show the window when the dock icon is clicked.
   app.on('activate', () => {

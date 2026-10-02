@@ -31,6 +31,7 @@ import { SignalingService } from "../../core/services/signaling.service";
 import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
+import { UpdateBannerComponent } from "../../shared/components/update-banner/update-banner.component";
 import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
@@ -64,6 +65,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
     AmbientBgComponent,
     PatientProfileModalComponent,
     CallOverlayComponent,
+    UpdateBannerComponent,
     PeopleDrawerComponent,
     ChatWindowsComponent,
     ChatPopupsComponent,
@@ -183,6 +185,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
       }
 
 
+
+      <!-- Desktop self-update banner (electron/updater.js). Unconditional —
+           it already renders nothing outside the desktop app / a build with
+           no resolved update channel (UpdaterService.available). -->
+      <pf-update-banner></pf-update-banner>
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)
