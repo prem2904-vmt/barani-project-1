@@ -12,7 +12,15 @@ export type DotTone = '' | 'done' | 'warn' | 'bad';
 export interface StockLike { onHand: number; reorderLevel: number; lowStock?: boolean }
 
 /** Out = nothing on hand; Low = at / under the reorder level (or the server's
- *  lowStock flag); otherwise in stock. */
+ *  lowStock flag); otherwise in stock.
+ *
+ *  Contract (Inventory Phase 1 fix 6/7): `onHand` is the SERVER's figure
+ *  (`InventoryController.Items`/`Alerts`), which already excludes expired lots
+ *  (IST end-of-day boundary — `InventoryService.ExpiryCutoffUtc`) before
+ *  summing. An item whose only stock has expired therefore reports
+ *  `onHand: 0` and reads 'out' here — never recompute on-hand client-side
+ *  from the raw batches list (that would re-introduce a second, un-synced
+ *  "is this lot usable" rule). */
 export function stockLevel(it: StockLike): StockLevel {
   if (it.onHand <= 0) return 'out';
   if (it.lowStock || it.onHand <= it.reorderLevel) return 'low';
@@ -32,6 +40,10 @@ export function expiryView(daysLeft: number): { label: string; tone: DotTone } {
 /** The server's inventory transaction types, in words. */
 const LEDGER_WORDS: Record<string, string> = {
   receipt: 'Received', consumption: 'Used', adjustment: 'Adjusted', wastage: 'Written off', count: 'Counted',
+  // Inventory Phase 1: a shortfall is a Delta=0 flagged record (never a real
+  // stock movement — see InventoryService.ConsumeForSampleAsync), and a
+  // reversal is undo-collect giving stock back to the same batch.
+  shortfall: 'Short at collection', consumption_reversal: 'Returned (undo)',
 };
 export function ledgerWord(type: string | null | undefined): string {
   const t = (type ?? '').toLowerCase();

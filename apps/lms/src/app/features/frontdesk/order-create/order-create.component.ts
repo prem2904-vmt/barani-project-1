@@ -12,6 +12,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
@@ -83,6 +84,7 @@ interface HistoryRow {
 export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly labelPrint = inject(LabelPrintService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -571,6 +573,82 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // they clear as soon as the user edits that field (see the input handlers).
   readonly refHospitalError = signal<string | null>(null);
   readonly refDoctorError = signal<string | null>(null);
+
+  /** POST /api/orders/, catching a `stock_warning` (Inventory Phase 1 fix 3 —
+   *  the gate is a warning, not a hard block) so the desk sees which tests are
+   *  short via DialogService. L3: the override is only ever OFFERED to a
+   *  manage_inventory holder — the server would refuse anyone else's override
+   *  as `stock_override_forbidden` anyway, so a desk user without the
+   *  permission gets a plain "ask an inventory manager" notice (no action to
+   *  try, nothing to fail). On confirm, resends the SAME body with
+   *  `overrideStockWarning: true`. Backing out of the dialog rethrows, so the
+   *  caller's own catch shows it. */
+  private async postOrderWithStockGate(body: Record<string, unknown>): Promise<Order> {
+    try {
+      return await firstValueFrom(this.api.post<Order>('/api/orders/', body));
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        // Two-OK-buttons review fix: this is a notice, not a choice — there's
+        // nothing to confirm against, so it's dialog.alert() (ONE button),
+        // not confirm() with confirmLabel===cancelLabel faking the same thing.
+        await this.dialog.alert({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          tone: 'danger',
+        });
+        throw e;
+      }
+      const proceed = await this.dialog.confirm({
+        title: 'Stock warning',
+        message: err.message,
+        question: 'Place the order anyway?',
+        confirmLabel: 'Order anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!proceed) throw e;
+      return await firstValueFrom(this.api.post<Order>('/api/orders/', { ...body, overrideStockWarning: true }));
+    }
+  }
+
+  /** PATCH /api/orders/{id}/tests, catching a `stock_warning` the SAME way
+   *  postOrderWithStockGate does for creating an order (R1 review fix — both
+   *  PATCH call sites, confirmPayment's patch branch and submit()'s edit-mode
+   *  branch, were hitting this 400 with no recovery path once the server
+   *  started gating an in-place test-list edit the same as a new order). Same
+   *  dialog, same manage_inventory permission gate, resend with
+   *  `overrideStockWarning: true`. Backing out rethrows, so the caller's own
+   *  catch shows it. */
+  private async patchTestsWithStockGate<T>(orderId: string, body: Record<string, unknown>): Promise<T> {
+    try {
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, body));
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        await this.dialog.alert({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          tone: 'danger',
+        });
+        throw e;
+      }
+      const proceed = await this.dialog.confirm({
+        title: 'Stock warning',
+        message: err.message,
+        question: 'Save anyway?',
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!proceed) throw e;
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, { ...body, overrideStockWarning: true }));
+    }
+  }
 
   /** Surface a mutation failure with the REAL backend message. Field-tagged
    *  validation for a form input highlights that input inline; everything else
@@ -2003,7 +2081,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const plan = planConfirmOrder(this.pendingOrder, p.id, key);
       let order: { id: string };
       if (plan.action === 'create') {
-        order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
+        order = await this.postOrderWithStockGate({
           patientId: p.id,
           refDoctorName: this.refDoctorName().trim() || null,
           refHospitalName: this.refHospitalName().trim() || null,
@@ -2017,14 +2095,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           // choice from the billing card (it was dropped on this path before).
           metadataJson: this.buildOrderMetadata(appointmentId),
           ...(discount > 0 ? { discount } : {})
-        }));
+        });
         this.pendingOrder = { id: order.id, patientId: p.id, key };
         this.noteOrdered(this._selected());
       } else {
         if (plan.action === 'patch') {
-          await firstValueFrom(this.api.patch<unknown>(`/api/orders/${plan.orderId}/tests`, {
+          await this.patchTestsWithStockGate(plan.orderId, {
             testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
-          }));
+          });
           this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
         }
         order = { id: plan.orderId };
@@ -2408,17 +2486,24 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       this._saving.set(true);
-      this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
-        testIds: this._selected(),
-        specimens: this.specimenPayload(), reason: 'reception edit'
-      }).subscribe({
-        next: () => {
+      // Async IIFE (not .subscribe) so a stock_warning can be gated through
+      // the same DialogService confirm + resend-with-override helper as the
+      // create path (R1 review fix — this PATCH used to hit a stock_warning
+      // 400 with no way to override it).
+      void (async () => {
+        try {
+          await this.patchTestsWithStockGate<{ order: Order; bill: unknown }>(editId, {
+            testIds: this._selected(),
+            specimens: this.specimenPayload(), reason: 'reception edit'
+          });
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
           this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(editId) });
-        },
-        error: e => { this._saving.set(false); this.surfaceMutationError(e); }
-      });
+        } catch (e) {
+          this._saving.set(false);
+          this.surfaceMutationError(e);
+        }
+      })();
       return;
     }
 
@@ -2428,7 +2513,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // pure walk-ins.
     const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
     this._saving.set(true);
-    this.api.post<Order>('/api/orders/', {
+    const orderBody = {
       patientId: p.id,
       refDoctorName: this.refDoctorName().trim() || null,
       refHospitalName: this.refHospitalName().trim() || null,
@@ -2442,47 +2527,55 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       metadataJson: this.buildOrderMetadata(appointmentId),
       // Validated against the cap BEFORE the order exists (no orphan order).
       ...(this.discountAmount() > 0 ? { discount: this.discountAmount() } : {})
-    }).subscribe({
-      next: order => {
+    };
+    // Async IIFE (not .subscribe) so a stock_warning can be gated through the
+    // same DialogService confirm + resend-with-override helper as confirmPayment().
+    void (async () => {
+      let order: Order;
+      try {
+        order = await this.postOrderWithStockGate(orderBody);
+      } catch (e) {
         this._saving.set(false);
-        this.noteOrdered(this._selected());
-        // Order persisted — drop any saved draft for this patient.
-        const pid = p.id;
-        this.removeDraft(pid);
-        this._hasDraft.set(false);
-        // Workflow-driven fork: when billing is NOT a separate counter
-        // (front_desk), payment is part of THIS walk-in flow — jump straight
-        // into billing with the order preselected (no detour through the
-        // queue). When the workflow puts billing on a separate counter, raise
-        // the request and reset for the next patient.
-        if (this.labCfg.billingMode() === 'front_desk') {
-          // Front-desk collects via the inline pay pane (Confirm payment), so
-          // submit() isn't the path here — fall back to the billing screen if
-          // it's ever reached (e.g. edit-mode proceed).
-          this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(order.id) });
-        } else {
-          // Billing lives on a separate counter. Generate the invoice HERE
-          // (allocates the invoice number + tracking QR) so the patient leaves
-          // with something to present; the standalone counter then scans the
-          // QR / enters the invoice number to collect payment. The order stays
-          // 'created' (awaiting payment) until the counter takes payment.
-          this._selected.set([]);
-          this._patient.set(null);
-          this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }).subscribe({
-            next: bill => {
-              this.toasts.success(`Invoice ${bill.invoiceNumber ?? ''} generated — send the patient to the billing counter`);
-              this.router.navigateByUrl('/frontdesk');
-            },
-            error: () => {
-              // Order still exists — the counter can bill it by patient/order id.
-              this.toasts.success('Order created — billing request raised');
-              this.router.navigateByUrl('/frontdesk');
-            }
-          });
-        }
-      },
-      error: e => { this._saving.set(false); this.surfaceMutationError(e); }
-    });
+        this.surfaceMutationError(e);
+        return;
+      }
+      this._saving.set(false);
+      this.noteOrdered(this._selected());
+      // Order persisted — drop any saved draft for this patient.
+      const pid = p.id;
+      this.removeDraft(pid);
+      this._hasDraft.set(false);
+      // Workflow-driven fork: when billing is NOT a separate counter
+      // (front_desk), payment is part of THIS walk-in flow — jump straight
+      // into billing with the order preselected (no detour through the
+      // queue). When the workflow puts billing on a separate counter, raise
+      // the request and reset for the next patient.
+      if (this.labCfg.billingMode() === 'front_desk') {
+        // Front-desk collects via the inline pay pane (Confirm payment), so
+        // submit() isn't the path here — fall back to the billing screen if
+        // it's ever reached (e.g. edit-mode proceed).
+        this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(order.id) });
+      } else {
+        // Billing lives on a separate counter. Generate the invoice HERE
+        // (allocates the invoice number + tracking QR) so the patient leaves
+        // with something to present; the standalone counter then scans the
+        // QR / enters the invoice number to collect payment. The order stays
+        // 'created' (awaiting payment) until the counter takes payment.
+        this._selected.set([]);
+        this._patient.set(null);
+        this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }).subscribe({
+          next: bill => {
+            this.toasts.success(`Invoice ${bill.invoiceNumber ?? ''} generated — send the patient to the billing counter`);
+            this.router.navigateByUrl('/frontdesk');
+          },
+          error: () => {
+            // Order still exists — the counter can bill it by patient/order id.
+            this.toasts.success('Order created — billing request raised');
+            this.router.navigateByUrl('/frontdesk');
+          }
+        });
+      }
+    })();
   }
 
   back() {

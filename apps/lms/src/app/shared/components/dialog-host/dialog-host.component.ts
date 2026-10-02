@@ -130,10 +130,12 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
               }
             </footer>
           } @else {
-          <footer class="pf-dh-actions">
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="onCancel()">
-              {{ d.cancelLabel ?? 'Cancel' }}
-            </pf-touch-btn>
+          <footer class="pf-dh-actions" [class.pf-dh-actions--single]="d.singleButton">
+            @if (!d.singleButton) {
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="onCancel()">
+                {{ d.cancelLabel ?? 'Cancel' }}
+              </pf-touch-btn>
+            }
             <pf-touch-btn size="sm"
                           [variant]="d.tone === 'danger' ? 'danger' : 'primary'"
                           [disabled]="!canConfirm()"
@@ -390,6 +392,10 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       justify-content: flex-end;
       gap: 8px;
     }
+
+    /* One button only (alert()) — nothing to decide, so nothing to weigh it
+       against; it sits where the primary action normally does. */
+    .pf-dh-actions--single { justify-content: flex-end; }
 
     /* Many actions (actions()): a full-width stack, the CTA on top, Cancel
        last — reads cleanly at every width instead of a ragged wrap. */

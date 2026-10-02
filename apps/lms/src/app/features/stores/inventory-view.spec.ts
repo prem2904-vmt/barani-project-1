@@ -28,6 +28,8 @@ describe('inventory-view', () => {
     expect(ledgerWord('consumption')).toBe('Used');
     expect(ledgerWord('wastage')).toBe('Written off');
     expect(ledgerWord('count')).toBe('Counted');
+    expect(ledgerWord('shortfall')).toBe('Short at collection');
+    expect(ledgerWord('consumption_reversal')).toBe('Returned (undo)');
     expect(ledgerWord('transfer')).toBe('Transfer');
     expect(ledgerWord(null)).toBe('Change');
     expect(signedQty(500)).toBe('+500');
