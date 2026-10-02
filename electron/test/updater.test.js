@@ -14,6 +14,12 @@ const path = require('path');
 const handlers = new Map();
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-updater-smoke-'));
 
+// updater.js resolves its channel from the REAL process.platform — pin it to
+// a supported OS so this suite passes on any CI host (e.g. a Linux box),
+// not just a Mac. Restored in test.after below.
+const origPlatform = process.platform;
+Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+
 const fakeApp = { isPackaged: true, getPath: () => userData };
 const fakeIpcMain = { handle: (ch, fn) => handlers.set(ch, fn) };
 const fakeElectron = { app: fakeApp, ipcMain: fakeIpcMain };
@@ -42,7 +48,10 @@ Module._load = function (req, ...rest) {
   return origLoad.call(this, req, ...rest);
 };
 const updater = require('../updater');
-test.after(() => { Module._load = origLoad; });
+test.after(() => {
+  Module._load = origLoad;
+  Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+});
 
 const tick = () => new Promise((r) => setImmediate(r));
 
