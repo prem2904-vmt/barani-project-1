@@ -82,3 +82,14 @@ export function resolveAnalyticsPeriod(
   const { from, to } = istDayRange(fromYmd, toYmd);
   return { fromYmd, toYmd, fromUtc: from, toUtc: to };
 }
+
+/** The previous period of the SAME IST day-count immediately before
+ *  [fromYmd, toYmd] — the window every Overview Δ is measured against
+ *  (mirror of `AnalyticsDefinitions.ResolvePeriod`'s PrevStart/PrevEnd).
+ *  Display only: the server computes the Δ itself. */
+export function previousAnalyticsPeriod(fromYmd: string, toYmd: string): { fromYmd: string; toYmd: string } {
+  const dayMs = 86_400_000;
+  const days = Math.round((Date.parse(toYmd + 'T00:00:00Z') - Date.parse(fromYmd + 'T00:00:00Z')) / dayMs) + 1;
+  const prevTo = addDays(fromYmd, -1);
+  return { fromYmd: addDays(prevTo, -(days - 1)), toYmd: prevTo };
+}

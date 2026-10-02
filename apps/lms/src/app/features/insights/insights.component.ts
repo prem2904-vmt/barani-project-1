@@ -1,1128 +1,1089 @@
-import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, Signal, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet, formatDate } from '@angular/common';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Location } from '@angular/common';
+import { Observable, Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
-import { AllCommunityModule, ColDef, ModuleRegistry, colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community';
+import { AllCommunityModule, ColDef, ModuleRegistry } from 'ag-grid-community';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { ANALYTICS_PERMS, FINANCIAL_ANALYTICS_PERMS, PATIENT_DATA_EXPORT_PERMS } from '../../core/auth/route-access';
 import { ThemeService } from '../../core/services/theme.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
 import { SelectComponent, PfSelectOption } from '../../shared/primitives/select.component';
-import { SkeletonCardComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
-import { ANALYTICS_PERIOD_OPTIONS, AnalyticsPeriod, AnalyticsPeriodPreset, resolveAnalyticsPeriod } from '../../shared/utils/analytics-period';
+import { SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { ANALYTICS_PERIOD_OPTIONS, AnalyticsPeriodPreset, previousAnalyticsPeriod, resolveAnalyticsPeriod } from '../../shared/utils/analytics-period';
+import { LAB_TIME_ZONE, labToday } from '../../shared/utils/lab-clock';
+import { plural } from '../../shared/utils/plural';
 import { Branch } from '../../shared/models/tenant.model';
-import { ndTrendSkin } from '../frontdesk/patient-profile/lab-trends.component';
-import { buildBusinessLineOption, buildHorizontalBarOption, buildStackedBarOption, rupeeFormatter } from '../../shared/utils/business-chart';
+import {
+  BuildLineOptionArgs, buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption,
+  buildSparklineOption, buildStackedBarOption, rupeeAxisFormatter, rupeeFormatter, seriesColor,
+} from '../../shared/utils/business-chart';
+import { DeltaView, allZero, bucketAxisLabel, bucketRange, deltaView, formatCount, formatMinutes, formatRupee, rangeLabel } from '../../shared/utils/insights-view';
+import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
+import { ChartPick, InsightsChartComponent } from './insights-chart.component';
+import {
+  AnalyticsSection, CriticalValuesSummary, DeptRevenueRow, ICONS, InsightsNavId, ListDrill, OPS_LISTS, OpsListConfig, OpsListKey,
+  OutsourcedVolumeTrendPoint, OutsourcingCostResult, OutsourcingCostTrendPoint, OverviewDto, PendingByStageRow, ProfitabilityRow,
+  REVENUE_SERIES, REVENUE_SERIES_LABEL, RejectionReasonRow, ReportDeliveryRow, RevenueSeriesKey, ReferralVolumeTrendPoint, RevenueTrendPoint,
+  SECTIONS, SectionDef, SourceTypeRevenueRow, StaffProductivityRow, TatByDeptRow, TestVolumeByDeptRow, TestsByVendorRow, TopReferringDoctorRow,
+  TopTestRow, TopTestVolumeRow, Trend, VolumeTrendPoint,
+} from './insights.config';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#7c3aed',
-});
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#a855f7',
-});
-
-type InsightsTab = 'analytics' | 'operations';
-type AnalyticsSubTab = 'overview' | 'volume' | 'revenue' | 'tests-depts' | 'referrals' | 'lab-ops' | 'outsourcing' | 'profitability';
-
-interface OverviewDto {
-  patients: number; patientsDeltaPct?: number | null;
-  tests: number; testsDeltaPct?: number | null;
-  billedNet?: number | null; billedNetDeltaPct?: number | null;
-  collected?: number | null; collectedDeltaPct?: number | null;
-  avgBillValue?: number | null; avgBillValueDeltaPct?: number | null;
-  testsPerPatient: number; testsPerPatientDeltaPct?: number | null;
-  outsourcedPct: number; outsourcedPctDeltaPct?: number | null;
-  medianTatMinutes?: number | null; medianTatDeltaPct?: number | null;
+/** A KPI tile on Overview. Money tiles are simply absent without
+ *  view_financial_analytics (the server omits the fields). */
+export interface KpiTile {
+  id: string; label: string; value: string; raw: number; money: boolean;
+  delta: DeltaView; list: OpsListKey | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  spark: any | null;
+  /** Shown instead of a sparkline when there's no per-day series (TAT). */
+  caption?: string;
 }
 
-interface VolumeTrendPoint { bucket: string; patients: number; newPatients: number; returningPatients: number; tests: number; testsPerPatient: number; }
-interface RevenueTrendPoint { bucket: string; gross: number; discount: number; refund: number; net: number; collected: number; avgBillValue: number; }
-interface DeptRevenueRow { departmentName: string; revenue: number; }
-interface TopTestRow { testName: string; orders: number; revenue: number; }
+/** One ranked row in the side card (top tests, departments, doctors…). */
+interface RankRow { name: string; value: string; share: number; meta?: string; drill?: () => void; }
 
-// Phase 2
-interface TestVolumeByDeptRow { departmentName: string; inHouse: number; outsourced: number; }
-interface TopTestVolumeRow { testName: string; count: number; pctOfTotal: number; }
-interface ReferralVolumeTrendPoint { bucket: string; orders: number; }
-interface TopReferringDoctorRow { doctorName: string; patients: number; orders: number; revenue: number; }
-interface SourceTypeRevenueRow { sourceType: string; revenue: number; }
-interface TatByDeptRow { departmentName: string; medianMinutes: number; p90Minutes: number; pctWithinTarget: number; count: number; }
-interface PendingByStageRow { stage: string; count: number; overdue: number; }
-interface RejectionReasonRow { reason: string; count: number; }
-interface StaffProductivityRow { userName: string; entered: number; validated: number; }
-interface ReportDeliveryRow { status: string; count: number; }
-interface CriticalValuesSummary { count: number; medianMinutesToAcknowledge: number | null; medianMinutesToCommunicate: number | null; }
+const NAV_KEY = 'pf-insights-nav-collapsed';
+const COLS_KEY = 'pf-insights-hidden-cols';
+const LIST_PAGE = 100;
 
-// Phase 3
-interface OutsourcedVolumeTrendPoint { bucket: string; count: number; }
-interface TestsByVendorRow { vendorName: string; count: number; revenue: number; }
-interface OutsourcingCostResult { revenue: number; cost: number; noPriceCount: number; lineCount: number; }
-interface OutsourcingCostTrendPoint { bucket: string; revenue: number; cost: number; noPriceCount: number; }
-interface ProfitabilityRow { name: string; revenue: number; cost: number | null; margin: number | null; hasOutsourcedLines: boolean; noPriceCount: number; }
-
-/** A Phase-1 KPI card: value + optional Δ, with a money flag so the template
- *  hides the whole tile (never a blank/garbled number) when the field was
- *  withheld server-side (no view_financial_analytics), and the Operations
- *  list it clicks through to. */
-interface KpiCard {
-  id: string; label: string; value: string; deltaPct: number | null; money: boolean; opsKey: string;
+function readStore<T>(key: string, fallback: T): T {
+  try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : fallback; } catch { return fallback; }
+}
+function writeStore(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
 }
 
-/** One Operations Insights list, driven entirely by this config — the SAME
- *  shape of request (period/branch/.../page) the Analytics half already
- *  uses, so a list's total and its matching chart/KPI never disagree. */
-interface OpsColumn { field: string; headerName: string; money?: boolean; date?: boolean; }
-interface OpsListConfig {
-  key: string; label: string; endpoint: string;
-  /** Viewing (not just exporting) this list needs export_patient_data — every column is PII (Patients). */
-  requiresExportPatientData?: boolean;
-  /** Exporting this list needs export_patient_data (it carries a patient name/phone/DOB column). */
-  patientExport?: boolean;
-  /** The whole list is money — needs view_financial_analytics to view at all. */
-  financialOnly?: boolean;
-  columns: OpsColumn[];
-}
-
-const OPS_LISTS: OpsListConfig[] = [
-  { key: 'patients', label: 'Patients', endpoint: 'patients', requiresExportPatientData: true, columns: [
-    { field: 'mrn', headerName: 'MRN' }, { field: 'firstName', headerName: 'First name' }, { field: 'lastName', headerName: 'Last name' },
-    { field: 'age', headerName: 'Age' }, { field: 'sex', headerName: 'Sex' }, { field: 'phone', headerName: 'Phone' },
-    { field: 'firstOrderAt', headerName: 'First order', date: true },
-  ] },
-  { key: 'orders', label: 'Orders', endpoint: 'orders', patientExport: true, columns: [
-    { field: 'branchName', headerName: 'Branch' }, { field: 'orderNumber', headerName: 'Order #' }, { field: 'patientName', headerName: 'Patient' },
-    { field: 'mrn', headerName: 'MRN' }, { field: 'orderValue', headerName: 'Order value', money: true }, { field: 'createdAt', headerName: 'Created', date: true },
-  ] },
-  { key: 'test-volume', label: 'Test volume', endpoint: 'test-volume', columns: [
-    { field: 'branchName', headerName: 'Branch' }, { field: 'testName', headerName: 'Test' },
-    { field: 'orders', headerName: 'Orders' }, { field: 'value', headerName: 'Value', money: true },
-  ] },
-  { key: 'outsourced-tests', label: 'Outsourced tests', endpoint: 'outsourced-tests', columns: [
-    { field: 'branchName', headerName: 'Branch' }, { field: 'vendorName', headerName: 'Partner' }, { field: 'testName', headerName: 'Test' },
-    { field: 'value', headerName: 'Value', money: true }, { field: 'orderId', headerName: 'Order ID' }, { field: 'createdAt', headerName: 'Created', date: true },
-  ] },
-  { key: 'referrals', label: 'Referral', endpoint: 'referrals', columns: [
-    { field: 'branchName', headerName: 'Branch' }, { field: 'doctorName', headerName: 'Doctor' },
-    { field: 'orders', headerName: 'Orders' }, { field: 'orderValue', headerName: 'Order value', money: true },
-  ] },
-  { key: 'monthly-financial', label: 'Monthly financial', endpoint: 'monthly-financial', financialOnly: true, columns: [
-    { field: 'orderId', headerName: 'Order ID' }, { field: 'value', headerName: 'Value', money: true },
-    { field: 'paymentMode', headerName: 'Payment mode' }, { field: 'status', headerName: 'Status' }, { field: 'at', headerName: 'Paid at', date: true },
-  ] },
-  { key: 'outstanding', label: 'Outstanding payments', endpoint: 'outstanding', financialOnly: true, patientExport: true, columns: [
-    { field: 'orderId', headerName: 'Order ID' }, { field: 'value', headerName: 'Value', money: true },
-    { field: 'patientName', headerName: 'Patient' }, { field: 'at', headerName: 'Date', date: true },
-  ] },
-  { key: 'discounts', label: 'Discounts', endpoint: 'discounts', financialOnly: true, patientExport: true, columns: [
-    { field: 'orderId', headerName: 'Order ID' }, { field: 'patientName', headerName: 'Patient' },
-    { field: 'orderValue', headerName: 'Order value', money: true }, { field: 'discount', headerName: 'Discount', money: true },
-  ] },
-  { key: 'refunds', label: 'Refunds', endpoint: 'refunds', financialOnly: true, patientExport: true, columns: [
-    { field: 'orderId', headerName: 'Order ID' }, { field: 'patientName', headerName: 'Patient' },
-    { field: 'orderValue', headerName: 'Order value', money: true }, { field: 'refund', headerName: 'Refund', money: true },
-    { field: 'refundedAt', headerName: 'Refunded at', date: true },
-  ] },
-];
-
-const REVENUE_SERIES = ['gross', 'discount', 'refund', 'net', 'collected', 'avgBillValue'] as const;
-type RevenueSeriesKey = typeof REVENUE_SERIES[number];
-const REVENUE_SERIES_LABEL: Record<RevenueSeriesKey, string> = {
-  gross: 'Gross', discount: 'Discount', refund: 'Refund', net: 'Net', collected: 'Collected', avgBillValue: 'Avg bill value',
-};
-
+/**
+ * Insights (Analytics / Lab Insights) — ND pattern, three cards under the band:
+ *  LEFT  = SECTIONS (a navigation companion: the 8 analytics sections + the
+ *          9 Operations lists), collapsible to a strip, a sheet ≤900px;
+ *  MAIN  = the section's KPIs and ECharts (or the list's AG-Grid);
+ *  RIGHT = DETAILS (what the main card doesn't show: the selected KPI's
+ *          comparison and breakdown, ranked lists, the filters a list
+ *          applies, the ONE primary — open the list / Export CSV); folded
+ *          into the main card below ~1280px.
+ * The band pill holds the shared filters (period, branch, department, test,
+ * referrer) + a search over what's on screen. Every number comes from the
+ * server's AnalyticsService; a chart element drills to its list, narrowed
+ * to that bucket / department / test / doctor without moving the band.
+ */
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [HeroBandComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, SkeletonTableComponent, SkeletonTilesComponent, AgGridAngular, DecimalPipe],
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, NdDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="nd-page px-4 md:px-8 pt-6">
-      <pf-hero-band [back]="true">
-        <ng-container band-tools>
-          <pf-select class="ins-filter" size="sm" [options]="periodOptions" [value]="period()"
-                     (valueChange)="period.set($event)"></pf-select>
-          @if (branchOptions().length > 1) {
-            <pf-select class="ins-filter" size="sm" [options]="branchOptions()" [value]="branchId()"
-                       (valueChange)="branchId.set($event)"></pf-select>
-          }
-          <pf-select class="ins-filter" size="sm" [options]="departmentOptions()" [value]="departmentId()"
-                     [searchable]="true" (valueChange)="departmentId.set($event)"></pf-select>
-          <pf-select class="ins-filter" size="sm" [options]="testOptions()" [value]="testId()"
-                     [searchable]="true" (valueChange)="testId.set($event)"></pf-select>
-          <pf-select class="ins-filter" size="sm" [options]="referrerOptions()" [value]="refDoctorId()"
-                     [searchable]="true" (valueChange)="refDoctorId.set($event)"></pf-select>
-        </ng-container>
-      </pf-hero-band>
-
-      <div class="nd-body">
-        <div class="ins-tabs">
-          <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="tab.set($event)"></pf-segmented>
-        </div>
-
-        @if (!canSeeAnalytics()) {
-          <div class="nd-card">
-            <div class="nd-card__body" style="padding: 24px;">
-              <p style="color: var(--text-secondary);">You don't have access to Analytics / Lab Insights.</p>
-            </div>
-          </div>
-        } @else if (tab() === 'analytics') {
-          <div class="ins-tabs">
-            <pf-segmented size="sm" [options]="analyticsSubTabOptions" [value]="analyticsSubTab()" (valueChange)="analyticsSubTab.set($event)"></pf-segmented>
-          </div>
-
-          @if (analyticsSubTab() === 'overview') {
-            <div class="nd-card">
-              <div class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>
-                  </svg>
-                </span>
-                <span class="nd-card__label">Overview</span>
-                <span class="nd-card__spacer"></span>
-                <span class="nd-card__note">{{ periodLabel() }}</span>
-              </div>
-              <div class="nd-card__body">
-                @if (overviewLoading() && !overview()) {
-                  <pf-skeleton-tiles [count]="8"></pf-skeleton-tiles>
-                } @else if (overview()) {
-                  <div class="ins-kpi-grid">
-                    @for (card of kpiCards(); track card.id) {
-                      <button type="button" class="ins-kpi" (click)="openList(card.opsKey)">
-                        <span class="ins-kpi__label">{{ card.label }}</span>
-                        <span class="ins-kpi__value">{{ card.value }}</span>
-                        @if (card.deltaPct !== null) {
-                          <span class="ins-kpi__delta" [class.up]="card.deltaPct >= 0" [class.down]="card.deltaPct < 0">
-                            {{ card.deltaPct >= 0 ? '+' : '' }}{{ card.deltaPct }}% vs previous period
-                          </span>
-                        }
-                      </button>
-                    }
-                  </div>
-                }
-              </div>
-            </div>
-          } @else if (analyticsSubTab() === 'volume') {
-            <div class="ins-chart-grid">
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Patient volume</span></div>
-                <div class="nd-card__body">
-                  @if (volumeLoading() && !volumeTrend().length) { <pf-skeleton-card></pf-skeleton-card> }
-                  <div class="ins-chart-host" #patientVolumeHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('patients')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">New vs returning</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #newReturningHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('patients')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Tests volume</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #testsVolumeHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Tests per patient</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #testsPerPatientHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-            </div>
-          } @else if (analyticsSubTab() === 'revenue') {
-            @if (!canSeeMoney()) {
-            <div class="nd-card"><div class="nd-card__body" style="padding: 24px;">
-              <p style="color: var(--text-secondary);">Revenue needs the view_financial_analytics permission.</p>
-            </div></div>
-            } @else {
-            <div class="ins-chart-grid">
-              <div class="nd-card" style="grid-column: 1 / -1;">
-                <div class="nd-card__head">
-                  <span class="nd-card__label">Revenue trend</span>
-                  <span class="nd-card__spacer"></span>
-                  <div class="ins-toggles">
-                    @for (s of revenueSeriesKeys; track s) {
-                      <button type="button" class="nd-chip" [attr.aria-pressed]="revenueSeriesOn().has(s)" (click)="toggleRevenueSeries(s)">
-                        {{ revenueSeriesLabel[s] }}
-                      </button>
-                    }
-                  </div>
-                </div>
-                <div class="nd-card__body">
-                  @if (revenueLoading() && !revenueTrend().length) { <pf-skeleton-card></pf-skeleton-card> }
-                  <div class="ins-chart-host ins-chart-host--tall" #revenueHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('monthly-financial')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Revenue by department</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #deptRevenueHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Top 10 tests by revenue</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Test</th><th>Orders</th><th>Revenue</th></tr></thead>
-                    <tbody>
-                      @for (t of topTests(); track t.testName) {
-                        <tr><td>{{ t.testName }}</td><td>{{ t.orders }}</td><td>{{ rupee(t.revenue) }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-            </div>
-            }
-          } @else if (analyticsSubTab() === 'tests-depts') {
-            <div class="ins-chart-grid">
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Test volume by department (in-house vs outsourced)</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #testsByDeptHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Top tests by volume</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Test</th><th>Count</th><th>% of total</th></tr></thead>
-                    <tbody>
-                      @for (t of topTestsByVolume(); track t.testName) {
-                        <tr><td>{{ t.testName }}</td><td>{{ t.count }}</td><td>{{ t.pctOfTotal }}%</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('test-volume')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Test mix — in-house vs outsourced</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Department</th><th>In-house</th><th>Outsourced</th></tr></thead>
-                    <tbody>
-                      @for (d of testVolumeByDept(); track d.departmentName) {
-                        <tr><td>{{ d.departmentName }}</td><td>{{ d.inHouse }}</td><td>{{ d.outsourced }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                  <p class="ins-note">No Routine vs Specialised split — Test Master carries no such classification today.</p>
-                </div>
-              </div>
-            </div>
-          } @else if (analyticsSubTab() === 'referrals') {
-            <div class="ins-chart-grid">
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Referral volume trend</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #referralVolumeHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('referrals')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Top referring doctors</span></div>
-                <div class="nd-card__body">
-                  @if (!canSeeMoney()) {
-                    <p class="ins-note">Needs view_financial_analytics.</p>
-                  } @else {
-                    <table class="ins-table">
-                      <thead><tr><th>Doctor</th><th>Patients</th><th>Orders</th><th>Revenue</th></tr></thead>
-                      <tbody>
-                        @for (d of topReferringDoctors(); track d.doctorName) {
-                          <tr><td>{{ d.doctorName }}</td><td>{{ d.patients }}</td><td>{{ d.orders }}</td><td>{{ rupee(d.revenue) }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  }
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('referrals')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Revenue by referral source type</span></div>
-                <div class="nd-card__body">
-                  @if (!canSeeMoney()) {
-                    <p class="ins-note">Needs view_financial_analytics.</p>
-                  } @else {
-                    <div class="ins-chart-host" #sourceTypeHost></div>
-                  }
-                </div>
-              </div>
-            </div>
-          } @else if (analyticsSubTab() === 'lab-ops') {
-            <!-- Lab Operations (reuses the SAME calculation layer as Overview/TAT board — never a second definition). -->
-            <div class="ins-chart-grid">
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">TAT by department</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Department</th><th>Median (min)</th><th>P90 (min)</th><th>% within target</th><th>N</th></tr></thead>
-                    <tbody>
-                      @for (r of tatByDept(); track r.departmentName) {
-                        <tr><td>{{ r.departmentName }}</td><td>{{ r.medianMinutes | number:'1.0-0' }}</td><td>{{ r.p90Minutes | number:'1.0-0' }}</td><td>{{ r.pctWithinTarget }}%</td><td>{{ r.count }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Pending / overdue, by stage (live)</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Stage</th><th>Pending</th><th>Overdue</th></tr></thead>
-                    <tbody>
-                      @for (r of pendingByStage(); track r.stage) {
-                        <tr><td>{{ r.stage }}</td><td>{{ r.count }}</td><td>{{ r.overdue }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Sample rejection rate</span></div>
-                <div class="nd-card__body">
-                  <p class="ins-stat">{{ rejectionRate() }}%</p>
-                  <table class="ins-table">
-                    <thead><tr><th>Reason</th><th>Count</th></tr></thead>
-                    <tbody>
-                      @for (r of rejectionReasons(); track r.reason) {
-                        <tr><td>{{ r.reason }}</td><td>{{ r.count }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Staff productivity</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Staff</th><th>Entered</th><th>Validated</th></tr></thead>
-                    <tbody>
-                      @for (r of staffProductivity(); track r.userName) {
-                        <tr><td>{{ r.userName }}</td><td>{{ r.entered }}</td><td>{{ r.validated }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Home collection volume</span></div>
-                <div class="nd-card__body"><p class="ins-stat">{{ homeCollectionVolume() }}</p></div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Report delivery (WhatsApp)</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>Status</th><th>Count</th></tr></thead>
-                    <tbody>
-                      @for (r of reportDelivery(); track r.status) {
-                        <tr><td>{{ r.status }}</td><td>{{ r.count }}</td></tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Critical values</span></div>
-                <div class="nd-card__body">
-                  @if (criticalValues(); as cv) {
-                    <p class="ins-stat">{{ cv.count }}</p>
-                    <p class="ins-note">
-                      Median time to acknowledge: {{ cv.medianMinutesToAcknowledge != null ? (cv.medianMinutesToAcknowledge | number:'1.0-0') + ' min' : '—' }}
-                      · Median time to inform: {{ cv.medianMinutesToCommunicate != null ? (cv.medianMinutesToCommunicate | number:'1.0-0') + ' min' : '—' }}
-                    </p>
-                  }
-                </div>
-              </div>
-            </div>
-          } @else if (analyticsSubTab() === 'outsourcing') {
-            <div class="ins-chart-grid">
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Outsourced volume trend</span></div>
-                <div class="nd-card__body">
-                  <div class="ins-chart-host" #outsourcedVolumeHost></div>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="openList('outsourced-tests')">View list →</button>
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Outsourcing cost trend</span></div>
-                <div class="nd-card__body">
-                  @if (!canSeeMoney()) {
-                    <p class="ins-note">Needs view_financial_analytics.</p>
-                  } @else {
-                    <div class="ins-chart-host" #outsourcingCostHost></div>
-                  }
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Outsourced revenue vs vendor cost</span></div>
-                <div class="nd-card__body">
-                  @if (!canSeeMoney()) {
-                    <p class="ins-note">Needs view_financial_analytics.</p>
-                  } @else if (outsourcedRevenueVsCost(); as r) {
-                    <p class="ins-stat">{{ rupee(r.revenue - r.cost) }}
-                      <span style="font-size:13px;font-weight:400;color:var(--text-tertiary);">margin</span></p>
-                    <table class="ins-table">
-                      <tbody>
-                        <tr><td>Revenue</td><td>{{ rupee(r.revenue) }}</td></tr>
-                        <tr><td>Vendor cost</td><td>{{ rupee(r.cost) }}</td></tr>
-                        <tr><td>Lines without a priced partner rate</td><td>{{ r.noPriceCount }} / {{ r.lineCount }}</td></tr>
-                      </tbody>
-                    </table>
-                    @if (r.noPriceCount > 0) {
-                      <p class="ins-note">Cost is understated — {{ r.noPriceCount }} outsourced line(s) have no partner price on record for their order date. Add them in Partners → Partner Prices.</p>
-                    }
-                  }
-                </div>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Tests by vendor</span></div>
-                <div class="nd-card__body">
-                  @if (!canSeeMoney()) {
-                    <p class="ins-note">Needs view_financial_analytics.</p>
-                  } @else {
-                    <table class="ins-table">
-                      <thead><tr><th>Vendor</th><th>Count</th><th>Revenue</th></tr></thead>
-                      <tbody>
-                        @for (v of testsByVendor(); track v.vendorName) {
-                          <tr><td>{{ v.vendorName }}</td><td>{{ v.count }}</td><td>{{ rupee(v.revenue) }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  }
-                </div>
-              </div>
-            </div>
-          } @else {
-            <!-- Profitability (final catch-all): per test / per department. In-house
-                 rows show revenue only (cost/margin stay null); an outsourced line
-                 resolves cost from the partner price effective on the order's OWN
-                 date — never the latest price (ProfitabilityRow.HasOutsourcedLines
-                 is what the template keys the dash-vs-number on, never a null check
-                 alone, since a priced row can still legitimately be 0). -->
-            @if (!canSeeMoney()) {
-              <div class="nd-card"><div class="nd-card__body" style="padding: 24px;">
-                <p style="color: var(--text-secondary);">Profitability needs the view_financial_analytics permission.</p>
-              </div></div>
-            } @else {
-              <div class="ins-tabs">
-                <pf-segmented size="sm" [options]="profitabilityViewOptions" [value]="profitabilityView()" (valueChange)="profitabilityView.set($event)"></pf-segmented>
-              </div>
-              <div class="nd-card">
-                <div class="nd-card__head"><span class="nd-card__label">Profitability by {{ profitabilityView() === 'test' ? 'test' : 'department' }}</span></div>
-                <div class="nd-card__body">
-                  <table class="ins-table">
-                    <thead><tr><th>{{ profitabilityView() === 'test' ? 'Test' : 'Department' }}</th><th>Revenue</th><th>Outsourcing cost</th><th>Margin</th></tr></thead>
-                    <tbody>
-                      @for (r of (profitabilityView() === 'test' ? profitabilityByTest() : profitabilityByDepartment()); track r.name) {
-                        <tr>
-                          <td>{{ r.name }}</td>
-                          <td>{{ rupee(r.revenue) }}</td>
-                          <td>{{ r.hasOutsourcedLines ? rupee(r.cost) : '—' }}</td>
-                          <td>{{ r.hasOutsourcedLines ? rupee(r.margin) : '—' }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                  <p class="ins-note">In-house work shows revenue only — margin applies only where a line was outsourced to a priced partner.</p>
-                </div>
-              </div>
-            }
-          }
-        } @else {
-          <!-- Operations Insights: 9 lists, one filter band, one calculation layer. -->
-          <div class="ins-tabs">
-            <pf-segmented size="sm" [options]="opsListOptions" [value]="opsKey()" (valueChange)="opsKey.set($event)"></pf-segmented>
-          </div>
-          <div class="nd-card">
-            <div class="nd-card__head">
-              <span class="nd-card__label">{{ activeOpsConfig().label }}</span>
-              <span class="nd-card__spacer"></span>
-              <span class="nd-card__note">{{ opsTotal() }} rows</span>
-              @if (canExportOps()) {
-                <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" (click)="exportOps()">
-                  {{ exporting() ? 'Exporting…' : 'Export CSV' }}
-                </button>
-              }
-            </div>
-            <div class="nd-card__body">
-              @if (!canViewOps()) {
-                <p style="padding: 16px; color: var(--text-secondary);">
-                  @if (activeOpsConfig().requiresExportPatientData) { This list needs the export_patient_data permission. }
-                  @else { This list needs the view_financial_analytics permission. }
-                </p>
-              } @else if (opsLoading() && opsRows().length === 0) {
-                <pf-skeleton-table [rows]="8" [cols]="6"></pf-skeleton-table>
-              } @else {
-                <ag-grid-angular style="width: 100%; height: 520px;"
-                  [theme]="gridTheme()" [rowData]="opsRows()" [columnDefs]="opsColDefs()"
-                  [defaultColDef]="defaultColDef"></ag-grid-angular>
-              }
-            </div>
-          </div>
-        }
-      </div>
-    </section>
-  `,
-  styles: [`
-    :host { display: block; }
-    .ins-filter { min-width: 140px; }
-    .ins-tabs { margin: 16px 0; }
-    .ins-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-      gap: 12px;
-      padding: 16px;
-    }
-    .ins-kpi {
-      text-align: left;
-      border: 1px solid var(--nd-line, var(--border-default));
-      border-radius: var(--nd-radius-card, 12px);
-      background: var(--nd-card-bg, transparent);
-      padding: 14px 16px;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .ins-kpi:hover { border-color: #7c3aed; }
-    .ins-kpi__label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-    .ins-kpi__value {
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--text-primary);
-      font-variant-numeric: tabular-nums;
-    }
-    .ins-kpi__delta { font-size: 12px; color: var(--text-tertiary); }
-    .ins-kpi__delta.up { color: #10b981; }
-    .ins-kpi__delta.down { color: #ef4444; }
-    .ins-chart-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 16px;
-    }
-    .ins-chart-host { width: 100%; height: 260px; }
-    .ins-chart-host--tall { height: 320px; }
-    .ins-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
-    .ins-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .ins-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px; }
-    .ins-table td { padding: 6px 8px; border-top: 1px solid var(--nd-line, var(--border-default)); }
-    .ins-note { font-size: 12px; color: var(--text-tertiary); padding: 8px 2px 0; }
-    .ins-stat { font-size: 28px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; margin: 4px 0; }
-    @media (max-width: 640px) {
-      .ins-kpi-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 8px; }
-      .ins-chart-grid { grid-template-columns: 1fr; }
-    }
-  `],
+  templateUrl: './insights.component.html',
+  styleUrl: './insights.component.scss',
 })
 export class InsightsComponent {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  private readonly router = inject(Router, { optional: true });
+  private readonly location = inject(Location, { optional: true });
   protected readonly theme = inject(ThemeService);
 
+  readonly icons = ICONS;
+  readonly fmtCount = formatCount;
+  readonly fmtRupee = formatRupee;
+  readonly fmtMins = formatMinutes;
+  readonly plural = plural;
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly svgCache = new Map<string, SafeHtml>();
+  /** Trusted, constant icon path data (ICONS / SECTIONS only — never user text). */
+  svg(paths: string): SafeHtml {
+    let v = this.svgCache.get(paths);
+    if (!v) { v = this.sanitizer.bypassSecurityTrustHtml(paths); this.svgCache.set(paths, v); }
+    return v;
+  }
+
+  // ── Permissions (the server decides; the screen mirrors) ─────────────
   readonly canSeeAnalytics = computed(() => this.auth.hasAnyPermission(ANALYTICS_PERMS));
   readonly canSeeMoney = computed(() => this.auth.hasAnyPermission(FINANCIAL_ANALYTICS_PERMS));
   readonly canExportPatients = computed(() => this.auth.hasAnyPermission(PATIENT_DATA_EXPORT_PERMS));
 
+  // ── Layout ───────────────────────────────────────────────────────────
+  readonly narrow = signal(this.mq('(max-width: 900px)', v => this.narrow.set(v)));
+  readonly phone = signal(this.mq('(max-width: 640px)', v => this.phone.set(v)));
+  /** The DETAILS card gets its own column only when there's room for three. */
+  readonly ctxSide = signal(this.mq('(min-width: 1280px)', v => this.ctxSide.set(v)));
+  readonly navCollapsed = signal<boolean>(readStore(NAV_KEY, false));
+  readonly navSheet = signal(false);
+  readonly colsOpen = signal(false);
+  private readonly mainBody = viewChild<ElementRef<HTMLElement>>('mainBody');
+
+  // ── Filter band ──────────────────────────────────────────────────────
+  readonly q = signal('');
   readonly periodOptions = ANALYTICS_PERIOD_OPTIONS as unknown as PfSelectOption<AnalyticsPeriodPreset>[];
-  readonly period = signal<AnalyticsPeriodPreset>('today');
-  readonly resolvedPeriod = computed<AnalyticsPeriod>(() => resolveAnalyticsPeriod(this.period()));
-  readonly periodLabel = computed(() => {
-    const p = this.resolvedPeriod();
-    return p.fromYmd === p.toYmd ? p.fromYmd : `${p.fromYmd} → ${p.toYmd}`;
+  /** Default "This month" (owner): "Today" opened on an empty morning. */
+  readonly period = signal<AnalyticsPeriodPreset>('month');
+  readonly today = labToday();
+  readonly customFrom = signal<string>(this.today.slice(0, 8) + '01');
+  readonly customTo = signal<string>(this.today);
+  readonly resolved = computed(() => {
+    const p = this.period();
+    try {
+      return p === 'custom' ? resolveAnalyticsPeriod('custom', this.customFrom(), this.customTo()) : resolveAnalyticsPeriod(p);
+    } catch {
+      return resolveAnalyticsPeriod('month');
+    }
   });
+  readonly periodLabel = computed(() => rangeLabel(this.resolved().fromYmd, this.resolved().toYmd));
+  readonly prevLabel = computed(() => {
+    const r = this.resolved();
+    const p = previousAnalyticsPeriod(r.fromYmd, r.toYmd);
+    return rangeLabel(p.fromYmd, p.toYmd);
+  });
+  /** "today" · "this month" · "the last 7 days" — for sentences. */
+  readonly periodPhrase = computed(() => ({
+    today: 'today', '7d': 'the last 7 days', month: 'this month', lastMonth: 'last month', quarter: 'this quarter', custom: 'this range',
+  } as Record<AnalyticsPeriodPreset, string>)[this.period()]);
+  readonly periodName = computed(() => this.periodOptions.find(o => o.value === this.period())?.label ?? 'This period');
 
   readonly branches = signal<Branch[]>([]);
   readonly branchId = signal<string>('');
   readonly branchOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'All branches' },
-    ...this.branches().map(b => ({ value: b.id, label: b.name })),
+    { value: '', label: 'All branches' }, ...this.branches().map(b => ({ value: b.id, label: b.name })),
   ]);
-
   readonly departments = signal<{ id: string; name: string }[]>([]);
   readonly departmentId = signal<string>('');
   readonly departmentOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'All departments' },
-    ...this.departments().map(d => ({ value: d.id, label: d.name })),
+    { value: '', label: 'All departments' }, ...this.departments().map(d => ({ value: d.id, label: d.name })),
   ]);
-
   readonly tests = signal<{ id: string; name: string }[]>([]);
   readonly testId = signal<string>('');
   readonly testOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'All tests' },
-    ...this.tests().map(t => ({ value: t.id, label: t.name })),
+    { value: '', label: 'All tests' }, ...this.tests().map(t => ({ value: t.id, label: t.name })),
   ]);
-
   readonly referrers = signal<{ id: string; name: string }[]>([]);
   readonly refDoctorId = signal<string>('');
   readonly referrerOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'All referrers' },
-    ...this.referrers().map(d => ({ value: d.id, label: d.name })),
+    { value: '', label: 'All referrers' }, ...this.referrers().map(d => ({ value: d.id, label: d.name })),
   ]);
+  readonly dimsActive = computed(() => !!(this.branchId() || this.departmentId() || this.testId() || this.refDoctorId()));
 
-  readonly tabOptions: SegmentedOption<InsightsTab>[] = [
-    { value: 'analytics', label: 'Analytics' },
-    { value: 'operations', label: 'Operations' },
-  ];
-  readonly tab = signal<InsightsTab>('analytics');
-
-  readonly analyticsSubTabOptions: SegmentedOption<AnalyticsSubTab>[] = [
-    { value: 'overview', label: 'Overview' },
-    { value: 'volume', label: 'Patients & Volume' },
-    { value: 'revenue', label: 'Revenue' },
-    { value: 'tests-depts', label: 'Tests & Departments' },
-    { value: 'referrals', label: 'Referrals' },
-    { value: 'lab-ops', label: 'Lab Operations' },
-    { value: 'outsourcing', label: 'Outsourcing' },
-    { value: 'profitability', label: 'Profitability' },
-  ];
-  readonly analyticsSubTab = signal<AnalyticsSubTab>('overview');
-
-  readonly profitabilityViewOptions: SegmentedOption<'test' | 'department'>[] = [
-    { value: 'test', label: 'By test' },
-    { value: 'department', label: 'By department' },
-  ];
-  readonly profitabilityView = signal<'test' | 'department'>('test');
-
-  readonly opsListOptions: SegmentedOption<string>[] = OPS_LISTS.map(c => ({ value: c.key, label: c.label }));
-  readonly opsKey = signal<string>('patients');
-  readonly activeOpsConfig = computed(() => OPS_LISTS.find(c => c.key === this.opsKey())!);
-  readonly canViewOps = computed(() => {
-    const c = this.activeOpsConfig();
-    if (c.requiresExportPatientData) return this.canExportPatients();
-    if (c.financialOnly) return this.canSeeMoney();
-    return true;
+  // ── Navigation ───────────────────────────────────────────────────────
+  readonly sections = computed<SectionDef[]>(() => SECTIONS.filter(s => !s.money || this.canSeeMoney()));
+  readonly lists = computed<OpsListConfig[]>(() => OPS_LISTS.filter(l =>
+    (!l.requiresExportPatientData || this.canExportPatients()) && (!l.financialOnly || this.canSeeMoney())));
+  readonly nav = signal<InsightsNavId>('overview');
+  readonly listKey = computed<OpsListKey | null>(() => {
+    const n = this.nav();
+    return n.startsWith('list:') ? (n.slice(5) as OpsListKey) : null;
   });
-  readonly canExportOps = computed(() => {
-    const c = this.activeOpsConfig();
-    if (!this.canViewOps()) return false;
-    if (c.requiresExportPatientData) return this.canExportPatients();
-    if (c.patientExport) return this.canExportPatients();
-    return true;
-  });
-  readonly opsColDefs = computed<ColDef[]>(() => {
-    const money = this.canSeeMoney();
-    return this.activeOpsConfig().columns
-      .filter(c => !c.money || money)
-      .map(c => ({
-        field: c.field, headerName: c.headerName, flex: 1, minWidth: 110,
-        valueFormatter: c.date ? (p: { value: unknown }) => p.value ? new Date(p.value as string).toLocaleString() : ''
-          : c.money ? (p: { value: unknown }) => p.value != null ? this.rupee(p.value as number) : '' : undefined,
-      }));
-  });
+  readonly section = computed<AnalyticsSection | null>(() => (this.listKey() ? null : (this.nav() as AnalyticsSection)));
+  readonly sectionDef = computed(() => SECTIONS.find(s => s.id === this.section()) ?? null);
+  readonly listCfg = computed(() => OPS_LISTS.find(l => l.key === this.listKey()) ?? null);
+  readonly navLabel = computed(() => this.sectionDef()?.label ?? this.listCfg()?.label ?? '');
+  readonly navIcon = computed(() => this.sectionDef()?.icon ?? ICONS.list);
+  readonly drill = signal<ListDrill | null>(null);
 
-  readonly gridTheme = computed(() => this.theme.isDark() ? gridThemeDark : gridThemeLight);
-  readonly defaultColDef: ColDef = { filter: true, sortable: true, resizable: true, flex: 1, minWidth: 110 };
-
+  // ── Data ─────────────────────────────────────────────────────────────
+  readonly loading = signal(false);
+  private inflight = 0;
   readonly overview = signal<OverviewDto | null>(null);
-  readonly overviewLoading = signal(false);
-
-  readonly opsRows = signal<Record<string, unknown>[]>([]);
-  readonly opsTotal = signal(0);
-  readonly opsLoading = signal(false);
-  readonly exporting = signal(false);
-
-  readonly volumeTrend = signal<VolumeTrendPoint[]>([]);
-  readonly volumeLoading = signal(false);
-  readonly revenueTrend = signal<RevenueTrendPoint[]>([]);
-  readonly revenueLoading = signal(false);
+  readonly volume = signal<Trend<VolumeTrendPoint> | null>(null);
+  readonly revenue = signal<Trend<RevenueTrendPoint> | null>(null);
   readonly deptRevenue = signal<DeptRevenueRow[]>([]);
   readonly topTests = signal<TopTestRow[]>([]);
-
-  // Phase 2
-  readonly testVolumeByDept = signal<TestVolumeByDeptRow[]>([]);
+  readonly testsByDept = signal<TestVolumeByDeptRow[]>([]);
   readonly topTestsByVolume = signal<TopTestVolumeRow[]>([]);
-  readonly referralVolumeTrend = signal<ReferralVolumeTrendPoint[]>([]);
-  readonly topReferringDoctors = signal<TopReferringDoctorRow[]>([]);
-  readonly sourceTypeRevenue = signal<SourceTypeRevenueRow[]>([]);
+  readonly referralTrend = signal<Trend<ReferralVolumeTrendPoint> | null>(null);
+  readonly topDoctors = signal<TopReferringDoctorRow[]>([]);
+  readonly sourceTypes = signal<SourceTypeRevenueRow[]>([]);
   readonly tatByDept = signal<TatByDeptRow[]>([]);
   readonly pendingByStage = signal<PendingByStageRow[]>([]);
-  readonly rejectionRate = signal(0);
-  readonly rejectionReasons = signal<RejectionReasonRow[]>([]);
-  readonly staffProductivity = signal<StaffProductivityRow[]>([]);
-  readonly homeCollectionVolume = signal(0);
-  readonly reportDelivery = signal<ReportDeliveryRow[]>([]);
-  readonly criticalValues = signal<CriticalValuesSummary | null>(null);
-
-  // Phase 3
-  readonly outsourcedVolumeTrend = signal<OutsourcedVolumeTrendPoint[]>([]);
-  readonly testsByVendor = signal<TestsByVendorRow[]>([]);
-  readonly outsourcingCostTrend = signal<OutsourcingCostTrendPoint[]>([]);
-  readonly outsourcedRevenueVsCost = signal<OutsourcingCostResult | null>(null);
-  readonly profitabilityByTest = signal<ProfitabilityRow[]>([]);
-  readonly profitabilityByDepartment = signal<ProfitabilityRow[]>([]);
+  readonly rejection = signal<{ ratePct: number; topReasons: RejectionReasonRow[] } | null>(null);
+  readonly staff = signal<StaffProductivityRow[]>([]);
+  readonly homeCollection = signal<number | null>(null);
+  readonly delivery = signal<ReportDeliveryRow[]>([]);
+  readonly critical = signal<CriticalValuesSummary | null>(null);
+  readonly outsourcedTrend = signal<Trend<OutsourcedVolumeTrendPoint> | null>(null);
+  readonly vendors = signal<TestsByVendorRow[]>([]);
+  readonly costTrend = signal<Trend<OutsourcingCostTrendPoint> | null>(null);
+  readonly revVsCost = signal<OutsourcingCostResult | null>(null);
+  readonly profitByTest = signal<ProfitabilityRow[]>([]);
+  readonly profitByDept = signal<ProfitabilityRow[]>([]);
+  readonly profitView = signal<'test' | 'department'>('test');
 
   readonly revenueSeriesKeys = REVENUE_SERIES;
   readonly revenueSeriesLabel = REVENUE_SERIES_LABEL;
-  readonly revenueSeriesOn = signal<Set<RevenueSeriesKey>>(new Set(['net', 'collected']));
+  readonly revenueOn = signal<ReadonlySet<RevenueSeriesKey>>(new Set<RevenueSeriesKey>(['net', 'collected']));
 
-  readonly kpiCards = computed<KpiCard[]>(() => {
-    const o = this.overview();
-    if (!o) return [];
-    const money = this.canSeeMoney();
-    const pct = (n?: number | null) => n == null ? '—' : `${n}%`;
-    const cards: KpiCard[] = [
-      { id: 'patients', label: 'Patients', value: String(o.patients), deltaPct: o.patientsDeltaPct ?? null, money: false, opsKey: 'patients' },
-      { id: 'tests', label: 'Tests', value: String(o.tests), deltaPct: o.testsDeltaPct ?? null, money: false, opsKey: 'test-volume' },
-      { id: 'testsPerPatient', label: 'Tests per patient', value: o.testsPerPatient.toFixed(2), deltaPct: o.testsPerPatientDeltaPct ?? null, money: false, opsKey: 'test-volume' },
-      { id: 'outsourcedPct', label: 'Outsourced %', value: pct(o.outsourcedPct), deltaPct: o.outsourcedPctDeltaPct ?? null, money: false, opsKey: 'outsourced-tests' },
-      { id: 'medianTat', label: 'Median TAT', value: o.medianTatMinutes != null ? `${Math.round(o.medianTatMinutes)} min` : '—', deltaPct: o.medianTatDeltaPct ?? null, money: false, opsKey: 'test-volume' },
-    ];
-    if (money) {
-      cards.splice(2, 0,
-        { id: 'billedNet', label: 'Billed (net)', value: this.rupee(o.billedNet), deltaPct: o.billedNetDeltaPct ?? null, money: true, opsKey: 'orders' },
-        { id: 'collected', label: 'Collected', value: this.rupee(o.collected), deltaPct: o.collectedDeltaPct ?? null, money: true, opsKey: 'monthly-financial' },
-        { id: 'avgBillValue', label: 'Avg bill value', value: this.rupee(o.avgBillValue), deltaPct: o.avgBillValueDeltaPct ?? null, money: true, opsKey: 'orders' },
-      );
-    }
-    return cards;
-  });
+  // ── Lists ────────────────────────────────────────────────────────────
+  readonly rows = signal<Record<string, unknown>[]>([]);
+  readonly total = signal(0);
+  readonly page = signal(0);
+  readonly listLoading = signal(false);
+  readonly exporting = signal(false);
+  readonly hiddenCols = signal<Record<string, string[]>>(readStore(COLS_KEY, {}));
+
+  // ── Overview KPI selection ───────────────────────────────────────────
+  readonly selectedKpi = signal<string>('patients');
 
   constructor() {
-    this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: b => this.branches.set(b ?? []) });
-    this.api.get<{ id: string; name: string }[]>('/api/tenants/departments').subscribe({ next: d => this.departments.set(d ?? []) });
-    this.api.get<{ id: string; name: string }[]>('/api/tests?view=summary&activeOnly=true').subscribe({ next: t => this.tests.set((t ?? []).map(x => ({ id: x.id, name: x.name }))) });
-    this.api.get<{ id: string; name: string }[]>('/api/referring-network/doctors').subscribe({ next: d => this.referrers.set(d ?? []) });
+    this.restoreFromUrl();
+    this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: b => this.branches.set(b ?? []), error: () => undefined });
+    this.api.get<{ id: string; name: string }[]>('/api/tenants/departments').subscribe({ next: d => this.departments.set(d ?? []), error: () => undefined });
+    this.api.get<{ id: string; name: string }[]>('/api/tests?view=summary&activeOnly=true')
+      .subscribe({ next: t => this.tests.set((t ?? []).map(x => ({ id: x.id, name: x.name }))), error: () => undefined });
+    this.api.get<{ id: string; name: string }[]>('/api/referring-network/doctors').subscribe({ next: d => this.referrers.set(d ?? []), error: () => undefined });
 
-    // Any filter change reloads every surface — Analytics and Operations
-    // share ONE filter band, so a chart's numbers and the list behind it
-    // never disagree.
+    // Analytics: one load per (section, filter band). Lists load on their own.
     effect(() => {
+      const sec = this.section();
       const q = this.query();
-      this.overviewLoading.set(true);
-      this.api.get<OverviewDto>(`/api/analytics/overview${q}`).subscribe({
-        next: d => { this.overview.set(d); this.overviewLoading.set(false); },
-        error: () => this.overviewLoading.set(false),
-      });
-    });
-
-    effect(() => {
-      const q = this.query();
-      this.volumeLoading.set(true);
-      this.api.get<{ bucketUnit: string; points: VolumeTrendPoint[] }>(`/api/analytics/trends/patients-volume${q}`).subscribe({
-        next: d => { this.volumeTrend.set(d?.points ?? []); this.volumeLoading.set(false); },
-        error: () => this.volumeLoading.set(false),
-      });
-    });
-
-    effect(() => {
-      const q = this.query();
-      if (!this.canSeeMoney()) return;
-      this.revenueLoading.set(true);
-      this.api.get<{ bucketUnit: string; points: RevenueTrendPoint[] }>(`/api/analytics/trends/revenue${q}`).subscribe({
-        next: d => { this.revenueTrend.set(d?.points ?? []); this.revenueLoading.set(false); },
-        error: () => this.revenueLoading.set(false),
-      });
-      this.api.get<DeptRevenueRow[]>(`/api/analytics/revenue-by-department${q}`).subscribe({ next: d => this.deptRevenue.set(d ?? []) });
-      this.api.get<TopTestRow[]>(`/api/analytics/top-tests${q}`).subscribe({ next: d => this.topTests.set(d ?? []) });
-    });
-
-    // Phase 2: Tests & Departments — fetched only while that sub-tab is open.
-    effect(() => {
-      const q = this.query();
-      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'tests-depts') return;
-      this.api.get<TestVolumeByDeptRow[]>(`/api/analytics/tests-by-department${q}`).subscribe({ next: d => this.testVolumeByDept.set(d ?? []) });
-      this.api.get<TopTestVolumeRow[]>(`/api/analytics/top-tests-by-volume${q}`).subscribe({ next: d => this.topTestsByVolume.set(d ?? []) });
-    });
-
-    // Phase 2: Referrals — fetched only while that sub-tab is open.
-    effect(() => {
-      const q = this.query();
-      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'referrals') return;
-      this.api.get<{ bucketUnit: string; points: ReferralVolumeTrendPoint[] }>(`/api/analytics/trends/referrals${q}`)
-        .subscribe({ next: d => this.referralVolumeTrend.set(d?.points ?? []) });
-      if (this.canSeeMoney()) {
-        this.api.get<TopReferringDoctorRow[]>(`/api/analytics/top-referring-doctors${q}`).subscribe({ next: d => this.topReferringDoctors.set(d ?? []) });
-        this.api.get<SourceTypeRevenueRow[]>(`/api/analytics/revenue-by-source-type${q}`).subscribe({ next: d => this.sourceTypeRevenue.set(d ?? []) });
-      }
-    });
-
-    // Phase 2: Lab Operations — fetched only while that sub-tab is open.
-    effect(() => {
-      const q = this.query();
-      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'lab-ops') return;
-      this.api.get<TatByDeptRow[]>(`/api/analytics/ops/tat-by-department${q}`).subscribe({ next: d => this.tatByDept.set(d ?? []) });
-      const branchQ = this.branchId() ? `?branchId=${this.branchId()}` : '';
-      this.api.get<PendingByStageRow[]>(`/api/analytics/ops/pending-by-stage${branchQ}`).subscribe({ next: d => this.pendingByStage.set(d ?? []) });
-      this.api.get<{ ratePct: number; topReasons: RejectionReasonRow[] }>(`/api/analytics/ops/rejections${q}`)
-        .subscribe({ next: d => { this.rejectionRate.set(d?.ratePct ?? 0); this.rejectionReasons.set(d?.topReasons ?? []); } });
-      this.api.get<StaffProductivityRow[]>(`/api/analytics/ops/staff-productivity${q}`).subscribe({ next: d => this.staffProductivity.set(d ?? []) });
-      this.api.get<{ volume: number }>(`/api/analytics/ops/home-collection-volume${q}`).subscribe({ next: d => this.homeCollectionVolume.set(d?.volume ?? 0) });
-      this.api.get<ReportDeliveryRow[]>(`/api/analytics/ops/report-delivery${q}`).subscribe({ next: d => this.reportDelivery.set(d ?? []) });
-      this.api.get<CriticalValuesSummary>(`/api/analytics/ops/critical-values${q}`).subscribe({ next: d => this.criticalValues.set(d ?? null) });
-    });
-
-    // Phase 3: Outsourcing — fetched only while that sub-tab is open. The
-    // volume trend needs only view_analytics; every money-bearing endpoint
-    // here needs view_financial_analytics (same gate the server enforces).
-    effect(() => {
-      const q = this.query();
-      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'outsourcing') return;
-      this.api.get<{ bucketUnit: string; points: OutsourcedVolumeTrendPoint[] }>(`/api/analytics/trends/outsourced-volume${q}`)
-        .subscribe({ next: d => this.outsourcedVolumeTrend.set(d?.points ?? []) });
-      if (this.canSeeMoney()) {
-        this.api.get<TestsByVendorRow[]>(`/api/analytics/tests-by-vendor${q}`).subscribe({ next: d => this.testsByVendor.set(d ?? []) });
-        this.api.get<{ bucketUnit: string; points: OutsourcingCostTrendPoint[] }>(`/api/analytics/trends/outsourcing-cost${q}`)
-          .subscribe({ next: d => this.outsourcingCostTrend.set(d?.points ?? []) });
-        this.api.get<OutsourcingCostResult>(`/api/analytics/outsourced-revenue-vs-cost${q}`).subscribe({ next: d => this.outsourcedRevenueVsCost.set(d ?? null) });
-      }
-    });
-
-    // Phase 3: Profitability — fetched only while that sub-tab is open (the
-    // whole tab is money, gated client AND server side).
-    effect(() => {
-      const q = this.query();
-      if (this.tab() !== 'analytics' || this.analyticsSubTab() !== 'profitability' || !this.canSeeMoney()) return;
-      this.api.get<ProfitabilityRow[]>(`/api/analytics/profitability/by-test${q}`).subscribe({ next: d => this.profitabilityByTest.set(d ?? []) });
-      this.api.get<ProfitabilityRow[]>(`/api/analytics/profitability/by-department${q}`).subscribe({ next: d => this.profitabilityByDepartment.set(d ?? []) });
-    });
-
-    // Paint (and repaint) the charts whenever their tab is on screen, their
-    // data changes, or the theme flips — effects track every signal read
-    // during their run, including ones made inside the painters below, so
-    // this alone covers "data arrived while not on this tab" (it repaints
-    // the moment the tab is opened, because the viewChild host signal only
-    // resolves once that @if block is mounted).
-    effect(() => {
-      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'volume') {
-        this.theme.isDark();
-        void this.paintVolumeCharts();
-      }
+      const money = this.canSeeMoney();
+      if (!sec || !this.canSeeAnalytics()) return;
+      untracked(() => this.loadSection(sec, q, money));
     });
     effect(() => {
-      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'revenue' && this.canSeeMoney()) {
-        this.theme.isDark();
-        void this.paintRevenueChart();
-        void this.paintDeptChart();
-      }
+      const cfg = this.listCfg();
+      const q = cfg ? this.listQuery(cfg) : '';
+      const page = this.page();
+      if (!cfg || !this.canSeeAnalytics()) return;
+      untracked(() => this.loadList(cfg, q, page));
     });
+    // Keep the URL shareable (section + period + branch), never a history entry.
     effect(() => {
-      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'tests-depts') {
-        this.theme.isDark();
-        void this.paintTestsByDeptChart();
-      }
-    });
-    effect(() => {
-      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'referrals') {
-        this.theme.isDark();
-        void this.paintReferralVolumeChart();
-        if (this.canSeeMoney()) void this.paintSourceTypeChart();
-      }
-    });
-    effect(() => {
-      if (this.tab() === 'analytics' && this.analyticsSubTab() === 'outsourcing') {
-        this.theme.isDark();
-        void this.paintOutsourcedVolumeChart();
-        if (this.canSeeMoney()) void this.paintOutsourcingCostChart();
-      }
-    });
-
-    effect(() => {
-      const q = this.query();
-      const cfg = this.activeOpsConfig();
-      if (!this.canViewOps()) { this.opsRows.set([]); this.opsTotal.set(0); return; }
-      this.opsLoading.set(true);
-      this.api.get<{ total: number; rows: Record<string, unknown>[] }>(`/api/analytics/lists/${cfg.endpoint}${q}`).subscribe({
-        next: d => { this.opsRows.set(d?.rows ?? []); this.opsTotal.set(d?.total ?? 0); this.opsLoading.set(false); },
-        error: () => this.opsLoading.set(false),
-      });
+      const params: Record<string, string> = { section: this.nav(), period: this.period() };
+      if (this.period() === 'custom') { params['from'] = this.customFrom(); params['to'] = this.customTo(); }
+      if (this.branchId()) params['branch'] = this.branchId();
+      untracked(() => this.writeUrl(params));
     });
   }
 
-  private query(): string {
-    const p = this.resolvedPeriod();
+  // ═══ Query building ═════════════════════════════════════════════════
+
+  private bandParams(): URLSearchParams {
+    const p = this.resolved();
     const params = new URLSearchParams({ period: this.period(), from: p.fromYmd, to: p.toYmd });
     if (this.branchId()) params.set('branchId', this.branchId());
     if (this.departmentId()) params.set('departmentId', this.departmentId());
     if (this.testId()) params.set('testId', this.testId());
     if (this.refDoctorId()) params.set('refDoctorId', this.refDoctorId());
+    return params;
+  }
+
+  /** The analytics query (every chart/KPI of the section shares it). */
+  query(): string {
+    return `?${this.bandParams().toString()}`;
+  }
+
+  /** A list's query: the band + the drill (a bucket's days, one department / test / doctor). */
+  listQuery(cfg: OpsListConfig): string {
+    const params = this.bandParams();
+    const d = this.drill();
+    if (d?.fromYmd && d.toYmd) { params.set('period', 'custom'); params.set('from', d.fromYmd); params.set('to', d.toYmd); }
+    if (d?.departmentId) params.set('departmentId', d.departmentId);
+    if (d?.testId) params.set('testId', d.testId);
+    if (d?.refDoctorId) params.set('refDoctorId', d.refDoctorId);
+    for (const k of ['departmentId', 'testId', 'refDoctorId'] as const) {
+      if (!cfg.takes.includes(k)) params.delete(k);
+    }
     return `?${params.toString()}`;
   }
 
-  rupee(v?: number | null): string {
-    return v == null ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  // ═══ Loading ════════════════════════════════════════════════════════
+
+  private subs: Subscription[] = [];
+
+  private get$<T>(url: string, sink: (v: T) => void): void {
+    this.inflight++;
+    this.loading.set(true);
+    const done = () => { this.inflight = Math.max(0, this.inflight - 1); if (!this.inflight) this.loading.set(false); };
+    const s = (this.api.get<T>(url) as Observable<T>).subscribe({
+      next: v => { sink(v); done(); },
+      error: () => done(),
+    });
+    this.subs.push(s);
   }
 
-  /** Every chart/KPI clicks through to its matching Operations list, scoped
-   *  by the SAME filter band (owner spec) — never a re-navigation with its
-   *  own copied params. */
-  openList(opsKey: string): void {
-    this.opsKey.set(opsKey);
-    this.tab.set('operations');
+  private loadSection(sec: AnalyticsSection, q: string, money: boolean): void {
+    this.subs.forEach(s => s.unsubscribe());
+    this.subs = [];
+    this.inflight = 0;
+    const g = <T>(path: string, sink: (v: T) => void) => this.get$<T>(`/api/analytics/${path}${q}`, sink);
+    const trend = <P>(path: string, sink: (v: Trend<P> | null) => void) => g<Trend<P>>(path, v => sink(v ?? null));
+    switch (sec) {
+      case 'overview':
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        trend<VolumeTrendPoint>('trends/patients-volume', v => this.volume.set(v));
+        trend<OutsourcedVolumeTrendPoint>('trends/outsourced-volume', v => this.outsourcedTrend.set(v));
+        g<TestVolumeByDeptRow[]>('tests-by-department', v => this.testsByDept.set(v ?? []));
+        g<TatByDeptRow[]>('ops/tat-by-department', v => this.tatByDept.set(v ?? []));
+        g<TopTestVolumeRow[]>('top-tests-by-volume', v => this.topTestsByVolume.set(v ?? []));
+        if (money) {
+          trend<RevenueTrendPoint>('trends/revenue', v => this.revenue.set(v));
+          g<DeptRevenueRow[]>('revenue-by-department', v => this.deptRevenue.set(v ?? []));
+          g<TestsByVendorRow[]>('tests-by-vendor', v => this.vendors.set(v ?? []));
+        }
+        break;
+      case 'volume':
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        trend<VolumeTrendPoint>('trends/patients-volume', v => this.volume.set(v));
+        g<TopTestVolumeRow[]>('top-tests-by-volume', v => this.topTestsByVolume.set(v ?? []));
+        break;
+      case 'revenue':
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        if (money) {
+          trend<RevenueTrendPoint>('trends/revenue', v => this.revenue.set(v));
+          g<DeptRevenueRow[]>('revenue-by-department', v => this.deptRevenue.set(v ?? []));
+          g<TopTestRow[]>('top-tests', v => this.topTests.set(v ?? []));
+        }
+        break;
+      case 'tests-depts':
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        g<TestVolumeByDeptRow[]>('tests-by-department', v => this.testsByDept.set(v ?? []));
+        g<TopTestVolumeRow[]>('top-tests-by-volume', v => this.topTestsByVolume.set(v ?? []));
+        break;
+      case 'referrals':
+        trend<ReferralVolumeTrendPoint>('trends/referrals', v => this.referralTrend.set(v));
+        g<TopReferringDoctorRow[]>('top-referring-doctors', v => this.topDoctors.set(v ?? []));
+        if (money) g<SourceTypeRevenueRow[]>('revenue-by-source-type', v => this.sourceTypes.set(v ?? []));
+        break;
+      case 'lab-ops': {
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        g<TatByDeptRow[]>('ops/tat-by-department', v => this.tatByDept.set(v ?? []));
+        const branchQ = this.branchId() ? `?branchId=${this.branchId()}` : '';
+        this.get$<PendingByStageRow[]>(`/api/analytics/ops/pending-by-stage${branchQ}`, v => this.pendingByStage.set(v ?? []));
+        g<{ ratePct: number; topReasons: RejectionReasonRow[] }>('ops/rejections', v => this.rejection.set(v ?? null));
+        g<StaffProductivityRow[]>('ops/staff-productivity', v => this.staff.set(v ?? []));
+        g<{ volume: number }>('ops/home-collection-volume', v => this.homeCollection.set(v?.volume ?? 0));
+        g<ReportDeliveryRow[]>('ops/report-delivery', v => this.delivery.set(v ?? []));
+        g<CriticalValuesSummary>('ops/critical-values', v => this.critical.set(v ?? null));
+        break;
+      }
+      case 'outsourcing':
+        g<OverviewDto>('overview', v => this.overview.set(v ?? null));
+        trend<OutsourcedVolumeTrendPoint>('trends/outsourced-volume', v => this.outsourcedTrend.set(v));
+        if (money) {
+          g<TestsByVendorRow[]>('tests-by-vendor', v => this.vendors.set(v ?? []));
+          trend<OutsourcingCostTrendPoint>('trends/outsourcing-cost', v => this.costTrend.set(v));
+          g<OutsourcingCostResult>('outsourced-revenue-vs-cost', v => this.revVsCost.set(v ?? null));
+        }
+        break;
+      case 'profitability':
+        if (money) {
+          g<ProfitabilityRow[]>('profitability/by-test', v => this.profitByTest.set(v ?? []));
+          g<ProfitabilityRow[]>('profitability/by-department', v => this.profitByDept.set(v ?? []));
+        }
+        break;
+    }
   }
 
-  toggleRevenueSeries(key: RevenueSeriesKey): void {
-    const next = new Set(this.revenueSeriesOn());
-    if (next.has(key)) next.delete(key); else next.add(key);
-    this.revenueSeriesOn.set(next); // the revenue paint effect re-runs on its own (it reads this signal)
+  private listSub: Subscription | null = null;
+  private loadList(cfg: OpsListConfig, q: string, page: number): void {
+    this.listSub?.unsubscribe();
+    if (!this.canViewList(cfg)) { this.rows.set([]); this.total.set(0); return; }
+    this.listLoading.set(true);
+    const sep = q ? '&' : '?';
+    this.listSub = this.api.get<{ total: number; rows: Record<string, unknown>[] }>(
+      `/api/analytics/lists/${cfg.endpoint}${q}${sep}page=${page}&pageSize=${LIST_PAGE}`,
+    ).subscribe({
+      next: d => { this.rows.set(d?.rows ?? []); this.total.set(d?.total ?? 0); this.listLoading.set(false); },
+      error: () => { this.rows.set([]); this.total.set(0); this.listLoading.set(false); },
+    });
   }
 
-  exportOps(): void {
+  // ═══ Navigation actions ═════════════════════════════════════════════
+
+  go(id: InsightsNavId): void {
+    if (id !== this.nav()) {
+      this.nav.set(id);
+      this.drill.set(null);
+      this.page.set(0);
+      this.colsOpen.set(false);
+      this.q.set('');
+    }
+    this.navSheet.set(false);
+    this.mainBody()?.nativeElement.scrollTo?.({ top: 0 });
+  }
+
+  /** A chart element / KPI / ranked row → its list, narrowed (band untouched). */
+  openList(key: OpsListKey, drill: ListDrill | null = null): void {
+    const cfg = OPS_LISTS.find(l => l.key === key);
+    if (!cfg || !this.lists().includes(cfg)) return;
+    this.go(`list:${key}`);
+    this.drill.set(drill);
+  }
+
+  goList(key: OpsListKey): void { this.go(`list:${key}`); }
+
+  clearDrill(): void { this.drill.set(null); this.page.set(0); }
+
+  toggleNav(): void {
+    const next = !this.navCollapsed();
+    this.navCollapsed.set(next);
+    writeStore(NAV_KEY, next);
+  }
+
+  setPeriod(p: AnalyticsPeriodPreset): void { this.period.set(p); this.page.set(0); }
+  setFilter(which: 'branch' | 'department' | 'test' | 'referrer', v: string | null): void {
+    const val = v ?? '';
+    if (which === 'branch') this.branchId.set(val);
+    if (which === 'department') this.departmentId.set(val);
+    if (which === 'test') this.testId.set(val);
+    if (which === 'referrer') this.refDoctorId.set(val);
+    this.page.set(0);
+  }
+  clearFilters(): void {
+    this.branchId.set(''); this.departmentId.set(''); this.testId.set(''); this.refDoctorId.set('');
+    this.page.set(0);
+  }
+  /** Empty-state shortcut: a wider period. */
+  widen(p: AnalyticsPeriodPreset): void { this.setPeriod(p); }
+
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(ev: Event): void {
+    if (this.colsOpen()) { this.colsOpen.set(false); ev.preventDefault(); }
+    else if (this.navSheet()) { this.navSheet.set(false); ev.preventDefault(); }
+  }
+
+  // ═══ Overview: KPI tiles ════════════════════════════════════════════
+
+  private dark(): 'dark' | 'light' { return this.theme.isDark() ? 'dark' : 'light'; }
+
+  readonly kpis = computed<KpiTile[]>(() => {
+    const o = this.overview();
+    if (!o) return [];
+    const theme = this.dark();
+    const vol = this.volume()?.points ?? [];
+    const rev = this.revenue()?.points ?? [];
+    const out = this.outsourcedTrend()?.points ?? [];
+    const labelsV = vol.map(p => bucketAxisLabel(p.bucket, this.volume()?.bucketUnit));
+    const labelsR = rev.map(p => bucketAxisLabel(p.bucket, this.revenue()?.bucketUnit));
+    const spark = (data: number[], labels: string[], i: number, fmt?: (v: number) => string) =>
+      data.length >= 4 ? buildSparklineOption({ data, labels, theme, color: seriesColor(i, theme), valueFormatter: fmt }) : null;
+    const slowest = [...this.tatByDept()].sort((a, b) => b.medianMinutes - a.medianMinutes)[0];
+    const tiles: KpiTile[] = [
+      { id: 'patients', label: 'Patients', value: formatCount(o.patients), raw: o.patients, money: false, list: 'patients',
+        delta: deltaView(o.patients, o.patientsDeltaPct), spark: spark(vol.map(p => p.patients), labelsV, 0) },
+      { id: 'tests', label: 'Tests', value: formatCount(o.tests), raw: o.tests, money: false, list: 'test-volume',
+        delta: deltaView(o.tests, o.testsDeltaPct), spark: spark(vol.map(p => p.tests), labelsV, 0) },
+    ];
+    if (this.canSeeMoney() && o.billedNet != null) {
+      tiles.push(
+        { id: 'billedNet', label: 'Billed (net)', value: formatRupee(o.billedNet), raw: o.billedNet, money: true, list: 'orders',
+          delta: deltaView(o.billedNet, o.billedNetDeltaPct), spark: spark(rev.map(p => p.net), labelsR, 0, rupeeFormatter) },
+        { id: 'collected', label: 'Collected', value: formatRupee(o.collected), raw: o.collected ?? 0, money: true, list: 'monthly-financial',
+          delta: deltaView(o.collected, o.collectedDeltaPct), spark: spark(rev.map(p => p.collected), labelsR, 1, rupeeFormatter) },
+        { id: 'avgBillValue', label: 'Avg bill value', value: formatRupee(o.avgBillValue), raw: o.avgBillValue ?? 0, money: true, list: 'orders',
+          delta: deltaView(o.avgBillValue, o.avgBillValueDeltaPct), spark: spark(rev.map(p => p.avgBillValue), labelsR, 0, rupeeFormatter) },
+      );
+    }
+    tiles.push(
+      { id: 'testsPerPatient', label: 'Tests per patient', value: o.patients ? o.testsPerPatient.toFixed(2) : '—', raw: o.testsPerPatient, money: false, list: 'test-volume',
+        delta: deltaView(o.testsPerPatient, o.testsPerPatientDeltaPct, { neutral: true }), spark: spark(vol.map(p => p.testsPerPatient), labelsV, 0) },
+      { id: 'outsourcedPct', label: 'Outsourced', value: o.tests ? `${o.outsourcedPct}%` : '—', raw: o.outsourcedPct, money: false, list: 'outsourced-tests',
+        delta: deltaView(o.outsourcedPct, o.outsourcedPctDeltaPct, { neutral: true }), spark: spark(out.map(p => p.count), out.map(p => bucketAxisLabel(p.bucket, this.outsourcedTrend()?.bucketUnit)), 2) },
+      { id: 'medianTat', label: 'Median TAT', value: formatMinutes(o.medianTatMinutes), raw: o.medianTatMinutes ?? 0, money: false, list: null,
+        delta: deltaView(o.medianTatMinutes, o.medianTatDeltaPct, { lowerIsBetter: true }), spark: null,
+        caption: slowest ? `Slowest: ${slowest.departmentName} · ${formatMinutes(slowest.medianMinutes)}` : 'Received → validated, in-house work' },
+    );
+    return tiles;
+  });
+
+  readonly selectedTile = computed<KpiTile | null>(() => this.kpis().find(k => k.id === this.selectedKpi()) ?? this.kpis()[0] ?? null);
+
+  /** Nothing at all in the period: one calm banner instead of eight zeros shouting. */
+  readonly periodEmpty = computed(() => {
+    const o = this.overview();
+    return !!o && !o.patients && !o.tests;
+  });
+
+  selectKpi(id: string): void {
+    this.selectedKpi.set(id);
+    if (!this.ctxSide()) {
+      queueMicrotask(() => this.mainBody()?.nativeElement.querySelector('#pf-ins-ctx')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+    }
+  }
+
+  /** Side card for the selected KPI: what the period looked like inside. */
+  readonly kpiDetail = computed(() => {
+    const k = this.selectedTile();
+    if (!k) return null;
+    const vol = this.volume();
+    const rev = this.revenue();
+    const unit = (k.money ? rev?.bucketUnit : vol?.bucketUnit) ?? 'day';
+    const series: { bucket: string; v: number }[] =
+      k.id === 'patients' ? (vol?.points ?? []).map(p => ({ bucket: p.bucket, v: p.patients }))
+      : k.id === 'tests' ? (vol?.points ?? []).map(p => ({ bucket: p.bucket, v: p.tests }))
+      : k.id === 'billedNet' ? (rev?.points ?? []).map(p => ({ bucket: p.bucket, v: p.net }))
+      : k.id === 'collected' ? (rev?.points ?? []).map(p => ({ bucket: p.bucket, v: p.collected }))
+      : [];
+    const fmt = (v: number) => (k.money ? formatRupee(v) : formatCount(v));
+    const peak = series.reduce<{ bucket: string; v: number } | null>((m, p) => (!m || p.v > m.v ? p : m), null);
+    const facts: { k: string; v: string }[] = [];
+    if (peak && peak.v > 0) facts.push({ k: `Busiest ${unit}`, v: `${fmt(peak.v)} · ${bucketAxisLabel(peak.bucket, unit)}` });
+    if (series.length > 1) {
+      const active = series.filter(p => p.v > 0).length;
+      facts.push({ k: `Active ${unit}s`, v: `${active} of ${series.length}` });
+    }
+    let rank: RankRow[] = [];
+    let rankTitle = '';
+    if (k.id === 'tests' || k.id === 'testsPerPatient') {
+      rankTitle = 'Most ordered tests';
+      rank = this.topTestsByVolume().slice(0, 6).map(t => ({
+        name: t.testName, value: formatCount(t.count), share: t.pctOfTotal / 100, meta: `${t.pctOfTotal}%`,
+        drill: () => this.openList('test-volume', t.testId ? { label: t.testName, testId: t.testId } : null),
+      }));
+    } else if (k.id === 'billedNet' || k.id === 'avgBillValue' || k.id === 'collected') {
+      rankTitle = 'Revenue by department';
+      const max = Math.max(1, ...this.deptRevenue().map(d => d.revenue));
+      rank = this.deptRevenue().slice(0, 6).map(d => ({
+        name: d.departmentName, value: formatRupee(d.revenue), share: d.revenue / max,
+        drill: () => this.openList('test-volume', d.departmentId ? { label: d.departmentName, departmentId: d.departmentId } : null),
+      }));
+    } else if (k.id === 'outsourcedPct') {
+      rankTitle = 'Sent to partners';
+      const max = Math.max(1, ...this.vendors().map(v => v.count));
+      rank = this.vendors().slice(0, 6).map(v => ({ name: v.vendorName, value: formatCount(v.count), share: v.count / max, drill: () => this.openList('outsourced-tests') }));
+    } else if (k.id === 'medianTat') {
+      rankTitle = 'Median TAT by department';
+      const max = Math.max(1, ...this.tatByDept().map(t => t.medianMinutes));
+      rank = [...this.tatByDept()].sort((a, b) => b.medianMinutes - a.medianMinutes).slice(0, 6).map(t => ({
+        name: t.departmentName, value: formatMinutes(t.medianMinutes), share: t.medianMinutes / max, meta: `${t.pctWithinTarget}% on time`,
+      }));
+    } else if (k.id === 'patients') {
+      rankTitle = 'Tests by department';
+      const max = Math.max(1, ...this.testsByDept().map(d => d.inHouse + d.outsourced));
+      rank = this.testsByDept().slice(0, 6).map(d => ({
+        name: d.departmentName, value: formatCount(d.inHouse + d.outsourced), share: (d.inHouse + d.outsourced) / max,
+        drill: () => this.openList('test-volume', d.departmentId ? { label: d.departmentName, departmentId: d.departmentId } : null),
+      }));
+    }
+    return { tile: k, facts, rank: this.searchRank(rank), rankTitle };
+  });
+
+  private searchRank(rows: RankRow[]): RankRow[] {
+    const q = this.q().trim().toLowerCase();
+    return q ? rows.filter(r => r.name.toLowerCase().includes(q)) : rows;
+  }
+
+  // ═══ Chart options (rebuilt on data / theme / toggles) ══════════════
+
+  private line(args: Omit<BuildLineOptionArgs, 'theme'>) {
+    return buildBusinessLineOption(null, { ...args, theme: this.dark() });
+  }
+
+  readonly volumeUnit = computed(() => this.volume()?.bucketUnit ?? 'day');
+  readonly volumeLabels = computed(() => (this.volume()?.points ?? []).map(p => bucketAxisLabel(p.bucket, this.volumeUnit())));
+  readonly volumeEmpty = computed(() => allZero((this.volume()?.points ?? []).map(p => p.tests + p.patients)));
+
+  readonly ovVolumeChart = computed(() => {
+    const pts = this.volume()?.points ?? [];
+    return this.line({
+      categories: pts.map(p => p.bucket), labels: this.volumeLabels(),
+      series: [{ name: 'Tests', data: pts.map(p => p.tests) }, { name: 'Patients', data: pts.map(p => p.patients) }],
+    });
+  });
+
+  readonly newReturningChart = computed(() => {
+    const pts = this.volume()?.points ?? [];
+    return buildStackedBarOption(null, {
+      categories: pts.map(p => p.bucket), labels: this.volumeLabels(), theme: this.dark(),
+      series: [{ name: 'New', data: pts.map(p => p.newPatients) }, { name: 'Returning', data: pts.map(p => p.returningPatients) }],
+    });
+  });
+  readonly testsTrendChart = computed(() => {
+    const pts = this.volume()?.points ?? [];
+    return this.line({ categories: pts.map(p => p.bucket), labels: this.volumeLabels(), series: [{ name: 'Tests', data: pts.map(p => p.tests) }] });
+  });
+  readonly tppChart = computed(() => {
+    const pts = this.volume()?.points ?? [];
+    return this.line({
+      categories: pts.map(p => p.bucket), labels: this.volumeLabels(),
+      series: [{ name: 'Tests per patient', data: pts.map(p => p.testsPerPatient) }], valueFormatter: (v: number) => (+v).toFixed(2),
+    });
+  });
+
+  readonly revenueUnit = computed(() => this.revenue()?.bucketUnit ?? 'day');
+  readonly revenueEmpty = computed(() => allZero((this.revenue()?.points ?? []).map(p => p.gross + p.collected)));
+  readonly ovRevenueChart = computed(() => {
+    const pts = this.revenue()?.points ?? [];
+    return this.line({
+      categories: pts.map(p => p.bucket), labels: pts.map(p => bucketAxisLabel(p.bucket, this.revenueUnit())),
+      series: [{ name: 'Billed (net)', data: pts.map(p => p.net) }, { name: 'Collected', data: pts.map(p => p.collected) }],
+      valueFormatter: rupeeFormatter, axisFormatter: rupeeAxisFormatter,
+    });
+  });
+  readonly revenueChart = computed(() => {
+    const pts = this.revenue()?.points ?? [];
+    const on = this.revenueOn();
+    const theme = this.dark();
+    return this.line({
+      categories: pts.map(p => p.bucket), labels: pts.map(p => bucketAxisLabel(p.bucket, this.revenueUnit())),
+      series: REVENUE_SERIES.map((k, i) => ({ k, i })).filter(x => on.has(x.k))
+        .map(x => ({ name: REVENUE_SERIES_LABEL[x.k], data: pts.map(p => p[x.k]), color: seriesColor(x.i, theme) })),
+      valueFormatter: rupeeFormatter, axisFormatter: rupeeAxisFormatter,
+    });
+  });
+  readonly deptRevenueChart = computed(() => {
+    const rows = this.deptRevenue().slice(0, 10);
+    return buildHorizontalBarOption(null, { categories: rows.map(r => r.departmentName), values: rows.map(r => r.revenue), theme: this.dark(), valueFormatter: rupeeFormatter });
+  });
+  readonly topTestsChart = computed(() => {
+    const rows = this.topTests().slice(0, 10);
+    return buildHorizontalBarOption(null, { categories: rows.map(r => r.testName), values: rows.map(r => r.revenue), theme: this.dark(), valueFormatter: rupeeFormatter, color: seriesColor(1, this.dark()) });
+  });
+
+  readonly deptMixChart = computed(() => {
+    const rows = this.testsByDept();
+    const total = rows.reduce((s, r) => s + r.inHouse + r.outsourced, 0);
+    return buildDonutOption({
+      items: rows.map(r => ({ name: r.departmentName, value: r.inHouse + r.outsourced, key: r.departmentId ?? null })),
+      theme: this.dark(), centre: { value: formatCount(total), label: 'tests' },
+    });
+  });
+  readonly testsByDeptChart = computed(() => {
+    const rows = this.testsByDept().slice(0, 12);
+    return buildGroupedHBarOption({
+      categories: rows.map(r => r.departmentName), theme: this.dark(), stacked: true,
+      series: [{ name: 'In-house', data: rows.map(r => r.inHouse) }, { name: 'Outsourced', data: rows.map(r => r.outsourced), color: seriesColor(2, this.dark()) }],
+    });
+  });
+  readonly topVolumeChart = computed(() => {
+    const rows = this.topTestsByVolume().slice(0, 10);
+    return buildHorizontalBarOption(null, { categories: rows.map(r => r.testName), values: rows.map(r => r.count), theme: this.dark() });
+  });
+
+  readonly referralUnit = computed(() => this.referralTrend()?.bucketUnit ?? 'day');
+  readonly referralEmpty = computed(() => allZero((this.referralTrend()?.points ?? []).map(p => p.orders)));
+  readonly referralChart = computed(() => {
+    const pts = this.referralTrend()?.points ?? [];
+    return this.line({ categories: pts.map(p => p.bucket), labels: pts.map(p => bucketAxisLabel(p.bucket, this.referralUnit())), series: [{ name: 'Referred orders', data: pts.map(p => p.orders) }] });
+  });
+  readonly doctorsChart = computed(() => {
+    const rows = this.topDoctors().slice(0, 10);
+    const money = this.canSeeMoney() && rows.some(r => r.revenue != null);
+    return buildHorizontalBarOption(null, {
+      categories: rows.map(r => r.doctorName), values: rows.map(r => (money ? r.revenue ?? 0 : r.orders)), theme: this.dark(),
+      valueFormatter: money ? rupeeFormatter : undefined,
+    });
+  });
+  readonly sourceChart = computed(() => {
+    const rows = this.sourceTypes();
+    return buildDonutOption({
+      items: rows.map(r => ({ name: r.sourceType ? r.sourceType.charAt(0).toUpperCase() + r.sourceType.slice(1) : 'Not set', value: r.revenue })), theme: this.dark(), valueFormatter: rupeeFormatter,
+      centre: { value: formatRupee(rows.reduce((s, r) => s + r.revenue, 0), true), label: 'revenue' },
+    });
+  });
+
+  readonly tatChart = computed(() => {
+    const rows = this.tatByDept().slice(0, 10);
+    const hours = (m: number) => Math.round((m / 60) * 10) / 10;
+    return buildGroupedHBarOption({
+      categories: rows.map(r => r.departmentName), theme: this.dark(), valueFormatter: (v: number) => formatMinutes(v * 60),
+      series: [{ name: 'Median', data: rows.map(r => hours(r.medianMinutes)) }, { name: '90th percentile', data: rows.map(r => hours(r.p90Minutes)), color: seriesColor(2, this.dark()) }],
+    });
+  });
+  readonly pendingChart = computed(() => {
+    const rows = this.pendingByStage();
+    return buildStackedBarOption(null, {
+      categories: rows.map(r => r.stage), theme: this.dark(),
+      series: [
+        { name: 'On time', data: rows.map(r => Math.max(0, r.count - r.overdue)), color: seriesColor(0, this.dark()) },
+        { name: 'Overdue', data: rows.map(r => r.overdue), color: seriesColor(3, this.dark()) },
+      ],
+    });
+  });
+  readonly rejectionChart = computed(() => {
+    const rows = this.rejection()?.topReasons ?? [];
+    return buildHorizontalBarOption(null, { categories: rows.map(r => r.reason), values: rows.map(r => r.count), theme: this.dark(), color: seriesColor(3, this.dark()) });
+  });
+  readonly staffChart = computed(() => {
+    const rows = this.staff().slice(0, 10);
+    return buildGroupedHBarOption({
+      categories: rows.map(r => r.userName), theme: this.dark(),
+      series: [{ name: 'Entered', data: rows.map(r => r.entered) }, { name: 'Validated', data: rows.map(r => r.validated) }],
+    });
+  });
+  readonly deliveryChart = computed(() => {
+    const rows = this.delivery();
+    return buildDonutOption({
+      items: rows.map(r => ({ name: r.status, value: r.count })), theme: this.dark(),
+      centre: { value: formatCount(rows.reduce((s, r) => s + r.count, 0)), label: 'messages' },
+    });
+  });
+
+  readonly outsourcedUnit = computed(() => this.outsourcedTrend()?.bucketUnit ?? 'day');
+  readonly outsourcedEmpty = computed(() => allZero((this.outsourcedTrend()?.points ?? []).map(p => p.count)));
+  readonly outsourcedChart = computed(() => {
+    const pts = this.outsourcedTrend()?.points ?? [];
+    return this.line({ categories: pts.map(p => p.bucket), labels: pts.map(p => bucketAxisLabel(p.bucket, this.outsourcedUnit())), series: [{ name: 'Outsourced tests', data: pts.map(p => p.count), color: seriesColor(2, this.dark()) }] });
+  });
+  readonly costUnit = computed(() => this.costTrend()?.bucketUnit ?? 'day');
+  readonly costEmpty = computed(() => allZero((this.costTrend()?.points ?? []).map(p => p.revenue + p.cost)));
+  readonly costChart = computed(() => {
+    const pts = this.costTrend()?.points ?? [];
+    return this.line({
+      categories: pts.map(p => p.bucket), labels: pts.map(p => bucketAxisLabel(p.bucket, this.costUnit())),
+      series: [{ name: 'Revenue', data: pts.map(p => p.revenue) }, { name: 'Partner cost', data: pts.map(p => p.cost), color: seriesColor(2, this.dark()) }],
+      valueFormatter: rupeeFormatter, axisFormatter: rupeeAxisFormatter,
+    });
+  });
+  readonly vendorChart = computed(() => {
+    const rows = this.vendors().slice(0, 10);
+    return buildHorizontalBarOption(null, { categories: rows.map(r => r.vendorName), values: rows.map(r => r.count), theme: this.dark(), color: seriesColor(2, this.dark()) });
+  });
+
+  readonly profitRows = computed(() => (this.profitView() === 'test' ? this.profitByTest() : this.profitByDept()));
+  readonly profitChart = computed(() => {
+    const rows = this.profitRows().slice(0, 10);
+    return buildGroupedHBarOption({
+      categories: rows.map(r => r.name), theme: this.dark(), valueFormatter: rupeeAxisFormatter,
+      series: [
+        { name: 'Revenue', data: rows.map(r => r.revenue) },
+        { name: 'Partner cost', data: rows.map(r => r.cost ?? 0), color: seriesColor(2, this.dark()) },
+      ],
+    });
+  });
+  readonly profitTotals = computed(() => {
+    const rows = this.profitRows();
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const out = rows.filter(r => r.hasOutsourcedLines);
+    return {
+      revenue, outRevenue: out.reduce((s, r) => s + r.revenue, 0), cost: out.reduce((s, r) => s + (r.cost ?? 0), 0),
+      margin: out.reduce((s, r) => s + (r.margin ?? 0), 0), noPrice: rows.reduce((s, r) => s + r.noPriceCount, 0), outCount: out.length,
+    };
+  });
+  readonly profitCols = computed<ColDef<ProfitabilityRow>[]>(() => [
+    { field: 'name', headerName: this.profitView() === 'test' ? 'Test' : 'Department', flex: 1.6, minWidth: 180, wrapText: true, autoHeight: true },
+    { field: 'revenue', headerName: 'Revenue', type: 'rightAligned', minWidth: 120, valueFormatter: p => formatRupee(p.value as number), cellClass: 'pf-ins-num' },
+    { field: 'cost', headerName: 'Partner cost', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
+      valueFormatter: p => ((p.data as ProfitabilityRow)?.hasOutsourcedLines ? formatRupee(p.value as number) : '—') },
+    { field: 'margin', headerName: 'Margin', type: 'rightAligned', minWidth: 120, cellClass: 'pf-ins-num',
+      valueFormatter: p => ((p.data as ProfitabilityRow)?.hasOutsourcedLines ? formatRupee(p.value as number) : '—') },
+  ]);
+
+  readonly revenueTotals = computed(() => {
+    const pts = this.revenue()?.points ?? [];
+    return {
+      gross: pts.reduce((s, p) => s + p.gross, 0), discount: pts.reduce((s, p) => s + p.discount, 0),
+      refund: pts.reduce((s, p) => s + p.refund, 0),
+    };
+  });
+
+  toggleRevenueSeries(k: RevenueSeriesKey): void {
+    const next = new Set(this.revenueOn());
+    if (next.has(k)) { if (next.size > 1) next.delete(k); } else next.add(k);
+    this.revenueOn.set(next);
+  }
+
+  // ═══ Drill handlers (chart element → list) ══════════════════════════
+
+  private bucketDrill(key: OpsListKey, unit: string, pick: ChartPick, label?: string): void {
+    const r = this.resolved();
+    const range = bucketRange(pick.name, unit, r.fromYmd, r.toYmd);
+    this.openList(key, { label: label ?? rangeLabel(range.fromYmd, range.toYmd), ...range });
+  }
+  drillVolume(p: ChartPick, key: OpsListKey = 'test-volume'): void { this.bucketDrill(key, this.volumeUnit(), p); }
+  drillRevenue(p: ChartPick): void { this.bucketDrill('monthly-financial', this.revenueUnit(), p); }
+  drillReferral(p: ChartPick): void { this.bucketDrill('referrals', this.referralUnit(), p); }
+  drillOutsourced(p: ChartPick): void { this.bucketDrill('outsourced-tests', this.outsourcedUnit(), p); }
+  drillCost(p: ChartPick): void { this.bucketDrill('outsourced-tests', this.costUnit(), p); }
+  drillDept(p: ChartPick, rows: { departmentName: string; departmentId?: string | null }[], key: OpsListKey = 'test-volume'): void {
+    const row = rows.find(r => r.departmentName === p.name);
+    const id = p.key ?? row?.departmentId ?? null;
+    this.openList(key, id ? { label: p.name, departmentId: id } : { label: p.name });
+  }
+  drillTest(p: ChartPick, rows: { testName: string; testId?: string | null }[]): void {
+    const id = rows.find(r => r.testName === p.name)?.testId ?? null;
+    this.openList('test-volume', id ? { label: p.name, testId: id } : { label: p.name });
+  }
+  drillDoctor(p: ChartPick): void {
+    const id = this.topDoctors().find(r => r.doctorName === p.name)?.doctorId ?? null;
+    this.openList('referrals', id ? { label: p.name, refDoctorId: id } : { label: p.name });
+  }
+  drillProfit(p: ChartPick): void {
+    const row = this.profitRows().find(r => r.name === p.name);
+    if (this.profitView() === 'test') this.openList('test-volume', row?.id ? { label: p.name, testId: row.id } : { label: p.name });
+    else this.openList('test-volume', row?.id ? { label: p.name, departmentId: row.id } : { label: p.name });
+  }
+
+  /** A drill whose dimension the server can't narrow by (no id on the row)
+   *  still opens the list — the chip says what was clicked, honestly. */
+  readonly drillNarrows = computed(() => {
+    const d = this.drill();
+    return !!d && !!(d.fromYmd || d.departmentId || d.testId || d.refDoctorId);
+  });
+
+  // ═══ Lists: grid, columns, export ═══════════════════════════════════
+
+  canViewList(cfg: OpsListConfig | null): boolean {
+    if (!cfg) return false;
+    if (cfg.requiresExportPatientData) return this.canExportPatients();
+    if (cfg.financialOnly) return this.canSeeMoney();
+    return true;
+  }
+  readonly canExport = computed(() => {
+    const c = this.listCfg();
+    if (!c || !this.canViewList(c)) return false;
+    return !(c.requiresExportPatientData || c.patientExport) || this.canExportPatients();
+  });
+
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, flex: 1, minWidth: 96, wrapText: true, autoHeight: true };
+
+  /** Columns the viewer may see (money columns are absent without the permission). */
+  readonly availableCols = computed(() => {
+    const cfg = this.listCfg();
+    if (!cfg) return [];
+    const money = this.canSeeMoney();
+    return cfg.columns.filter(c => !c.money || money);
+  });
+  readonly moneyHidden = computed(() => !this.canSeeMoney() && !!this.listCfg()?.columns.some(c => c.money));
+  readonly colDefs = computed<ColDef[]>(() => {
+    const cfg = this.listCfg();
+    if (!cfg) return [];
+    if (this.phone()) return [this.phoneRecordCol()];
+    const hidden = new Set(this.hiddenCols()[cfg.key] ?? []);
+    return this.availableCols().map((c): ColDef => ({
+      field: c.field, headerName: c.headerName, hide: hidden.has(c.field),
+      minWidth: (c.flex ?? 1) > 1 ? Math.round((c.minWidth ?? 110) * 0.8) : (c.minWidth ?? 110), flex: c.flex ?? 1,
+      // Names wrap (never cut); codes, dates and amounts stay on one line.
+      wrapText: (c.flex ?? 1) > 1, autoHeight: (c.flex ?? 1) > 1,
+      type: c.money || c.num ? 'rightAligned' : undefined,
+      cellClass: c.money || c.num || c.date || c.ref ? 'pf-ins-num' : undefined,
+      tooltipValueGetter: c.ref ? (p) => String(p.value ?? '') : undefined,
+      valueFormatter: c.date
+        ? (p: { value: unknown }) => (p.value ? formatDate(p.value as string, 'd MMM y, h:mm a', 'en-IN', LAB_TIME_ZONE) : '')
+        : c.money ? (p: { value: unknown }) => (p.value != null ? formatRupee(p.value as number) : '')
+        : c.ref ? (p: { value: unknown }) => (p.value ? String(p.value).slice(0, 8).toUpperCase() : '')
+        : c.num ? (p: { value: unknown }) => (p.value != null ? formatCount(p.value as number) : '')
+        : undefined,
+    }));
+  });
+  private fmtCell(c: { money?: boolean; date?: boolean; num?: boolean; ref?: boolean }, v: unknown): string {
+    if (v == null || v === '') return '';
+    if (c.date) return formatDate(v as string, 'd MMM, h:mm a', 'en-IN', LAB_TIME_ZONE);
+    if (c.money) return formatRupee(v as number);
+    if (c.ref) return String(v).slice(0, 8).toUpperCase();
+    if (c.num) return formatCount(v as number);
+    return String(v);
+  }
+
+  /** Phones: one record cell — the first text column as the title, the
+   *  first money (or count) column as the value, every other column on a
+   *  muted meta line. Nothing cut, no sideways scroll. */
+  private phoneRecordCol(): ColDef {
+    const cols = this.availableCols();
+    const texts = cols.filter(c => !c.money && !c.date && !c.num && !c.ref);
+    const value = cols.find(c => c.money) ?? cols.find(c => c.num);
+    const esc = (t: string) => t.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+    return {
+      colId: 'record', headerName: this.listCfg()?.label ?? '', flex: 1, minWidth: 200, sortable: false,
+      valueGetter: p => (p.data ? cols.map(c => this.fmtCell(c, (p.data as Record<string, unknown>)[c.field])).join(' ') : ''),
+      cellRenderer: (p: { data?: Record<string, unknown> }) => {
+        const d = p.data;
+        if (!d) return '';
+        // Title = the first text column this row actually has (an order
+        // without a number leads with its patient, never a blank line).
+        const title = texts.find(c => d[c.field] != null && d[c.field] !== '') ?? cols[0];
+        const meta = cols.filter(c => c !== title && c !== value).map(c => this.fmtCell(c, d[c.field])).filter(Boolean).join(' · ');
+        return `<div class="pf-ins-rec"><span class="pf-ins-rec__t"><span>${esc(this.fmtCell(title, d[title.field]))}</span>` +
+          (value ? `<span class="pf-ins-rec__v">${esc(this.fmtCell(value, d[value.field]))}</span>` : '') +
+          `</span>${meta ? `<span class="pf-ins-rec__m">${esc(meta)}</span>` : ''}</div>`;
+      },
+    };
+  }
+
+  readonly visibleColCount = computed(() => this.colDefs().filter(c => !c.hide).length);
+
+  isColHidden(field: string): boolean {
+    const k = this.listKey();
+    return !!k && (this.hiddenCols()[k] ?? []).includes(field);
+  }
+  toggleCol(field: string): void {
+    const k = this.listKey();
+    if (!k) return;
+    const cur = new Set(this.hiddenCols()[k] ?? []);
+    if (cur.has(field)) cur.delete(field);
+    else if (this.visibleColCount() > 1) cur.add(field);
+    const next = { ...this.hiddenCols(), [k]: [...cur] };
+    this.hiddenCols.set(next);
+    writeStore(COLS_KEY, next);
+  }
+  resetCols(): void {
+    const k = this.listKey();
+    if (!k) return;
+    const next = { ...this.hiddenCols() };
+    delete next[k];
+    this.hiddenCols.set(next);
+    writeStore(COLS_KEY, next);
+  }
+
+  readonly pageFrom = computed(() => (this.total() ? this.page() * LIST_PAGE + 1 : 0));
+  readonly pageTo = computed(() => Math.min(this.total(), (this.page() + 1) * LIST_PAGE));
+  readonly lastPage = computed(() => Math.max(0, Math.ceil(this.total() / LIST_PAGE) - 1));
+  readonly rowsLabel = computed(() => `${formatCount(this.total())} ${this.total() === 1 ? 'row' : 'rows'}`);
+  prevPage(): void { if (this.page() > 0) this.page.update(p => p - 1); }
+  nextPage(): void { if (this.page() < this.lastPage()) this.page.update(p => p + 1); }
+
+  /** Filters the server applies to this list, as words (side card). */
+  readonly listFilters = computed(() => {
+    const cfg = this.listCfg();
+    if (!cfg) return [];
+    const d = this.drill();
+    const out: { k: string; v: string }[] = [];
+    out.push({ k: 'Period', v: d?.fromYmd && d.toYmd ? rangeLabel(d.fromYmd, d.toYmd) : this.periodLabel() });
+    out.push({ k: 'Branch', v: this.branches().find(b => b.id === this.branchId())?.name ?? 'All branches' });
+    const dept = d?.departmentId ?? (cfg.takes.includes('departmentId') ? this.departmentId() : '');
+    if (dept) out.push({ k: 'Department', v: this.departments().find(x => x.id === dept)?.name ?? d?.label ?? '—' });
+    const test = d?.testId ?? (cfg.takes.includes('testId') ? this.testId() : '');
+    if (test) out.push({ k: 'Test', v: this.tests().find(x => x.id === test)?.name ?? d?.label ?? '—' });
+    const doc = d?.refDoctorId ?? (cfg.takes.includes('refDoctorId') ? this.refDoctorId() : '');
+    if (doc) out.push({ k: 'Referrer', v: this.referrers().find(x => x.id === doc)?.name ?? d?.label ?? '—' });
+    return out;
+  });
+  /** Band dimensions this list's endpoint can't narrow by. */
+  readonly ignoredFilters = computed(() => {
+    const cfg = this.listCfg();
+    if (!cfg) return [];
+    const out: string[] = [];
+    if (this.departmentId() && !cfg.takes.includes('departmentId')) out.push('department');
+    if (this.testId() && !cfg.takes.includes('testId')) out.push('test');
+    if (this.refDoctorId() && !cfg.takes.includes('refDoctorId')) out.push('referrer');
+    return out;
+  });
+
+  exportList(): void {
+    const cfg = this.listCfg();
+    if (!cfg || this.exporting()) return;
     this.exporting.set(true);
-    const cfg = this.activeOpsConfig();
-    const p = this.resolvedPeriod();
-    const params = new URLSearchParams({ period: this.period(), from: p.fromYmd, to: p.toYmd });
-    if (this.branchId()) params.set('branchId', this.branchId());
-    if (this.departmentId()) params.set('departmentId', this.departmentId());
-    if (this.testId()) params.set('testId', this.testId());
-    if (this.refDoctorId()) params.set('refDoctorId', this.refDoctorId());
-    this.api.getBlob(`/api/analytics/lists/${cfg.endpoint}/export.csv?${params.toString()}`).subscribe({
+    const q = this.listQuery(cfg);
+    const r = this.resolved();
+    this.api.getBlob(`/api/analytics/lists/${cfg.endpoint}/export.csv${q}`).subscribe({
       next: blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `insights-${cfg.key}-${p.fromYmd}-${p.toYmd}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `insights-${cfg.key}-${r.fromYmd}-${r.toYmd}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch { /* no DOM download (tests) */ }
         this.exporting.set(false);
       },
       error: () => this.exporting.set(false),
     });
   }
 
-  // ── Charts (ECharts, same engine + theme skin as the Trendogram) ─────
-  // Signal viewChild refs: each host only exists once its sub-tab is on
-  // screen (OnPush + @if); painting a tab that isn't mounted no-ops.
-  private readonly patientVolumeHost = viewChild<ElementRef<HTMLElement>>('patientVolumeHost');
-  private readonly newReturningHost = viewChild<ElementRef<HTMLElement>>('newReturningHost');
-  private readonly testsVolumeHost = viewChild<ElementRef<HTMLElement>>('testsVolumeHost');
-  private readonly testsPerPatientHost = viewChild<ElementRef<HTMLElement>>('testsPerPatientHost');
-  private readonly revenueHost = viewChild<ElementRef<HTMLElement>>('revenueHost');
-  private readonly deptRevenueHost = viewChild<ElementRef<HTMLElement>>('deptRevenueHost');
-  private readonly testsByDeptHost = viewChild<ElementRef<HTMLElement>>('testsByDeptHost');
-  private readonly referralVolumeHost = viewChild<ElementRef<HTMLElement>>('referralVolumeHost');
-  private readonly sourceTypeHost = viewChild<ElementRef<HTMLElement>>('sourceTypeHost');
-  private readonly outsourcedVolumeHost = viewChild<ElementRef<HTMLElement>>('outsourcedVolumeHost');
-  private readonly outsourcingCostHost = viewChild<ElementRef<HTMLElement>>('outsourcingCostHost');
+  // ═══ Section side-card summaries ════════════════════════════════════
 
-  private _echarts: typeof import('echarts') | null = null;
-  private async ec(): Promise<typeof import('echarts')> {
-    this._echarts ??= await import('echarts');
-    return this._echarts;
+  readonly sectionRank = computed<{ title: string; rows: RankRow[]; list: OpsListKey | null } | null>(() => {
+    const sec = this.section();
+    let title = '', rows: RankRow[] = [], list: OpsListKey | null = null;
+    if (sec === 'volume') {
+      title = 'Most ordered tests'; list = 'test-volume';
+      rows = this.topTestsByVolume().slice(0, 8).map(t => ({
+        name: t.testName, value: formatCount(t.count), share: t.pctOfTotal / 100, meta: `${t.pctOfTotal}% of tests`,
+        drill: () => this.openList('test-volume', t.testId ? { label: t.testName, testId: t.testId } : null),
+      }));
+    } else if (sec === 'tests-depts') {
+      // The main card ranks volume; the side card shows how much of each
+      // department's work leaves the lab (counts from the same server rows).
+      title = 'Sent out, by department'; list = 'outsourced-tests';
+      rows = this.testsByDept().filter(d => d.outsourced > 0)
+        .map(d => ({ d, total: d.inHouse + d.outsourced }))
+        .sort((a, b) => b.d.outsourced / b.total - a.d.outsourced / a.total).slice(0, 8)
+        .map(({ d, total }) => ({
+          name: d.departmentName, value: `${formatCount(d.outsourced)} of ${formatCount(total)}`, share: d.outsourced / total,
+          drill: () => this.openList('outsourced-tests', d.departmentId ? { label: d.departmentName, departmentId: d.departmentId } : null),
+        }));
+    } else if (sec === 'revenue') {
+      return null;
+    } else if (sec === 'referrals') {
+      title = 'Doctor details'; list = 'referrals';
+      const max = Math.max(1, ...this.topDoctors().map(d => d.patients));
+      rows = this.topDoctors().slice(0, 8).map(d => ({
+        name: d.doctorName, value: plural(d.patients, 'patient'), share: d.patients / max,
+        meta: `${plural(d.orders, 'order')}${this.canSeeMoney() && d.revenue != null ? ' · ' + formatRupee(d.revenue) : ''}`,
+        drill: () => this.openList('referrals', d.doctorId ? { label: d.doctorName, refDoctorId: d.doctorId } : null),
+      }));
+    } else if (sec === 'outsourcing') {
+      title = this.canSeeMoney() ? 'Partner revenue' : 'Tests by partner'; list = 'outsourced-tests';
+      const money = this.canSeeMoney();
+      const max = Math.max(1, ...this.vendors().map(v => (money ? v.revenue : v.count)));
+      rows = this.vendors().slice(0, 8).map(v => ({
+        name: v.vendorName, value: money ? formatRupee(v.revenue) : formatCount(v.count), share: (money ? v.revenue : v.count) / max,
+        meta: plural(v.count, 'test'), drill: () => this.openList('outsourced-tests'),
+      }));
+    } else if (sec === 'lab-ops') {
+      title = 'Within TAT target'; list = null;
+      rows = [...this.tatByDept()].sort((a, b) => a.pctWithinTarget - b.pctWithinTarget).slice(0, 8).map(t => ({
+        name: t.departmentName, value: `${t.pctWithinTarget}%`, share: t.pctWithinTarget / 100,
+        meta: `${plural(t.count, 'test')} · median ${formatMinutes(t.medianMinutes)}`,
+      }));
+    } else if (sec === 'profitability') {
+      title = this.profitView() === 'test' ? 'Best margins' : 'Department margins'; list = 'test-volume';
+      const withMargin = this.profitRows().filter(r => r.hasOutsourcedLines && r.margin != null).sort((a, b) => (b.margin ?? 0) - (a.margin ?? 0));
+      const max = Math.max(1, ...withMargin.map(r => Math.abs(r.margin ?? 0)));
+      rows = withMargin.slice(0, 8).map(r => ({ name: r.name, value: formatRupee(r.margin), share: Math.abs(r.margin ?? 0) / max, meta: `on ${formatRupee(r.revenue)}` }));
+    } else {
+      return null;
+    }
+    return { title, rows: this.searchRank(rows), list };
+  });
+
+  /** The side card's primary action for a section (the ONE primary). */
+  readonly sectionCta = computed<{ label: string; list: OpsListKey } | null>(() => {
+    switch (this.section()) {
+      case 'overview': {
+        const t = this.selectedTile();
+        if (!t?.list) return null;
+        const cfg = OPS_LISTS.find(l => l.key === t.list);
+        return cfg && this.lists().includes(cfg) ? { label: `Open ${cfg.label.toLowerCase()}`, list: t.list } : null;
+      }
+      case 'volume': return this.lists().some(l => l.key === 'patients') ? { label: 'Open patients', list: 'patients' } : { label: 'Open test volume', list: 'test-volume' };
+      case 'revenue': return { label: 'Open payments', list: 'monthly-financial' };
+      case 'tests-depts': return { label: 'Open test volume', list: 'test-volume' };
+      case 'referrals': return { label: 'Open referrals', list: 'referrals' };
+      case 'outsourcing': return { label: 'Open outsourced tests', list: 'outsourced-tests' };
+      case 'profitability': return { label: 'Open test volume', list: 'test-volume' };
+      default: return null;
+    }
+  });
+
+  // ═══ URL ════════════════════════════════════════════════════════════
+
+  private restoreFromUrl(): void {
+    const qp = this.route?.snapshot?.queryParamMap;
+    if (!qp) return;
+    const sec = qp.get('section');
+    if (sec && (SECTIONS.some(s => s.id === sec) || OPS_LISTS.some(l => `list:${l.key}` === sec))) this.nav.set(sec as InsightsNavId);
+    const p = qp.get('period') as AnalyticsPeriodPreset | null;
+    if (p && ANALYTICS_PERIOD_OPTIONS.some(o => o.value === p)) this.period.set(p);
+    const from = qp.get('from'), to = qp.get('to');
+    if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) this.customFrom.set(from);
+    if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) this.customTo.set(to);
+    const b = qp.get('branch');
+    if (b) this.branchId.set(b);
   }
 
-  private readonly charts = new Map<string, ReturnType<typeof import('echarts').init>>();
-
-  private async paintTo(ref: Signal<ElementRef<HTMLElement> | undefined>, key: string, option: unknown) {
-    const el = ref()?.nativeElement;
-    if (!el) return;
-    const ec = await this.ec();
-    let chart = this.charts.get(key);
-    if (chart && chart.getDom() !== el) { chart.dispose(); chart = undefined; }
-    if (!chart) { chart = ec.init(el, undefined, { renderer: 'canvas' }); this.charts.set(key, chart); }
-    chart.setOption(ndTrendSkin(option, this.theme.isDark()));
+  private writeUrl(params: Record<string, string>): void {
+    if (!this.router || !this.location) return;
+    try {
+      const tree = this.router.createUrlTree([], { relativeTo: this.route ?? undefined, queryParams: params });
+      this.location.replaceState(this.router.serializeUrl(tree));
+    } catch { /* no router in a bare spec */ }
   }
 
-  private async paintVolumeCharts() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const points = this.volumeTrend();
-    const categories = points.map(p => p.bucket);
-    void this.paintTo(this.patientVolumeHost, 'patient-volume', buildBusinessLineOption(ec, {
-      categories, series: [{ name: 'Patients', data: points.map(p => p.patients) }], theme: dark ? 'dark' : 'light',
-    }));
-    void this.paintTo(this.newReturningHost, 'new-returning', buildStackedBarOption(ec, {
-      categories, series: [
-        { name: 'New', data: points.map(p => p.newPatients) },
-        { name: 'Returning', data: points.map(p => p.returningPatients) },
-      ], theme: dark ? 'dark' : 'light',
-    }));
-    void this.paintTo(this.testsVolumeHost, 'tests-volume', buildBusinessLineOption(ec, {
-      categories, series: [{ name: 'Tests', data: points.map(p => p.tests) }], theme: dark ? 'dark' : 'light',
-    }));
-    void this.paintTo(this.testsPerPatientHost, 'tests-per-patient', buildBusinessLineOption(ec, {
-      categories, series: [{ name: 'Tests / patient', data: points.map(p => p.testsPerPatient) }], theme: dark ? 'dark' : 'light',
-    }));
-  }
-
-  private async paintRevenueChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const points = this.revenueTrend();
-    const categories = points.map(p => p.bucket);
-    const on = this.revenueSeriesOn();
-    const series = this.revenueSeriesKeys.filter(k => on.has(k)).map(k => ({ name: this.revenueSeriesLabel[k], data: points.map(p => p[k]) }));
-    void this.paintTo(this.revenueHost, 'revenue', buildBusinessLineOption(ec, { categories, series, theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter }));
-  }
-
-  private async paintDeptChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const rows = this.deptRevenue();
-    void this.paintTo(this.deptRevenueHost, 'dept-revenue', buildHorizontalBarOption(ec, {
-      categories: rows.map(r => r.departmentName), values: rows.map(r => r.revenue), theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
-    }));
-  }
-
-  private async paintTestsByDeptChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const rows = this.testVolumeByDept();
-    void this.paintTo(this.testsByDeptHost, 'tests-by-dept', buildStackedBarOption(ec, {
-      categories: rows.map(r => r.departmentName),
-      series: [
-        { name: 'In-house', data: rows.map(r => r.inHouse) },
-        { name: 'Outsourced', data: rows.map(r => r.outsourced) },
-      ],
-      theme: dark ? 'dark' : 'light',
-    }));
-  }
-
-  private async paintReferralVolumeChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const points = this.referralVolumeTrend();
-    void this.paintTo(this.referralVolumeHost, 'referral-volume', buildBusinessLineOption(ec, {
-      categories: points.map(p => p.bucket), series: [{ name: 'Referred orders', data: points.map(p => p.orders) }], theme: dark ? 'dark' : 'light',
-    }));
-  }
-
-  private async paintSourceTypeChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const rows = this.sourceTypeRevenue();
-    void this.paintTo(this.sourceTypeHost, 'source-type', buildHorizontalBarOption(ec, {
-      categories: rows.map(r => r.sourceType), values: rows.map(r => r.revenue), theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
-    }));
-  }
-
-  private async paintOutsourcedVolumeChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const points = this.outsourcedVolumeTrend();
-    void this.paintTo(this.outsourcedVolumeHost, 'outsourced-volume', buildBusinessLineOption(ec, {
-      categories: points.map(p => p.bucket), series: [{ name: 'Outsourced tests', data: points.map(p => p.count) }], theme: dark ? 'dark' : 'light',
-    }));
-  }
-
-  private async paintOutsourcingCostChart() {
-    const ec = await this.ec();
-    const dark = this.theme.isDark();
-    const points = this.outsourcingCostTrend();
-    void this.paintTo(this.outsourcingCostHost, 'outsourcing-cost', buildBusinessLineOption(ec, {
-      categories: points.map(p => p.bucket),
-      series: [
-        { name: 'Revenue', data: points.map(p => p.revenue) },
-        { name: 'Vendor cost', data: points.map(p => p.cost) },
-      ],
-      theme: dark ? 'dark' : 'light', valueFormatter: rupeeFormatter,
-    }));
+  private mq(query: string, set: (v: boolean) => void): boolean {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    const m = window.matchMedia(query);
+    const on = (ev: MediaQueryListEvent) => set(ev.matches);
+    try { m.addEventListener('change', on); this.destroyRef.onDestroy(() => m.removeEventListener('change', on)); } catch { /* old Safari */ }
+    return !!m.matches;
   }
 }

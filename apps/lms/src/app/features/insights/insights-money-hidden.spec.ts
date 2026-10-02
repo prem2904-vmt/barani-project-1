@@ -57,6 +57,9 @@ describe('Insights — money-hidden rendering', () => {
     expect(text).toContain('Median TAT');
     expect(text).not.toContain('Billed (net)');
     expect(text).not.toContain('Collected');
+    // money-only sections and lists are not offered at all
+    expect(text).not.toContain('Profitability');
+    expect(text).not.toContain('Outstanding payments');
     expect(text).not.toContain('Avg bill value');
     expect(text).not.toContain('undefined');
     expect(text).not.toContain('NaN');
@@ -78,7 +81,7 @@ describe('Insights — money-hidden rendering', () => {
     const p = render([], OVERVIEW_NO_MONEY);
     p.f.detectChanges();
     expect(p.el.textContent).toContain("don't have access");
-    expect(p.el.querySelector('.ins-kpi')).toBeNull();
+    expect(p.el.querySelector('.pf-ins-kpi')).toBeNull();
     p.f.destroy();
   });
 });
