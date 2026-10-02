@@ -590,12 +590,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const err = ApiError.from(e);
       if (err.code !== 'stock_warning') throw e;
       if (!this.auth.hasPermission('manage_inventory')) {
-        await this.dialog.confirm({
+        // Two-OK-buttons review fix: this is a notice, not a choice — there's
+        // nothing to confirm against, so it's dialog.alert() (ONE button),
+        // not confirm() with confirmLabel===cancelLabel faking the same thing.
+        await this.dialog.alert({
           title: 'Stock warning',
           message: err.message,
           question: 'Ask an inventory manager to approve.',
-          confirmLabel: 'OK',
-          cancelLabel: 'OK',
           tone: 'danger',
         });
         throw e;
@@ -610,6 +611,42 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       });
       if (!proceed) throw e;
       return await firstValueFrom(this.api.post<Order>('/api/orders/', { ...body, overrideStockWarning: true }));
+    }
+  }
+
+  /** PATCH /api/orders/{id}/tests, catching a `stock_warning` the SAME way
+   *  postOrderWithStockGate does for creating an order (R1 review fix — both
+   *  PATCH call sites, confirmPayment's patch branch and submit()'s edit-mode
+   *  branch, were hitting this 400 with no recovery path once the server
+   *  started gating an in-place test-list edit the same as a new order). Same
+   *  dialog, same manage_inventory permission gate, resend with
+   *  `overrideStockWarning: true`. Backing out rethrows, so the caller's own
+   *  catch shows it. */
+  private async patchTestsWithStockGate<T>(orderId: string, body: Record<string, unknown>): Promise<T> {
+    try {
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, body));
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        await this.dialog.alert({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          tone: 'danger',
+        });
+        throw e;
+      }
+      const proceed = await this.dialog.confirm({
+        title: 'Stock warning',
+        message: err.message,
+        question: 'Save anyway?',
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!proceed) throw e;
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, { ...body, overrideStockWarning: true }));
     }
   }
 
@@ -2063,9 +2100,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         this.noteOrdered(this._selected());
       } else {
         if (plan.action === 'patch') {
-          await firstValueFrom(this.api.patch<unknown>(`/api/orders/${plan.orderId}/tests`, {
+          await this.patchTestsWithStockGate(plan.orderId, {
             testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
-          }));
+          });
           this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
         }
         order = { id: plan.orderId };
@@ -2449,17 +2486,24 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       this._saving.set(true);
-      this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
-        testIds: this._selected(),
-        specimens: this.specimenPayload(), reason: 'reception edit'
-      }).subscribe({
-        next: () => {
+      // Async IIFE (not .subscribe) so a stock_warning can be gated through
+      // the same DialogService confirm + resend-with-override helper as the
+      // create path (R1 review fix — this PATCH used to hit a stock_warning
+      // 400 with no way to override it).
+      void (async () => {
+        try {
+          await this.patchTestsWithStockGate<{ order: Order; bill: unknown }>(editId, {
+            testIds: this._selected(),
+            specimens: this.specimenPayload(), reason: 'reception edit'
+          });
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
           this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(editId) });
-        },
-        error: e => { this._saving.set(false); this.surfaceMutationError(e); }
-      });
+        } catch (e) {
+          this._saving.set(false);
+          this.surfaceMutationError(e);
+        }
+      })();
       return;
     }
 

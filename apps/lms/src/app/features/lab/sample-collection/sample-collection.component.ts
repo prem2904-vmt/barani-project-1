@@ -1683,10 +1683,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         // first request's late failure.
         const current = this._pending().find((x) => x.id === s.id);
         if (current?.status !== "pending") return;
+        const err = ApiError.from(e);
+        // L-a review fix: "Sample is already pending; cannot uncollect."
+        // means a concurrent uncollect (another tap, another tab) already
+        // won the race — the server's TRUE status is pending, same as what
+        // we're already showing. Rolling back to 'collected' here would
+        // show the desk a tile state the server doesn't have; leave it
+        // pending (matches reality) instead of fighting it back.
+        if (/already pending/i.test(err.message)) {
+          this.toasts.error(err.message);
+          return;
+        }
         this._pending.update((list) =>
           list.map((x) => (x.id === s.id ? { ...x, ...prev } : x)),
         );
-        this.toasts.error(ApiError.from(e).message);
+        this.toasts.error(err.message);
       },
     });
   }
