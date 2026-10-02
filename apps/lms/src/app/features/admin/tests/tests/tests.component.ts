@@ -575,7 +575,7 @@ export class TestsComponent implements OnInit {
 
   protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
     if (!this.isPhone) return cols;
-    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status']);
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status', 'standardCode']);
     return cols.filter(c => !drop.has(String(c.field ?? c.colId ?? '')));
   }
 
@@ -622,6 +622,8 @@ export class TestsComponent implements OnInit {
           cellEditor: 'agNumberCellEditor',
         },
         this.priceColDef(this.canEditPrices()),
+        // Standard code (LOINC) — plain free text like Short / Section, set on the master catalogue.
+        { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180 },
         this.statusColDef(),
         this.actionsColDef(),
       ];
@@ -654,6 +656,7 @@ export class TestsComponent implements OnInit {
       { ...this.derivedRangeColDef(), minWidth: 180, sortable: false, filter: false },
       { ...this.derivedUnitColDef(), sortable: false, filter: false },
       { ...this.priceColDef(this.canEditPrices()), sortable: false, filter: false },
+      { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180, sortable: false, filter: false },
       this.statusColDef(),
       this.actionsColDef(),
     ];

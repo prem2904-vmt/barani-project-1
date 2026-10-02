@@ -492,3 +492,36 @@ describe('Test Master grid — column sizing: slim actions, wrap instead of crop
     expect(name.querySelector('.pf-tm-tree-name')!.classList.contains('pf-tm-clamp2')).toBe(false);
   });
 });
+
+describe('Test Master grid — Standard code (LOINC) column', () => {
+  const fields = (cols: any[]) => cols.map((d: any) => d.colId ?? d.field);
+
+  it('flat view: a plain editable standardCode text column, right before Status (Status + Actions stay last)', () => {
+    const { c } = make([hb()]);
+    const cols = c.colDefs();
+    const sc = col(c, 'standardCode');
+    expect(sc.headerName).toBe('Standard code (LOINC)');
+    expect(sc.editable).toBe(true);
+    expect(sc.cellRenderer).toBeUndefined();
+    expect(sc.cellEditor).toBeUndefined();
+    const f = fields(cols);
+    expect(f.indexOf('standardCode')).toBe(f.indexOf('status') - 1);
+    expect(f.slice(-2)).toEqual(['status', 'actions']);
+  });
+
+  it('tree view: the same column, right before Status', () => {
+    const { c } = make([hb({ type: 'profile' })]);
+    c.setType('profile');
+    const f = fields(c.colDefs());
+    expect(col(c, 'standardCode').editable).toBe(true);
+    expect(f.indexOf('standardCode')).toBe(f.indexOf('status') - 1);
+    expect(f.slice(-2)).toEqual(['status', 'actions']);
+  });
+
+  it('an edit batches and PATCHes like any text field', () => {
+    const { c, api } = make([hb()]);
+    c.onCellValueChanged({ colDef: { field: 'standardCode' }, newValue: '718-7', oldValue: null, data: { id: 't1' } });
+    c.saveAll();
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { standardCode: '718-7' });
+  });
+});
