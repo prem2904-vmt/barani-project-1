@@ -66,7 +66,7 @@ export class InstrumentsApiService {
   imageMaps(id: string): Observable<ImageCodeDto[]> {
     return this.api.get<ImageCodeDto[]>(`/api/instruments/${encodeURIComponent(id)}/image-maps`);
   }
-  /** Replace-all of the image code → profile maps. */
+  /** Set which profiles each listed image code shows on (stored in each profile's layout JSON — page_layout.analyzerImages — on its effective row). */
   saveImageMaps(id: string, maps: ImageMapUpsert[]): Observable<ImageCodeDto[]> {
     return this.api.put<ImageCodeDto[]>(`/api/instruments/${encodeURIComponent(id)}/image-maps`, maps);
   }

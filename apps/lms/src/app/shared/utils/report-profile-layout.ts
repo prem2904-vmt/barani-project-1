@@ -1,4 +1,4 @@
-import type { PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutSection, PageLayoutTableMode, ReportSection } from '../models/report-layout.model';
+import type { PageLayoutAnalyzerImage, PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutSection, PageLayoutTableMode, ReportSection } from '../models/report-layout.model';
 import {
   MARGIN_X, MM, PAGE, intersectBox, mmToPt, nudgeSnapX, ptToMm, snapBoxX,
 } from './report-header-layout';
@@ -97,8 +97,13 @@ export function readPageLayout(sections: ReadonlyArray<unknown> | null | undefin
     : [{ id: 'page-1', boxes }];
   if (!pages.length) pages.push({ id: 'page-1', boxes: [] });
   const tableMode: PageLayoutTableMode = raw['tableMode'] === 'manual' ? 'manual' : 'auto';
+  const analyzerImages = Array.isArray(raw['analyzerImages'])
+    ? (raw['analyzerImages'] as unknown[]).filter((o): o is PageLayoutAnalyzerImage =>
+        !!o && typeof o === 'object' && typeof (o as Record<string, unknown>)['code'] === 'string')
+    : undefined;
   return { id: String(hit['id'] ?? 'page-layout'), type: PAGE_LAYOUT_SECTION_TYPE, order: Number(hit['order'] ?? 0),
-    v: 2, enabled: raw['enabled'] === true, boxes: pages[0].boxes, pages, tableMode };
+    v: 2, enabled: raw['enabled'] === true, boxes: pages[0].boxes, pages, tableMode,
+    ...(analyzerImages?.length ? { analyzerImages } : {}) };
 }
 
 function isBox(o: unknown): o is PageLayoutBox {
@@ -129,6 +134,9 @@ export function writePageLayout(
     boxes: pages[0].boxes,
     pages,
     tableMode: cfg.tableMode ?? 'auto',
+    // Owned by Instruments → Code mapping — a layout save carries it through.
+    ...(existing && Array.isArray((existing as PageLayoutSection).analyzerImages)
+      ? { analyzerImages: (existing as PageLayoutSection).analyzerImages } : {}),
   };
   return existing
     ? sections.map(s => (isPageLayoutSection(s) ? next : s))

@@ -56,3 +56,20 @@ describe('Custom layout — table across pages', () => {
     expect([...by.get('b')!]).toEqual(['WBC', 'PLT']);
   });
 });
+
+describe('Custom layout — analyzer image mapping (lives in the same JSON)', () => {
+  const mapped = [{ id: 'page-layout', type: 'page_layout', order: 1, v: 2, enabled: false, boxes: [], pages: [{ id: 'page-1', boxes: [] }],
+    analyzerImages: [{ code: '12003', label: 'WBC histogram' }, { code: '12153' }, { nope: 1 }] }] as unknown as ReportSection[];
+  it('reads the profile\'s analyzerImages (ignoring malformed entries)', () => {
+    expect(readPageLayout(mapped)!.analyzerImages).toEqual([{ code: '12003', label: 'WBC histogram' }, { code: '12153' }]);
+  });
+  it('a designer save keeps the list Code mapping wrote', () => {
+    const next = writePageLayout(mapped, { enabled: true, pages: [{ id: 'page-1', boxes: [t('table')] }] });
+    expect((next[0] as unknown as Record<string, unknown>)['analyzerImages']).toEqual((mapped[0] as unknown as Record<string, unknown>)['analyzerImages']);
+    expect(readPageLayout(next)!.enabled).toBe(true);
+  });
+  it('a layout with no mapping writes none', () => {
+    const next = writePageLayout([], { enabled: true, pages: [{ id: 'page-1', boxes: [] }] });
+    expect('analyzerImages' in (next[0] as unknown as Record<string, unknown>)).toBe(false);
+  });
+});

@@ -260,7 +260,12 @@ export interface PageLayoutSection extends ReportSectionBase {
   boxes: PageLayoutBox[];
   pages?: PageLayoutPage[];
   tableMode?: PageLayoutTableMode;
+  /** Analyzer image codes mapped to this profile (Instruments → Code mapping
+   *  owns it; the designer only carries it through a save). */
+  analyzerImages?: PageLayoutAnalyzerImage[];
 }
+
+export interface PageLayoutAnalyzerImage { code: string; label?: string; }
 
 export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection
   | CultureLineSection | CultureAstSection | PageLayoutSection;
