@@ -253,6 +253,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
             <pf-profile-layout-designer
               [sections]="$any(rawSections() ?? [])"
               [resolvedColumns]="resolvedColumns()"
+              [profileTestId]="testId()"
               [availableAnalyzerCodes]="availableAnalyzerCodes()"
               [hasDefault]="true"
               (sectionsChange)="onPageLayoutChange($event)"

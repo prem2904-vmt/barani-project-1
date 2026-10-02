@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
 import { ProfileLayoutDesignerComponent } from './profile-layout-designer.component';
 import type { ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
-import { readPageLayout } from '../../../shared/utils/report-profile-layout';
+import { KNOWN_ANALYZER_IMAGES, readPageLayout } from '../../../shared/utils/report-profile-layout';
+import { ApiService } from '../../../core/services/api.service';
+import { PlatformService } from '../../../core/services/platform.service';
 
 const COLUMNS: ReportColumn[] = [
   { id: 'c-name', name: 'name', label: 'Investigation', order: 1, width: 34, type: 'name', locked: false } as ReportColumn,
@@ -11,8 +14,17 @@ const COLUMNS: ReportColumn[] = [
   { id: 'c-method', name: 'method', label: 'Methodology', order: 5, width: 16, type: 'method', locked: false } as ReportColumn,
 ];
 
+/** No real template configured — the designer falls back to the plain
+ *  greyed frame (its own [pdf.js render]-failure path), which is exactly
+ *  what every test below needs: the box geometry/behaviour, not pixels. */
 function make(sections: ReportSection[] = []) {
-  TestBed.configureTestingModule({ imports: [ProfileLayoutDesignerComponent] });
+  TestBed.configureTestingModule({
+    imports: [ProfileLayoutDesignerComponent],
+    providers: [
+      { provide: ApiService, useValue: { get: () => of(null) } },
+      { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
+    ],
+  });
   const f = TestBed.createComponent(ProfileLayoutDesignerComponent);
   f.componentRef.setInput('sections', sections);
   f.componentRef.setInput('resolvedColumns', COLUMNS);
@@ -124,5 +136,91 @@ describe('ProfileLayoutDesignerComponent', () => {
     expect(btn).toBeTruthy();
     btn!.click();
     expect(fired).toBe(true);
+  });
+
+  // ── Real header/footer (owner: "show the REAL header/footer, read-only,
+  // greyed — the same page that prints") ─────────────────────────────────
+  it('fetches the tenant report template once, to render the real letterhead/footer', () => {
+    const get = vi.fn(() => of(null));
+    TestBed.configureTestingModule({
+      imports: [ProfileLayoutDesignerComponent],
+      providers: [
+        { provide: ApiService, useValue: { get } },
+        { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
+      ],
+    });
+    const f = TestBed.createComponent(ProfileLayoutDesignerComponent);
+    f.componentRef.setInput('sections', []);
+    f.detectChanges();
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith('/api/config/report-template');
+  });
+
+  it('before the template arrives, the body geometry is the classic-template fallback (never NaN/zero)', () => {
+    const f = make([]);
+    const c = f.componentInstance;
+    expect(c.bodyTopPx()).toBeGreaterThan(0);
+    expect(c.bodyBottomPx()).toBeGreaterThan(c.bodyTopPx());
+    expect(c.canvasReady()).toBe(false);
+  });
+
+  it('a template fetch error never throws — the designer still works with the fallback frame', () => {
+    const get = vi.fn(() => throwError(() => new Error('network')));
+    TestBed.configureTestingModule({
+      imports: [ProfileLayoutDesignerComponent],
+      providers: [
+        { provide: ApiService, useValue: { get } },
+        { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
+      ],
+    });
+    const f = TestBed.createComponent(ProfileLayoutDesignerComponent);
+    f.componentRef.setInput('sections', []);
+    expect(() => f.detectChanges()).not.toThrow();
+    expect(f.componentInstance.bodyTopPx()).toBeGreaterThan(0);
+  });
+
+  it('once the template resolves, body geometry comes from the REAL resolved layout (computeReportPageLayout), not the hardcoded fallback', () => {
+    const get = vi.fn(() => of(null)); // null = "no custom template" — still a REAL resolved classic layout
+    TestBed.configureTestingModule({
+      imports: [ProfileLayoutDesignerComponent],
+      providers: [
+        { provide: ApiService, useValue: { get } },
+        { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
+      ],
+    });
+    const f = TestBed.createComponent(ProfileLayoutDesignerComponent);
+    f.componentRef.setInput('sections', []);
+    f.detectChanges();
+    const c = f.componentInstance;
+    // realLayout() is only non-null once the (resolved, even if null) template
+    // has arrived — proving the fallback constant is no longer what's driving it.
+    expect(c.realLayout()).not.toBeNull();
+    expect(c.bodyTopPx()).toBeCloseTo(c.realLayout()!.bodyTop * (480 / 595.28), 1);
+  });
+
+  // ── Analyzer palette: codes actually SEEN, M51 as fallback ──────────────
+  it('offers the codes actually attached to recent results, once the profile id resolves them', async () => {
+    const get = vi.fn((url: string) =>
+      url.includes('/analyzer-codes') ? of({ testId: 'p1', codes: ['12003', '99999'] }) : of(null));
+    TestBed.configureTestingModule({
+      imports: [ProfileLayoutDesignerComponent],
+      providers: [
+        { provide: ApiService, useValue: { get } },
+        { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
+      ],
+    });
+    const f = TestBed.createComponent(ProfileLayoutDesignerComponent);
+    f.componentRef.setInput('sections', []);
+    f.componentRef.setInput('profileTestId', 'p1');
+    f.detectChanges();
+    for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0)); // firstValueFrom() + the service's + the effect's .then()
+    f.detectChanges();
+    expect(get).toHaveBeenCalledWith('/api/report-layout/test/p1/analyzer-codes');
+    expect(f.componentInstance.effectiveAnalyzerCodes()).toEqual(['12003', '99999']);
+  });
+
+  it('nothing seen yet (or no profile id): falls back to the known M51 suggestions', () => {
+    const f = make([]);
+    expect(f.componentInstance.effectiveAnalyzerCodes()).toEqual(KNOWN_ANALYZER_IMAGES.map(i => i.code));
   });
 });

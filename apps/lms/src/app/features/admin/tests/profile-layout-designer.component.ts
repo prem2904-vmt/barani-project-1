@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ReportColumn, ReportSection, PageLayoutBox } from '../../../shared/models/report-layout.model';
+import type { ReportTemplate } from '../../../shared/models/report.model';
 import {
   KNOWN_ANALYZER_IMAGES, MARGIN_X, MIN_BODY_FONT_PT, PAGE, addAnalyzerSlot, analyzerLabel, bodyArea,
   collapseMissingAnalyzerBoxes, detectLayoutIssues, fitMeter, missingAnalyzerWarning, moveBox,
@@ -8,6 +9,27 @@ import {
   type BodyArea, type PageLayoutIssue,
 } from '../../../shared/utils/report-profile-layout';
 import { ptToMm } from '../../../shared/utils/report-header-layout';
+import {
+  computeReportPageLayout, footerFloor, preloadReportImages, renderReportPdfBlobUrl,
+} from '../../../shared/utils/report-pdf';
+import { ApiService } from '../../../core/services/api.service';
+import { PlatformService } from '../../../core/services/platform.service';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
+
+/** A profile has no results snapshot at design time — an empty-tests report
+ *  still draws the full page chrome (letterhead, patient block, footer),
+ *  which is all the designer borrows: the REAL page, read-only/greyed,
+ *  exactly like report-header-editor.component.ts renders it (pdf.js → a
+ *  canvas) — see its "page rendering" section, reused here rather than
+ *  reinvented. */
+function blankPreviewSnapshot(): string {
+  return JSON.stringify({
+    patient: { displayName: 'Sample Patient', age: 30, sex: 'Female' },
+    order: { id: 'preview', orderNumber: 'PREVIEW', createdAt: new Date().toISOString() },
+    type: 'final',
+    tests: [],
+  });
+}
 
 /** Nudge steps (mm) — same choice the letterhead editor offers. */
 const STEPS = [0.5, 1, 5];
@@ -59,8 +81,17 @@ const STEPS = [0.5, 1, 5];
       </div>
 
       <div class="pld-page" [style.width.px]="pageW" [style.height.px]="pageW * (PAGE.h / PAGE.w)">
-        <div class="pld-band pld-band--header" [style.height.px]="bodyTopPx()">Letterhead (fixed — from Report template)</div>
-        <div class="pld-band pld-band--footer" [style.top.px]="bodyBottomPx()" [style.height.px]="pageW * (PAGE.h / PAGE.w) - bodyBottomPx()">Footer (fixed)</div>
+        <div class="pld-canvas" #canvasHost aria-hidden="true"></div>
+        @if (!canvasReady()) {
+          <div class="pld-band pld-band--header" [style.height.px]="bodyTopPx()">Letterhead (fixed — from Report template)</div>
+          <div class="pld-band pld-band--footer" [style.top.px]="bodyBottomPx()" [style.height.px]="pageW * (PAGE.h / PAGE.w) - bodyBottomPx()">Footer (fixed)</div>
+        } @else {
+          <!-- The REAL letterhead/footer (pdf.js-rendered, same as the
+               letterhead editor) — a grey wash over the top makes clear
+               they're read-only here; only the body between them is live. -->
+          <div class="pld-grey pld-grey--header" [style.height.px]="bodyTopPx()"></div>
+          <div class="pld-grey pld-grey--footer" [style.top.px]="bodyBottomPx()" [style.height.px]="pageW * (PAGE.h / PAGE.w) - bodyBottomPx()"></div>
+        }
 
         <div class="pld-body" [style.top.px]="bodyTopPx()" [style.left.px]="marginPx()" [style.width.px]="bodyWpx()" [style.height.px]="bodyHpx()"
              (pointerdown)="onBodyPointerDown($event)" tabindex="0" role="application"
@@ -129,7 +160,7 @@ const STEPS = [0.5, 1, 5];
         } @else {
           <p class="nd-field__hint">Select a box on the page, or add one below.</p>
           <h4 class="pld-sec__h">Analyzer image slots</h4>
-          @for (img of availableAnalyzerCodes(); track img) {
+          @for (img of effectiveAnalyzerCodes(); track img) {
             @if (!hasBox('analyzer-' + img)) {
               <button type="button" class="nd-btn nd-btn--secondary pld-add" (click)="addAnalyzer(img)">+ {{ labelForCode(img) }}</button>
             }
@@ -157,6 +188,9 @@ const STEPS = [0.5, 1, 5];
     .pld-band { position: absolute; left: 0; right: 0; top: 0; background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px);
       color: #64748b; font-size: 10px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2px; }
     .pld-band--footer { bottom: 0; top: auto; }
+    .pld-canvas, .pld-canvas ::ng-deep canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .pld-grey { position: absolute; left: 0; right: 0; top: 0; background: rgba(241,245,249,.72); pointer-events: none; }
+    .pld-grey--footer { bottom: 0; top: auto; }
     .pld-body { position: absolute; outline: 1px dashed #94a3b8; }
     .pld-box { position: absolute; border: 1px solid #64748b; background: rgba(59,130,246,.08); cursor: move; box-sizing: border-box; }
     .pld-box--table { background: rgba(16,185,129,.08); }
@@ -178,13 +212,26 @@ const STEPS = [0.5, 1, 5];
     .pld-steps { margin-top: 4px; }
   `],
 })
-export class ProfileLayoutDesignerComponent {
+export class ProfileLayoutDesignerComponent implements OnDestroy {
+  private readonly api = inject(ApiService);
+  private readonly platform = inject(PlatformService);
+  private readonly layoutSvc = inject(ReportLayoutService);
+
   readonly sections = input.required<ReportSection[]>();
   readonly resolvedColumns = input<ReportColumn[]>([]);
-  /** Instrument image codes actually seen for this profile's tests, plus the
-   *  known catalogue (generic — not CBC-specific; any profile whose member
-   *  tests carry instrument-tagged attachments offers them here). */
+  /** This profile's own test id — used ONLY to ask the server which
+   *  instrument codes have actually been attached to its recent results
+   *  (generic — not CBC-specific; any profile whose member tests carry
+   *  instrument-tagged attachments offers them here). */
+  readonly profileTestId = input<string | null>(null);
+  /** Fallback/override analyzer codes — the known M51 catalogue by default.
+   *  Used whenever nothing has been SEEN yet (see effectiveAnalyzerCodes). */
   readonly availableAnalyzerCodes = input<string[]>(KNOWN_ANALYZER_IMAGES.map(i => i.code));
+  private readonly seenAnalyzerCodes = signal<string[]>([]);
+  /** Codes actually attached to recent results, falling back to the known
+   *  M51 suggestions (or the host's override) when none have been seen. */
+  readonly effectiveAnalyzerCodes = computed(() =>
+    this.seenAnalyzerCodes().length ? this.seenAnalyzerCodes() : this.availableAnalyzerCodes());
   /** Codes with an image actually ATTACHED right now (sample preview) — used
    *  only for the live fit/issue preview; absent = assume all attached (the
    *  designer, unlike the printed report, doesn't collapse missing boxes by
@@ -201,6 +248,16 @@ export class ProfileLayoutDesignerComponent {
   readonly boxes = signal<PageLayoutBox[]>([]);
   private readonly lastSections = signal<ReportSection[] | null>(null);
 
+  // ── real letterhead/footer (pdf.js, page 1 — same technique as
+  // report-header-editor.component.ts's "page rendering" section) ────────
+  private readonly template = signal<ReportTemplate | null | undefined>(undefined);
+  private readonly imageCache = signal<Record<string, string>>({});
+  readonly pdfUrl = signal<string | null>(null);
+  readonly canvasReady = signal(false);
+  private readonly canvasHost = viewChild<ElementRef<HTMLDivElement>>('canvasHost');
+  private renderToken = 0;
+  private lastBlobUrl: string | null = null;
+
   constructor() {
     effect(() => {
       const sections = this.sections();
@@ -208,6 +265,65 @@ export class ProfileLayoutDesignerComponent {
       const cfg = readPageLayout(sections);
       this.boxes.set(cfg?.boxes.length ? cfg.boxes : this.blankDefault());
     });
+    this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
+      next: t => this.template.set(t ?? null),
+      error: () => this.template.set(null),
+    });
+    effect(() => {
+      const tpl = this.template();
+      if (tpl === undefined) return; // still loading
+      void this.buildPreview(tpl);
+    });
+    effect(() => {
+      const url = this.pdfUrl();
+      const host = this.canvasHost()?.nativeElement;
+      if (url && host) void this.drawPage(url, host);
+    });
+    effect(() => {
+      const id = this.profileTestId();
+      if (!id) { this.seenAnalyzerCodes.set([]); return; }
+      this.layoutSvc.analyzerCodesSeen(id).then(codes => this.seenAnalyzerCodes.set(codes));
+    });
+  }
+
+  ngOnDestroy(): void { if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl); }
+
+  private async buildPreview(tpl: ReportTemplate | null): Promise<void> {
+    const baseInput = { report: { id: 'pld-preview', type: 'final', data: blankPreviewSnapshot() }, template: tpl };
+    try {
+      const imageCache = await preloadReportImages(baseInput, this.platform.getApiUrl());
+      this.imageCache.set(imageCache);
+      if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl);
+      const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      this.lastBlobUrl = url;
+      this.pdfUrl.set(url);
+    } catch { /* keep the plain greyed frame — outlines/placement still work */ }
+  }
+
+  /** pdf.js → canvas, page 1 — identical approach to
+   *  report-header-editor.component.ts's drawPage(). */
+  private async drawPage(url: string, host: HTMLDivElement): Promise<void> {
+    const my = ++this.renderToken;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pdfjs: any = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
+      const buf = await fetch(url).then(r => r.arrayBuffer());
+      if (my !== this.renderToken) return;
+      const doc = await pdfjs.getDocument({ data: buf }).promise;
+      const page = await doc.getPage(1);
+      if (my !== this.renderToken) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: (this.pageW / base.width) * dpr });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+      if (my !== this.renderToken) return;
+      host.replaceChildren(canvas);
+      this.canvasReady.set(true);
+    } catch { /* keep the plain greyed frame */ }
   }
 
   readonly selected = signal<string | null>(null);
@@ -223,15 +339,27 @@ export class ProfileLayoutDesignerComponent {
   /** px per BOX-mm — every box's x/y/w/h is stored in mm; 1 mm = 2.834645669 pt. */
   readonly scale = computed(() => this.pxPerPt() * 2.834645669);
 
-  /** A representative body area: a classic-template letterhead bottom and the
-   *  standard footer reserve (see the class doc — this surface doesn't fetch
-   *  the tenant's live template geometry). */
-  private readonly LEGACY_BODY_TOP = 98;     // MARGIN_TOP(28) + 70, report-header-layout.ts
-  private readonly FOOTER_TOP = PAGE.h - 64; // PAGE.h - FOOTER_AREA_H
-  readonly body = computed((): BodyArea => bodyArea(this.LEGACY_BODY_TOP, this.FOOTER_TOP));
+  /** The REAL body bounds for the tenant's actual template — the SAME
+   *  geometry report-pdf.ts prints with (computeReportPageLayout / footerFloor,
+   *  the same functions report-header-editor.component.ts's own `layout`
+   *  computed uses). A generic classic-template fallback only until the
+   *  template has loaded. */
+  private readonly FALLBACK_BODY_TOP = 98;     // MARGIN_TOP(28) + 70, report-header-layout.ts
+  private readonly FALLBACK_FOOTER_TOP = PAGE.h - 64; // PAGE.h - FOOTER_AREA_H
+  readonly realLayout = computed(() => {
+    const tpl = this.template();
+    if (tpl === undefined) return null; // still loading
+    return computeReportPageLayout({ report: { id: 'pld-layout', type: 'final', data: '{}' }, template: tpl, imageCache: this.imageCache() });
+  });
+  private readonly realBodyTop = computed(() => this.realLayout()?.bodyTop ?? this.FALLBACK_BODY_TOP);
+  private readonly realFooterTop = computed(() => {
+    const l = this.realLayout();
+    return l ? PAGE.h - footerFloor(l) : this.FALLBACK_FOOTER_TOP;
+  });
+  readonly body = computed((): BodyArea => bodyArea(this.realBodyTop(), this.realFooterTop()));
 
-  bodyTopPx(): number { return this.LEGACY_BODY_TOP * this.pxPerPt(); }
-  bodyBottomPx(): number { return this.FOOTER_TOP * this.pxPerPt(); }
+  bodyTopPx(): number { return this.realBodyTop() * this.pxPerPt(); }
+  bodyBottomPx(): number { return this.realFooterTop() * this.pxPerPt(); }
   marginPx(): number { return MARGIN_X * this.pxPerPt(); }
   bodyWpx(): number { return this.body().w * this.pxPerPt(); }
   bodyHpx(): number { return this.body().h * this.pxPerPt(); }

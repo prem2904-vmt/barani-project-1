@@ -97,6 +97,9 @@ import { formatDate } from "@angular/common";
 import { LAB_TIME_ZONE } from "../../../shared/utils/lab-clock";
 import { InstrumentsApiService } from "../../../shared/instruments/instruments-api.service";
 import type { RunDto } from "../../../shared/instruments/instrument.models";
+import { ReportLayoutService } from "../../../core/services/report-layout.service";
+import { missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
+import type { PageLayoutBox } from "../../../shared/models/report-layout.model";
 import {
   AnalyzerBadge,
   AppliedMap,
@@ -194,6 +197,7 @@ export class SampleResultEntryComponent {
   private readonly draftShelf = inject(DraftShelfService);
   private readonly criticalSvc = inject(CriticalResultsService);
   private readonly instrumentsApi = inject(InstrumentsApiService);
+  private readonly layoutSvc = inject(ReportLayoutService);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -1677,6 +1681,62 @@ export class SampleResultEntryComponent {
     return out;
   }
 
+  // ── "Analyzer graphs not received" (owner decision 2, 2026-10-02) ───
+  // A profile's one-page layout can expect analyzer image boxes (M51
+  // histograms etc.) that haven't arrived on this sample yet. Shown in
+  // BOTH normal entry and validate mode — purely informational, never
+  // blocks anything.
+  private readonly _profileLayouts = signal<Record<string, { enabled: boolean; boxes: PageLayoutBox[] } | null>>({});
+
+  private profileBundlesOf(sample: OrderSample | null): Array<{ id: string; name: string }> {
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const t of sample?.tests ?? []) {
+      const g = this.benchGroup(t);
+      if (g && !seen.has(g.id)) seen.set(g.id, g);
+    }
+    return [...seen.values()];
+  }
+
+  private async loadProfileLayouts(sample: OrderSample | null): Promise<void> {
+    for (const { id } of this.profileBundlesOf(sample)) {
+      if (id in this._profileLayouts()) continue;
+      try {
+        const res = await this.layoutSvc.getTestLayout(id);
+        const pl = readPageLayout((res?.sections as unknown[]) ?? []);
+        this._profileLayouts.update(m => ({ ...m, [id]: pl?.enabled ? { enabled: true, boxes: pl.boxes } : null }));
+      } catch {
+        this._profileLayouts.update(m => ({ ...m, [id]: null }));
+      }
+    }
+  }
+
+  /** Instrument-tagged codes ("instrument:<code>") actually attached across
+   *  a profile's member lines — the same attachmentsFor() this screen's
+   *  gallery already reads, never a second attachment model. */
+  private attachedAnalyzerCodes(sample: OrderSample | null, profileId: string): Set<string> {
+    const codes = new Set<string>();
+    for (const t of sample?.tests ?? []) {
+      if (this.benchGroup(t)?.id !== profileId) continue;
+      for (const a of this.attachmentsFor(t)) {
+        if (a.param?.startsWith("instrument:")) codes.add(a.param.slice("instrument:".length));
+      }
+    }
+    return codes;
+  }
+
+  readonly missingAnalyzerWarnings = computed(() => {
+    const sample = this._sample();
+    const layouts = this._profileLayouts();
+    const out: Array<{ profileId: string; message: string }> = [];
+    for (const { id } of this.profileBundlesOf(sample)) {
+      const pl = layouts[id];
+      if (!pl?.enabled) continue;
+      const attached = this.attachedAnalyzerCodes(sample, id);
+      for (const w of missingAnalyzerWarning(pl.boxes, attached)) out.push({ profileId: id, message: w.message });
+    }
+    return out;
+  });
+
   // ── Fetch from analyzer (owner, 2026-10-02) ─────────────────────────
   // The connector pushes automatically — this button just RE-QUERIES for
   // (a) newly arrived instrument images/values already matched to this
@@ -1931,6 +1991,10 @@ export class SampleResultEntryComponent {
       // Analyzer results (instrument connector): PREFILL only, after the
       // tube + drafts are on screen; never blocks or fails the load.
       void this.loadAnalyzerPrefill(seq, id);
+      // "Analyzer graphs not received" — fetch each bundle's page_layout
+      // once (its box arrangement is static; the sample reloads above
+      // already refresh what's attached, which is all this warning needs).
+      void this.loadProfileLayouts(this._sample());
     } catch (e) {
       if (seq === this.loadSeq) this.toasts.error("Could not load sample");
     } finally {

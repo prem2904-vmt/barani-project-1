@@ -53,6 +53,22 @@ export class ReportLayoutService {
    *  (by CatalogKey) into this test's own sections. `no_default` (e.g. a
    *  non-CBC profile) resolves to `null` rather than throwing — the caller
    *  shows "no default available" instead of an error toast. */
+  /** Instrument codes actually attached to recent results of this profile's
+   *  tests (tenant-scoped, server-side) — for the designer's analyzer-slot
+   *  palette. Never throws: an unreachable/failed call resolves to an empty
+   *  list, same as "nothing seen yet" (the caller falls back to the known
+   *  M51 suggestions either way). */
+  async analyzerCodesSeen(testId: string): Promise<string[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<{ testId: string; codes: string[] }>(
+        `/api/report-layout/test/${testId}/analyzer-codes`
+      ));
+      return res?.codes ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   async restorePageLayoutDefault(testId: string): Promise<{ sections: ReportSection[] } | null> {
     try {
       return await firstValueFrom(this.api.post<{ sections: ReportSection[] }>(

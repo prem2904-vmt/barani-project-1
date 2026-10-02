@@ -135,6 +135,11 @@
 
 /* Order-level extras above the cards (only when they apply). */
 .pf-sre-critical { flex: none; }
+.pf-sre-fetchbar { flex: none; display: flex; }
+.pf-sre-warnbar { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: var(--nd-radius-sm, 10px);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent); color: var(--text-primary); font-size: 12.5px; }
+.pf-sre-warnbar svg { flex: none; margin-top: 1px; color: var(--color-warning, #f59e0b); }
+.pf-sre-warnbar__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .pf-sre-strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .pf-sre-strip__meta { height: 30px; color: var(--text-secondary); }
 .pf-sre-trend { font-size: 12.5px; }
