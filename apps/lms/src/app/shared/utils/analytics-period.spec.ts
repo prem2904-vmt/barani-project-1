@@ -1,4 +1,4 @@
-import { resolveAnalyticsPeriod } from './analytics-period';
+import { previousAnalyticsPeriod, resolveAnalyticsPeriod } from './analytics-period';
 
 describe('resolveAnalyticsPeriod', () => {
   // 2026-10-01 20:00 UTC = 2026-10-02 01:30 IST.
@@ -62,5 +62,13 @@ describe('resolveAnalyticsPeriod', () => {
 
   it('rejects an unknown preset', () => {
     expect(() => resolveAnalyticsPeriod('not-a-preset' as never, undefined, undefined, nowUtc)).toThrow();
+  });
+});
+
+describe('previousAnalyticsPeriod', () => {
+  it('is the same day-count immediately before (server PrevStart/PrevEnd mirror)', () => {
+    expect(previousAnalyticsPeriod('2026-10-01', '2026-10-02')).toEqual({ fromYmd: '2026-09-29', toYmd: '2026-09-30' });
+    expect(previousAnalyticsPeriod('2026-10-02', '2026-10-02')).toEqual({ fromYmd: '2026-10-01', toYmd: '2026-10-01' });
+    expect(previousAnalyticsPeriod('2026-09-01', '2026-09-30')).toEqual({ fromYmd: '2026-08-02', toYmd: '2026-08-31' });
   });
 });

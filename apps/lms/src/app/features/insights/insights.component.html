@@ -1,0 +1,782 @@
+<section class="pf-ins pf-band-page px-4 md:px-8 pt-6">
+  <!-- Band (ND): back · tenant · the pill = search over what's on screen +
+       the shared filters every section and list reads. -->
+  <pf-hero-band [back]="true" [placeholder]="listKey() ? 'Search these rows…' : 'Search tests, departments, doctors…'"
+                [value]="q()" (valueChange)="q.set($event)">
+    <ng-container band-tools>
+      @if (narrow() && !phone()) {
+        <button type="button" class="nd-chip pf-ins-navchip press" (click)="navSheet.set(true)"
+                aria-haspopup="dialog" [attr.aria-expanded]="navSheet()" [attr.aria-label]="'Sections · ' + navLabel()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.sections)"></svg>
+          <span>{{ navLabel() }}</span>
+        </button>
+      }
+      <pf-select class="pf-ins-bandsel pf-ins-bandsel--period" size="sm" [options]="periodOptions" [value]="period()"
+                 (valueChange)="setPeriod($event)" aria-label="Period"></pf-select>
+      @if (phone()) {
+        <!-- Phones: no sideways-scrolling filter row — period + one Filters button (bottom sheet). -->
+        <button type="button" class="nd-chip pf-ins-filtersbtn press" (click)="openFilters()" aria-haspopup="dialog"
+                [attr.aria-expanded]="filtersSheet()" [attr.aria-pressed]="dimCount() > 0"
+                [attr.aria-label]="dimCount() ? 'Filters, ' + dimCount() + ' on' : 'Filters'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+          <span>Filters{{ dimCount() || period() === 'custom' ? ' (' + (dimCount() + (period() === 'custom' ? 1 : 0)) + ')' : '' }}</span>
+        </button>
+      } @else {
+        @if (period() === 'custom') {
+          <span class="pf-ins-dates">
+            <pf-nd-date label="From" inputId="pf-ins-from" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-nd-date>
+            <span class="pf-ins-dates__sep" aria-hidden="true">–</span>
+            <pf-nd-date label="To" inputId="pf-ins-to" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-nd-date>
+          </span>
+        }
+        @if (branchOptions().length > 2) {
+          <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
+                     (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
+        }
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="departmentOptions()" [value]="departmentId()" [searchable]="true"
+                   (valueChange)="setFilter('department', $event)" aria-label="Department"></pf-select>
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="testOptions()" [value]="testId()" [searchable]="true"
+                   (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
+        <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
+                   (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
+      }
+    </ng-container>
+    <ng-container band-actions>
+      @if (dimsActive()) {
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="clearFilters()" aria-label="Clear filters" title="Clear filters">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" [innerHTML]="svg(icons.close)"></svg>
+          <span class="pf-ins-hbt">Clear</span>
+        </button>
+      }
+      @if (!ctxSide() && canSeeAnalytics()) {
+        <!-- Below 1280px the DETAILS card is a sheet (right panel on tablets, bottom sheet on phones). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-ins-ctxbtn" (click)="ctxSheet.set(true)"
+                aria-haspopup="dialog" [attr.aria-expanded]="ctxSheet()" [attr.aria-label]="listKey() ? 'This list — summary and export' : 'Details'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(listKey() ? icons.download : icons.details)"></svg>
+          <span class="pf-ins-hbt">{{ listKey() ? 'Export & details' : 'Details' }}</span>
+        </button>
+      }
+    </ng-container>
+  </pf-hero-band>
+
+  <div class="pf-band-body pf-band-body--fill pf-ins__body">
+    @if (!canSeeAnalytics()) {
+      <div class="nd-card pf-ins-denied">
+        <div class="nd-empty">
+          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.overview)"></svg></span>
+          <p class="nd-empty__title">You don't have access to Insights</p>
+          <p class="nd-empty__body">Ask your lab admin for the "View analytics" permission.</p>
+        </div>
+      </div>
+    } @else {
+    <div class="pf-ins__panels" [class.pf-ins__panels--narrow]="narrow()" [class.pf-ins__panels--collapsed]="navCollapsed() && !narrow()"
+         [class.pf-ins__panels--ctx]="ctxSide()">
+
+      <!-- ── LEFT: SECTIONS (navigation companion) ─────────────────── -->
+      @if (narrow()) {
+        @if (navSheet()) {
+          <div class="nd-sheet-backdrop pf-ins-sheet-backdrop" (click)="navSheet.set(false)"></div>
+          <aside class="nd-card pf-ins-nav pf-ins-nav--sheet" role="dialog" aria-modal="true" aria-label="Sections">
+            <span class="pf-ins-sheet-handle" aria-hidden="true"></span>
+            <ng-container *ngTemplateOutlet="navHead; context: { sheet: true }"></ng-container>
+            <ng-container *ngTemplateOutlet="navBody"></ng-container>
+          </aside>
+        }
+      } @else if (navCollapsed()) {
+        <!-- Collapsed: a full-height icon rail — one target per section / list,
+             labels as tooltips + aria-labels; the chevron expands it back. -->
+        <aside class="nd-card pf-ins-strip" aria-label="Sections">
+          <button type="button" class="nd-btn nd-btn--icon pf-ins-strip__expand" (click)="toggleNav()" aria-label="Show section names" aria-expanded="false" title="Show section names">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <nav class="pf-ins-strip__list" aria-label="Insights sections">
+            @for (sct of sections(); track sct.id) {
+              <button type="button" class="pf-ins-strip__item" [attr.aria-current]="nav() === sct.id ? 'page' : null" (click)="go(sct.id)" [attr.aria-label]="sct.label" [title]="sct.label">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(sct.icon)"></svg>
+              </button>
+            }
+            <span class="pf-ins-strip__sep" aria-hidden="true"></span>
+            @for (l of lists(); track l.key) {
+              <button type="button" class="pf-ins-strip__item" [attr.aria-current]="listKey() === l.key ? 'page' : null" (click)="goList(l.key)" [attr.aria-label]="l.label + ' list'" [title]="l.label + ' list'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(l.icon)"></svg>
+              </button>
+            }
+          </nav>
+        </aside>
+      } @else {
+        <aside class="nd-card pf-ins-nav" aria-label="Sections">
+          <ng-container *ngTemplateOutlet="navHead; context: { sheet: false }"></ng-container>
+          <ng-container *ngTemplateOutlet="navBody"></ng-container>
+        </aside>
+      }
+
+      <!-- ── MAIN: the section's figures and charts, or the list ─────── -->
+      <section class="nd-card pf-ins-main" [attr.aria-label]="navLabel()">
+        <header class="nd-card__head pf-ins-main__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(navIcon())"></svg>
+          </span>
+          @if (phone()) {
+            <!-- Phones: the section switcher lives on the card title (opens the Sections sheet). -->
+            <button type="button" class="pf-ins-main__switch press" (click)="navSheet.set(true)" aria-haspopup="dialog"
+                    [attr.aria-expanded]="navSheet()" [attr.aria-label]="'Section: ' + navLabel() + '. Change section'">
+              <h2 class="nd-card__label pf-ins-main__title">{{ navLabel() }}</h2>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          } @else {
+            <h2 class="nd-card__label pf-ins-main__title">{{ navLabel() }}</h2>
+          }
+          @if (listKey()) {
+            @if (drill(); as d) {
+              <button type="button" class="nd-chip pf-ins-drillchip" (click)="clearDrill()" [attr.aria-label]="'Remove filter ' + d.label">
+                <span>{{ d.label }}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            }
+            <span class="pf-ins-count nd-num" aria-live="polite">{{ listLoading() && !total() ? 'Loading…' : rowsLabel() }}</span>
+            @if (canViewList(listCfg()) && !phone()) {
+              <div class="pf-ins-cols">
+                <button type="button" class="nd-btn nd-btn--quiet" (click)="colsOpen.set(!colsOpen())" aria-haspopup="menu" [attr.aria-expanded]="colsOpen()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.columns)"></svg>
+                  Columns <span class="nd-num pf-ins-cols__n">{{ visibleColCount() }}/{{ availableCols().length }}</span>
+                </button>
+                @if (colsOpen()) {
+                  <div class="pf-ins-cols__scrim" (click)="colsOpen.set(false)"></div>
+                  <div class="pf-ins-cols__menu" role="menu" aria-label="Show columns">
+                    <p class="pf-ins-cols__title">Show columns</p>
+                    @for (c of availableCols(); track c.field) {
+                      <button type="button" class="pf-ins-cols__row" role="menuitemcheckbox" [attr.aria-checked]="!isColHidden(c.field)" (click)="toggleCol(c.field)">
+                        <span class="nd-check" aria-hidden="true" [attr.aria-checked]="!isColHidden(c.field)">
+                          <span class="nd-check__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                        </span>
+                        <span>{{ c.headerName }}</span>
+                      </button>
+                    }
+                    <button type="button" class="nd-btn nd-btn--tertiary pf-ins-cols__reset" (click)="resetCols()">Show all</button>
+                  </div>
+                }
+              </div>
+            }
+          } @else {
+            <span class="nd-card__note pf-ins-main__note">{{ sectionDef()?.blurb }}</span>
+            <span class="pf-ins-period nd-num">{{ periodLabel() }}</span>
+          }
+        </header>
+
+        @if (listKey()) {
+          <!-- Operations list: AG-Grid like Test Master; pages of 100. -->
+          <div class="pf-ins-grid-wrap">
+            @if (!canViewList(listCfg())) {
+              <div class="nd-empty">
+                <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.info)"></svg></span>
+                <p class="nd-empty__title">This list isn't open to you</p>
+                <p class="nd-empty__body">{{ listCfg()?.requiresExportPatientData ? 'It shows patient details — it needs "Export patient data".' : 'It shows money — it needs "View financial analytics".' }}</p>
+              </div>
+            } @else {
+              @if (listLoading() && !rows().length) {
+                <pf-skeleton-table class="pf-ins-grid-skel" [rows]="10" [cols]="5" label="Loading the list…"></pf-skeleton-table>
+              } @else if (!rows().length) {
+                <div class="nd-empty">
+                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.list)"></svg></span>
+                  <p class="nd-empty__title">No {{ listCfg()?.label!.toLowerCase() }} for {{ drill()?.fromYmd ? drill()!.label : periodLabel() }}</p>
+                  <p class="nd-empty__body">Try a wider period{{ drill() ? ', or remove the "' + drill()!.label + '" filter' : '' }}.</p>
+                  @if (drill()) {
+                    <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="clearDrill()">Remove filter</button>
+                  } @else if (period() !== 'quarter') {
+                    <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="widen('quarter')">Show this quarter</button>
+                  }
+                </div>
+              } @else {
+                <ag-grid-angular class="pf-ins-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
+                                 [defaultColDef]="defaultColDef" [quickFilterText]="q()" [animateRows]="true" [autoSizeStrategy]="phone() ? undefined : autoSize()"
+                                 [suppressCellFocus]="true" [enableCellTextSelection]="true" [tooltipShowDelay]="300"></ag-grid-angular>
+              }
+            }
+          </div>
+          @if (canViewList(listCfg()) && total() > 0) {
+            <footer class="pf-ins-pager">
+              <span class="nd-num pf-ins-pager__info">{{ fmtCount(pageFrom()) }}–{{ fmtCount(pageTo()) }} of {{ fmtCount(total()) }}</span>
+              <button type="button" class="nd-btn nd-btn--icon pf-ins-pager__btn" [disabled]="page() === 0" (click)="prevPage()" aria-label="Previous page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <button type="button" class="nd-btn nd-btn--icon pf-ins-pager__btn" [disabled]="page() >= lastPage()" (click)="nextPage()" aria-label="Next page">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </footer>
+          }
+        } @else {
+          <div class="nd-card__body pf-ins-main__body" #mainBody>
+            @switch (section()) {
+              @case ('overview') { <ng-container *ngTemplateOutlet="overviewTpl"></ng-container> }
+              @case ('volume') { <ng-container *ngTemplateOutlet="volumeTpl"></ng-container> }
+              @case ('revenue') { <ng-container *ngTemplateOutlet="revenueTpl"></ng-container> }
+              @case ('tests-depts') { <ng-container *ngTemplateOutlet="testsTpl"></ng-container> }
+              @case ('referrals') { <ng-container *ngTemplateOutlet="referralsTpl"></ng-container> }
+              @case ('lab-ops') { <ng-container *ngTemplateOutlet="labOpsTpl"></ng-container> }
+              @case ('outsourcing') { <ng-container *ngTemplateOutlet="outsourcingTpl"></ng-container> }
+              @case ('profitability') { <ng-container *ngTemplateOutlet="profitTpl"></ng-container> }
+            }
+          </div>
+        }
+      </section>
+
+      @if (phone() && filtersSheet()) {
+        <div class="nd-sheet-backdrop pf-ins-sheet-backdrop" (click)="filtersSheet.set(false)"></div>
+        <aside class="nd-card pf-ins-ctx pf-ins-ctx--sheet pf-ins-filters" role="dialog" aria-modal="true" aria-label="Filters">
+          <span class="pf-ins-sheet-handle pf-ins-ctx__handle" aria-hidden="true"></span>
+          <header class="nd-card__head">
+            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg></span>
+            <h2 class="nd-card__label">Filters</h2>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="filtersSheet.set(false)" aria-label="Close filters">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
+          <div class="nd-card__body pf-ins-filters__body">
+            @if (period() === 'custom') {
+              <div class="nd-field">
+                <span class="nd-field__lbl">Dates (IST)</span>
+                <div class="pf-ins-filters__dates">
+                  <pf-nd-date label="From" inputId="pf-ins-from-m" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-nd-date>
+                  <pf-nd-date label="To" inputId="pf-ins-to-m" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-nd-date>
+                </div>
+              </div>
+            }
+            @if (branchOptions().length > 2) {
+              <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-branch">Branch</label>
+                <pf-select id="pf-ins-f-branch" [options]="branchOptions()" [value]="draft().branch" (valueChange)="setDraft('branch', $event)"></pf-select></div>
+            }
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-dept">Department</label>
+              <pf-select id="pf-ins-f-dept" [options]="departmentOptions()" [value]="draft().department" [searchable]="true" (valueChange)="setDraft('department', $event)"></pf-select></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-test">Test</label>
+              <pf-select id="pf-ins-f-test" [options]="testOptions()" [value]="draft().test" [searchable]="true" (valueChange)="setDraft('test', $event)"></pf-select></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-ins-f-ref">Referrer</label>
+              <pf-select id="pf-ins-f-ref" [options]="referrerOptions()" [value]="draft().referrer" [searchable]="true" (valueChange)="setDraft('referrer', $event)"></pf-select></div>
+          </div>
+          <footer class="nd-card__foot">
+            <button type="button" class="nd-btn nd-btn--secondary" (click)="clearDraft()">Clear</button>
+            <button type="button" class="nd-btn nd-btn--primary" (click)="applyFilters()">Apply</button>
+          </footer>
+        </aside>
+      }
+
+      <!-- ── RIGHT: DETAILS (what the main card doesn't show + the primary) ── -->
+      @if (ctxSide()) {
+        <aside class="nd-card pf-ins-ctx" [attr.aria-label]="listKey() ? 'This list' : 'Details'">
+          <ng-container *ngTemplateOutlet="ctxCard; context: { sheet: false }"></ng-container>
+        </aside>
+      } @else if (ctxSheet()) {
+        <div class="nd-sheet-backdrop pf-ins-sheet-backdrop" (click)="ctxSheet.set(false)"></div>
+        <aside class="nd-card pf-ins-ctx pf-ins-ctx--sheet" role="dialog" aria-modal="true" [attr.aria-label]="listKey() ? 'This list' : 'Details'">
+          <span class="pf-ins-sheet-handle pf-ins-ctx__handle" aria-hidden="true"></span>
+          <ng-container *ngTemplateOutlet="ctxCard; context: { sheet: true }"></ng-container>
+        </aside>
+      }
+    </div>
+    }
+  </div>
+</section>
+
+<!-- ═══ Templates ═════════════════════════════════════════════════════ -->
+
+<ng-template #navHead let-sheet="sheet">
+  <header class="nd-card__head pf-ins-nav__head">
+    <span class="nd-card__icon" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.sections)"></svg>
+    </span>
+    <h2 class="nd-card__label">Insights</h2>
+    <span class="nd-card__spacer"></span>
+    @if (sheet) {
+      <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="navSheet.set(false)" aria-label="Close sections">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    } @else {
+      <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="toggleNav()" aria-label="Hide sections" aria-expanded="true" title="Hide sections">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    }
+  </header>
+</ng-template>
+
+<ng-template #navBody>
+  <nav class="nd-card__body pf-ins-nav__body" aria-label="Insights sections">
+    <p class="pf-ins-nav__group">Analytics</p>
+    <ul class="pf-ins-nav__list">
+      @for (s of sections(); track s.id) {
+        <li>
+          <button type="button" class="pf-ins-nav__item" [attr.aria-current]="nav() === s.id ? 'page' : null" (click)="go(s.id)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(s.icon)"></svg>
+            <span>{{ s.label }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+    <p class="pf-ins-nav__group">Operations lists</p>
+    <ul class="pf-ins-nav__list">
+      @for (l of lists(); track l.key) {
+        <li>
+          <button type="button" class="pf-ins-nav__item pf-ins-nav__item--list" [attr.aria-current]="listKey() === l.key ? 'page' : null" (click)="goList(l.key)">
+            <span class="pf-ins-nav__dot" aria-hidden="true"></span>
+            <span>{{ l.label }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+  </nav>
+</ng-template>
+
+<!-- A chart panel: title row, chart / skeleton / empty. -->
+<ng-template #emptyChart let-msg="msg">
+  <div class="pf-ins-chartempty">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15h.01M11 12h.01M15 14h.01M19 9h.01"/></svg>
+    <span>{{ msg || 'No data for this period' }}</span>
+  </div>
+</ng-template>
+
+<ng-template #periodEmptyTpl>
+  <div class="pf-ins-banner" role="status">
+    <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.overview)"></svg></span>
+    <div class="pf-ins-banner__text">
+      <p class="pf-ins-banner__title">No orders {{ period() === 'today' ? 'today' : 'in ' + periodPhrase() }}{{ period() === 'lastMonth' || period() === 'custom' ? '' : ' yet' }}</p>
+      <p class="pf-ins-banner__body">{{ periodLabel() }}{{ dimsActive() ? ' · with the filters above' : '' }}. Widen the period to compare.</p>
+    </div>
+    <div class="pf-ins-banner__acts">
+      @if (period() !== 'lastMonth') { <button type="button" class="nd-btn nd-btn--secondary" (click)="widen('lastMonth')">Last month</button> }
+      @if (period() !== 'quarter') { <button type="button" class="nd-btn nd-btn--secondary" (click)="widen('quarter')">This quarter</button> }
+      @if (dimsActive()) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearFilters()">Clear filters</button> }
+    </div>
+  </div>
+</ng-template>
+
+<!-- ── Overview ─────────────────────────────────────────────────────── -->
+<ng-template #overviewTpl>
+  @if (!overview()) {
+    <div class="pf-ins-kpis" aria-busy="true">
+      @for (i of [1,2,3,4,5,6,7,8]; track i) { <div class="pf-ins-kpi pf-ins-kpi--skel"><span class="pf-ins-skel pf-ins-skel--s"></span><span class="pf-ins-skel pf-ins-skel--l"></span><span class="pf-ins-skel pf-ins-skel--spark"></span></div> }
+    </div>
+  } @else {
+    @if (periodEmpty()) { <ng-container *ngTemplateOutlet="periodEmptyTpl"></ng-container> }
+    <div class="pf-ins-kpis" role="list">
+      @for (k of kpis(); track k.id) {
+        <button type="button" role="listitem" class="pf-ins-kpi" [attr.aria-pressed]="selectedTile()?.id === k.id" (click)="selectKpi(k.id)"
+                [attr.aria-label]="k.label + ' ' + k.value + '. ' + k.delta.sentence">
+          <span class="pf-ins-kpi__top">
+            <span class="pf-ins-kpi__label">{{ k.label }}</span>
+            <span class="pf-ins-delta nd-num" [attr.data-tone]="k.delta.tone" [attr.data-kind]="k.delta.kind" [title]="k.delta.sentence">
+              @if (k.delta.dir === 'up') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg> }
+              @if (k.delta.dir === 'down') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg> }
+              {{ k.delta.text }}
+            </span>
+          </span>
+          <span class="pf-ins-kpi__value nd-num" [class.pf-ins-kpi__value--muted]="k.delta.kind === 'none'">{{ k.value }}</span>
+          @if (k.spark && k.raw) {
+            <pf-ins-chart class="pf-ins-kpi__spark" [option]="k.spark" [spark]="true" height="40px" [label]="k.label + ' trend'"></pf-ins-chart>
+          } @else {
+            <span class="pf-ins-kpi__caption">{{ k.caption ?? (k.delta.kind === 'none' ? 'No data for this period' : 'vs ' + prevLabel()) }}</span>
+          }
+        </button>
+      }
+    </div>
+
+    <div class="pf-ins-charts">
+      <div class="pf-ins-panel pf-ins-panel--wide">
+        <div class="pf-ins-panel__head">
+          <h3 class="pf-ins-panel__title">Patients &amp; tests</h3>
+          <span class="pf-ins-panel__hint">per {{ volumeUnit() }} · tap a point for its tests</span>
+        </div>
+        @if (!volume()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+        @else if (volumeEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="ovVolumeChart()" height="260px" [clickable]="true" label="Patients and tests per day" (pick)="drillVolume($event)"></pf-ins-chart> }
+      </div>
+      @if (canSeeMoney()) {
+        <div class="pf-ins-panel">
+          <div class="pf-ins-panel__head">
+            <h3 class="pf-ins-panel__title">Billed vs collected</h3>
+            <span class="pf-ins-panel__hint">net of GST</span>
+          </div>
+          @if (!revenue()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+          @else if (revenueEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+          @else { <pf-ins-chart [option]="ovRevenueChart()" height="240px" [clickable]="true" label="Billed versus collected" (pick)="drillRevenue($event)"></pf-ins-chart> }
+        </div>
+      }
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head">
+          <h3 class="pf-ins-panel__title">Department mix</h3>
+          <span class="pf-ins-panel__hint">share of tests</span>
+        </div>
+        @if (!testsByDept().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="deptMixChart()" height="240px" [clickable]="true" label="Tests by department" (pick)="drillDept($event, testsByDept())"></pf-ins-chart> }
+      </div>
+      @if (!canSeeMoney()) {
+        <div class="pf-ins-panel">
+          <div class="pf-ins-panel__head">
+            <h3 class="pf-ins-panel__title">New vs returning</h3>
+            <span class="pf-ins-panel__hint">patients per {{ volumeUnit() }}</span>
+          </div>
+          @if (volumeEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+          @else { <pf-ins-chart [option]="newReturningChart()" height="240px" [clickable]="true" label="New versus returning patients" (pick)="drillVolume($event, 'orders')"></pf-ins-chart> }
+        </div>
+      }
+    </div>
+  }
+</ng-template>
+
+<!-- ── Patients & Volume ────────────────────────────────────────────── -->
+<ng-template #volumeTpl>
+  @if (periodEmpty()) { <ng-container *ngTemplateOutlet="periodEmptyTpl"></ng-container> }
+  <div class="pf-ins-charts">
+    <div class="pf-ins-panel pf-ins-panel--wide">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">New vs returning patients</h3><span class="pf-ins-panel__hint">per {{ volumeUnit() }} · tap a bar for its orders</span></div>
+      @if (!volume()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+      @else if (volumeEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="newReturningChart()" height="280px" [clickable]="true" label="New versus returning patients" (pick)="drillVolume($event, 'orders')"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Tests</h3><span class="pf-ins-panel__hint">member-level, per {{ volumeUnit() }}</span></div>
+      @if (volumeEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="testsTrendChart()" height="220px" [clickable]="true" label="Tests per day" (pick)="drillVolume($event)"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Tests per patient</h3><span class="pf-ins-panel__hint">average order size</span></div>
+      @if (volumeEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="tppChart()" height="220px" [clickable]="true" label="Tests per patient" (pick)="drillVolume($event)"></pf-ins-chart> }
+    </div>
+  </div>
+</ng-template>
+
+<!-- ── Revenue ──────────────────────────────────────────────────────── -->
+<ng-template #revenueTpl>
+  @if (!canSeeMoney()) {
+    <div class="nd-empty"><p class="nd-empty__title">Revenue needs "View financial analytics"</p></div>
+  } @else {
+    @if (overview(); as o) {
+      <div class="pf-ins-stats">
+        <div class="pf-ins-stat"><span class="pf-ins-stat__k">Billed (net)</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(o.billedNet) }}</span></div>
+        <div class="pf-ins-stat"><span class="pf-ins-stat__k">Collected</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(o.collected) }}</span></div>
+        <div class="pf-ins-stat"><span class="pf-ins-stat__k">Avg bill value</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(o.avgBillValue) }}</span></div>
+        <div class="pf-ins-stat"><span class="pf-ins-stat__k">Discounts</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(revenueTotals().discount) }}</span></div>
+      </div>
+    }
+    <div class="pf-ins-charts">
+      <div class="pf-ins-panel pf-ins-panel--wide">
+        <div class="pf-ins-panel__head">
+          <h3 class="pf-ins-panel__title">Revenue trend</h3>
+          <span class="pf-ins-panel__spacer"></span>
+          <div class="pf-ins-toggles" role="group" aria-label="Series">
+            @for (s of revenueSeriesKeys; track s) {
+              <button type="button" class="nd-chip" [attr.aria-pressed]="revenueOn().has(s)" (click)="toggleRevenueSeries(s)">{{ revenueSeriesLabel[s] }}</button>
+            }
+          </div>
+        </div>
+        @if (!revenue()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+        @else if (revenueEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="revenueChart()" height="280px" [clickable]="true" label="Revenue trend" (pick)="drillRevenue($event)"></pf-ins-chart> }
+      </div>
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">By department</h3><span class="pf-ins-panel__hint">tap a bar for its tests</span></div>
+        @if (!deptRevenue().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="deptRevenueChart()" [height]="(36 + deptRevenue().slice(0,10).length * 30) + 'px'" [clickable]="true" label="Revenue by department" (pick)="drillDept($event, deptRevenue())"></pf-ins-chart> }
+      </div>
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Top tests</h3><span class="pf-ins-panel__hint">by revenue</span></div>
+        @if (!topTests().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="topTestsChart()" [height]="(36 + topTests().slice(0,10).length * 30) + 'px'" [clickable]="true" label="Top tests by revenue" (pick)="drillTest($event, topTests())"></pf-ins-chart> }
+      </div>
+    </div>
+  }
+</ng-template>
+
+<!-- ── Tests & Departments ──────────────────────────────────────────── -->
+<ng-template #testsTpl>
+  <div class="pf-ins-charts">
+    <div class="pf-ins-panel pf-ins-panel--wide">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Tests by department</h3><span class="pf-ins-panel__hint">in-house and outsourced · tap for the list</span></div>
+      @if (!testsByDept().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="testsByDeptChart()" [height]="(56 + testsByDept().slice(0,12).length * 32) + 'px'" [clickable]="true" label="Tests by department" (pick)="drillDept($event, testsByDept(), $event.seriesName === 'Outsourced' ? 'outsourced-tests' : 'test-volume')"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Top 10 tests</h3><span class="pf-ins-panel__hint">by volume</span></div>
+      @if (!topTestsByVolume().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="topVolumeChart()" [height]="(36 + topTestsByVolume().slice(0,10).length * 30) + 'px'" [clickable]="true" label="Top tests by volume" (pick)="drillTest($event, topTestsByVolume())"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Department mix</h3><span class="pf-ins-panel__hint">share of tests</span></div>
+      @if (!testsByDept().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="deptMixChart()" height="240px" [clickable]="true" label="Department mix" (pick)="drillDept($event, testsByDept())"></pf-ins-chart> }
+    </div>
+  </div>
+</ng-template>
+
+<!-- ── Referrals ────────────────────────────────────────────────────── -->
+<ng-template #referralsTpl>
+  <div class="pf-ins-charts">
+    <div class="pf-ins-panel pf-ins-panel--wide">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Referred orders</h3><span class="pf-ins-panel__hint">per {{ referralUnit() }} · tap a point for the list</span></div>
+      @if (!referralTrend()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+      @else if (referralEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'No referred orders in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="referralChart()" height="260px" [clickable]="true" label="Referred orders" (pick)="drillReferral($event)"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Top referring doctors</h3><span class="pf-ins-panel__hint">{{ canSeeMoney() ? 'by revenue' : 'by orders' }}</span></div>
+      @if (!topDoctors().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'No referring doctors in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="doctorsChart()" [height]="(36 + topDoctors().slice(0,10).length * 30) + 'px'" [clickable]="true" label="Top referring doctors" (pick)="drillDoctor($event)"></pf-ins-chart> }
+    </div>
+    @if (canSeeMoney()) {
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Revenue by source</h3><span class="pf-ins-panel__hint">doctor, hospital, walk-in…</span></div>
+        @if (!sourceTypes().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="sourceChart()" height="240px" [clickable]="true" label="Revenue by referral source" (pick)="openList('referrals')"></pf-ins-chart> }
+      </div>
+    }
+  </div>
+</ng-template>
+
+<!-- ── Lab Operations ───────────────────────────────────────────────── -->
+<ng-template #labOpsTpl>
+  <div class="pf-ins-stats">
+    <div class="pf-ins-stat"><span class="pf-ins-stat__k">Median TAT</span><span class="pf-ins-stat__v nd-num">{{ fmtMins(overview()?.medianTatMinutes) }}</span><span class="pf-ins-stat__h">received → validated</span></div>
+    <div class="pf-ins-stat"><span class="pf-ins-stat__k">Rejection rate</span><span class="pf-ins-stat__v nd-num">{{ rejection() ? rejection()!.ratePct + '%' : '—' }}</span><span class="pf-ins-stat__h">of samples</span></div>
+    <div class="pf-ins-stat"><span class="pf-ins-stat__k">Home collections</span><span class="pf-ins-stat__v nd-num">{{ fmtCount(homeCollection()) }}</span><span class="pf-ins-stat__h">visits in period</span></div>
+    <div class="pf-ins-stat"><span class="pf-ins-stat__k">Critical values</span><span class="pf-ins-stat__v nd-num">{{ fmtCount(critical()?.count) }}</span><span class="pf-ins-stat__h">ack. median {{ fmtMins(critical()?.medianMinutesToAcknowledge) }}</span></div>
+  </div>
+  <div class="pf-ins-charts">
+    <div class="pf-ins-panel pf-ins-panel--wide">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Turnaround by department</h3><span class="pf-ins-panel__hint">hours, received → validated</span></div>
+      @if (!tatByDept().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'No validated tests in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="tatChart()" [height]="(56 + tatByDept().slice(0,10).length * 34) + 'px'" label="Turnaround by department"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Open work by stage</h3><span class="pf-ins-panel__hint">live, right now</span></div>
+      @if (!pendingByStage().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'Nothing waiting — the bench is clear' }"></ng-container> }
+      @else { <pf-ins-chart [option]="pendingChart()" height="240px" label="Open work by stage"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Rejection reasons</h3></div>
+      @if (!(rejection()?.topReasons!.length)) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'No rejected samples in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="rejectionChart()" [height]="(36 + rejection()!.topReasons.length * 30) + 'px'" label="Rejection reasons"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Staff productivity</h3><span class="pf-ins-panel__hint">results entered and validated</span></div>
+      @if (!staff().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="staffChart()" [height]="(56 + staff().slice(0,10).length * 34) + 'px'" label="Staff productivity"></pf-ins-chart> }
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Report delivery</h3><span class="pf-ins-panel__hint">WhatsApp</span></div>
+      @if (!delivery().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'No reports sent in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="deliveryChart()" height="220px" label="Report delivery"></pf-ins-chart> }
+    </div>
+  </div>
+</ng-template>
+
+<!-- ── Outsourcing ──────────────────────────────────────────────────── -->
+<ng-template #outsourcingTpl>
+  @if (canSeeMoney() && revVsCost(); as r) {
+    <div class="pf-ins-stats">
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Outsourced revenue</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(r.revenue) }}</span><span class="pf-ins-stat__h">{{ fmtCount(r.lineCount) }} lines</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Partner cost</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(r.cost) }}</span><span class="pf-ins-stat__h">at each order's date</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Margin</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(r.revenue - r.cost) }}</span><span class="pf-ins-stat__h">revenue − cost</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Share of tests</span><span class="pf-ins-stat__v nd-num">{{ overview() ? overview()!.outsourcedPct + '%' : '—' }}</span><span class="pf-ins-stat__h">sent out</span></div>
+    </div>
+    @if (r.noPriceCount > 0) {
+      <p class="pf-ins-warn" role="note">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.info)"></svg>
+        Cost is understated: {{ plural(r.noPriceCount, 'line has', 'lines have') }} no partner price for their order date. Add them in Partners → Partner prices.
+      </p>
+    }
+  }
+  <div class="pf-ins-charts">
+    <div class="pf-ins-panel pf-ins-panel--wide">
+      <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Outsourced tests</h3><span class="pf-ins-panel__hint">per {{ outsourcedUnit() }} · tap a point for the list</span></div>
+      @if (!outsourcedTrend()) { <div class="pf-ins-skel pf-ins-skel--chart"></div> }
+      @else if (outsourcedEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: 'Nothing sent to partner labs in this period' }"></ng-container> }
+      @else { <pf-ins-chart [option]="outsourcedChart()" height="240px" [clickable]="true" label="Outsourced tests" (pick)="drillOutsourced($event)"></pf-ins-chart> }
+    </div>
+    @if (canSeeMoney()) {
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">Revenue vs partner cost</h3></div>
+        @if (costEmpty()) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="costChart()" height="240px" [clickable]="true" label="Revenue versus partner cost" (pick)="drillCost($event)"></pf-ins-chart> }
+      </div>
+      <div class="pf-ins-panel">
+        <div class="pf-ins-panel__head"><h3 class="pf-ins-panel__title">By partner</h3><span class="pf-ins-panel__hint">tests sent</span></div>
+        @if (!vendors().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+        @else { <pf-ins-chart [option]="vendorChart()" [height]="(36 + vendors().slice(0,10).length * 30) + 'px'" [clickable]="true" label="Tests by partner" (pick)="openList('outsourced-tests')"></pf-ins-chart> }
+      </div>
+    }
+  </div>
+</ng-template>
+
+<!-- ── Profitability ────────────────────────────────────────────────── -->
+<ng-template #profitTpl>
+  @if (!canSeeMoney()) {
+    <div class="nd-empty"><p class="nd-empty__title">Profitability needs "View financial analytics"</p></div>
+  } @else {
+    <div class="pf-ins-stats">
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Revenue</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(profitTotals().revenue) }}</span><span class="pf-ins-stat__h">all {{ profitView() === 'test' ? 'tests' : 'departments' }}</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Outsourced revenue</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(profitTotals().outRevenue) }}</span><span class="pf-ins-stat__h">{{ profitTotals().outCount }} with partner work</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Partner cost</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(profitTotals().cost) }}</span></div>
+      <div class="pf-ins-stat"><span class="pf-ins-stat__k">Margin on outsourced</span><span class="pf-ins-stat__v nd-num">{{ fmtRupee(profitTotals().margin) }}</span></div>
+    </div>
+    <div class="pf-ins-panel">
+      <div class="pf-ins-panel__head">
+        <h3 class="pf-ins-panel__title">Revenue and partner cost</h3>
+        <span class="pf-ins-panel__spacer"></span>
+        <span class="nd-seg" role="radiogroup" aria-label="Group by">
+          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="profitView() === 'test'" (click)="profitView.set('test')">By test</button>
+          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="profitView() === 'department'" (click)="profitView.set('department')">By department</button>
+        </span>
+      </div>
+      @if (!profitRows().length) { <ng-container *ngTemplateOutlet="emptyChart; context: { msg: '' }"></ng-container> }
+      @else { <pf-ins-chart [option]="profitChart()" [height]="(56 + profitRows().slice(0,10).length * 34) + 'px'" [clickable]="true" label="Revenue and partner cost" (pick)="drillProfit($event)"></pf-ins-chart> }
+    </div>
+    @if (profitRows().length) {
+      <div class="pf-ins-panel pf-ins-panel--grid">
+        <ag-grid-angular class="pf-ins-grid pf-ins-grid--inline" [theme]="gridTheme()" [rowData]="profitRows()" [columnDefs]="profitCols()"
+                         [defaultColDef]="defaultColDef" [quickFilterText]="q()" [suppressCellFocus]="true" [domLayout]="'autoHeight'"></ag-grid-angular>
+      </div>
+      <p class="pf-ins-note">In-house work shows revenue only — a margin appears only where a line went to a priced partner.</p>
+    }
+  }
+</ng-template>
+
+<!-- ── Side card bodies ─────────────────────────────────────────────── -->
+<ng-template #rankTpl let-title="title" let-rows="rows">
+  <div class="pf-ins-side__sec">
+    <p class="pf-ins-side__title">{{ title }}</p>
+    @if (!rows.length) {
+      <p class="pf-ins-side__muted">{{ q() ? 'Nothing matches "' + q() + '".' : 'Nothing in this period.' }}</p>
+    } @else {
+      <ol class="pf-ins-rank">
+        @for (r of rows; track r.name; let i = $index) {
+          <li>
+            <button type="button" class="pf-ins-rank__row" [disabled]="!r.drill" (click)="r.drill && r.drill()">
+              <span class="pf-ins-rank__top">
+                <span class="pf-ins-rank__name">{{ r.name }}</span>
+                <span class="pf-ins-rank__val nd-num">{{ r.value }}</span>
+              </span>
+              <span class="pf-ins-rank__bar" aria-hidden="true"><span [style.width.%]="r.share * 100"></span></span>
+              @if (r.meta) { <span class="pf-ins-rank__meta nd-num">{{ r.meta }}</span> }
+            </button>
+          </li>
+        }
+      </ol>
+    }
+  </div>
+</ng-template>
+
+<ng-template #ctxBody>
+  @if (section() === 'overview') {
+    @if (kpiDetail(); as d) {
+      <div class="pf-ins-side__sec">
+        <p class="pf-ins-side__title">{{ d.tile.label }}</p>
+        <p class="pf-ins-side__big nd-num">{{ d.tile.value }}</p>
+        <p class="pf-ins-side__delta">
+          <span class="pf-ins-delta nd-num" [attr.data-tone]="d.tile.delta.tone" [attr.data-kind]="d.tile.delta.kind">{{ d.tile.delta.text }}</span>
+          <span>{{ d.tile.delta.kind === 'none' ? 'No data in ' + periodLabel() + ' or ' + prevLabel() : d.tile.delta.kind === 'new' ? 'Nothing in ' + prevLabel() + ' to compare' : 'vs ' + prevLabel() }}</span>
+        </p>
+        @if (d.facts.length) {
+          <dl class="pf-ins-facts">
+            @for (f of d.facts; track f.k) { <div><dt>{{ f.k }}</dt><dd class="nd-num">{{ f.v }}</dd></div> }
+          </dl>
+        }
+      </div>
+      @if (d.rankTitle) { <ng-container *ngTemplateOutlet="rankTpl; context: { title: d.rankTitle, rows: d.rank }"></ng-container> }
+    }
+  } @else {
+    <div class="pf-ins-side__sec">
+      <p class="pf-ins-side__title">Period</p>
+      <p class="pf-ins-side__text nd-num">{{ periodLabel() }} <span class="pf-ins-side__muted">· compared with {{ prevLabel() }}</span></p>
+    </div>
+    @if (sectionRank(); as r) { <ng-container *ngTemplateOutlet="rankTpl; context: { title: r.title, rows: r.rows }"></ng-container> }
+    @if (section() === 'revenue' && canSeeMoney()) {
+      <div class="pf-ins-side__sec">
+        <p class="pf-ins-side__title">Money in the period</p>
+        <dl class="pf-ins-facts">
+          <div><dt>Gross</dt><dd class="nd-num">{{ fmtRupee(revenueTotals().gross) }}</dd></div>
+          <div><dt>Discounts</dt><dd class="nd-num">{{ fmtRupee(revenueTotals().discount) }}</dd></div>
+          <div><dt>Refunds</dt><dd class="nd-num">{{ fmtRupee(revenueTotals().refund) }}</dd></div>
+        </dl>
+        <div class="pf-ins-side__links">
+          <button type="button" class="nd-btn nd-btn--quiet" (click)="openList('discounts')">Discounts</button>
+          <button type="button" class="nd-btn nd-btn--quiet" (click)="openList('refunds')">Refunds</button>
+          <button type="button" class="nd-btn nd-btn--quiet" (click)="openList('outstanding')">Outstanding</button>
+        </div>
+      </div>
+    }
+    @if (section() === 'lab-ops' && critical(); as cv) {
+      <div class="pf-ins-side__sec">
+        <p class="pf-ins-side__title">Critical values</p>
+        <dl class="pf-ins-facts">
+          <div><dt>Flagged</dt><dd class="nd-num">{{ fmtCount(cv.count) }}</dd></div>
+          <div><dt>Median to acknowledge</dt><dd class="nd-num">{{ fmtMins(cv.medianMinutesToAcknowledge) }}</dd></div>
+          <div><dt>Median to inform</dt><dd class="nd-num">{{ fmtMins(cv.medianMinutesToCommunicate) }}</dd></div>
+        </dl>
+      </div>
+    }
+    @if (section() === 'lab-ops') {
+      <p class="pf-ins-side__muted">Lab Operations has no list behind it — open the TAT board for live work.</p>
+    }
+  }
+</ng-template>
+
+<ng-template #listCtxBody>
+  @if (listCfg(); as cfg) {
+    <div class="pf-ins-side__sec">
+      <p class="pf-ins-side__title">{{ cfg.label }}</p>
+      <p class="pf-ins-side__text">{{ cfg.about }}</p>
+      <p class="pf-ins-side__big nd-num">{{ fmtCount(total()) }} <span class="pf-ins-side__unit">{{ total() === 1 ? 'row' : 'rows' }}</span></p>
+    </div>
+    <div class="pf-ins-side__sec">
+      <p class="pf-ins-side__title">Filtered by</p>
+      <dl class="pf-ins-facts">
+        @for (f of listFilters(); track f.k) { <div><dt>{{ f.k }}</dt><dd>{{ f.v }}</dd></div> }
+      </dl>
+      @if (drill()) { <button type="button" class="nd-btn nd-btn--tertiary pf-ins-side__inline" (click)="clearDrill()">Remove "{{ drill()!.label }}"</button> }
+      @if (drill() && !drillNarrows()) { <p class="pf-ins-side__muted">This list can't be narrowed to "{{ drill()!.label }}" — showing the whole period.</p> }
+      @if (ignoredFilters().length) { <p class="pf-ins-side__muted">The {{ ignoredFilters().join(' and ') }} filter doesn't apply to this list.</p> }
+    </div>
+    @if (moneyHidden()) {
+      <p class="pf-ins-side__muted">Money columns are hidden — they need "View financial analytics".</p>
+    }
+    @if (canViewList(cfg) && !canExport()) {
+      <p class="pf-ins-side__muted">Export needs "Export patient data" — this list carries patient names.</p>
+    }
+    <p class="pf-ins-side__muted">Export includes every row, not just this page (up to 50,000).</p>
+  }
+</ng-template>
+
+<ng-template #ctxCard let-sheet="sheet">
+  <header class="nd-card__head">
+    <span class="nd-card__icon" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(listKey() ? icons.download : icons.info)"></svg>
+    </span>
+    <h2 class="nd-card__label">{{ listKey() ? 'This list' : 'Details' }}</h2>
+    @if (sheet) {
+      <span class="nd-card__spacer"></span>
+      <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="ctxSheet.set(false)" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    }
+  </header>
+  <div class="nd-card__body pf-ins-ctx__body">
+    @if (listKey()) { <ng-container *ngTemplateOutlet="listCtxBody"></ng-container> }
+    @else { <ng-container *ngTemplateOutlet="ctxBody"></ng-container> }
+  </div>
+  @if (listKey()) {
+    @if (canExport()) {
+      <footer class="nd-card__foot">
+        <button type="button" class="nd-btn nd-btn--primary nd-span" [disabled]="exporting() || !total()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportList()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.download)"></svg>
+          {{ exporting() ? 'Preparing…' : 'Export CSV' }}
+        </button>
+      </footer>
+    }
+  } @else if (sectionCta(); as cta) {
+    <footer class="nd-card__foot">
+      <button type="button" class="nd-btn nd-btn--primary nd-span" (click)="openList(cta.list)">
+        {{ cta.label }}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.arrowRight)"></svg>
+      </button>
+    </footer>
+  }
+</ng-template>
