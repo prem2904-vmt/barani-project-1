@@ -2788,6 +2788,7 @@ export class MyWorkComponent implements OnInit {
         id: 'lab:' + sid,
         label: e.barcode,
         sub: e.patient,
+        verb: 'Resume result for',
         link: ['/lab/sample', sid] as const,
       })));
   });
