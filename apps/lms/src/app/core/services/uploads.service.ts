@@ -43,6 +43,8 @@ export class UploadsService {
   /** path → blob: URL (kept for the session; uploads are immutable). */
   private readonly urls = signal<Record<string, string>>({});
   private readonly inflight = new Map<string, Promise<string | null>>();
+  /** Paths whose fetch src() has queued for right after the current render. */
+  private readonly scheduled = new Set<string>();
   /** Paths the server answered 410 file_missing for. */
   private readonly missing = signal<ReadonlySet<string>>(new Set());
 
@@ -152,7 +154,17 @@ export class UploadsService {
     if (have) return have;
     // Gone (410) or just failed: keep the placeholder, don't re-request per render.
     if (this.missing().has(url) || this.recentlyFailed(url)) return '';
-    if (!this.inflight.has(url)) void this.objectUrl(url);
+    // src() runs inside a template (a reactive context): starting the HTTP
+    // request right here runs the interceptors synchronously, and the busy
+    // interceptor's signal write throws NG0600 — the fetch then "failed"
+    // before it was ever sent and every thumbnail stayed blank (analyzer
+    // graphs in result entry, 2026-10-02). Kick it off just after the
+    // render instead — once per path.
+    if (!this.inflight.has(url) && !this.scheduled.has(url)) {
+      const path = url;
+      this.scheduled.add(path);
+      queueMicrotask(() => { this.scheduled.delete(path); void this.objectUrl(path); });
+    }
     return '';
   }
 

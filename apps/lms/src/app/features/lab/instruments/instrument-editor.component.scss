@@ -103,3 +103,24 @@
 .pf-ie-keyrow .nd-input { flex: 1 1 auto; }
 .pf-ie-actrow { display: flex; flex-wrap: wrap; gap: 10px; }
 .pf-ie-foot { grid-template-columns: auto auto; justify-content: space-between; }
+
+// ── Analyzer images → profiles (Code mapping) ─────────────────────────
+.pf-ie-images { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--nd-line); }
+.pf-ie-images__h { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+.pf-ie-imgs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+@media (max-width: 640px) { .pf-ie-imgs { grid-template-columns: 1fr; } }
+.pf-ie-img { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); background: var(--nd-card-bg); }
+.pf-ie-img__thumb { flex: none; width: 112px; aspect-ratio: 156 / 111; display: flex; align-items: center; justify-content: center; padding: 3px;
+  border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; overflow: hidden; }
+.pf-ie-img__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.pf-ie-img__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pf-ie-img__meta { display: flex; flex-direction: column; gap: 2px; }
+.pf-ie-img__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.pf-ie-img__sub { font-size: 12px; color: var(--text-tertiary); }
+.pf-ie-imgadd { display: flex; gap: 8px; max-width: 420px; }
+.pf-ie-imgadd .nd-input { flex: 1 1 auto; min-width: 0; }
+:host-context(.dark) .pf-ie-img__thumb, :host-context([data-theme='dark']) .pf-ie-img__thumb { border-color: rgba(148, 163, 184, .35); }
+
+.pf-ie-img__mapped { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
+.pf-ie-img__mk { display: inline-flex; vertical-align: -1px; margin-right: 6px; color: var(--color-violet-600, #7c3aed); }
+.pf-ie-img__none { font-size: 12px; color: var(--text-tertiary); }

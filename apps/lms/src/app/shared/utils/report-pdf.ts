@@ -3,6 +3,7 @@ import { drawTextWithSuperscripts, hasSuperscript, installPdfTextSanitizer, pdfS
 import autoTable, { __createTable, __drawTable } from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
+  type PageLayoutBox,
   DEFAULT_RESULT_COLUMNS,
   ReportColumn,
   ResolvedReportLayout,
@@ -32,10 +33,10 @@ import { renderReportChart, setReportChartContext, reportChartLead } from './rep
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
 import {
-  bodyArea, collapseMissingAnalyzerBoxes, readPageLayout, type BodyArea as ProfileBodyArea,
+  bodyArea, collapseMissingAnalyzerBoxes, manualRowsByBox, printableBoxes, readPageLayout, tableChain, type BodyArea as ProfileBodyArea,
 } from './report-profile-layout';
 import {
-  drawAnalyzerImageBox, drawNotesBox, drawProfileTableBox, drawSignaturesBox, type ProfileTableRow,
+  drawAnalyzerImageBox, drawNotesBox,
 } from './report-profile-layout.pdf';
 
 /**
@@ -57,6 +58,20 @@ import {
 export interface ReportPdfInput {
   /** Admin live-preview: keep every configured column visible even when empty. */
   previewKeepEmptyColumns?: boolean;
+  /** Designer hook (profile one-page layout): told the EXACT body rect (pt)
+   *  and page each one-page profile's boxes were placed in, so the designer
+   *  lays its draggable outlines over the very pixels the PDF drew. Never
+   *  set by a real report path. */
+  /** Designer only: print every Custom-layout page even when it has nothing
+   *  on it yet (a page just added), so the lab sees its letterhead. */
+  keepEmptyLayoutPages?: boolean;
+  onOnePageBody?: (info: { pkg: string; page: number; layoutPage?: number; boxId?: string; rowsPrinted?: number;
+    body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
+    /** Where the results table really ended (pt), when it ended on this page;
+     *  null = it ran onto the next page. */
+    tableBottom?: number | null;
+    /** The table's natural height (pt, head + rows at the box's row spacing, before any Fill). */
+    tableNaturalH?: number | null }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -405,6 +420,8 @@ let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
  *  regardless of which typed columns an individual test's layout happens to
  *  carry. Set once per render in buildReportPdf, before the test loop. */
 let PREVIEW_KEEP_EMPTY_COLS = false; // admin preview: show configured columns even when empty
+let ON_ONE_PAGE_BODY: ReportPdfInput['onOnePageBody'] | null = null; // designer hook only
+let KEEP_EMPTY_LAYOUT_PAGES = false; // designer only
 let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
@@ -751,6 +768,8 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
     trackToken: snap.order?.trackToken || input.orderTrackToken || null,
   };
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
+  ON_ONE_PAGE_BODY = input.onOnePageBody ?? null;
+  KEEP_EMPTY_LAYOUT_PAGES = !!input.keepEmptyLayoutPages;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
     MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
@@ -1053,15 +1072,21 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // empty and `groups` is untouched, so the rest of this function runs
   // EXACTLY as it always has (byte-identical output; see
   // report-pdf.one-page-layout.spec.ts).
-  const onePageBundles: Array<{ pkg: string; group: PanelGroup; layout: ResolvedReportLayout }> = [];
+  // `before` = how many ordinary blocks precede the profile in REPORT
+  // SEQUENCE order — the custom layout prints at that point (Custom layout,
+  // owner 2026-10-02), not after everything.
+  const onePageBundles: Array<{ pkg: string; group: PanelGroup; layout: ResolvedReportLayout; before: number }> = [];
   for (const [pkg, group] of byPkg) {
     const lay = resolvedLayouts[pkg];
     const pl = lay && readPageLayout(lay.sections);
-    if (pl?.enabled && pl.boxes.length > 0) onePageBundles.push({ pkg, group, layout: lay });
+    if (pl?.enabled && (pl.pages ?? []).some(pg => pg.boxes.length > 0)) onePageBundles.push({ pkg, group, layout: lay, before: 0 });
   }
   if (onePageBundles.length > 0) {
-    const bundleGroups = new Set<PanelGroup>(onePageBundles.map(b => b.group));
-    for (let i = groups.length - 1; i >= 0; i--) if (bundleGroups.has(groups[i])) groups.splice(i, 1);
+    const bundleOf = new Map<PanelGroup, (typeof onePageBundles)[number]>(onePageBundles.map(b => [b.group, b]));
+    let ordinary = 0;
+    for (const g of groups) { const b = bundleOf.get(g); if (b) b.before = ordinary; else ordinary++; }
+    onePageBundles.sort((x, y) => groups.indexOf(x.group) - groups.indexOf(y.group));
+    for (let i = groups.length - 1; i >= 0; i--) if (bundleOf.has(groups[i])) groups.splice(i, 1);
   }
 
   // The profile's own NARRATIVE blocks (images, charts) render once under
@@ -1183,35 +1208,81 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     }
   }
 
-  if (inScope.length > 0) {
-    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs,
-      outScope.length === 0 ? finalSigs : undefined);
+  // ── Composition: ordinary blocks and Custom-layout profiles in REPORT
+  // SEQUENCE order (owner 2026-10-02). A custom-layout profile starts on its
+  // own page and prints its designed pages; the blocks after it start on a
+  // fresh page. Each department signs ONCE, after its LAST item in the
+  // report (an ordinary block's inline sign-off, or the profile's
+  // signatures box) — never in an earlier segment.
+  type Segment = { kind: 'groups'; groups: PanelGroup[]; scopeHeading?: boolean } | { kind: 'custom'; b: (typeof onePageBundles)[number] };
+  const segments: Segment[] = [];
+  {
+    let taken = 0;
+    for (const b of onePageBundles) {
+      // Bundle positions are counted over ALL ordinary blocks; the in-scope
+      // list is that order minus the out-of-scope ones.
+      const upTo = groups.slice(0, b.before).filter(g => inScope.includes(g)).length;
+      if (upTo > taken) segments.push({ kind: 'groups', groups: inScope.slice(taken, upTo) });
+      segments.push({ kind: 'custom', b });
+      taken = Math.max(taken, upTo);
+    }
+    if (inScope.length > taken) segments.push({ kind: 'groups', groups: inScope.slice(taken) });
+    if (outScope.length > 0) segments.push({ kind: 'groups', groups: outScope, scopeHeading: true });
   }
-  if (outScope.length > 0) {
-    cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
-    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs, finalSigs);
-  }
-
-  // Each one-page profile prints on its OWN fresh page, after the normal
-  // table(s) — letterhead + patient block drawn exactly like every other
-  // page, the designer's boxes filling the body between them. EXCEPT the
-  // first one: when nothing else has printed yet (no in/out-of-scope table
-  // at all — a CBC-only order, say), the currently open page is still blank
-  // below the patient block, so that first bundle reuses it instead of
-  // forcing an empty page 1 + its own page 2 (owner, 2026-10-02).
-  let onePageIsFirstOnOpenPage = inScope.length === 0 && outScope.length === 0;
-  for (const b of onePageBundles) {
-    cursorY = renderOnePageProfile(doc, b.pkg, b.group, b.layout, practice, snap, report,
-      deptSigs.get((b.group.department ?? '').trim()) ?? [], onePageIsFirstOnOpenPage ? cursorY : undefined);
-    onePageIsFirstOnOpenPage = false;
-  }
+  const deptOf = (g: PanelGroup) => (g.department ?? '').trim();
+  const lastSegOfDept = new Map<string, number>();
+  segments.forEach((sg, i) => {
+    const ds = sg.kind === 'groups' ? sg.groups.map(deptOf) : [deptOf(sg.b.group)];
+    for (const d of ds) lastSegOfDept.set(d, i);
+  });
+  const sigsOnlyFor = (i: number) => new Map([...deptSigs].filter(([d]) => lastSegOfDept.get(d) === i));
+  let pageHasContent = false;
+  segments.forEach((sg, i) => {
+    const isFinal = i === segments.length - 1;
+    if (sg.kind === 'groups') {
+      if (i > 0 && segments[i - 1].kind === 'custom') {
+        // Blocks after a custom layout open a fresh page that reads like the
+        // layout's own pages: letterhead + patient block, then the results.
+        NEXT_PAGE_IS_FIRST = false;
+        doc.addPage();
+        drawLetterhead(doc);
+        cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+        pageHasContent = false;
+      }
+      if (sg.scopeHeading) cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
+      cursorY = renderContinuousTable(doc, sg.groups, cursorY, practice, null, sigsOnlyFor(i), isFinal ? finalSigs : undefined);
+      pageHasContent = true;
+      return;
+    }
+    const dept = deptOf(sg.b.group);
+    const sigs = deptSigs.get(dept) ?? [];
+    const signHere = lastSegOfDept.get(dept) === i;
+    const res = renderCustomLayout(doc, sg.b.pkg, sg.b.group, sg.b.layout, practice, snap, report, sigs,
+      { topY: pageHasContent ? undefined : cursorY, signHere });
+    cursorY = res.bottom;
+    pageHasContent = true;
+    // Last item of its department but no signatures box in the layout: the
+    // sign-off still prints — below the End of Report when this is the
+    // report's final item, else right under the layout.
+    if (signHere && !res.signed && sigs.length) {
+      if (isFinal) finalSigs.sigs = sigs;
+      else cursorY = drawInlineSignatures(doc, sigs, cursorY + 8, practice);
+    }
+  });
 
   // Tech attachments for TABULAR tests — the columnar table has no
   // per-test section hook, so their shown images print here, labelled.
   // The Test Master's Images block is the print switch: hidden (all image
   // sections invisible) = lab-only traceability, nothing on the PDF.
   for (const t of tabular) {
-    const imgs = (t as { images?: string[] | null }).images ?? [];
+    let imgs = (t as { images?: string[] | null }).images ?? [];
+    // A one-page-layout profile's analyzer graphs print in their own boxes —
+    // never a second time in this images block.
+    const bundle = t.profileTestId ?? (t.packageType === 'profile' ? t.packageTestId : null) ?? (t.packageType == null ? t.packageTestId : null);
+    if (bundle && onePagePkgs.has(bundle) && t.analyzerImages) {
+      const graphs = new Set(Object.values(t.analyzerImages));
+      imgs = imgs.filter(u => !graphs.has(u));
+    }
     if (!imgs.length) continue;
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     const imgSecs = layout?.sections.filter(s => s.type === 'image') ?? [];
@@ -2762,6 +2833,9 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
 
 interface PanelRowData {
   kind: 'param' | 'note';
+  /** The value's parameter name (param rows) — a Custom layout's manual row
+   *  assignment keys on it. */
+  rowKey?: string;
   /** A technician report note (markup) — a full-width row painted with real
    *  bold / italic / underline and lists (report-note-pdf.ts). */
   techNote?: string;
@@ -3054,6 +3128,7 @@ function buildPanelGroup(
         }
         group.rows.push({
           kind: 'param',
+          rowKey: r.parameterName || undefined,
           name: reportDisplayName(r.title) || humanize(r.parameterName ?? ''),
           result: resultText,
           range: rangeText,
@@ -3099,6 +3174,7 @@ function buildPanelGroup(
       texts: v?.description ? { description: v.description } : undefined,
       description: descriptionText({ description: v?.description }) || undefined,
       kind: 'param',
+      rowKey: paramName,
       name: humanize(paramName),
       result: String(v?.value ?? '—'),
       range: rangeCellText(v?.range, v?.unit),
@@ -3316,122 +3392,176 @@ function profileAnalyzerImages(snap: ReportSnapshot, pkg: string): Record<string
   return out;
 }
 
-/** A PanelGroup row → the one-page table's own (simpler) row shape. */
-function toProfileTableRows(rows: PanelRowData[]): ProfileTableRow[] {
-  return rows.map(r => {
-    if (r.kind === 'note') {
-      const text = r.techNote ? `${r.techLabel ?? ''} ${r.techNote}`.trim() : (r.note ?? '');
-      return { cells: {}, isNote: true, noteText: text };
-    }
-    return {
-      name: r.name, flag: r.flag ?? null, bold: !!(r.bold || r.printBold), color: r.color ?? null,
-      cells: { result: r.result ?? '', unit: r.unit ?? '', range: r.range ?? '', ...(r.texts ?? {}) },
-    };
-  });
+/** The one-page table box's columns: the SAME effective set the continuous
+ *  report would print for this profile (its own override, else its
+ *  department's — `effectiveColumns` / `deptColumns`), minus the ones the lab
+ *  switched off in the designer (by column name or type). The name and
+ *  result columns always print. */
+function onePageTableColumns(group: PanelGroup, box: PageLayoutBox): ReportColumn[] {
+  const base = group.columnsOverridden && group.columns?.length ? effectiveColumns(group.columns) : deptColumns([group]);
+  const off = new Set((box.columns ?? []).filter(c => !c.visible).map(c => c.name));
+  return base.filter(c => c.type === 'name' || c.type === 'result' || !(off.has(c.name) || off.has(c.type)));
 }
 
-/** Render one profile's one-page layout: the designer's boxes (table /
- *  chart / analyzer image / signatures / notes) filling the body between a
- *  letterhead+patient block and the footer. Missing analyzer images
- *  collapse per owner decision 2 (collapseMissingAnalyzerBoxes) — never an
- *  empty frame.
- *
- *  `topY` (owner, 2026-10-02): when this bundle is the FIRST thing to print
- *  on the currently open page (nothing else drew there yet — a CBC-only
- *  order, say), the caller passes the open page's own cursor instead of
- *  forcing a fresh page; omitted, this draws its own letterhead + patient
- *  block on a new page exactly as before (every one-page profile after the
- *  first, or one printed after a normal table).
- *
- *  Returns the Y right below the printed content (table/graphs — NOT the
- *  signatures box, which keeps whatever position the layout gave it): the
- *  caller's own "does the End-of-Report line fit here" check then lands the
- *  marker in the gap ABOVE the signatures, the same before-the-final-
- *  signature order every other department's sign-off follows. */
-function renderOnePageProfile(
+/** Render one profile's CUSTOM LAYOUT (owner 2026-10-02): the designer's
+ *  pages, each opening with the Report template's letterhead + patient block
+ *  (and footer, drawn for every page at the end), the profile's boxes in the
+ *  body between them:
+ *   · the results table is the report's OWN renderColumnarTable aimed at a
+ *     box. AUTO mode: rows flow through the table boxes in page order — each
+ *     box takes the whole rows that fit, the rest continue in the next
+ *     ("continued") box; the last box lets any remainder run on (never a cut
+ *     row). MANUAL mode: each box prints the rows chosen for it; a row in no
+ *     box prints in the last one (a result is never dropped);
+ *   · a missing analyzer graph hides its box; a page left with nothing to
+ *     print is dropped;
+ *   · the department signs here only when `signHere` (this profile is the
+ *     department's LAST item in the report) and the layout has a signatures
+ *     box — otherwise that box is left out.
+ *  `topY`: the open page is still blank below the patient block — reuse it
+ *  for the first page instead of forcing an empty one.
+ *  Returns the y under the printed content (End of Report goes there) and
+ *  whether the department signed. */
+function renderCustomLayout(
   doc: jsPDF, pkg: string, group: PanelGroup, layout: ResolvedReportLayout,
   practice: NonNullable<ReportPdfInput['practice']>, snap: ReportSnapshot, report: ReportPdfInput['report'],
-  deptSigs: ReportSignature[], topY?: number,
-): number {
+  deptSigs: ReportSignature[], opts: { topY?: number; signHere: boolean },
+): { bottom: number; signed: boolean } {
   const pl = readPageLayout(layout.sections);
-  if (!pl?.enabled || !pl.boxes.length) return newPage(doc, practice); // guarded by the caller; never reached
-
-  let top: number;
-  if (topY != null) {
-    top = topY; // reuse the already-open page — its letterhead/patient block are already drawn
-  } else {
-    NEXT_PAGE_IS_FIRST = false;
-    doc.addPage();
-    drawLetterhead(doc);
-    const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
-    top = patientBottom + 10;
-  }
-
-  // Section context — department heading + Sample ID, then the profile's
-  // own title band — SAME styles/helpers the continuous report's
-  // renderContinuousTable / renderColumnarTable use, so a one-page profile
-  // reads like any other department block, not a bare box arrangement.
-  let y = top;
-  const dept = (group.department ?? '').trim();
-  if (dept) {
-    const ids = departmentSampleIds([group]);
-    const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
-    y = renderScopeHeading(doc, dept.toUpperCase(), y, practice, right);
-  }
-  y = drawPanelNameBand(doc, group.testName || layout.testName || '', MARGIN_X, y + 2, A4.w - 2 * MARGIN_X) + 6;
-
-  // footerFloor() returns a MARGIN (how much room the footer band needs,
-  // like MARGIN_BOTTOM) — not an absolute y. The body's floor is the page
-  // height minus that reserve.
-  const floor = A4.h - footerFloor(LAYOUT);
-  const body: ProfileBodyArea = bodyArea(y, floor);
-
+  const pages = pl?.pages ?? [];
   const images = profileAnalyzerImages(snap, pkg);
   const availCodes = new Set(Object.keys(images));
-  const { boxes } = collapseMissingAnalyzerBoxes(pl.boxes, availCodes, body);
-  const rows = toProfileTableRows(group.rows);
+  const labelFont = EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT;
+  const floor = A4.h - footerFloor(LAYOUT);
+  const chain = tableChain(pages);
+  const lastTableId = chain[chain.length - 1]?.box.id;
+  const manual = pl?.tableMode === 'manual';
+  const rowKeys = group.rows.filter(r => r.kind === 'param' && r.rowKey).map(r => r.rowKey!);
 
-  const tableTheme = {
-    font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, headFill: '#f1f5f9', headText: BLACK, bodyText: TEXT,
-    dimText: TEXT_DIM, hair: HAIR, abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
-    zebra: theme.zebraRows, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
-  };
-  for (const box of boxes) {
-    switch (box.kind) {
-      case 'table':
-        drawProfileTableBox(doc, box, body, layout.columns ?? [], rows, tableTheme);
-        break;
-      case 'analyzer': {
-        const url = box.ref ? images[box.ref] : undefined;
-        drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, tableTheme.font);
-        break;
+  // MANUAL: each table box's rows (a note row rides with the value above it).
+  const manualRows = new Map<string, PanelRowData[]>();
+  if (manual && chain.length) {
+    const byBox = manualRowsByBox(chain, rowKeys);
+    let owner = chain[0].box.id;
+    for (const r of group.rows) {
+      if (r.kind === 'param') {
+        owner = [...byBox.entries()].find(([, set]) => r.rowKey && set.has(r.rowKey))?.[0]
+          ?? (r.rowKey ? lastTableId! : owner);
       }
-      case 'chart': {
-        const sec = layout.sections.find(s => s.id === box.ref && s.type === 'chart' && s.trend);
-        if (sec) {
-          const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM, h: box.h * MM };
-          renderReportChart(doc, sec, group.testName ?? '', r.y, chartTheme(),
-            { x: r.x, contentWidth: r.w, floor: r.y + r.h, newPage: () => r.y });
-        }
-        break;
-      }
-      case 'signatures':
-        drawSignaturesBox(doc, box, body, deptSigs, IMG_CACHE, BLACK, tableTheme.font);
-        break;
-      case 'notes':
-        if (box.label) drawNotesBox(doc, box, body, box.label, TEXT_DIM, tableTheme.font);
-        break;
+      const list = manualRows.get(owner) ?? [];
+      list.push(r);
+      manualRows.set(owner, list);
     }
   }
-  // The actual bottom of the CONTENT (table/graphs/notes) — never the
-  // signatures box, which the layout already pins wherever the lab (or the
-  // shipped default) placed it. Returning this, not the full page floor,
-  // is what lets "****End of Report****" land on the SAME page: the
-  // caller's existing "near the floor → new page" check now sees how much
-  // room is really left, instead of always reading "full".
-  const contentBottomMm = boxes.filter(b => b.kind !== 'signatures')
-    .reduce((m, b) => Math.max(m, b.y + b.h), 0);
-  return contentBottomMm > 0 ? body.top + contentBottomMm * MM : floor;
+  let remaining = group.rows;                       // AUTO: rows not printed yet
+  const tableRowsFor = (box: PageLayoutBox): PanelRowData[] => (manual ? (manualRows.get(box.id) ?? []) : remaining);
+
+  let opened = 0, signed = false, bottom = opts.topY ?? MARGIN_TOP, lastPdfPage = doc.getNumberOfPages();
+  // The signatures box signs only if NO results print after it (a table
+  // that continues on a later page): decided after all pages, then drawn on
+  // its own page (jsPDF setPage) — else the sign-off follows the profile.
+  let pendingSig: { pdfPage: number; layoutPage: number; x: number; y: number; w: number } | null = null;
+  let lastTableLayoutPage = -1;
+  for (let i = 0; i < pages.length; i++) {
+    const live = printableBoxes(pages[i].boxes);
+    const hasContent = live.some(b =>
+      (b.kind === 'table' && tableRowsFor(b).length > 0) ||
+      (b.kind === 'analyzer' && !!b.ref && availCodes.has(b.ref)) ||
+      (b.kind === 'chart' && layout.sections.some(sx => sx.id === b.ref && sx.type === 'chart' && !!sx.trend)) ||
+      (b.kind === 'notes' && !!(b.text ?? b.label ?? '').trim()) ||
+      (b.kind === 'signatures' && opts.signHere && !signed && deptSigs.length > 0));
+    if (!hasContent && !KEEP_EMPTY_LAYOUT_PAGES) continue; // a page with nothing to print is dropped
+
+    let y: number;
+    if (opened === 0 && opts.topY != null) {
+      y = opts.topY;                                 // the open page is still blank — use it
+    } else {
+      NEXT_PAGE_IS_FIRST = false;
+      doc.addPage();
+      drawLetterhead(doc);
+      y = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 10;
+    }
+    const dept = (group.department ?? '').trim();
+    if (opened === 0 && dept) {
+      const ids = departmentSampleIds([group]);
+      y = renderScopeHeading(doc, dept.toUpperCase(), y, practice, ids.length ? `Sample ID: ${ids.join(', ')}` : null);
+    }
+    const name = group.testName || layout.testName || '';
+    y = drawPanelNameBand(doc, opened === 0 ? name : `${name.toUpperCase()} — CONTINUED`, MARGIN_X, y + 2, A4.w - 2 * MARGIN_X) + 6;
+    opened++;
+    const body: ProfileBodyArea = bodyArea(y, floor);
+    const bodyPage = doc.getNumberOfPages();
+    try { ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body } }); } catch { /* designer hook only */ }
+
+    const { boxes } = collapseMissingAnalyzerBoxes(live, availCodes, body);
+    let pageBottom = body.top, tableEnd = 0;
+    // Tables last: a table that runs on must not push the other boxes off this page.
+    const ordered = [...boxes.filter(b => b.kind !== 'table'), ...boxes.filter(b => b.kind === 'table').sort((a, b2) => a.y - b2.y)];
+    for (const box of ordered) {
+      const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM, h: box.h * MM };
+      switch (box.kind) {
+        case 'table': {
+          const rows = tableRowsFor(box);
+          if (!rows.length) break;
+          const fit = !manual && box.id !== lastTableId;
+          const out = { consumed: rows.length };
+          const sized = { natural: 0 };
+          const end = renderColumnarTable(doc, [{ ...group, rows }], onePageTableColumns(group, box), r.y, practice, null, 0, false,
+            { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, ...(fit ? { fitH: r.h, out } : {}),
+              boxH: r.h, vAlign: box.vAlign ?? 'top', rowGap: ROW_SPACING_PT[box.rowSpacing ?? 'normal'] ?? 0, sized });
+          if (!manual) remaining = remaining.slice(out.consumed);
+          lastTableLayoutPage = i;
+          tableEnd = Math.max(tableEnd, end - 6);
+          try {
+            ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body }, boxId: box.id, rowsPrinted: out.consumed,
+              tableBottom: doc.getNumberOfPages() === bodyPage ? end - 6 : null, tableNaturalH: sized.natural || null });
+          } catch { /* designer hook only */ }
+          break;
+        }
+        case 'analyzer': {
+          const url = box.ref ? images[box.ref] : undefined;
+          drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, labelFont);
+          pageBottom = Math.max(pageBottom, r.y + r.h);
+          break;
+        }
+        case 'chart': {
+          const sec = layout.sections.find(sx => sx.id === box.ref && sx.type === 'chart' && sx.trend);
+          if (sec) {
+            renderReportChart(doc, sec, group.testName ?? '', r.y, chartTheme(),
+              { x: r.x, contentWidth: r.w, floor: r.y + r.h, newPage: () => r.y });
+            pageBottom = Math.max(pageBottom, r.y + r.h);
+          }
+          break;
+        }
+        case 'signatures':
+          if (opts.signHere && !pendingSig && deptSigs.length) pendingSig = { pdfPage: bodyPage, layoutPage: i, x: r.x, y: r.y, w: r.w };
+          break;
+        case 'notes': {
+          const text = (box.text ?? box.label ?? '').trim();
+          if (text) { drawNotesBox(doc, box, body, text, TEXT, labelFont); pageBottom = Math.max(pageBottom, r.y + r.h); }
+          break;
+        }
+      }
+    }
+    // The End of Report goes under what actually printed — never the
+    // signatures box, which the layout pins where the lab placed it.
+    lastPdfPage = doc.getNumberOfPages();
+    bottom = lastPdfPage === bodyPage ? Math.max(pageBottom, tableEnd) : tableEnd;
+  }
+  if (pendingSig && pendingSig.layoutPage >= lastTableLayoutPage) {
+    const cur = doc.getNumberOfPages();
+    doc.setPage(pendingSig.pdfPage);
+    drawInlineSignatures(doc, deptSigs, pendingSig.y, practice, { x: pendingSig.x, w: pendingSig.w });
+    doc.setPage(cur);
+    signed = true;
+  }
+  // Safety net: rows no table box printed (no table box at all) still print.
+  if (!manual && remaining.length && (!chain.length || opened === 0)) {
+    let y = opened === 0 && opts.topY != null ? opts.topY : bottom + 8;
+    if (opened > 0 && y > floor - 60) y = newPage(doc, practice);
+    bottom = renderColumnarTable(doc, [{ ...group, rows: remaining }], onePageTableColumns(group, {} as PageLayoutBox), y, practice, null, 0, false);
+  }
+  return { bottom, signed };
 }
 
 // ── Technician report notes (owner 2026-09-30) ───────────────────
@@ -3540,14 +3670,18 @@ function drawInlineSignatures(
   doc: jsPDF,
   sigs: ReportSignature[],
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  /** Profile one-page layout: the same sign-off, inside the signatures box
+   *  (left `x`, width `w`) — never moved to another page. */
+  region: { x: number; w: number } | null = null,
 ): number {
-  const usable = A4.w - 2 * MARGIN_X;
-  const probe = layoutSignatureBlock(sigs, MARGIN_X, usable, 0);
+  const left = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
+  const probe = layoutSignatureBlock(sigs, left, usable, 0);
   if (probe.rows.length === 0) return startY;
   let top = startY;
-  if (top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
-  const block = layoutSignatureBlock(sigs, MARGIN_X, usable, top);
+  if (!region && top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
+  const block = layoutSignatureBlock(sigs, left, usable, top);
   const textW = block.slotW - 6;
   for (const row of block.rows) {
     const baseY = row.top + SIG_ROW.base;
@@ -3746,12 +3880,31 @@ function renderColumnarTable(
    *  run): configured columns print exactly as arranged — even empty ones —
    *  and every group gets its heading band so the odd-width table reads as
    *  its own titled block. */
-  overriddenRun = false
+  overriddenRun = false,
+  /** Profile one-page layout: draw this SAME table (theme, fonts, rules,
+   *  flags, superscripts — nothing restyled) inside a box instead of across
+   *  the page: left edge `x`, width `w`, rows stop at `bottom` (overflow
+   *  still continues on the next page — never cut). `hideBand` leaves out
+   *  the panel band (the one-page block prints it full width above);
+   *  `dropEmpty` drops columns with no content even in the admin preview. */
+  region: { x: number; w: number; bottom: number; hideBand?: boolean; dropEmpty?: boolean;
+            /** Custom layout, auto-continue: print only the rows that FIT the
+             *  box's height (`boxH`, pt) — whole rows, never a cut row — and
+             *  report how many of the group's rows were used in `out`. */
+            fitH?: number; out?: { consumed: number };
+            /** The box's height (pt) and where the rows sit in it when they
+             *  need less: 'fill' spreads them evenly, 'center' centres them. */
+            boxH?: number; vAlign?: 'top' | 'fill' | 'center' | null;
+            /** Extra space per row (pt; negative = tighter) — the box's row spacing. */
+            rowGap?: number;
+            /** Out: the natural height (head + rows, before Fill), pt. */
+            sized?: { natural: number } } | null = null,
 ): number {
   if (groups.length === 0) return startY;
-  if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
+  if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
-  const usable = A4.w - 2 * MARGIN_X;
+  const LEFT = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
   let vcols: VCol[] = [];
   for (let i = 0; i < cfg.length; i++) {
@@ -3791,7 +3944,7 @@ function renderColumnarTable(
   // visible (structure fidelity beats economy — an override's just-added
   // column must show even before it has data); the department's shared
   // table still drops empties.
-  if (!PREVIEW_KEEP_EMPTY_COLS && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
+  if ((!PREVIEW_KEEP_EMPTY_COLS || region?.dropEmpty) && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
   const hasMethodCol = vcols.some(c => c.members.some(m => m.type === 'method'));
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
@@ -3829,6 +3982,11 @@ function renderColumnarTable(
   /** No Description column in this table → each value's description prints
    *  as a full-width row right under that value's row (P1, D1, P2, P3, D3). */
   const descAsRow = !hasDescriptionColumn(cfg);
+  /** Body row → the index of its source row in the group (-1 = a band /
+   *  sub-line) — so a box-fitted table can report whole rows used. */
+  const srcOfBody: number[] = [];
+  let curSrc = -1;
+  const markSrc = (next: number) => { while (srcOfBody.length < body.length) srcOfBody.push(curSrc); curSrc = next; };
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -3844,7 +4002,7 @@ function renderColumnarTable(
     const compact = coreRows.length === 1 && coreRows[0].kind === 'param' && !g.referralLab;
     const groupStart = body.length;
 
-    if (!compact) {
+    if (!compact && !region?.hideBand) {
       // Panel / profile header band — bold, full width.
       bandRowOf.set(groups.indexOf(g), body.length);
       body.push([{
@@ -3885,7 +4043,9 @@ function renderColumnarTable(
     }
 
     let firstParam = true;
+    let srcIdx = -1;
     for (const r of g.rows) {
+      markSrc(++srcIdx);
       if (r.sentence) {
         // The test's Sentence → ONE full-width row (every column merged),
         // readable body text in the template's font and body colour; the
@@ -4072,8 +4232,11 @@ function renderColumnarTable(
   // When the table spills onto further pages, stamp "<DEPT> — continued" above
   // the repeated column header — otherwise a reader on page 2 can't tell which
   // department the rows belong to.
+  markSrc(-1);
   let tablePagesSeen = 0;
-  const margin = tablePageMargins();
+  const margin = region
+    ? { ...tablePageMargins(), left: region.x, right: A4.w - region.x - region.w, bottom: Math.max(MARGIN_BOTTOM, A4.h - region.bottom) }
+    : tablePageMargins();
 
   // ── Panel heading on continuation pages ──────────────────────────
   // A page that opens MID-panel repeats the band as "<PANEL> — CONTINUED"
@@ -4108,11 +4271,11 @@ function renderColumnarTable(
       // hook returns — so the band's paint state is put back afterwards.
       const fill = doc.getFillColor(), font = doc.getFont(), size = doc.getFontSize(), color = doc.getTextColor();
       doc.setFillColor('#eef2f7');
-      doc.rect(MARGIN_X, top, usable, contH, 'F');
+      doc.rect(LEFT, top, usable, contH, 'F');
       const bandSize = typeset(doc, 'panelContinued');
       doc.setTextColor(theme.primary);
       // autotable's own top-aligned first baseline for the band's font.
-      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, MARGIN_X + 6, top + 4 + bandSize * 0.85);
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, LEFT + 6, top + 4 + bandSize * 0.85);
       doc.setFillColor(fill);
       doc.setFont(font.fontName, font.fontStyle);
       doc.setFontSize(size);
@@ -4141,10 +4304,10 @@ function renderColumnarTable(
       if (tablePagesSeen > 1 && deptLabel) {
         typeset(doc, 'deptContinued');
         doc.setTextColor(theme.primary);
-        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, margin.top - 14);
+        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, LEFT, margin.top - 14);
         doc.setDrawColor(HAIR);
         doc.setLineWidth(0.5);
-        doc.line(MARGIN_X, margin.top - 10, A4.w - MARGIN_X, margin.top - 10);
+        doc.line(LEFT, margin.top - 10, LEFT + usable, margin.top - 10);
       }
     },
     columnStyles: Object.fromEntries(
@@ -4207,7 +4370,43 @@ function renderColumnarTable(
   // The header and the first glued chain (a panel band, its sub-line and
   // its first result) open the table together — keepRowsTogether only
   // looks ahead from a row already drawn, so row 0 is decided here.
-  if (table.body.length > 0) {
+  // Row spacing (Custom layout table box) — before the fit, so the rows a
+  // box holds are counted at the spacing it prints.
+  if (region?.rowGap) for (const row of table.body) setRowHeight(row, Math.max(4, row.height + region.rowGap));
+  if (region?.fitH != null && region.out) {
+    // Whole rows that fit the box (head included); never split one source
+    // row's body rows (a value + its description) across two boxes.
+    const rows = table.body as Array<{ height: number }>;
+    let used = headH, cut = 0;
+    while (cut < rows.length && used + rows[cut].height <= region.fitH + 0.5) { used += rows[cut].height; cut++; }
+    while (cut > 0 && cut < rows.length && srcOfBody[cut] >= 0 && srcOfBody[cut] === srcOfBody[cut - 1]) cut--;
+    const firstSrc = srcOfBody.findIndex(x => x >= 0);
+    if (cut <= firstSrc && firstSrc >= 0) {
+      // Not even one row fits: print the first row anyway (a box never swallows a result).
+      cut = firstSrc + 1;
+      while (cut < rows.length && srcOfBody[cut] === srcOfBody[firstSrc]) cut++;
+    }
+    if (cut < rows.length) {
+      (table as unknown as { body: unknown[] }).body = table.body.slice(0, cut);
+      region.out.consumed = Math.max(0, ...srcOfBody.slice(0, cut).filter(x => x >= 0).map(x => x + 1));
+    } else {
+      region.out.consumed = groups[0]?.rows.length ?? 0;
+    }
+  }
+  if (region) {
+    const natural = headH + table.body.reduce((a, r) => a + r.height, 0);
+    if (region.sized) region.sized.natural = natural;
+    // Top / Fill / Center inside the box — only when every row fits it here.
+    const extra = (region.boxH ?? 0) - natural;
+    if (extra > 1 && table.body.length > 0 && startY + region.boxH! <= region.bottom + 0.5) {
+      if (region.vAlign === 'center') table.settings.startY = startY + extra / 2;
+      else if (region.vAlign === 'fill') {
+        const add = extra / table.body.length;
+        for (const row of table.body) setRowHeight(row, row.height + add);
+      }
+    }
+  }
+  if (!region && table.body.length > 0) {
     const lead = headH + table.body[0].height + chainAfter(table.body, 0, keepWithNext);
     if (startY + lead > floor && lead <= floor - margin.top) {
       startY = table.settings.startY = newPage(doc, practice);
@@ -4225,6 +4424,15 @@ function renderColumnarTable(
   }
   __drawTable(doc, table);
   return table.finalY! + 6;
+}
+
+/** Custom layout table box row spacing → extra pt per row ('normal' = the theme's own). */
+export const ROW_SPACING_PT: Record<'compact' | 'normal' | 'relaxed', number> = { compact: -2, normal: 0, relaxed: 5 };
+
+/** Set an autotable body row's height (and its cells', which autotable paints from). */
+function setRowHeight(row: { height: number; cells: Record<string, unknown> }, h: number): void {
+  row.height = h;
+  for (const cell of Object.values(row.cells)) (cell as { height: number }).height = h;
 }
 
 /** Keep a department's sign-off on the page its results END on — without

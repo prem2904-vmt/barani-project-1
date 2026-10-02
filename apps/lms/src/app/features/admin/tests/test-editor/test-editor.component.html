@@ -1185,6 +1185,14 @@
                 [chartContext]="chartContext()"
                 [isProfile]="d.type === 'profile'"
                 [resolvedColumns]="resolvedColumnsForDesigner()"
+                [profileName]="d.name"
+                [profileCatalogKey]="draftCatalogKey()"
+                [profileDepartment]="selectedDeptName()"
+                [profileDepartmentId]="d.departmentId || null"
+                [profileSampleType]="d.sampleType"
+                [profileMembers]="previewProfileMembers()"
+                [columnsOverride]="liveColumnsOverride()"
+                (pageLayoutLive)="livePageLayout.set($event)"
                 (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()">
                 <div descriptionEditor>
@@ -1285,6 +1293,8 @@
             [columnsOverride]="liveColumnsOverride()"
             [parametersJson]="d.parametersJson || null"
             [culture]="cultureBench()"
+            [pageLayout]="livePageLayout()"
+            [departmentId]="d.departmentId || null"
             [refreshToken]="previewToken()">
           </pf-report-pdf-preview>
         } @else {

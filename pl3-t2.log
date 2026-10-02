@@ -1,0 +1,1502 @@
+
+> nx run lms:test --include=**/report-pdf.one-page-layout.spec.ts
+
+[33m❯[39m Building...
+(node:21866) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[32m✔[39m Building...
+[37m[1mInitial chunk files[22m                                [2m | [22m[1mNames[22m                                           [2m | [22m [1mRaw size[22m
+[32mspec-app-shared-utils-report-pdf.one-page-layout.js[37m[2m | [22m[2mspec-app-shared-utils-report-pdf.one-page-layout[22m[2m | [22m[36m305.57 kB[37m[2m | [22m
+[32mstyles.css[37m                                         [2m | [22m[2mstyles[22m                                          [2m | [22m[36m228.03 kB[37m[2m | [22m
+[32mchunk-JBWBLPNK.js[37m                                  [2m | [22m[2m-[22m                                               [2m | [22m  [36m5.19 kB[37m[2m | [22m
+[32minit-testbed.js[37m                                    [2m | [22m[2minit-testbed[22m                                    [2m | [22m  [36m1.21 kB[37m[2m | [22m
+[32mvitest-mock-patch.js[37m                               [2m | [22m[2mvitest-mock-patch[22m                               [2m | [22m[36m974 bytes[37m[2m | [22m
+[1m [22m                                                  [2m | [22m[1mInitial total[22m                                   [2m | [22m[1m540.98 kB[22m
+Application bundle generation complete. [34.464 seconds] - 2026-10-02T12:41:06.174Z
+[39m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8107: NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator. Find more at https://v21.angular.dev/extended-diagnostics/NG8107[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/lab-settings/lab-settings.component.ts:532:85:
+[37m      532 │ ...er?.source !== 'tenant' && !waSettings()!.platform?.[32mconfigured[37m) {
+          ╵                                                        [32m~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/label-printer/label-printer.component.ts:175:89:
+[37m      175 │ ...ions]="docPrinterOptions()" [value]="[32mcfg().documentPrinter ?? ''[37m"
+          ╵                                         [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/report-template/report-columns-editor.component.ts:165:34:
+[37m      165 │                          [value]="[32msc.label ?? ''[37m"
+          ╵                                   [32m~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. F[39m[22m
+[1m[33mind more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/report-template/report-columns-editor.component.ts:169:34:
+[37m      169 │                          [value]="[32msc.label ?? ''[37m"
+          ╵                                   [32m~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: TileComponent is not used within the template of TestNotesEditorComponent[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/report-template/test-notes-editor.component.ts:44:52:
+[37m      44 │ ...ponent, SelectComponent, [32mTileComponent[37m, TouchButtonComponent, R...
+         ╵                             [32m~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/tests/test-editor/test-editor.component.html:704:26:
+[37m      704 │                     @if (([32mp.label ?? ''[37m).trim()) {
+          ╵                           [32m~~~~~~~~~~~~~[0m
+  Warning occurs in the template of component TestEditorComponent.
+    apps/lms/src/app/features/admin/tests/test-editor/test-editor.component.ts:184:15:
+[37m      184 │   templateUrl: [32m'./test-editor.component.html'[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/test[39m[22m[1m[33ms/test-editor/test-editor.component.html:971:78:
+[37m      971 │ ...der]="ref.placeholder" [ngModel]="[32mcalcTryValues()[ref.key] ?? ''[37m"
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+  Warning occurs in the template of component TestEditorComponent.
+    apps/lms/src/app/features/admin/tests/test-editor/test-editor.component.ts:184:15:
+[37m      184 │   templateUrl: [32m'./test-editor.component.html'[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ConditionEditorComponent is not used within the template of TestEditorComponent[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/admin/tests/test-editor/test-editor.component.ts:164:4:
+[37m      164 │     [32mConditionEditorComponent[37m,
+          ╵     [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/finance/expenses/day-closing.component.ts:70:128:
+[37m      70 │ ...d-num">{{ inr([32md.figures.collectionBuckets[b] ?? 0[37m) }}</span></div>
+         ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/frontdesk/order-create/order-create.component.html:1017:50:
+[37m      1017 │ ..."d.name + ', ' + ([32msearchDeptCounts()[d.name] ?? 0[37m) + ' matches'[39m[22m[1m[33m"
+           ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+  Warning occurs in the template of component OrderCreateComponent.
+    apps/lms/src/app/features/frontdesk/order-create/order-create.component.ts:80:15:
+[37m      80 │   templateUrl: [32m'./order-create.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/frontdesk/order-create/order-create.component.html:1019:67:
+[37m      1019 │ ...ass="pf-us__chip-n">{{ [32msearchDeptCounts()[d.name] ?? 0[37m }}</span>
+           ╵                           [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+  Warning occurs in the template of component OrderCreateComponent.
+    apps/lms/src/app/features/frontdesk/order-create/order-create.component.ts:80:15:
+[37m      80 │   templateUrl: [32m'./order-create.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. Find more at https://v21.angular.dev/extended-diagnostics/NG8102[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/app/features/frontdesk/patient-profile/lab-orders.component.ts:155:12:
+[37m      155 │       @if (([32morders() ?? [][37m).length === 0) {
+          ╵             [32m~~~~~~~~~~~~~~[0m
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: LogoMarkComponent is not used within the template of CultureEntryComponent[0m [1m[35m[plugin angular-compiler][0m
+    apps/lms/src/a[39m[22m[1m[33mpp/features/lab/culture-entry/culture-entry.component.ts:32:87:
+[37m      32 │ ...nent, SelectComponent, [32mLogoMarkComponent[37m, NumpadDirective, Nump...
+         ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+[39m[22m
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/private/tmp/claude-501/-Users-suganthanarulvelan-Documents-GitHub-prefrontal-ops-ui/7b9228c0-b3c4-4259-83bc-47a7ab2f26e1/scratchpad/pl2-ui[39m
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ [31m❯[39m [30m[45m lms [49m[39m apps/lms/src/app/shared/utils/report-pdf.one-page-layout.spec.ts [2m([22m[2m16 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 115[2mms[22m[39m
+[31m     [31m×[31m AUTO-continue: the page-1 table box takes the rows that fit, the rest continue in the page-2 box — every row once, never cut[39m[32m 25[2mms[22m[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[41m[1m FAIL [22m[49m [30m[45m lms [49m[39m apps/lms/src/app/shared/utils/report-pdf.one-page-layout.spec.ts[2m > [22mprofile one-page layout — PDF render[2m > [22mAUTO-continue: the page-1 table box takes the rows that fit, the rest continue in the page-2 box — every row once, never cut
+[31m[1mAssertionError[22m: expected '%PDF-1.3\n%ºß¬à\n3 0 obj\n<</Type /Pa…' to contain 'CBC — CONTINUED'[39m
+- Expected
++ Received
+- CBC — CONTINUED
++ %PDF-1.3
++ %ºß¬à
++ 3 0 obj
++ <</Type /Page
++ /Parent 1 0 R
++ /Resources 2 0 R
++ /MediaBox [0 0 595.2799999999999727 841.8899999999999864]
++ /Contents 4 0 R
++ >>
++ endobj
++ 4 0 obj
++ <<
++ /Length 8010
++ >>
++ stream
++ 0.200025 w
++ 0 G
++ 0. 0.4 0.8 rg
++ 62. 797.8899999999999864 m
++ 62. 806.7265559972927349 54.8365559972926917 813.8899999999999864 46. 813.8899999999999864 c
++ 37.1634440027073083 813.8899999999999864 30. 806.7265559972927349 30. 797.8899999999999864 c
++ 30. 789.0534440027072378 37.1634440027073083 781.8899999999999864 46. 781.8899999999999864 c
++ 54.8365559972926917 781.8899999999999864 62. 789.0534440027072378 62. 797.8899999999999864 c
++ f
++ 1. g
++ 44.7199999999999989 805.0900000000000318 2.5600000000000001 -14.4000000000000004 re
++ f
++ 38.7999999999999972 799.1699999999999591 14.4000000000000004 -2.5600000000000001 re
++ f
++ BT
++ /F2 18 Tf
++ 20.6999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 68. 795.8899999999999864 Td
++ (PREFRONTAL) Tj
++ ET
++ BT
++ /F2 18 Tf
++ 20.6999999999999993 TL
++ 0. 0.4 0.8 rg
++ 194. 795.8899999999999864 Td
++ (PATHOLOGY LAB) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 68. 781.8899999999999864 Td
++ (Accurate ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0. 0.4 0.8 rg
++ 108.7700000000000102 781.8899999999999864 Td
++ ( | ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 116.3300000000000125 781.8899999999999864 Td
++ ( Caring ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0. 0.4 0.8 rg
++ 149.8100000000000023 781.8899999999999864 Td
++ ( | ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 157.3700000000000045 781.8899999999999864 Td
++ ( Instant) Tj
++ ET
++ 0. 0.4 0.8 rg
++ 30. 759.8899999999999864 535.2799999999999727 -4. re
++ f
++ 0.8 G
++ 0.5 w
++ 30. 743.8899999999999864 m
++ 565.2799999999999727 743.8899999999999864 l
++ S
++ 30. 663.8899999999999864 m
++ 565.2799999999999727 663.8899999999999864 l
++ S
++ 222.7007999999999868 737.8899999999999864 m
++ 222.7007999999999868 669.8899999999999864 l
++ S
++ 415.4015999999999735 737.8899999999999864 m
++ 415.4015999999999735 669.8899999999999864 l
++ S
++ BT
++ /F2 13 Tf
++ 14.9499999999999993 TL
++ 0.106 0.227 0.42 rg
++ 40. 725.8899999999999864 Td
++ (Test Patient) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 40. 709.8899999999999864 Td
++ (Age : 30 Years) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 40. 697.8899999999999864 Td
++ (Sex : F) Tj
++ ET
++ BT
++ /F2 9.5 Tf
++ 10.9249999999999989 TL
++ 0. 0.4 0.8 rg
++ 232.7007999999999868 725.8899999999999864 Td
++ (Specimen\(s\) :) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 232.7007999999999868 712.8899999999999864 Td
++ (EDTA Whole Blood) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 729.8899999999999864 Td
++ (Registered on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 484.691599999999994 729.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 718.8899999999999864 Td
++ (Collected on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 479.0815999999999804 718.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 707.8899999999999864 Td
++ (Reported on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 478.5715999999999894 707.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ BT
++ /F2 10.5 Tf
++ 12.0749999999999993 TL
++ 0.106 0.227 0.42 rg
++ 30. 637.8899999999999864 Td
++ (HAEMATOLOGY) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.4 g
++ 495.3249999999999318 637.8899999999999864 Td
++ (Sample ID: SMP-1) Tj
++ ET
++ 0.11 0.23 0.42 RG
++ 1. w
++ 30. 632.8899999999999864 m
++ 565.2799999999999727 632.8899999999999864 l
++ S
++ 0.93 0.95 0.97 rg
++ 30. 624.8899999999999864 535.2799999999999727 -22. re
++ f
++ BT
++ /F2 9.5 Tf
++ 10.9249999999999989 TL
++ 0.106 0.227 0.42 rg
++ 36. 610.7549999999999955 Td
++ (HEMOGLOBIN) Tj
++ ET
++ 0.11 0.23 0.42 RG
++ 1. w
++ 0.11 0.23 0.42 RG
++ 1. w
++ 1. g
++ 0.8 G
++ 1. g
++ 30. 596.8899999999999864 215.7030370981904639 -18.7749999999999986 re
++ f
++ 0.7 w
++ 30. 578.1150000000000091 m
++ 245.7030370981904639 578.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 36. 586.6649999999999636 Td
++ (Investigation) Tj
++ ET
++ 1. g
++ 0.8 G
++ 1. g
++ 245.7030370981904639 596.8899999999999864 164.949381310380943 -18.7749999999999986 re
++ f
++ 0.7 w
++ 245.7030370981904639 578.1150000000000091 m
++ 410.6524184085714069 578.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 251.7030370981904639 586.6649999999999636 Td
++ (Result) Tj
++ ET
++ 1. g
++ 0.8 G
++ 1. g
++ 410.6524184085714069 596.8899999999999864 152.2609673634285627 -18.7749999999999986 re
++ f
++ 0.7 w
++ 410.6524184085714069 578.1150000000000091 m
++ 562.9133857719999696 578.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 416.6524184085714069 586.6649999999999636 Td
++ (Reference range) Tj
++ ET
++ 0.8 G
++ 0. w
++ 0.11 0.23 0.42 RG
++ 1. w
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 578.1150000000000091 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 566.4650000000000318 Td
++ (Hemoglobin) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 578.1150000000000091 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 566.4650000000000318 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 578.1150000000000091 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 566.4650000000000318 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 559.7649999999999864 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 548.1150000000000091 Td
++ (RBC Count) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 559.7649999999999864 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 548.1150000000000091 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 559.7649999999999864 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 548.1150000000000091 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 541.4149999999999636 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 529.7649999999999864 Td
++ (Hematocrit) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 541.4149999999999636 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 529.7649999999999864 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 541.4149999999999636 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 529.7649999999999864 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 523.0649999999999409 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 511.4149999999999636 Td
++ (MCV) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 523.0649999999999409 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 511.4149999999999636 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 523.0649999999999409 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 511.4149999999999636 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 504.7149999999999181 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 493.0649999999999409 Td
++ (MCH) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 504.7149999999999181 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 493.0649999999999409 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 504.7149999999999181 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 493.0649999999999409 Td
++ (1  99) Tj
++ ET
++ 0.11 0.23 0.42 RG
++ 1. w
++ 0.78 G
++ 0. w
++ 0.11 0.23 0.42 RG
++ 1. w
++ 0.11 0.23 0.42 RG
++ 1. w
++ 0.8 G
++ 0.4 w
++ 30. 30. m
++ 565.2799999999999727 30. l
++ S
++ BT
++ /F1 8 Tf
++ 9.1999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 30. 18. Td
++ (Generated on :  02 Oct 2026, 06:11 PM) Tj
++ ET
++ BT
++ /F1 8 Tf
++ 9.1999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 560.8799999999999955 18. Td
++ (1) Tj
++ ET
++ endstream
++ endobj
++ 5 0 obj
++ <</Type /Page
++ /Parent 1 0 R
++ /Resources 2 0 R
++ /MediaBox [0 0 595.2799999999999727 841.8899999999999864]
++ /Contents 6 0 R
++ >>
++ endobj
++ 6 0 obj
++ <<
++ /Length 11179
++ >>
++ stream
++ 1. w
++ 0.11 0.23 0.42 RG
++ 0. 0.4 0.8 rg
++ 62. 797.8899999999999864 m
++ 62. 806.7265559972927349 54.8365559972926917 813.8899999999999864 46. 813.8899999999999864 c
++ 37.1634440027073083 813.8899999999999864 30. 806.7265559972927349 30. 797.8899999999999864 c
++ 30. 789.0534440027072378 37.1634440027073083 781.8899999999999864 46. 781.8899999999999864 c
++ 54.8365559972926917 781.8899999999999864 62. 789.0534440027072378 62. 797.8899999999999864 c
++ f
++ 1. g
++ 44.7199999999999989 805.0900000000000318 2.5600000000000001 -14.4000000000000004 re
++ f
++ 38.7999999999999972 799.1699999999999591 14.4000000000000004 -2.5600000000000001 re
++ f
++ BT
++ /F2 18 Tf
++ 20.6999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 68. 795.8899999999999864 Td
++ (PREFRONTAL) Tj
++ ET
++ BT
++ /F2 18 Tf
++ 20.6999999999999993 TL
++ 0. 0.4 0.8 rg
++ 194. 795.8899999999999864 Td
++ (PATHOLOGY LAB) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 68. 781.8899999999999864 Td
++ (Accurate ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0. 0.4 0.8 rg
++ 108.7700000000000102 781.8899999999999864 Td
++ ( | ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 116.3300000000000125 781.8899999999999864 Td
++ ( Caring ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0. 0.4 0.8 rg
++ 149.8100000000000023 781.8899999999999864 Td
++ ( | ) Tj
++ ET
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 157.3700000000000045 781.8899999999999864 Td
++ ( Instant) Tj
++ ET
++ 0. 0.4 0.8 rg
++ 30. 759.8899999999999864 535.2799999999999727 -4. re
++ f
++ 0.8 G
++ 0.5 w
++ 30. 743.8899999999999864 m
++ 565.2799999999999727 743.8899999999999864 l
++ S
++ 30. 663.8899999999999864 m
++ 565.2799999999999727 663.8899999999999864 l
++ S
++ 222.7007999999999868 737.8899999999999864 m
++ 222.7007999999999868 669.8899999999999864 l
++ S
++ 415.4015999999999735 737.8899999999999864 m
++ 415.4015999999999735 669.8899999999999864 l
++ S
++ BT
++ /F2 13 Tf
++ 14.9499999999999993 TL
++ 0.106 0.227 0.42 rg
++ 40. 725.8899999999999864 Td
++ (Test Patient) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 40. 709.8899999999999864 Td
++ (Age : 30 Years) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 40. 697.8899999999999864 Td
++ (Sex : F) Tj
++ ET
++ BT
++ /F2 9.5 Tf
++ 10.9249999999999989 TL
++ 0. 0.4 0.8 rg
++ 232.7007999999999868 725.8899999999999864 Td
++ (Specimen\(s\) :) Tj
++ ET
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 232.7007999999999868 712.8899999999999864 Td
++ (EDTA Whole Blood) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 729.8899999999999864 Td
++ (Registered on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 484.691599999999994 729.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 718.8899999999999864 Td
++ (Collected on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 479.0815999999999804 718.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ BT
++ /F1 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 425.4015999999999735 707.8899999999999864 Td
++ (Reported on: ) Tj
++ ET
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0.106 0.227 0.42 rg
++ 478.5715999999999894 707.8899999999999864 Td
++ (02 Oct 2026, 05:30 AM) Tj
++ ET
++ 0.93 0.95 0.97 rg
++ 30. 651.8899999999999864 535.2799999999999727 -22. re
++ f
++ BT
++ /F2 9.5 Tf
++ 10.9249999999999989 TL
++ 0.106 0.227 0.42 rg
++ 36. 637.7549999999999955 Td
++ (HEMOGLOBIN  CONTINUED) Tj
++ ET
++ 0.8 G
++ 0.5 w
++ 0.8 G
++ 0.5 w
++ 1. g
++ 0.8 G
++ 1. g
++ 30. 623.8899999999999864 215.7030370981904639 -18.7749999999999986 re
++ f
++ 0.7 w
++ 30. 605.1150000000000091 m
++ 245.7030370981904639 605.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 36. 613.6649999999999636 Td
++ (Investigation) Tj
++ ET
++ 1. g
++ 0.8 G
++ 1. g
++ 245.7030370981904639 623.8899999999999864 164.949381310380943 -18.7749999999999986 re
++ f
++ 0.7 w
++ 245.7030370981904639 605.1150000000000091 m
++ 410.6524184085714069 605.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 251.7030370981904639 613.6649999999999636 Td
++ (Result) Tj
++ ET
++ 1. g
++ 0.8 G
++ 1. g
++ 410.6524184085714069 623.8899999999999864 152.2609673634285627 -18.7749999999999986 re
++ f
++ 0.7 w
++ 410.6524184085714069 605.1150000000000091 m
++ 562.9133857719999696 605.1150000000000091 l
++ S
++ BT
++ /F2 8.5 Tf
++ 9.7749999999999986 TL
++ 0. g
++ 416.6524184085714069 613.6649999999999636 Td
++ (Reference range) Tj
++ ET
++ 0.8 G
++ 0. w
++ 0.8 G
++ 0.5 w
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 605.1150000000000091 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 593.4650000000000318 Td
++ (MCHC) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 605.1150000000000091 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 593.4650000000000318 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 605.1150000000000091 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 593.4650000000000318 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 586.7649999999999864 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 575.1150000000000091 Td
++ (RDW-CV) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 586.7649999999999864 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 575.1150000000000091 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 586.7649999999999864 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 575.1150000000000091 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 568.4149999999999636 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 556.7650000000001 Td
++ (WBC Count) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 568.4149999999999636 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 556.7650000000001 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 568.4149999999999636 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 556.7650000000001 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 550.0650000000000546 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 538.4149999999999636 Td
++ (Neutrophils) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 550.0650000000000546 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 538.4149999999999636 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 550.0650000000000546 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 538.4149999999999636 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 531.7149999999999181 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 520.0650000000000546 Td
++ (Lymphocytes) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 531.7149999999999181 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 520.0650000000000546 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 531.7149999999999181 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 520.0650000000000546 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 513.3650000000000091 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 501.714999999999975 Td
++ (Monocytes) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 513.3650000000000091 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 501.714999999999975 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 513.3650000000000091 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 501.714999999999975 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 495.0149999999999295 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 483.3649999999999523 Td
++ (Eosinophils) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 495.0149999999999295 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 483.3649999999999523 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 495.0149999999999295 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 483.3649999999999523 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 476.6649999999999068 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 465.0149999999999295 Td
++ (Basophils) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 476.6649999999999068 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 465.0149999999999295 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 476.6649999999999068 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 465.0149999999999295 Td
++ (1  99) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 30. 458.314999999999884 215.7030370981904639 -18.3500000000000014 re
++ f
++ BT
++ /F2 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 36. 446.6649999999999068 Td
++ (Platelet Count) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 245.7030370981904639 458.314999999999884 164.949381310380943 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 251.7030370981904639 446.6649999999999068 Td
++ (11.4 g/dL) Tj
++ ET
++ 1. g
++ 0.8 G
++ 0. w
++ 1. g
++ 410.6524184085714069 458.314999999999884 152.2609673634285627 -18.3500000000000014 re
++ f
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.4 g
++ 416.6524184085714069 446.6649999999999068 Td
++ (1  99) Tj
++ ET
++ 0.8 G
++ 0.5 w
++ 0.78 G
++ 0. w
++ 0.8 G
++ 0.5 w
++ 0.8 G
++ 0.5 w
++ BT
++ /F1 9 Tf
++ 10.3499999999999996 TL
++ 0.106 0.227 0.42 rg
++ 256.0149999999999864 427.9649999999998613 Td
++ (****End of Report****) Tj
++ ET
++ 0.4 G
++ 0.6 w
++ 476.3700000000000045 79. m
++ 484.3700000000000045 85. l
++ S
++ 484.3700000000000045 85. m
++ 494.3700000000000045 75. l
++ S
++ 494.3700000000000045 75. m
++ 504.3700000000000045 83. l
++ S
++ 504.3700000000000045 83. m
++ 516.3700000000000045 77. l
++ S
++ BT
++ /F2 9.5 Tf
++ 10.9249999999999989 TL
++ 0.106 0.227 0.42 rg
++ 465.7375000000000114 67. Td
++ (Dr. Technician) Tj
++ ET
++ BT
++ /F3 7 Tf
++ 8.0499999999999989 TL
++ 0.4 g
++ 30. 40. Td
++ (with the patients clinical history and other diagnostic findings. Please consult your treating physician for appropriate medical advice.) Tj
++ ET
++ BT
++ /F3 7 Tf
++ 8.0499999999999989 TL
++ 0.4 g
++ 30. 48.5 Td
++ (This report has been digitally signed by an authorized laboratory professional and is valid without a handwritten signature. Test results should be interpreted in conjunction) Tj
++ ET
++ 0.8 G
++ 0.4 w
++ 30. 30. m
++ 565.2799999999999727 30. l
++ S
++ BT
++ /F1 8 Tf
++ 9.1999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 30. 18. Td
++ (Generated on :  02 Oct 2026, 06:11 PM) Tj
++ ET
++ BT
++ /F1 8 Tf
++ 9.1999999999999993 TL
++ 0.106 0.227 0.42 rg
++ 560.8799999999999955 18. Td
++ (2) Tj
++ ET
++ BT
++ /F3 7 Tf
++ 8.0499999999999989 TL
++ 0.4 g
++ 263.2699999999999818 4. Td
++ (Powered by Prefrontal) Tj
++ ET
++ endstream
++ endobj
++ 1 0 obj
++ <</Type /Pages
++ /Kids [3 0 R 5 0 R ]
++ /Count 2
++ >>
++ endobj
++ 7 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Helvetica
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 8 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Helvetica-Bold
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 9 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Helvetica-Oblique
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 10 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Helvetica-BoldOblique
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 11 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Courier
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 12 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Courier-Bold
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 13 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Courier-Oblique
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 14 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Courier-BoldOblique
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 15 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Times-Roman
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 16 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Times-Bold
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 17 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Times-Italic
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 18 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Times-BoldItalic
++ /Subtype /Type1
++ /Encoding /WinAnsiEncoding
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 19 0 obj
++ <<
++ /Type /Font
++ /BaseFont /ZapfDingbats
++ /Subtype /Type1
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 20 0 obj
++ <<
++ /Type /Font
++ /BaseFont /Symbol
++ /Subtype /Type1
++ /FirstChar 32
++ /LastChar 255
++ >>
++ endobj
++ 2 0 obj
++ <<
++ /ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
++ /Font <<
++ /F1 7 0 R
++ /F2 8 0 R
++ /F3 9 0 R
++ /F4 10 0 R
++ /F5 11 0 R
++ /F6 12 0 R
++ /F7 13 0 R
++ /F8 14 0 R
++ /F9 15 0 R
++ /F10 16 0 R
++ /F11 17 0 R
++ /F12 18 0 R
++ /F13 19 0 R
++ /F14 20 0 R
++ >>
++ /XObject <<
++ >>
++ >>
++ endobj
++ 21 0 obj
++ <<
++ /Producer (jsPDF 4.2.1)
++ /CreationDate (D:20261002181108+05'30')
++ >>
++ endobj
++ 22 0 obj
++ <<
++ /Type /Catalog
++ /Pages 1 0 R
++ /OpenAction [3 0 R /FitH null]
++ /PageLayout /OneColumn
++ >>
++ endobj
++ xref
++ 0 23
++ 0000000000 65535 f 
++ 0000019583 00000 n 
++ 0000021408 00000 n 
++ 0000000015 00000 n 
++ 0000000152 00000 n 
++ 0000008214 00000 n 
++ 0000008351 00000 n 
++ 0000019646 00000 n 
++ 0000019771 00000 n 
++ 0000019901 00000 n 
++ 0000020034 00000 n 
++ 0000020172 00000 n 
++ 0000020296 00000 n 
++ 0000020425 00000 n 
++ 0000020557 00000 n 
++ 0000020693 00000 n 
++ 0000020821 00000 n 
++ 0000020948 00000 n 
++ 0000021077 00000 n 
++ 0000021210 00000 n 
++ 0000021312 00000 n 
++ 0000021658 00000 n 
++ 0000021744 00000 n 
++ trailer
++ <<
++ /Size 23
++ /Root 22 0 R
++ /Info 21 0 R
++ /ID [ <A00EDCE4B611506774D6226CAB027764> <A00EDCE4B611506774D6226CAB027764> ]
++ >>
++ startxref
++ 21848
++ %%EOF
+[36m [2m❯[22m apps/lms/src/app/shared/utils/report-pdf.one-page-layout.spec.ts:[2m260:18[22m[39m
+    [90m258|[39m     [34mexpect[39m(p2[33m.[39mlayoutPage)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m259|[39m     for (const n of CBC14) expect(count(text, n)).toBeGreaterThanOrEqu…
+    [90m260|[39m     [34mexpect[39m(text)[33m.[39m[34mtoContain[39m([32m'CBC — CONTINUED'[39m)[33m;[39m
+    [90m   |[39m                  [31m^[39m
+    [90m261|[39m   })[33m;[39m
+    [90m262|[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m15 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 18:11:06
+[2m   Duration [22m 1.64s[2m (transform 236ms, setup 234ms, import 310ms, tests 115ms, environment 782ms)[22m
+
+
+
+ NX   Running target test for project lms failed
+
+Failed tasks:
+
+- lms:test
+
+Hint: run the command with --verbose for more details.
+
+Your AI agent configuration is outdated. Run "nx configure-ai-agents" to update.
+

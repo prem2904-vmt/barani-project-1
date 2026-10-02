@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import {
-  CodeMapDto, CodeMapUpsert, DeviceKeyDto, InstrumentDto, InstrumentUpsert,
+  CodeMapDto, CodeMapUpsert, DeviceKeyDto, ImageCodeDto, ImageMapUpsert, InstrumentDto, InstrumentUpsert,
   MessageDetailDto, MessagePage, MessageSummaryDto, SamplePrefillDto,
 } from './instrument.models';
 
@@ -60,6 +60,15 @@ export class InstrumentsApiService {
   /** Replace-all. */
   saveCodeMaps(id: string, maps: CodeMapUpsert[]): Observable<CodeMapDto[]> {
     return this.api.put<CodeMapDto[]>(`/api/instruments/${encodeURIComponent(id)}/code-maps`, maps);
+  }
+
+  /** The image codes (graphs) the analyzer sends + the profiles each is mapped to. */
+  imageMaps(id: string): Observable<ImageCodeDto[]> {
+    return this.api.get<ImageCodeDto[]>(`/api/instruments/${encodeURIComponent(id)}/image-maps`);
+  }
+  /** Set which profiles each listed image code shows on (stored in each profile's layout JSON — page_layout.analyzerImages — on its effective row). */
+  saveImageMaps(id: string, maps: ImageMapUpsert[]): Observable<ImageCodeDto[]> {
+    return this.api.put<ImageCodeDto[]>(`/api/instruments/${encodeURIComponent(id)}/image-maps`, maps);
   }
 
   messages(q: MessageQuery = {}): Observable<MessagePage> { return this.api.get<MessagePage>(messagesUrl(q)); }

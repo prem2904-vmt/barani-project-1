@@ -1,3 +1,4 @@
+import type { ReportSignature } from '../../shared/models/report.model';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
@@ -66,6 +67,35 @@ export class ReportLayoutService {
       return res?.codes ?? [];
     } catch {
       return [];
+    }
+  }
+
+  /** Profile one-page layout palette: the analyzer image types this
+   *  profile can show — every image code an instrument LINKED to the
+   *  profile's members (code map → member CatalogKey) has sent, plus any
+   *  already attached to its results. Never throws: failure = nothing
+   *  linked (the designer then offers CBC suggestions / manual codes). */
+  async analyzerImages(testId: string): Promise<ProfileAnalyzerImages> {
+    try {
+      const res = await firstValueFrom(this.api.get<ProfileAnalyzerImages>(
+        `/api/report-layout/test/${testId}/analyzer-images`
+      ));
+      return { linked: !!res?.linked, mapped: !!res?.mapped, instruments: res?.instruments ?? [], images: res?.images ?? [] };
+    } catch {
+      return { linked: false, instruments: [], images: [] };
+    }
+  }
+
+  /** A department's sign-off AS THE REPORT PRINTS IT (configured
+   *  signatories, their designations, reg. nos and signature images — the
+   *  signed-in user standing in for "whoever tests / validates"). Null when
+   *  unavailable — the sample report then keeps its generic sign-off. */
+  async signoffPreview(departmentId: string): Promise<{ department: string | null; signatures: ReportSignature[] } | null> {
+    try {
+      return await firstValueFrom(this.api.get<{ department: string | null; signatures: ReportSignature[] }>(
+        `/api/report-layout/department/${departmentId}/signoff-preview`));
+    } catch {
+      return null;
     }
   }
 
@@ -138,4 +168,15 @@ export class ReportLayoutService {
       { values, imageUrls, sex: patient?.sex ?? null, age: bandAgeYears(patient), parametersJson: parametersJson ?? null },
     ));
   }
+}
+
+/** GET /api/report-layout/test/{id}/analyzer-images — codes/labels only,
+ *  never image bytes or patient data. */
+export interface ProfileAnalyzerImages {
+  linked: boolean;
+  /** True = these are the graphs MAPPED to this profile (Instruments → Code
+   *  mapping); false = discovered from linked instruments' runs (fallback). */
+  mapped?: boolean;
+  instruments: Array<{ id: string; name: string; make?: string | null; model?: string | null }>;
+  images: Array<{ code: string; label?: string | null; seen: number; instrumentIds?: string[] }>;
 }

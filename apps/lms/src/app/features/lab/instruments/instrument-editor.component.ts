@@ -7,6 +7,8 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { UploadsService } from '../../../core/services/uploads.service';
+import { analyzerLabel, analyzerSampleAsset } from '../../../shared/utils/report-profile-layout';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -25,7 +27,7 @@ import {
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
-  ConnectorStatus, DetectResult, Hl7SampleIdField, InstrumentDto, InstrumentMessage, ListenEvent, MessageSummaryDto,
+  ConnectorStatus, DetectResult, Hl7SampleIdField, ImageCodeDto, InstrumentDto, InstrumentMessage, ListenEvent, MessageSummaryDto,
   PairedInstrument, ParserType, RawLogEntry, TransportType,
 } from '../../../shared/instruments/instrument.models';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
@@ -124,6 +126,38 @@ export class InstrumentEditorComponent {
   // ── Code maps ────────────────────────────────────────────────────────
   readonly maps = signal<CodeMapRow[]>([]);
   readonly mapsDirty = signal(false);
+  // ── Analyzer images → profiles (owner 2026-10-02) ───────────────────
+  private readonly uploads = inject(UploadsService);
+  readonly imageMaps = signal<ImageCodeDto[]>([]);
+  readonly imageMapsDirty = signal(false);
+  readonly newImageCode = signal('');
+  /** Profiles (by catalogue key) an image can be mapped to. */
+  readonly profileOptions = computed((): PfSelectOption[] => this.tests()
+    .filter(t => t.type !== 'individual' && !!t.catalogKey)
+    .map(t => ({ value: t.catalogKey!, label: t.name, hint: t.catalogKey! }))
+    .sort((a, b) => a.label.localeCompare(b.label)));
+  profileNames(keys: string[]): string { return keys.map(k => this.profileName(k)).join(', '); }
+  profileName(key: string): string { return this.profileOptions().find(o => o.value === key)?.label ?? key; }
+  imageLabel(r: ImageCodeDto): string { return r.label || analyzerLabel(r.code); }
+  /** The newest received graph (session fetch), else a sample look-alike. */
+  imageSrc(r: ImageCodeDto): string { return (r.lastUrl ? this.uploads.src(r.lastUrl) : '') || analyzerSampleAsset(r.code); }
+  setImageProfiles(i: number, keys: string[]) {
+    this.imageMaps.update(list => list.map((r, j) => (j === i ? { ...r, profileKeys: keys } : r)));
+    this.imageMapsDirty.set(true);
+  }
+  addImageCode() {
+    const code = this.newImageCode().trim();
+    if (!code || this.imageMaps().some(r => r.code === code)) { this.newImageCode.set(''); return; }
+    this.imageMaps.update(list => [...list, { code, label: null, seen: 0, lastUrl: null, lastAt: null, profileKeys: [] }]);
+    this.imageMapsDirty.set(true);
+    this.newImageCode.set('');
+  }
+  private loadImageMaps(id: string) {
+    this.api.imageMaps(id).subscribe({
+      next: list => { this.imageMaps.set(list ?? []); this.imageMapsDirty.set(false); },
+      error: () => this.imageMaps.set([]),
+    });
+  }
   readonly mapIssues = computed(() => validateCodeMaps(this.maps()));
   readonly tests = signal<Test[]>([]);
   readonly testOptions = computed<PfSelectOption<string>[]>(() => {
@@ -232,6 +266,7 @@ export class InstrumentEditorComponent {
   }
 
   private loadMaps(id: string) {
+    this.loadImageMaps(id);
     this.api.codeMaps(id).subscribe({
       next: (list) => { this.maps.set((list ?? []).map(rowFromDto)); this.mapsDirty.set(false); },
       error: () => undefined,
@@ -320,6 +355,12 @@ export class InstrumentEditorComponent {
         const maps = await firstValueFrom(this.api.saveCodeMaps(saved.id, toCodeMapUpserts(this.maps())));
         this.maps.set((maps ?? []).map(rowFromDto));
         this.mapsDirty.set(false);
+      }
+      if (this.imageMapsDirty()) {
+        const im = await firstValueFrom(this.api.saveImageMaps(saved.id, this.imageMaps()
+          .filter(r => r.profileKeys.length).map(r => ({ code: r.code, label: r.label, profileKeys: r.profileKeys }))));
+        this.imageMaps.set(im ?? []);
+        this.imageMapsDirty.set(false);
       }
       this.toasts.success(id ? 'Instrument saved' : 'Instrument created');
       // Paired here? Apply the saved settings to the running connector now

@@ -229,14 +229,53 @@ export interface PageLayoutBox {
   /** table box only: results font size in pt (the fit meter may shrink this
    *  further at print time, down to MIN_BODY_FONT_PT). */
   fontSize?: number;
+  /** Kept in the layout but not printed (the designer's "Hide" — the box
+   *  stays where it was, ready to show again). Absent = prints. */
+  hidden?: boolean;
+  /** notes box only: the text it prints (older layouts used `label`). */
+  text?: string | null;
+  /** table box only: where the rows sit when the box is taller than they
+   *  need — 'top' (default), 'fill' (rows spread evenly to fill the box) or
+   *  'center'. The report draws exactly this. */
+  vAlign?: PageLayoutRowAlign | null;
+  /** table box only: space between rows — 'compact', 'normal' (default) or
+   *  'relaxed'. The report draws exactly this. */
+  rowSpacing?: PageLayoutRowSpacing | null;
+  /** table box, MANUAL row mode only: the member rows (parameter names) this
+   *  box prints, in the profile's order. Every row belongs to exactly one box. */
+  rows?: string[] | null;
 }
+
+/** One page of a profile's Custom layout. */
+export interface PageLayoutPage {
+  id: string;
+  boxes: PageLayoutBox[];
+}
+
+/** How the results table spreads across table boxes:
+ *  'auto' — rows flow from the first table box into the next ("continued");
+ *  'manual' — each table box prints the rows chosen for it. */
+export type PageLayoutTableMode = 'auto' | 'manual';
+
+export type PageLayoutRowAlign = 'top' | 'fill' | 'center';
+export type PageLayoutRowSpacing = 'compact' | 'normal' | 'relaxed';
 
 export interface PageLayoutSection extends ReportSectionBase {
   type: 'page_layout';
-  v: 1;
+  /** 1 = single page (`boxes`); 2 = Custom layout (`pages`; `boxes` mirrors
+   *  page 1 so an older reader still prints page 1). */
+  v: 1 | 2;
   enabled: boolean;
+  /** Page 1's boxes (v1 storage; kept in sync for older readers). */
   boxes: PageLayoutBox[];
+  pages?: PageLayoutPage[];
+  tableMode?: PageLayoutTableMode;
+  /** Analyzer image codes mapped to this profile (Instruments → Code mapping
+   *  owns it; the designer only carries it through a save). */
+  analyzerImages?: PageLayoutAnalyzerImage[];
 }
+
+export interface PageLayoutAnalyzerImage { code: string; label?: string; }
 
 export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection
   | CultureLineSection | CultureAstSection | PageLayoutSection;
