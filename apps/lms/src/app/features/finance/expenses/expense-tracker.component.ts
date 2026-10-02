@@ -21,7 +21,7 @@ import { ModalPortalDirective } from '../../../shared/directives/modal-portal.di
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { ndGridDark, ndGridLight } from '../../../shared/utils/nd-grid-theme';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { plural } from '../../../shared/utils/plural';
@@ -68,6 +68,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" placeholder="Search item, category, vendor, notes…"
                       [value]="q()" (valueChange)="q.set($event)">
+          <!-- The screen's sections ride the band pill next to the search
+               (owner): no orphan tab row above the cards. Role-gated by
+               expenseTabs() exactly as before — one section = no switch. -->
+          <ng-container band-tools>
+            @if (tabs().length > 1) {
+              <ng-container *ngTemplateOutlet="tabSwitch"></ng-container>
+            }
+          </ng-container>
           <ng-container band-actions>
             @if (narrow() && tab() !== 'closing') {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="sheetOpen.set(true)"
@@ -101,12 +109,9 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       </pf-screen-header>
 
       <div class="pf-band-body pf-band-body--fill pf-xt__body" [class.pf-xt__body--bar]="can().canAdd && tab() !== 'closing'">
-        @if (tabs().length > 1) {
-          <div class="nd-tabs pf-xt__tabs" role="tablist" aria-label="Expenses">
-            @for (t of tabs(); track t) {
-              <button type="button" role="tab" class="nd-tabs__item" [attr.aria-selected]="tab() === t" (click)="setTab(t)">{{ tabLabel[t] }}</button>
-            }
-          </div>
+        @if (tabs().length > 1 && !theme.isNewDesign()) {
+          <!-- Classic design has no band: the switch keeps its own row. -->
+          <div class="pf-xt__tabrow"><ng-container *ngTemplateOutlet="tabSwitch"></ng-container></div>
         }
         @if (tab() === 'closing') {
           <pf-day-closing [date]="closingDate()" [today]="today" [narrow]="narrow()"
@@ -145,14 +150,24 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
             </header>
 
             @if (book(); as b) {
-              <div class="pf-xt__stats" role="group" aria-label="Range totals">
+              <!-- The range as one ledger line: Opening + Cash in − Expenses =
+                   Closing. The operators carry the formula; Closing (the
+                   result) is the one emphasised figure. -->
+              <div class="pf-xt__stats" [class.pf-xt__stats--book]="seesAll()" role="group" aria-label="Range totals">
                 @if (seesAll()) {
-                  <div class="pf-xt__stat"><span class="pf-xt__statk">Opening</span><span class="pf-xt__statv nd-num">{{ b.opening ?? 0 | inr }}</span><span class="pf-xt__stath">{{ dayShort(b.from) }}</span></div>
+                  <div class="pf-xt__stat"><span class="pf-xt__statk">Opening</span><span class="pf-xt__statv nd-num">{{ b.opening ?? 0 | inr }}</span><span class="pf-xt__stath nd-num">{{ dayShort(b.from) }}</span></div>
+                  <span class="pf-xt__op" aria-hidden="true">+</span>
                 }
                 <div class="pf-xt__stat"><span class="pf-xt__statk">Cash in</span><span class="pf-xt__statv nd-num">{{ b.totalCashIn | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'Top-ups in range' : 'You entered' }}</span></div>
+                @if (seesAll()) { <span class="pf-xt__op" aria-hidden="true">−</span> }
                 <div class="pf-xt__stat"><span class="pf-xt__statk">Expenses</span><span class="pf-xt__statv nd-num">{{ b.totalExpenses | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'All modes' : 'You entered' }}</span></div>
                 @if (seesAll()) {
-                  <div class="pf-xt__stat"><span class="pf-xt__statk">Closing</span><span class="pf-xt__statv nd-num" [class.pf-xt__neg]="(b.closing ?? 0) < 0">{{ b.closing ?? 0 | inr }}</span><span class="pf-xt__stath">{{ dayShort(b.to) }}</span></div>
+                  <span class="pf-xt__op" aria-hidden="true">=</span>
+                  <div class="pf-xt__stat pf-xt__stat--result" [attr.data-neg]="(b.closing ?? 0) < 0">
+                    <span class="pf-xt__statk">Closing</span>
+                    <span class="pf-xt__statv nd-num" [class.pf-xt__neg]="(b.closing ?? 0) < 0">{{ b.closing ?? 0 | inr }}</span>
+                    <span class="pf-xt__stath nd-num">{{ (b.closing ?? 0) < 0 ? 'Below zero · ' + dayShort(b.to) : dayShort(b.to) }}</span>
+                  </div>
                 }
               </div>
             }
@@ -173,7 +188,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                 </div>
               } @else if (view() === 'entries') {
                 <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
-                                 [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [animateRows]="true" [suppressCellFocus]="true"
+                                 [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [rowClassRules]="entryRowRules" [animateRows]="true" [suppressCellFocus]="true"
                                  (cellClicked)="onEntryClicked($event)"></ag-grid-angular>
               } @else {
                 <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
@@ -204,6 +219,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       }
     </section>
 
+    <ng-template #tabSwitch>
+      <span class="nd-seg pf-xt__tabs" role="tablist" aria-label="Expenses">
+        @for (t of tabs(); track t) {
+          <button type="button" role="tab" class="nd-seg__item pf-xt__tab" [attr.aria-selected]="tab() === t" (click)="setTab(t)">{{ tabLabel[t] }}</button>
+        }
+      </span>
+    </ng-template>
+
     <ng-template #filterHead let-sheet="sheet">
       <header class="nd-card__head">
         <span class="nd-card__icon" aria-hidden="true">
@@ -223,13 +246,16 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       <div class="nd-card__body pf-xt__filters">
         <div class="nd-field">
           <span class="nd-field__lbl" id="pf-xt-range-lbl">Dates (IST)</span>
+          <!-- Three presets share the row evenly (never wrap); a custom range
+               is simply picking From / To below — the presets then show
+               none selected and the date row says "Custom range". -->
           <span class="nd-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-range-lbl">
             <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
             <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
             <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'month'" (click)="setQuick('month')">This month</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'custom'" (click)="setQuick('custom')">Custom</button>
           </span>
-          <div class="pf-xt__dates">
+          <div class="pf-xt__dates" [attr.data-custom]="quick() === 'custom'">
+            @if (quick() === 'custom') { <span class="pf-xt__custom">Custom range</span> }
             <label class="pf-xt__dates-lbl" for="pf-xt-from">From</label>
             <pf-nd-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-nd-date>
             <label class="pf-xt__dates-lbl" for="pf-xt-to">To</label>
@@ -260,22 +286,38 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
             @if (b.byCategory.length === 0) {
               <p class="nd-field__hint">No expenses in this range.</p>
             } @else {
+              <!-- Name · count · amount on one aligned row, with a hairline
+                   share bar (of the range's expenses) under each. Tapping a
+                   row filters by it; tapping again clears. -->
               <ul class="pf-xt__totals" aria-label="Expenses by category">
                 @for (c of b.byCategory; track c.key) {
                   <li>
-                    <button type="button" class="nd-row pf-xt__totrow" [attr.aria-pressed]="categoryId() === c.key" (click)="toggleCategory(c.key)">
-                      <span class="nd-row__name">{{ c.label }}</span>
-                      <span class="nd-row__meta nd-num">{{ c.count }}</span>
-                      <span class="nd-row__value nd-num">{{ c.total | inr }}</span>
+                    <button type="button" class="pf-xt__totrow" [attr.aria-pressed]="categoryId() === c.key" (click)="toggleCategory(c.key)"
+                            [attr.aria-label]="c.label + ', ' + c.count + ' · ' + (c.total | inr) + (categoryId() === c.key ? ' — filtering, tap to clear' : '')">
+                      <span class="pf-xt__totname">{{ c.label }}</span>
+                      <span class="pf-xt__totn nd-num">{{ c.count }}</span>
+                      <span class="pf-xt__totv nd-num">{{ c.total | inr }}</span>
+                      <span class="pf-xt__totbar" aria-hidden="true"><span [style.width.%]="share(c.total, b.totalExpenses)"></span></span>
                     </button>
                   </li>
                 }
               </ul>
             }
-            @if (b.byMode.length > 0) {
-              <p class="nd-field__hint nd-num">{{ modeSummary() }}</p>
-            }
           </div>
+          @if (b.byMode.length > 0) {
+            <div class="nd-field">
+              <span class="nd-field__lbl">By payment mode</span>
+              <ul class="pf-xt__totals pf-xt__totals--static" aria-label="Expenses by payment mode">
+                @for (m of b.byMode; track m.key) {
+                  <li class="pf-xt__totrow">
+                    <span class="pf-xt__totname">{{ m.label }}</span>
+                    <span class="pf-xt__totn nd-num">{{ m.count }}</span>
+                    <span class="pf-xt__totv nd-num">{{ m.total | inr }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
         }
 
         @if (can().isAdmin) {
@@ -361,7 +403,10 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
   styles: [`
     :host { display: block; min-height: 0; }
     .pf-xt__body { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-    .pf-xt__tabs { align-self: flex-start; flex: none; }
+    /* Section switch: in the band pill (new design) / its own row (classic). */
+    .pf-xt__tabrow { align-self: flex-start; flex: none; }
+    .pf-xt__tabs { flex: none; }
+    .pf-xt__tab { height: 32px; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
     .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
@@ -370,36 +415,77 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .pf-xt__side--sheet .nd-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
-    .pf-xt__filters { gap: 16px; overflow-y: auto; }
-    .pf-xt__seg { flex-wrap: wrap; }
-    .pf-xt__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .pf-xt__filters { gap: 20px; overflow-y: auto; }
+    /* Presets fill the row in equal columns — never wrap. */
+    .pf-xt__seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+    .pf-xt__seg .nd-seg__item { height: 32px; padding: 0 6px; white-space: nowrap; font-size: 12.5px; }
+    .pf-xt__dates { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 4px; }
     .pf-xt__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
-    .pf-xt__totals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pf-xt__totrow { width: 100%; min-height: 44px; cursor: pointer; }
-    .pf-xt__totrow[aria-pressed='true'] { background: var(--nd-in-tint); border-color: var(--nd-sel-border); }
+    .pf-xt__custom { grid-column: 1 / -1; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+    /* Range totals: aligned name · count · amount rows on hairlines. */
+    .pf-xt__totals { list-style: none; margin: 0 -8px; padding: 0; display: flex; flex-direction: column; }
+    .pf-xt__totrow {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto 92px; column-gap: 10px; row-gap: 6px; align-items: baseline;
+      width: 100%; min-height: 44px; padding: 10px 8px 9px; border: 0; border-radius: 10px; background: transparent;
+      font: inherit; font-size: 13px; color: var(--text-primary); text-align: left;
+    }
+    button.pf-xt__totrow { cursor: pointer; transition: background var(--nd-dur-fast, 200ms) ease; }
+    button.pf-xt__totrow:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+    button.pf-xt__totrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+    .pf-xt__totrow[aria-pressed='true'] { background: var(--nd-in-tint); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+    .pf-xt__totals li + li .pf-xt__totrow, li.pf-xt__totrow + li.pf-xt__totrow { border-top: 1px solid var(--nd-line); border-radius: 0; }
+    .pf-xt__totals li + li .pf-xt__totrow[aria-pressed='true'] { border-radius: 10px; border-top-color: transparent; }
+    .pf-xt__totals--static .pf-xt__totrow { min-height: 40px; padding-block: 9px; }
+    .pf-xt__totname { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+    .pf-xt__totn { font-size: 12px; color: var(--text-tertiary); text-align: right; }
+    .pf-xt__totv { text-align: right; font-weight: 500; }
+    .pf-xt__totbar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--nd-chip-bg); overflow: hidden; }
+    .pf-xt__totbar > span { display: block; height: 100%; border-radius: inherit; background: var(--nd-toggle-on); }
+    .pf-xt__totrow[aria-pressed='true'] .pf-xt__totbar > span { background: var(--nd-switch-on); }
     .pf-xt__managecats { align-self: flex-start; }
     .pf-xt__main { min-width: 0; min-height: 0; }
     .pf-xt__head { flex-wrap: wrap; row-gap: 8px; }
     .pf-xt__view { margin-left: 8px; }
     .pf-xt__count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-xt__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--nd-line); }
-    .pf-xt__stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--nd-line); background: var(--glass-bg); min-width: 0; }
-    .pf-xt__statk { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); }
-    .pf-xt__statv { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+    /* Ledger line: figures on one baseline, operators between, the result
+       (Closing) on a quiet tinted plate. */
+    .pf-xt__stats {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 4px;
+      padding: 12px 14px; border-bottom: 1px solid var(--nd-line);
+    }
+    .pf-xt__stats--book { grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1.15fr); }
+    .pf-xt__stat { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; min-width: 0; border-radius: 12px; }
+    .pf-xt__stat--result { background: var(--nd-chip-bg); padding-inline: 14px; }
+    .pf-xt__statk { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+    .pf-xt__statv { font-size: 17px; font-weight: 500; line-height: 1.25; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pf-xt__stat--result .pf-xt__statv { font-size: 19px; font-weight: 600; }
     .pf-xt__stath { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-xt__neg { color: var(--red-text, #dc2626); }
+    .pf-xt__op { align-self: center; justify-self: center; font-size: 16px; font-weight: 400; color: var(--text-tertiary); padding-top: 12px; }
+    /* Below zero: a muted red figure (data, not an alarm) — no red plate. */
+    .pf-xt__neg { color: color-mix(in srgb, var(--red-text, #dc2626) 78%, var(--text-primary)); }
     .pf-xt__off { color: var(--text-tertiary); }
     .pf-xt__grid-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
     .pf-xt__skel { display: block; }
     .pf-xt__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 380px); min-height: 320px; }
     :host-context(.design-new) .pf-xt__grid { height: auto; min-height: 300px; }
     .pf-xt__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
-    .pf-xt__main ::ng-deep .ag-pinned-right-header, .pf-xt__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--nd-line); }
+    .pf-xt__main ::ng-deep .ag-row.pf-xt-row--open { cursor: pointer; }
+    /* One vertical rhythm: every cell centres on the row (two-line cells and
+       single figures no longer sit at different heights). */
+    .pf-xt__main ::ng-deep .ag-cell { display: flex; align-items: center; }
+    .pf-xt__main ::ng-deep .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+    .pf-xt__main ::ng-deep .ag-cell > .pf-xt-cell, .pf-xt__main ::ng-deep .ag-cell > .pf-xt-acts { height: auto; }
+    /* A text cell always spans its column (the flex centring above must not
+       shrink it to its text): the phone amount line then right-aligns to the
+       column edge on every row, whatever the title / meta length. */
+    .pf-xt__main ::ng-deep .ag-cell > .ag-cell-wrapper { flex: 1 1 auto; width: 100%; min-width: 0; }
+    .pf-xt__main ::ng-deep .ag-cell-wrapper > .ag-cell-value { flex: 1 1 auto; min-width: 0; }
+    .pf-xt__main ::ng-deep .ag-cell .pf-xt-cell { width: 100%; min-width: 0; }
     .pf-xt__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
     .pf-xt__main ::ng-deep .pf-xt-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-xt__main ::ng-deep .pf-xt-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-xt__main ::ng-deep .pf-xt-cell--end { align-items: flex-end; text-align: right; }
-    .pf-xt__main ::ng-deep .pf-xt-amt { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; display: block; }
+    .pf-xt__main ::ng-deep .pf-xt-amt { font-variant-numeric: tabular-nums; font-weight: 500; text-align: right; display: block; white-space: nowrap; }
     .pf-xt__main ::ng-deep .pf-xt-amt--in { color: var(--text-secondary); }
     .pf-xt__main ::ng-deep .pf-xt-amt--neg { color: var(--red-text, #dc2626); }
     .pf-xt__main ::ng-deep .pf-xt-num { font-variant-numeric: tabular-nums; text-align: right; display: block; }
@@ -409,6 +495,11 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
     .pf-xt__main ::ng-deep .ag-cell.pf-xt-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact--icon { width: 44px; height: 44px; }
+    /* Quiet row actions: no outline at rest (the whole row already opens the
+       entry); the outline comes back on row hover / keyboard focus. */
+    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact { border-color: transparent; background: transparent; color: var(--text-tertiary); }
+    .pf-xt__main ::ng-deep .ag-row-hover .pf-xt-acts .nd-rowact,
+    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact:focus-visible { border-color: var(--nd-line); color: var(--text-primary); }
     .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
     .pf-xt-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pf-xt-modal__backdrop { position: absolute; inset: 0; background: rgba(5, 5, 15, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -431,8 +522,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     @media (max-width: 640px) {
       .pf-xt__addbtn { display: none; }
       .pf-xt__body--bar { padding-bottom: 76px; }
-      .pf-xt__stats { grid-template-columns: 1fr 1fr; padding: 10px; gap: 8px; }
+      /* Phones: the switch spans the band row in equal segments (the global
+         phone rule keeps tab strips flex + scrollable, so grow, not grid). */
+      .pf-xt__tabs { width: 100%; }
+      .pf-xt__tab { flex: 1 0 0; height: 36px; padding: 0 8px; }
+      .pf-xt__stats, .pf-xt__stats--book { grid-template-columns: 1fr 1fr; padding: 10px; gap: 6px; }
+      .pf-xt__op { display: none; }
       .pf-xt__statv { font-size: 16px; }
+      .pf-xt__stat--result .pf-xt__statv { font-size: 17px; }
       .pf-xt__view { margin-left: 0; order: 3; }
       .pf-xt__main ::ng-deep .pf-xt-acts { gap: 4px; }
       .pf-xt-modal { align-items: flex-end; padding: 0; bottom: var(--nd-nav-h, 0px); }
@@ -512,10 +609,13 @@ export class ExpenseTrackerComponent {
     if (!b) return range;
     return `${range} · ${inr(b.totalExpenses)} ${this.seesAll() ? 'spent' : 'by you'}`;
   });
-  readonly modeSummary = computed(() => (this.book()?.byMode ?? []).map(m => `${m.label} ${inr(m.total)}`).join(' · '));
+  /** A category's share of the range's expenses, for its hairline bar (0–100). */
+  share(total: number, of: number): number { return of > 0 ? Math.max(0, Math.min(100, (total / of) * 100)) : 0; }
 
   // ── Grids ─────────────────────────────────────────────────────────────
-  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly gridTheme = computed(() => (this.theme.isDark() ? ndGridDark : ndGridLight));
+  /** Rows that open something on click (edit, or the bills) show a pointer. */
+  readonly entryRowRules = { 'pf-xt-row--open': (p: { data?: ExpenseEntry }) => !!p.data && (p.data.canEdit || p.data.attachments.length > 0) };
   readonly entryRowId = (p: GetRowIdParams<ExpenseEntry>) => p.data.id;
   readonly dayRowId = (p: GetRowIdParams<ExpenseDay>) => p.data.date;
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, minWidth: 100, autoHeight: true, wrapText: true };
@@ -573,7 +673,9 @@ export class ExpenseTrackerComponent {
         valueGetter: p => (p.data?.kind === 'cash_in' ? expenseKindLabel('cash_in') : p.data?.categoryName) ?? '',
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.kind === 'cash_in' ? 'Cash in' : p.data?.categoryName ?? '') },
       { colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0, valueGetter: p => expenseModeLabel(p.data?.paymentMode) },
-      { colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned',
+      // Pinned right (beside the row action): the money never scrolls out of
+      // view when the grid is narrower than its columns (iPad + side card).
+      { colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned', pinned: 'right', lockPinned: true,
         valueGetter: p => (p.data ? (p.data.kind === 'cash_in' ? p.data.amount : -p.data.amount) : 0),
         cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.amountHtml(p.data) : '') },
       { colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0, sortable: false,
