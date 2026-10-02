@@ -2,7 +2,7 @@
   @if (theme.isNewDesign()) {
     <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
       <ng-container band-actions>
-        @if (dirty() || mapsDirty()) {
+        @if (dirty() || mapsDirty() || imageMapsDirty()) {
           <span class="nd-savestate"><span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-ie-vh-phone">Unsaved changes</span></span>
         }
         @if (!isNew()) {
@@ -373,6 +373,38 @@
                 </div>
                 <p class="nd-field__hint">Value stored = analyzer value × factor + offset, rounded to the decimals. Example: WBC 7.8 (10³/µL) × 1000 → 7800 cells/µL.</p>
               }
+
+              <!-- Analyzer IMAGES (histograms / scattergrams) → the profiles
+                   whose report shows them (Custom layout palette + routing). -->
+              <section class="pf-ie-images" aria-label="Analyzer images">
+                <h3 class="pf-ie-images__h">Analyzer images</h3>
+                <p class="nd-field__hint">Graphs this analyzer sends with a run. Map each to the profiles whose report shows it — the profile's Custom layout offers it, and a received graph lands on that profile's tests.</p>
+                @if (isNew()) {
+                  <p class="nd-field__hint">Create the instrument first — then map its graphs here.</p>
+                } @else {
+                  <ul class="pf-ie-imgs">
+                    @for (r of imageMaps(); track r.code; let i = $index) {
+                      <li class="pf-ie-img">
+                        <span class="pf-ie-img__thumb"><img [src]="imageSrc(r)" [alt]="imageLabel(r)" loading="lazy" /></span>
+                        <div class="pf-ie-img__body">
+                          <div class="pf-ie-img__meta">
+                            <span class="pf-ie-img__name">{{ imageLabel(r) }}</span>
+                            <span class="pf-ie-img__sub nd-num">Code {{ r.code }} · {{ r.seen ? 'received ' + r.seen + '× · last ' + fmtIst(r.lastAt) : 'not received yet — sample shown' }}</span>
+                          </div>
+                          <pf-select class="pf-ie-img__profiles" [options]="profileOptions()" [multiple]="true" [searchable]="true"
+                                     [values]="r.profileKeys" [value]="''" placeholder="Map to profiles…" [attr.aria-label]="'Profiles for ' + imageLabel(r)"
+                                     (valuesChange)="setImageProfiles(i, $event)"></pf-select>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                  <div class="pf-ie-imgadd">
+                    <input class="nd-input nd-num" type="text" inputmode="numeric" placeholder="Another image code, e.g. 13001" aria-label="Image code"
+                           [value]="newImageCode()" (input)="newImageCode.set($any($event.target).value)" (keydown.enter)="addImageCode()" />
+                    <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="!newImageCode().trim()" (click)="addImageCode()">Add code</button>
+                  </div>
+                }
+              </section>
             </div>
           }
 

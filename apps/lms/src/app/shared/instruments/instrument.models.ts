@@ -176,6 +176,13 @@ export interface MessageDetailDto extends MessageSummaryDto {
   mapped: MappedValue[];
 }
 
+/** GET/PUT /api/instruments/{id}/image-maps — an image code the analyzer
+ *  sends and the PROFILES (catalogue keys) it is mapped to. `lastUrl` = the
+ *  newest received graph (authenticated /uploads path), null before the
+ *  first run. */
+export interface ImageCodeDto { code: string; label: string | null; seen: number; lastUrl: string | null; lastAt: string | null; profileKeys: string[] }
+export interface ImageMapUpsert { code: string; label: string | null; profileKeys: string[] }
+
 export interface RunDto {
   messageId: string;
   instrumentId: string;
