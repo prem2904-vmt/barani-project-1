@@ -1,4 +1,4 @@
-import type { PageLayoutBox, PageLayoutBoxKind, PageLayoutSection, ReportSection } from '../models/report-layout.model';
+import type { PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutSection, PageLayoutTableMode, ReportSection } from '../models/report-layout.model';
 import {
   MARGIN_X, MM, PAGE, intersectBox, mmToPt, nudgeSnapX, ptToMm, snapBoxX,
 } from './report-header-layout';
@@ -87,8 +87,18 @@ export function readPageLayout(sections: ReadonlyArray<unknown> | null | undefin
   const nested = hit['pageLayout'];
   const raw = (nested && typeof nested === 'object') ? (nested as Record<string, unknown>) : hit;
   const boxes = Array.isArray(raw['boxes']) ? (raw['boxes'] as unknown[]).filter(isBox) : [];
+  // v2 (Custom layout): pages; a v1 layout reads as its page 1 — no migration.
+  const rawPages = Array.isArray(raw['pages']) ? (raw['pages'] as unknown[]) : null;
+  const pages: PageLayoutPage[] = rawPages
+    ? rawPages.filter(p => !!p && typeof p === 'object').map((p, i) => {
+        const o = p as Record<string, unknown>;
+        return { id: String(o['id'] ?? `page-${i + 1}`), boxes: Array.isArray(o['boxes']) ? (o['boxes'] as unknown[]).filter(isBox) : [] };
+      })
+    : [{ id: 'page-1', boxes }];
+  if (!pages.length) pages.push({ id: 'page-1', boxes: [] });
+  const tableMode: PageLayoutTableMode = raw['tableMode'] === 'manual' ? 'manual' : 'auto';
   return { id: String(hit['id'] ?? 'page-layout'), type: PAGE_LAYOUT_SECTION_TYPE, order: Number(hit['order'] ?? 0),
-    v: 1, enabled: raw['enabled'] === true, boxes };
+    v: 2, enabled: raw['enabled'] === true, boxes: pages[0].boxes, pages, tableMode };
 }
 
 function isBox(o: unknown): o is PageLayoutBox {
@@ -105,16 +115,20 @@ export const BOX_KINDS: PageLayoutBoxKind[] = ['table', 'chart', 'analyzer', 'si
  *  print order since the renderer special-cases it entirely). */
 export function writePageLayout(
   sections: ReadonlyArray<ReportSection>,
-  cfg: Pick<PageLayoutSection, 'enabled' | 'boxes'>,
+  cfg: { enabled: boolean; boxes?: PageLayoutBox[]; pages?: PageLayoutPage[]; tableMode?: PageLayoutTableMode },
 ): ReportSection[] {
   const existing = sections.find(isPageLayoutSection);
+  const pages = cfg.pages?.length ? cfg.pages : [{ id: 'page-1', boxes: cfg.boxes ?? [] }];
   const next: PageLayoutSection = {
     id: existing?.id ?? 'page-layout',
     type: PAGE_LAYOUT_SECTION_TYPE,
     order: existing?.order ?? (Math.max(0, ...sections.map(s => (s as { order?: number }).order ?? 0)) + 1),
-    v: 1,
+    v: 2,
     enabled: cfg.enabled,
-    boxes: cfg.boxes,
+    // Page 1 mirrored for any reader that only knows the single-page shape.
+    boxes: pages[0].boxes,
+    pages,
+    tableMode: cfg.tableMode ?? 'auto',
   };
   return existing
     ? sections.map(s => (isPageLayoutSection(s) ? next : s))
@@ -672,4 +686,80 @@ export function boxLabel(b: Pick<PageLayoutBox, 'kind' | 'label' | 'ref'>): stri
     case 'chart': return 'Chart';
     default: return analyzerLabel(b.ref ?? '');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Custom layout (multi-page, owner 2026-10-02)
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Every box of every page, with its page index (page order, then top-down). */
+export function allBoxes(pages: ReadonlyArray<PageLayoutPage>): Array<{ page: number; box: PageLayoutBox }> {
+  return pages.flatMap((p, page) => [...p.boxes].sort((a, b) => a.y - b.y || a.x - b.x).map(box => ({ page, box })));
+}
+
+/** The table boxes in PRINT order (page by page, top-down) — the chain an
+ *  auto-continued table flows through. Hidden table boxes are skipped. */
+export function tableChain(pages: ReadonlyArray<PageLayoutPage>): Array<{ page: number; box: PageLayoutBox }> {
+  return allBoxes(pages).filter(x => x.box.kind === 'table' && !x.box.hidden);
+}
+
+export interface RowAssignmentIssue { kind: 'missing' | 'duplicate'; rows: string[]; message: string }
+
+/** MANUAL row mode: every member row must sit in exactly one table box. */
+export function rowAssignmentIssues(pages: ReadonlyArray<PageLayoutPage>, rowKeys: ReadonlyArray<string>): RowAssignmentIssue[] {
+  const count = new Map<string, number>();
+  for (const { box } of tableChain(pages)) for (const r of box.rows ?? []) count.set(r, (count.get(r) ?? 0) + 1);
+  const missing = rowKeys.filter(k => !count.get(k));
+  const dup = rowKeys.filter(k => (count.get(k) ?? 0) > 1);
+  const out: RowAssignmentIssue[] = [];
+  if (missing.length) out.push({ kind: 'missing', rows: missing, message: `${missing.length} row${missing.length === 1 ? '' : 's'} not placed in any table box — they print in the last table box.` });
+  if (dup.length) out.push({ kind: 'duplicate', rows: dup, message: `${dup.length} row${dup.length === 1 ? ' is' : 's are'} in more than one table box — only the first prints.` });
+  return out;
+}
+
+/**
+ * MANUAL mode → which rows each table box prints (render side). Safety: a
+ * row placed in no box prints in the LAST table box (a result is never
+ * dropped); a row placed twice prints once, in its first box.
+ */
+export function manualRowsByBox(chain: ReadonlyArray<{ box: PageLayoutBox }>, rowKeys: ReadonlyArray<string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const placed = new Set<string>();
+  for (const { box } of chain) {
+    const mine = new Set<string>();
+    for (const r of box.rows ?? []) if (!placed.has(r) && rowKeys.includes(r)) { mine.add(r); placed.add(r); }
+    out.set(box.id, mine);
+  }
+  const last = chain[chain.length - 1];
+  if (last) for (const k of rowKeys) if (!placed.has(k)) out.get(last.box.id)!.add(k);
+  return out;
+}
+
+/** Give a manual-mode table box a row, taking it out of every other box. */
+export function assignRowToBox(pages: PageLayoutPage[], rowKey: string, boxId: string | null): PageLayoutPage[] {
+  return pages.map(p => ({ ...p, boxes: p.boxes.map(b => {
+    if (b.kind !== 'table') return b;
+    const rows = (b.rows ?? []).filter(r => r !== rowKey);
+    if (b.id === boxId) rows.push(rowKey);
+    return { ...b, rows };
+  }) }));
+}
+
+/** Switching to MANUAL: every row starts in the first table box (nothing
+ *  missing), later boxes empty — the lab then moves rows. Switching back to
+ *  AUTO drops the per-box lists. */
+export function setTableMode(pages: PageLayoutPage[], mode: PageLayoutTableMode, rowKeys: ReadonlyArray<string>): PageLayoutPage[] {
+  const first = tableChain(pages)[0]?.box.id;
+  return pages.map(p => ({ ...p, boxes: p.boxes.map(b => {
+    if (b.kind !== 'table') return b;
+    if (mode === 'auto') { const { rows: _r, ...rest } = b; return rest; }
+    return { ...b, rows: b.rows?.length ? b.rows : (b.id === first ? [...rowKeys] : []) };
+  }) }));
+}
+
+let pageSeq = 0;
+export function newPageId(pages: ReadonlyArray<PageLayoutPage>): string {
+  let id = `page-${pages.length + 1}`;
+  while (pages.some(p => p.id === id)) id = `page-${pages.length + 1}-${(++pageSeq).toString(36)}`;
+  return id;
 }
