@@ -1183,6 +1183,8 @@
                 [reloadToken]="structureReload()"
                 [paramDefs]="$any(paramDefMap())"
                 [chartContext]="chartContext()"
+                [isProfile]="d.type === 'profile'"
+                [resolvedColumns]="resolvedColumnsForDesigner()"
                 (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()">
                 <div descriptionEditor>

@@ -119,7 +119,13 @@ export type ReportSectionType = 'grid' | 'paragraph' | 'chart' | 'image'
   /* Culture-only building blocks (offered ONLY for culture_sensitivity
      tests): a labelled summary line bound to a bench data source, and the
      per-organism AST tables block. Other tests never see these types. */
-  | 'culture_line' | 'culture_ast';
+  | 'culture_line' | 'culture_ast'
+  /* Profile one-page report layout designer (docs/REPORT-CHARTS.md's sibling
+     feature): ONE section per profile, carrying the body-area box
+     arrangement (table / chart / analyzer-image / signatures / notes boxes)
+     in millimetres. Same jsonb section-array storage as every other
+     section — no migration. See shared/utils/report-profile-layout.ts. */
+  | 'page_layout';
 
 interface ReportSectionBase {
   id: string;
@@ -200,8 +206,40 @@ export interface ChartZone {
   label?: string;
 }
 
+/** One box of the profile's one-page body layout — see
+ *  shared/utils/report-profile-layout.ts for the geometry helpers and the
+ *  CBC default. Position/size in millimetres from the BODY area's top-left
+ *  (the designer's page-frame origin), not the page's. */
+export type PageLayoutBoxKind = 'table' | 'chart' | 'analyzer' | 'signatures' | 'notes';
+
+export interface PageLayoutBox {
+  id: string;
+  kind: PageLayoutBoxKind;
+  /** `chart:<blockId>` → the report-chart section id. `analyzer:<code>` →
+   *  the instrument image code (e.g. "12003"). Absent for table/signatures/notes. */
+  ref?: string | null;
+  /** A lab-facing label, e.g. "WBC histogram". */
+  label?: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** table box only: which report columns print, and at what width (%). */
+  columns?: Array<{ name: string; visible: boolean; width?: number }>;
+  /** table box only: results font size in pt (the fit meter may shrink this
+   *  further at print time, down to MIN_BODY_FONT_PT). */
+  fontSize?: number;
+}
+
+export interface PageLayoutSection extends ReportSectionBase {
+  type: 'page_layout';
+  v: 1;
+  enabled: boolean;
+  boxes: PageLayoutBox[];
+}
+
 export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection
-  | CultureLineSection | CultureAstSection;
+  | CultureLineSection | CultureAstSection | PageLayoutSection;
 
 // ═══════════════════════════════════════════════════════════════
 // Per-test layout response
@@ -283,6 +321,9 @@ export interface ResolvedSection {
   /** Report chart block (type 'chart' with a Test Master chart spec) — the
    *  stored spec, passed through by mw (docs/REPORT-CHARTS.md). */
   trend?: unknown | null;
+  /** Profile one-page layout (type 'page_layout') — the stored box array,
+   *  passed through by mw verbatim (same pattern as `trend`). */
+  pageLayout?: unknown | null;
 }
 
 export interface ResolvedRow {

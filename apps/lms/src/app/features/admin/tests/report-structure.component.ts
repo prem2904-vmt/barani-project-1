@@ -12,6 +12,8 @@ import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared
 import { defaultChartSpec, type ReportChartSpec } from '../../../shared/utils/report-chart/report-chart.model';
 import type { ChartEditorContext } from '../../../shared/utils/report-chart/report-chart.sample';
 import { ReportChartEditorComponent } from './report-chart-editor.component';
+import { ProfileLayoutDesignerComponent } from './profile-layout-designer.component';
+import type { ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -51,7 +53,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
 @Component({
   selector: 'pf-report-structure',
   standalone: true,
-  imports: [FormsModule, SelectComponent, ReportChartEditorComponent],
+  imports: [FormsModule, SelectComponent, ReportChartEditorComponent, ProfileLayoutDesignerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rsd">
@@ -245,6 +247,18 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
             }
           </span>
         </div>
+
+        @if (isProfile()) {
+          <section class="rsd__onepage">
+            <pf-profile-layout-designer
+              [sections]="$any(rawSections() ?? [])"
+              [resolvedColumns]="resolvedColumns()"
+              [availableAnalyzerCodes]="availableAnalyzerCodes()"
+              [hasDefault]="true"
+              (sectionsChange)="onPageLayoutChange($event)"
+              (restoreDefault)="onRestoreDefault()" />
+          </section>
+        }
       }
     </div>
   `,
@@ -388,6 +402,29 @@ export class ReportStructureComponent {
   readonly changed = output<void>();
   readonly customizeColumns = output<void>();
 
+  // ── Profile one-page layout (owner, 2026-10-02) ───────────────────────
+  /** Only a profile/package gets the one-page layout designer — a single
+   *  test's report is one block already. */
+  readonly isProfile = input<boolean>(false);
+  readonly resolvedColumns = input<ReportColumn[]>([]);
+  readonly availableAnalyzerCodes = input<string[]>([]);
+
+  onPageLayoutChange(next: ReportSection[]): void {
+    this.commit(next as unknown as RawSection[], { debounce: true });
+  }
+  async onRestoreDefault(): Promise<void> {
+    const id = this.testId();
+    if (!id) return;
+    try {
+      const res = await this.layout.restorePageLayoutDefault(id);
+      if (!res) { this.toasts.info('No default one-page layout is available for this profile.'); return; }
+      this.rawSections.set((res.sections as unknown as RawSection[]) ?? []);
+      this.toasts.success('Restored the default one-page layout.');
+    } catch {
+      this.toasts.error('Could not restore the default layout — check the connection and try again.');
+    }
+  }
+
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly savedTick = signal(false);
@@ -396,7 +433,9 @@ export class ReportStructureComponent {
   readonly renameDraft = signal('');
 
   /** Raw stored sections (null = no saved layout → implicit structure). */
-  private readonly rawSections = signal<RawSection[] | null>(null);
+  /** protected, not private: the template passes it straight to
+   *  pf-profile-layout-designer's [sections] input. */
+  protected readonly rawSections = signal<RawSection[] | null>(null);
 
   /** The test records values of its OWN (an individual test — not a
    *  profile/package, whose members print their values). Its results table
@@ -593,7 +632,10 @@ export class ReportStructureComponent {
       canHide: true, implicit: true,
     };
     if (raw) {
-      const out = raw.map((s, i) => this.rowFor(s, i));
+      // The profile one-page layout rides in this SAME sections array (no
+      // second storage) but is edited only by pf-profile-layout-designer —
+      // it must never show as a generic, deletable/hideable block here.
+      const out = raw.filter(s => s.type !== 'page_layout').map((s, i) => this.rowFor(s, i));
       // Mirrors materialised(): a missing results table leads the list.
       if (this.missingTable()) out.unshift(this.implicitGridRow());
       if (this.attachments() && !raw.some(s => s.type === 'image')) out.push(implicitImage);
@@ -726,10 +768,16 @@ export class ReportStructureComponent {
     const imageSec = (): RawSection => ({ id: newSecId(), type: 'image', order: 0, conditions: [] });
     const raw = this.rawSections();
     if (raw) {
-      let secs = raw.map(s => ({ ...s }));
+      // The profile one-page layout section (if any) is NOT one of rows()'s
+      // displayed blocks (filtered out there — it's edited only by
+      // pf-profile-layout-designer) — pulled out here and re-appended LAST
+      // so this array stays index-aligned with rows() for mutate()/moveRow()
+      // (both position-based), then rides along untouched on save.
+      const pageLayoutSec = raw.find(s => s.type === 'page_layout') ?? null;
+      let secs = raw.filter(s => s.type !== 'page_layout').map(s => ({ ...s }));
       if (this.missingTable()) secs = withResultsTableFirst(secs, newSecId());
       if (this.attachments() && !secs.some(s => s.type === 'image')) secs.push(imageSec());
-      return secs;
+      return pageLayoutSec ? [...secs, pageLayoutSec] : secs;
     }
     if (this.culture()) {
       const secs = CLASSIC_CULTURE.map((c, i) => {

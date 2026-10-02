@@ -234,6 +234,18 @@
           <pf-critical-ack-strip class="pf-sre-critical" [events]="critical()" [via]="criticalVia()"
                                  (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
         }
+        @if (showFetchFromAnalyzer()) {
+          <!-- Re-query the server for newly arrived analyzer images/values for
+               this tube (the connector pushes automatically — this is a
+               refresh, not a device command). Its own small bar, independent
+               of .pf-sre-strip's other (mutually exclusive) conditions. -->
+          <div class="pf-sre-fetchbar">
+            <button type="button" class="nd-btn nd-btn--secondary nd-btn--sm pf-sre-fetch"
+                    [disabled]="fetchingAnalyzer()" (click)="fetchFromAnalyzer()">
+              {{ fetchingAnalyzer() ? 'Checking…' : 'Fetch from analyzer' }}
+            </button>
+          </div>
+        }
         @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0 || analyzerRuns().length > 1) {
           <div class="pf-sre-strip">
             @if (analyzerRuns().length > 1 && !validateMode() && !viewOnly()) {

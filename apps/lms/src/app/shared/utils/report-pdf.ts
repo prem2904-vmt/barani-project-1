@@ -31,6 +31,12 @@ import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './repor
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
+import {
+  bodyArea, collapseMissingAnalyzerBoxes, readPageLayout, type BodyArea as ProfileBodyArea,
+} from './report-profile-layout';
+import {
+  drawAnalyzerImageBox, drawNotesBox, drawProfileTableBox, drawSignaturesBox, type ProfileTableRow,
+} from './report-profile-layout.pdf';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -247,6 +253,11 @@ interface ReportSnapshot {
   tests?: Array<{
     /** Tech attachments marked show — printed as an images block. */
     images?: string[] | null;
+    /** Analyzer images (M51 histograms/scattergrams…), keyed by instrument
+     *  image code — the profile ONE-PAGE layout's analyzer boxes read this
+     *  (report-profile-layout.ts). Absent/empty for every test that carries
+     *  none; doesn't affect `images` or the normal Images-block rendering. */
+    analyzerImages?: Record<string, string> | null;
     /** Per-REPORT value picker: parameter names the tech unticked for this
      *  order — their rows never print (bench record keeps them). */
     hidden?: string[] | null;
@@ -1032,6 +1043,27 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     if (panel && obs.length) panel.rows.push(...obs);
   }
 
+  // ── Profile ONE-PAGE report layouts (owner, 2026-10-02) ─────────────────
+  // A profile whose Printed-report tab has an ENABLED `page_layout` section
+  // is pulled OUT of the normal continuous table entirely and rendered on
+  // its own forced page by renderOnePageProfile() (below), side-by-side
+  // table + charts + analyzer images + that department's signatures. A
+  // profile without one (every profile before this feature, and any that
+  // hasn't opted in) never enters this branch — `onePageBundles` stays
+  // empty and `groups` is untouched, so the rest of this function runs
+  // EXACTLY as it always has (byte-identical output; see
+  // report-pdf.one-page-layout.spec.ts).
+  const onePageBundles: Array<{ pkg: string; group: PanelGroup; layout: ResolvedReportLayout }> = [];
+  for (const [pkg, group] of byPkg) {
+    const lay = resolvedLayouts[pkg];
+    const pl = lay && readPageLayout(lay.sections);
+    if (pl?.enabled && pl.boxes.length > 0) onePageBundles.push({ pkg, group, layout: lay });
+  }
+  if (onePageBundles.length > 0) {
+    const bundleGroups = new Set<PanelGroup>(onePageBundles.map(b => b.group));
+    for (let i = groups.length - 1; i >= 0; i--) if (bundleGroups.has(groups[i])) groups.splice(i, 1);
+  }
+
   // The profile's own NARRATIVE blocks (images, charts) render once under
   // the profile's name, after the table. Its Sentences already closed the
   // profile's block in the table (above) — only a profile with no block
@@ -1048,7 +1080,12 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       ?? (legacy ? t.packageTestId : null);
     if (b && !benchBundles.has(b)) benchBundles.set(b, t);
   }
+  const onePagePkgs = new Set(onePageBundles.map(b => b.pkg));
   for (const [pkg, member] of benchBundles) {
+    // A one-page-layout profile draws its OWN chart/image boxes inside its
+    // dedicated page (renderOnePageProfile, below) — never also here, or its
+    // chart would print twice.
+    if (onePagePkgs.has(pkg)) continue;
     const pl = resolvedLayouts[pkg];
     const inTable = byPkg.has(pkg);
     // Only when there is something to PRINT. A visible-but-empty paragraph
@@ -1153,6 +1190,13 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   if (outScope.length > 0) {
     cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
     cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs, finalSigs);
+  }
+
+  // Each one-page profile prints on its OWN fresh page, after the normal
+  // table(s) — letterhead + patient block drawn exactly like every other
+  // page, the designer's boxes filling the body between them.
+  for (const b of onePageBundles) {
+    cursorY = renderOnePageProfile(doc, b.pkg, b.group, b.layout, practice, snap, report, deptSigs.get((b.group.department ?? '').trim()) ?? []);
   }
 
   // Tech attachments for TABULAR tests — the columnar table has no
@@ -1369,7 +1413,10 @@ export async function preloadReportImages(
   // image sections (positioned by the test's layout).
   try {
     const snap = JSON.parse(input.report.data ?? '{}') as ReportSnapshot;
-    for (const t of snap.tests ?? []) for (const u of t.images ?? []) urls.add(u);
+    for (const t of snap.tests ?? []) {
+      for (const u of t.images ?? []) urls.add(u);
+      for (const u of Object.values(t.analyzerImages ?? {})) if (u) urls.add(u);
+    }
   } catch { /* malformed snapshot — images just won't preload */ }
   for (const l of Object.values(input.resolvedLayouts ?? {})) {
     for (const sec of l.sections ?? []) for (const u of sec.imageUrls ?? []) urls.add(u);
@@ -3226,6 +3273,103 @@ function renderContinuousTable(
     rendered++;
   }
   return y;
+}
+
+// ── Profile ONE-PAGE report layout (owner, 2026-10-02) ──────────────────
+
+/** Every analyzer image code attached to ANY member line of this profile
+ *  bundle, merged into one map — the connector routes an M51 image onto
+ *  whichever member line matches its analyte (RouteTarget), so the box
+ *  doesn't care which specific line carried it. */
+function profileAnalyzerImages(snap: ReportSnapshot, pkg: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const t of snap.tests ?? []) {
+    const legacy = t.packageType == null;
+    const b = t.profileTestId ?? (t.packageType === 'profile' ? t.packageTestId : null) ?? (legacy ? t.packageTestId : null);
+    if (b !== pkg) continue;
+    for (const [code, url] of Object.entries(t.analyzerImages ?? {})) if (url) out[code] = url;
+  }
+  return out;
+}
+
+/** A PanelGroup row → the one-page table's own (simpler) row shape. */
+function toProfileTableRows(rows: PanelRowData[]): ProfileTableRow[] {
+  return rows.map(r => {
+    if (r.kind === 'note') {
+      const text = r.techNote ? `${r.techLabel ?? ''} ${r.techNote}`.trim() : (r.note ?? '');
+      return { cells: {}, isNote: true, noteText: text };
+    }
+    return {
+      name: r.name, flag: r.flag ?? null, bold: !!(r.bold || r.printBold), color: r.color ?? null,
+      cells: { result: r.result ?? '', unit: r.unit ?? '', range: r.range ?? '', ...(r.texts ?? {}) },
+    };
+  });
+}
+
+/** Render one profile's one-page layout on a fresh page: letterhead +
+ *  patient block exactly as every other page, then the designer's boxes
+ *  (table / chart / analyzer image / signatures / notes) filling the body
+ *  between them. Missing analyzer images collapse per owner decision 2
+ *  (collapseMissingAnalyzerBoxes) — never an empty frame. Returns the
+ *  cursor position below the forced page (callers already treat "near the
+ *  floor" as "start a new page", so whatever renders next lands clean). */
+function renderOnePageProfile(
+  doc: jsPDF, pkg: string, group: PanelGroup, layout: ResolvedReportLayout,
+  practice: NonNullable<ReportPdfInput['practice']>, snap: ReportSnapshot, report: ReportPdfInput['report'],
+  deptSigs: ReportSignature[],
+): number {
+  const pl = readPageLayout(layout.sections);
+  if (!pl?.enabled || !pl.boxes.length) return newPage(doc, practice); // guarded by the caller; never reached
+
+  NEXT_PAGE_IS_FIRST = false;
+  doc.addPage();
+  drawLetterhead(doc);
+  const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
+  const top = patientBottom + 10;
+  // footerFloor() returns a MARGIN (how much room the footer band needs,
+  // like MARGIN_BOTTOM) — not an absolute y. The body's floor is the page
+  // height minus that reserve.
+  const floor = A4.h - footerFloor(LAYOUT);
+  const body: ProfileBodyArea = bodyArea(top, floor);
+
+  const images = profileAnalyzerImages(snap, pkg);
+  const availCodes = new Set(Object.keys(images));
+  const { boxes } = collapseMissingAnalyzerBoxes(pl.boxes, availCodes, body);
+  const rows = toProfileTableRows(group.rows);
+
+  const tableTheme = {
+    font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, headFill: '#f1f5f9', headText: BLACK, bodyText: TEXT,
+    dimText: TEXT_DIM, hair: HAIR, abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
+    zebra: theme.zebraRows,
+  };
+  for (const box of boxes) {
+    switch (box.kind) {
+      case 'table':
+        drawProfileTableBox(doc, box, body, layout.columns ?? [], rows, tableTheme);
+        break;
+      case 'analyzer': {
+        const url = box.ref ? images[box.ref] : undefined;
+        drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, tableTheme.font);
+        break;
+      }
+      case 'chart': {
+        const sec = layout.sections.find(s => s.id === box.ref && s.type === 'chart' && s.trend);
+        if (sec) {
+          const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM, h: box.h * MM };
+          renderReportChart(doc, sec, group.testName ?? '', r.y, chartTheme(),
+            { x: r.x, contentWidth: r.w, floor: r.y + r.h, newPage: () => r.y });
+        }
+        break;
+      }
+      case 'signatures':
+        drawSignaturesBox(doc, box, body, deptSigs, IMG_CACHE, BLACK, tableTheme.font);
+        break;
+      case 'notes':
+        if (box.label) drawNotesBox(doc, box, body, box.label, TEXT_DIM, tableTheme.font);
+        break;
+    }
+  }
+  return floor;
 }
 
 // ── Technician report notes (owner 2026-09-30) ───────────────────

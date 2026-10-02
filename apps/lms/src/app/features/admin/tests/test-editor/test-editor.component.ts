@@ -867,6 +867,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected readonly testColumnsOverride = signal<ReportColumn[] | null>(null);
+  /** The effective columns for the profile one-page layout designer: this
+   *  test/profile's own override, else the department set — same cascade
+   *  `liveColumnsOverride`/`columnsSummary` already read for the label. */
+  protected readonly resolvedColumnsForDesigner = computed<ReportColumn[]>(() =>
+    this.testColumnsOverride() ?? this.deptColumnCfg());
   protected readonly customizingColumns = signal(false);
   protected readonly columnsSaving = signal(false);
   protected readonly columnsEditorSeed = signal<ReportColumn[] | null>(null);

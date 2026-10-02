@@ -1677,6 +1677,41 @@ export class SampleResultEntryComponent {
     return out;
   }
 
+  // ── Fetch from analyzer (owner, 2026-10-02) ─────────────────────────
+  // The connector pushes automatically — this button just RE-QUERIES for
+  // (a) newly arrived instrument images/values already matched to this
+  // tube (a plain reload) and (b) unmatched messages reported against this
+  // tube's barcode (a timing miss at ingest) — attaching those, then
+  // reloading. Never a device command.
+  readonly fetchingAnalyzer = signal(false);
+  showFetchFromAnalyzer(): boolean { return !this.validateMode() && !this.viewOnly(); }
+
+  async fetchFromAnalyzer(): Promise<void> {
+    const s = this._sample();
+    if (!s?.id || this.fetchingAnalyzer()) return;
+    this.fetchingAnalyzer.set(true);
+    let attached = 0;
+    try {
+      const barcode = (s.barcode ?? "").trim();
+      if (barcode) {
+        const page = await firstValueFrom(this.instrumentsApi.messages({ state: "unmatched", sampleId: barcode, pageSize: 20 }));
+        for (const m of page?.items ?? []) {
+          try {
+            await firstValueFrom(this.instrumentsApi.attach(m.id, barcode));
+            attached++;
+          } catch { /* lost a race to another attach, or no longer unmatched — skip */ }
+        }
+      }
+      await this.load(s.id);
+      if (attached > 0) this.toasts.success(attached === 1 ? "1 new analyzer result attached." : `${attached} new analyzer results attached.`);
+      else this.toasts.info("No new analyzer results yet.");
+    } catch {
+      this.toasts.error("Could not reach the analyzer — try again.");
+    } finally {
+      this.fetchingAnalyzer.set(false);
+    }
+  }
+
   private async loadAnalyzerPrefill(seq: number, sampleId: string) {
     if (this.validateMode() || this.viewOnly()) return;
     try {

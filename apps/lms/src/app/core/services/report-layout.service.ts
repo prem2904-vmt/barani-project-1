@@ -10,6 +10,7 @@ import {
   TestReportLayoutResponse,
 } from '../../shared/models/report-layout.model';
 import { AgeSource, bandAgeYears } from '../../shared/utils/patient-age';
+import { ApiError } from '../../shared/models/api-response.model';
 
 /**
  * HTTP wrapper around ReportLayoutController. ApiService already unwraps
@@ -45,6 +46,22 @@ export class ReportLayoutService {
     return firstValueFrom(this.api.post<unknown>(
       `/api/report-layout/test/${testId}`, { sections }
     ));
+  }
+
+  /** Profile one-page layout — "Restore to default": pulls ONLY the
+   *  `page_layout` section from the master catalogue's matching test
+   *  (by CatalogKey) into this test's own sections. `no_default` (e.g. a
+   *  non-CBC profile) resolves to `null` rather than throwing — the caller
+   *  shows "no default available" instead of an error toast. */
+  async restorePageLayoutDefault(testId: string): Promise<{ sections: ReportSection[] } | null> {
+    try {
+      return await firstValueFrom(this.api.post<{ sections: ReportSection[] }>(
+        `/api/report-layout/test/${testId}/page-layout/restore-default`, {}
+      ));
+    } catch (e) {
+      if (ApiError.from(e).code === 'no_default') return null;
+      throw e;
+    }
   }
 
   // ── Per-(test, parameter) locks ─────────────────────────

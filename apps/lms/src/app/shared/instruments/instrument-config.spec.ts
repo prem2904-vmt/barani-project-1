@@ -187,4 +187,9 @@ describe('instrument config — raw capture + preview + summaries', () => {
     expect(messagesUrl({ state: 'unmatched', pageSize: 500 })).toBe('/api/instruments/messages?state=unmatched&page=1&pageSize=100');
     expect(messagesUrl({ instrumentId: 'i 1' })).toBe('/api/instruments/messages?instrumentId=i+1&page=1&pageSize=50');
   });
+
+  it('messages URL carries sampleId (Fetch from analyzer — the tube already open)', () => {
+    expect(messagesUrl({ state: 'unmatched', sampleId: '26123' })).toBe('/api/instruments/messages?state=unmatched&sampleId=26123&page=1&pageSize=50');
+    expect(messagesUrl({ sampleId: null })).toBe('/api/instruments/messages?page=1&pageSize=50');
+  });
 });

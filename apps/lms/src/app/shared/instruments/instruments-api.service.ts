@@ -11,6 +11,10 @@ export type MessageStateFilter = 'unmatched' | 'qc' | 'matched' | 'superseded' |
 export interface MessageQuery {
   state?: MessageStateFilter;
   instrumentId?: string | null;
+  /** The as-reported (pre-match) sample id/barcode a message carries —
+   *  "Fetch from analyzer" (sample result entry) narrows to the tube
+   *  that's already open, so an unmatched run for it surfaces here. */
+  sampleId?: string | null;
   page?: number;
   /** Server clamps to ≤ 100. */
   pageSize?: number;
@@ -21,6 +25,7 @@ export function messagesUrl(q: MessageQuery = {}): string {
   const p = new URLSearchParams();
   if (q.state) p.set('state', q.state);
   if (q.instrumentId) p.set('instrumentId', q.instrumentId);
+  if (q.sampleId) p.set('sampleId', q.sampleId);
   p.set('page', String(Math.max(1, q.page ?? 1)));
   p.set('pageSize', String(Math.min(100, Math.max(1, q.pageSize ?? 50))));
   return `/api/instruments/messages?${p.toString()}`;
