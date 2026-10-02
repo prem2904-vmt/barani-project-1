@@ -234,6 +234,13 @@ export interface PageLayoutBox {
   hidden?: boolean;
   /** notes box only: the text it prints (older layouts used `label`). */
   text?: string | null;
+  /** table box only: where the rows sit when the box is taller than they
+   *  need — 'top' (default), 'fill' (rows spread evenly to fill the box) or
+   *  'center'. The report draws exactly this. */
+  vAlign?: PageLayoutRowAlign | null;
+  /** table box only: space between rows — 'compact', 'normal' (default) or
+   *  'relaxed'. The report draws exactly this. */
+  rowSpacing?: PageLayoutRowSpacing | null;
   /** table box, MANUAL row mode only: the member rows (parameter names) this
    *  box prints, in the profile's order. Every row belongs to exactly one box. */
   rows?: string[] | null;
@@ -249,6 +256,9 @@ export interface PageLayoutPage {
  *  'auto' — rows flow from the first table box into the next ("continued");
  *  'manual' — each table box prints the rows chosen for it. */
 export type PageLayoutTableMode = 'auto' | 'manual';
+
+export type PageLayoutRowAlign = 'top' | 'fill' | 'center';
+export type PageLayoutRowSpacing = 'compact' | 'normal' | 'relaxed';
 
 export interface PageLayoutSection extends ReportSectionBase {
   type: 'page_layout';

@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type {
-  PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutTableMode, ReportColumn, ReportSection,
+  PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutRowAlign, PageLayoutRowSpacing, PageLayoutTableMode, ReportColumn, ReportSection,
 } from '../../../shared/models/report-layout.model';
 import type { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
 import { layoutSignatureBlock } from '../../../shared/utils/report-signatures';
@@ -129,8 +129,10 @@ interface DragState {
         <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="activePage() === pages().length - 1" (click)="movePage(1)" aria-label="Move this page later" title="Move this page later">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
-        <button type="button" class="nd-btn nd-btn--icon pld-tool pld-tool--danger" [disabled]="pages().length === 1" (click)="removePage()" aria-label="Remove this page" title="Remove this page">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        <button type="button" class="nd-btn nd-btn--tertiary pld-delpage" [disabled]="pages().length === 1" (click)="removePage()"
+                [attr.title]="pages().length === 1 ? 'A layout keeps at least one page' : 'Delete page ' + (activePage() + 1)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          Delete page
         </button>
       </div>
 
@@ -303,6 +305,20 @@ interface DragState {
                 @if (!fitsBox() && measuredFor(b) != null && !continuesFrom(b)) {
                   <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
                 }
+                <h4 class="pld-sec__h">Rows in this box</h4>
+                <div class="nd-seg" role="radiogroup" aria-label="Rows in this box">
+                  @for (m of vAligns; track m.value) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(b.vAlign ?? 'top') === m.value" (click)="setVAlign(m.value)">{{ m.label }}</button>
+                  }
+                </div>
+                <p class="nd-field__hint">{{ vAlignHint(b) }}</p>
+                <h4 class="pld-sec__h">Row spacing</h4>
+                <div class="nd-seg" role="radiogroup" aria-label="Row spacing">
+                  @for (m of rowSpacings; track m.value) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(b.rowSpacing ?? 'normal') === m.value" (click)="setRowSpacing(m.value)">{{ m.label }}</button>
+                  }
+                </div>
+                <p class="nd-field__hint">Space between the result rows — the report prints the same.</p>
                 <h4 class="pld-sec__h">Rows across table boxes</h4>
                 <div class="nd-seg" role="radiogroup" aria-label="Rows across table boxes">
                   <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'auto'" (click)="changeTableMode('auto')">Continue automatically</button>
@@ -515,6 +531,9 @@ interface DragState {
     .pld-addpage { display: inline-flex; align-items: center; gap: 4px; }
     .pld-pages__grow { flex: 1 1 auto; }
     .pld-tool--danger:not(:disabled):hover { color: #b91c1c; }
+    .pld-delpage { display: inline-flex; align-items: center; gap: 6px; color: #b91c1c; }
+    .pld-delpage:disabled { color: var(--text-tertiary); }
+    :host-context(.dark) .pld-delpage:not(:disabled), :host-context([data-theme="dark"]) .pld-delpage:not(:disabled) { color: #fca5a5; }
     .pld-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
     .pld-rowitem { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 6px; border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); cursor: grab; }
     .pld-rowitem__grip { color: var(--text-tertiary); display: inline-flex; }
@@ -1016,7 +1035,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
             const bx = this.pages()[lp]?.boxes.find(b => b.id === info.boxId);
             const boxBottom = bx ? info.body.top + (bx.y + bx.h) * MM : Infinity;
             tables[info.boxId] = { rows: info.rowsPrinted ?? 0, overflow: info.tableBottom == null || info.tableBottom > boxBottom + 1 };
-            if (info.tableBottom !== undefined && lp === this.activePage()) this.setMeasuredTable(info.tableBottom, info.body, info.boxId);
+            if (info.tableBottom !== undefined && lp === this.activePage()) this.setMeasuredTable(info.tableBottom, info.body, info.boxId, info.tableNaturalH);
           }
         },
       });
@@ -1040,16 +1059,39 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   private measuredForWidth = -1;
   /** Per table box: rows the sample printed in it, and whether rows ran past it. */
   readonly tableStats = signal<Record<string, { rows: number; overflow: boolean }>>({});
-  private setMeasuredTable(bottomPt: number | null, body: BodyArea, boxId?: string): void {
+  private setMeasuredTable(bottomPt: number | null, body: BodyArea, boxId?: string, naturalPt?: number | null): void {
     const t = this.boxes().find(b => b.kind === 'table' && (!boxId || b.id === boxId));
     if (!t || t.id !== this.tableBox()?.id) return;
-    const mm = bottomPt == null ? null : Math.round(((bottomPt - (body.top + t.y * MM)) / MM) * 10) / 10;
+    // The NATURAL height (rows before Fill / Center) — what "fit the table" sizes to.
+    const mm = bottomPt == null ? null : Math.round(((naturalPt ?? (bottomPt - (body.top + t.y * MM))) / MM) * 10) / 10;
     this.measuredForWidth = t.w;
     if (mm !== this.measuredTableMm()) this.measuredTableMm.set(mm);
   }
   /** The measurement belongs to the width it was taken at. */
   measuredFor(t: PageLayoutBox | null): number | null | undefined {
     return t && Math.abs(t.w - this.measuredForWidth) < 0.05 ? this.measuredTableMm() : undefined;
+  }
+  protected readonly vAligns: Array<{ value: PageLayoutRowAlign; label: string }> = [
+    { value: 'top', label: 'Top' }, { value: 'fill', label: 'Fill' }, { value: 'center', label: 'Center' },
+  ];
+  protected readonly rowSpacings: Array<{ value: PageLayoutRowSpacing; label: string }> = [
+    { value: 'compact', label: 'Compact' }, { value: 'normal', label: 'Normal' }, { value: 'relaxed', label: 'Relaxed' },
+  ];
+  vAlignHint(b: PageLayoutBox): string {
+    const v = b.vAlign ?? 'top';
+    return v === 'fill' ? 'Rows spread evenly to fill the box — the report prints the same.'
+      : v === 'center' ? 'The rows sit in the middle of the box.'
+      : 'Rows start at the top; any spare room stays below.';
+  }
+  setVAlign(v: PageLayoutRowAlign): void {
+    const id = this.selected(); const b = this.boxes().find(x => x.id === id);
+    if (!b || b.kind !== 'table') return;
+    this.commit(patchBox(this.boxes(), b.id, { vAlign: v === 'top' ? null : v }));
+  }
+  setRowSpacing(v: PageLayoutRowSpacing): void {
+    const id = this.selected(); const b = this.boxes().find(x => x.id === id);
+    if (!b || b.kind !== 'table') return;
+    this.commit(patchBox(this.boxes(), b.id, { rowSpacing: v === 'normal' ? null : v }));
   }
   fitTableBox(): void {
     const t = this.tableBox(); const m = this.measuredFor(t);
@@ -1251,23 +1293,34 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     this.activePage.set(j);
     this.scheduleRender(0);
   }
+  /** Delete the active page (confirmed). Its boxes go with it — except the
+   *  ONLY results table, which moves to the neighbouring page (results
+   *  always print). Its rows move back: auto-continue reflows them into the
+   *  remaining table boxes; in "Choose rows" they become unplaced (warned). */
   async removePage(): Promise<void> {
     const i = this.activePage();
     const pages = this.pages();
     if (pages.length < 2) return;
     const victim = pages[i];
-    const otherTables = pages.filter((_, j) => j !== i).some(p => p.boxes.some(b => b.kind === 'table'));
-    if (victim.boxes.some(b => b.kind === 'table') && !otherTables) {
-      this.toasts.info('This page holds the only results table — move the table to another page first.');
-      return;
-    }
-    if (victim.boxes.length) {
-      const ok = await this.dialog.confirm({ title: `Remove page ${i + 1}?`, message: 'Its boxes are removed too. You can undo this.', confirmLabel: 'Remove page', tone: 'danger' });
-      if (!ok) return;
-    }
+    const keepTable = !pages.some((p, j) => j !== i && p.boxes.some(b => b.kind === 'table'))
+      ? victim.boxes.find(b => b.kind === 'table') ?? null : null;
+    const others = victim.boxes.filter(b => b !== keepTable && !b.hidden).length;
+    const parts = [
+      keepTable ? 'The results table moves to the page before.' : null,
+      others ? `Its ${others} other box${others === 1 ? '' : 'es'} ${others === 1 ? 'is' : 'are'} removed.` : null,
+      victim.boxes.some(b => b.kind === 'table' && b !== keepTable)
+        ? (this.tableMode() === 'auto' ? 'Its rows continue in the remaining table boxes.' : 'Its rows become unplaced until you choose a box for them.')
+        : null,
+      'You can undo this.',
+    ].filter(Boolean);
+    const ok = await this.dialog.confirm({ title: `Delete page ${i + 1}?`, message: parts.join(' '), confirmLabel: 'Delete page', tone: 'danger' });
+    if (!ok) return;
+    const target = i > 0 ? i - 1 : 1;
+    const next = pages.map((p, j) => (j === target && keepTable ? { ...p, boxes: [...p.boxes, keepTable] } : p)).filter((_, j) => j !== i);
     this.select(null);
-    this.commitLayout(pages.filter((_, j) => j !== i));
+    this.commitLayout(next);
     this.activePage.set(Math.max(0, i - 1));
+    this.canvasReady.set(false);
     this.scheduleRender(0);
   }
   /** "Page 2 · 6 rows" — what the sample printed in the page's table boxes. */

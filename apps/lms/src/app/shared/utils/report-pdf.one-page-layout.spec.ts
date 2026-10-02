@@ -323,4 +323,53 @@ describe('profile one-page layout — PDF render', () => {
     expect(pdfText(doc, 1)).not.toContain('Dr. Technician');
     expect(pdfText(doc, doc.getNumberOfPages())).toContain('Dr. Technician');
   });
+
+  describe('table box row spacing + Top / Fill / Center (drawn by the REAL renderer)', () => {
+    type Seen = { boxId?: string; body: { top: number }; tableBottom?: number | null; tableNaturalH?: number | null; rowsPrinted?: number };
+    const run = (box: Record<string, unknown>, h = 150) => {
+      const seen: Seen[] = [];
+      buildReportPdf({
+        report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(cbcSnapshot()) },
+        resolvedLayouts: cbcLayouts({ tableMode: 'auto', pages: [{ id: 'p1', boxes: [{ ...table('t', 0, h), ...box }] }] }), template: null,
+        onOnePageBody: (i: Seen) => seen.push(i),
+      } as never);
+      return seen.find(x => x.boxId === 't')!;
+    };
+    const MMPT = 2.8346;
+    it('Top leaves the rows at their natural height; Fill grows them to exactly the box; Center keeps them natural', () => {
+      const top = run({}), fill = run({ vAlign: 'fill' }), center = run({ vAlign: 'center' });
+      expect(top.tableNaturalH!).toBeLessThan(150 * MMPT - 20);
+      expect(top.tableBottom! - top.body.top).toBeCloseTo(top.tableNaturalH!, 0);
+      expect(fill.tableNaturalH).toBeCloseTo(top.tableNaturalH!, 1);
+      expect(fill.tableBottom! - fill.body.top).toBeCloseTo(150 * MMPT, 0);
+      const spare = 150 * MMPT - top.tableNaturalH!;
+      expect(center.tableBottom! - center.body.top).toBeCloseTo(top.tableNaturalH! + spare / 2, 0);
+    });
+    it('Compact < Normal < Relaxed, by the same step on every row', () => {
+      const c = run({ rowSpacing: 'compact' }), n = run({}), r = run({ rowSpacing: 'relaxed' });
+      expect(c.tableNaturalH!).toBeLessThan(n.tableNaturalH!);
+      expect(r.tableNaturalH!).toBeGreaterThan(n.tableNaturalH!);
+      const rows = n.rowsPrinted!;
+      expect(r.tableNaturalH! - n.tableNaturalH!).toBeGreaterThanOrEqual(rows * 4);
+    });
+    it('Relaxed spacing in a short box: fewer rows fit, the rest continue — never cut', () => {
+      const seen: Seen[] = [];
+      const doc = buildReportPdf({
+        report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(cbcSnapshot()) },
+        resolvedLayouts: cbcLayouts({ tableMode: 'auto', pages: [{ id: 'p1', boxes: [table('a', 0, 60)] }, { id: 'p2', boxes: [table('b', 0, 200)] }] }), template: null,
+        onOnePageBody: (i: Seen) => seen.push(i),
+      } as never);
+      const normal = seen.find(x => x.boxId === 'a')!.rowsPrinted!;
+      const seen2: Seen[] = [];
+      buildReportPdf({
+        report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(cbcSnapshot()) },
+        resolvedLayouts: cbcLayouts({ tableMode: 'auto', pages: [{ id: 'p1', boxes: [{ ...table('a', 0, 60), rowSpacing: 'relaxed' }] }, { id: 'p2', boxes: [table('b', 0, 200)] }] }), template: null,
+        onOnePageBody: (i: Seen) => seen2.push(i),
+      } as never);
+      const relaxed = seen2.find(x => x.boxId === 'a')!.rowsPrinted!;
+      expect(relaxed).toBeLessThan(normal);
+      expect(relaxed + seen2.find(x => x.boxId === 'b')!.rowsPrinted!).toBe(14);
+      expect(doc.getNumberOfPages()).toBe(2);
+    });
+  });
 });

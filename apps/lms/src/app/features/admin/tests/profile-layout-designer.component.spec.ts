@@ -280,25 +280,72 @@ describe('ProfileLayoutDesignerComponent — Custom layout pages', () => {
     expect((raw['pages'] as unknown[]).length).toBe(1);
   });
 
-  it('Add page / move / remove: each one undoable; a page with the ONLY table cannot be removed', async () => {
-    const { f, c, el, toasts, dialog } = make({ sections: saved([tbl('table')]) });
+  it('Add page / move / Delete page: each one undoable; deleting the page with the ONLY table moves the table back', async () => {
+    const { f, c, el, dialog } = make({ sections: saved([tbl('table')]) });
+    f.detectChanges();
+    const delBtn = () => el.querySelector('.pld-delpage') as HTMLButtonElement;
+    expect(delBtn().textContent).toContain('Delete page');
+    expect(delBtn().disabled).toBe(true);                  // the last remaining page
     c.addPage(); f.detectChanges();
     expect(c.pages().length).toBe(2);
     expect(c.activePage()).toBe(1);
     expect(el.querySelectorAll('.pld-pagetab').length).toBe(2);
+    expect(delBtn().disabled).toBe(false);
     c.add('notes');
     c.movePage(-1);
     expect(c.pages()[0].boxes[0].kind).toBe('notes');      // the notes page moved first
     c.goPage(1);
-    await c.removePage();                                  // page 2 holds the only table
-    expect(toasts.info).toHaveBeenCalled();
-    expect(c.pages().length).toBe(2);
-    c.goPage(0);
-    await c.removePage();                                  // the notes page: asks, then removes
-    expect(dialog.confirm).toHaveBeenCalled();
+    delBtn().click(); await f.whenStable();                // page 2 holds the only table
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Delete page 2?' }));
     expect(c.pages().length).toBe(1);
+    expect(c.pages()[0].boxes.map(b => b.kind)).toEqual(['notes', 'table']);   // the table moved back
     c.undo();
     expect(c.pages().length).toBe(2);
+  });
+
+  it('Delete page: cancelling the confirm keeps the page; an empty page also asks', async () => {
+    const { c, dialog } = make({ sections: saved([tbl('table')]), confirm: false });
+    c.addPage();
+    await c.removePage();
+    expect(dialog.confirm).toHaveBeenCalledTimes(1);
+    expect(c.pages().length).toBe(2);
+  });
+
+  it('Delete page in AUTO mode: the continued box goes, its rows reflow into the remaining table box', async () => {
+    const { c } = make({ sections: saved([tbl('table')]), members: CBC_MEMBERS });
+    c.addPage(); c.addTableBox();
+    expect(c.pages()[1].boxes.some(b => b.kind === 'table')).toBe(true);
+    await c.removePage();
+    expect(c.pages().length).toBe(1);
+    expect(c.pages()[0].boxes.filter(b => b.kind === 'table').length).toBe(1);
+    expect(c.rowIssues().filter(i => i.kind === 'missing')).toEqual([]);
+  });
+
+  it('Delete page in MANUAL mode: that box\'s rows become unplaced, with the warning', async () => {
+    const { c } = make({ sections: saved([tbl('table')]), members: CBC_MEMBERS });
+    c.addPage(); c.addTableBox();
+    const second = c.boxes()[0].id;
+    c.changeTableMode('manual');
+    c.toggleRow('Platelet Count', second);
+    await c.removePage();
+    const missing = c.rowIssues().find(i => i.kind === 'missing');
+    expect(missing?.rows).toEqual(['Platelet Count']);
+  });
+
+  it('table box rows: Top / Fill / Center and Compact / Normal / Relaxed are saved on the box, undoable', () => {
+    const { f, c, el, emitted } = make({ sections: saved([tbl('table')]) });
+    c.select('table'); f.detectChanges();
+    const segs = [...el.querySelectorAll('[aria-label="Rows in this box"] .nd-seg__item')].map(e => e.textContent!.trim());
+    expect(segs).toEqual(['Top', 'Fill', 'Center']);
+    expect([...el.querySelectorAll('[aria-label="Row spacing"] .nd-seg__item')].map(e => e.textContent!.trim())).toEqual(['Compact', 'Normal', 'Relaxed']);
+    c.setVAlign('fill'); c.setRowSpacing('relaxed');
+    let box = pagesOf(emitted)[0].boxes[0];
+    expect([box.vAlign, box.rowSpacing]).toEqual(['fill', 'relaxed']);
+    c.setVAlign('top'); c.setRowSpacing('normal');
+    box = pagesOf(emitted)[0].boxes[0];
+    expect([box.vAlign ?? null, box.rowSpacing ?? null]).toEqual([null, null]);
+    c.undo();
+    expect(pagesOf(emitted)[0].boxes[0].rowSpacing).toBe('relaxed');
   });
 
   it('the palette text renders as text (no raw template braces)', async () => {
