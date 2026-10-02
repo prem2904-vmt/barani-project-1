@@ -25,6 +25,10 @@ export interface PfAction {
   disabled?: boolean;
   /** One quiet line under the label ("Opens WhatsApp with the report link"). */
   hint?: string;
+  /** The row for what is on screen right now (a navigation menu such as the
+   *  draft tray's overflow): `aria-current="page"` + the quiet selected look.
+   *  Still pickable — the host decides that picking it is a no-op. */
+  current?: boolean;
 }
 
 /** Stroked paths per icon — never emoji (docs/ND-PATTERN.md §10). */
@@ -121,6 +125,7 @@ export class ActionsMenuTriggerDirective {
                 @for (a of s.items; track a.id) {
                   <button #item type="button" role="menuitem" class="pf-am-item" tabindex="-1"
                           [attr.data-action]="a.id" [class.pf-am-item--danger]="a.tone === 'danger'"
+                          [class.pf-am-item--current]="a.current" [attr.aria-current]="a.current ? 'page' : null"
                           [disabled]="a.disabled" [attr.aria-disabled]="a.disabled || null"
                           (click)="pick(a)">
                     @if (a.icon) {
@@ -188,6 +193,12 @@ export class ActionsMenuTriggerDirective {
     .pf-am-item:focus-visible { box-shadow: inset 0 0 0 2px var(--color-violet-600, #7c3aed); }
     .pf-am-item:disabled { opacity: 0.5; cursor: not-allowed; }
     .pf-am-item--danger, .pf-am-item--danger .pf-am-item__i { color: var(--red-text, #dc2626); }
+    /* IDs / sample numbers line up (tabular figures, same Noto Sans). */
+    .pf-am-item__t { font-variant-numeric: tabular-nums; }
+    /* Current row: the app's quiet selected look (violet tint + ink). */
+    .pf-am-item--current { background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent); }
+    .pf-am-item--current .pf-am-item__t { color: var(--violet-text, #6d28d9); font-weight: 600; }  /* --violet-text is theme-aware (light #6d28d9 / dark #c4b5fd) */
+    .pf-am-item--current .pf-am-item__i { color: var(--violet-text, #7c3aed); }
 
     /* ── Phones: bottom sheet above the navbar (nd-sheet language) ── */
     .pf-am-layer--sheet .pf-am-backdrop { background: rgba(0, 0, 0, 0.45); bottom: var(--nd-nav-h, 0px); animation: pf-am-fade var(--nd-dur-fast, 200ms) ease both; }

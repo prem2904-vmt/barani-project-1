@@ -121,7 +121,9 @@ describe('draft open / close — zoom', () => {
       .toMatch(/pf-wrow--draft"[^>]*\[pfZoomSource\]="\[d\.patientId, 'fd:' \+ d\.patientId\]"/);
     const strip = read('layout/top-strip/top-strip.component.html');
     expect(strip).toMatch(/pf-draftshelf__chip[^>]*\[pfZoomSource\]="on \? null : chipZoomKeys\(d\)"/);
-    expect(strip).toMatch(/pf-draftshelf__pop-item[^>]*\[pfZoomSource\]="on \? null : chipZoomKeys\(d\)"/);
+    // A draft picked from the "+N" menu zooms from the "+N" chip.
+    expect(read('layout/top-strip/top-strip.component.ts'))
+      .toMatch(/resumeDraft\(id: string\)[\s\S]*this\.zoom\.tap\(more, this\.chipZoomKeys\(d\)\)/);
     expect(read('features/frontdesk/order-create/order-create.component.html'))
       .toMatch(/pf-oc-body"[^>]*\s+\[pfZoomTarget\]="zoomKeys\(\)"/);
   });
