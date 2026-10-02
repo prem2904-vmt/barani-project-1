@@ -457,8 +457,8 @@
                                 }
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, null).length > 0, label: 'Note on ' + (t.test?.name ?? 'this test'), tid: t.id, pname: null }"></ng-container>
                                 <pf-report-note-button scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-button>
-                                @if (!attachEnabled(t) && attachmentsFor(t).length > 0) {
-                                  <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: attachmentsFor(t).length }"></ng-container>
+                                @if (!attachEnabled(t) && benchAttachmentsFor(t).length > 0) {
+                                  <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: benchAttachmentsFor(t).length }"></ng-container>
                                 }
                               }
                               @if (attachEnabledForParam(t, p)) {
@@ -489,7 +489,7 @@
                             <td colspan="6"><pf-report-note-slot scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-slot></td>
                           </tr>
                         }
-                        @if (attachmentsFor(t).length > 0) {
+                        @if (benchAttachmentsFor(t).length > 0) {
                           <tr class="pf-sre__grow-attach">
                             <td colspan="6"><ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container></td>
                           </tr>
@@ -516,6 +516,13 @@
               </div>
             </section>
           }
+        }
+        @if (analyzerGraphs().length > 0) {
+          <!-- The analyzer's own graphs for this tube (instrument-routed
+               attachments) — one card with real thumbnails + a lightbox;
+               tech-captured files keep their chips under the line. -->
+          <pf-analyzer-graphs class="pf-sre-graphs" [graphs]="analyzerGraphs()" [source]="analyzerGraphSource()"
+                              [readOnly]="viewOnly()" (toggleShow)="toggleGraphShow($event)"></pf-analyzer-graphs>
         }
         <!-- Report notes above the line level: each department section of
              this tube, and the whole report (Lab settings switch). -->
@@ -590,7 +597,7 @@
            the eye ON print. -->
       <ng-template #attachStrip let-t>
         <div class="pf-sre__attach-strip">
-          @for (a of attachmentsFor(t); track a.id) {
+          @for (a of benchAttachmentsFor(t); track a.id) {
             <div class="pf-sre__attach-chip" [class.pf-sre__attach-chip--off]="!a.show">
               @if (attachMissing(a)) {
                 <!-- The server no longer has this file (wiped disk): remove it and attach again. -->
@@ -763,8 +770,8 @@
                 @if (enteredByLabel(t)) { <span class="pf-sre__who" title="Entered by">{{ enteredByLabel(t) }}</span> }
               }
               <span class="nd-card__spacer"></span>
-              @if (attachEnabled(t) || attachmentsFor(t).length > 0) {
-                <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: attachmentsFor(t).length }"></ng-container>
+              @if (attachEnabled(t) || benchAttachmentsFor(t).length > 0) {
+                <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: benchAttachmentsFor(t).length }"></ng-container>
               }
               <pf-report-note-button scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'" [withText]="true"></pf-report-note-button>
               <!-- "+ Note": the small secondary button; "Notes (N)" once a
@@ -783,7 +790,7 @@
             </header>
 
             <div class="nd-card__body pf-sre-card__body">
-              @if (attachmentsFor(t).length > 0) {
+              @if (benchAttachmentsFor(t).length > 0) {
                 <ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container>
               }
               @if (t.status === "re_entry" && t.rejectionReason) {

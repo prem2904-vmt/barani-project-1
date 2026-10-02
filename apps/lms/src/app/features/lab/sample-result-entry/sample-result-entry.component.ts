@@ -98,7 +98,8 @@ import { LAB_TIME_ZONE } from "../../../shared/utils/lab-clock";
 import { InstrumentsApiService } from "../../../shared/instruments/instruments-api.service";
 import type { RunDto } from "../../../shared/instruments/instrument.models";
 import { ReportLayoutService } from "../../../core/services/report-layout.service";
-import { missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
+import { KNOWN_ANALYZER_IMAGES, missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
+import { AnalyzerGraphsComponent, type AnalyzerGraph } from "./analyzer-graphs.component";
 import type { PageLayoutBox } from "../../../shared/models/report-layout.model";
 import {
   AnalyzerBadge,
@@ -155,6 +156,7 @@ function calcKey(testId: string, paramName: string): string {
   selector: "pf-sample-result-entry",
   standalone: true,
   imports: [
+    AnalyzerGraphsComponent,
     DailyNoComponent,
     CommonModule,
     FormsModule,
@@ -2735,6 +2737,43 @@ export class SampleResultEntryComponent {
     return p?.title || p?.name || a.param;
   }
 
+  /** Tech-captured files only — the chips under each line. The analyzer's
+   *  graphs (instrument-routed, `param` "instrument:<code>") have their own
+   *  card (analyzerGraphs). */
+  benchAttachmentsFor(t: { id: string }): ResultAttachment[] {
+    return this.attachmentsFor(t).filter(a => !isInstrumentAttachment(a));
+  }
+
+  /** Every analyzer graph on this tube, in the analyzer's own order, with a
+   *  human label ("RBC histogram", never "instrument:12053"). */
+  readonly analyzerGraphs = computed((): AnalyzerGraph[] => {
+    const s = this._sample();
+    this._attach();
+    const out: AnalyzerGraph[] = [];
+    for (const t of s?.tests ?? []) {
+      for (const a of this.attachmentsFor(t)) {
+        if (!isInstrumentAttachment(a) || a.kind !== 'image') continue;
+        const code = a.param!.slice('instrument:'.length);
+        out.push({ key: `${t.id}:${code}`, lineId: t.id, attachmentId: a.id, code, url: a.url, show: a.show,
+          label: graphLabel(code, a.name) });
+      }
+    }
+    const rank = (c: string) => { const i = KNOWN_ANALYZER_IMAGES.findIndex(k => k.code === c); return i < 0 ? 99 : i; };
+    return out.sort((x, y) => rank(x.code) - rank(y.code) || x.code.localeCompare(y.code));
+  });
+  /** "From Arun CBC · 5:02 PM" — the newest run on this tube. */
+  readonly analyzerGraphSource = computed((): string | null => {
+    const run = this.analyzerRuns()[0];
+    if (!run) return null;
+    const when = this.analyzerTime(run.runAt ?? run.receivedAt);
+    return `From ${run.instrumentName}${when ? ' · ' + when : ''}`;
+  });
+  toggleGraphShow(g: AnalyzerGraph): void {
+    const t = this._sample()?.tests.find(x => x.id === g.lineId);
+    if (!t) return;
+    void this.saveAttachments(g.lineId, this.attachmentsFor(t).map(x => x.id === g.attachmentId ? { ...x, show: !x.show } : x));
+  }
+
   attachmentsFor(t: { id: string }): ResultAttachment[] {
     const local = this._attach()[t.id];
     if (local) return local;
@@ -2823,6 +2862,18 @@ export class SampleResultEntryComponent {
       this.toasts.error("Could not save the attachments — retry.");
     }
   }
+}
+
+/** An analyzer graph attached by the instrument connector (mw tags it
+ *  `param: "instrument:<code>"`, InstrumentIngestService.InstrumentImageTag). */
+function isInstrumentAttachment(a: { param?: string | null }): boolean {
+  return !!a.param && a.param.startsWith('instrument:');
+}
+/** Lab-facing label: the known graph name, else what the analyzer called it. */
+function graphLabel(code: string, name?: string | null): string {
+  const known = KNOWN_ANALYZER_IMAGES.find(k => k.code === code);
+  if (known) return known.label;
+  return (name ?? '').trim() || `Analyzer image ${code}`;
 }
 
 interface ResultAttachment {

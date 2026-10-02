@@ -872,7 +872,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  another test opens. */
   protected readonly livePageLayout = signal<{ enabled: boolean; boxes: PageLayoutBox[] } | null>(null);
   private readonly resetLivePageLayout = effect(() => {
-    this._draft().id;
+    void this._draft().id; // track: another test opened
     untracked(() => this.livePageLayout.set(null));
   });
   /** This profile's catalogue key (CBC-family detection in the designer). */
