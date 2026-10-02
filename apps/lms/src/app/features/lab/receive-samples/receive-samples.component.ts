@@ -1101,14 +1101,17 @@ export class ReceiveSamplesComponent implements OnInit {
       latestAt: (sm.dispatchedAt ?? sm.receivedAtLab) || null,
       testLabels: this.uniqueTestNames(o),
     }));
-  // 24-h LEDGER: pending tubes on top (newest dispatch first — a tube
-  // sent an hour after the others leads), received tubes sink to the
-  // bottom (still green, aged out by the API's 24-h window). Ties fall
-  // back to the sample number.
+  // Sample-focused Lab Intake (owner, 2026-10-02): strict ascending order by
+  // sample number — numeric compare, not string, so "26120" < "26126" <
+  // "26202" sorts correctly whatever the digit count. A received tube stays
+  // IN SEQUENCE (just greyed "Received"), never sunk to the bottom — unlike
+  // the order-focused 24-h ledger above, this view's whole point is "what
+  // number comes next", so reordering by status would defeat it. A missing
+  // sample number (shouldn't normally happen) falls back to latestAt so the
+  // sort is still total and stable.
   }).sort((a, b) =>
-    (a.state === 'received' ? 1 : 0) - (b.state === 'received' ? 1 : 0)
-    || (b.latestAt ?? '').localeCompare(a.latestAt ?? '')
-    || (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
+    (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })
+    || (a.latestAt ?? '').localeCompare(b.latestAt ?? '')));
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');

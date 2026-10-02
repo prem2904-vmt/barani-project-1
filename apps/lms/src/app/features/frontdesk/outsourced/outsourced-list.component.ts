@@ -9,6 +9,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import {
   ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, STATUS_LABEL, attachState, filterOutsourced, rowReport,
 } from './outsourced-view';
+import { sortByDailySerial } from '../frontdesk-landing/work-merge';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { OutsourcedActionsComponent } from './outsourced-actions.component';
 
@@ -134,11 +135,16 @@ export class OutsourcedListComponent implements OnInit {
   readonly showFilters = input(false);
 
   /** Rows on screen: classic = the service's filtered set; new design = every
-   *  status (search only), open tubes before completed ones. */
+   *  status (search only), open tubes before completed ones, and WITHIN each
+   *  of those two groups the same business-day → #N ledger order as every
+   *  other tab of the frontdesk list (owner, 2026-10-02 —
+   *  `sortByDailySerial`, work-merge.ts). */
   readonly shown = computed(() => {
     if (this.showFilters()) return this.svc.visible();
     const rows = filterOutsourced(this.svc.rows(), { query: this.svc.query(), status: 'all', partnerId: null });
-    return [...rows.filter(r => r.status !== 'completed'), ...rows.filter(r => r.status === 'completed')];
+    const open = sortByDailySerial(rows.filter(r => r.status !== 'completed'));
+    const completed = sortByDailySerial(rows.filter(r => r.status === 'completed'));
+    return [...open, ...completed];
   });
 
   readonly web = webPointerSignal();
