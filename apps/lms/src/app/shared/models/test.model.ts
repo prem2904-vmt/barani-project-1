@@ -9,6 +9,8 @@ export interface Test {
   testCode?: string | null;
   /** Abbreviated display name. */
   shortName?: string | null;
+  /** Standard code (LOINC, e.g. "6690-2"), set on the master catalogue; null = not set. */
+  standardCode?: string | null;
   /** Sub-grouping under the department. */
   section?: string | null;
   /** Profile group tag (e.g. 'LFT', 'Lipid Profile') from the test catalogue. */

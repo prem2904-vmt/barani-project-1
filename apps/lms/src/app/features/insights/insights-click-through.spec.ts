@@ -185,3 +185,26 @@ describe('Insights — phone band (owner 2026-10-02: no sideways scroll)', () =>
     expect(tools.querySelector('.pf-ins-filtersbtn')!.textContent).toContain('Filters (1)');
   });
 });
+
+describe('Insights — All time (owner 2026-10-02)', () => {
+  it('"All time" is a period choice; it asks the server where history starts and never compares', () => {
+    const p = render(undefined, { patients: 40, tests: 90, testsPerPatient: 2.25, outsourcedPct: 0, medianTatMinutes: null });
+    p.f.detectChanges();
+    expect(p.c.periodOptions.some(o => o.value === 'all' && o.label === 'All time')).toBe(true);
+    p.c.setPeriod('all');
+    p.f.detectChanges();
+    const u = urls(p.api);
+    expect(u.some(x => x.startsWith('/api/analytics/period?period=all'))).toBe(true);
+    const ov = u.filter(x => x.startsWith('/api/analytics/overview')).pop()!;
+    expect(paramsOf(ov).get('period')).toBe('all');
+    const deltas = Array.from(p.el.querySelectorAll('.pf-ins-kpi .pf-ins-delta')).map(e => e.textContent?.trim());
+    expect(deltas.length).toBeGreaterThan(0);
+    expect(deltas.every(t => t === '—')).toBe(true);
+    // lists stay server-paged under All time
+    p.c.goList('orders');
+    p.f.detectChanges();
+    const list = urls(p.api).filter(x => x.startsWith('/api/analytics/lists/orders')).pop()!;
+    expect(paramsOf(list).get('period')).toBe('all');
+    expect(paramsOf(list).get('pageSize')).toBe('100');
+  });
+});

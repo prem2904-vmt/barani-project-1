@@ -23,7 +23,7 @@ import {
   BuildLineOptionArgs, buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption,
   buildSparklineOption, buildStackedBarOption, rupeeAxisFormatter, rupeeFormatter, seriesColor,
 } from '../../shared/utils/business-chart';
-import { DeltaView, allZero, bucketAxisLabel, bucketRange, deltaView, formatCount, formatMinutes, formatRupee, rangeLabel } from '../../shared/utils/insights-view';
+import { DeltaView, allZero, bucketAxisLabel, bucketRange, deltaView, formatCount, formatMinutes, formatRupee, rangeLabel, shortDay } from '../../shared/utils/insights-view';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { ChartPick, InsightsChartComponent } from './insights-chart.component';
 import {
@@ -131,10 +131,15 @@ export class InsightsComponent {
   readonly today = labToday();
   readonly customFrom = signal<string>(this.today.slice(0, 8) + '01');
   readonly customTo = signal<string>(this.today);
+  /** "All time" lower bound — the scope's first order day, from the server. */
+  readonly allFrom = signal<string | null>(null);
+  readonly isAll = computed(() => this.period() === 'all');
   readonly resolved = computed(() => {
     const p = this.period();
     try {
-      return p === 'custom' ? resolveAnalyticsPeriod('custom', this.customFrom(), this.customTo()) : resolveAnalyticsPeriod(p);
+      if (p === 'custom') return resolveAnalyticsPeriod('custom', this.customFrom(), this.customTo());
+      if (p === 'all') return resolveAnalyticsPeriod('all', undefined, undefined, new Date(), this.allFrom());
+      return resolveAnalyticsPeriod(p);
     } catch {
       return resolveAnalyticsPeriod('month');
     }
@@ -145,9 +150,11 @@ export class InsightsComponent {
     const p = previousAnalyticsPeriod(r.fromYmd, r.toYmd);
     return rangeLabel(p.fromYmd, p.toYmd);
   });
+  /** Under a KPI: "vs 1 – 30 Sep 2026", or "Since 9 Mar 2024" for All time. */
+  readonly compareText = computed(() => (this.isAll() ? `Since ${shortDay(this.resolved().fromYmd, true)}` : `vs ${this.prevLabel()}`));
   /** "today" · "this month" · "the last 7 days" — for sentences. */
   readonly periodPhrase = computed(() => ({
-    today: 'today', '7d': 'the last 7 days', month: 'this month', lastMonth: 'last month', quarter: 'this quarter', custom: 'this range',
+    today: 'today', '7d': 'the last 7 days', month: 'this month', lastMonth: 'last month', quarter: 'this quarter', all: 'all time', custom: 'this range',
   } as Record<AnalyticsPeriodPreset, string>)[this.period()]);
   readonly periodName = computed(() => this.periodOptions.find(o => o.value === this.period())?.label ?? 'This period');
 
@@ -257,6 +264,14 @@ export class InsightsComponent {
     this.api.get<{ id: string; name: string }[]>('/api/tests?view=summary&activeOnly=true')
       .subscribe({ next: t => this.tests.set((t ?? []).map(x => ({ id: x.id, name: x.name }))), error: () => undefined });
     this.api.get<{ id: string; name: string }[]>('/api/referring-network/doctors').subscribe({ next: d => this.referrers.set(d ?? []), error: () => undefined });
+
+    // "All time": ask the server where the scope's history starts (per branch).
+    effect(() => {
+      if (!this.isAll() || !this.canSeeAnalytics()) return;
+      const b = this.branchId();
+      untracked(() => this.api.get<{ fromIst: string }>(`/api/analytics/period?period=all${b ? '&branchId=' + b : ''}`)
+        .subscribe({ next: d => this.allFrom.set(d?.fromIst ?? null), error: () => undefined }));
+    });
 
     // Analytics: one load per (section, filter band). Lists load on their own.
     effect(() => {
@@ -490,27 +505,27 @@ export class InsightsComponent {
     const slowest = [...this.tatByDept()].sort((a, b) => b.medianMinutes - a.medianMinutes)[0];
     const tiles: KpiTile[] = [
       { id: 'patients', label: 'Patients', value: formatCount(o.patients), raw: o.patients, money: false, list: 'patients',
-        delta: deltaView(o.patients, o.patientsDeltaPct), spark: spark(vol.map(p => p.patients), labelsV, 0) },
+        delta: deltaView(o.patients, o.patientsDeltaPct, { noBaseline: this.isAll() }), spark: spark(vol.map(p => p.patients), labelsV, 0) },
       { id: 'tests', label: 'Tests', value: formatCount(o.tests), raw: o.tests, money: false, list: 'test-volume',
-        delta: deltaView(o.tests, o.testsDeltaPct), spark: spark(vol.map(p => p.tests), labelsV, 0) },
+        delta: deltaView(o.tests, o.testsDeltaPct, { noBaseline: this.isAll() }), spark: spark(vol.map(p => p.tests), labelsV, 0) },
     ];
     if (this.canSeeMoney() && o.billedNet != null) {
       tiles.push(
         { id: 'billedNet', label: 'Billed (net)', value: formatRupee(o.billedNet), raw: o.billedNet, money: true, list: 'orders',
-          delta: deltaView(o.billedNet, o.billedNetDeltaPct), spark: spark(rev.map(p => p.net), labelsR, 0, rupeeFormatter) },
+          delta: deltaView(o.billedNet, o.billedNetDeltaPct, { noBaseline: this.isAll() }), spark: spark(rev.map(p => p.net), labelsR, 0, rupeeFormatter) },
         { id: 'collected', label: 'Collected', value: formatRupee(o.collected), raw: o.collected ?? 0, money: true, list: 'monthly-financial',
-          delta: deltaView(o.collected, o.collectedDeltaPct), spark: spark(rev.map(p => p.collected), labelsR, 1, rupeeFormatter) },
+          delta: deltaView(o.collected, o.collectedDeltaPct, { noBaseline: this.isAll() }), spark: spark(rev.map(p => p.collected), labelsR, 1, rupeeFormatter) },
         { id: 'avgBillValue', label: 'Avg bill value', value: formatRupee(o.avgBillValue), raw: o.avgBillValue ?? 0, money: true, list: 'orders',
-          delta: deltaView(o.avgBillValue, o.avgBillValueDeltaPct), spark: spark(rev.map(p => p.avgBillValue), labelsR, 0, rupeeFormatter) },
+          delta: deltaView(o.avgBillValue, o.avgBillValueDeltaPct, { noBaseline: this.isAll() }), spark: spark(rev.map(p => p.avgBillValue), labelsR, 0, rupeeFormatter) },
       );
     }
     tiles.push(
       { id: 'testsPerPatient', label: 'Tests per patient', value: o.patients ? o.testsPerPatient.toFixed(2) : '—', raw: o.testsPerPatient, money: false, list: 'test-volume',
-        delta: deltaView(o.testsPerPatient, o.testsPerPatientDeltaPct, { neutral: true }), spark: spark(vol.map(p => p.testsPerPatient), labelsV, 0) },
+        delta: deltaView(o.testsPerPatient, o.testsPerPatientDeltaPct, { neutral: true, noBaseline: this.isAll() }), spark: spark(vol.map(p => p.testsPerPatient), labelsV, 0) },
       { id: 'outsourcedPct', label: 'Outsourced', value: o.tests ? `${o.outsourcedPct}%` : '—', raw: o.outsourcedPct, money: false, list: 'outsourced-tests',
-        delta: deltaView(o.outsourcedPct, o.outsourcedPctDeltaPct, { neutral: true }), spark: spark(out.map(p => p.count), out.map(p => bucketAxisLabel(p.bucket, this.outsourcedTrend()?.bucketUnit)), 2) },
+        delta: deltaView(o.outsourcedPct, o.outsourcedPctDeltaPct, { neutral: true, noBaseline: this.isAll() }), spark: spark(out.map(p => p.count), out.map(p => bucketAxisLabel(p.bucket, this.outsourcedTrend()?.bucketUnit)), 2) },
       { id: 'medianTat', label: 'Median TAT', value: formatMinutes(o.medianTatMinutes), raw: o.medianTatMinutes ?? 0, money: false, list: null,
-        delta: deltaView(o.medianTatMinutes, o.medianTatDeltaPct, { lowerIsBetter: true }), spark: null,
+        delta: deltaView(o.medianTatMinutes, o.medianTatDeltaPct, { lowerIsBetter: true, noBaseline: this.isAll() }), spark: null,
         caption: slowest ? `Slowest: ${slowest.departmentName} · ${formatMinutes(slowest.medianMinutes)}` : 'Received → validated, in-house work' },
     );
     return tiles;

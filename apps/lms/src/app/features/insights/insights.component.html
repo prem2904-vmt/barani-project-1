@@ -182,7 +182,7 @@
                   <p class="nd-empty__body">Try a wider period{{ drill() ? ', or remove the "' + drill()!.label + '" filter' : '' }}.</p>
                   @if (drill()) {
                     <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="clearDrill()">Remove filter</button>
-                  } @else if (period() !== 'quarter') {
+                  } @else if (period() !== 'quarter' && period() !== 'all') {
                     <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="widen('quarter')">Show this quarter</button>
                   }
                 </div>
@@ -337,7 +337,7 @@
   <div class="pf-ins-banner" role="status">
     <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.overview)"></svg></span>
     <div class="pf-ins-banner__text">
-      <p class="pf-ins-banner__title">No orders {{ period() === 'today' ? 'today' : 'in ' + periodPhrase() }}{{ period() === 'lastMonth' || period() === 'custom' ? '' : ' yet' }}</p>
+      <p class="pf-ins-banner__title">No orders {{ period() === 'today' ? 'today' : period() === 'all' ? '' : 'in ' + periodPhrase() }}{{ period() === 'lastMonth' || period() === 'custom' ? '' : ' yet' }}</p>
       <p class="pf-ins-banner__body">{{ periodLabel() }}{{ dimsActive() ? ' · with the filters above' : '' }}. Widen the period to compare.</p>
     </div>
     <div class="pf-ins-banner__acts">
@@ -372,7 +372,7 @@
           @if (k.spark && k.raw) {
             <pf-ins-chart class="pf-ins-kpi__spark" [option]="k.spark" [spark]="true" height="40px" [label]="k.label + ' trend'"></pf-ins-chart>
           } @else {
-            <span class="pf-ins-kpi__caption">{{ k.caption ?? (k.delta.kind === 'none' ? 'No data for this period' : 'vs ' + prevLabel()) }}</span>
+            <span class="pf-ins-kpi__caption">{{ k.caption ?? (isAll() ? compareText() : k.delta.kind === 'none' ? 'No data for this period' : compareText()) }}</span>
           }
         </button>
       }
@@ -672,7 +672,7 @@
         <p class="pf-ins-side__big nd-num">{{ d.tile.value }}</p>
         <p class="pf-ins-side__delta">
           <span class="pf-ins-delta nd-num" [attr.data-tone]="d.tile.delta.tone" [attr.data-kind]="d.tile.delta.kind">{{ d.tile.delta.text }}</span>
-          <span>{{ d.tile.delta.kind === 'none' ? 'No data in ' + periodLabel() + ' or ' + prevLabel() : d.tile.delta.kind === 'new' ? 'Nothing in ' + prevLabel() + ' to compare' : 'vs ' + prevLabel() }}</span>
+          <span>{{ isAll() ? 'All time — nothing earlier to compare with' : d.tile.delta.kind === 'none' ? 'No data in ' + periodLabel() + ' or ' + prevLabel() : d.tile.delta.kind === 'new' ? 'Nothing in ' + prevLabel() + ' to compare' : 'vs ' + prevLabel() }}</span>
         </p>
         @if (d.facts.length) {
           <dl class="pf-ins-facts">
@@ -685,7 +685,7 @@
   } @else {
     <div class="pf-ins-side__sec">
       <p class="pf-ins-side__title">Period</p>
-      <p class="pf-ins-side__text nd-num">{{ periodLabel() }} <span class="pf-ins-side__muted">· compared with {{ prevLabel() }}</span></p>
+      <p class="pf-ins-side__text nd-num">{{ periodLabel() }} <span class="pf-ins-side__muted">· {{ isAll() ? 'since the first order' : 'compared with ' + prevLabel() }}</span></p>
     </div>
     @if (sectionRank(); as r) { <ng-container *ngTemplateOutlet="rankTpl; context: { title: r.title, rows: r.rows }"></ng-container> }
     @if (section() === 'revenue' && canSeeMoney()) {
@@ -741,7 +741,7 @@
     @if (canViewList(cfg) && !canExport()) {
       <p class="pf-ins-side__muted">Export needs "Export patient data" — this list carries patient names.</p>
     }
-    <p class="pf-ins-side__muted">Export includes every row, not just this page (up to 50,000).</p>
+    <p class="pf-ins-side__muted">Export CSV downloads every matching row, not just this page — streamed from the server (up to 1,000,000 rows per file).</p>
   }
 </ng-template>
 

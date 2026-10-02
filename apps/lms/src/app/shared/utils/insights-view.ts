@@ -37,9 +37,11 @@ export const DELTA_NOISE_PCT = 2;
 export function deltaView(
   current: number | null | undefined,
   deltaPct: number | null | undefined,
-  opts: { lowerIsBetter?: boolean; neutral?: boolean } = {},
+  opts: { lowerIsBetter?: boolean; neutral?: boolean; noBaseline?: boolean } = {},
 ): DeltaView {
   const cur = current ?? 0;
+  // "All time" has nothing before it: never a comparison, never "New".
+  if (opts.noBaseline) return { kind: 'none', tone: 'neutral', text: '—', sentence: 'All time — nothing earlier to compare with', dir: null };
   if (deltaPct == null) {
     if (!cur) return { kind: 'none', tone: 'neutral', text: '—', sentence: 'No data in this or the previous period', dir: null };
     return { kind: 'new', tone: 'neutral', text: 'New', sentence: 'Nothing in the previous period to compare with', dir: null };
@@ -58,7 +60,7 @@ export function deltaView(
   return { kind: 'change', tone, text, sentence, dir };
 }
 
-export type BucketUnit = 'day' | 'week' | 'month';
+export type BucketUnit = 'day' | 'week' | 'month' | 'quarter';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -76,6 +78,8 @@ export function shortDay(ymd: string, withYear = false): string {
 /** X-axis label of a server trend bucket: day "2 Oct", week "w/c 28 Sep", month "Oct 2026". */
 export function bucketAxisLabel(label: string, unit: string | null | undefined): string {
   if (!label) return '';
+  const q = /^(\d{4})-Q([1-4])$/.exec(label);
+  if (q) return `Q${q[2]} ${q[1]}`;
   if (unit === 'month' || /^\d{4}-\d{2}$/.test(label)) {
     const [y, m] = ymdParts(label);
     return `${MONTHS[m - 1]} ${y}`;
@@ -94,7 +98,12 @@ function lastDayOfMonth(y: number, m: number): string {
  *  Monday label, a month is "yyyy-MM"). Drives the chart → list drill. */
 export function bucketRange(label: string, unit: string | null | undefined, periodFrom: string, periodTo: string): { fromYmd: string; toYmd: string } {
   let from: string, to: string;
-  if (unit === 'month' || /^\d{4}-\d{2}$/.test(label)) {
+  const q = /^(\d{4})-Q([1-4])$/.exec(label);
+  if (q) {
+    const y = +q[1], m0 = (+q[2] - 1) * 3 + 1;
+    from = `${y}-${String(m0).padStart(2, '0')}-01`;
+    to = lastDayOfMonth(y, m0 + 2);
+  } else if (unit === 'month' || /^\d{4}-\d{2}$/.test(label)) {
     const [y, m] = ymdParts(label);
     from = `${y}-${String(m).padStart(2, '0')}-01`;
     to = lastDayOfMonth(y, m);

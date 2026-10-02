@@ -8,7 +8,7 @@
  */
 import { addDays, istDayRange, labToday } from './lab-clock';
 
-export type AnalyticsPeriodPreset = 'today' | '7d' | 'month' | 'lastMonth' | 'quarter' | 'custom';
+export type AnalyticsPeriodPreset = 'today' | '7d' | 'month' | 'lastMonth' | 'quarter' | 'all' | 'custom';
 
 export interface AnalyticsPeriod {
   /** IST calendar days, inclusive. */
@@ -25,6 +25,7 @@ export const ANALYTICS_PERIOD_OPTIONS: ReadonlyArray<{ value: AnalyticsPeriodPre
   { value: 'month', label: 'This month' },
   { value: 'lastMonth', label: 'Last month' },
   { value: 'quarter', label: 'Quarter' },
+  { value: 'all', label: 'All time' },
   { value: 'custom', label: 'Custom' },
 ];
 
@@ -45,6 +46,9 @@ function quarterStartOf(ymd: string): string {
  *  custom range — the caller (the filter band) never sends a half-built one. */
 export function resolveAnalyticsPeriod(
   preset: AnalyticsPeriodPreset, customFromYmd?: string, customToYmd?: string, now: Date = new Date(),
+  /** 'all' only: the scope's first order day, which only the server knows
+   *  (`GET /api/analytics/period`); until it answers, "all" is just today. */
+  earliestYmd?: string | null,
 ): AnalyticsPeriod {
   const today = labToday(now);
   let fromYmd: string, toYmd: string;
@@ -69,6 +73,10 @@ export function resolveAnalyticsPeriod(
     case 'quarter':
       toYmd = today;
       fromYmd = quarterStartOf(today);
+      break;
+    case 'all':
+      toYmd = today;
+      fromYmd = earliestYmd && earliestYmd < today ? earliestYmd : today;
       break;
     case 'custom':
       if (!customFromYmd || !customToYmd) throw new Error('custom period needs both from and to');
