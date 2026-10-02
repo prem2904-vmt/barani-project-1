@@ -1,474 +1,488 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AllCommunityModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
 import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../shared/utils/min-duration';
 import { busyWhile } from '../../shared/utils/busy';
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ToastService } from '../../core/services/toast.service';
+import { DialogService } from '../../core/services/dialog.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { ScanService } from '../../core/services/scan.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../shared/components/barcode-display/barcode-display.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { SegmentedComponent, type SegmentedOption } from '../../shared/primitives/segmented.component';
 import { printLabelOnly } from '../../shared/utils/print-label';
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
+import { webPointerSignal } from '../../shared/utils/pointer-mode';
+import { mediaSignal } from '../../shared/utils/media-query';
+import { plural } from '../../shared/utils/plural';
+import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
+import {
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel,
+} from './inventory-view';
 
-interface InvItem { id: string; sku: string; barcode?: string; name: string; category?: string; uom: string; onHand: number; lowStock: boolean; reorderLevel: number; }
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+interface InvItem { id: string; sku: string; barcode?: string; name: string; category?: string; uom: string; onHand: number; lowStock: boolean; reorderLevel: number; nearExpiryDays?: number; isActive?: boolean; }
 type StockStatus = 'all' | 'ok' | 'low' | 'out';
 type Mode = 'home' | 'scan';
 type StockAction = 'receive' | 'issue' | 'count';
+type StoresTab = 'home' | StockAction;
 interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiryDate?: string; qtyOnHand: number; expired: boolean; }
+/** A scan that matched no item: the code read, the code to link (a GS1
+ *  scan's GTIN, else the raw code) and what the scan parsed (lot / expiry /
+ *  qty) so picking the item still prefills Receive. */
+interface UnknownScan { raw: string; code: string; parsed: any }
+
+const ICON = {
+  home: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M3 14h7v7H3z', 'M14 14h7v7h-7z'],
+  receive: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+  issue: ['M12 21V9', 'm7 14 5-5 5 5', 'M5 3h14'],
+  count: ['M9 4h6a1 1 0 0 1 1 1v2H8V5a1 1 0 0 1 1-1Z', 'M8 6H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2', 'm9 14 2 2 4-4'],
+} as const;
 
 /**
- * Stores operator work area — scan-first. A store keeper scans a supplier/GS1
- * barcode (HID gun or camera) to receive stock (lot/expiry/qty auto-parsed),
- * issue/consume FEFO, or cycle-count a lot. Catalog config (items, per-test BOM,
- * the enable switch) stays in Admin → Inventory.
+ * Stores — the inventory operator's work area (ND-PATTERN: band → main card
+ * + side card). The band pill holds ONE field and the section tabs
+ * (Overview · Receive · Issue · Count):
  *
- * Scan robustness: besides the focused scan input, a document-level keydown
- * listener captures HID-gun bursts even when focus has drifted to a button or
- * the body (the most common cause of "missed" scans). It only fires for rapid
- * key sequences outside editable fields, so it never fights manual typing.
+ *  • Overview — the field searches the STOCK grid (AG-Grid, like Test
+ *    Master); ATTENTION (low / out / expiring, neutral numbers with a status
+ *    dot) is the side card, a sheet from the band on narrow widths.
+ *  • Receive / Issue / Count — the field is the scan box: Enter resolves a
+ *    supplier / GS1 / item / lot barcode, typing filters the ITEMS list.
+ *    The picked item opens in the side card (a sheet on narrow widths) with
+ *    the action's form and its ONE primary button.
+ *
+ * The lab's Scan / Manual setting (`ScanService.manualEntry`) is honoured:
+ * manual mode drops the camera, the "scanner ready" mark and the
+ * document-level gun capture, and the field reads "type".
+ *
+ * Scan robustness: besides the focused field, a document-level keydown
+ * listener captures HID-gun bursts even when focus has drifted to a button
+ * or the body. It only fires for rapid key sequences outside editable
+ * fields, so it never fights manual typing.
  */
 @Component({
   selector: 'pf-stores',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent, BusyDirective, SkeletonTableComponent],
+  imports: [DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
+    BusyDirective, SkeletonTableComponent, HeroBandComponent, NdDateComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['./inv-layout.scss'],
   template: `
-    <section class="wrap">
-      <!-- Header -->
-      <header class="head">
-        <div>
-          <div class="eyebrow">Stores · {{ branchName() }}</div>
-          <h1 class="title">Inventory desk</h1>
-        </div>
-        @if (mode() === 'scan') {
-          <div class="listen" title="Scanner active — point the gun and scan">
-            <span class="listen__dot"></span> Listening for scanner
-          </div>
-        }
-      </header>
+    <section class="pf-band-page st">
+      <pf-hero-band [back]="true" [placeholder]="fieldPlaceholder()" [value]="fieldValue()"
+                    (valueChange)="onField($event)" (submitted)="onSubmit($event)">
+        <ng-container band-inline>
+          @if (mode() === 'scan' && !manual()) {
+            <button type="button" class="pf-hb-tool press" (click)="scanning.set(true)" title="Scan with camera" aria-label="Scan with camera">
+              <pf-scan-icon [size]="18" />
+            </button>
+          }
+        </ng-container>
+        <ng-container band-tools>
+          @if (narrow() && mode() === 'home') {
+            <button type="button" class="nd-chip st-attn-chip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
+                    [attr.aria-expanded]="attnOpen()" [attr.aria-label]="'Attention, ' + attentionCount()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+              Attention <span class="nd-num inv-muted">{{ attentionCount() }}</span>
+            </button>
+          }
+          <pf-segmented class="st-tabs" size="sm" [options]="tabOptions()" [value]="tab()" (valueChange)="onTab($event)"></pf-segmented>
+        </ng-container>
+        <ng-container band-actions>
+          @if (canManage()) {
+            <a class="pf-hb-btn pf-hb-btn--ghost press" routerLink="/admin/inventory" title="Manage items" aria-label="Manage items">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>
+              Manage items
+            </a>
+          }
+          @if (mode() === 'home' && canAction('receive')) {
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="enterAction('receive')" aria-label="Receive stock">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+              Receive stock
+            </button>
+          }
+        </ng-container>
+      </pf-hero-band>
 
-      <!-- One tab bar: Overview + the three stock actions, all sharing the
-           same scan surface below (only the post-resolve form differs). -->
-      <nav class="tabs">
-        <button class="tab" [class.tab--on]="mode()==='home'" (click)="goHome()">Overview</button>
-        @for (a of allowedActions(); track a.key) {
-          <button class="tab" [class.tab--on]="mode()==='scan' && action()===a.key" (click)="enterAction(a.key)">{{ a.label }}</button>
-        }
-      </nav>
+      <div class="pf-band-body pf-band-body--fill">
+        @if (mode() === 'home') {
+          <div class="inv-body">
+            <!-- MAIN: stock on hand -->
+            <section class="nd-card" aria-labelledby="st-stock-t">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+                <span class="nd-card__label" id="st-stock-t">Stock</span>
+                <div class="nd-seg st-filter" role="radiogroup" aria-label="Show">
+                  @for (f of stockFilters; track f.key) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="stockStatus() === f.key" (click)="stockStatus.set(f.key)">
+                      {{ f.label }} <span class="nd-num inv-muted">{{ filterCount(f.key) }}</span>
+                    </button>
+                  }
+                </div>
+                <span class="nd-card__spacer"></span>
+                <span class="inv-count nd-num">{{ itemsLabel() }}</span>
+              </header>
+              <div class="nd-card__body inv-main__body">
+                @if (stockSkeleton()) {
+                  <pf-skeleton-table [rows]="6" [cols]="4" label="Loading stock…"></pf-skeleton-table>
+                } @else if (!items().length) {
+                  <ng-container [ngTemplateOutlet]="noItems"></ng-container>
+                } @else {
+                  <ag-grid-angular class="inv-grid st-grid" [theme]="gridTheme()" [rowData]="stockRows()" [columnDefs]="stockCols()"
+                                   [getRowId]="rowId" [animateRows]="true" [suppressCellFocus]="true"
+                                   [overlayNoRowsTemplate]="noMatchHtml"></ag-grid-angular>
+                }
+              </div>
+            </section>
 
-      <div class="content">
-      @if (mode() === 'home') {
-        <!-- KPI strip -->
-        <div class="kpis">
-          <div class="kpi"><span class="kpi__v">{{ kpis().total | number }}</span><span class="kpi__l">Items</span></div>
-          <div class="kpi kpi--green"><span class="kpi__v">{{ kpis().inStock | number }}</span><span class="kpi__l">In stock</span></div>
-          <div class="kpi kpi--amber"><span class="kpi__v">{{ kpis().low | number }}</span><span class="kpi__l">Low stock</span></div>
-          <div class="kpi kpi--red"><span class="kpi__v">{{ kpis().out | number }}</span><span class="kpi__l">Out of stock</span></div>
-          <div class="kpi kpi--violet"><span class="kpi__v">{{ expiring().length | number }}</span><span class="kpi__l">Expiring soon</span></div>
-        </div>
-
-        <!-- Stock table toolbar -->
-        <div class="toolbar">
-          <div class="searchfield">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input [ngModel]="stockQuery()" (ngModelChange)="stockQuery.set($event)" placeholder="Search items by name or SKU" />
-          </div>
-          <div class="filters">
-            @for (f of stockFilters; track f.key) {
-              <button class="chip" [class.chip--on]="stockStatus()===f.key" (click)="stockStatus.set(f.key)">{{ f.label }}</button>
+            <!-- SIDE: what needs attention (a sheet on narrow widths) -->
+            @if (!narrow()) {
+              <aside class="nd-card" aria-labelledby="st-attn-t">
+                <ng-container [ngTemplateOutlet]="attentionCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
+              </aside>
+            } @else if (attnOpen()) {
+              <div class="inv-sheet-backdrop" (click)="attnOpen.set(false)"></div>
+              <aside class="nd-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-attn-t" (keydown.escape)="attnOpen.set(false)">
+                <span class="inv-sheet-handle" aria-hidden="true"></span>
+                <ng-container [ngTemplateOutlet]="attentionCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
+              </aside>
             }
           </div>
-        </div>
-
-        <!-- Stock-on-hand table -->
-        @if (stockSkeleton()) {
-          <!-- First load: the table's shape (held 600ms), never "No inventory
-               items yet" for a list that simply hasn't arrived. -->
-          <div class="tablecard"><pf-skeleton-table [rows]="6" [cols]="5" label="Loading stock…"></pf-skeleton-table></div>
         } @else {
-        <div class="tablecard">
-          <table class="stock">
-            <thead><tr><th>Item</th><th>Category</th><th class="r">On hand</th><th class="r">Reorder</th><th class="r">Status</th></tr></thead>
-            <tbody>
-              @for (it of stockRows(); track it.id) {
-                <tr>
-                  <td><span class="it-name">{{ it.name }}</span> <span class="it-sku">{{ it.sku }}</span></td>
-                  <td class="dim">{{ it.category || '—' }}</td>
-                  <td class="r mono">{{ it.onHand | number:'1.0-2' }} <span class="dim">{{ it.uom }}</span></td>
-                  <td class="r mono dim">{{ it.reorderLevel | number:'1.0-2' }}</td>
-                  <td class="r">
-                    @switch (statusOf(it)) {
-                      @case ('out') { <span class="pill pill--red"><span class="dot"></span>Out</span> }
-                      @case ('low') { <span class="pill pill--amber"><span class="dot"></span>Low</span> }
-                      @default { <span class="pill pill--green"><span class="dot"></span>In stock</span> }
-                    }
-                  </td>
-                </tr>
-              } @empty {
-                <tr><td colspan="5" class="empty">{{ items().length ? 'No items match.' : 'No inventory items yet — add them under Admin → Inventory.' }}</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        }
-
-        <!-- Alerts -->
-        <div class="alerts">
-          <div class="card">
-            <div class="card__h card__h--amber">Low stock <span class="badge">{{ lowStock().length }}</span></div>
-            @for (l of lowStock(); track l.id) {
-              <div class="line"><span class="line__name">{{ l.name }}</span><span class="line__v">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
-            } @empty { <p class="muted">All items above reorder level.</p> }
-          </div>
-          <div class="card">
-            <div class="card__h card__h--red">Expiring soon <span class="badge">{{ expiring().length }}</span></div>
-            @for (e of expiring(); track e.id) {
-              <div class="line"><span class="line__name">{{ e.item }} <span class="muted">{{ e.lotNumber }}</span></span>
-                <span class="line__v" [style.color]="e.daysLeft < 0 ? 'var(--red)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
-            } @empty { <p class="muted">Nothing expiring within the window.</p> }
-          </div>
-        </div>
-      } @else {
-        <!-- One scan / search box, shared by every action -->
-        <div class="scanbar">
-          <div class="scanfield">
-            <pf-scan-icon class="scanfield__ic" [size]="18" />
-            <input #scan class="scanfield__in" autocomplete="off" spellcheck="false"
-                   [ngModel]="term()" (ngModelChange)="term.set($event)"
-                   (keyup.enter)="resolve(term())"
-                   [placeholder]="action()==='receive' ? 'Scan supplier barcode, or type to search items' : 'Scan item / lot barcode, or type to search items'" />
-          </div>
-          <button class="btn btn--primary" (click)="resolve(term())" [disabled]="resolving()" [pfBusy]="resolving()" pfBusyLabel="Looking up…">Resolve</button>
-          <button class="btn btn--ghost" (click)="scanning.set(true)" title="Use device camera">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          </button>
-        </div>
-        @if (lastScan()) { <div class="lastscan">Last read: <code>{{ lastScan() }}</code></div> }
-
-        @if (resolved(); as r) {
-          <div class="result">
-            <div class="result__head">
-              <div>
-                <div class="result__name">{{ r.item.name }}</div>
-                <div class="result__meta">{{ r.item.sku }}</div>
-              </div>
-              <div class="onhand" [class.onhand--low]="r.item.onHand <= r.item.reorderLevel">
-                <span class="onhand__v">{{ r.item.onHand | number:'1.0-2' }}</span>
-                <span class="onhand__u">{{ r.item.uom }} on hand</span>
-              </div>
-            </div>
-
-            @if (action() === 'receive') {
-              <div class="form4">
-                <label><span class="lbl">Lot #</span><input class="inp" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
-                <label><span class="lbl">Expiry</span><input class="inp" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
-                <label><span class="lbl">Unit cost</span><input class="inp" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
-                <label><span class="lbl">Qty *</span><input class="inp" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/></label>
-              </div>
-              <button class="btn btn--green mt" [disabled]="busy() || rcv().qty<=0" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="doReceive(r.item)">Receive stock</button>
-              @if (lastLabel()) {
-                <div class="label-block">
-                  <div class="label-block__head">
-                    <span class="lbl">Label</span>
-                    <div class="lseg">
-                      <button class="lseg__i" [class.lseg__i--on]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
-                      <button class="lseg__i" [class.lseg__i--on]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
-                      <button class="lseg__i" [class.lseg__i--on]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
+          <div class="inv-body">
+            <!-- MAIN: the items to act on — the band field filters them -->
+            <section class="nd-card" aria-labelledby="st-items-t">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+                <span class="nd-card__label" id="st-items-t">Items</span>
+                <span class="nd-card__note">{{ manual() ? 'Type a name, SKU or code above — or pick an item' : 'Scan a barcode or type above — or pick an item' }}</span>
+                @if (!manual()) {
+                  <span class="nd-sdot st-listen" data-tone="done" title="Point the scanner and scan — no need to click the field first">Scanner ready</span>
+                }
+              </header>
+              <div class="nd-card__body st-items-body">
+                @if (unknown(); as u) {
+                  <div class="inv-note" role="status">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>
+                    <div class="inv-note__body">
+                      No item has barcode <strong class="nd-num">{{ u.code }}</strong>.
+                      @if (canManage()) {
+                        Pick the item it belongs to — you can link the barcode to it from the side card, so the next scan finds it.
+                      } @else {
+                        Pick the item to {{ actionVerb() }} it. To make this barcode scan next time, ask an inventory admin to link it to the item.
+                      }
+                      <div class="inv-note__actions">
+                        <button type="button" class="nd-btn nd-btn--quiet" (click)="unknown.set(null)">Dismiss</button>
+                      </div>
                     </div>
                   </div>
-                  <div class="label-print pf-print-label">
-                    <pf-barcode-display [code]="lastLabel()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
-                  </div>
-                  <button class="link" (click)="printLabel()">Print label</button>
-                </div>
-              }
-            }
-
-            @if (action() === 'issue') {
-              <div class="form-row">
-                <label><span class="lbl">Qty to issue *</span><input class="inp" style="width:140px" type="number" [ngModel]="issueQty()" (ngModelChange)="issueQty.set(+$event)"/></label>
-                <button class="btn btn--primary" [disabled]="busy() || issueQty()<=0" [pfBusy]="busy()" pfBusyLabel="Issuing…" (click)="doIssue(r.item)">Issue (FEFO)</button>
+                }
+                @if (!items().length) {
+                  <ng-container [ngTemplateOutlet]="noItems"></ng-container>
+                } @else {
+                  <ul class="inv-rows" role="list">
+                    @for (it of filteredItems(); track it.id) {
+                      <li>
+                        <button type="button" class="inv-row" [attr.aria-pressed]="resolved()?.item?.id === it.id" (click)="pick(it)">
+                          <span class="inv-row__main">
+                            <span class="inv-row__name">{{ it.name }}</span>
+                            <span class="inv-row__meta nd-num">{{ it.sku }}{{ it.category ? ' · ' + it.category : '' }}</span>
+                          </span>
+                          <span class="inv-row__end">
+                            <span class="inv-row__qty">{{ it.onHand | number:'1.0-2' }} {{ it.uom }}</span>
+                            @if (level(it) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
+                          </span>
+                        </button>
+                      </li>
+                    } @empty {
+                      <li class="nd-empty nd-empty--compact">
+                        <p class="nd-empty__title">No items match “{{ term().trim() }}”</p>
+                        <p class="nd-empty__body">Check the spelling, or scan the item's barcode.</p>
+                      </li>
+                    }
+                  </ul>
+                }
               </div>
-              <p class="hint">FEFO — the earliest-expiring non-expired lot is consumed first.</p>
-            }
+            </section>
 
-            @if (action() === 'count') {
-              <div class="lbl mt">Batches — enter the counted quantity</div>
-              @for (b of r.batches; track b.id) {
-                <div class="batch">
-                  <span class="batch__lot">{{ b.lotNumber || '—' }} <span class="muted">exp {{ b.expiryDate ? (b.expiryDate | date) : '—' }} · system {{ b.qtyOnHand | number:'1.0-2' }}</span></span>
-                  <span class="batch__act">
-                    <input class="inp" style="width:90px" type="number" [ngModel]="countDraft()[b.id]" (ngModelChange)="setCount(b.id,+$event)" placeholder="count"/>
-                    <button class="link" [disabled]="busy()" [pfBusy]="busy() && countingId() === b.id" pfBusyLabel="Saving…" (click)="doCount(b)">Save</button>
-                  </span>
-                </div>
-              } @empty { <p class="muted">No batches at this branch yet.</p> }
+            <!-- SIDE: the picked item + this action (a sheet on narrow widths) -->
+            @if (!narrow()) {
+              <aside class="nd-card" aria-labelledby="st-act-t">
+                <ng-container [ngTemplateOutlet]="actionCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
+              </aside>
+            } @else if (resolved()) {
+              <div class="inv-sheet-backdrop" (click)="clearPick()"></div>
+              <aside class="nd-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-act-t" (keydown.escape)="clearPick()">
+                <span class="inv-sheet-handle" aria-hidden="true"></span>
+                <ng-container [ngTemplateOutlet]="actionCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
+              </aside>
             }
           </div>
         }
-
-        <!-- Live item list — filtered by the same box; pick to act without a scan -->
-        @if (!resolved()) {
-          <div class="picker">
-            <div class="picker__label">{{ term().trim() ? 'Matching items' : 'All items' }}</div>
-            <div class="picker__grid">
-              @for (it of filteredItems(); track it.id) {
-                <button class="pick" (click)="pick(it)">
-                  <span class="pick__name">{{ it.name }} <span class="muted">{{ it.sku }}</span></span>
-                  <span class="pick__v">{{ it.onHand | number:'1.0-2' }} {{ it.uom }}</span>
-                </button>
-              } @empty { <p class="muted">No items match.</p> }
-            </div>
-          </div>
-        }
-      }
       </div>
     </section>
 
+    <!-- No items at all: guide to creating them -->
+    <ng-template #noItems>
+      <div class="nd-empty">
+        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+        <p class="nd-empty__title">No inventory items yet</p>
+        @if (canManage()) {
+          <p class="nd-empty__body">Create the items this lab stocks — tubes, reagents, kits — in Inventory. Then receive, issue and count them here.</p>
+          <a class="nd-btn nd-btn--secondary nd-empty__action" routerLink="/admin/inventory">Create items</a>
+        } @else {
+          <p class="nd-empty__body">Items are created in Admin → Inventory. Ask an inventory admin to add the items this lab stocks; they show here to receive, issue and count.</p>
+        }
+      </div>
+    </ng-template>
+
+    <!-- ATTENTION side card -->
+    <ng-template #attentionCard let-sheet="sheet">
+      <header class="nd-card__head">
+        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+        <span class="nd-card__label" id="st-attn-t">Attention</span>
+        <span class="nd-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="attnOpen.set(false)" aria-label="Close attention">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+      <div class="nd-card__body">
+        <div class="inv-kpis" role="list" aria-label="Stock summary">
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().low | number }}</span><span class="nd-sdot" data-tone="warn">Low</span></div>
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().out | number }}</span><span class="nd-sdot" data-tone="bad">Out</span></div>
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="nd-sdot" data-tone="warn">Expiring</span></div>
+        </div>
+
+        <p class="inv-title">Expiring soon</p>
+        <div>
+          @for (e of expiring(); track e.id) {
+            <div class="inv-line">
+              <span class="inv-line__main">
+                <span class="inv-line__name">{{ e.item }}</span>
+                <span class="inv-line__meta nd-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}{{ e.qtyOnHand != null ? ' · ' + (e.qtyOnHand | number:'1.0-2') + ' left' : '' }}</span>
+              </span>
+              <span class="inv-line__end"><span class="nd-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
+            </div>
+          } @empty { <p class="inv-sub">Nothing expiring within its item's near-expiry window.</p> }
+        </div>
+
+        <p class="inv-title">At or below reorder level</p>
+        <div>
+          @for (l of lowStock(); track l.id) {
+            <div class="inv-line">
+              <span class="inv-line__main">
+                <span class="inv-line__name">{{ l.name }}</span>
+                @if (l.sku) { <span class="inv-line__meta nd-num">{{ l.sku }}</span> }
+              </span>
+              <span class="inv-line__end nd-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
+            </div>
+          } @empty { <p class="inv-sub">Every item is above its reorder level.</p> }
+        </div>
+      </div>
+    </ng-template>
+
+    <!-- ACTION side card: Receive / Issue / Count for the picked item -->
+    <ng-template #actionCard let-sheet="sheet">
+      <header class="nd-card__head">
+        <span class="nd-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            @for (d of actionIcon(); track d) { <path [attr.d]="d"/> }
+          </svg>
+        </span>
+        <span class="nd-card__label" id="st-act-t">{{ actionTitle() }}</span>
+        <span class="nd-card__spacer"></span>
+        @if (resolved()) {
+          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="clearPick()" [attr.aria-label]="sheet ? 'Close' : 'Clear the picked item'" [title]="sheet ? 'Close' : 'Clear'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+
+      @if (resolved(); as r) {
+        <div class="nd-card__body">
+          <div class="inv-subject">
+            <div>
+              <p class="inv-subject__name">{{ r.item.name }}</p>
+              <p class="inv-subject__meta nd-num">{{ r.item.sku }}{{ r.item.category ? ' · ' + r.item.category : '' }}</p>
+            </div>
+            <div class="inv-onhand">
+              <span class="inv-onhand__v">{{ r.item.onHand | number:'1.0-2' }}</span>
+              <span class="inv-onhand__u">{{ r.item.uom }} on hand</span>
+              @if (level(r.item) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(r.item)">{{ levelLabel(r.item) }}</span> }
+            </div>
+          </div>
+
+          @if (unknown(); as u) {
+            <div class="inv-note">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>
+              <div class="inv-note__body">
+                @if (canManage()) {
+                  Link barcode <strong class="nd-num">{{ u.code }}</strong> to this item so the next scan finds it.
+                  <div class="inv-note__actions">
+                    <button type="button" class="nd-btn nd-btn--quiet" (click)="linkBarcode(r.item)" [disabled]="linking()" [pfBusy]="linking()" pfBusyLabel="Linking…">Link barcode</button>
+                  </div>
+                } @else {
+                  Barcode <strong class="nd-num">{{ u.code }}</strong> isn't on any item. You can still {{ actionVerb() }} this item; an inventory admin can link the barcode in Admin → Inventory.
+                }
+              </div>
+            </div>
+          }
+
+          @if (action() === 'receive') {
+            <div class="inv-fields">
+              <div class="nd-field"><label class="nd-field__lbl" for="st-lot">Lot no.</label>
+                <input id="st-lot" class="nd-input nd-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)" /></div>
+              <div class="nd-field"><span class="nd-field__lbl">Expiry</span>
+                <pf-nd-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-nd-date></div>
+              <div class="nd-field"><label class="nd-field__lbl" for="st-cost">Unit cost (₹)</label>
+                <input id="st-cost" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)" /></div>
+              <div class="nd-field"><label class="nd-field__lbl" for="st-qty">Quantity ({{ r.item.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
+                <input id="st-qty" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)" /></div>
+            </div>
+            @if (prefilled()) { <p class="inv-sub">Lot, expiry and quantity were read from the barcode — check them before receiving.</p> }
+            @if (lastLabel()) {
+              <p class="inv-title">Lot label</p>
+              <div class="inv-label">
+                <div class="nd-seg" role="radiogroup" aria-label="Label type">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'both'" (click)="labelMode.set('both')">Both</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'barcode'" (click)="labelMode.set('barcode')">Barcode</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'qr'" (click)="labelMode.set('qr')">QR</button>
+                </div>
+                <div class="inv-label__paper pf-print-label">
+                  <pf-barcode-display [code]="lastLabel()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
+                </div>
+              </div>
+            }
+          }
+
+          @if (action() === 'issue') {
+            <div class="inv-fields">
+              <div class="nd-field inv-span"><label class="nd-field__lbl" for="st-iq">Quantity to issue ({{ r.item.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
+                <input id="st-iq" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="issueQty() || ''" (input)="issueQty.set(+$any($event.target).value)" /></div>
+            </div>
+            <p class="inv-sub">The earliest-expiring lot that isn't expired is used first (FEFO). Expired stock is never issued.</p>
+          }
+
+          @if (action() === 'count') {
+            <p class="inv-title">Lots at this branch — enter what you counted</p>
+            <div>
+              @for (b of r.batches; track b.id) {
+                <div class="inv-line st-count">
+                  <span class="inv-line__main">
+                    <span class="inv-line__name nd-num">{{ b.lotNumber || 'No lot no.' }}</span>
+                    <span class="inv-line__meta nd-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }} · system {{ b.qtyOnHand | number:'1.0-2' }}
+                      @if (b.expired) { · <span class="nd-sdot" data-tone="bad">Expired</span> }</span>
+                  </span>
+                  <span class="inv-line__end">
+                    <input class="nd-input nd-num st-count__in" type="number" min="0" inputmode="decimal" placeholder="Count"
+                           [attr.aria-label]="'Counted quantity for lot ' + (b.lotNumber || 'without number')"
+                           [value]="countValue(b.id)" (input)="setCount(b.id, +$any($event.target).value)" />
+                    <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busy() && countingId() === b.id" pfBusyLabel="Saving…"
+                            (click)="doCount(b)" [attr.aria-label]="'Save count for lot ' + (b.lotNumber || 'without number')">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                      <span class="nd-rowact__t">Save</span>
+                    </button>
+                  </span>
+                </div>
+              } @empty { <p class="inv-sub">No lots of this item at this branch yet — receive stock first.</p> }
+            </div>
+            <p class="inv-sub">A count that differs from the system adjusts the lot and is kept in the item's ledger.</p>
+          }
+        </div>
+
+        @if (action() === 'receive') {
+          <div class="nd-card__foot">
+            @if (lastLabel()) {
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="printLabel()">Print label</button>
+            } @else {
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="clearPick()">Cancel</button>
+            }
+            <button type="button" class="nd-btn" [class.nd-btn--primary]="rcv().qty > 0" [class.nd-btn--secondary]="rcv().qty <= 0"
+                    [disabled]="busy() || rcv().qty <= 0" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="doReceive(r.item)">
+              Receive {{ rcv().qty > 0 ? (rcv().qty | number:'1.0-2') + ' ' + r.item.uom : 'stock' }}
+            </button>
+          </div>
+        }
+        @if (action() === 'issue') {
+          <div class="nd-card__foot">
+            <button type="button" class="nd-btn nd-btn--secondary" (click)="clearPick()">Cancel</button>
+            <button type="button" class="nd-btn" [class.nd-btn--primary]="issueQty() > 0" [class.nd-btn--secondary]="issueQty() <= 0"
+                    [disabled]="busy() || issueQty() <= 0" [pfBusy]="busy()" pfBusyLabel="Issuing…" (click)="doIssue(r.item)">
+              Issue {{ issueQty() > 0 ? (issueQty() | number:'1.0-2') + ' ' + r.item.uom : 'stock' }}
+            </button>
+          </div>
+        }
+      } @else {
+        <div class="nd-card__body">
+          <div class="nd-empty">
+            <span class="nd-empty__icon" aria-hidden="true">
+              @if (manual()) {
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              } @else { <pf-scan-icon [size]="20" /> }
+            </span>
+            <p class="nd-empty__title">{{ manual() ? 'Find an item' : 'Scan or pick an item' }}</p>
+            <p class="nd-empty__body">{{ emptyHint() }}</p>
+            @if (lastScan()) { <p class="nd-empty__body">Last read <span class="nd-num inv-strong">{{ lastScan() }}</span></p> }
+          </div>
+        </div>
+      }
+    </ng-template>
+
     @if (scanning()) {
-      <pf-barcode-scanner-modal title="Scan inventory barcode"
+      <pf-barcode-scanner-modal title="Scan inventory barcode" noun="item"
         (matched)="onCameraScan($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
     }
   `,
   styles: [`
-    @use '../../shared/styles/device-tier' as dt;
-    /* WORK page: fill the shell's main area and scroll inside the content
-       panel, not the page. :host fills the flex:1 shell-main; .wrap is a
-       flex column whose header + tabs are fixed and whose .content scrolls. */
-    :host { display: block; height: 100%; }
-    .wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden;
-      padding: 24px 16px 0; max-width: 1180px; margin: 0 auto; }
-    @media (min-width: 768px) { .wrap { padding: 28px 32px 0; } }
-    .head, .tabs { flex: 0 0 auto; }
-    .content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
-      padding-bottom: max(24px, env(safe-area-inset-bottom)); }
-
-    /* KPI strip */
-    .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
-    @media (min-width: 720px) { .kpis { grid-template-columns: repeat(5, 1fr); } }
-    .kpi { position: relative; overflow: hidden; padding: 15px 16px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--bg-card-solid); }
-    .kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--gradient-primary); opacity: .55; }
-    .kpi--green::after { background: #34d399; } .kpi--amber::after { background: #fbbf24; } .kpi--red::after { background: #f87171; } .kpi--violet::after { background: #a78bfa; }
-    .kpi__v { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .kpi--green .kpi__v { color: var(--green-text); } .kpi--amber .kpi__v { color: var(--amber-text); } .kpi--red .kpi__v { color: var(--red-text); } .kpi--violet .kpi__v { color: var(--violet-text); }
-    .kpi__l { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-top: 3px; }
-
-    /* Toolbar + filters */
-    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    .searchfield { position: relative; display: flex; align-items: center; flex: 1; min-width: 220px; max-width: 420px; }
-    .searchfield svg { position: absolute; left: 12px; width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
-    .searchfield input { width: 100%; padding: 9px 12px 9px 34px; border-radius: 10px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 13.5px; }
-    .searchfield input:focus { outline: none; border-color: var(--violet-500); box-shadow: 0 0 0 3px rgba(124,58,237,.16); }
-    .filters { display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .chip { font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 0; background: transparent; color: var(--text-tertiary); }
-    .chip--on { color: #fff; background: var(--gradient-primary); }
-
-    /* Stock table */
-    .tablecard { border: 1px solid var(--glass-border); border-radius: 14px; overflow: hidden; background: var(--bg-card-solid); margin-bottom: 16px; }
-    table.stock { width: 100%; border-collapse: collapse; }
-    table.stock th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); padding: 11px 16px; border-bottom: 1px solid var(--glass-border); }
-    table.stock td { padding: 12px 16px; border-bottom: 1px solid var(--glass-border); font-size: 13.5px; color: var(--text-secondary); }
-    table.stock tbody tr:last-child td { border-bottom: 0; }
-    table.stock tbody tr:hover td { background: rgba(139,92,246,.06); }
-    .stock .r { text-align: right; } .stock th.r { text-align: right; }
-    .it-name { font-weight: 700; color: var(--text-primary); }
-    .it-sku { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-muted); margin-left: 6px; }
-    .stock .dim { color: var(--text-muted); }
-    .stock .mono { font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); }
-    .stock .empty { text-align: center; padding: 32px; color: var(--text-muted); }
-    .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 7px currentColor; }
-    .pill--green { color: #6ee7b7; background: rgba(16,185,129,.14); } .pill--amber { color: #fcd34d; background: rgba(245,158,11,.14); } .pill--red { color: #fca5a5; background: rgba(239,68,68,.14); }
-    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--violet-400); }
-    .title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); margin: 4px 0 0; }
-    .listen { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary);
-      padding: 5px 11px; border-radius: 999px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .listen__dot { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; animation: pf-pulse 1.8s ease-in-out infinite; }
-    @keyframes pf-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-
-    .tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 11px; border: 1px solid var(--glass-border); background: var(--glass-bg); margin-bottom: 18px; flex-wrap: wrap; }
-    .tab { font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 0; background: transparent; color: var(--text-tertiary); transition: background .14s, color .14s; }
-    .tab:hover { color: var(--text-primary); }
-    .tab--on { color: #fff; background: var(--gradient-primary); }
-
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-    .stat { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--bg-card-solid); }
-    .stat__v { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .stat__l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-top: 3px; }
-    .stat--amber .stat__v { color: var(--amber-text); } .stat--red .stat__v { color: var(--red-text); }
-
-    .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .action { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 18px;
-      border-radius: 16px; border: 1px solid var(--glass-border); background: var(--bg-card-solid); transition: border-color .15s, transform .15s; }
-    .action:hover { border-color: var(--violet-500); transform: translateY(-2px); }
-    .action__ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: rgba(124,58,237,.14); color: var(--violet-300); margin-bottom: 6px; }
-    .action__ic svg { width: 19px; height: 19px; }
-    .action__t { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-    .action__s { font-size: 12.5px; color: var(--text-tertiary); }
-
-    .alerts { display: grid; gap: 12px; } @media (min-width: 768px) { .alerts { grid-template-columns: 1fr 1fr; } }
-    .card { padding: 16px; border-radius: 14px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .card__h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-    .card__h--amber { color: var(--amber-text); } .card__h--red { color: var(--red-text); }
-    .badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--text-secondary); }
-    .line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 4px 0; color: var(--text-secondary); }
-    .line__name { min-width: 0; } .line__v { font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); white-space: nowrap; }
-    .muted { color: var(--text-muted); font-size: 13px; }
-
-    .actionseg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); margin-bottom: 14px; flex-wrap: wrap; }
-    .aseg { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 16px; border-radius: 9px; border: 0; background: transparent; color: var(--text-tertiary); transition: background .14s, color .14s; }
-    .aseg:hover { color: var(--text-primary); }
-    .aseg--on { background: var(--gradient-primary); color: #fff; }
-    .aseg__t { font-size: 13.5px; font-weight: 700; }
-    .aseg__s { font-size: 10.5px; opacity: .8; }
-    .picker__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 4px; }
-    .scanbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .scanfield { position: relative; flex: 1; display: flex; align-items: center; }
-    .scanfield__ic { position: absolute; left: 13px; width: 18px; height: 18px; color: var(--violet-400); pointer-events: none; }
-    .scanfield__in { width: 100%; padding: 13px 14px 13px 40px; border-radius: 12px; background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border-hover); color: var(--text-primary); font-size: 15px; font-family: 'JetBrains Mono', monospace; transition: border-color .15s, box-shadow .15s; }
-    .scanfield__in:focus { outline: none; border-color: var(--violet-500); box-shadow: 0 0 0 3px rgba(124,58,237,.18); }
-    .lastscan { font-size: 11.5px; color: var(--text-muted); margin-bottom: 14px; } .lastscan code { color: var(--text-secondary); }
-
-    .btn { padding: 12px 16px; border-radius: 11px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); font-weight: 700; font-size: 13.5px; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
-    .btn:hover:not(:disabled) { color: #fff; border-color: var(--glass-border-hover); }
-    .btn:disabled { opacity: .5; }
-    .btn--primary { background: var(--gradient-primary); border-color: transparent; color: #fff; }
-    .btn--green { background: var(--green, #10b981); border-color: transparent; color: #fff; }
-    .btn--ghost { background: var(--glass-bg); }
-    .mt { margin-top: 14px; }
-
-    .result { padding: 18px; border-radius: 16px; border: 1px solid var(--glass-border-hover); background: var(--bg-card-solid); margin-bottom: 16px; }
-    .result__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .result__name { font-size: 16px; font-weight: 700; color: var(--text-primary); }
-    .result__meta { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); margin-top: 2px; }
-    .onhand { text-align: right; flex-shrink: 0; }
-    .onhand__v { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; display: block; }
-    .onhand--low .onhand__v { color: var(--amber-text); }
-    .onhand__u { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
-    .form4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; } @media (min-width: 768px) { .form4 { grid-template-columns: repeat(4, 1fr); } }
-    .form-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-    .lbl { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 4px; }
-    .inp { width: 100%; padding: 9px 11px; border-radius: 10px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 14px; }
-    .inp:focus { outline: none; border-color: var(--violet-500); }
-    .hint { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; }
-    .label-block { margin-top: 16px; }
-    .label-block__head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-    .lseg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .lseg__i { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 0; background: transparent; color: var(--text-tertiary); }
-    .lseg__i--on { color: #fff; background: var(--gradient-primary); }
-    .label-print { display: inline-block; padding: 12px; border-radius: 12px; background: #fff; }
-    .link { display: block; margin-top: 8px; background: none; border: 0; font-size: 12.5px; font-weight: 700; color: var(--violet-400); }
-    .link:disabled { opacity: .5; }
-    .batch { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 9px 0; border-bottom: 1px solid var(--glass-border); }
-    .batch__lot { min-width: 0; } .batch__act { display: flex; align-items: center; gap: 10px; }
-
-    .picker { margin-top: 6px; }
-    .picker__grid { margin-top: 10px; display: grid; gap: 8px; } @media (min-width: 640px) { .picker__grid { grid-template-columns: 1fr 1fr; } }
-    .pick { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; padding: 12px 14px;
-      border-radius: 11px; border: 1px solid var(--glass-border); background: var(--glass-bg); transition: border-color .15s; }
-    .pick:hover { border-color: var(--violet-500); }
-    .pick__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); min-width: 0; }
-    .pick__v { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
-
-    /* ─────────────────────────────────────────────────────────────────
-       CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (≥1280px) is
-       intentionally untouched; every rule below is gated to a sub-desktop
-       width or a touch/native context and scoped under .wrap, so it can
-       never alter the established desktop layout. The shell's .shell-main
-       already reserves --tab-nav-total-height and the iPad left-rail gap,
-       so this page adds no bottom-nav clearance of its own.
-       ───────────────────────────────────────────────────────────────── */
-
-    /* Phone (≤640px) */
+    .st-tabs { flex-shrink: 0; }
+    .st-attn-chip { flex-shrink: 0; height: 32px; }
+    .st-filter { flex: none; }
+    .st-listen { font-size: 12px; }
+    .st-items-body { padding: 10px 6px; }
+    .st-items-body > .inv-note { margin: 0 8px; }
+    .st-items-body .inv-rows { padding: 0 2px; }
+    .st-count__in { width: 96px; height: 40px; }
     @media (max-width: 640px) {
-      /* Stock table can't reflow to one column meaningfully — let it scroll
-         horizontally inside its own card instead of forcing page overflow. */
-      .wrap .tablecard { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .wrap table.stock { min-width: 520px; }
-
-      /* Header can wrap so the "Listening" pill drops below the title. */
-      .wrap .head { flex-wrap: wrap; align-items: flex-start; }
-
-      /* Tabs/chips: comfortable tap targets, allow horizontal scroll rather
-         than wrapping into a tall stack. */
-      .wrap .tabs { display: flex; flex-wrap: nowrap; overflow-x: auto;
-        -webkit-overflow-scrolling: touch; max-width: 100%; }
-      .wrap .tab { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; }
-      .wrap .filters { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .wrap .chip { min-height: 38px; padding: 8px 14px; }
-
-      /* Toolbar: search takes the full width above the filter chips. */
-      .wrap .toolbar { flex-direction: column; align-items: stretch; }
-      .wrap .searchfield { max-width: none; }
-
-      /* Scan bar: keep the input on its own row, action buttons below at
-         full reach. Camera button gets a real tap target. */
-      .wrap .scanbar { flex-wrap: wrap; }
-      .wrap .scanfield { flex: 1 1 100%; }
-      .wrap .scanbar .btn { flex: 1 1 auto; justify-content: center; min-height: 48px; }
-      .wrap .scanbar .btn--ghost { flex: 0 0 auto; min-width: 48px; }
-
-      /* Result header stacks so the on-hand figure sits under the name. */
-      .wrap .result__head { flex-direction: column; align-items: flex-start; }
-      .wrap .onhand { text-align: left; }
-
-      /* Issue/count rows: the fixed inline widths overflow narrow screens —
-         override to fluid. (Inline style:width set in template; this beats it
-         only because it is more specific via .wrap and !important.) */
-      .wrap .form-row { flex-direction: column; align-items: stretch; }
-      .wrap .form-row .inp,
-      .wrap .batch .inp { width: 100% !important; }
-      .wrap .form-row .btn { width: 100%; justify-content: center; min-height: 48px; }
-      .wrap .batch { flex-direction: column; align-items: stretch; gap: 8px; }
-      .wrap .batch__act { width: 100%; }
-      .wrap .batch__act .inp { flex: 1 1 auto; }
-
-      /* iOS zooms any focused input under 16px — lift every field to 16px on
-         phone only so the page never auto-zooms on tap. */
-      .wrap .scanfield__in,
-      .wrap .searchfield input,
-      .wrap .inp { font-size: 16px; }
+      .st-filter { order: 10; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+      .st-filter .nd-seg__item { flex: 1 0 auto; min-height: 36px; }
+      .st-count { flex-wrap: wrap; }
+      .st-count .inv-line__end { flex: 1 1 100%; justify-content: flex-end; }
+      .st-count__in { flex: 1 1 auto; width: auto; height: 44px; }
     }
-
-    /* iPad band (641–1279px): the layout already uses available width well
-       (KPIs 5-up ≥720, alerts 2-up ≥768, form4 4-up ≥768). Just make sure
-       the wide stock table never forces page-level horizontal scroll. */
-    @include dt.tablet-band {
-      .wrap .tablecard { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    }
-
-    /* Touch (coarse pointer): give the small inline action targets — Save
-       links, label-mode segments — a usable hit area without changing look
-       on mouse-driven desktops. */
-    @media (pointer: coarse) {
-      .wrap .link { min-height: 44px; display: inline-flex; align-items: center; }
-      .wrap .lseg__i { min-height: 44px; }
-      /* Camera-scan icon-only button needs a full 44px hit area. */
-      .wrap .scanbar .btn--ghost { min-width: 44px; min-height: 44px; justify-content: center; }
-      /* Filter chips reach a comfortable tap target. */
-      .wrap .chip { min-height: 44px; }
-      /* Save links inside count batches sit on their own touchable row. */
-      .wrap .batch__act .link { min-width: 44px; justify-content: center; }
-      /* Action/overview tabs and item-picker rows are touch targets at every
-         touch width (the ≤640 rule only covers phones — tablets are coarse too). */
-      .wrap .tab { min-height: 44px; }
-      .wrap .pick { min-height: 44px; }
-    }
-  `]
+    @media (pointer: coarse) { .st-filter .nd-seg__item { min-height: 40px; } }
+  `],
 })
 export class StoresComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly auth = inject(AuthService);
+  private readonly theme = inject(ThemeService);
+  private readonly scan = inject(ScanService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  @ViewChild('scan') private scanInput?: ElementRef<HTMLInputElement>;
+  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  protected readonly web = webPointerSignal();
+  /** ≤900px: no side column — side cards become sheets. */
+  protected readonly narrow = mediaSignal('(max-width: 900px)');
+  private readonly phone = mediaSignal('(max-width: 640px)');
+  /** The lab's Scan / Manual identification setting. */
+  readonly manual = computed(() => this.scan.manualEntry());
+  protected readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
   readonly mode = signal<Mode>('home');
   readonly action = signal<StockAction>('receive');
@@ -479,17 +493,24 @@ export class StoresComponent implements OnInit, AfterViewInit {
   readonly term = signal('');
   readonly lastScan = signal('');
   private lastParsed: any = null;
+  /** The last scan matched no item (Receive / Issue / Count). */
+  readonly unknown = signal<UnknownScan | null>(null);
   readonly scanning = signal(false);
   readonly busy = signal(false);
+  readonly linking = signal(false);
+  /** The narrow-width ATTENTION sheet. */
+  readonly attnOpen = signal(false);
   /** The batch whose count is saving (its Save shows the busy state). */
   readonly countingId = signal<string | null>(null);
   /** Resolve (scan / typed code lookup) request in flight. */
   readonly resolving = signal(false);
-  /** First-load skeleton for the stock table (ND-PATTERN "Loading feedback"). */
+  /** First-load skeleton for the stock grid (ND-PATTERN "Loading feedback"). */
   private readonly stockHold = createLoadHold(true);
   readonly stockSkeleton = this.stockHold.active;
   readonly resolved = signal<{ item: InvItem; batches: InvBatch[] } | null>(null);
   readonly lastLabel = signal<string | null>(null);
+  /** The receive form was filled from a parsed GS1 scan. */
+  readonly prefilled = signal(false);
 
   readonly rcv = signal<{ lot: string; expiry: string; cost: number; qty: number }>({ lot: '', expiry: '', cost: 0, qty: 0 });
   readonly issueQty = signal(0);
@@ -497,26 +518,57 @@ export class StoresComponent implements OnInit, AfterViewInit {
   readonly labelMode = signal<'both' | 'barcode' | 'qr'>('both');
 
   // Document-level HID-gun capture buffer (used only when focus is NOT in an
-  // editable field — the focused scan input handles its own Enter).
+  // editable field — the focused band field handles its own Enter).
   private hidBuffer = '';
   private hidLastKey = 0;
 
   readonly branchName = () => this.auth.user()?.branchName ?? '';
   private can(p: string) { return this.auth.hasPermission(p) || this.auth.hasPermission('manage_inventory'); }
+  /** Item config (create items, link barcodes) is Admin → Inventory's permission. */
+  readonly canManage = () => this.auth.hasPermission('manage_inventory');
   readonly actions: Array<{ key: StockAction; label: string; sub: string; can: () => boolean }> = [
     { key: 'receive', label: 'Receive', sub: 'add stock', can: () => this.can('inventory_receive') },
-    { key: 'issue', label: 'Issue / Consume', sub: 'deduct (FEFO)', can: () => this.can('inventory_issue') },
-    { key: 'count', label: 'Stock count', sub: 'reconcile', can: () => this.can('inventory_count') },
+    { key: 'issue', label: 'Issue', sub: 'deduct (FEFO)', can: () => this.can('inventory_issue') },
+    { key: 'count', label: 'Count', sub: 'reconcile', can: () => this.can('inventory_count') },
   ];
   readonly allowedActions = computed(() => this.actions.filter(a => a.can()));
+  canAction(a: StockAction) { return this.allowedActions().some(x => x.key === a); }
+
+  // ── Band: tabs + the one field ──────────────────────────────────
+  readonly tab = computed<StoresTab>(() => (this.mode() === 'home' ? 'home' : this.action()));
+  readonly tabOptions = computed<SegmentedOption<StoresTab>[]>(() => [
+    { value: 'home', label: 'Overview', iconPath: [...ICON.home] },
+    ...this.allowedActions().map(a => ({ value: a.key as StoresTab, label: a.label, iconPath: [...ICON[a.key]] })),
+  ]);
+  onTab(t: StoresTab) { if (t === 'home') this.goHome(); else this.enterAction(t); }
+  readonly fieldValue = computed(() => (this.mode() === 'home' ? this.stockQuery() : this.term()));
+  readonly fieldPlaceholder = computed(() => {
+    if (this.mode() === 'home') return 'Search stock — name, SKU or category';
+    if (this.manual()) return 'Type an item name, SKU or barcode';
+    return this.action() === 'receive' ? 'Scan a supplier barcode, or type to find an item' : 'Scan an item or lot barcode, or type to find an item';
+  });
+  onField(v: string) { if (this.mode() === 'home') this.stockQuery.set(v); else this.term.set(v); }
+  onSubmit(v: string) { if (this.mode() === 'scan') this.resolve(v); }
+
+  readonly actionTitle = computed(() => ({ receive: 'Receive stock', issue: 'Issue stock', count: 'Stock count' })[this.action()]);
+  readonly actionIcon = computed(() => ICON[this.action()]);
+  readonly actionVerb = computed(() => ({ receive: 'receive', issue: 'issue', count: 'count' })[this.action()]);
+  readonly emptyHint = computed(() => {
+    const how = this.manual() ? 'Type its name, SKU or barcode in the bar above' : 'Scan its barcode with the scanner or the camera';
+    return ({
+      receive: `${how}, or pick it from the list. A supplier GS1 barcode fills in the lot, expiry and quantity.`,
+      issue: `${how}, or pick it from the list, then enter how much is used.`,
+      count: `${how}, or pick it from the list, then enter what you counted for each lot.`,
+    })[this.action()];
+  });
 
   readonly filteredItems = computed(() => {
     const s = this.term().trim().toLowerCase();
     const list = this.items();
-    return (s ? list.filter(i => (i.name + ' ' + i.sku).toLowerCase().includes(s)) : list).slice(0, 12);
+    return s ? list.filter(i => (i.name + ' ' + i.sku + ' ' + (i.category ?? '') + ' ' + (i.barcode ?? '')).toLowerCase().includes(s)) : list;
   });
 
-  // ── Overview stock table ──────────────────────────────────────────
+  // ── Overview stock grid ─────────────────────────────────────────
   readonly stockQuery = signal('');
   readonly stockStatus = signal<StockStatus>('all');
   readonly stockFilters: Array<{ key: StockStatus; label: string }> = [
@@ -524,11 +576,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
     { key: 'low', label: 'Low' }, { key: 'out', label: 'Out' },
   ];
 
-  statusOf(it: InvItem): 'ok' | 'low' | 'out' {
-    if (it.onHand <= 0) return 'out';
-    if (it.lowStock || it.onHand <= it.reorderLevel) return 'low';
-    return 'ok';
-  }
+  statusOf(it: InvItem): 'ok' | 'low' | 'out' { return stockLevel(it); }
+  level(it: InvItem) { return stockLevel(it); }
+  tone(it: InvItem) { return STOCK_LEVEL_TONE[stockLevel(it)]; }
+  levelLabel(it: InvItem) { return STOCK_LEVEL_LABEL[stockLevel(it)]; }
+  expiry(daysLeft: number) { return expiryView(daysLeft); }
 
   readonly kpis = computed(() => {
     let inStock = 0, low = 0, out = 0;
@@ -538,14 +590,42 @@ export class StoresComponent implements OnInit, AfterViewInit {
     }
     return { total: this.items().length, inStock, low, out };
   });
+  filterCount(k: StockStatus) {
+    const k2 = this.kpis();
+    return k === 'all' ? k2.total : k === 'ok' ? k2.inStock : k === 'low' ? k2.low : k2.out;
+  }
+  readonly attentionCount = computed(() => this.kpis().low + this.kpis().out + this.expiring().length);
+  readonly itemsLabel = computed(() => plural(this.stockRows().length, 'item'));
 
   readonly stockRows = computed(() => {
     const s = this.stockQuery().trim().toLowerCase();
     const st = this.stockStatus();
     return this.items().filter(it => {
       if (st !== 'all' && this.statusOf(it) !== st) return false;
-      return !s || (it.name + ' ' + it.sku).toLowerCase().includes(s);
+      return !s || (it.name + ' ' + it.sku + ' ' + (it.category ?? '')).toLowerCase().includes(s);
     });
+  });
+
+  readonly rowId = (p: { data: InvItem }) => p.data.id;
+  readonly noMatchHtml = '<span class="inv-sub">No items match — clear the search or the filter.</span>';
+  readonly stockCols = computed<ColDef<InvItem>[]>(() => {
+    const phone = this.phone();
+    return [
+      { colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true, sortable: true,
+        valueGetter: p => p.data?.name ?? '',
+        cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.category].filter(Boolean).join(' · ')) },
+      { colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', sortable: true, cellClass: 'inv-num',
+        valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
+      { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
+        valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
+      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
+        valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
+        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
+        cellRenderer: (p: { data?: InvItem }) => {
+          const l = p.data ? stockLevel(p.data) : 'ok';
+          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
+        } },
+    ];
   });
 
   async ngOnInit() {
@@ -557,10 +637,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
 
   /** Global keystroke capture for HID scanner guns. Fires only when focus is
    *  outside an editable element and the keys arrive in a rapid burst — so a
-   *  scan isn't lost just because the operator clicked a button first. */
+   *  scan isn't lost just because the operator clicked a button first.
+   *  Off in the lab's Manual mode (no scanning there). */
   @HostListener('document:keydown', ['$event'])
   onDocKey(ev: KeyboardEvent) {
-    if (this.mode() === 'home' || this.scanning()) return;
+    if (this.mode() === 'home' || this.scanning() || this.manual()) return;
     if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
     const t = ev.target as HTMLElement | null;
     const tag = t?.tagName;
@@ -579,9 +660,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
     if (ev.key.length === 1) this.hidBuffer += ev.key;
   }
 
+  /** Focus the band field for the next scan — on web only: on touch it
+   *  would raise the keyboard over the sheet after every action. */
   private focusScan() {
-    // Defer so the input exists after the mode switch renders.
-    setTimeout(() => this.scanInput?.nativeElement?.focus(), 0);
+    if (!this.web()) return;
+    setTimeout(() => this.host.nativeElement.querySelector<HTMLInputElement>('.pf-hb__input')?.focus(), 0);
   }
 
   private async loadItems() {
@@ -592,31 +675,39 @@ export class StoresComponent implements OnInit, AfterViewInit {
   }
 
   /** Tab click: enter the scan surface for an action. Coming from Overview
-   *  starts fresh; switching between action tabs keeps the resolved item. */
+   *  starts fresh; switching between action tabs keeps the picked item. */
   enterAction(a: StockAction) {
-    if (this.mode() !== 'scan') { this.mode.set('scan'); this.resolved.set(null); this.term.set(''); this.lastLabel.set(''); }
+    if (this.mode() !== 'scan') { this.mode.set('scan'); this.resolved.set(null); this.term.set(''); this.lastLabel.set(''); this.unknown.set(null); }
     this.setAction(a);
   }
-  /** Switch the action without losing the resolved item — scan once, then
+  /** Switch the action without losing the picked item — scan once, then
    *  Receive / Issue / Count the same item. */
   setAction(a: StockAction) {
     this.action.set(a);
     const r = this.resolved();
     if (r) {
       if (a === 'count') this.loadBatchesFor(r.item.id);
-      if (a === 'receive') this.rcv.set({
-        lot: this.lastParsed?.lot ?? '',
-        expiry: this.lastParsed?.expiry ? String(this.lastParsed.expiry).substring(0, 10) : '',
-        cost: 0, qty: this.lastParsed?.qty ?? 1,
-      });
+      if (a === 'receive') this.prefillReceive(this.lastParsed);
     }
     this.focusScan();
   }
-  goHome() { this.mode.set('home'); this.resolved.set(null); this.loadAlerts(); this.loadItems(); }
+  goHome() { this.mode.set('home'); this.resolved.set(null); this.unknown.set(null); this.loadAlerts(); this.loadItems(); }
   setR(k: string, v: unknown) { this.rcv.update(r => ({ ...r, [k]: v })); }
+  countValue(id: string): number | '' { const v = this.countDraft()[id]; return v == null ? '' : v; }
   setCount(id: string, v: number) { this.countDraft.update(d => ({ ...d, [id]: v })); }
+  clearPick() { this.resolved.set(null); this.lastLabel.set(''); this.focusScan(); }
 
   onCameraScan(code: string) { this.scanning.set(false); this.resolve(code); }
+
+  private prefillReceive(parsed: any) {
+    this.rcv.set({
+      lot: parsed?.lot ?? '',
+      expiry: parsed?.expiry ? String(parsed.expiry).substring(0, 10) : '',
+      cost: 0,
+      qty: parsed?.qty ?? 1,
+    });
+    this.prefilled.set(!!(parsed?.lot || parsed?.expiry || parsed?.qty));
+  }
 
   async resolve(code: string) {
     const c = (code ?? '').trim();
@@ -628,44 +719,68 @@ export class StoresComponent implements OnInit, AfterViewInit {
     try {
       const r: any = await firstValueFrom(this.api.post('/api/inventory/scan/resolve', { code: c }).pipe(busyWhile(this.resolving)));
       if (!r?.item) {
-        this.toasts.warning(this.action() === 'receive'
-          ? `No item for “${c}” — pick it below to link the barcode.`
-          : `No item found for “${c}”.`);
+        // Truthful copy: picking an item does NOT link the barcode by
+        // itself — the side card offers "Link barcode" (manage_inventory).
+        this.unknown.set({ raw: c, code: linkableCode(c, r?.parsed), parsed: r?.parsed ?? null });
+        this.lastParsed = r?.parsed ?? null;
+        this.toasts.warning(`No item has barcode ${linkableCode(c, r?.parsed)} — pick the item from the list.`);
         this.resolved.set(null);
         this.term.set('');
         this.focusScan();
         return;
       }
+      this.unknown.set(null);
       this.lastParsed = r.parsed ?? null;
       this.resolved.set({ item: r.item, batches: r.batches ?? [] });
       this.lastLabel.set('');
       if (this.action() === 'count') this.loadBatchesFor(r.item.id);
       // Prefill receive form from parsed GS1 (lot/expiry/qty).
-      if (this.action() === 'receive' && r.parsed) {
-        this.rcv.set({
-          lot: r.parsed.lot ?? '',
-          expiry: r.parsed.expiry ? String(r.parsed.expiry).substring(0, 10) : '',
-          cost: 0,
-          qty: r.parsed.qty ?? 1,
-        });
-      }
+      if (this.action() === 'receive' && r.parsed) this.prefillReceive(r.parsed);
       this.term.set('');
       this.focusScan();
     } catch (e) { this.toasts.error(ApiError.from(e).message); this.focusScan(); }
   }
 
   pick(it: InvItem) {
-    this.lastParsed = null;
+    // After an unknown scan the parsed lot / expiry / qty still apply.
+    const parsed = this.unknown()?.parsed ?? null;
+    this.lastParsed = parsed;
     this.resolved.set({ item: it, batches: [] });
+    this.lastLabel.set('');
     this.term.set('');
     if (this.action() === 'count') this.loadBatchesFor(it.id);
-    if (this.action() === 'receive') this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 1 });
+    if (this.action() === 'receive') this.prefillReceive(parsed);
   }
   private async loadBatchesFor(itemId: string) {
     try {
       const b = await firstValueFrom(this.api.get<InvBatch[]>(`/api/inventory/items/${itemId}/batches`)) ?? [];
       this.resolved.update(r => r ? { ...r, batches: b } : r);
     } catch { /* */ }
+  }
+
+  /** Link the unknown scanned barcode to the picked item (Admin → Inventory's
+   *  item upsert, `manage_inventory`). The item has ONE barcode, so an
+   *  existing one is replaced — confirmed first; lot labels are unaffected. */
+  async linkBarcode(item: InvItem) {
+    const u = this.unknown(); if (!u || this.linking()) return;
+    if (item.barcode && item.barcode !== u.code) {
+      const ok = await this.dialog.confirm({
+        title: `Link ${u.code} to ${item.name}?`,
+        message: `It replaces the item's barcode ${item.barcode}. Item labels printed with the old barcode stop scanning; lot labels keep working.`,
+        confirmLabel: 'Link barcode', tone: 'primary',
+      });
+      if (!ok) return;
+    }
+    this.linking.set(true);
+    try {
+      await firstValueFrom(this.api.post('/api/inventory/items', linkBarcodeBody(item, u.code)));
+      this.toasts.success(`Barcode linked — scanning ${u.code} now finds ${item.name}`);
+      this.unknown.set(null);
+      const r = this.resolved();
+      if (r?.item.id === item.id) this.resolved.set({ ...r, item: { ...r.item, barcode: u.code } });
+      await this.loadItems();
+    } catch (e) { this.toasts.error(ApiError.from(e).message); }
+    this.linking.set(false);
   }
 
   async doReceive(item: InvItem) {
@@ -678,7 +793,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
       this.toasts.success(`Received ${r.qty} ${item.uom} of ${item.name}`);
       if (res?.lotBarcode) this.lastLabel.set(res.lotBarcode);
       this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 0 });
+      this.prefilled.set(false);
       await this.loadItems();
+      const fresh = this.items().find(i => i.id === item.id);
+      const cur = this.resolved();
+      if (fresh && cur?.item.id === item.id) this.resolved.set({ ...cur, item: fresh });
     } catch (e) { this.toasts.error(ApiError.from(e).message); }
     this.busy.set(false);
   }
