@@ -69,7 +69,9 @@ export interface ReportPdfInput {
     body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
     /** Where the results table really ended (pt), when it ended on this page;
      *  null = it ran onto the next page. */
-    tableBottom?: number | null }) => void;
+    tableBottom?: number | null;
+    /** The table's natural height (pt, head + rows at the box's row spacing, before any Fill). */
+    tableNaturalH?: number | null }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -3503,14 +3505,16 @@ function renderCustomLayout(
           if (!rows.length) break;
           const fit = !manual && box.id !== lastTableId;
           const out = { consumed: rows.length };
+          const sized = { natural: 0 };
           const end = renderColumnarTable(doc, [{ ...group, rows }], onePageTableColumns(group, box), r.y, practice, null, 0, false,
-            { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, ...(fit ? { fitH: r.h, out } : {}) });
+            { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, ...(fit ? { fitH: r.h, out } : {}),
+              boxH: r.h, vAlign: box.vAlign ?? 'top', rowGap: ROW_SPACING_PT[box.rowSpacing ?? 'normal'] ?? 0, sized });
           if (!manual) remaining = remaining.slice(out.consumed);
           lastTableLayoutPage = i;
           tableEnd = Math.max(tableEnd, end - 6);
           try {
             ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body }, boxId: box.id, rowsPrinted: out.consumed,
-              tableBottom: doc.getNumberOfPages() === bodyPage ? end - 6 : null });
+              tableBottom: doc.getNumberOfPages() === bodyPage ? end - 6 : null, tableNaturalH: sized.natural || null });
           } catch { /* designer hook only */ }
           break;
         }
@@ -3887,7 +3891,14 @@ function renderColumnarTable(
             /** Custom layout, auto-continue: print only the rows that FIT the
              *  box's height (`boxH`, pt) — whole rows, never a cut row — and
              *  report how many of the group's rows were used in `out`. */
-            fitH?: number; out?: { consumed: number } } | null = null,
+            fitH?: number; out?: { consumed: number };
+            /** The box's height (pt) and where the rows sit in it when they
+             *  need less: 'fill' spreads them evenly, 'center' centres them. */
+            boxH?: number; vAlign?: 'top' | 'fill' | 'center' | null;
+            /** Extra space per row (pt; negative = tighter) — the box's row spacing. */
+            rowGap?: number;
+            /** Out: the natural height (head + rows, before Fill), pt. */
+            sized?: { natural: number } } | null = null,
 ): number {
   if (groups.length === 0) return startY;
   if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
@@ -4359,6 +4370,9 @@ function renderColumnarTable(
   // The header and the first glued chain (a panel band, its sub-line and
   // its first result) open the table together — keepRowsTogether only
   // looks ahead from a row already drawn, so row 0 is decided here.
+  // Row spacing (Custom layout table box) — before the fit, so the rows a
+  // box holds are counted at the spacing it prints.
+  if (region?.rowGap) for (const row of table.body) setRowHeight(row, Math.max(4, row.height + region.rowGap));
   if (region?.fitH != null && region.out) {
     // Whole rows that fit the box (head included); never split one source
     // row's body rows (a value + its description) across two boxes.
@@ -4379,6 +4393,19 @@ function renderColumnarTable(
       region.out.consumed = groups[0]?.rows.length ?? 0;
     }
   }
+  if (region) {
+    const natural = headH + table.body.reduce((a, r) => a + r.height, 0);
+    if (region.sized) region.sized.natural = natural;
+    // Top / Fill / Center inside the box — only when every row fits it here.
+    const extra = (region.boxH ?? 0) - natural;
+    if (extra > 1 && table.body.length > 0 && startY + region.boxH! <= region.bottom + 0.5) {
+      if (region.vAlign === 'center') table.settings.startY = startY + extra / 2;
+      else if (region.vAlign === 'fill') {
+        const add = extra / table.body.length;
+        for (const row of table.body) setRowHeight(row, row.height + add);
+      }
+    }
+  }
   if (!region && table.body.length > 0) {
     const lead = headH + table.body[0].height + chainAfter(table.body, 0, keepWithNext);
     if (startY + lead > floor && lead <= floor - margin.top) {
@@ -4397,6 +4424,15 @@ function renderColumnarTable(
   }
   __drawTable(doc, table);
   return table.finalY! + 6;
+}
+
+/** Custom layout table box row spacing → extra pt per row ('normal' = the theme's own). */
+export const ROW_SPACING_PT: Record<'compact' | 'normal' | 'relaxed', number> = { compact: -2, normal: 0, relaxed: 5 };
+
+/** Set an autotable body row's height (and its cells', which autotable paints from). */
+function setRowHeight(row: { height: number; cells: Record<string, unknown> }, h: number): void {
+  row.height = h;
+  for (const cell of Object.values(row.cells)) (cell as { height: number }).height = h;
 }
 
 /** Keep a department's sign-off on the page its results END on — without
