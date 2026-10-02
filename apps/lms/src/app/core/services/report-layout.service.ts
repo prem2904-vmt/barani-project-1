@@ -69,6 +69,22 @@ export class ReportLayoutService {
     }
   }
 
+  /** Profile one-page layout palette: the analyzer image types this
+   *  profile can show — every image code an instrument LINKED to the
+   *  profile's members (code map → member CatalogKey) has sent, plus any
+   *  already attached to its results. Never throws: failure = nothing
+   *  linked (the designer then offers CBC suggestions / manual codes). */
+  async analyzerImages(testId: string): Promise<ProfileAnalyzerImages> {
+    try {
+      const res = await firstValueFrom(this.api.get<ProfileAnalyzerImages>(
+        `/api/report-layout/test/${testId}/analyzer-images`
+      ));
+      return { linked: !!res?.linked, instruments: res?.instruments ?? [], images: res?.images ?? [] };
+    } catch {
+      return { linked: false, instruments: [], images: [] };
+    }
+  }
+
   async restorePageLayoutDefault(testId: string): Promise<{ sections: ReportSection[] } | null> {
     try {
       return await firstValueFrom(this.api.post<{ sections: ReportSection[] }>(
@@ -138,4 +154,12 @@ export class ReportLayoutService {
       { values, imageUrls, sex: patient?.sex ?? null, age: bandAgeYears(patient), parametersJson: parametersJson ?? null },
     ));
   }
+}
+
+/** GET /api/report-layout/test/{id}/analyzer-images — codes/labels only,
+ *  never image bytes or patient data. */
+export interface ProfileAnalyzerImages {
+  linked: boolean;
+  instruments: Array<{ id: string; name: string; make?: string | null; model?: string | null }>;
+  images: Array<{ code: string; label?: string | null; seen: number; instrumentIds?: string[] }>;
 }

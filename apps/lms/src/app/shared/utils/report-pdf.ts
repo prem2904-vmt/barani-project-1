@@ -32,7 +32,7 @@ import { renderReportChart, setReportChartContext, reportChartLead } from './rep
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
 import {
-  bodyArea, collapseMissingAnalyzerBoxes, readPageLayout, type BodyArea as ProfileBodyArea,
+  bodyArea, collapseMissingAnalyzerBoxes, printableBoxes, readPageLayout, type BodyArea as ProfileBodyArea,
 } from './report-profile-layout';
 import {
   drawAnalyzerImageBox, drawNotesBox, drawProfileTableBox, drawSignaturesBox, type ProfileTableRow,
@@ -57,6 +57,11 @@ import {
 export interface ReportPdfInput {
   /** Admin live-preview: keep every configured column visible even when empty. */
   previewKeepEmptyColumns?: boolean;
+  /** Designer hook (profile one-page layout): told the EXACT body rect (pt)
+   *  and page each one-page profile's boxes were placed in, so the designer
+   *  lays its draggable outlines over the very pixels the PDF drew. Never
+   *  set by a real report path. */
+  onOnePageBody?: (info: { pkg: string; page: number; body: { top: number; bottom: number; left: number; right: number; w: number; h: number } }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -405,6 +410,7 @@ let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
  *  regardless of which typed columns an individual test's layout happens to
  *  carry. Set once per render in buildReportPdf, before the test loop. */
 let PREVIEW_KEEP_EMPTY_COLS = false; // admin preview: show configured columns even when empty
+let ON_ONE_PAGE_BODY: ReportPdfInput['onOnePageBody'] | null = null; // designer hook only
 let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
@@ -751,6 +757,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
     trackToken: snap.order?.trackToken || input.orderTrackToken || null,
   };
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
+  ON_ONE_PAGE_BODY = input.onOnePageBody ?? null;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
     MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
@@ -3385,10 +3392,12 @@ function renderOnePageProfile(
   // height minus that reserve.
   const floor = A4.h - footerFloor(LAYOUT);
   const body: ProfileBodyArea = bodyArea(y, floor);
+  try { ON_ONE_PAGE_BODY?.({ pkg, page: doc.getNumberOfPages(), body: { ...body } }); } catch { /* a designer hook never breaks a render */ }
 
   const images = profileAnalyzerImages(snap, pkg);
   const availCodes = new Set(Object.keys(images));
-  const { boxes } = collapseMissingAnalyzerBoxes(pl.boxes, availCodes, body);
+  // Hidden boxes (the designer's "Hide") stay in the layout but never print.
+  const { boxes } = collapseMissingAnalyzerBoxes(printableBoxes(pl.boxes), availCodes, body);
   const rows = toProfileTableRows(group.rows);
 
   const tableTheme = {
@@ -3418,9 +3427,11 @@ function renderOnePageProfile(
       case 'signatures':
         drawSignaturesBox(doc, box, body, deptSigs, IMG_CACHE, BLACK, tableTheme.font);
         break;
-      case 'notes':
-        if (box.label) drawNotesBox(doc, box, body, box.label, TEXT_DIM, tableTheme.font);
+      case 'notes': {
+        const text = (box.text ?? box.label ?? '').trim();
+        if (text) drawNotesBox(doc, box, body, text, TEXT, tableTheme.font);
         break;
+      }
     }
   }
   // The actual bottom of the CONTENT (table/graphs/notes) — never the

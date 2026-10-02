@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
@@ -7,7 +7,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
-import { ReportColumn } from '../../../../shared/models/report-layout.model';
+import { PageLayoutBox, ReportColumn } from '../../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
 import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
@@ -867,6 +867,19 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected readonly testColumnsOverride = signal<ReportColumn[] | null>(null);
+  /** The profile one-page layout as the designer has it right now (unsaved) —
+   *  the Live preview renders it while the lab arranges the page. Reset when
+   *  another test opens. */
+  protected readonly livePageLayout = signal<{ enabled: boolean; boxes: PageLayoutBox[] } | null>(null);
+  private readonly resetLivePageLayout = effect(() => {
+    this._draft().id;
+    untracked(() => this.livePageLayout.set(null));
+  });
+  /** This profile's catalogue key (CBC-family detection in the designer). */
+  protected readonly draftCatalogKey = computed(() => {
+    const id = this._draft().id;
+    return id ? (this._memberById().get(id)?.catalogKey ?? null) : null;
+  });
   /** The effective columns for the profile one-page layout designer: this
    *  test/profile's own override, else the department set — same cascade
    *  `liveColumnsOverride`/`columnsSummary` already read for the label. */
@@ -949,14 +962,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       for (const r of this.normalizeRows(this._memberRows())) {
         const t = byId.get(r.testId);
         if (t) out.push({ id: r.testId, name: t.name, parameters: t.parameters ?? null,
-                          department: shownDepartmentName(t) || null, offsetMin: r.offsetMin });
+                          department: shownDepartmentName(t) || null, offsetMin: r.offsetMin, catalogKey: t.catalogKey ?? null });
       }
       return out;
     }
     for (const id of this.packageItems()) {
       const t = byId.get(id);
       // Each member previews under ITS OWN department (a package has none).
-      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null });
+      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null, catalogKey: t.catalogKey ?? null });
     }
     return out;
   });

@@ -167,12 +167,15 @@ export function drawAnalyzerImageBox(
   doc: jsPDF, box: PageLayoutBox, body: BodyArea, dataUrl: string | null | undefined, labelColor: string, labelFont: string,
 ): void {
   const r = mmRect(box, body);
+  // The caption sits INSIDE the box's top edge — the box is exactly what
+  // the lab drew, never a label spilling above it onto a neighbour.
+  const labelH = box.label ? 10 : 0;
   if (box.label) {
-    doc.setFont(labelFont, 'bold'); doc.setFontSize(8); doc.setTextColor(labelColor);
-    doc.text(box.label, r.x, r.y - 2);
+    doc.setFont(labelFont, 'bold'); doc.setFontSize(7.5); doc.setTextColor(labelColor);
+    const caption = (doc.splitTextToSize(box.label, r.w) as string[])[0] ?? box.label;
+    doc.text(caption, r.x, r.y + 7);
   }
   if (!dataUrl) return;
-  const labelH = box.label ? 10 : 0;
   try {
     const dims = (doc as unknown as { getImageProperties: (u: string) => { width: number; height: number } }).getImageProperties(dataUrl);
     const availW = r.w, availH = r.h - labelH;
