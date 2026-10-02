@@ -30,8 +30,21 @@
                  (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
       <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
                  (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
+    </ng-container>
+    <ng-container band-actions>
       @if (dimsActive()) {
-        <button type="button" class="nd-btn nd-btn--tertiary pf-ins-clear" (click)="clearFilters()">Clear filters</button>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="clearFilters()" aria-label="Clear filters" title="Clear filters">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" [innerHTML]="svg(icons.close)"></svg>
+          <span class="pf-ins-hbt">Clear</span>
+        </button>
+      }
+      @if (!ctxSide() && canSeeAnalytics()) {
+        <!-- Below 1280px the DETAILS card is a sheet (right panel on tablets, bottom sheet on phones). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-ins-ctxbtn" (click)="ctxSheet.set(true)"
+                aria-haspopup="dialog" [attr.aria-expanded]="ctxSheet()" [attr.aria-label]="listKey() ? 'This list — summary and export' : 'Details'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(listKey() ? icons.download : icons.details)"></svg>
+          <span class="pf-ins-hbt">{{ listKey() ? 'Export & details' : 'Details' }}</span>
+        </button>
       }
     </ng-container>
   </pf-hero-band>
@@ -60,16 +73,25 @@
           </aside>
         }
       } @else if (navCollapsed()) {
+        <!-- Collapsed: a full-height icon rail — one target per section / list,
+             labels as tooltips + aria-labels; the chevron expands it back. -->
         <aside class="nd-card pf-ins-strip" aria-label="Sections">
-          <button type="button" class="pf-ins-strip__btn" (click)="toggleNav()" aria-label="Show sections" aria-expanded="false" title="Show sections">
-            <span class="nd-btn nd-btn--icon pf-ins-strip__expand" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </span>
-            <span class="nd-card__icon" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(navIcon())"></svg>
-            </span>
-            <span class="pf-ins-strip__label">{{ navLabel() }}</span>
+          <button type="button" class="nd-btn nd-btn--icon pf-ins-strip__expand" (click)="toggleNav()" aria-label="Show section names" aria-expanded="false" title="Show section names">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
           </button>
+          <nav class="pf-ins-strip__list" aria-label="Insights sections">
+            @for (sct of sections(); track sct.id) {
+              <button type="button" class="pf-ins-strip__item" [attr.aria-current]="nav() === sct.id ? 'page' : null" (click)="go(sct.id)" [attr.aria-label]="sct.label" [title]="sct.label">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(sct.icon)"></svg>
+              </button>
+            }
+            <span class="pf-ins-strip__sep" aria-hidden="true"></span>
+            @for (l of lists(); track l.key) {
+              <button type="button" class="pf-ins-strip__item" [attr.aria-current]="listKey() === l.key ? 'page' : null" (click)="goList(l.key)" [attr.aria-label]="l.label + ' list'" [title]="l.label + ' list'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(l.icon)"></svg>
+              </button>
+            }
+          </nav>
         </aside>
       } @else {
         <aside class="nd-card pf-ins-nav" aria-label="Sections">
@@ -147,7 +169,7 @@
                 </div>
               } @else {
                 <ag-grid-angular class="pf-ins-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
-                                 [defaultColDef]="defaultColDef" [quickFilterText]="q()" [animateRows]="true"
+                                 [defaultColDef]="defaultColDef" [quickFilterText]="q()" [animateRows]="true" [autoSizeStrategy]="phone() ? undefined : autoSize()"
                                  [suppressCellFocus]="true" [enableCellTextSelection]="true" [tooltipShowDelay]="300"></ag-grid-angular>
               }
             }
@@ -163,11 +185,6 @@
               </button>
             </footer>
           }
-          @if (!ctxSide()) {
-            <div class="pf-ins-listctx">
-              <ng-container *ngTemplateOutlet="listCtxInline"></ng-container>
-            </div>
-          }
         } @else {
           <div class="nd-card__body pf-ins-main__body" #mainBody>
             @switch (section()) {
@@ -180,48 +197,20 @@
               @case ('outsourcing') { <ng-container *ngTemplateOutlet="outsourcingTpl"></ng-container> }
               @case ('profitability') { <ng-container *ngTemplateOutlet="profitTpl"></ng-container> }
             }
-            @if (!ctxSide()) {
-              <div class="pf-ins-inlinectx" id="pf-ins-ctx">
-                <ng-container *ngTemplateOutlet="ctxBody"></ng-container>
-                @if (sectionCta(); as cta) {
-                  <button type="button" class="nd-btn nd-btn--primary pf-ins-inlinectx__cta" (click)="openList(cta.list)">{{ cta.label }}</button>
-                }
-              </div>
-            }
           </div>
         }
       </section>
 
       <!-- ── RIGHT: DETAILS (what the main card doesn't show + the primary) ── -->
       @if (ctxSide()) {
-        <aside class="nd-card pf-ins-ctx" aria-label="Details">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(listKey() ? icons.download : icons.info)"></svg>
-            </span>
-            <h2 class="nd-card__label">{{ listKey() ? 'This list' : 'Details' }}</h2>
-          </header>
-          <div class="nd-card__body pf-ins-ctx__body">
-            @if (listKey()) { <ng-container *ngTemplateOutlet="listCtxBody"></ng-container> }
-            @else { <ng-container *ngTemplateOutlet="ctxBody"></ng-container> }
-          </div>
-          @if (listKey()) {
-            @if (canExport()) {
-              <footer class="nd-card__foot">
-                <button type="button" class="nd-btn nd-btn--primary nd-span" [disabled]="exporting() || !total()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportList()">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.download)"></svg>
-                  {{ exporting() ? 'Preparing…' : 'Export CSV' }}
-                </button>
-              </footer>
-            }
-          } @else if (sectionCta(); as cta) {
-            <footer class="nd-card__foot">
-              <button type="button" class="nd-btn nd-btn--primary nd-span" (click)="openList(cta.list)">
-                {{ cta.label }}
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.arrowRight)"></svg>
-              </button>
-            </footer>
-          }
+        <aside class="nd-card pf-ins-ctx" [attr.aria-label]="listKey() ? 'This list' : 'Details'">
+          <ng-container *ngTemplateOutlet="ctxCard; context: { sheet: false }"></ng-container>
+        </aside>
+      } @else if (ctxSheet()) {
+        <div class="nd-sheet-backdrop pf-ins-sheet-backdrop" (click)="ctxSheet.set(false)"></div>
+        <aside class="nd-card pf-ins-ctx pf-ins-ctx--sheet" role="dialog" aria-modal="true" [attr.aria-label]="listKey() ? 'This list' : 'Details'">
+          <span class="pf-ins-sheet-handle pf-ins-ctx__handle" aria-hidden="true"></span>
+          <ng-container *ngTemplateOutlet="ctxCard; context: { sheet: true }"></ng-container>
         </aside>
       }
     </div>
@@ -697,15 +686,38 @@
   }
 </ng-template>
 
-<!-- Narrow / medium widths: the list's side card folds under the grid. -->
-<ng-template #listCtxInline>
-  <div class="pf-ins-listctx__row">
-    <span class="pf-ins-side__muted">{{ listFilters()[0]?.v }}{{ drill() ? ' · ' + drill()!.label : '' }}{{ moneyHidden() ? ' · money columns hidden' : '' }}</span>
-    @if (canExport()) {
-      <button type="button" class="nd-btn nd-btn--primary pf-ins-listctx__btn" [disabled]="exporting() || !total()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportList()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.download)"></svg>
-        Export CSV
+<ng-template #ctxCard let-sheet="sheet">
+  <header class="nd-card__head">
+    <span class="nd-card__icon" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(listKey() ? icons.download : icons.info)"></svg>
+    </span>
+    <h2 class="nd-card__label">{{ listKey() ? 'This list' : 'Details' }}</h2>
+    @if (sheet) {
+      <span class="nd-card__spacer"></span>
+      <button type="button" class="nd-btn nd-btn--icon pf-ins-nav__btn" (click)="ctxSheet.set(false)" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     }
+  </header>
+  <div class="nd-card__body pf-ins-ctx__body">
+    @if (listKey()) { <ng-container *ngTemplateOutlet="listCtxBody"></ng-container> }
+    @else { <ng-container *ngTemplateOutlet="ctxBody"></ng-container> }
   </div>
+  @if (listKey()) {
+    @if (canExport()) {
+      <footer class="nd-card__foot">
+        <button type="button" class="nd-btn nd-btn--primary nd-span" [disabled]="exporting() || !total()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportList()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.download)"></svg>
+          {{ exporting() ? 'Preparing…' : 'Export CSV' }}
+        </button>
+      </footer>
+    }
+  } @else if (sectionCta(); as cta) {
+    <footer class="nd-card__foot">
+      <button type="button" class="nd-btn nd-btn--primary nd-span" (click)="openList(cta.list)">
+        {{ cta.label }}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.arrowRight)"></svg>
+      </button>
+    </footer>
+  }
 </ng-template>
