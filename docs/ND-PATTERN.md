@@ -1922,3 +1922,40 @@ preview drawn from sample values by the SAME geometry the PDF paints
 The preview sits beside the form (sticky) at ≥760px of block width and
 ABOVE it below that. Prints / Hidden and ↑ / ↓ are the block's usual header
 controls. The PDF draws the chart as vectors and never splits it.
+
+## 27. Inventory (Stores desk + Admin → Inventory)
+
+Both screens share ONE layout (`features/stores/inv-layout.scss`) and ONE set
+of view rules (`features/stores/inventory-view.ts`: stock level, expiry,
+ledger words, tests covered, barcode-link body).
+
+- **Stores (`/stores`):** band pill = ONE field + the section tabs
+  `Overview · Receive · Issue · Count` (`pf-segmented`; icons on phones, so
+  nothing truncates). Overview: STOCK is an AG-Grid (Item + SKU · category,
+  On hand, Reorder at, Status) with a neutral level filter whose counts are
+  plain numbers; ATTENTION (Low / Out / Expiring as neutral numbers, lots
+  expiring, items at or below reorder) is the side card. Receive / Issue /
+  Count: the field is the scan box (Enter resolves; typing filters the ITEMS
+  list, one item per row); the picked item opens the action side card with
+  its ONE primary (Receive N / Issue N). The band's primary is "Receive
+  stock" on Overview only.
+- **Admin → Inventory:** Items = the item AG-Grid (main) + the ITEM side
+  card (`Batches · Receive · Label · Ledger`, one primary in its footer;
+  New / Edit item open in the same card; nothing picked = ATTENTION). Test
+  consumables = the TESTS list on the LEFT (band search) + the picked
+  test's CONSUMABLES as the main card, each line saying how many tests the
+  branch's stock still covers.
+- **Status = `.nd-sdot`:** a neutral word + a 7px dot; the dot alone carries
+  the colour (amber Low / expiring, red Out / expired, violet done). Never a
+  green "In stock" pill, never coloured KPI numbers.
+- Expiry uses `pf-nd-date`, never a visible native date input.
+- The lab's Scan / Manual setting (`ScanService.manualEntry`) is honoured:
+  manual = no camera, no "Scanner ready", no document-level gun capture.
+- Unknown barcode: the note says exactly what happens. With
+  `manage_inventory` the side card offers **Link barcode** (the item upsert,
+  `POST /api/inventory/items` with the scanned GTIN; replacing an existing
+  item barcode asks first); without it, the copy says an inventory admin
+  links it. No items at all: an empty state that links to Admin → Inventory
+  (with permission) — never "No items match".
+- ≤900px: every side card is a sheet (Test Master pattern); ATTENTION opens
+  from a band chip.

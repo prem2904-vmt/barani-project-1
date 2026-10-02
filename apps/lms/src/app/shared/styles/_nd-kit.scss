@@ -327,6 +327,14 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
    (class name kept for compatibility — there is no "unpriced" marker any
    more: a default-priced test shows just "₹1"). */
 .nd-dot-unpriced { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 999px; background: #d97706; }
+/* Status dot + word (stock levels, batch expiry): the WORD stays neutral
+   text; semantic colour lives only in the 7px dot. Tones: (none) neutral ·
+   done violet · warn amber · bad red. Use for data, never decoration. */
+.nd-sdot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.nd-sdot::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--nd-sel-border); }
+.nd-sdot[data-tone='done']::before { background: var(--color-primary, #7c3aed); }
+.nd-sdot[data-tone='warn']::before { background: var(--amber-text, #d97706); }
+.nd-sdot[data-tone='bad']::before { background: var(--red-text, #dc2626); }
 @media (max-width: 640px) {
   .nd-ctx { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 4px 0; }
   .nd-ctx::-webkit-scrollbar { display: none; }

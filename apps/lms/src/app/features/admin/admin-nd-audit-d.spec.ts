@@ -337,21 +337,53 @@ describe('ND audit D — Inventory', () => {
     return p;
   };
 
-  it('ONE primary; row actions are .nd-rowact; low stock = neutral chip; alerts are kit cards', async () => {
+  it('ONE primary (band New item); the item grid is AG-Grid; nothing picked = ATTENTION side card with neutral numbers + status dots', async () => {
     const p = await render();
     expect(primaries(p.el)).toBe(1);
-    const acts = p.el.querySelectorAll('tbody tr.pf-inv-row')[0].querySelectorAll('.nd-rowact .nd-rowact__t');
-    expect(Array.from(acts).map(a => a.textContent!.trim())).toEqual(['Receive', 'Label', 'Batches', 'Edit']);
-    expect(p.el.querySelector('.pf-inv-low.nd-chip')).not.toBeNull();
-    expect(p.el.querySelectorAll('.pf-inv-alert.nd-card .nd-card__icon').length).toBe(2);
+    expect(p.actions()[0].className).toContain('pf-hb-btn--primary');
+    expect(p.el.querySelector('ag-grid-angular.pf-inv-grid')).not.toBeNull();
+    const side = p.el.querySelector('.pf-inv-side.nd-card')!;
+    expect(side.querySelector('.nd-card__icon')).not.toBeNull();
+    expect(side.textContent).toContain('Attention');
+    expect(side.querySelector('.nd-sdot[data-tone="warn"]')).not.toBeNull();
+    expect(side.textContent).toContain('Glucose reagent');
+    // No off-palette status pills / fills.
+    expect(p.el.querySelector('.pill--green, .pill--amber, .pill--red, .kpi--green')).toBeNull();
     hygiene(p.el);
   });
 
-  it('item editor = kit card with kit fields + a slate Active switch; the band turns ghost so Save is the one primary', async () => {
+  it('picking an item opens the ITEM side card (Batches · Receive · Label · Ledger) with ONE primary; the band New item turns ghost', async () => {
+    const p = await render();
+    p.cmp.selectItem(items[0]); p.f.detectChanges();
+    await p.f.whenStable(); p.f.detectChanges();
+    const side = p.el.querySelector('.pf-inv-side')!;
+    expect(side.textContent).toContain('EDTA tube 3ml');
+    const secs = Array.from(side.querySelectorAll('.pf-inv-sections [role="radio"]')).map(b => b.textContent!.trim());
+    expect(secs).toEqual(['Batches', 'Receive', 'Label', 'Ledger']);
+    expect(primaries(p.el)).toBe(1);
+    expect(side.querySelector('.nd-card__foot .nd-btn--primary')!.textContent).toContain('Receive stock');
+    expect(p.actions()[0].className).toContain('pf-hb-btn--ghost');
+    expect(p.api.get).toHaveBeenCalledWith('/api/inventory/items/i1/batches');
+
+    // Receive: the kit date picker (never a native date input), Add stock is the primary once a quantity is in.
+    p.cmp.openReceive(items[0]); p.cmp.setR('qty', 5); p.f.detectChanges();
+    expect(side.querySelector('pf-nd-date')).not.toBeNull();
+    expect(side.querySelector('input[type="date"]:not(.pf-ndd__native)')).toBeNull();
+    expect(primaries(p.el)).toBe(1);
+    expect(side.querySelector('.nd-card__foot .nd-btn--primary')!.textContent).toContain('Add stock');
+
+    // Ledger reads the item ledger endpoint.
+    p.cmp.setSection(items[0], 'ledger'); p.f.detectChanges();
+    expect(p.api.get).toHaveBeenCalledWith('/api/inventory/items/i1/ledger?take=50');
+    hygiene(p.el);
+  });
+
+  it('item editor = the side card with kit fields (incl. Barcode) + a slate Active switch; the band turns ghost so Save is the one primary', async () => {
     const p = await render();
     p.cmp.startNew(); p.f.detectChanges();
-    const ed = p.el.querySelector('.pf-inv-editor.nd-card')!;
+    const ed = p.el.querySelector('.pf-inv-side.nd-card')!;
     expect(ed.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
+    expect(ed.querySelector('#pf-inv-barcode')).not.toBeNull();
     const sw = ed.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
     expect(sw).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
