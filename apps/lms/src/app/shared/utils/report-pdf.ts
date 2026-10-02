@@ -65,7 +65,9 @@ export interface ReportPdfInput {
   onOnePageBody?: (info: { pkg: string; page: number; body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
     /** Where the results table really ended (pt), when it ended on this page;
      *  null = it ran onto the next page. */
-    tableBottom?: number | null }) => void;
+    tableBottom?: number | null;
+    /** The table's natural height (pt) before any fill. */
+    tableNaturalH?: number | null }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -3419,9 +3421,14 @@ function renderOnePageProfile(
         // flags, superscript units — renderColumnarTable), drawn inside the
         // box: the designer only places it, never restyles it.
         const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM };
+        LAST_TABLE_NATURAL_H = 0;
         tableBottom = renderColumnarTable(doc, [group], onePageTableColumns(group, box), r.y, practice, null, 0, false,
-          { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true });
-        try { ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, body: { ...body }, tableBottom: doc.getNumberOfPages() === bodyPage ? tableBottom - 6 : null }); } catch { /* designer hook only */ }
+          { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, boxH: box.h * MM, vAlign: box.vAlign ?? 'top' });
+        try {
+          ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, body: { ...body },
+            tableBottom: doc.getNumberOfPages() === bodyPage ? tableBottom - 6 : null,
+            tableNaturalH: LAST_TABLE_NATURAL_H || null });
+        } catch { /* designer hook only */ }
         break;
       }
       case 'analyzer': {
@@ -3785,7 +3792,10 @@ function renderColumnarTable(
    *  still continues on the next page — never cut). `hideBand` leaves out
    *  the panel band (the one-page block prints it full width above);
    *  `dropEmpty` drops columns with no content even in the admin preview. */
-  region: { x: number; w: number; bottom: number; hideBand?: boolean; dropEmpty?: boolean } | null = null,
+  region: { x: number; w: number; bottom: number; hideBand?: boolean; dropEmpty?: boolean;
+            /** The box's height + where the rows sit in it when they need less
+             *  ('fill': rows grow evenly; 'center'). */
+            boxH?: number; vAlign?: 'top' | 'fill' | 'center' | null } | null = null,
 ): number {
   if (groups.length === 0) return startY;
   if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
@@ -4265,9 +4275,29 @@ function renderColumnarTable(
       table.settings.startY = newPage(doc, practice);
     }
   }
+  if (region) {
+    // The rows' natural height (before any fill) — the designer's "Fit box
+    // to content" reads it (LAST_TABLE_NATURAL_H).
+    const natural = headH + table.body.reduce((a, r) => a + r.height, 0);
+    LAST_TABLE_NATURAL_H = natural;
+    const extra = (region.boxH ?? 0) - natural;
+    if (extra > 1 && table.body.length > 0 && startY + region.boxH! <= region.bottom + 0.5) {
+      if (region.vAlign === 'center') {
+        table.settings.startY = startY + extra / 2;
+      } else if (region.vAlign === 'fill') {
+        const add = extra / table.body.length;
+        for (const row of table.body) {
+          row.height += add;
+          for (const cell of Object.values(row.cells)) (cell as { height: number }).height = row.height;
+        }
+      }
+    }
+  }
   __drawTable(doc, table);
   return table.finalY! + 6;
 }
+/** The last region table's natural (unfilled) height, pt. Designer hook only. */
+let LAST_TABLE_NATURAL_H = 0;
 
 /** Keep a department's sign-off on the page its results END on — without
  *  reserving it on every page the table spans (which cost multi-page reports

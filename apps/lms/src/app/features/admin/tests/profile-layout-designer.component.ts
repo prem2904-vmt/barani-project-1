@@ -9,7 +9,8 @@ import {
   DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
   boxLabel, buildDefaultLayout, detectLayoutIssues, dragBox, fitMeter, isCbcFamily, nudgeBox, patchBox, readPageLayout, removeBox,
   resizeBox, resizeFromHandle, setBoxHidden, setColumnVisible, writePageLayout,
-  type BodyArea, type PageLayoutIssue, type ResizeHandle, type SnapGuides,
+  alignBoxes, autoArrange, distributeBoxes, fillColumn, matchSize,
+  type AlignEdge, type BodyArea, type PageLayoutIssue, type ResizeHandle, type SnapGuides,
 } from '../../../shared/utils/report-profile-layout';
 import { MM, ptToMm } from '../../../shared/utils/report-header-layout';
 import { computeReportPageLayout, renderReportPdfBlobUrl, type ReportPdfInput } from '../../../shared/utils/report-pdf';
@@ -76,6 +77,10 @@ interface DragState {
         </span>
         <span class="nd-card__label">One-page layout</span>
         <div class="pld-tools">
+          <button type="button" class="nd-btn nd-btn--secondary pld-auto" (click)="autoArrangePage()" title="Table and graph column the same height, graphs evenly spaced, consistent 4 mm gutters">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="11" height="18" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="17" y="10" width="4" height="5" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></svg>
+            Auto-arrange
+          </button>
           <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="!canUndo()" (click)="undo()" aria-label="Undo" title="Undo (Ctrl+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
           </button>
@@ -148,9 +153,12 @@ interface DragState {
             <div class="pld-hole" aria-hidden="true" [style.left.px]="h.x" [style.top.px]="h.y" [style.width.px]="h.w" [style.height.px]="h.h"></div>
           }
 
+          @if (marquee(); as m) {
+            <div class="pld-marquee" aria-hidden="true" [style.left.px]="m.x" [style.top.px]="m.y" [style.width.px]="m.w" [style.height.px]="m.h"></div>
+          }
           @for (b of boxes(); track b.id) {
             <div class="pld-box" role="button" tabindex="0"
-                 [class.pld-box--sel]="selected() === b.id"
+                 [class.pld-box--sel]="isSelected(b.id)"
                  [class.pld-box--hidden]="b.hidden"
                  [class.pld-box--warn]="warnIds().has(b.id)"
                  [class.pld-box--drag]="drag()?.id === b.id"
@@ -177,7 +185,7 @@ interface DragState {
               @if (drag()?.id === b.id) {
                 <span class="pld-box__live nd-num">{{ readout(b) }}</span>
               }
-              @if (selected() === b.id) {
+              @if (selected() === b.id && selection().length === 1) {
                 @for (h of handles; track h) {
                   <span class="pld-handle pld-handle--{{ h }}" aria-hidden="true" (pointerdown)="onHandlePointerDown($event, b, h)"></span>
                 }
@@ -205,9 +213,9 @@ interface DragState {
         <span class="nd-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
         </span>
-        <span class="nd-card__label">{{ selectedBox() ? labelFor(selectedBox()!) : 'Add to the page' }}</span>
+        <span class="nd-card__label">{{ selection().length > 1 ? selection().length + ' boxes selected' : selectedBox() ? labelFor(selectedBox()!) : 'Add to the page' }}</span>
         <span class="nd-card__spacer"></span>
-        @if (selectedBox()) {
+        @if (selectedBox() || selection().length > 1) {
           <button type="button" class="nd-btn nd-btn--quiet" (click)="select(null)" aria-label="Back to the palette">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             All
@@ -216,7 +224,43 @@ interface DragState {
       </div>
 
       <div class="nd-card__body pld-side__body">
-        @if (selectedBox(); as b) {
+        @if (selection().length > 1) {
+          <!-- ── Several boxes: align / distribute / size ── -->
+          <p class="nd-field__hint">Shift-click or drag across the page to change the selection. Every tool is one step you can undo.</p>
+          <section class="pld-sec pld-sec--first" aria-label="Align">
+            <h4 class="pld-sec__h">Align</h4>
+            <div class="pld-toolgrid">
+              @for (a of alignTools; track a.edge) {
+                <button type="button" class="nd-btn nd-btn--secondary pld-toolbtn" (click)="align(a.edge)" [attr.aria-label]="a.label" [title]="a.label">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="a.icon"/></svg>
+                  <span>{{ a.short }}</span>
+                </button>
+              }
+            </div>
+          </section>
+          <section class="pld-sec" aria-label="Spacing and size">
+            <h4 class="pld-sec__h">Spacing &amp; size</h4>
+            <div class="pld-toolgrid pld-toolgrid--2">
+              <button type="button" class="nd-btn nd-btn--secondary pld-toolbtn" (click)="distribute('v')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16M4 21h16"/><rect x="7" y="8" width="10" height="3" rx="1"/><rect x="7" y="13" width="10" height="3" rx="1"/></svg>
+                <span>Space vertically</span></button>
+              <button type="button" class="nd-btn nd-btn--secondary pld-toolbtn" (click)="distribute('h')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 4v16M21 4v16"/><rect x="8" y="7" width="3" height="10" rx="1"/><rect x="13" y="7" width="3" height="10" rx="1"/></svg>
+                <span>Space horizontally</span></button>
+              <button type="button" class="nd-btn nd-btn--secondary pld-toolbtn" (click)="match('w')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="5" rx="1"/><rect x="4" y="14" width="16" height="5" rx="1"/></svg>
+                <span>Same width</span></button>
+              <button type="button" class="nd-btn nd-btn--secondary pld-toolbtn" (click)="match('h')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>
+                <span>Same height</span></button>
+            </div>
+            <button type="button" class="nd-btn nd-btn--secondary pld-wide" (click)="fillColumnSel()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="5" rx="1"/><rect x="6" y="10" width="12" height="4" rx="1"/><rect x="6" y="16" width="12" height="5" rx="1"/></svg>
+              Fill the column{{ tableBox() ? ' (table height)' : '' }}
+            </button>
+            <p class="nd-field__hint">Stacks the selected boxes in one column with equal 4 mm gaps, exactly as tall as the results table. Graphs keep their shape inside their boxes.</p>
+          </section>
+        } @else if (selectedBox(); as b) {
           @if (issuesFor(b.id).length) {
             <ul class="pld-issues" role="status">
               @for (iss of issuesFor(b.id); track iss.message) {
@@ -270,9 +314,16 @@ interface DragState {
             @case ('table') {
               <section class="pld-sec" aria-label="Table">
                 <p class="nd-field__hint">The table prints in your report theme — fonts, header, rules and flags come from the Report template. Here you choose where it sits and which columns print.</p>
-                @if (!fitsBox() && measuredFor(b) != null) {
-                  <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
-                }
+                <h4 class="pld-sec__h">Rows in the box</h4>
+                <div class="nd-seg" role="radiogroup" aria-label="Rows in the box">
+                  @for (m of vAligns; track m.value) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(b.vAlign ?? 'top') === m.value" (click)="setVAlign(m.value)">{{ m.label }}</button>
+                  }
+                </div>
+                <p class="nd-field__hint">{{ (b.vAlign ?? 'top') === 'fill' ? 'Rows grow evenly to fill the box — the report prints the same.' : (b.vAlign === 'center' ? 'The table sits in the middle of the box.' : 'Rows start at the top; any spare room stays below.') }}</p>
+                <button type="button" class="nd-btn nd-btn--secondary" [disabled]="measuredFor(b) == null" (click)="fitTableBox()">
+                  Fit box to content{{ measuredFor(b) != null ? ' (' + round(measuredFor(b)!) + ' mm)' : '' }}
+                </button>
                 <h4 class="pld-sec__h">Columns</h4>
                 <ul class="pld-cols">
                   @for (c of tableColumns(); track c.name) {
@@ -322,6 +373,7 @@ interface DragState {
           }
         } @else {
           <!-- ── Palette ── -->
+          <p class="nd-field__hint pld-tip">Tip: Shift-click boxes, or drag across empty page, to select several — then align, space or size them together.</p>
           <div class="pld-pal">
             @if (!hasVisible('table')) {
               <button type="button" class="pld-pal__item" (click)="add('table')">
@@ -460,6 +512,13 @@ interface DragState {
     .pld-guide { position: absolute; z-index: 4; pointer-events: none; }
     .pld-guide--v { width: 0; border-left: 1.5px solid #7c3aed; }
     .pld-guide--h { height: 0; border-top: 1.5px solid #7c3aed; }
+    .pld-marquee { position: absolute; z-index: 7; pointer-events: none; border: 1px solid #7c3aed; background: rgba(124, 58, 237, .08); border-radius: 2px; }
+    .pld-auto { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+    .pld-toolgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .pld-toolgrid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pld-toolbtn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; padding: 6px 4px; font-size: 11.5px; white-space: normal; text-align: center; line-height: 1.2; }
+    .pld-sec--first { border-top: 0; padding-top: 0; }
+    .pld-tip { margin: 0; }
     .pld-hole { position: absolute; z-index: 2; background: #fff; pointer-events: none; }
 
     .pld-box { position: absolute; z-index: 3; box-sizing: border-box; cursor: grab; touch-action: none; outline: none;
@@ -602,6 +661,22 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   private readonly draft = signal(true);
   private lastEmitted: ReportSection[] | null = null;
   readonly selected = signal<string | null>(null);
+  /** Every selected box (Shift-click / marquee); `selected` is the one the
+   *  side card edits and the reference for "same width / height". */
+  readonly selection = signal<string[]>([]);
+  readonly marquee = signal<{ x: number; y: number; w: number; h: number } | null>(null);
+  protected readonly vAligns: Array<{ value: 'top' | 'fill' | 'center'; label: string }> = [
+    { value: 'top', label: 'Top' }, { value: 'fill', label: 'Fill' }, { value: 'center', label: 'Center' },
+  ];
+  protected readonly alignTools: Array<{ edge: AlignEdge; label: string; short: string; icon: string }> = [
+    { edge: 'left', label: 'Align left edges', short: 'Left', icon: 'M4 3v18M8 7h10M8 15h6' },
+    { edge: 'hcenter', label: 'Align centres (across)', short: 'Centre', icon: 'M12 3v18M6 7h12M8 15h8' },
+    { edge: 'right', label: 'Align right edges', short: 'Right', icon: 'M20 3v18M6 7h10M10 15h6' },
+    { edge: 'top', label: 'Align top edges', short: 'Top', icon: 'M3 4h18M7 8v10M15 8v6' },
+    { edge: 'vcenter', label: 'Align middles', short: 'Middle', icon: 'M3 12h18M7 6v12M15 8v8' },
+    { edge: 'bottom', label: 'Align bottom edges', short: 'Bottom', icon: 'M3 20h18M7 6v10M15 10v6' },
+  ];
+  isSelected(id: string): boolean { return this.selection().includes(id); }
   readonly step = signal<number>(1);
   readonly zoom = signal<1 | 1.5>(1);
   readonly guides = signal(false);
@@ -893,7 +968,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         onOnePageBody: info => {
           if (info.pkg !== id) return;
           page = info.page; this.setBody(info.body);
-          if (info.tableBottom !== undefined) this.setMeasuredTable(info.tableBottom, info.body);
+          if (info.tableBottom !== undefined) this.setMeasuredTable(info.tableBottom, info.body, info.tableNaturalH);
         },
       });
       if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl);
@@ -911,10 +986,12 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
    *  at the table box's current width; null = it ran past the page. */
   readonly measuredTableMm = signal<number | null | undefined>(undefined);
   private measuredForWidth = -1;
-  private setMeasuredTable(bottomPt: number | null, body: BodyArea): void {
+  private setMeasuredTable(bottomPt: number | null, body: BodyArea, naturalPt?: number | null): void {
     const t = this.boxes().find(b => b.kind === 'table');
     if (!t) return;
-    const mm = bottomPt == null ? null : Math.round(((bottomPt - (body.top + t.y * MM)) / MM) * 10) / 10;
+    // The table's NATURAL height (rows before any fill) — "Fit box to content".
+    const mm = bottomPt == null ? null
+      : Math.round(((naturalPt ?? (bottomPt - (body.top + t.y * MM))) / MM) * 10) / 10;
     this.measuredForWidth = t.w;
     if (mm !== this.measuredTableMm()) this.measuredTableMm.set(mm);
   }
@@ -925,7 +1002,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   fitTableBox(): void {
     const t = this.tableBox(); const m = this.measuredFor(t);
     if (!t || m == null) return;
-    this.commit(resizeBox(this.boxes(), t.id, t.w, m + 1, this.body()));
+    this.commit(resizeBox(this.boxes(), t.id, t.w, m + 0.5, this.body()));
   }
 
   private setBody(b: BodyArea): void {
@@ -1033,15 +1110,47 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   hasVisible(kind: PageLayoutBoxKind): boolean { return this.boxes().some(b => b.kind === kind && !b.hidden); }
   colVisible(b: PageLayoutBox, name: string): boolean { return b.columns?.find(c => c.name === name)?.visible ?? true; }
   ghostFor(id: string) { return this.ghosts()[id] ?? null; }
-  select(id: string | null): void { this.selected.set(id); }
-  focusSelect(id: string): void { if (this.selected() !== id && !this.drag()) this.selected.set(id); }
+  select(id: string | null): void { this.selected.set(id); this.selection.set(id ? [id] : []); }
+  /** Shift-click: add / remove a box from the selection. */
+  toggleInSelection(id: string): void {
+    const cur = this.selection();
+    const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+    this.selection.set(next);
+    this.selected.set(next.length ? (next.includes(id) ? id : next[next.length - 1]) : null);
+  }
+  focusSelect(id: string): void { if (!this.isSelected(id) && !this.drag()) this.select(id); }
   readout(b: PageLayoutBox): string {
     return this.drag()?.mode === 'resize' ? `${this.round(b.w)} × ${this.round(b.h)} mm` : `${this.round(b.x)}, ${this.round(b.y)} mm`;
   }
 
   nudge(dx: number, dy: number): void {
-    const id = this.selected(); if (!id) return;
-    this.commit(nudgeBox(this.boxes(), id, dx, dy, this.body()).boxes);
+    const ids = this.selection(); if (!ids.length) return;
+    let next = this.boxes();
+    for (const id of ids) next = nudgeBox(next, id, dx, dy, this.body()).boxes;
+    this.commit(next);
+  }
+  // ── arrange tools ───────────────────────────────────────────────────
+  align(edge: AlignEdge): void { this.commit(alignBoxes(this.boxes(), this.selection(), edge, this.body())); }
+  distribute(axis: 'h' | 'v'): void { this.commit(distributeBoxes(this.boxes(), this.selection(), axis, this.body())); }
+  match(dim: 'w' | 'h'): void {
+    const ref = this.selected(); if (!ref) return;
+    this.commit(matchSize(this.boxes(), this.selection(), dim, ref, this.body()));
+  }
+  /** Stack the selection in one column as tall as the results table. */
+  fillColumnSel(): void {
+    const t = this.tableBox();
+    const ids = this.selection().filter(id => id !== t?.id);
+    this.commit(fillColumn(this.boxes(), ids, this.body(), t ? { top: t.y, height: t.h, gap: 4 } : { gap: 4 }));
+  }
+  autoArrangePage(): void {
+    this.commit(autoArrange(this.boxes(), this.body(), {
+      gutter: 4, tableNaturalMm: this.measuredFor(this.tableBox()) ?? null, signaturesHeightMm: this.signoffHeightMm(),
+    }));
+    this.select(null);
+  }
+  setVAlign(v: 'top' | 'fill' | 'center'): void {
+    const t = this.tableBox(); if (!t) return;
+    this.commit(patchBox(this.boxes(), t.id, { vAlign: v === 'top' ? null : v }));
   }
   setGeom(k: 'x' | 'y' | 'w' | 'h', raw: string): void {
     const b = this.selectedBox(); const v = parseFloat(raw);
@@ -1119,16 +1228,50 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   }
 
   // ── pointer: move / resize ──────────────────────────────────────────
+  /** Press on empty page: a drag draws a selection rectangle (marquee); a
+   *  plain click clears the selection. */
   onPagePointerDown(ev: PointerEvent): void {
     const t = ev.target as HTMLElement | null;
-    if (t === this.pageEl()?.nativeElement || t?.closest?.('.pld-canvas') || t?.classList?.contains('pld-fixed')) this.select(null);
+    const page = this.pageEl()?.nativeElement;
+    if (!page || !(t === page || t?.closest?.('.pld-canvas') || t?.classList?.contains('pld-fixed'))) return;
+    if (ev.button !== 0) return;
+    const origin = page.getBoundingClientRect();
+    const sx = ev.clientX - origin.left, sy = ev.clientY - origin.top;
+    let moved = false;
+    const add = ev.shiftKey ? this.selection() : [];
+    try { page.setPointerCapture(ev.pointerId); } catch { /* jsdom */ }
+    const onMove = (e: PointerEvent) => {
+      const x = e.clientX - origin.left, y = e.clientY - origin.top;
+      if (!moved && Math.hypot(x - sx, y - sy) < 4) return;
+      moved = true;
+      this.marquee.set({ x: Math.min(sx, x), y: Math.min(sy, y), w: Math.abs(x - sx), h: Math.abs(y - sy) });
+    };
+    const onUp = () => {
+      page.removeEventListener('pointermove', onMove);
+      page.removeEventListener('pointerup', onUp);
+      page.removeEventListener('pointercancel', onUp);
+      const m = this.marquee();
+      this.marquee.set(null);
+      if (!moved || !m) { if (!ev.shiftKey) this.select(null); return; }
+      const hit = this.boxes().filter(b => {
+        const r = this.boxRect(b);
+        return r.x < m.x + m.w && r.x + r.w > m.x && r.y < m.y + m.h && r.y + r.h > m.y;
+      }).map(b => b.id);
+      const next = [...new Set([...add, ...hit])];
+      this.selection.set(next);
+      this.selected.set(next.length ? next[next.length - 1] : null);
+    };
+    page.addEventListener('pointermove', onMove);
+    page.addEventListener('pointerup', onUp);
+    page.addEventListener('pointercancel', onUp);
   }
 
   /** Press on a box = select it AND start dragging it (no second tap). */
   onBoxPointerDown(ev: PointerEvent, b: PageLayoutBox): void {
     if (ev.button !== 0) return;
     ev.stopPropagation();
-    this.select(b.id);
+    if (ev.shiftKey) { this.toggleInSelection(b.id); return; }
+    if (!this.isSelected(b.id)) this.select(b.id); else this.selected.set(b.id);
     this.pageEl()?.nativeElement.focus({ preventScroll: true });
     this.track(ev, b, 'move');
   }
@@ -1159,7 +1302,19 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         ? dragBox(before, start.id, start.x + dxPx / k, start.y + dyPx / k, this.body(), snap)
         : resizeFromHandle(before, start, handle!, dxPx / k, dyPx / k, this.body(), snap);
       this.guideLines.set(r.guides);
-      this.boxes.set(r.boxes);
+      let next = r.boxes;
+      const group = this.selection();
+      if (mode === 'move' && group.length > 1 && group.includes(start.id)) {
+        // The whole selection moves with the box under the pointer.
+        const moved2 = next.find(x => x.id === start.id)!;
+        const ddx = moved2.x - start.x, ddy = moved2.y - start.y;
+        for (const id of group) {
+          if (id === start.id) continue;
+          const o = before.find(x => x.id === id);
+          if (o) next = dragBox(next, id, o.x + ddx, o.y + ddy, this.body(), false).boxes;
+        }
+      }
+      this.boxes.set(next);
       if (mode === 'resize') this.shiftGhost(start, r.boxes.find(x => x.id === start.id)!);
     };
     const onUp = () => {
@@ -1212,7 +1367,12 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     }
     const id = this.selected();
     if (!id) return;
-    if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); this.remove(id); return; }
+    if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      ev.preventDefault();
+      const ids = this.selection().filter(x => this.boxes().find(b => b.id === x)?.kind !== 'table');
+      if (ids.length) { this.commit(this.boxes().filter(b => !ids.includes(b.id))); this.select(null); }
+      return;
+    }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const d = dirs[ev.key];
     if (!d) return;
