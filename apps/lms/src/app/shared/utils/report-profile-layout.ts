@@ -433,6 +433,31 @@ export interface DefaultLayoutInput {
   tableHeightMm?: number | null;
 }
 
+/** Analyzer graphs are ~1.4:1 (M51: 156×111 px) under a ~3.5 mm caption. */
+const GRAPH_ASPECT = 1.4, CAPTION_MM = 3.5;
+
+/** Lay `n` graph boxes in the column beside the table so they are as LARGE
+ *  as the column allows and fill the table's height (owner 2026-10-02: no
+ *  small 2×2 grid over a big empty area): try 1 and 2 columns, keep each box
+ *  to the graph's own aspect (no letterbox bands), pick the bigger graphs,
+ *  then spread the rows down the table's height. */
+export function graphGrid(n: number, colW: number, targetH: number, gap: number, maxH: number) {
+  const fill = Math.min(Math.max(targetH, 30), maxH);
+  let best: { cols: number; rows: number; cellW: number; cellH: number; area: number } | null = null;
+  for (const cols of [2, 1]) {
+    const rows = Math.ceil(n / cols);
+    const cellW = (colW - gap * (cols - 1)) / cols;
+    const fitH = (fill - gap * (rows - 1)) / rows;
+    const cellH = Math.max(14, Math.min(fitH, cellW / GRAPH_ASPECT + CAPTION_MM));
+    const imgW = Math.min(cellW, (cellH - CAPTION_MM) * GRAPH_ASPECT);
+    const area = imgW * imgW / GRAPH_ASPECT;
+    if (!best || area > best.area * 1.05) best = { cols, rows, cellW: round1(cellW), cellH: round1(cellH), area };
+  }
+  const b = best!;
+  const gapY = b.rows > 1 ? Math.max(gap, Math.min(gap * 4, (fill - b.rows * b.cellH) / (b.rows - 1))) : 0;
+  return { cols: b.cols, rows: b.rows, cellW: b.cellW, cellH: b.cellH, gapY: round1(gapY) };
+}
+
 /** The table's share of the body width when graphs / charts sit beside it. */
 export const DEFAULT_TABLE_SHARE = 0.62;
 
@@ -471,15 +496,12 @@ export function buildDefaultLayout(input: DefaultLayoutInput): PageLayoutBox[] {
   let bottom = tableH;
   if (side.length) {
     const rightX = tableW + gap, rightW = wMm - rightX;
-    const cols = side.length === 1 ? 1 : 2;
-    const cellW = round1((rightW - gap * (cols - 1)) / cols);
-    // Graphs keep the analyzer's own ~4:3 look; the grid never runs past the body.
-    const rows = Math.ceil(side.length / cols);
-    const cellH = round1(Math.max(14, Math.min(cellW * 0.78, (avail - gap * (rows - 1)) / rows)));
+    const grid = graphGrid(side.length, rightW, tableH, gap, avail);
     side.forEach((b, i) => {
-      boxes.push({ ...b, x: round1(rightX + (i % cols) * (cellW + gap)), y: round1(Math.floor(i / cols) * (cellH + gap)), w: cellW, h: cellH });
+      boxes.push({ ...b, x: round1(rightX + (i % grid.cols) * (grid.cellW + gap)),
+        y: round1(Math.floor(i / grid.cols) * (grid.cellH + grid.gapY)), w: grid.cellW, h: grid.cellH });
     });
-    bottom = Math.max(bottom, rows * cellH + (rows - 1) * gap);
+    bottom = Math.max(bottom, grid.rows * grid.cellH + (grid.rows - 1) * grid.gapY);
   }
   // End of Report prints under the content, then the sign-off.
   const sigY = round1(Math.min(bottom + gap + eorGap, hMm - sigH));

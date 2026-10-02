@@ -1,7 +1,7 @@
 import type { PageLayoutBox } from '../models/report-layout.model';
 import { PAGE, ptToMm } from './report-header-layout';
 import {
-  addPaletteBox, analyzerSampleAsset, bodyArea, buildDefaultLayout, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
+  addPaletteBox, analyzerSampleAsset, bodyArea, buildDefaultLayout, graphGrid, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
   KNOWN_ANALYZER_IMAGES, printableBoxes, resizeFromHandle, setBoxHidden,
 } from './report-profile-layout';
 
@@ -45,13 +45,16 @@ describe('buildDefaultLayout — a sensible start for ANY profile', () => {
     expect(detectLayoutIssues(boxes, BODY)).toEqual([]);
   });
 
-  it('CBC with the 4 graphs: table left, a 2x2 graph grid right, signatures below — all inside the body, no overlap', () => {
-    const boxes = buildDefaultLayout({ body: BODY, rowCount: 20, analyzerCodes: KNOWN_ANALYZER_IMAGES.map(i => i.code) });
+  it('CBC with the 4 graphs beside a TALL table: one column of large graphs filling the table height, signatures below, no overlap', () => {
+    const boxes = buildDefaultLayout({ body: BODY, rowCount: 20, analyzerCodes: KNOWN_ANALYZER_IMAGES.map(i => i.code), tableHeightMm: 150 });
     const table = boxes.find(b => b.kind === 'table')!;
     const graphs = boxes.filter(b => b.kind === 'analyzer');
     expect(graphs.map(g => g.ref)).toEqual(['12003', '12053', '12103', '12153']);
     expect(graphs.every(g => g.x >= table.x + table.w)).toBe(true);
-    expect(new Set(graphs.map(g => g.x)).size).toBe(2);
+    expect(new Set(graphs.map(g => g.x)).size).toBe(1);
+    const last = graphs[3];
+    expect(last.y + last.h).toBeGreaterThan(table.h * 0.85);   // fills the table's height
+    expect(last.y + last.h).toBeLessThanOrEqual(table.h + 0.5);
     expect(graphs[0].label).toBe('WBC histogram');
     expect(detectLayoutIssues(boxes, BODY)).toEqual([]);
   });
@@ -121,6 +124,17 @@ describe('resizeFromHandle — 8 handles, opposite edges stay put', () => {
     const other = box('b', 100, 0, 20, 20);
     const a = resizeFromHandle([start, other], start, 'e', 9, 0, BODY).boxes.find(b => b.id === 'a')!;
     expect(a.x + a.w).toBe(100);
+  });
+});
+
+describe('graphGrid — graphs as large as the column allows', () => {
+  it('a short table keeps a 2×2 grid; a tall one stacks them', () => {
+    expect(graphGrid(4, 68, 60, 4, 200).cols).toBe(2);
+    expect(graphGrid(4, 68, 150, 4, 200).cols).toBe(1);
+  });
+  it('boxes keep the graph aspect (no tall letterboxed frames)', () => {
+    const g = graphGrid(4, 68, 400, 4, 400);
+    expect(g.cellH).toBeLessThanOrEqual(g.cellW / 1.4 + 3.6);
   });
 });
 
