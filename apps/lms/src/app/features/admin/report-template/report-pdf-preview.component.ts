@@ -7,6 +7,7 @@ import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { firstValueFrom } from 'rxjs';
 import { ReportPdfInput, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { buildSamplePreviewInput, type PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
+import type { LiveLayout } from '../../../shared/utils/report-profile-layout';
 import type { PageLayoutBox } from '../../../shared/models/report-layout.model';
 
 export type { PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
@@ -97,7 +98,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
   /** The profile one-page layout as the designer has it RIGHT NOW (unsaved
    *  boxes) — the preview renders it while the lab drags, instead of
    *  waiting for the autosave round trip. Null = whatever is saved. */
-  readonly pageLayout = input<{ enabled: boolean; boxes: PageLayoutBox[] } | null>(null);
+  readonly pageLayout = input<LiveLayout | null>(null);
   /** The test's department — the sample report signs with its REAL sign-off. */
   readonly departmentId = input<string | null>(null);
   private readonly signoff = signal<{ signatures: ReportSignature[] } | null>(null);

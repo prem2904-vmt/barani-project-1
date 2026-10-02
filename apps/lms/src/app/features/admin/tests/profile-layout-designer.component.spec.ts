@@ -267,6 +267,94 @@ describe('ProfileLayoutDesignerComponent — real box editing', () => {
   });
 });
 
+describe('ProfileLayoutDesignerComponent — Custom layout pages', () => {
+  const tbl = (id: string, rows?: string[]): PageLayoutBox => ({ id, kind: 'table', x: 0, y: 0, w: 100, h: 80, ...(rows ? { rows } : {}) });
+  const pagesOf = (emitted: ReportSection[][]) => readPageLayout(emitted[emitted.length - 1])!.pages!;
+
+  it('a saved single-page layout opens as Page 1 and saves back as v2 pages', () => {
+    const { c, emitted } = make({ sections: saved([tbl('table')]) });
+    expect(c.pages().length).toBe(1);
+    c.setEnabled(true);
+    const raw = emitted[0].find(x => x.type === 'page_layout') as unknown as Record<string, unknown>;
+    expect(raw['v']).toBe(2);
+    expect((raw['pages'] as unknown[]).length).toBe(1);
+  });
+
+  it('Add page / move / remove: each one undoable; a page with the ONLY table cannot be removed', async () => {
+    const { f, c, el, toasts, dialog } = make({ sections: saved([tbl('table')]) });
+    c.addPage(); f.detectChanges();
+    expect(c.pages().length).toBe(2);
+    expect(c.activePage()).toBe(1);
+    expect(el.querySelectorAll('.pld-pagetab').length).toBe(2);
+    c.add('notes');
+    c.movePage(-1);
+    expect(c.pages()[0].boxes[0].kind).toBe('notes');      // the notes page moved first
+    c.goPage(1);
+    await c.removePage();                                  // page 2 holds the only table
+    expect(toasts.info).toHaveBeenCalled();
+    expect(c.pages().length).toBe(2);
+    c.goPage(0);
+    await c.removePage();                                  // the notes page: asks, then removes
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(c.pages().length).toBe(1);
+    c.undo();
+    expect(c.pages().length).toBe(2);
+  });
+
+  it('AUTO mode: "Table (continued)" adds another table box on the current page', () => {
+    const { c, emitted } = make({ sections: saved([tbl('table')]) });
+    c.addPage();
+    c.addTableBox();
+    const p2 = pagesOf(emitted)[1].boxes;
+    expect(p2[0].kind).toBe('table');
+    expect(p2[0].id).not.toBe('table');
+    expect(p2[0].label).toContain('continued');
+  });
+
+  it('MANUAL mode: every row starts in the first box; a row moved to the page-2 box leaves page 1; missing rows are listed', () => {
+    const { c, emitted } = make({ sections: saved([tbl('table')]), members: CBC_MEMBERS });
+    c.addPage(); c.addTableBox();
+    const second = c.boxes()[0].id;
+    c.changeTableMode('manual');
+    let pg = pagesOf(emitted);
+    expect(pg[0].boxes[0].rows).toEqual(['Haemoglobin', 'Total Leukocyte Count', 'Platelet Count']);
+    c.toggleRow('Platelet Count', second);
+    pg = pagesOf(emitted);
+    expect(pg[0].boxes[0].rows).toEqual(['Haemoglobin', 'Total Leukocyte Count']);
+    expect(pg[1].boxes[0].rows).toEqual(['Platelet Count']);
+    c.toggleRow('Platelet Count', second);                 // off → placed nowhere
+    expect(c.rowIssues()[0].kind).toBe('missing');
+    expect(c.rowHome('Platelet Count', second)).toBe('Not placed yet');
+  });
+
+  it('dragging a row onto a table box (or a page tab) assigns it there', () => {
+    const { c, emitted } = make({ sections: saved([tbl('table')]), members: CBC_MEMBERS });
+    c.addPage(); c.addTableBox(); c.changeTableMode('manual');
+    const second = c.boxes()[0];
+    const dt = { data: {} as Record<string, string>, types: ['text/x-pf-row'], setData(k: string, v: string) { this.data[k] = v; }, getData(k: string) { return this.data[k]; } };
+    c.onRowDragStart({ dataTransfer: dt } as unknown as DragEvent, 'Haemoglobin');
+    c.onRowDropOnBox({ dataTransfer: dt, preventDefault() {} } as unknown as DragEvent, second);
+    expect(pagesOf(emitted)[1].boxes[0].rows).toEqual(['Haemoglobin']);
+    c.onRowDropOnPage({ dataTransfer: dt, preventDefault() {} } as unknown as DragEvent, 0);
+    expect(pagesOf(emitted)[0].boxes[0].rows).toContain('Haemoglobin');
+  });
+
+  it('a graph already on another page is not added twice — the designer opens that page instead', () => {
+    const { c } = make({ sections: saved([tbl('table'), { id: 'analyzer-12003', kind: 'analyzer', ref: '12003', x: 110, y: 0, w: 40, h: 30 }]) });
+    c.addPage();
+    c.addAnalyzer('12003', 'WBC histogram');
+    expect(c.activePage()).toBe(0);
+    expect(c.selected()).toBe('analyzer-12003');
+    expect(c.pages()[1].boxes).toEqual([]);
+  });
+
+  it('the signatures box explains when it prints (department\'s last test)', () => {
+    const { f, c, el } = make({ sections: saved([tbl('table'), { id: 'signatures', kind: 'signatures', x: 0, y: 100, w: 188, h: 24 }]) });
+    c.select('signatures'); f.detectChanges();
+    expect(el.textContent).toContain("department's LAST test");
+  });
+});
+
 describe('ProfileLayoutDesignerComponent — palette', () => {
   it('adds a graph, a text box and a manual-code graph, each selected and in free space', () => {
     const { c, emitted } = make();

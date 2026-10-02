@@ -1,4 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import type { LiveLayout } from '../../../../shared/utils/report-profile-layout';
 import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
@@ -870,7 +871,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   /** The profile one-page layout as the designer has it right now (unsaved) —
    *  the Live preview renders it while the lab arranges the page. Reset when
    *  another test opens. */
-  protected readonly livePageLayout = signal<{ enabled: boolean; boxes: PageLayoutBox[] } | null>(null);
+  protected readonly livePageLayout = signal<LiveLayout | null>(null);
   private readonly resetLivePageLayout = effect(() => {
     void this._draft().id; // track: another test opened
     untracked(() => this.livePageLayout.set(null));

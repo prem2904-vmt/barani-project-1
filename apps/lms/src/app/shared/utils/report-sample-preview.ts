@@ -3,7 +3,7 @@ import type { PageLayoutBox, ReportColumn, ResolvedReportLayout } from '../model
 import { preloadReportImages, type ReportPdfInput } from './report-pdf';
 import { resolveReportLayouts } from './report-layouts';
 import { sampleSeriesValues } from './report-chart/report-chart.sample';
-import { PAGE_LAYOUT_SECTION_TYPE, analyzerSampleAsset, readPageLayout } from './report-profile-layout';
+import { PAGE_LAYOUT_SECTION_TYPE, analyzerSampleAsset, readPageLayout, type LiveLayout } from './report-profile-layout';
 
 /**
  * The SAMPLE report a Test Master preview renders: a fabricated order
@@ -122,7 +122,7 @@ export interface SamplePreviewOptions {
   preview: PreviewEngineFn;
   /** LIVE (unsaved) one-page layout for the TARGET profile — the designer's
    *  boxes as they are right now, patched over whatever the engine returned. */
-  pageLayout?: { enabled: boolean; boxes: PageLayoutBox[] } | null;
+  pageLayout?: LiveLayout | null;
   /** Base href the sample analyzer graphs resolve against (document.baseURI). */
   assetBase?: string | null;
   /** The department's REAL sign-off (signoff-preview) — the sample report
@@ -157,9 +157,10 @@ const SAMPLE_CULTURE = {
 
 /** Patch the target layout's page_layout section with the live boxes (or
  *  add one) — the resolved shape the renderer reads (`pageLayout` nested). */
-function withLivePageLayout(layout: ResolvedReportLayout, live: { enabled: boolean; boxes: PageLayoutBox[] }): ResolvedReportLayout {
+function withLivePageLayout(layout: ResolvedReportLayout, live: LiveLayout): ResolvedReportLayout {
+  const pages = live.pages?.length ? live.pages : [{ id: 'page-1', boxes: live.boxes }];
   const sec = { id: 'page-layout', type: PAGE_LAYOUT_SECTION_TYPE, isVisible: true,
-    pageLayout: { type: PAGE_LAYOUT_SECTION_TYPE, v: 1, enabled: live.enabled, boxes: live.boxes } };
+    pageLayout: { type: PAGE_LAYOUT_SECTION_TYPE, v: 2, enabled: live.enabled, boxes: pages[0].boxes, pages, tableMode: live.tableMode ?? 'auto' } };
   const has = layout.sections.some(s => s.type === PAGE_LAYOUT_SECTION_TYPE);
   return {
     ...layout,
@@ -256,7 +257,7 @@ export async function buildSamplePreviewInput(
   // Live one-page layout (the designer's unsaved boxes) for the target, with
   // SAMPLE graphs for its analyzer boxes.
   const saved = layouts[testId] ? readPageLayout(layouts[testId].sections) : null;
-  const live = o.pageLayout ?? (saved?.enabled ? { enabled: true, boxes: saved.boxes } : null);
+  const live: LiveLayout | null = o.pageLayout ?? (saved?.enabled ? { enabled: true, boxes: saved.boxes, pages: saved.pages, tableMode: saved.tableMode } : null);
   if (live && layouts[testId] && o.members.length > 0) {
     input = applyLivePageLayout(input, testId, live, o.assetBase ?? null);
     input = await withSampleImagesLoaded(input, o.apiUrl);
@@ -270,7 +271,7 @@ export async function buildSamplePreviewInput(
  *  on every drag end) and SAMPLE graphs (synthetic look-alikes, never a real
  *  run) attached for its analyzer boxes. */
 export function applyLivePageLayout(
-  input: ReportPdfInput, testId: string, live: { enabled: boolean; boxes: PageLayoutBox[] }, assetBase: string | null,
+  input: ReportPdfInput, testId: string, live: LiveLayout, assetBase: string | null,
 ): ReportPdfInput {
   const layouts = { ...(input.resolvedLayouts ?? {}) } as Record<string, ResolvedReportLayout>;
   const target = layouts[testId];
@@ -280,7 +281,7 @@ export function applyLivePageLayout(
   if (live.enabled && assetBase) {
     try {
       const snap = JSON.parse(data ?? '{}') as { tests?: Array<Record<string, unknown>> };
-      const imgs = sampleAnalyzerImages(live.boxes, assetBase);
+      const imgs = sampleAnalyzerImages(live.pages?.length ? live.pages.flatMap(p => p.boxes) : live.boxes, assetBase);
       const tests: Array<Record<string, unknown>> = (snap.tests ?? []).map(t => ({ ...t, analyzerImages: null }));
       const first = tests.findIndex(t => t['profileTestId'] === testId || t['packageTestId'] === testId);
       if (first >= 0 && Object.keys(imgs).length) tests[first] = { ...tests[first], analyzerImages: imgs };

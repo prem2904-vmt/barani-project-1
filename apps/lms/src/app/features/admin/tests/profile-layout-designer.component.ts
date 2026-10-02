@@ -2,13 +2,16 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { PageLayoutBox, PageLayoutBoxKind, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
+import type {
+  PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutTableMode, ReportColumn, ReportSection,
+} from '../../../shared/models/report-layout.model';
 import type { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
 import { layoutSignatureBlock } from '../../../shared/utils/report-signatures';
 import {
   DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
   boxLabel, buildDefaultLayout, detectLayoutIssues, dragBox, fitMeter, isCbcFamily, nudgeBox, patchBox, readPageLayout, removeBox,
   resizeBox, resizeFromHandle, setBoxHidden, setColumnVisible, writePageLayout,
+  assignRowToBox, newBoxId, newPageId, rowAssignmentIssues, setTableMode, tableChain, type LiveLayout,
   type BodyArea, type PageLayoutIssue, type ResizeHandle, type SnapGuides,
 } from '../../../shared/utils/report-profile-layout';
 import { MM, ptToMm } from '../../../shared/utils/report-header-layout';
@@ -31,6 +34,7 @@ const HISTORY_MAX = 60;
 
 interface PaletteImage { code: string; label: string; detail: string; onPage: boolean; hidden: boolean }
 interface ChartBlock { id: string; label: string; onPage: boolean }
+interface LayoutState { pages: PageLayoutPage[]; tableMode: PageLayoutTableMode }
 interface DragState {
   id: string; mode: 'move' | 'resize'; handle?: ResizeHandle;
   /** px offset the ghost image is drawn at inside the moving box (resize from n/w). */
@@ -69,12 +73,12 @@ interface DragState {
   template: `
   <div class="pld" [class.pld--guides]="guides()">
     <!-- ══ MAIN CARD: the page ══ -->
-    <section class="nd-card pld-main" aria-label="One-page layout">
+    <section class="nd-card pld-main" aria-label="Custom layout">
       <div class="nd-card__head pld-main__head">
         <span class="nd-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>
         </span>
-        <span class="nd-card__label">One-page layout</span>
+        <span class="nd-card__label">Custom layout</span>
         <div class="pld-tools">
           <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="!canUndo()" (click)="undo()" aria-label="Undo" title="Undo (Ctrl+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
@@ -94,15 +98,39 @@ interface DragState {
 
       <div class="pld-onrow">
         <div class="pld-onrow__txt">
-          <p class="pld-onrow__t">Print this profile as one page</p>
-          <p class="pld-onrow__s">{{ enabled() ? 'On — reports print this arrangement.' : 'Off — reports print the normal results table. Arrange the page, then switch it on.' }}</p>
+          <p class="pld-onrow__t">Print this profile with its custom layout</p>
+          <p class="pld-onrow__s">{{ enabled() ? 'On — reports print these pages.' : 'Off — reports print the normal results table. Arrange the pages, then switch it on.' }}</p>
         </div>
         <button type="button" class="nd-btn nd-btn--tertiary" (click)="restoreDefault()" [disabled]="restoring()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           {{ restoring() ? 'Restoring…' : 'Restore to default' }}
         </button>
-        <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="enabled()" aria-label="Print this profile as one page" (click)="setEnabled(!enabled())">
+        <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="enabled()" aria-label="Print this profile with its custom layout" (click)="setEnabled(!enabled())">
           <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+        </button>
+      </div>
+
+      <div class="pld-pages" role="tablist" aria-label="Pages">
+        @for (pg of pages(); track pg.id; let i = $index) {
+          <button type="button" role="tab" class="pld-pagetab" [attr.aria-selected]="activePage() === i" (click)="goPage(i)"
+                  (dragover)="$event.preventDefault()" (drop)="onRowDropOnPage($event, i)">
+            Page {{ i + 1 }}
+            @if (pageRowsLabel(i); as rl) { <span class="pld-pagetab__meta nd-num">{{ rl }}</span> }
+          </button>
+        }
+        <button type="button" class="nd-btn nd-btn--tertiary pld-addpage" (click)="addPage()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add page
+        </button>
+        <span class="pld-pages__grow"></span>
+        <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="activePage() === 0" (click)="movePage(-1)" aria-label="Move this page earlier" title="Move this page earlier">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="activePage() === pages().length - 1" (click)="movePage(1)" aria-label="Move this page later" title="Move this page later">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button type="button" class="nd-btn nd-btn--icon pld-tool pld-tool--danger" [disabled]="pages().length === 1" (click)="removePage()" aria-label="Remove this page" title="Remove this page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
         </button>
       </div>
 
@@ -158,6 +186,8 @@ interface DragState {
                  [style.width.px]="boxRect(b).w" [style.height.px]="boxRect(b).h"
                  [attr.aria-label]="labelFor(b) + (b.hidden ? ' (hidden)' : '') + (selected() === b.id ? ', selected' : '')"
                  [attr.aria-pressed]="selected() === b.id"
+                 [class.pld-box--droptarget]="dropTarget() === b.id"
+                 (dragover)="onBoxDragOver($event, b)" (dragleave)="dropTarget.set(null)" (drop)="onRowDropOnBox($event, b)"
                  (pointerdown)="onBoxPointerDown($event, b)" (focus)="focusSelect(b.id)">
               @if (ghostFor(b.id); as g) {
                 <span class="pld-box__ghost" aria-hidden="true" [style.background-image]="'url(' + g.url + ')'"
@@ -273,6 +303,32 @@ interface DragState {
                 @if (!fitsBox() && measuredFor(b) != null) {
                   <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
                 }
+                <h4 class="pld-sec__h">Rows across table boxes</h4>
+                <div class="nd-seg" role="radiogroup" aria-label="Rows across table boxes">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'auto'" (click)="changeTableMode('auto')">Continue automatically</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'manual'" (click)="changeTableMode('manual')">Choose rows</button>
+                </div>
+                @if (tableMode() === 'auto') {
+                  <p class="nd-field__hint">{{ autoHint(b) }}</p>
+                } @else {
+                  <p class="nd-field__hint">Switch a row on to print it in this box (it leaves any other box), or drag a row onto a table box or a page tab.</p>
+                  <ul class="pld-rows">
+                    @for (r of rowOptions(); track r.key) {
+                      <li class="pld-rowitem" draggable="true" (dragstart)="onRowDragStart($event, r.key)">
+                        <span class="pld-rowitem__grip" aria-hidden="true">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+                        </span>
+                        <span class="pld-rowitem__t">{{ r.title }}
+                          @if (rowHome(r.key, b.id); as home) { <small>{{ home }}</small> }
+                        </span>
+                        <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="(b.rows ?? []).includes(r.key)"
+                                [attr.aria-label]="'Print ' + r.title + ' in this table box'" (click)="toggleRow(r.key, b.id)">
+                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
                 <h4 class="pld-sec__h">Columns</h4>
                 <ul class="pld-cols">
                   @for (c of tableColumns(); track c.name) {
@@ -306,6 +362,11 @@ interface DragState {
                 <p class="nd-field__hint">Edit what the chart shows in its block in the print order below.</p>
               </section>
             }
+            @case ('signatures') {
+              <section class="pld-sec" aria-label="Signatures">
+                <p class="nd-field__hint">The department's real sign-off. It prints only when this profile is the department's LAST test in the report — if more tests of the department follow, the sign-off moves after them (as on every report) and this space is left out.</p>
+              </section>
+            }
             @case ('notes') {
               <section class="pld-sec" aria-label="Text">
                 <label class="nd-field"><span class="nd-field__lbl">Text that prints</span>
@@ -323,15 +384,21 @@ interface DragState {
         } @else {
           <!-- ── Palette ── -->
           <div class="pld-pal">
-            @if (!hasVisible('table')) {
+            @if (hasAnyTable()) {
+              <button type="button" class="pld-pal__item" (click)="addTableBox()">
+                <span class="pld-pal__ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10"/><path d="M15 15h3"/></svg></span>
+                <span><b>{{ tableMode() === 'auto' ? 'Table (continued)' : 'Another table box' }}</b><small>{{ tableMode() === 'auto' ? 'Rows that don\'t fit the earlier table box continue here' : 'Choose which rows print in it' }}</small></span>
+              </button>
+            }
+            @if (!hasAnyTable()) {
               <button type="button" class="pld-pal__item" (click)="add('table')">
                 <span class="pld-pal__ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10"/></svg></span>
                 <span><b>Results table</b><small>Every value with its unit and reference range</small></span>
               </button>
             }
-            <button type="button" class="pld-pal__item" [disabled]="hasVisible('signatures')" (click)="add('signatures')">
+            <button type="button" class="pld-pal__item" [disabled]="hasAnywhere('signatures')" (click)="add('signatures')">
               <span class="pld-pal__ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3 0 4-8 6-8s0 8 3 8 3-4 5-4 2 2 4 2"/><path d="M3 21h18"/></svg></span>
-              <span><b>Signatures</b><small>{{ hasVisible('signatures') ? 'On the page' : "The department's sign-off" }}</small></span>
+              <span><b>Signatures</b><small>{{ hasAnywhere('signatures') ? 'In the layout' : "The department's sign-off — prints when this profile is its last test" }}</small></span>
             </button>
             <button type="button" class="pld-pal__item" (click)="add('notes')">
               <span class="pld-pal__ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
@@ -400,6 +467,13 @@ interface DragState {
                 </li>
               }
             </ul>
+            @if (rowIssues().length) {
+              <ul class="pld-issues" role="status">
+                @for (iss of rowIssues(); track iss.kind) {
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>{{ iss.message }} ({{ rowTitles(iss.rows) }})</span></li>
+                }
+              </ul>
+            }
             @if (pageIssues().length) {
               <ul class="pld-issues" role="status">
                 @for (iss of pageIssues(); track iss.message) {
@@ -425,6 +499,20 @@ interface DragState {
     @media (pointer: coarse) { .pld-tool { width: 44px; min-height: 44px; height: 44px; } .nd-seg__item { min-height: 40px; } }
     .nd-toggle { min-height: 44px; }
 
+    .pld-pages { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--nd-line); flex-wrap: wrap; }
+    .pld-pagetab { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+      color: var(--text-secondary); background: transparent; border: 1px solid var(--nd-line); }
+    .pld-pagetab[aria-selected="true"] { color: var(--text-primary); background: var(--nd-card-bg); border-color: var(--nd-sel-border, rgba(124, 58, 237, .55)); box-shadow: 0 1px 2px rgba(15, 23, 42, .08); font-weight: 600; }
+    .pld-pagetab__meta { font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+    .pld-addpage { display: inline-flex; align-items: center; gap: 4px; }
+    .pld-pages__grow { flex: 1 1 auto; }
+    .pld-tool--danger:not(:disabled):hover { color: #b91c1c; }
+    .pld-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
+    .pld-rowitem { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 6px; border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); cursor: grab; }
+    .pld-rowitem__grip { color: var(--text-tertiary); display: inline-flex; }
+    .pld-rowitem__t { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--text-primary); display: flex; flex-direction: column; }
+    .pld-rowitem__t small { font-size: 11px; color: var(--text-tertiary); }
+    .pld-box--droptarget { border: 2px dashed #7c3aed !important; background: rgba(124, 58, 237, .08) !important; }
     .pld-onrow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--nd-line); flex-wrap: wrap; }
     .pld-onrow__txt { flex: 1 1 220px; min-width: 0; }
     .pld-onrow__t { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -592,10 +680,20 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
 
   readonly sectionsChange = output<ReportSection[]>();
   /** The box set as it is right now — for the Live preview while editing. */
-  readonly liveChange = output<{ enabled: boolean; boxes: PageLayoutBox[] }>();
+  readonly liveChange = output<LiveLayout>();
 
   // ── state ───────────────────────────────────────────────────────────
-  readonly boxes = signal<PageLayoutBox[]>([]);
+  /** Custom layout: the pages, the one being edited, and how the results
+   *  table spreads across table boxes. `boxes` is the ACTIVE page's boxes —
+   *  every box tool works on it. */
+  readonly pages = signal<PageLayoutPage[]>([{ id: 'page-1', boxes: [] }]);
+  readonly activePage = signal(0);
+  readonly tableMode = signal<PageLayoutTableMode>('auto');
+  readonly boxes = computed(() => this.pages()[this.activePage()]?.boxes ?? []);
+  private setBoxes(next: PageLayoutBox[]): void {
+    const i = this.activePage();
+    this.pages.update(ps => ps.map((p, j) => (j === i ? { ...p, boxes: next } : p)));
+  }
   readonly enabled = signal(false);
   /** True while the boxes are the auto-built default nobody has touched —
    *  rebuilt as better information (real body rect, linked graphs) arrives. */
@@ -614,8 +712,8 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   readonly holes = signal<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   /** Cropped page pixels that travel with a moved box until the re-render lands. */
   private readonly ghosts = signal<Record<string, { url: string; w: number; h: number; dx: number; dy: number }>>({});
-  private readonly history = signal<PageLayoutBox[][]>([]);
-  private readonly future = signal<PageLayoutBox[][]>([]);
+  private readonly history = signal<LayoutState[]>([]);
+  private readonly future = signal<LayoutState[]>([]);
   readonly canUndo = computed(() => this.history().length > 0);
   readonly canRedo = computed(() => this.future().length > 0);
   readonly analyzerInfo = signal<ProfileAnalyzerImages | null>(null);
@@ -648,7 +746,10 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   /** The EXACT body rect (pt) the renderer placed the boxes in — reported by
    *  the PDF pipeline itself (`onOnePageBody`). Until the first render: an
    *  estimate below the letterhead + patient block. */
-  private readonly renderedBody = signal<BodyArea | null>(null);
+  /** layout page → its rendered body rect / its page in the sample PDF. */
+  private readonly renderedBodies = signal<Record<number, BodyArea>>({});
+  private readonly pdfPageOf = signal<Record<number, number>>({});
+  private readonly renderedBody = computed(() => this.renderedBodies()[this.activePage()] ?? null);
   private readonly estimatedBody = computed((): BodyArea => {
     const tpl = this.template();
     let top = 98 + 128; // classic letterhead + patient block + headings
@@ -722,10 +823,14 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   });
   readonly imageSourceNote = computed(() => {
     const info = this.analyzerInfo();
+    if (info?.mapped && info.instruments.length) {
+      const names = info.instruments.map(i => i.model ? `${i.name} (${i.model})` : i.name).join(', ');
+      return `Graphs mapped to this profile in Instruments → Code mapping (${names}). Thumbnails are samples.`;
+    }
     if (info?.linked && info.instruments.length) {
       const names = info.instruments.map(i => i.model ? `${i.name} (${i.model})` : i.name).join(', ');
       return info.images.length
-        ? `Graphs ${names} sends for these tests. Thumbnails are samples.`
+        ? `Graphs ${names} sends for these tests — map them to this profile in Instruments → Code mapping. Thumbnails are samples.`
         : `${names} is linked to these tests but hasn't sent a graph yet.`;
     }
     if (info?.images.length) return 'Graphs already attached to this profile\'s results. Thumbnails are samples.';
@@ -772,8 +877,10 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         if (secs === this.lastEmitted) return;
         const cfg = readPageLayout(secs);
         this.enabled.set(cfg?.enabled ?? false);
-        if (cfg?.boxes.length) { this.boxes.set(cfg.boxes); this.draft.set(false); }
-        else { this.draft.set(true); this.boxes.set(this.buildDefault()); }
+        this.tableMode.set(cfg?.tableMode ?? 'auto');
+        if (cfg?.pages?.some(p => p.boxes.length)) { this.pages.set(cfg.pages); this.draft.set(false); }
+        else { this.draft.set(true); this.pages.set([{ id: 'page-1', boxes: this.buildDefault() }]); }
+        if (this.activePage() >= this.pages().length) this.activePage.set(0);
         this.history.set([]); this.future.set([]);
         this.emitLive();
       });
@@ -781,7 +888,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     // The untouched default follows better information as it arrives.
     effect(() => {
       this.body(); this.analyzerCodes(); this.members(); this.chartSections(); this.measuredTableMm(); this.signoffHeightMm();
-      untracked(() => { if (this.draft()) { this.boxes.set(this.buildDefault()); this.emitLive(); } });
+      untracked(() => { if (this.draft()) { this.pages.set([{ id: 'page-1', boxes: this.buildDefault() }]); this.activePage.set(0); this.emitLive(); } });
     });
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => this.template.set(t ?? null),
@@ -806,7 +913,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     });
     // Every box change re-paints the page (no engine call).
     effect(() => {
-      this.boxes(); this.template();
+      this.pages(); this.activePage(); this.tableMode(); this.template();
       untracked(() => this.scheduleRender(this.drag() ? 0 : 120));
     });
     effect(() => {
@@ -881,21 +988,31 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         if (seq !== this.renderSeq) return;
       }
       if (!this.baseInput || !id) return;
-      const live = { enabled: true, boxes: this.boxes() };
+      const live: LiveLayout = { enabled: true, boxes: this.pages()[0].boxes, pages: this.pages(), tableMode: this.tableMode() };
       let input = applyLivePageLayout(this.baseInput, id, live, typeof document !== 'undefined' ? document.baseURI : null);
       input = await withSampleImagesLoaded(input, this.platform.getApiUrl());
       if (seq !== this.renderSeq) return;
       // Keep newly fetched sample graphs on the base (fetched once per session).
       this.baseInput = { ...this.baseInput, imageCache: input.imageCache };
-      let page = 1;
+      const pageOf: Record<number, number> = {};
+      const tables: Record<string, { rows: number; overflow: boolean }> = {};
       const url = renderReportPdfBlobUrl({
         ...input,
+        keepEmptyLayoutPages: true,
         onOnePageBody: info => {
           if (info.pkg !== id) return;
-          page = info.page; this.setBody(info.body);
-          if (info.tableBottom !== undefined) this.setMeasuredTable(info.tableBottom, info.body);
+          const lp = info.layoutPage ?? 0;
+          if (pageOf[lp] == null) pageOf[lp] = info.page;
+          this.setBody(lp, info.body);
+          if (info.boxId) {
+            tables[info.boxId] = { rows: info.rowsPrinted ?? 0, overflow: info.tableBottom === null };
+            if (info.tableBottom !== undefined && lp === this.activePage()) this.setMeasuredTable(info.tableBottom, info.body, info.boxId);
+          }
         },
       });
+      this.pdfPageOf.set(pageOf);
+      this.tableStats.set(tables);
+      const page = pageOf[this.activePage()] ?? 1;
       if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl);
       this.lastBlobUrl = url;
       const host = this.canvasHost()?.nativeElement;
@@ -911,9 +1028,11 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
    *  at the table box's current width; null = it ran past the page. */
   readonly measuredTableMm = signal<number | null | undefined>(undefined);
   private measuredForWidth = -1;
-  private setMeasuredTable(bottomPt: number | null, body: BodyArea): void {
-    const t = this.boxes().find(b => b.kind === 'table');
-    if (!t) return;
+  /** Per table box: rows the sample printed in it, and whether rows ran past it. */
+  readonly tableStats = signal<Record<string, { rows: number; overflow: boolean }>>({});
+  private setMeasuredTable(bottomPt: number | null, body: BodyArea, boxId?: string): void {
+    const t = this.boxes().find(b => b.kind === 'table' && (!boxId || b.id === boxId));
+    if (!t || t.id !== this.tableBox()?.id) return;
     const mm = bottomPt == null ? null : Math.round(((bottomPt - (body.top + t.y * MM)) / MM) * 10) / 10;
     this.measuredForWidth = t.w;
     if (mm !== this.measuredTableMm()) this.measuredTableMm.set(mm);
@@ -928,10 +1047,10 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     this.commit(resizeBox(this.boxes(), t.id, t.w, m + 1, this.body()));
   }
 
-  private setBody(b: BodyArea): void {
-    const cur = this.renderedBody();
+  private setBody(layoutPage: number, b: BodyArea): void {
+    const cur = this.renderedBodies()[layoutPage];
     if (cur && Math.abs(cur.top - b.top) < 0.01 && Math.abs(cur.h - b.h) < 0.01 && Math.abs(cur.left - b.left) < 0.01) return;
-    this.renderedBody.set({ ...b });
+    this.renderedBodies.update(m => ({ ...m, [layoutPage]: { ...b } }));
   }
 
   /** pdf.js → canvas — the letterhead editor's drawPage(). */
@@ -963,38 +1082,55 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
 
   // ── emitting ────────────────────────────────────────────────────────
   private emit(): void {
-    const next = writePageLayout(this.sections(), { enabled: this.enabled(), boxes: this.boxes() });
+    const next = writePageLayout(this.sections(), { enabled: this.enabled(), pages: this.pages(), tableMode: this.tableMode() });
     this.lastEmitted = next;
     this.sectionsChange.emit(next);
     this.emitLive();
   }
   /** The Live preview shows the arrangement being designed — on or off —
    *  so the lab sees what switching it on will print. */
-  private emitLive(): void { this.liveChange.emit({ enabled: true, boxes: this.boxes() }); }
+  private emitLive(): void {
+    this.liveChange.emit({ enabled: true, boxes: this.pages()[0]?.boxes ?? [], pages: this.pages(), tableMode: this.tableMode() });
+  }
+  private snapshot(): LayoutState { return { pages: this.pages(), tableMode: this.tableMode() }; }
+  private restore(st: LayoutState): void {
+    this.pages.set(st.pages); this.tableMode.set(st.tableMode);
+    if (this.activePage() >= st.pages.length) this.activePage.set(st.pages.length - 1);
+  }
+  /** Apply a page-level edit (pages / table mode): history, then save. */
+  private commitLayout(pages: PageLayoutPage[], tableMode = this.tableMode()): void {
+    this.history.update(h => [...h.slice(-(HISTORY_MAX - 1)), this.snapshot()]);
+    this.future.set([]);
+    this.draft.set(false);
+    this.pages.set(pages); this.tableMode.set(tableMode);
+    this.emit();
+  }
   /** Apply an edit: history, then save. */
   private commit(next: PageLayoutBox[], prev = this.boxes()): void {
     if (next === prev) return;
-    this.history.update(h => [...h.slice(-(HISTORY_MAX - 1)), prev]);
+    const i = this.activePage();
+    const before: LayoutState = { pages: this.pages().map((p, j) => (j === i ? { ...p, boxes: prev } : p)), tableMode: this.tableMode() };
+    this.history.update(h => [...h.slice(-(HISTORY_MAX - 1)), before]);
     this.future.set([]);
     this.draft.set(false);
-    this.boxes.set(next);
+    this.setBoxes(next);
     this.emit();
   }
   undo(): void {
     const h = this.history();
     if (!h.length) return;
-    this.future.update(f => [this.boxes(), ...f]);
+    this.future.update(f => [this.snapshot(), ...f]);
     this.history.set(h.slice(0, -1));
-    this.boxes.set(h[h.length - 1]);
+    this.restore(h[h.length - 1]);
     this.draft.set(false);
     this.emit();
   }
   redo(): void {
     const f = this.future();
     if (!f.length) return;
-    this.history.update(h => [...h, this.boxes()]);
+    this.history.update(h => [...h, this.snapshot()]);
     this.future.set(f.slice(1));
-    this.boxes.set(f[0]);
+    this.restore(f[0]);
     this.emit();
   }
   setEnabled(on: boolean): void {
@@ -1017,8 +1153,9 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       const id = this.profileTestId();
       const res = id ? await this.layoutSvc.restorePageLayoutDefault(id).catch(() => null) : null;
       const fromMaster = res ? readPageLayout(res.sections) : null;
-      const boxes = fromMaster?.boxes.length ? fromMaster.boxes : this.buildDefault();
-      this.commit(boxes);
+      const pages = fromMaster?.pages?.some(p => p.boxes.length) ? fromMaster.pages : [{ id: 'page-1', boxes: this.buildDefault() }];
+      this.commitLayout(pages, fromMaster?.tableMode ?? 'auto');
+      this.activePage.set(0);
       this.selected.set(null);
       this.toasts.success('Restored the default one-page layout.');
     } finally {
@@ -1082,11 +1219,155 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     if (this.selected() === id) this.selected.set(null);
   }
 
+  // ── pages ───────────────────────────────────────────────────────────
+  goPage(i: number): void {
+    if (i === this.activePage()) return;
+    this.select(null);
+    this.activePage.set(i);
+    this.canvasReady.set(false);
+    this.scheduleRender(0);
+  }
+  addPage(): void {
+    const pages = [...this.pages(), { id: newPageId(this.pages()), boxes: [] }];
+    this.commitLayout(pages);
+    this.goPage(pages.length - 1);
+  }
+  movePage(d: -1 | 1): void {
+    const i = this.activePage(), j = i + d;
+    const pages = [...this.pages()];
+    if (j < 0 || j >= pages.length) return;
+    [pages[i], pages[j]] = [pages[j], pages[i]];
+    this.commitLayout(pages);
+    this.activePage.set(j);
+    this.scheduleRender(0);
+  }
+  async removePage(): Promise<void> {
+    const i = this.activePage();
+    const pages = this.pages();
+    if (pages.length < 2) return;
+    const victim = pages[i];
+    const otherTables = pages.filter((_, j) => j !== i).some(p => p.boxes.some(b => b.kind === 'table'));
+    if (victim.boxes.some(b => b.kind === 'table') && !otherTables) {
+      this.toasts.info('This page holds the only results table — move the table to another page first.');
+      return;
+    }
+    if (victim.boxes.length) {
+      const ok = await this.dialog.confirm({ title: `Remove page ${i + 1}?`, message: 'Its boxes are removed too. You can undo this.', confirmLabel: 'Remove page', tone: 'danger' });
+      if (!ok) return;
+    }
+    this.select(null);
+    this.commitLayout(pages.filter((_, j) => j !== i));
+    this.activePage.set(Math.max(0, i - 1));
+    this.scheduleRender(0);
+  }
+  /** "Page 2 · 6 rows" — what the sample printed in the page's table boxes. */
+  pageRowsLabel(i: number): string | null {
+    const stats = this.tableStats();
+    const n = (this.pages()[i]?.boxes ?? []).filter(b => b.kind === 'table').reduce((s, b) => s + (stats[b.id]?.rows ?? 0), 0);
+    return n ? `${n} row${n === 1 ? '' : 's'}` : null;
+  }
+
+  // ── results table across pages ──────────────────────────────────────
+  /** Every member row (parameter name → its display title), report order. */
+  readonly rowOptions = computed(() => {
+    const out: Array<{ key: string; title: string }> = [];
+    for (const m of this.members()) {
+      try {
+        const parsed = JSON.parse(m.parameters ?? '[]');
+        const list: Array<{ name?: string; title?: string }> = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.parameters) ? parsed.parameters : [];
+        for (const p of list) if (p?.name && !out.some(o => o.key === p.name)) out.push({ key: p.name, title: p.title || p.name });
+      } catch { /* malformed member — skip */ }
+    }
+    return out;
+  });
+  private rowKeys(): string[] { return this.rowOptions().map(r => r.key); }
+  readonly rowIssues = computed(() => (this.tableMode() === 'manual' ? rowAssignmentIssues(this.pages(), this.rowKeys()) : []));
+  rowTitles(keys: string[]): string {
+    const t = new Map(this.rowOptions().map(r => [r.key, r.title]));
+    return keys.map(k => t.get(k) ?? k).join(', ');
+  }
+  hasAnyTable(): boolean { return this.pages().some(p => p.boxes.some(b => b.kind === 'table')); }
+  hasAnywhere(kind: PageLayoutBoxKind): boolean { return this.pages().some(p => p.boxes.some(b => b.kind === kind)); }
+  changeTableMode(mode: PageLayoutTableMode): void {
+    if (mode === this.tableMode()) return;
+    this.commitLayout(setTableMode(this.pages(), mode, this.rowKeys()), mode);
+  }
+  toggleRow(key: string, boxId: string): void {
+    const inBox = this.boxes().find(b => b.id === boxId)?.rows?.includes(key);
+    this.commitLayout(assignRowToBox(this.pages(), key, inBox ? null : boxId));
+  }
+  /** Where a row prints when it isn't in `boxId` ("on page 2"), or that it's unplaced. */
+  rowHome(key: string, boxId: string): string | null {
+    const chain = tableChain(this.pages());
+    const homes = chain.filter(c => c.box.id !== boxId && (c.box.rows ?? []).includes(key));
+    if (homes.length) return `In the table on page ${homes[0].page + 1}`;
+    if (!chain.some(c => (c.box.rows ?? []).includes(key))) return 'Not placed yet';
+    return null;
+  }
+  autoHint(b: PageLayoutBox): string {
+    const st = this.tableStats()[b.id];
+    const chain = tableChain(this.pages());
+    const last = chain[chain.length - 1]?.box.id === b.id;
+    if (!st) return 'Rows fill this box; the rest continue in the next table box.';
+    if (last && st.overflow) return `${st.rows} rows here — more rows than fit: add a "Table (continued)" box on a later page, or they run on to an extra page.`;
+    return last ? `${st.rows} rows print here.` : `${st.rows} rows fit here; the rest continue in the next table box.`;
+  }
+  addTableBox(): void {
+    const all = this.pages().flatMap(p => p.boxes);
+    const r = addPaletteBox(this.boxes().filter(b => b.kind !== 'table'), 'table', this.body(), {});
+    const nb = r.boxes.find(x => x.id === r.id)!;
+    const box: PageLayoutBox = { ...nb, id: newBoxId('table', all), label: this.tableMode() === 'auto' ? 'Results table (continued)' : 'Results table',
+      ...(this.tableMode() === 'manual' ? { rows: [] } : {}) };
+    this.commit([...this.boxes(), box]);
+    this.selected.set(box.id);
+  }
+  readonly dropTarget = signal<string | null>(null);
+  onRowDragStart(ev: DragEvent, key: string): void {
+    ev.dataTransfer?.setData('text/x-pf-row', key);
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+  }
+  onBoxDragOver(ev: DragEvent, b: PageLayoutBox): void {
+    if (b.kind !== 'table' || this.tableMode() !== 'manual') return;
+    if (!Array.from(ev.dataTransfer?.types ?? []).includes('text/x-pf-row')) return;
+    ev.preventDefault();
+    this.dropTarget.set(b.id);
+  }
+  onRowDropOnBox(ev: DragEvent, b: PageLayoutBox): void {
+    this.dropTarget.set(null);
+    const key = ev.dataTransfer?.getData('text/x-pf-row');
+    if (!key || b.kind !== 'table' || this.tableMode() !== 'manual') return;
+    ev.preventDefault();
+    this.commitLayout(assignRowToBox(this.pages(), key, b.id));
+  }
+  /** Drop a row on a page tab → the first table box on that page. */
+  onRowDropOnPage(ev: DragEvent, i: number): void {
+    const key = ev.dataTransfer?.getData('text/x-pf-row');
+    const target = this.pages()[i]?.boxes.find(b => b.kind === 'table');
+    if (!key || !target || this.tableMode() !== 'manual') return;
+    ev.preventDefault();
+    this.commitLayout(assignRowToBox(this.pages(), key, target.id));
+    this.toasts.info(`Moved to the table on page ${i + 1}.`);
+  }
+
   // ── palette ─────────────────────────────────────────────────────────
   add(kind: PageLayoutBoxKind, opts: { ref?: string; label?: string } = {}): void {
+    // One per layout: a graph / chart (by ref) or the signatures already on
+    // ANOTHER page → open that page and select it there.
+    const elsewhere = this.pages().findIndex((p, i) => i !== this.activePage() && p.boxes.some(b =>
+      b.kind === kind && ((kind === 'analyzer' || kind === 'chart') ? b.ref === opts.ref : kind === 'signatures')));
+    if (elsewhere >= 0) {
+      const id = this.pages()[elsewhere].boxes.find(b => b.kind === kind && ((kind === 'analyzer' || kind === 'chart') ? b.ref === opts.ref : true))!.id;
+      this.goPage(elsewhere);
+      this.select(id);
+      return;
+    }
     const r = addPaletteBox(this.boxes(), kind, this.body(), opts);
-    this.commit(r.boxes);
-    this.selected.set(r.id);
+    // Box ids are unique across ALL pages (manual table rows key on them).
+    const others = this.pages().filter((_, i) => i !== this.activePage()).flatMap(p => p.boxes);
+    let id = r.id;
+    if (others.some(o => o.id === id)) id = newBoxId(id, [...others, ...r.boxes]);
+    this.commit(r.boxes.map(b => (b.id === r.id ? { ...b, id } : b)));
+    this.selected.set(id);
   }
   addAnalyzer(code: string, label: string): void { this.add('analyzer', { ref: code, label }); }
   addChart(id: string, label: string): void { this.add('chart', { ref: id, label }); }
@@ -1107,10 +1388,10 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       trend: defaultChartSpec({ series: !!ctx?.series, parameters: ctx?.params.map(p => p.name) ?? [] }),
     } as unknown as ReportSection;
     const r = addPaletteBox(this.boxes(), 'chart', this.body(), { ref: secId, label: 'Chart' });
-    this.history.update(h => [...h.slice(-(HISTORY_MAX - 1)), this.boxes()]);
+    this.history.update(h => [...h.slice(-(HISTORY_MAX - 1)), this.snapshot()]);
     this.draft.set(false);
-    this.boxes.set(r.boxes);
-    const next = writePageLayout([...this.sections(), chart], { enabled: this.enabled(), boxes: r.boxes });
+    this.setBoxes(r.boxes);
+    const next = writePageLayout([...this.sections(), chart], { enabled: this.enabled(), pages: this.pages(), tableMode: this.tableMode() });
     this.lastEmitted = next;
     this.sectionsChange.emit(next);
     this.emitLive();
@@ -1159,7 +1440,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         ? dragBox(before, start.id, start.x + dxPx / k, start.y + dyPx / k, this.body(), snap)
         : resizeFromHandle(before, start, handle!, dxPx / k, dyPx / k, this.body(), snap);
       this.guideLines.set(r.guides);
-      this.boxes.set(r.boxes);
+      this.setBoxes(r.boxes);
       if (mode === 'resize') this.shiftGhost(start, r.boxes.find(x => x.id === start.id)!);
     };
     const onUp = () => {
@@ -1172,7 +1453,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       this.holes.update(hs => [...hs.filter(h => h.id !== start.id), { id: start.id, ...r }]);
       this.drag.set(null);
       const next = this.boxes();
-      this.boxes.set(before);
+      this.setBoxes(before);
       this.commit(next, before);
     };
     el.addEventListener('pointermove', onMove);

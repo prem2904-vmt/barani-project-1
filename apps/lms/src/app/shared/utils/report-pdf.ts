@@ -62,6 +62,9 @@ export interface ReportPdfInput {
    *  and page each one-page profile's boxes were placed in, so the designer
    *  lays its draggable outlines over the very pixels the PDF drew. Never
    *  set by a real report path. */
+  /** Designer only: print every Custom-layout page even when it has nothing
+   *  on it yet (a page just added), so the lab sees its letterhead. */
+  keepEmptyLayoutPages?: boolean;
   onOnePageBody?: (info: { pkg: string; page: number; layoutPage?: number; boxId?: string; rowsPrinted?: number;
     body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
     /** Where the results table really ended (pt), when it ended on this page;
@@ -416,6 +419,7 @@ let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
  *  carry. Set once per render in buildReportPdf, before the test loop. */
 let PREVIEW_KEEP_EMPTY_COLS = false; // admin preview: show configured columns even when empty
 let ON_ONE_PAGE_BODY: ReportPdfInput['onOnePageBody'] | null = null; // designer hook only
+let KEEP_EMPTY_LAYOUT_PAGES = false; // designer only
 let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
@@ -763,6 +767,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   };
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
   ON_ONE_PAGE_BODY = input.onOnePageBody ?? null;
+  KEEP_EMPTY_LAYOUT_PAGES = !!input.keepEmptyLayoutPages;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
     MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
@@ -3450,7 +3455,7 @@ function renderCustomLayout(
       (b.kind === 'chart' && layout.sections.some(sx => sx.id === b.ref && sx.type === 'chart' && !!sx.trend)) ||
       (b.kind === 'notes' && !!(b.text ?? b.label ?? '').trim()) ||
       (b.kind === 'signatures' && opts.signHere && !signed && deptSigs.length > 0));
-    if (!hasContent) continue;                       // a page with nothing to print is dropped
+    if (!hasContent && !KEEP_EMPTY_LAYOUT_PAGES) continue; // a page with nothing to print is dropped
 
     let y: number;
     if (opened === 0 && opts.topY != null) {

@@ -692,6 +692,9 @@ export function boxLabel(b: Pick<PageLayoutBox, 'kind' | 'label' | 'ref'>): stri
 // Custom layout (multi-page, owner 2026-10-02)
 // ═══════════════════════════════════════════════════════════════════════
 
+/** The layout as the designer has it right now (unsaved) — for the previews. */
+export interface LiveLayout { enabled: boolean; boxes: PageLayoutBox[]; pages?: PageLayoutPage[]; tableMode?: PageLayoutTableMode }
+
 /** Every box of every page, with its page index (page order, then top-down). */
 export function allBoxes(pages: ReadonlyArray<PageLayoutPage>): Array<{ page: number; box: PageLayoutBox }> {
   return pages.flatMap((p, page) => [...p.boxes].sort((a, b) => a.y - b.y || a.x - b.x).map(box => ({ page, box })));
