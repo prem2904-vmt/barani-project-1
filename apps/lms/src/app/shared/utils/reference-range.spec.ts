@@ -173,6 +173,62 @@ describe('flagAgainst', () => {
     expect(flagAgainst(null, 5)).toBeNull();
     expect(flagAgainst({ segment: 'normal' }, 5)).toBeNull();
   });
+
+  // Logic review (2026-10-02): a one-sided band with no explicit op derives
+  // its strictness from a comparator glyph sitting immediately before its
+  // OWN number in reportText/label — never from one-sidedness alone. Mirrors
+  // mw ResultFlaggingService.NumericLevel + ReferenceRangeResolver.
+  // EffectiveOneSidedOp; the boundary cases below are duplicated in
+  // ReferenceRangeGlyphParityTests (mw) on purpose — SAME inputs, SAME flag.
+  describe('op-absent one-sided bound: glyph-derived, else inclusive (2026-10-02)', () => {
+    it('no glyph at all stays inclusive (the limit itself is Normal)', () => {
+      expect(flagAgainst({ max: 200, reportText: null }, 200)).toBe('N');
+      expect(flagAgainst({ min: 60 }, 60)).toBe('N');
+    });
+
+    it('a strict "<" / ">" glyph before the bound\'s own number flags the limit', () => {
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 140)).toBe('H');
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 139.9)).toBe('N');
+      expect(flagAgainst({ max: 5, label: 'Nonpregnant — <5 IU/L — Negative' }, 5)).toBe('H');
+    });
+
+    it('an inclusive "≤" / "≥" glyph (even with no space) keeps the limit Normal', () => {
+      expect(flagAgainst({ max: 5, reportText: '≤ 5 {u}' }, 5)).toBe('N');
+      expect(flagAgainst({ min: 90, reportText: '≥ 90 {u}' }, 90)).toBe('N');
+      expect(flagAgainst({ min: 40, reportText: '≥40 {u}' }, 40)).toBe('N');
+    });
+
+    it('an explicit op always wins over a glyph in the text', () => {
+      expect(flagAgainst({ max: 140, maxOp: 'lte', reportText: 'Normal: <140 {u}' }, 140)).toBe('N');
+    });
+
+    it('a glyph near a DIFFERENT number is ignored — falls back to inclusive', () => {
+      expect(flagAgainst({ max: 140, reportText: 'G-OGTT: <180 mg/dL\nSame-tier: 140 mg/dL' }, 140)).toBe('N');
+    });
+
+    // The owner's named boundary cases (real master-catalogue shapes) —
+    // mw ReferenceRangeGlyphParityTests covers the full 158-band sweep.
+    it('CRP 5.0 against "≤ 5" is Normal', () => {
+      expect(flagAgainst({ max: 5, reportText: '≤ 5 mg/L' }, 5.0)).toBe('N');
+    });
+    it('eGFR 90 against "≥ 90" is Normal', () => {
+      expect(flagAgainst({ min: 90, reportText: '≥ 90 mL/min' }, 90.0)).toBe('N');
+    });
+    it('HDL 40 against "≥40" is Normal', () => {
+      expect(flagAgainst({ min: 40, reportText: 'Normal ≥40 mg/dL' }, 40.0)).toBe('N');
+    });
+    it('OGTT 140 against "<140" is High', () => {
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 140.0)).toBe('H');
+    });
+    it('Postprandial 139 against a band whose text says "<140" is Normal (structured max is 139)', () => {
+      expect(flagAgainst({ max: 139, reportText: '2-hour: <140 mg/dL normal' }, 139.0)).toBe('N');
+    });
+    it('HbA1c 6.4 is not High', () => {
+      expect(flagAgainst(
+        { max: 6.4, reportText: 'Normal: <5.7 %\nPrediabetes: 5.7–6.4%\nDiabetes: ≥6.5%' }, 6.4,
+      )).not.toBe('H');
+    });
+  });
 });
 
 describe('report text — the simple model prints what was typed', () => {

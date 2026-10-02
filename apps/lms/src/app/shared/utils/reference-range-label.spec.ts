@@ -103,11 +103,34 @@ describe('formatRange', () => {
   });
 
   it('renders inclusive one-sided bounds with their own glyphs', () => {
-    // Op absent = today's strict glyphs (above); an explicit inclusive op
-    // prints ≤/≥ so "140 is still normal" is visible.
-    expect(formatRange({ max: 140, maxOp: 'lte' })).toBe('≤ 140');
-    expect(formatRange({ min: 40, minOp: 'gte' })).toBe('≥ 40');
+    // Op absent = inclusive glyphs (above); an explicit strict op
+    // prints </> so "the limit itself flags" is visible.
+    expect(formatRange({ max: 140, maxOp: 'lt' })).toBe('< 140');
+    expect(formatRange({ min: 40, minOp: 'gt' })).toBe('> 40');
     // Two-sided display is unchanged by ops.
     expect(formatRange({ min: 13, max: 17, minOp: 'gte', maxOp: 'lte' })).toBe('13–17');
+  });
+
+  // Logic review (2026-10-02): op-absent is INCLUSIVE by default (above) —
+  // UNLESS the band's own reportText/label carries a comparator glyph right
+  // before its own number, which is read off and used instead so the
+  // printed glyph always matches what flagAgainst actually flags.
+  it('derives a strict glyph from the band\'s own text when no op is set', () => {
+    expect(formatRange({ max: 140, reportText: 'Normal <140 mg/dL' })).toBe('< 140');
+    expect(formatRange({ max: 5, label: 'Nonpregnant — <5 IU/L — Negative' })).toBe('< 5');
+  });
+
+  it('derives an inclusive glyph from the band\'s own text when no op is set', () => {
+    expect(formatRange({ max: 5, reportText: '≤ 5 {u}' })).toBe('≤ 5');
+    expect(formatRange({ min: 90, reportText: '≥ 90 {u}' })).toBe('≥ 90');
+    expect(formatRange({ min: 40, reportText: '≥40 {u}' })).toBe('≥ 40');
+  });
+
+  it('an explicit op always wins over a glyph found in the text', () => {
+    expect(formatRange({ max: 140, maxOp: 'lte', reportText: 'Normal: <140 {u}' })).toBe('≤ 140');
+  });
+
+  it('a glyph near a DIFFERENT number in the text is ignored', () => {
+    expect(formatRange({ max: 140, reportText: 'G-OGTT: <180 mg/dL\nSame-tier: 140 mg/dL' })).toBe('≤ 140');
   });
 });
