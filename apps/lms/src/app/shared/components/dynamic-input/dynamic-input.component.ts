@@ -181,7 +181,7 @@ export { isContactNumberField };
               <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true, err: err }"></ng-container>
             } @else {
               <pf-select [options]="selectOptions()" [value]="value" [searchable]="opts.length > 8"
-                         [class.pf-di-select--error]="!!err"
+                         [class.pf-di-select--error]="!!err" [enterAdvances]="enterAdvances"
                          [placeholder]="field.placeholder ?? 'Select…'" (valueChange)="emit($event)"></pf-select>
             }
           }
@@ -397,6 +397,7 @@ export { isContactNumberField };
           <pf-select
             [options]="selectOptions()"
             [value]="value"
+            [enterAdvances]="enterAdvances"
             [placeholder]="field.placeholder ?? '— Select —'"
             (valueChange)="emit($event)"></pf-select>
         }
@@ -1042,6 +1043,12 @@ export class DynamicInputComponent {
   /** New-design markup (ND-PATTERN §14). Off by default: every existing host
    *  (result entry, workflow preview, …) keeps the classic look. */
   @Input() nd = false;
+  /** Forwarded to the field's own `pf-select` (the 'select' case only — never
+   *  the phone country-code / size / duration unit mini-pickers). Off by
+   *  default; the workflow renderer's test-parameter data-entry fields turn
+   *  it on so a filled, closed dropdown lets Enter advance instead of
+   *  reopening (see `pf-select`'s own `enterAdvances`). */
+  @Input() enterAdvances = false;
   private static readonly ND_TYPES = new Set([
     'text', 'email', 'phone', 'number', 'numeric', 'textarea', 'date', 'datetime', 'time',
     'select', 'button_select', 'image_select', 'radio', 'yesno', 'yes_no_na',

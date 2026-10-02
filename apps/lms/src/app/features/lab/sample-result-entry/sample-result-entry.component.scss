@@ -232,6 +232,24 @@
 }
 .pf-sre__gselect { width: 100%; }
 .pf-sre__gdate { display: block; width: 100%; }
+/* Match the sm pf-select trigger beside it exactly (select.component.ts's
+   .pf-dd--sm .pf-dd__trigger: 34px tall, 8px radius, 10px side padding) —
+   one border, same height/radius/padding, never pf-nd-date's own separate
+   box. Scoped to THIS host class only; pf-nd-date elsewhere is untouched. */
+.pf-sre__gdate ::ng-deep .pf-ndd__in,
+.pf-sre__gdate ::ng-deep .pf-ndt__in {
+  height: 34px;
+  padding: 0 40px 0 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.pf-sre__gdate ::ng-deep .pf-ndd__in.nd-input--error,
+.pf-sre__gdate ::ng-deep .pf-ndt__in.nd-input--error {
+  border-color: var(--red-border, #ef4444);
+}
 .pf-sre__gdate.pf-sre__input--flagged ::ng-deep .pf-ndd__in {
   border-color: rgba(239, 68, 68, 0.6) !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
@@ -456,6 +474,8 @@
   :host ::ng-deep .pf-sre__test select,
   :host ::ng-deep .pf-sre__test input,
   :host ::ng-deep .pf-sre__test textarea { font-size: 16px; }
+  .pf-sre__gdate ::ng-deep .pf-ndd__in,
+  .pf-sre__gdate ::ng-deep .pf-ndt__in { font-size: 16px; }
 
   /* STACKED rows for EVERY row type (numeric, select, free text,
      textarea, date, checkbox, calculated): a table can't lay out at

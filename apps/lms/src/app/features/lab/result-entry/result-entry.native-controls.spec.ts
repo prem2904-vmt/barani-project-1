@@ -1,9 +1,11 @@
 import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { ResultEntryComponent } from './result-entry.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ScanService } from '../../../core/services/scan.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -84,5 +86,19 @@ describe.each([['grid' as const], ['cards' as const]])('Result entry %s view —
     txt.value = '26092026';
     txt.dispatchEvent(new Event('input'));
     expect(c.valueOf('collected_on')).toBe('2026-09-26');
+  });
+
+  it('the dropdown opts into enterAdvances (a filled, closed select lets Enter bubble to advanceFrom)', async () => {
+    const { f } = await render(view);
+    const selects = f.debugElement.queryAll(By.directive(SelectComponent));
+    expect(selects.length).toBeGreaterThan(0);
+    for (const s of selects) expect((s.componentInstance as SelectComponent<unknown>).enterAdvances).toBe(true);
+  });
+
+  it('the date box is the kit pf-nd-date scoped host class only — no leftover .pf-rg__input/.pf-param__input double box', async () => {
+    const { el } = await render(view);
+    const dateHost = el.querySelector('pf-nd-date')!;
+    expect(dateHost.classList.contains('pf-rg__input')).toBe(false);
+    expect(dateHost.classList.contains('pf-param__input')).toBe(false);
   });
 });
