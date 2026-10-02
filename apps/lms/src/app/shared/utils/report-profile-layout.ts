@@ -124,24 +124,58 @@ export function bodyArea(bodyTop: number, footerTop: number): BodyArea {
 
 // ── CBC default layout ───────────────────────────────────────────────────
 
+/** The catalogue CBC Basic (HEM001) profile's own parameter count — used
+ *  ONLY to size the SHIPPED default layout's table/graph boxes to their
+ *  natural content height (never a lab's own saved arrangement, which keeps
+ *  whatever height it was dragged to). Kept as a named constant rather than
+ *  re-deriving it from the catalogue at layout-build time — this file has no
+ *  access to the resolved row count, only the body's geometry. */
+const CBC_DEFAULT_ROW_COUNT = 14;
+
+/** Same row-height model `fitMeter` scores a box against, factored out so
+ *  the "does it fit" check and the shipped default's own sizing can never
+ *  silently diverge. */
+function estimateTableHeightPt(rowCount: number, fontPt: number, extraWrappedLines = 0): number {
+  const padding = 10; // header row + top/bottom cell padding, pt
+  return padding + rowCount * fontPt * 1.5 + extraWrappedLines * fontPt * 1.3;
+}
+
 /** The shipped default for the CBC profile (master catalogue only — a
  *  tenant's own CBC never gets this pushed onto it; "Restore to default"
- *  pulls it explicitly). Table on the left (~60%), the 4 M51 images stacked
- *  on the right, signatures across the bottom. All sizes in mm from the
- *  body area's own top-left — the designer/renderer re-anchors them to
- *  wherever the body actually starts on a given template. */
+ *  pulls it explicitly). Table + a 2x2 analyzer-image grid side by side,
+ *  BOTH sized to the profile's own natural content height (owner,
+ *  2026-10-02: a box sized to the full body leaves most of itself blank —
+ *  "no large empty block"), with signatures below and a reserved gap sized
+ *  for the "****End of Report****" line so a CBC-only order still closes
+ *  on the SAME page. All sizes in mm from the body area's own top-left —
+ *  the designer/renderer re-anchors them to wherever the body actually
+ *  starts on a given template. */
 export function defaultCbcLayout(body: BodyArea): PageLayoutBox[] {
   const wMm = ptToMm(body.w), hMm = ptToMm(body.h);
   const gapMm = 4;
   const sigHMm = 24;
-  const tableW = Math.round(wMm * 0.6 * 10) / 10;
+  // Room for the End-of-Report line printed between the content and the
+  // signatures (report-pdf.ts's own general floor reserve is 26pt).
+  const eorGapMm = ptToMm(30);
+  const reserveBelowContent = gapMm + eorGapMm;
+  const availableForContent = Math.max(20, hMm - sigHMm - reserveBelowContent);
+
+  const tableW = Math.round(wMm * 0.58 * 10) / 10;
   const rightX = tableW + gapMm;
   const rightW = Math.max(20, wMm - tableW - gapMm);
-  const topH = Math.max(10, hMm - sigHMm - gapMm);
-  const imgH = Math.max(10, (topH - gapMm * 3) / 4);
+
+  const desiredContentMm = ptToMm(estimateTableHeightPt(CBC_DEFAULT_ROW_COUNT, DEFAULT_BODY_FONT_PT) + 14);
+  const contentHMm = Math.min(desiredContentMm, availableForContent);
+  // The 2x2 image grid sits "beside the table height plus a little".
+  const gridHMm = Math.min(contentHMm + 6, availableForContent);
+  const blockHMm = Math.max(contentHMm, gridHMm);
+  const cellWMm = Math.max(18, (rightW - gapMm) / 2);
+  const cellHMm = Math.max(14, (gridHMm - gapMm) / 2);
+  const sigY = blockHMm + reserveBelowContent;
+
   const boxes: PageLayoutBox[] = [
     {
-      id: 'table', kind: 'table', x: 0, y: 0, w: tableW, h: topH,
+      id: 'table', kind: 'table', x: 0, y: 0, w: tableW, h: contentHMm,
       fontSize: DEFAULT_BODY_FONT_PT,
       columns: [
         { name: 'name', visible: true, width: 34 }, { name: 'result', visible: true, width: 16 },
@@ -151,9 +185,10 @@ export function defaultCbcLayout(body: BodyArea): PageLayoutBox[] {
     },
     ...KNOWN_ANALYZER_IMAGES.map((img, i): PageLayoutBox => ({
       id: `analyzer-${img.code}`, kind: 'analyzer', ref: img.code, label: img.label,
-      x: rightX, y: i * (imgH + gapMm), w: rightW, h: imgH,
+      x: rightX + (i % 2) * (cellWMm + gapMm), y: Math.floor(i / 2) * (cellHMm + gapMm),
+      w: cellWMm, h: cellHMm,
     })),
-    { id: 'signatures', kind: 'signatures', x: 0, y: topH + gapMm, w: wMm, h: sigHMm },
+    { id: 'signatures', kind: 'signatures', x: 0, y: sigY, w: wMm, h: sigHMm },
   ];
   return boxes;
 }
@@ -322,9 +357,7 @@ export interface FitMeter {
  *  wrapped, is charged as the main CBC default has none — callers passing a
  *  true `extraWrappedLines` get a closer estimate for notes-heavy profiles. */
 export function fitMeter(rowCount: number, tableBoxHeightPt: number, fontPt: number, extraWrappedLines = 0): FitMeter {
-  const padding = 10; // header row + top/bottom cell padding, pt
-  const rowH = (size: number) => size * 1.5;
-  const estimate = (size: number) => padding + rowCount * rowH(size) + extraWrappedLines * size * 1.3;
+  const estimate = (size: number) => estimateTableHeightPt(rowCount, size, extraWrappedLines);
   if (estimate(fontPt) <= tableBoxHeightPt) {
     return { fits: true, shrinkToPt: fontPt, overflowsToPage2: false, estimatedRows: rowCount };
   }

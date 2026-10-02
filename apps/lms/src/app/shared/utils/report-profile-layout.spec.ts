@@ -4,7 +4,7 @@ import {
   detectLayoutIssues, fitMeter, missingAnalyzerWarning, moveBox, nudgeBox, readPageLayout, removeBox, resizeBox,
   setColumnVisible, setColumnWidth, writePageLayout,
 } from './report-profile-layout';
-import { MM, MARGIN_X, PAGE } from './report-header-layout';
+import { MM, MARGIN_X, PAGE, ptToMm } from './report-header-layout';
 
 // A realistic A4 body area: letterhead ends ~140pt down, footer/signature
 // band reserves the last 64pt (report-header-layout.FOOTER_AREA_H).
@@ -182,10 +182,42 @@ describe('report-profile-layout — fit meter (owner decision 1: shrink to 8pt, 
     expect(m.shrinkToPt).toBe(MIN_BODY_FONT_PT);
   });
 
-  it('CBC default: its table box fits CBC-sized data (≈20 parameters) at the default font', () => {
+  it('CBC default: its table box fits the catalogue CBC Basic row count (14 parameters) at the default font', () => {
     const boxes = defaultCbcLayout(BODY);
     const table = boxes.find(b => b.kind === 'table')!;
-    const m = fitMeter(20, table.h * MM, table.fontSize ?? 9);
+    const m = fitMeter(14, table.h * MM, table.fontSize ?? 9);
     expect(m.fits).toBe(true);
+    expect(m.shrinkToPt).toBe(table.fontSize ?? 9); // never pre-shrunk — the box is sized FOR this font
+  });
+
+  // Owner, 2026-10-02: the table/graphs must be sized to their OWN content,
+  // not the full body — a box many times taller than its ~14-row content
+  // left a large empty block underneath it (and oversized graph slots).
+  it('CBC default: the table box is sized to its natural content height, not the full (oversized) body', () => {
+    const boxes = defaultCbcLayout(BODY);
+    const table = boxes.find(b => b.kind === 'table')!;
+    expect(table.h).toBeLessThan(ptToMm(BODY.h) * 0.6);
+  });
+
+  it('CBC default: the 4 analyzer images sit in a 2x2 grid roughly matching the table\'s own height, not stacked across the full body', () => {
+    const boxes = defaultCbcLayout(BODY);
+    const table = boxes.find(b => b.kind === 'table')!;
+    const imgs = boxes.filter(b => b.kind === 'analyzer');
+    expect(imgs).toHaveLength(4);
+    const xs = new Set(imgs.map(b => Math.round(b.x)));
+    const ys = new Set(imgs.map(b => Math.round(b.y)));
+    expect(xs.size).toBe(2); // two distinct columns
+    expect(ys.size).toBe(2); // two distinct rows
+    const gridBottom = Math.max(...imgs.map(b => b.y + b.h));
+    expect(gridBottom).toBeLessThanOrEqual(table.h + 10); // "plus a little", not 4x taller
+  });
+
+  it('CBC default: the signature box sits right below the content with room reserved for End of Report, never pinned to the full body floor', () => {
+    const boxes = defaultCbcLayout(BODY);
+    const table = boxes.find(b => b.kind === 'table')!;
+    const sig = boxes.find(b => b.kind === 'signatures')!;
+    const gapMm = sig.y - table.h;
+    expect(gapMm).toBeGreaterThan(ptToMm(26)); // enough for the EOR line to land in the gap
+    expect(sig.y + sig.h).toBeLessThanOrEqual(ptToMm(BODY.h) + 0.01);
   });
 });

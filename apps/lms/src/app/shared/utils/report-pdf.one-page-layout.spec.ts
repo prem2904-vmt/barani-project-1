@@ -85,17 +85,72 @@ describe('profile one-page layout — PDF render', () => {
     expect(strip(withDisabled)).toBe(strip(withNone));
   });
 
-  it('an ENABLED page_layout forces its own extra page (and the table renders on it)', () => {
+  it('an ENABLED page_layout renders the table on the SAME page as the letterhead — no blank page 1 (owner follow-up, 2026-10-02)', () => {
     const disabled = render({ t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: false }) });
     const enabled = render({ t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true }) });
-    // Strictly MORE pages (the profile's own forced page, plus — since that
-    // page is filled edge to edge by design — the "End of Report" marker
-    // spilling to its own page afterwards, same as any other report whose
-    // last block reaches the floor). The table content itself must be present.
-    expect(enabled.getNumberOfPages()).toBeGreaterThan(disabled.getNumberOfPages());
+    // A one-page profile that is the ONLY content prints on page 1, exactly
+    // like the disabled/no-layout case — never a blank page 1 followed by
+    // the profile on page 2 (the bug the owner flagged after reviewing the
+    // first render). The table content itself must be present.
+    expect(enabled.getNumberOfPages()).toBe(disabled.getNumberOfPages());
     const text = Buffer.from(enabled.output('arraybuffer')).toString('latin1');
     expect(text).toContain('Investigation');
     expect(text).toContain('Hemoglobin');
+  });
+
+  it('a CBC-only order (14 real catalogue parameters, the shipped default layout) renders in EXACTLY ONE page', () => {
+    const names = [
+      'Hemoglobin', 'RBC Count', 'Hematocrit (PCV)', 'MCV', 'MCH', 'MCHC', 'RDW-CV',
+      'WBC Count', 'Neutrophils', 'Lymphocytes', 'Monocytes', 'Eosinophils', 'Basophils', 'Platelet Count',
+    ];
+    const layouts: Record<string, ResolvedReportLayout> = { 'pkg-cbc': profileLayout({ enabled: true }) };
+    const tests = names.map((name, i) => {
+      const id = `ot${i + 1}`;
+      layouts[id] = memberLayout(id, name);
+      return { testId: id, name, packageTestId: 'pkg-cbc', packageType: 'profile', profileName: 'CBC',
+        department: 'Haematology', sampleType: 'EDTA Whole Blood', sampleId: 'SMP-1',
+        result: { values: { [name]: { value: '1', unit: '', range: '' } } } };
+    });
+    const snap = {
+      patient: { displayName: 'Test Patient', age: 30, sex: 'F' },
+      order: { id: 'o1', orderNumber: 'LAB-2610-000003', createdAt: '2026-10-02T00:00:00Z' },
+      type: 'final',
+      deptSignatures: [{ department: 'Haematology', signatures: [{ name: 'Dr. Technician' }] }],
+      tests,
+    };
+    const doc = buildReportPdf({
+      report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(snap) },
+      resolvedLayouts: layouts,
+      template: null,
+    } as never);
+    expect(doc.getNumberOfPages()).toBe(1);
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(text).toContain('End of Report');
+  });
+
+  it('prints the department heading + Sample ID line, and the profile title row, same as the continuous report', () => {
+    const snap = {
+      patient: { displayName: 'Test Patient', age: 30, sex: 'F' },
+      order: { id: 'o1', orderNumber: 'LAB-2610-000004', createdAt: '2026-10-02T00:00:00Z' },
+      type: 'final',
+      deptSignatures: [{ department: 'Haematology', signatures: [{ name: 'Dr. Technician' }] }],
+      tests: [
+        { testId: 't1', name: 'Hemoglobin', packageTestId: 'pkg-cbc', packageType: 'profile',
+          profileName: 'CBC', packageName: 'CBC',
+          department: 'Haematology', sampleType: 'EDTA Whole Blood', sampleId: 'SMP-42',
+          result: { values: { Hemoglobin: { value: '11.4', unit: 'g/dL', range: '12.0 – 16.0' } } } },
+      ],
+    };
+    const doc = buildReportPdf({
+      report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(snap) },
+      resolvedLayouts: { t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true }) },
+      template: null,
+    } as never);
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(text).toContain('HAEMATOLOGY');
+    expect(text).toContain('Sample ID:');
+    expect(text).toContain('SMP-42');
+    expect(text).toContain('CBC');
   });
 
   it('never throws when an analyzer box has no attached image (collapses instead)', () => {

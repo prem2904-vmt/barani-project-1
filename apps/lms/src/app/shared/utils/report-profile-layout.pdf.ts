@@ -44,6 +44,13 @@ export interface ProfileTableTheme {
   abnormalColor: string;
   abnormalLowColor: string;
   zebra: boolean;
+  /** The report theme's abnormal-result treatment — same tokens
+   *  renderColumnarTable reads (theme.flagStyle / theme.flagIndicator), so
+   *  an abnormal value here looks EXACTLY like one in the continuous table
+   *  (owner, 2026-10-02): bold-only vs bold+colour, and letter vs arrow vs
+   *  no glyph at all. */
+  flagStyle: 'bold' | 'bold_color';
+  flagIndicator: 'letter' | 'arrow' | 'none';
 }
 
 function mmRect(b: Pick<PageLayoutBox, 'x' | 'y' | 'w' | 'h'>, body: BodyArea) {
@@ -53,10 +60,32 @@ function mmRect(b: Pick<PageLayoutBox, 'x' | 'y' | 'w' | 'h'>, body: BodyArea) {
   };
 }
 
-function colorFor(flag: string | null | undefined, th: ProfileTableTheme): string | null {
-  if (flag === 'H' || flag === 'CH') return th.abnormalColor;
-  if (flag === 'L' || flag === 'CL') return th.abnormalLowColor;
-  return null;
+/** Mirrors renderColumnarTable's own per-row verdict (report-pdf.ts): a 'N'
+ *  flag (or none) is never abnormal; H/CH is high, L/CL is low; 'A'
+ *  (qualitative abnormal, e.g. a non-Normal dropdown pick) is bold-only,
+ *  no colour/glyph — a direction means nothing for a text answer. Exported
+ *  so this decision can be unit-tested directly, without a real/mocked
+ *  jsPDF + autoTable round trip (report-profile-layout.pdf.spec.ts). */
+export function rowVerdict(row: ProfileTableRow, th: ProfileTableTheme): { emphasise: boolean; color: string | null; glyph: string } {
+  const flag = row.flag ?? null;
+  const isNormal = !flag || flag === 'N';
+  const isLow = flag === 'L' || flag === 'CL';
+  const abnColor = isLow ? th.abnormalLowColor : th.abnormalColor;
+  let emphasise = !!row.bold;
+  let color: string | null = null;
+  if (!isNormal && flag !== 'A') {
+    emphasise = true;
+    if (th.flagStyle === 'bold_color') color = abnColor;
+  }
+  if (flag === 'A') emphasise = true;
+  // An explicit admin row colour (condition chip) always wins and always
+  // bolds — same as renderColumnarTable's own `adminColor` handling, not
+  // gated by the theme's flagStyle (the admin chose this colour on purpose).
+  if (row.color) { color = row.color; emphasise = true; }
+  const glyph = (flag && flag !== 'A' && !isNormal && th.flagIndicator !== 'none')
+    ? (th.flagIndicator === 'arrow' ? (isLow ? '▼' : '▲') : flag)
+    : '';
+  return { emphasise, color, glyph };
 }
 
 /** Draws the table box: only the VISIBLE columns the lab configured, in
@@ -87,13 +116,22 @@ export function drawProfileTableBox(
     if (row.isNote) {
       return cols.map((c, i) => (i === 0 ? { content: row.noteText ?? '', colSpan: cols.length, styles: { fontStyle: 'italic', textColor: theme.dimText } } : ''));
     }
-    const color = row.color ?? colorFor(row.flag, theme);
+    // Same verdict the continuous table computes — and, like it, the
+    // bold/colour/glyph treatment lands ONLY on the result cell (the name,
+    // unit and range cells print plain), never the whole row.
+    const { emphasise, color, glyph } = rowVerdict(row, theme);
     return cols.map(c => {
       const key = c.col.type === 'name' ? 'name' : c.col.name;
-      const text = key === 'name' ? (row.name ?? '') : (row.cells[c.col.name] ?? '');
+      let text = key === 'name' ? (row.name ?? '') : (row.cells[c.col.name] ?? '');
+      const isResultCol = c.col.type === 'result';
       const styles: Record<string, unknown> = {};
-      if (color) styles['textColor'] = color;
-      if (row.bold) styles['fontStyle'] = 'bold';
+      if (isResultCol) {
+        if (glyph) text = text ? `${text}  ${glyph}` : glyph;
+        if (color) styles['textColor'] = color;
+        if (emphasise) styles['fontStyle'] = 'bold';
+      } else if (key === 'name' && row.bold) {
+        styles['fontStyle'] = 'bold';
+      }
       return { content: text, styles };
     });
   });

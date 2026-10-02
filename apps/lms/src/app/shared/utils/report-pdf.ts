@@ -1194,9 +1194,16 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
 
   // Each one-page profile prints on its OWN fresh page, after the normal
   // table(s) — letterhead + patient block drawn exactly like every other
-  // page, the designer's boxes filling the body between them.
+  // page, the designer's boxes filling the body between them. EXCEPT the
+  // first one: when nothing else has printed yet (no in/out-of-scope table
+  // at all — a CBC-only order, say), the currently open page is still blank
+  // below the patient block, so that first bundle reuses it instead of
+  // forcing an empty page 1 + its own page 2 (owner, 2026-10-02).
+  let onePageIsFirstOnOpenPage = inScope.length === 0 && outScope.length === 0;
   for (const b of onePageBundles) {
-    cursorY = renderOnePageProfile(doc, b.pkg, b.group, b.layout, practice, snap, report, deptSigs.get((b.group.department ?? '').trim()) ?? []);
+    cursorY = renderOnePageProfile(doc, b.pkg, b.group, b.layout, practice, snap, report,
+      deptSigs.get((b.group.department ?? '').trim()) ?? [], onePageIsFirstOnOpenPage ? cursorY : undefined);
+    onePageIsFirstOnOpenPage = false;
   }
 
   // Tech attachments for TABULAR tests — the columnar table has no
@@ -3154,6 +3161,23 @@ function renderScopeHeading(
   return y + 23 + grow;
 }
 
+/** The panel/profile title band — "COMPLETE BLOOD COUNT" etc. — SAME fill,
+ *  text colour and type token (`panelName`) as the band renderColumnarTable
+ *  draws as the first row of a multi-parameter panel's block (owner,
+ *  2026-10-02: the one-page profile's own section context must read like
+ *  the continuous report's, not a bare box arrangement with no heading). */
+function drawPanelNameBand(doc: jsPDF, text: string, x: number, y: number, w: number): number {
+  const label = (text ?? '').trim();
+  if (!label) return y;
+  const size = typeset(doc, 'panelName');
+  const h = Math.max(16, Math.round(size * 1.6 + 7));
+  doc.setFillColor('#eef2f7');
+  doc.rect(x, y, w, h, 'F');
+  doc.setTextColor(theme.primary);
+  doc.text(label.toUpperCase(), x + 6, y + h / 2 + size * 0.33, { baseline: 'alphabetic' });
+  return y + h;
+}
+
 /** Distinct sample IDs a department block prints on its band, in first-seen
  *  order: every tube behind its groups — a compiled profile contributes ALL
  *  the tubes its members were drawn in, not just its first member's. */
@@ -3306,31 +3330,61 @@ function toProfileTableRows(rows: PanelRowData[]): ProfileTableRow[] {
   });
 }
 
-/** Render one profile's one-page layout on a fresh page: letterhead +
- *  patient block exactly as every other page, then the designer's boxes
- *  (table / chart / analyzer image / signatures / notes) filling the body
- *  between them. Missing analyzer images collapse per owner decision 2
- *  (collapseMissingAnalyzerBoxes) — never an empty frame. Returns the
- *  cursor position below the forced page (callers already treat "near the
- *  floor" as "start a new page", so whatever renders next lands clean). */
+/** Render one profile's one-page layout: the designer's boxes (table /
+ *  chart / analyzer image / signatures / notes) filling the body between a
+ *  letterhead+patient block and the footer. Missing analyzer images
+ *  collapse per owner decision 2 (collapseMissingAnalyzerBoxes) — never an
+ *  empty frame.
+ *
+ *  `topY` (owner, 2026-10-02): when this bundle is the FIRST thing to print
+ *  on the currently open page (nothing else drew there yet — a CBC-only
+ *  order, say), the caller passes the open page's own cursor instead of
+ *  forcing a fresh page; omitted, this draws its own letterhead + patient
+ *  block on a new page exactly as before (every one-page profile after the
+ *  first, or one printed after a normal table).
+ *
+ *  Returns the Y right below the printed content (table/graphs — NOT the
+ *  signatures box, which keeps whatever position the layout gave it): the
+ *  caller's own "does the End-of-Report line fit here" check then lands the
+ *  marker in the gap ABOVE the signatures, the same before-the-final-
+ *  signature order every other department's sign-off follows. */
 function renderOnePageProfile(
   doc: jsPDF, pkg: string, group: PanelGroup, layout: ResolvedReportLayout,
   practice: NonNullable<ReportPdfInput['practice']>, snap: ReportSnapshot, report: ReportPdfInput['report'],
-  deptSigs: ReportSignature[],
+  deptSigs: ReportSignature[], topY?: number,
 ): number {
   const pl = readPageLayout(layout.sections);
   if (!pl?.enabled || !pl.boxes.length) return newPage(doc, practice); // guarded by the caller; never reached
 
-  NEXT_PAGE_IS_FIRST = false;
-  doc.addPage();
-  drawLetterhead(doc);
-  const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
-  const top = patientBottom + 10;
+  let top: number;
+  if (topY != null) {
+    top = topY; // reuse the already-open page — its letterhead/patient block are already drawn
+  } else {
+    NEXT_PAGE_IS_FIRST = false;
+    doc.addPage();
+    drawLetterhead(doc);
+    const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
+    top = patientBottom + 10;
+  }
+
+  // Section context — department heading + Sample ID, then the profile's
+  // own title band — SAME styles/helpers the continuous report's
+  // renderContinuousTable / renderColumnarTable use, so a one-page profile
+  // reads like any other department block, not a bare box arrangement.
+  let y = top;
+  const dept = (group.department ?? '').trim();
+  if (dept) {
+    const ids = departmentSampleIds([group]);
+    const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
+    y = renderScopeHeading(doc, dept.toUpperCase(), y, practice, right);
+  }
+  y = drawPanelNameBand(doc, group.testName || layout.testName || '', MARGIN_X, y + 2, A4.w - 2 * MARGIN_X) + 6;
+
   // footerFloor() returns a MARGIN (how much room the footer band needs,
   // like MARGIN_BOTTOM) — not an absolute y. The body's floor is the page
   // height minus that reserve.
   const floor = A4.h - footerFloor(LAYOUT);
-  const body: ProfileBodyArea = bodyArea(top, floor);
+  const body: ProfileBodyArea = bodyArea(y, floor);
 
   const images = profileAnalyzerImages(snap, pkg);
   const availCodes = new Set(Object.keys(images));
@@ -3340,7 +3394,7 @@ function renderOnePageProfile(
   const tableTheme = {
     font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, headFill: '#f1f5f9', headText: BLACK, bodyText: TEXT,
     dimText: TEXT_DIM, hair: HAIR, abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
-    zebra: theme.zebraRows,
+    zebra: theme.zebraRows, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
   };
   for (const box of boxes) {
     switch (box.kind) {
@@ -3369,7 +3423,15 @@ function renderOnePageProfile(
         break;
     }
   }
-  return floor;
+  // The actual bottom of the CONTENT (table/graphs/notes) — never the
+  // signatures box, which the layout already pins wherever the lab (or the
+  // shipped default) placed it. Returning this, not the full page floor,
+  // is what lets "****End of Report****" land on the SAME page: the
+  // caller's existing "near the floor → new page" check now sees how much
+  // room is really left, instead of always reading "full".
+  const contentBottomMm = boxes.filter(b => b.kind !== 'signatures')
+    .reduce((m, b) => Math.max(m, b.y + b.h), 0);
+  return contentBottomMm > 0 ? body.top + contentBottomMm * MM : floor;
 }
 
 // ── Technician report notes (owner 2026-09-30) ───────────────────
