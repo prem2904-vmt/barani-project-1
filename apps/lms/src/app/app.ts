@@ -15,6 +15,7 @@ import { SessionService } from './core/auth/session.service';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
 import { OpdGateService } from './features/opd/shared/opd-gate.service';
 import { DesktopWindowService } from './core/services/desktop-window.service';
+import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 
 @Component({
   selector: 'app-root',
@@ -190,6 +191,9 @@ export class App implements OnInit {
   /** Desktop kiosk full screen: Esc (when the app didn't use it) leaves it,
    *  on every screen incl. /login. No-op off Electron. */
   private readonly _desktopWindow = inject(DesktopWindowService);
+  /** Tray "Open Instruments" / "Unmatched results today" → navigates the
+   *  window (electron/tray.js sends 'menu-action'; no-op off Electron). */
+  private readonly _menuActions = inject(ElectronMenuActionService);
   /** The URL the app was opened with, captured before the router's first
    *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';
