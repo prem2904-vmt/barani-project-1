@@ -395,7 +395,7 @@ interface DragState {
             @if (hasAnyTable()) {
               <button type="button" class="pld-pal__item" (click)="addTableBox()">
                 <span class="pld-pal__ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 10v10"/><path d="M15 15h3"/></svg></span>
-                <span><b>{{ tableMode() === 'auto' ? 'Table (continued)' : 'Another table box' }}</b><small>{{ tableMode() === 'auto' ? 'Rows that don\'t fit the earlier table box continue here' : 'Choose which rows print in it' }}</small></span>
+                <span><b>{{ tableMode() === 'auto' ? 'Table (continued)' : 'Another table box' }}</b><small>{{ tableMode() === 'auto' ? 'Rows that overflow the earlier table box continue here' : 'Choose which rows print in it' }}</small></span>
               </button>
             }
             @if (!hasAnyTable()) {

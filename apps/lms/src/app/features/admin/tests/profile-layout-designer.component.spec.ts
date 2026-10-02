@@ -301,6 +301,13 @@ describe('ProfileLayoutDesignerComponent — Custom layout pages', () => {
     expect(c.pages().length).toBe(2);
   });
 
+  it('the palette text renders as text (no raw template braces)', async () => {
+    const { f, el } = make({ sections: saved([tbl('table')]) });
+    f.detectChanges(); await f.whenStable(); f.detectChanges();
+    expect(el.textContent).not.toContain('{{');
+    expect(el.textContent).not.toContain('tableMode()');
+  });
+
   it('AUTO mode: "Table (continued)" adds another table box on the current page', () => {
     const { c, emitted } = make({ sections: saved([tbl('table')]) });
     c.addPage();
