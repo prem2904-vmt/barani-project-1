@@ -171,6 +171,24 @@ export class InsightsComponent {
   readonly referrerOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '', label: 'All referrers' }, ...this.referrers().map(d => ({ value: d.id, label: d.name })),
   ]);
+  readonly dimCount = computed(() => [this.branchId(), this.departmentId(), this.testId(), this.refDoctorId()].filter(Boolean).length);
+  /** Phones: the four dimension filters live in a bottom sheet, applied together. */
+  readonly filtersSheet = signal(false);
+  readonly draft = signal({ branch: '', department: '', test: '', referrer: '' });
+  openFilters(): void {
+    this.draft.set({ branch: this.branchId(), department: this.departmentId(), test: this.testId(), referrer: this.refDoctorId() });
+    this.filtersSheet.set(true);
+  }
+  setDraft(k: 'branch' | 'department' | 'test' | 'referrer', v: string | null): void {
+    this.draft.update(d => ({ ...d, [k]: v ?? '' }));
+  }
+  clearDraft(): void { this.draft.set({ branch: '', department: '', test: '', referrer: '' }); }
+  applyFilters(): void {
+    const d = this.draft();
+    this.branchId.set(d.branch); this.departmentId.set(d.department); this.testId.set(d.test); this.refDoctorId.set(d.referrer);
+    this.page.set(0);
+    this.filtersSheet.set(false);
+  }
   readonly dimsActive = computed(() => !!(this.branchId() || this.departmentId() || this.testId() || this.refDoctorId()));
 
   // ── Navigation ───────────────────────────────────────────────────────
@@ -449,6 +467,7 @@ export class InsightsComponent {
   @HostListener('document:keydown.escape', ['$event'])
   onEscape(ev: Event): void {
     if (this.colsOpen()) { this.colsOpen.set(false); ev.preventDefault(); }
+    else if (this.filtersSheet()) { this.filtersSheet.set(false); ev.preventDefault(); }
     else if (this.ctxSheet()) { this.ctxSheet.set(false); ev.preventDefault(); }
     else if (this.navSheet()) { this.navSheet.set(false); ev.preventDefault(); }
   }

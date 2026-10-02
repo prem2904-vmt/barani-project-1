@@ -321,13 +321,27 @@
 .pf-ins-rank__meta { font-size: 11.5px; color: var(--text-tertiary); }
 @keyframes pf-ins-grow { from { transform: scaleX(0); } to { transform: none; } }
 
+.pf-ins-filtersbtn { flex: none; height: 36px; }
+.pf-ins-main__switch {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 6px; margin-left: -6px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; cursor: pointer;
+}
+.pf-ins-main__switch:hover { background: var(--nd-chip-bg); }
+.pf-ins-main__switch:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-ins-filters__body { gap: 14px; padding: 14px 16px; }
+.pf-ins-filters__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pf-ins-filters .nd-card__foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
 /* ── Touch + phones (additive; desktop unchanged) ─────────────────── */
 @media (hover: none) and (pointer: coarse) {
   .pf-ins-nav__item, .pf-ins-cols__row { min-height: 44px; }
   .pf-ins-nav__btn, .pf-ins-strip__expand, .pf-ins-pager__btn { width: 44px !important; height: 44px; min-height: 44px; }
 }
 @media (max-width: 640px) {
-  .pf-ins-bandsel, .pf-ins-bandsel--period { min-width: 140px; }
+  /* The pill's tool row: period + Filters, sharing the width — never a sideways scroll. */
+  :host ::ng-deep .pf-hb__tools { overflow-x: visible !important; }
+  .pf-ins-bandsel--period { flex: 1 1 auto; min-width: 0; }
+  .pf-ins-filtersbtn { flex: 1 1 auto; justify-content: center; height: 44px; font-size: 14px; }
   .pf-ins-navchip { height: 36px; }
   .pf-ins-main__body { padding: 12px; gap: 12px; }
   .pf-ins-main__note { display: none; }
