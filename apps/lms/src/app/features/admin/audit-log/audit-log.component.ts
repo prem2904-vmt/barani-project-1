@@ -11,6 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 /** Quick date windows for the band pill ('' = any time). */
 type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
@@ -36,7 +37,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent],
+  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     @use '../../../shared/styles/device-tier' as dt;
@@ -129,11 +130,11 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                        aria-label="When"></pf-select>
             @if (range() === 'custom') {
               <span class="audit-dates">
-                <input type="date" class="audit-date" aria-label="From"
-                       [ngModel]="filters().from" (ngModelChange)="setFilter({ from: $event })" />
+                <pf-nd-date label="From" [value]="filters().from || null"
+                            (valueChange)="setFilter({ from: $event ?? '' })"></pf-nd-date>
                 <span class="audit-dates__sep">to</span>
-                <input type="date" class="audit-date" aria-label="To"
-                       [ngModel]="filters().to" (ngModelChange)="setFilter({ to: $event })" />
+                <pf-nd-date label="To" [value]="filters().to || null"
+                            (valueChange)="setFilter({ to: $event ?? '' })"></pf-nd-date>
               </span>
             }
           </ng-container>
@@ -158,22 +159,15 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
         <div class="audit-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label class="pf-label">Record type</label>
-            <select class="pf-input" [ngModel]="filters().entityType"
-                    (ngModelChange)="patch({ entityType: $event })">
-              @for (t of entityTypes; track t.value) {
-                <option [value]="t.value">{{ t.label }}</option>
-              }
-            </select>
+            <pf-select [options]="entityTypeOptions" [value]="filters().entityType"
+                       (valueChange)="patch({ entityType: $event })"
+                       aria-label="Record type"></pf-select>
           </div>
           <div>
             <label class="pf-label">Action</label>
-            <select class="pf-input" [ngModel]="filters().action"
-                    (ngModelChange)="patch({ action: $event })">
-              <option value="">Any action</option>
-              <option value="create">Created</option>
-              <option value="update">Updated</option>
-              <option value="delete">Deleted</option>
-            </select>
+            <pf-select [options]="actionOptions" [value]="filters().action"
+                       (valueChange)="patch({ action: $event })"
+                       aria-label="Action"></pf-select>
           </div>
           <div>
             <label class="pf-label">Record ID</label>
@@ -182,13 +176,13 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
           </div>
           <div>
             <label class="pf-label">From</label>
-            <input type="date" class="pf-input"
-                   [ngModel]="filters().from" (ngModelChange)="patch({ from: $event })"/>
+            <pf-nd-date label="From" [value]="filters().from || null"
+                        (valueChange)="patch({ from: $event ?? '' })"></pf-nd-date>
           </div>
           <div>
             <label class="pf-label">To</label>
-            <input type="date" class="pf-input"
-                   [ngModel]="filters().to" (ngModelChange)="patch({ to: $event })"/>
+            <pf-nd-date label="To" [value]="filters().to || null"
+                        (valueChange)="patch({ to: $event ?? '' })"></pf-nd-date>
           </div>
         </div>
         <div class="mt-3 flex gap-2 justify-end">

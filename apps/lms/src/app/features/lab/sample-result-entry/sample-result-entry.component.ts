@@ -113,6 +113,7 @@ import { ReportNotesStore } from '../../../shared/components/report-note/report-
 import { ReportNoteButtonComponent, ReportNoteSlotComponent } from '../../../shared/components/report-note/report-note-slot.component';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -170,6 +171,7 @@ function calcKey(testId: string, paramName: string): string {
     ReportNoteButtonComponent,
     ReportNoteSlotComponent,
     ReportNotesCardComponent,
+    NdDateComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -628,7 +630,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-ndd__in",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -1345,6 +1347,11 @@ export class SampleResultEntryComponent {
 
   getValue(testId: string, paramName: string): unknown {
     return this._values()[testId]?.[paramName] ?? "";
+  }
+
+  /** The kit date input needs a plain ISO string or null, not `unknown`. */
+  asDateStr(v: unknown): string | null {
+    return typeof v === "string" && v ? v : null;
   }
 
   setValue(testId: string, paramName: string, v: unknown) {

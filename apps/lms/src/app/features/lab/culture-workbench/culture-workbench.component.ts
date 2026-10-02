@@ -799,10 +799,15 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const body = existing ? `${existing}\n${t.body}` : t.body;
     this.onDraft(stageKey, body);
   }
-  saveTemplate(stageKey: string) {
+  async saveTemplate(stageKey: string) {
     const body = (this.drafts()[stageKey] ?? '').trim();
     if (!body) return;
-    const name = (window.prompt('Save these findings as a template — name it:') ?? '').trim();
+    const name = ((await this.dialog.prompt({
+      title: 'Save as template',
+      message: 'Save these findings as a template — name it:',
+      placeholder: 'Template name',
+      required: true,
+    })) ?? '').trim();
     if (!name) return;
     this.api.post<ResultTemplate>('/api/result-templates', { scope: this.templateScope(stageKey), name, body }).subscribe({
       next: t => {

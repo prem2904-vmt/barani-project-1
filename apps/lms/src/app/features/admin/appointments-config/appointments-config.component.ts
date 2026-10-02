@@ -13,6 +13,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { NdTimeComponent } from '../../../shared/components/nd-time/nd-time.component';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -28,7 +29,7 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
+  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, NdTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -161,13 +162,13 @@ const MODES: ModeOption[] = [
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <label class="flex flex-col gap-1">
                 <span class="nd-field__lbl">Start time</span>
-                <input type="time" class="nd-input nd-num" [value]="startTime()"
-                  (change)="setStart($any($event.target).value)" />
+                <pf-nd-time label="Start time" [value]="startTime()"
+                  (valueChange)="setStart($event)"></pf-nd-time>
               </label>
               <label class="flex flex-col gap-1">
                 <span class="nd-field__lbl">End time</span>
-                <input type="time" class="nd-input nd-num" [value]="endTime()"
-                  (change)="setEnd($any($event.target).value)" />
+                <pf-nd-time label="End time" [value]="endTime()"
+                  (valueChange)="setEnd($event)"></pf-nd-time>
               </label>
             </div>
             <p class="pf-ap-hint">
@@ -255,8 +256,8 @@ export class AppointmentsConfigComponent implements OnInit {
     this.svc.getConfig().subscribe({ next: c => { this._cfg.set(c); this.hydrateHours(c); } });
   }
 
-  setStart(v: string) { if (v) this._startTime.set(v); }
-  setEnd(v: string) { if (v) this._endTime.set(v); }
+  setStart(v: string | null) { if (v) this._startTime.set(v); }
+  setEnd(v: string | null) { if (v) this._endTime.set(v); }
 
   /** Pull a representative start/end from the stored weekly schedule so the
    *  time pickers reflect what's actually saved. Falls back to 09:00–17:00. */

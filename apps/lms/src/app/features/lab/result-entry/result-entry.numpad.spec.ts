@@ -120,7 +120,9 @@ describe('Result entry — touch numpad', () => {
     press('1', '5');
     expect(pad()!.querySelector('[data-key="next"]')!.textContent).toContain('Next');
     press('next');
-    expect(document.activeElement).toBe(el.querySelector('[data-param="appearance"]'));
+    // The dropdown is now a themed pf-select (never a native <select>) — the
+    // wrapper carries data-param and focus lands on its trigger inside it.
+    expect(document.activeElement?.closest('[data-param="appearance"]')).toBeTruthy();
     await new Promise(r => setTimeout(r));
     tick();
     expect(pad()).toBeNull();

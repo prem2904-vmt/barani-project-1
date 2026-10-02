@@ -6,6 +6,7 @@ import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 
 interface PatientDocument {
   id: string;
@@ -35,7 +36,7 @@ const DOC_TYPES = [
 @Component({
   selector: 'pf-patient-documents',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   // Layout-only, scoped to :host. Touch devices have no hover, so the
   // hover-revealed delete button would be unreachable — reveal it on
@@ -55,9 +56,7 @@ const DOC_TYPES = [
       <div class="flex flex-wrap items-end gap-3 p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">Type</label>
-          <select class="pf-input !py-2" [ngModel]="docType()" (ngModelChange)="docType.set($event)">
-            @for (t of types; track t.value) { <option [value]="t.value">{{ t.label }}</option> }
-          </select>
+          <pf-select [options]="types" [value]="docType()" (valueChange)="docType.set($event)"></pf-select>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">Note (optional)</label>

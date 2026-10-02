@@ -700,13 +700,13 @@
                      (keydown.enter)="onEnterKey($event)" />
             }
             @case ("date") {
-              <input type="date" class="pf-sre__ginput"
-                     [attr.aria-label]="p.title || p.name"
-                     [attr.data-sre-field]="t.id + '::' + p.name"
-                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                     [ngModel]="getValue(t.id, p.name)"
-                     (ngModelChange)="setValue(t.id, p.name, $event)"
-                     (keydown.enter)="onEnterKey($event)" />
+              <pf-nd-date class="pf-sre__gdate"
+                          [label]="p.title || p.name"
+                          [attr.data-sre-field]="t.id + '::' + p.name"
+                          [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                          [value]="asDateStr(getValue(t.id, p.name))"
+                          (valueChange)="setValue(t.id, p.name, $event)"
+                          (keydown.enter)="onEnterKey($event)"></pf-nd-date>
             }
             @default {
               <!-- Free text: a multi-line box that grows with the text (tall on

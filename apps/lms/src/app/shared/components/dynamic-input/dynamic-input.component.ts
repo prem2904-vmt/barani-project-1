@@ -10,6 +10,9 @@ import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
 import { labToday } from '../../utils/lab-clock';
+import { NdDateComponent } from '../nd-date/nd-date.component';
+import { NdTimeComponent } from '../nd-time/nd-time.component';
+import { NdDateTimeComponent } from '../nd-date/nd-datetime.component';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -47,7 +50,7 @@ export { isContactNumberField };
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, SelectComponent],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent, NdDateComponent, NdTimeComponent, NdDateTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ndOn()) {
@@ -160,18 +163,17 @@ export { isContactNumberField };
               </div>
               @if (!err) { <p class="nd-field__hint">Type either — an entered age stays current automatically.</p> }
             } @else {
-              <input [id]="inputId" data-pf-stop type="date" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                     [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
-                     [ngModel]="value" (ngModelChange)="emit($event)" />
+              <pf-nd-date [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                          (valueChange)="emit($event)"></pf-nd-date>
             }
           }
           @case ('datetime') {
-            <input [id]="inputId" data-pf-stop type="datetime-local" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                   [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)"
+                            (valueChange)="emit($event)"></pf-nd-datetime>
           }
           @case ('time') {
-            <input [id]="inputId" data-pf-stop type="time" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                   [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-time [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                        (valueChange)="emit($event)"></pf-nd-time>
           }
           @case ('select') {
             @if (opts.length >= 2 && opts.length <= 4) {
@@ -355,8 +357,8 @@ export { isContactNumberField };
                  increments over time; either way the field's value is a DOB.
                  Infants: flip the unit to Months (auto-selected under 2 yrs). -->
             <div class="flex items-center gap-2 flex-wrap">
-              <input type="date" class="pf-input" style="flex:1 1 150px" [attr.max]="todayIso"
-                     [ngModel]="value" (ngModelChange)="emitDob($event, false)" />
+              <span style="flex:1 1 150px"><pf-nd-date [label]="field.title" [value]="asDateStr(value)" [max]="todayIso"
+                          (valueChange)="emitDob($event, false)"></pf-nd-date></span>
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
               <input type="number" class="pf-input" style="flex:0 0 84px" min="0"
                      [attr.max]="ageLimit()"
@@ -381,14 +383,14 @@ export { isContactNumberField };
               Type either — an entered age stays current automatically.
             </p>
           } @else {
-            <input type="date" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-date [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-date>
           }
         }
         @case ('datetime') {
-          <input type="datetime-local" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-datetime>
         }
         @case ('time') {
-          <input type="time" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          <pf-nd-time [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-time>
         }
 
         @case ('select') {
@@ -1243,6 +1245,12 @@ export class DynamicInputComponent {
   emit(v: unknown) {
     this._value.set(v);
     this.valueChange.emit(v);
+  }
+
+  /** `value` is `unknown` (the field can hold any JSON shape); the kit
+   * date/time/datetime inputs need a plain string or null. */
+  asDateStr(v: unknown): string | null {
+    return typeof v === 'string' && v ? v : null;
   }
 
   // ── Phone Input & Country Code Validation ─────────────────────────

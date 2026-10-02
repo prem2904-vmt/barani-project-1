@@ -231,6 +231,10 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
 .pf-sre__gselect { width: 100%; }
+.pf-sre__gdate { display: block; width: 100%; }
+.pf-sre__gdate.pf-sre__input--flagged ::ng-deep .pf-ndd__in {
+  border-color: rgba(239, 68, 68, 0.6) !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
 .pf-sre__cb { width: 18px; height: 18px; accent-color: var(--color-violet-600, #7c3aed); }
 
 /* Live flags — FUNCTIONAL colours (data, not decoration). */
