@@ -162,4 +162,40 @@ describe('profile one-page layout — PDF render', () => {
     const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
     expect(text).toContain('Dr. Technician');
   });
+
+  it('reports the exact body rect and where the themed table really ended (designer hook)', () => {
+    const seen: Array<{ page: number; tableBottom?: number | null }> = [];
+    buildReportPdf({
+      report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(snapshot()) },
+      resolvedLayouts: { t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true }) },
+      template: null,
+      onOnePageBody: (i: { page: number; tableBottom?: number | null }) => seen.push(i),
+    } as never);
+    expect(seen[0].page).toBe(1);
+    const t = seen.find(i => i.tableBottom !== undefined);
+    expect(typeof t?.tableBottom).toBe('number');
+  });
+
+  it('a HIDDEN box keeps its place in the layout but never prints', () => {
+    const boxes = defaultCbcLayout(BODY).map(b => (b.kind === 'signatures' ? { ...b, hidden: true } : b));
+    const doc = render({ t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true, boxes }) });
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(text).not.toContain('Dr. Technician');
+  });
+
+  it('the analyzer graphs placed in the layout are not printed AGAIN in the images block', () => {
+    // A 1x1 PNG — the same url is the member's attachment AND its analyzer image.
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    const snap = snapshot();
+    (snap.tests[0] as Record<string, unknown>)['images'] = [png];
+    (snap.tests[0] as Record<string, unknown>)['analyzerImages'] = { '12003': png };
+    const doc = buildReportPdf({
+      report: { id: 'r1', type: 'final', createdAt: '2026-10-02T00:00:00Z', data: JSON.stringify(snap) },
+      resolvedLayouts: { t1: memberLayout('t1', 'Hemoglobin'), 'pkg-cbc': profileLayout({ enabled: true }) },
+      template: null,
+      imageCache: { [png]: png },
+    } as never);
+    const text = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(text).not.toContain('IMAGES');
+  });
 });

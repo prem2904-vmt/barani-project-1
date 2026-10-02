@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import type { PageLayoutBox, PageLayoutBoxKind, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
 import type { ReportTemplate } from '../../../shared/models/report.model';
 import {
-  KNOWN_ANALYZER_IMAGES, MIN_BODY_FONT_PT, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
+  DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
   boxLabel, buildDefaultLayout, detectLayoutIssues, dragBox, fitMeter, isCbcFamily, nudgeBox, patchBox, readPageLayout, removeBox,
   resizeBox, resizeFromHandle, setBoxHidden, setColumnVisible, writePageLayout,
   type BodyArea, type PageLayoutIssue, type ResizeHandle, type SnapGuides,
@@ -186,15 +186,11 @@ interface DragState {
         </div>
       </div>
       <div class="pld-foot">
-        <span class="pld-fit" [class.pld-fit--bad]="!fit().fits">
+        <span class="pld-fit" [class.pld-fit--bad]="!fitsBox()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            @if (fit().fits) { <path d="M20 6 9 17l-5-5"/> } @else { <path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/> }
+            @if (fitsBox()) { <path d="M20 6 9 17l-5-5"/> } @else { <path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/> }
           </svg>
-          @if (fit().fits) {
-            {{ rowCount() }} rows fit on one page{{ fit().shrinkToPt < (tableBox()?.fontSize ?? 9) ? ' at ' + fit().shrinkToPt + ' pt' : '' }}.
-          } @else {
-            {{ rowCount() }} rows don't fit the table box even at {{ minFontPt }} pt — make it taller, or the rest flows onto page 2.
-          }
+          @if (fitsBox()) { {{ rowCount() }} rows fit in the table box. } @else { {{ rowCount() }} rows need a taller table box — otherwise the rest continues on page 2. }
         </span>
         <span class="pld-foot__note">
           @if (rendering()) { Updating the page… } @else { Sample values and sample analyzer graphs — the real report prints the patient's. }
@@ -213,7 +209,7 @@ interface DragState {
         @if (selectedBox()) {
           <button type="button" class="nd-btn nd-btn--quiet" (click)="select(null)" aria-label="Back to the palette">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-            All boxes
+            All
           </button>
         }
       </div>
@@ -240,7 +236,7 @@ interface DragState {
           }
 
           <section class="pld-sec" aria-label="Position and size">
-            <h4 class="pld-sec__h">Position &amp; size (mm from the body's top-left)</h4>
+            <h4 class="pld-sec__h">Position &amp; size · mm</h4>
             <div class="pld-nudge">
               <div class="pld-pad" role="group" aria-label="Move box">
                 <button type="button" class="nd-btn nd-btn--icon pld-pad__up" (click)="nudge(0, -step())" aria-label="Move up"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
@@ -249,10 +245,10 @@ interface DragState {
                 <button type="button" class="nd-btn nd-btn--icon pld-pad__down" (click)="nudge(0, step())" aria-label="Move down"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
               </div>
               <div class="pld-step">
-                <span class="nd-field__lbl">Step</span>
+                <span class="nd-field__lbl">Step (mm)</span>
                 <div class="nd-seg" role="radiogroup" aria-label="Step size">
                   @for (st of steps; track st) {
-                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
+                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }}</button>
                   }
                 </div>
               </div>
@@ -272,12 +268,10 @@ interface DragState {
           @switch (b.kind) {
             @case ('table') {
               <section class="pld-sec" aria-label="Table">
-                <h4 class="pld-sec__h">Type size</h4>
-                <div class="nd-seg" role="radiogroup" aria-label="Type size">
-                  @for (f of fontSizes; track f) {
-                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="(b.fontSize ?? 9) === f" (click)="setFontSize(f)">{{ f }} pt</button>
-                  }
-                </div>
+                <p class="nd-field__hint">The table prints in your report theme — fonts, header, rules and flags come from the Report template. Here you choose where it sits and which columns print.</p>
+                @if (!fitsBox() && measuredFor(b) != null) {
+                  <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
+                }
                 <h4 class="pld-sec__h">Columns</h4>
                 <ul class="pld-cols">
                   @for (c of tableColumns(); track c.name) {
@@ -471,7 +465,7 @@ interface DragState {
       border: 1px dashed rgba(124, 58, 237, .32); border-radius: 2px; background: transparent;
       transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease; }
     .pld-box:hover, .pld-box:focus-visible { border-color: rgba(124, 58, 237, .75); background: rgba(124, 58, 237, .04); }
-    .pld-box--sel, .pld-box--sel:hover { border: 1.5px solid #7c3aed; background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 3px rgba(124, 58, 237, .14); }
+    .pld-box--sel, .pld-box--sel:hover { z-index: 4; border: 1.5px solid #7c3aed; background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 3px rgba(124, 58, 237, .14); }
     .pld-box--drag { cursor: grabbing; transition: none; z-index: 5; box-shadow: 0 8px 24px rgba(15, 23, 42, .22), 0 0 0 1.5px #7c3aed; }
     .pld-box--warn:not(.pld-box--sel) { border: 1.5px solid rgba(217, 119, 6, .85); }
     .pld-box--hidden { border-color: rgba(100, 116, 139, .6); background: repeating-linear-gradient(135deg, rgba(100,116,139,.12) 0 5px, rgba(255,255,255,.7) 5px 10px); }
@@ -624,8 +618,6 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
 
   protected readonly steps = STEPS;
   protected readonly handles = RESIZE_HANDLES;
-  protected readonly fontSizes = [8, 8.5, 9, 10];
-  protected readonly minFontPt = MIN_BODY_FONT_PT;
   protected readonly PAGE_RATIO = PAGE.h / PAGE.w;
 
   // ── page geometry ───────────────────────────────────────────────────
@@ -675,6 +667,14 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     const t = this.tableBox();
     if (!t) return { fits: true, shrinkToPt: 9, overflowsToPage2: false, estimatedRows: 0 };
     return fitMeter(this.rowCount(), t.h * MM, t.fontSize ?? 9);
+  });
+  /** The themed table's rows fit the table box as drawn (no shrinking — the
+   *  type comes from the report theme). */
+  readonly fitsBox = computed(() => {
+    const t = this.tableBox();
+    const m = this.measuredFor(t);
+    if (t && m !== undefined) return m !== null && m <= t.h + 0.6;
+    const f = this.fit(); return f.fits && f.shrinkToPt >= (t?.fontSize ?? 9);
   });
   readonly issues = computed((): PageLayoutIssue[] => detectLayoutIssues(this.boxes(), this.body()));
   readonly pageIssues = computed(() => this.issues().slice(0, 4));
@@ -762,12 +762,13 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         if (cfg?.boxes.length) { this.boxes.set(cfg.boxes); this.draft.set(false); }
         else { this.draft.set(true); this.boxes.set(this.buildDefault()); }
         this.history.set([]); this.future.set([]);
+        this.emitLive();
       });
     });
     // The untouched default follows better information as it arrives.
     effect(() => {
-      this.body(); this.analyzerCodes(); this.members(); this.chartSections();
-      untracked(() => { if (this.draft()) this.boxes.set(this.buildDefault()); });
+      this.body(); this.analyzerCodes(); this.members(); this.chartSections(); this.measuredTableMm();
+      untracked(() => { if (this.draft()) { this.boxes.set(this.buildDefault()); this.emitLive(); } });
     });
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => this.template.set(t ?? null),
@@ -816,6 +817,13 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   }
 
   /** The default for ANY profile (report-profile-layout.ts buildDefaultLayout). */
+  /** The measured table height, when it was measured at the default's width. */
+  private draftTableMm(): number | null {
+    const want = this.analyzerCodes().length || this.chartSections().length
+      ? Math.round(ptToMm(this.body().w) * DEFAULT_TABLE_SHARE * 10) / 10 : Math.round(ptToMm(this.body().w) * 100) / 100;
+    const m = this.measuredTableMm();
+    return m != null && Math.abs(this.measuredForWidth - want) < 0.2 ? m : null;
+  }
   private buildDefault(): PageLayoutBox[] {
     return buildDefaultLayout({
       body: this.body(),
@@ -823,6 +831,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       analyzerCodes: this.analyzerCodes().map(i => i.code),
       chartIds: this.chartSections(),
       labelFor: code => this.codeLabel(code, this.analyzerInfo()?.images.find(i => i.code === code)?.label),
+      tableHeightMm: this.draftTableMm(),
     });
   }
 
@@ -859,7 +868,11 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       let page = 1;
       const url = renderReportPdfBlobUrl({
         ...input,
-        onOnePageBody: info => { if (info.pkg === id) { page = info.page; this.setBody(info.body); } },
+        onOnePageBody: info => {
+          if (info.pkg !== id) return;
+          page = info.page; this.setBody(info.body);
+          if (info.tableBottom !== undefined) this.setMeasuredTable(info.tableBottom, info.body);
+        },
       });
       if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl);
       this.lastBlobUrl = url;
@@ -870,6 +883,27 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     } finally {
       if (seq === this.renderSeq) this.rendering.set(false);
     }
+  }
+
+  /** The results table's REAL printed height (mm), measured by the renderer
+   *  at the table box's current width; null = it ran past the page. */
+  readonly measuredTableMm = signal<number | null | undefined>(undefined);
+  private measuredForWidth = -1;
+  private setMeasuredTable(bottomPt: number | null, body: BodyArea): void {
+    const t = this.boxes().find(b => b.kind === 'table');
+    if (!t) return;
+    const mm = bottomPt == null ? null : Math.round(((bottomPt - (body.top + t.y * MM)) / MM) * 10) / 10;
+    this.measuredForWidth = t.w;
+    if (mm !== this.measuredTableMm()) this.measuredTableMm.set(mm);
+  }
+  /** The measurement belongs to the width it was taken at. */
+  measuredFor(t: PageLayoutBox | null): number | null | undefined {
+    return t && Math.abs(t.w - this.measuredForWidth) < 0.05 ? this.measuredTableMm() : undefined;
+  }
+  fitTableBox(): void {
+    const t = this.tableBox(); const m = this.measuredFor(t);
+    if (!t || m == null) return;
+    this.commit(resizeBox(this.boxes(), t.id, t.w, m + 1, this.body()));
   }
 
   private setBody(b: BodyArea): void {
@@ -910,8 +944,11 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     const next = writePageLayout(this.sections(), { enabled: this.enabled(), boxes: this.boxes() });
     this.lastEmitted = next;
     this.sectionsChange.emit(next);
-    this.liveChange.emit({ enabled: this.enabled(), boxes: this.boxes() });
+    this.emitLive();
   }
+  /** The Live preview shows the arrangement being designed — on or off —
+   *  so the lab sees what switching it on will print. */
+  private emitLive(): void { this.liveChange.emit({ enabled: true, boxes: this.boxes() }); }
   /** Apply an edit: history, then save. */
   private commit(next: PageLayoutBox[], prev = this.boxes()): void {
     if (next === prev) return;
@@ -993,10 +1030,6 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       this.commit(dragBox(this.boxes(), b.id, k === 'x' ? v : b.x, k === 'y' ? v : b.y, this.body(), false).boxes);
     }
   }
-  setFontSize(v: number): void {
-    const id = this.selected(); if (!id) return;
-    this.commit(patchBox(this.boxes(), id, { fontSize: Math.max(MIN_BODY_FONT_PT, Math.min(14, v)) }));
-  }
   setLabel(v: string): void {
     const id = this.selected(); if (!id) return;
     this.commit(patchBox(this.boxes(), id, { label: v.trim() || null }));
@@ -1058,7 +1091,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     const next = writePageLayout([...this.sections(), chart], { enabled: this.enabled(), boxes: r.boxes });
     this.lastEmitted = next;
     this.sectionsChange.emit(next);
-    this.liveChange.emit({ enabled: this.enabled(), boxes: r.boxes });
+    this.emitLive();
     this.selected.set(r.id);
     this.toasts.info('Chart added — set what it shows in its block in the print order.');
   }

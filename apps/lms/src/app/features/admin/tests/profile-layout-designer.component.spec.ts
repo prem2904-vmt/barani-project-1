@@ -118,6 +118,15 @@ describe('ProfileLayoutDesignerComponent — starts from a sensible default', ()
     expect(c.boxes()).toEqual([{ id: 'table', kind: 'table', x: 0, y: 0, w: 100, h: 150 }]);
   });
 
+  it('the Live preview gets the arrangement being designed even while the layout is off', () => {
+    const { c } = make();
+    const live: Array<{ enabled: boolean }> = [];
+    c.liveChange.subscribe(v => live.push(v));
+    c.add('notes');
+    expect(live[live.length - 1].enabled).toBe(true);
+    expect(c.enabled()).toBe(false);
+  });
+
   it('switching it on saves the default arrangement with enabled: true', () => {
     const { c, emitted } = make();
     c.setEnabled(true);
@@ -228,13 +237,11 @@ describe('ProfileLayoutDesignerComponent — real box editing', () => {
     expect(c.boxes()[1].x).toBe(125);
   });
 
-  it('table settings: type size and column switches', () => {
+  it('table settings: column switches (type comes from the report theme, not the designer)', () => {
     const { c, emitted } = make({ sections: saved(two()) });
     c.select('table');
-    c.setFontSize(8.5);
     c.toggleColumn('method', false);
     const t = lastBoxes(emitted).find(b => b.id === 'table')!;
-    expect(t.fontSize).toBe(8.5);
     expect(t.columns?.find(col => col.name === 'method')?.visible).toBe(false);
   });
 });
