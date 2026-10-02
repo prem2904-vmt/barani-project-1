@@ -13,7 +13,8 @@ import { defaultChartSpec, type ReportChartSpec } from '../../../shared/utils/re
 import type { ChartEditorContext } from '../../../shared/utils/report-chart/report-chart.sample';
 import { ReportChartEditorComponent } from './report-chart-editor.component';
 import { ProfileLayoutDesignerComponent } from './profile-layout-designer.component';
-import type { ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
+import type { PageLayoutBox, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
+import type { PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -254,10 +255,15 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
               [sections]="$any(rawSections() ?? [])"
               [resolvedColumns]="resolvedColumns()"
               [profileTestId]="testId()"
-              [availableAnalyzerCodes]="availableAnalyzerCodes()"
-              [hasDefault]="true"
+              [profileName]="profileName()"
+              [profileCatalogKey]="profileCatalogKey()"
+              [department]="profileDepartment()"
+              [sampleType]="profileSampleType()"
+              [members]="profileMembers()"
+              [columnsOverride]="columnsOverride()"
+              [chartContext]="chartContext()"
               (sectionsChange)="onPageLayoutChange($event)"
-              (restoreDefault)="onRestoreDefault()" />
+              (liveChange)="pageLayoutLive.emit($event)" />
           </section>
         }
       }
@@ -408,22 +414,19 @@ export class ReportStructureComponent {
    *  test's report is one block already. */
   readonly isProfile = input<boolean>(false);
   readonly resolvedColumns = input<ReportColumn[]>([]);
-  readonly availableAnalyzerCodes = input<string[]>([]);
+  /** What the designer's sample page prints — the SAME profile facts the
+   *  test editor feeds its Live preview (report-sample-preview.ts). */
+  readonly profileName = input<string>('');
+  readonly profileCatalogKey = input<string | null>(null);
+  readonly profileDepartment = input<string>('');
+  readonly profileSampleType = input<string>('');
+  readonly profileMembers = input<PreviewProfileMember[]>([]);
+  readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** The designer's live box set (unsaved) — the host's Live preview shows it. */
+  readonly pageLayoutLive = output<{ enabled: boolean; boxes: PageLayoutBox[] }>();
 
   onPageLayoutChange(next: ReportSection[]): void {
     this.commit(next as unknown as RawSection[], { debounce: true });
-  }
-  async onRestoreDefault(): Promise<void> {
-    const id = this.testId();
-    if (!id) return;
-    try {
-      const res = await this.layout.restorePageLayoutDefault(id);
-      if (!res) { this.toasts.info('No default one-page layout is available for this profile.'); return; }
-      this.rawSections.set((res.sections as unknown as RawSection[]) ?? []);
-      this.toasts.success('Restored the default one-page layout.');
-    } catch {
-      this.toasts.error('Could not restore the default layout — check the connection and try again.');
-    }
   }
 
   readonly loading = signal(true);

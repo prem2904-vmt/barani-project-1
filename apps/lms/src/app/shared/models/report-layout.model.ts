@@ -229,6 +229,11 @@ export interface PageLayoutBox {
   /** table box only: results font size in pt (the fit meter may shrink this
    *  further at print time, down to MIN_BODY_FONT_PT). */
   fontSize?: number;
+  /** Kept in the layout but not printed (the designer's "Hide" — the box
+   *  stays where it was, ready to show again). Absent = prints. */
+  hidden?: boolean;
+  /** notes box only: the text it prints (older layouts used `label`). */
+  text?: string | null;
 }
 
 export interface PageLayoutSection extends ReportSectionBase {

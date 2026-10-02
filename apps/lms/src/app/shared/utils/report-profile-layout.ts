@@ -50,6 +50,17 @@ export function analyzerLabel(code: string): string {
   return KNOWN_ANALYZER_IMAGES.find(i => i.code === code)?.label ?? `Analyzer image ${code}`;
 }
 
+/** Where the designer/preview's SAMPLE graph for an image code lives — a
+ *  generic, synthetic look-alike of the analyzer's own graph (no patient
+ *  data; `public/assets/analyzer-samples/`). Codes without a known look get
+ *  a neutral stand-in curve. Never used for a real report: a real report
+ *  prints the attachment the analyzer actually sent. */
+export function analyzerSampleAsset(code: string): string {
+  return KNOWN_ANALYZER_IMAGES.some(i => i.code === code)
+    ? `assets/analyzer-samples/m51-${code}.png`
+    : 'assets/analyzer-samples/generic.png';
+}
+
 // ── storage (read/write the section inside the array) ──────────────────
 
 function isPageLayoutSection(s: unknown): s is PageLayoutSection {
@@ -87,7 +98,7 @@ function isBox(o: unknown): o is PageLayoutBox {
     && isFiniteNum(b['x']) && isFiniteNum(b['y']) && isFiniteNum(b['w']) && isFiniteNum(b['h']);
 }
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
-const BOX_KINDS: PageLayoutBoxKind[] = ['table', 'chart', 'analyzer', 'signatures', 'notes'];
+export const BOX_KINDS: PageLayoutBoxKind[] = ['table', 'chart', 'analyzer', 'signatures', 'notes'];
 
 /** Immutable: the section array with the page-layout section replaced (or
  *  added, in first-position-after-grid order — it does not affect normal
@@ -284,7 +295,8 @@ function boxRectPt(b: PageLayoutBox, body: BodyArea) {
  *  page). Pure — same shape as the letterhead editor's detectIssues(). */
 export function detectLayoutIssues(boxes: PageLayoutBox[], body: BodyArea): PageLayoutIssue[] {
   const out: PageLayoutIssue[] = [];
-  const label = (b: PageLayoutBox) => b.label ?? (b.kind === 'table' ? 'Results table' : b.kind === 'signatures' ? 'Signatures' : b.kind);
+  const label = (b: PageLayoutBox) => boxLabel(b);
+  boxes = boxes.filter(b => !b.hidden);
   for (const b of boxes) {
     const r = boxRectPt(b, body);
     if (r.x < body.left - 0.5 || r.x + r.w > body.right + 0.5 || r.y < body.top - 0.5 || r.y + r.h > body.bottom + 0.5) {
@@ -377,3 +389,253 @@ export function fitMeter(rowCount: number, tableBoxHeightPt: number, fontPt: num
 }
 
 export { MM, PAGE, MARGIN_X };
+
+// ═══════════════════════════════════════════════════════════════════════
+// v2 (owner review 2026-10-02): a default for ANY profile, CBC-family
+// matching, free-box editing (8 resize handles, edge snapping to the body
+// and to the other boxes), a palette that adds boxes into free space, and
+// show/hide per box.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** The catalogue keys a CBC profile's members carry (Hb, RBC, TLC, PLT) —
+ *  three of these four on a profile's members marks it CBC-family, however
+ *  the tenant keyed or named the profile itself. */
+const CBC_ANCHOR_KEYS = ['HEM011', 'HEM012', 'HEM019', 'HEM030'];
+const CBC_PROFILE_KEYS = ['HEM001', 'HEM002'];
+
+/** Is this profile a CBC (complete blood count) — by its own catalogue key
+ *  (CBC Basic HEM001 / CBC Comprehensive HEM002), else by its MEMBERS'
+ *  keys (any lab-made CBC of the same analytes), else by name as the last
+ *  resort ("CBC", "Complete blood count", "Haemogram"). */
+export function isCbcFamily(p: { catalogKey?: string | null; name?: string | null; memberKeys?: ReadonlyArray<string | null | undefined> }): boolean {
+  const key = (p.catalogKey ?? '').trim().toUpperCase();
+  if (CBC_PROFILE_KEYS.includes(key)) return true;
+  const members = new Set((p.memberKeys ?? []).map(k => (k ?? '').trim().toUpperCase()).filter(Boolean));
+  if (CBC_ANCHOR_KEYS.filter(k => members.has(k)).length >= 3) return true;
+  return /\b(cbc|complete blood count|ha?emogram)\b/i.test(p.name ?? '');
+}
+
+export interface DefaultLayoutInput {
+  body: BodyArea;
+  /** Rows the table will print (members' values + notes) — sizes the table box. */
+  rowCount: number;
+  /** Analyzer image codes to place (linked instrument images; CBC-family
+   *  profiles fall back to the 4 M51 graphs). Empty = no image boxes. */
+  analyzerCodes: ReadonlyArray<string>;
+  /** The profile's report-chart blocks (section ids) — each gets a box, so
+   *  turning the layout on never silently drops a chart the lab built. */
+  chartIds?: ReadonlyArray<{ id: string; label?: string | null }>;
+  labelFor?: (code: string) => string;
+}
+
+/**
+ * The sensible starting arrangement for ANY profile (owner 2026-10-02:
+ * "opening the designer with no saved layout must start from a sensible
+ * default"): the results table (sized to its rows), the profile's charts and
+ * analyzer graphs in a 2-column grid beside it, the department signatures
+ * below. With nothing to put beside it the table takes the full width.
+ * All mm, relative to the body's top-left.
+ */
+export function buildDefaultLayout(input: DefaultLayoutInput): PageLayoutBox[] {
+  const { body } = input;
+  const wMm = round1(ptToMm(body.w)), hMm = ptToMm(body.h);
+  const gap = 4, sigH = 24;
+  const eorGap = ptToMm(30);
+  const avail = Math.max(30, hMm - sigH - gap - eorGap);
+  const side: Array<Omit<PageLayoutBox, 'x' | 'y' | 'w' | 'h'>> = [
+    ...(input.chartIds ?? []).map(c => ({ id: `chart-${c.id}`, kind: 'chart' as const, ref: c.id, label: c.label || 'Chart' })),
+    ...input.analyzerCodes.map(code => ({
+      id: `analyzer-${code}`, kind: 'analyzer' as const, ref: code,
+      label: input.labelFor ? input.labelFor(code) : analyzerLabel(code),
+    })),
+  ];
+  const tableNatural = ptToMm(estimateTableHeightPt(Math.max(1, input.rowCount), DEFAULT_BODY_FONT_PT) + 14);
+  const tableW = side.length ? round1(wMm * 0.58) : wMm;
+  const tableH = round1(Math.min(avail, Math.max(30, tableNatural)));
+  const boxes: PageLayoutBox[] = [{
+    id: 'table', kind: 'table', x: 0, y: 0, w: tableW, h: tableH, fontSize: DEFAULT_BODY_FONT_PT,
+    columns: [
+      { name: 'name', visible: true, width: 34 }, { name: 'result', visible: true, width: 16 },
+      { name: 'unit', visible: true, width: 10 }, { name: 'range', visible: true, width: 24 },
+      { name: 'specimen', visible: false }, { name: 'method', visible: false },
+    ],
+  }];
+  let bottom = tableH;
+  if (side.length) {
+    const rightX = tableW + gap, rightW = wMm - rightX;
+    const cols = side.length === 1 ? 1 : 2;
+    const cellW = round1((rightW - gap * (cols - 1)) / cols);
+    // Graphs keep the analyzer's own ~4:3 look; the grid never runs past the body.
+    const rows = Math.ceil(side.length / cols);
+    const cellH = round1(Math.max(14, Math.min(cellW * 0.78, (avail - gap * (rows - 1)) / rows)));
+    side.forEach((b, i) => {
+      boxes.push({ ...b, x: round1(rightX + (i % cols) * (cellW + gap)), y: round1(Math.floor(i / cols) * (cellH + gap)), w: cellW, h: cellH });
+    });
+    bottom = Math.max(bottom, rows * cellH + (rows - 1) * gap);
+  }
+  const sigY = round1(Math.min(bottom + gap + eorGap, hMm - sigH));
+  boxes.push({ id: 'signatures', kind: 'signatures', x: 0, y: Math.max(0, sigY), w: wMm, h: sigH });
+  return boxes;
+}
+
+// ── free placement (palette adds) ────────────────────────────────────────
+
+/** The first free top-left (mm) where a w×h box fits without overlapping any
+ *  visible box — scanning top-to-bottom, left-to-right on a 2 mm grid; the
+ *  body's top-left when the page is full (the issue list then flags it). */
+export function findFreeSpot(boxes: ReadonlyArray<PageLayoutBox>, w: number, h: number, body: BodyArea): { x: number; y: number } {
+  const W = ptToMm(body.w), H = ptToMm(body.h);
+  const others = boxes.filter(b => !b.hidden);
+  const hit = (x: number, y: number) => others.some(b => x < b.x + b.w + 1 && x + w + 1 > b.x && y < b.y + b.h + 1 && y + h + 1 > b.y);
+  for (let y = 0; y + h <= H + 0.01; y += 2) {
+    for (let x = 0; x + w <= W + 0.01; x += 2) if (!hit(x, y)) return { x: round1(x), y: round1(y) };
+  }
+  return { x: 0, y: 0 };
+}
+
+let boxSeq = 0;
+/** A fresh unique box id with a readable prefix. */
+export function newBoxId(prefix: string, boxes: ReadonlyArray<PageLayoutBox>): string {
+  let id = prefix;
+  while (boxes.some(b => b.id === id)) id = `${prefix}-${(++boxSeq).toString(36)}`;
+  return id;
+}
+
+/** Palette add: a new box of `kind` at its natural size, dropped into the
+ *  first free spot. Analyzer / chart boxes are unique per ref (adding one
+ *  that's already there just un-hides it). Returns the boxes + the new id. */
+export function addPaletteBox(
+  boxes: PageLayoutBox[], kind: PageLayoutBoxKind, body: BodyArea,
+  opts: { ref?: string | null; label?: string | null; text?: string | null } = {},
+): { boxes: PageLayoutBox[]; id: string } {
+  const existing = (kind === 'analyzer' || kind === 'chart') && opts.ref
+    ? boxes.find(b => b.kind === kind && b.ref === opts.ref)
+    : (kind === 'table' || kind === 'signatures') ? boxes.find(b => b.kind === kind) : undefined;
+  if (existing) return { boxes: boxes.map(b => (b === existing ? { ...b, hidden: false } : b)), id: existing.id };
+  const W = ptToMm(body.w), H = ptToMm(body.h);
+  const size: Record<PageLayoutBoxKind, [number, number]> = {
+    table: [Math.min(110, W), Math.min(90, H)],
+    chart: [Math.min(90, W), Math.min(55, H)],
+    analyzer: [Math.min(38, W), Math.min(30, H)],
+    signatures: [W, Math.min(24, H)],
+    notes: [Math.min(90, W), Math.min(18, H)],
+  };
+  const [w, h] = size[kind];
+  const spot = findFreeSpot(boxes, w, h, body);
+  const prefix = kind === 'analyzer' ? `analyzer-${opts.ref ?? 'img'}` : kind === 'chart' ? `chart-${opts.ref ?? 'new'}` : kind;
+  const id = newBoxId(prefix, boxes);
+  const box: PageLayoutBox = { id, kind, x: spot.x, y: spot.y, w: round1(w), h: round1(h) };
+  if (opts.ref) box.ref = opts.ref;
+  if (opts.label) box.label = opts.label;
+  if (kind === 'notes') box.text = opts.text ?? '';
+  if (kind === 'table') box.fontSize = DEFAULT_BODY_FONT_PT;
+  return { boxes: [...boxes, box], id };
+}
+
+export function setBoxHidden(boxes: PageLayoutBox[], id: string, hidden: boolean): PageLayoutBox[] {
+  return boxes.map(b => (b.id === id ? { ...b, hidden: hidden || undefined } : b));
+}
+
+export function patchBox(boxes: PageLayoutBox[], id: string, patch: Partial<PageLayoutBox>): PageLayoutBox[] {
+  return boxes.map(b => (b.id === id ? { ...b, ...patch } : b));
+}
+
+/** The boxes that PRINT (hidden ones are kept in the layout but skipped). */
+export function printableBoxes(boxes: ReadonlyArray<PageLayoutBox>): PageLayoutBox[] {
+  return boxes.filter(b => !b.hidden);
+}
+
+// ── snapping: body edges / centre + every other box's edges ──────────────
+
+/** Snap lines (mm, body-relative) shown while dragging / resizing. */
+export interface SnapGuides { v: number[]; h: number[] }
+
+const SNAP_TOL_MM = 1.6;
+
+function snapTargets(boxes: ReadonlyArray<PageLayoutBox>, id: string, body: BodyArea): { xs: number[]; ys: number[] } {
+  const W = ptToMm(body.w), H = ptToMm(body.h);
+  const xs = [0, W / 2, W], ys = [0, H];
+  for (const b of boxes) {
+    if (b.id === id || b.hidden) continue;
+    xs.push(b.x, b.x + b.w, b.x + b.w / 2);
+    ys.push(b.y, b.y + b.h, b.y + b.h / 2);
+  }
+  return { xs, ys };
+}
+
+/** Best snap of any of `edges` (positions of the moving box's edges, mm) to
+ *  `targets`, within the tolerance. Returns the delta to apply and the line. */
+function bestSnap(edges: number[], targets: number[], tol = SNAP_TOL_MM): { d: number; line: number } | null {
+  let best: { d: number; line: number; abs: number } | null = null;
+  for (const e of edges) for (const t of targets) {
+    const d = t - e, abs = Math.abs(d);
+    if (abs <= tol && (!best || abs < best.abs)) best = { d, line: t, abs };
+  }
+  return best ? { d: best.d, line: best.line } : null;
+}
+
+/** Drag a box to (x, y) mm — every edge AND centre snaps to the body edges,
+ *  the body centre and the other boxes' edges/centres (both axes), then the
+ *  box is clamped inside the body. The letterhead editor's feel, in 2-D. */
+export function dragBox(
+  boxes: PageLayoutBox[], id: string, xMm: number, yMm: number, body: BodyArea, snap = true,
+): { boxes: PageLayoutBox[]; guides: SnapGuides } {
+  const b = boxes.find(x => x.id === id);
+  if (!b) return { boxes, guides: { v: [], h: [] } };
+  let x = xMm, y = yMm;
+  const guides: SnapGuides = { v: [], h: [] };
+  if (snap) {
+    const t = snapTargets(boxes, id, body);
+    const sx = bestSnap([x, x + b.w / 2, x + b.w], t.xs);
+    if (sx) { x += sx.d; guides.v.push(sx.line); }
+    const sy = bestSnap([y, y + b.h / 2, y + b.h], t.ys);
+    if (sy) { y += sy.d; guides.h.push(sy.line); }
+  }
+  const next = clampBox({ ...b, x, y }, body);
+  return { boxes: boxes.map(o => (o.id === id ? next : o)), guides };
+}
+
+/** Which edges a resize handle moves. */
+export type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export const RESIZE_HANDLES: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const MIN_W = 10, MIN_H = 8;
+
+/** Resize from any of the 8 handles, given the box as it was when the drag
+ *  STARTED (`start`) and the pointer delta in mm. The moving edges snap like
+ *  a drag; the opposite edges stay put; never below the minimum size and
+ *  never outside the body. */
+export function resizeFromHandle(
+  boxes: PageLayoutBox[], start: PageLayoutBox, handle: ResizeHandle, dxMm: number, dyMm: number, body: BodyArea, snap = true,
+): { boxes: PageLayoutBox[]; guides: SnapGuides } {
+  const W = ptToMm(body.w), H = ptToMm(body.h);
+  let l = start.x, r = start.x + start.w, t = start.y, btm = start.y + start.h;
+  if (handle.includes('w')) l += dxMm;
+  if (handle.includes('e')) r += dxMm;
+  if (handle.includes('n')) t += dyMm;
+  if (handle.includes('s')) btm += dyMm;
+  const guides: SnapGuides = { v: [], h: [] };
+  if (snap) {
+    const tg = snapTargets(boxes, start.id, body);
+    if (handle.includes('w')) { const s = bestSnap([l], tg.xs); if (s) { l += s.d; guides.v.push(s.line); } }
+    if (handle.includes('e')) { const s = bestSnap([r], tg.xs); if (s) { r += s.d; guides.v.push(s.line); } }
+    if (handle.includes('n')) { const s = bestSnap([t], tg.ys); if (s) { t += s.d; guides.h.push(s.line); } }
+    if (handle.includes('s')) { const s = bestSnap([btm], tg.ys); if (s) { btm += s.d; guides.h.push(s.line); } }
+  }
+  l = Math.max(0, l); t = Math.max(0, t); r = Math.min(W, r); btm = Math.min(H, btm);
+  if (r - l < MIN_W) { if (handle.includes('w')) l = r - MIN_W; else r = l + MIN_W; }
+  if (btm - t < MIN_H) { if (handle.includes('n')) t = btm - MIN_H; else btm = t + MIN_H; }
+  const next = clampBox({ ...start, x: l, y: t, w: r - l, h: btm - t }, body);
+  return { boxes: boxes.map(o => (o.id === start.id ? next : o)), guides };
+}
+
+/** The label a box shows in the designer / issue list. */
+export function boxLabel(b: Pick<PageLayoutBox, 'kind' | 'label' | 'ref'>): string {
+  if (b.label) return b.label;
+  switch (b.kind) {
+    case 'table': return 'Results table';
+    case 'signatures': return 'Signatures';
+    case 'notes': return 'Notes';
+    case 'chart': return 'Chart';
+    default: return analyzerLabel(b.ref ?? '');
+  }
+}
