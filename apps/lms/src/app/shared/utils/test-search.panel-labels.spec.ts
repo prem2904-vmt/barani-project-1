@@ -1,4 +1,4 @@
-import { filterTestList, filterTestListStrict } from './test-search';
+import { filterTestList, filterTestListStrict, enrichForCatalogueSearch } from './test-search';
 import { Test } from '../models/test.model';
 
 /**
@@ -156,5 +156,79 @@ describe('panel short-name search — LFT/RFT/TFT (strict matcher: filterTestLis
     expect(filterTestListStrict(individualsOnly, 'RFT').map(t => t.id)).not.toContain('urea');
     // With the full catalogue supplied as the 3rd arg, the same narrower list resolves correctly.
     expect(filterTestListStrict(individualsOnly, 'RFT', catalogue).map(t => t.id)).toContain('urea');
+  });
+});
+
+describe('panel short-name search — Lab Trends (enrichForCatalogueSearch + filterTestList)', () => {
+  // Lab Trends' own fetched row (TrendTest: GET /api/patients/{id}/lab-trends)
+  // is deliberately sparse — just testId/testName/count/parameters, no
+  // shortName/profile/catalogKey at all (apps/lms/.../trend-chart.ts
+  // `TrendTest`). `testId` is the backend's `OrderTestEntity.TestId`, i.e. the
+  // SAME guid as the catalogue row's own `id` — that's the join key.
+  const trendRows = [
+    { testId: 'bilirubin', testName: 'Bilirubin, Total', count: 4, parameters: [] },
+    { testId: 'urea', testName: 'Urea', count: 6, parameters: [] },
+    { testId: 'creatinine', testName: 'Creatinine', count: 6, parameters: [] },
+    { testId: 'tsh', testName: 'Thyroid Stimulating Hormone', count: 3, parameters: [] },
+    { testId: 'glucose', testName: 'Fasting Blood Sugar', count: 10, parameters: [] },
+    // A row whose testId has since left the catalogue (retired/deleted test) —
+    // must pass through unenriched, never throw, never crash the join.
+    { testId: 'long-gone', testName: 'Retired Test', count: 2, parameters: [] },
+  ];
+
+  it('enrichForCatalogueSearch joins by testId and carries catalogKey/profile/shortName/type — never duplicating the catalogue, just reading it', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    const urea2 = enriched.find(t => t.testId === 'urea')!;
+    expect(urea2.catalogKey).toBe('BIO054');
+    expect(urea2.profile).toBe('Renal');
+    expect(urea2.shortName).toBe('UREA');
+    expect(urea2.type).toBe('individual');
+    // The row's own trend fields are untouched.
+    expect(urea2.testName).toBe('Urea');
+    expect(urea2.count).toBe(6);
+  });
+
+  it('a testId no longer in the catalogue passes through unenriched (no crash, no stray fields)', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    const goneRow = enriched.find(t => t.testId === 'long-gone')!;
+    expect(goneRow.catalogKey).toBeUndefined();
+    expect(goneRow.testName).toBe('Retired Test');
+  });
+
+  it('"LFT" finds Bilirubin among the PATIENT\'s own trend rows (not the whole catalogue) once enriched + searched against the full catalogue for aliases', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    const hits = filterTestList(enriched, 'LFT', catalogue).map(t => t.testId);
+    expect(hits).toEqual(['bilirubin']);
+  });
+
+  it('"RFT" finds Urea AND Creatinine among the patient\'s trend rows, keyed off CatalogKey membership (their own `profile` tag is "Renal", not "RFT")', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    const hits = filterTestList(enriched, 'RFT', catalogue).map(t => t.testId);
+    expect(hits).toEqual(expect.arrayContaining(['urea', 'creatinine']));
+    expect(hits).not.toContain('glucose');
+  });
+
+  it('"TFT" finds TSH the same way', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    const hits = filterTestList(enriched, 'TFT', catalogue).map(t => t.testId);
+    expect(hits).toEqual(['tsh']);
+  });
+
+  it('mixed-case "rFt" matches identically to "RFT"', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    expect(filterTestList(enriched, 'rFt', catalogue).map(t => t.testId)).toEqual(
+      filterTestList(enriched, 'RFT', catalogue).map(t => t.testId));
+  });
+
+  it('a non-matching query returns none of the patient\'s trend rows (negative case)', () => {
+    const enriched = enrichForCatalogueSearch(trendRows, catalogue);
+    expect(filterTestList(enriched, 'zzz-no-such-panel', catalogue)).toEqual([]);
+  });
+
+  it('WITHOUT enrichment, the same sparse rows canNOT resolve "RFT"/"TFT" aliases — proving the join is load-bearing, not redundant', () => {
+    // Unenriched TrendTest rows have no id/catalogKey for aliasesFor to key
+    // off, and no profile/shortName for the substring pass either.
+    expect(filterTestList(trendRows as any, 'RFT', catalogue).map((t: any) => t.testId)).not.toContain('urea');
+    expect(filterTestList(trendRows as any, 'TFT', catalogue).map((t: any) => t.testId)).not.toContain('tsh');
   });
 });
