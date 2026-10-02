@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, effect, inje
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
-import { ReportTemplate } from '../../../shared/models/report.model';
+import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { firstValueFrom } from 'rxjs';
 import { ReportPdfInput, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
@@ -98,6 +98,10 @@ export class ReportPdfPreviewComponent implements OnDestroy {
    *  boxes) — the preview renders it while the lab drags, instead of
    *  waiting for the autosave round trip. Null = whatever is saved. */
   readonly pageLayout = input<{ enabled: boolean; boxes: PageLayoutBox[] } | null>(null);
+  /** The test's department — the sample report signs with its REAL sign-off. */
+  readonly departmentId = input<string | null>(null);
+  private readonly signoff = signal<{ signatures: ReportSignature[] } | null>(null);
+  private signoffFor: string | null = null;
   /** Bump to force a re-render (after Save, or a manual Refresh). */
   readonly refreshToken = input(0);
 
@@ -133,7 +137,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     effect(() => {
       this.testId(); this.testName(); this.department(); this.sampleType();
       this.parameters(); this.values(); this.profileMembers();
-      this.columnsOverride(); this.refreshToken(); this.tpl(); this.pageLayout();
+      this.columnsOverride(); this.refreshToken(); this.tpl(); this.pageLayout(); this.departmentId();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       if (!this.testId()) { this.setUrl(null); return; }
       this.rendering.set(true);
@@ -206,6 +210,16 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     }
   }
 
+  /** The department's real sign-off, fetched once per department. */
+  private async signoffOf(dept: string | null): Promise<{ signatures: ReportSignature[] } | null> {
+    if (!dept) return null;
+    if (this.signoffFor !== dept) {
+      this.signoffFor = dept;
+      this.signoff.set(await this.layout.signoffPreview(dept));
+    }
+    return this.signoff();
+  }
+
   /** The fabricated report + resolved layouts, exactly as buildReportPdf will
    *  receive them (shared/utils/report-sample-preview.ts — the SAME builder
    *  the profile one-page layout designer draws its page with). Null when
@@ -226,6 +240,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
       apiUrl: this.platform.getApiUrl(),
       preview: async (id, vals, imgs, p, pj) => this.layout.preview(await this.effectiveId(id), vals, imgs, p, pj),
       pageLayout: this.pageLayout(),
+      signoff: await this.signoffOf(this.departmentId()),
       assetBase: typeof document !== 'undefined' ? document.baseURI : null,
     }, superseded);
   }

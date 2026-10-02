@@ -3,7 +3,8 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { PageLayoutBox, PageLayoutBoxKind, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
-import type { ReportTemplate } from '../../../shared/models/report.model';
+import type { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { layoutSignatureBlock } from '../../../shared/utils/report-signatures';
 import {
   DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
   boxLabel, buildDefaultLayout, detectLayoutIssues, dragBox, fitMeter, isCbcFamily, nudgeBox, patchBox, readPageLayout, removeBox,
@@ -583,6 +584,9 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   readonly members = input<PreviewProfileMember[]>([]);
   /** Live (unsaved) column override, as the Live preview gets it. */
   readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** The profile's department — its REAL sign-off (signoff-preview) prints
+   *  in the signatures box, at the real height. */
+  readonly departmentId = input<string | null>(null);
   /** What a NEW chart block starts from (the report-structure's chart context). */
   readonly chartContext = input<ChartEditorContext | null>(null);
 
@@ -615,6 +619,15 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   readonly canUndo = computed(() => this.history().length > 0);
   readonly canRedo = computed(() => this.future().length > 0);
   readonly analyzerInfo = signal<ProfileAnalyzerImages | null>(null);
+  /** The department's real sign-off (undefined = still loading). */
+  readonly signoff = signal<{ signatures: ReportSignature[] } | null | undefined>(undefined);
+  /** The real sign-off block's height (mm) at the body's width — what the
+   *  report will draw (layoutSignatureBlock, report-signatures.ts). */
+  readonly signoffHeightMm = computed((): number | null => {
+    const sigs = this.signoff()?.signatures ?? [];
+    if (!sigs.length) return null;
+    return Math.round(ptToMm(layoutSignatureBlock(sigs, 0, this.body().w, 0).height) * 10) / 10 + 1;
+  });
 
   protected readonly steps = STEPS;
   protected readonly handles = RESIZE_HANDLES;
@@ -767,12 +780,17 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     });
     // The untouched default follows better information as it arrives.
     effect(() => {
-      this.body(); this.analyzerCodes(); this.members(); this.chartSections(); this.measuredTableMm();
+      this.body(); this.analyzerCodes(); this.members(); this.chartSections(); this.measuredTableMm(); this.signoffHeightMm();
       untracked(() => { if (this.draft()) { this.boxes.set(this.buildDefault()); this.emitLive(); } });
     });
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => this.template.set(t ?? null),
       error: () => this.template.set(null),
+    });
+    effect(() => {
+      const dept = this.departmentId();
+      if (!dept) { this.signoff.set(null); return; }
+      void this.layoutSvc.signoffPreview(dept).then(r => this.signoff.set(r));
     });
     effect(() => {
       const id = this.profileTestId();
@@ -782,7 +800,8 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     // The sample report base (engine round trips) — only when its inputs change.
     effect(() => {
       const key = JSON.stringify([this.profileTestId(), this.profileName(), this.department(), this.sampleType(),
-        this.members().map(m => [m.id, m.offsetMin ?? null]), this.columnsOverride(), this.template() === undefined]);
+        this.members().map(m => [m.id, m.offsetMin ?? null]), this.columnsOverride(), this.template() === undefined,
+        this.signoff() === undefined ? 'loading' : (this.signoff()?.signatures ?? []).map(s => [s.name, s.title, s.regNo])]);
       untracked(() => { if (key !== this.baseKey) { this.baseKey = key; this.baseInput = null; } this.scheduleRender(0); });
     });
     // Every box change re-paints the page (no engine call).
@@ -832,11 +851,13 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       chartIds: this.chartSections(),
       labelFor: code => this.codeLabel(code, this.analyzerInfo()?.images.find(i => i.code === code)?.label),
       tableHeightMm: this.draftTableMm(),
+      signaturesHeightMm: this.signoffHeightMm(),
     });
   }
 
   private scheduleRender(delay: number): void {
     if (this.template() === undefined) return; // wait for the real letterhead
+    if (this.departmentId() && this.signoff() === undefined) return; // and the real sign-off
     if (this.renderTimer) clearTimeout(this.renderTimer);
     this.renderTimer = setTimeout(() => void this.render(), delay);
   }
@@ -854,6 +875,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
           parameters: [], members: this.members(), columnsOverride: this.columnsOverride(),
           template: this.template() ?? null, apiUrl: this.platform.getApiUrl(),
           preview: (tid, vals, imgs, p, pj) => this.layoutSvc.preview(tid, vals, imgs, p, pj),
+          signoff: this.signoff() ?? null,
           assetBase: typeof document !== 'undefined' ? document.baseURI : null,
         }, () => seq !== this.renderSeq);
         if (seq !== this.renderSeq) return;

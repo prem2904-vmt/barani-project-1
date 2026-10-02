@@ -1,4 +1,4 @@
-import type { ReportTemplate } from '../models/report.model';
+import type { ReportSignature, ReportTemplate } from '../models/report.model';
 import type { PageLayoutBox, ReportColumn, ResolvedReportLayout } from '../models/report-layout.model';
 import { preloadReportImages, type ReportPdfInput } from './report-pdf';
 import { resolveReportLayouts } from './report-layouts';
@@ -125,6 +125,10 @@ export interface SamplePreviewOptions {
   pageLayout?: { enabled: boolean; boxes: PageLayoutBox[] } | null;
   /** Base href the sample analyzer graphs resolve against (document.baseURI). */
   assetBase?: string | null;
+  /** The department's REAL sign-off (signoff-preview) — the sample report
+   *  then signs exactly as a real one: same people, designations, images,
+   *  same block height. */
+  signoff?: { signatures: ReportSignature[] } | null;
 }
 
 const SAMPLE_CULTURE = {
@@ -223,7 +227,11 @@ export async function buildSamplePreviewInput(
       departmentColumns: target.hasColumnOverride ? (target.departmentColumns ?? null) : target.columns,
     };
   }
+  // The real department sign-off, keyed by the department the rows print under.
+  const signDept = String((snapshotTests[0] as { department?: string } | undefined)?.department ?? '');
+  const deptSignatures = o.signoff?.signatures?.length ? [{ department: signDept, signatures: o.signoff.signatures }] : undefined;
   const snapshot = {
+    ...(deptSignatures ? { deptSignatures } : {}),
     patient: { id: 'preview-patient', displayName: 'Sita Raman', age: patient.age, sex: patient.sex, phone: '9080706050' },
     order: {
       id: 'preview-order',

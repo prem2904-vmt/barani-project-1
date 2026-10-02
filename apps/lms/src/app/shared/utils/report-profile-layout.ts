@@ -431,6 +431,9 @@ export interface DefaultLayoutInput {
   /** The table's REAL printed height (mm) at the default width, measured by
    *  the renderer — beats the row estimate (wrapped names / ranges). */
   tableHeightMm?: number | null;
+  /** The REAL sign-off block's height (mm) for this department's
+   *  signatories (layoutSignatureBlock — the same geometry the report draws). */
+  signaturesHeightMm?: number | null;
 }
 
 /** Analyzer graphs are ~1.4:1 (M51: 156×111 px) under a ~3.5 mm caption. */
@@ -472,7 +475,7 @@ export const DEFAULT_TABLE_SHARE = 0.62;
 export function buildDefaultLayout(input: DefaultLayoutInput): PageLayoutBox[] {
   const { body } = input;
   const wMm = round1(ptToMm(body.w)), hMm = ptToMm(body.h);
-  const gap = 4, sigH = 24;
+  const gap = 4, sigH = round1(Math.max(12, input.signaturesHeightMm ?? 24));
   const eorGap = ptToMm(30);
   const avail = Math.max(30, hMm - sigH - gap - eorGap);
   const side: Array<Omit<PageLayoutBox, 'x' | 'y' | 'w' | 'h'>> = [
