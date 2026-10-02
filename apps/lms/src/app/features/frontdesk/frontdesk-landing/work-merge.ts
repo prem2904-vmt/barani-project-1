@@ -12,15 +12,29 @@ import { WorkStatus } from './work-status-filter';
  *
  * A chip STILL filters to a single status exactly as before
  * (work-status-filter.ts) — this module only drives the no-chip view.
+ *
+ * Sort order (owner, 2026-10-02): business day ASCENDING (oldest day first —
+ * visit/registration order), then the day's serial ascending (#1, #2, #3 …);
+ * a row with no serial sorts after the numbered rows of its day, by time.
+ * {@link compareByDailySerial} / {@link sortByDailySerial} are the ONE
+ * comparator for this — every single-status tab (In progress / Completed /
+ * Payments due / Outsourced) reuses it rather than its own ad hoc sort.
  */
 
-export interface MinimalWorkOrder {
-  id: string;
+/** Anything that can be placed on the business-day → #N ledger: a daily
+ *  serial + the day it belongs to (utils/daily-no.ts), plus a timestamp for
+ *  the fallback / tie-break. {@link MinimalWorkOrder} and an outsourced tube
+ *  (`OutsourcedTube`) both satisfy this without sharing any other shape. */
+export interface DailySortable {
   createdAt: string | Date;
   /** Daily patient number ("#N") + the IST day it was issued for
    *  (utils/daily-no.ts) — on-screen only, never printed. */
   dailyNo?: number | null;
   dailyNoDay?: string | null;
+}
+
+export interface MinimalWorkOrder extends DailySortable {
+  id: string;
 }
 
 /** One status feed, already filtered by the work card's search + date range
@@ -172,33 +186,49 @@ export function mergeWorkRows<T extends MinimalWorkOrder>(
   return rows;
 }
 
-function businessDayOf(o: MinimalWorkOrder): string {
+function businessDayOf(o: DailySortable): string {
   return o.dailyNoDay ?? istDateOf(o.createdAt);
 }
 
 /**
- * THE sort for the merged list: group by business day, newest day first;
- * within a day, ascending by the daily serial (#1, #2 … today's order of
- * arrival) — two rows that somehow share one serial (e.g. the same patient
+ * THE comparator for the business-day → #N ledger (owner, 2026-10-02): group
+ * by business day, OLDEST day first (ascending — the day's visit/registration
+ * order); within a day, ascending by the daily serial (#1, #2 … today's order
+ * of arrival) — two rows that somehow share one serial (e.g. the same patient
  * registered twice the same day, a data anomaly rather than the ordinary
  * case) break the tie by createdAt rather than leaving their relative order
  * to chance; a row with no serial for its day (shouldn't normally happen —
  * every order gets one on creation — but an older, pre-feature order might
  * lack one) sorts after the numbered rows of that day, oldest-created first.
+ *
+ * ONE comparator for every view that places orders on this ledger — the
+ * merged "no chip" list ({@link sortMergedWork}) and each single-status tab
+ * (In progress / Completed / Payments due) via {@link sortByDailySerial} —
+ * never a second, ad hoc `createdAt` sort re-implemented per view.
  */
+export function compareByDailySerial(a: DailySortable, b: DailySortable): number {
+  const da = businessDayOf(a);
+  const db = businessDayOf(b);
+  if (da !== db) return da < db ? -1 : 1; // oldest day first
+  const sa = a.dailyNo ?? null;
+  const sb = b.dailyNo ?? null;
+  const byCreatedAt = () => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  if (sa != null && sb != null) return sa !== sb ? sa - sb : byCreatedAt();
+  if (sa != null) return -1; // numbered rows before un-numbered ones
+  if (sb != null) return 1;
+  return byCreatedAt();
+}
+
+/** Sort any list of {@link DailySortable} items (orders, outsourced tubes, …)
+ *  by the same business-day → #N ledger order as the merged work list — see
+ *  {@link compareByDailySerial}. */
+export function sortByDailySerial<T extends DailySortable>(items: readonly T[]): T[] {
+  return [...items].sort(compareByDailySerial);
+}
+
+/** {@link sortByDailySerial}, applied to each row's `.order`. */
 export function sortMergedWork<T extends MinimalWorkOrder>(rows: readonly MergedWorkRow<T>[]): MergedWorkRow<T>[] {
-  return [...rows].sort((a, b) => {
-    const da = businessDayOf(a.order);
-    const db = businessDayOf(b.order);
-    if (da !== db) return da < db ? 1 : -1; // newest day first
-    const sa = a.order.dailyNo ?? null;
-    const sb = b.order.dailyNo ?? null;
-    const byCreatedAt = () => new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime();
-    if (sa != null && sb != null) return sa !== sb ? sa - sb : byCreatedAt();
-    if (sa != null) return -1; // numbered rows before un-numbered ones
-    if (sb != null) return 1;
-    return byCreatedAt();
-  });
+  return [...rows].sort((a, b) => compareByDailySerial(a.order, b.order));
 }
 
 /** {@link mergeWorkRows} + {@link sortMergedWork} — what the component calls. */

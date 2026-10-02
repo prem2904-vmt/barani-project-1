@@ -24,7 +24,7 @@ import { BranchLabConfigService } from '../../../core/services/branch-lab-config
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
-import { MergedWorkRow, WORK_STATUS_LABEL } from './work-merge';
+import { MergedWorkRow, WORK_STATUS_LABEL, sortByDailySerial } from './work-merge';
 import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
@@ -814,11 +814,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** "Completed" — orders that are BOTH report-generated (validated /
    *  delivered / completed) AND payment-completed (no outstanding balance).
    *  Drives the third FD pane next to In Progress so reception can see at a
-   *  glance which patients are ready to hand over. Sorted ascending by
-   *  creation time so the oldest ready-for-handover sits on top. */
+   *  glance which patients are ready to hand over. Sorted by the same
+   *  business-day → #N ledger order as every other tab of this list (owner,
+   *  2026-10-02 — `sortByDailySerial`, work-merge.ts), not a bare creation-
+   *  time compare. */
   readonly completedOrders = computed(() => {
     const unpaid = this._unpaidOrderIds();
-    return this._orders().filter(o => {
+    const filtered = this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
@@ -830,7 +832,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       // ListTodayAsync), so don't gate completed work by creation date in the
       // today view; only constrain by creation date for historical ranges.
       return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
-    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+    return sortByDailySerial(filtered);
   });
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
@@ -860,7 +863,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         list.push(o);
       }
     }
-    return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    // Same business-day → #N ledger order as every other tab (owner,
+    // 2026-10-02 — sortByDailySerial, work-merge.ts).
+    return sortByDailySerial(list);
   });
   /** Ids of the orders in the current work feed (today's feed / the range). */
   private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
@@ -892,7 +897,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const q = this.workQuery();
     return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q));
   });
-  readonly shownInProgress = computed(() => filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()));
+  /** Same business-day → #N ledger order as every other tab of this list
+   *  (owner, 2026-10-02 — `sortByDailySerial`, work-merge.ts): `visibleOrders`
+   *  itself carries no particular order (whatever the feed returned). */
+  readonly shownInProgress = computed(() =>
+    sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery())));
   readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
   readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
 
