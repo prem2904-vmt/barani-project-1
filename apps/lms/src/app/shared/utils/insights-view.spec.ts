@@ -30,6 +30,10 @@ describe('deltaView — how a KPI Δ reads (owner 2026-10-02)', () => {
     expect(deltaView(40, 10, { lowerIsBetter: true }).tone).toBe('bad');
   });
 
+  it('All time never compares: "—", neutral', () => {
+    expect(deltaView(500, null, { noBaseline: true })).toMatchObject({ text: '—', tone: 'neutral', kind: 'none' });
+  });
+
   it('noise under 2% and mix metrics stay neutral', () => {
     expect(deltaView(100, 1.2).tone).toBe('neutral');
     expect(deltaView(30, 25, { neutral: true }).tone).toBe('neutral');
@@ -42,12 +46,14 @@ describe('trend buckets', () => {
     expect(bucketAxisLabel('2026-10-02', 'day')).toBe('2 Oct');
     expect(bucketAxisLabel('2026-09-28', 'week')).toBe('w/c 28 Sep');
     expect(bucketAxisLabel('2026-10', 'month')).toBe('Oct 2026');
+    expect(bucketAxisLabel('2024-Q3', 'quarter')).toBe('Q3 2024');
   });
 
   it('drills a bucket to its IST day range, clipped to the period', () => {
     expect(bucketRange('2026-10-02', 'day', '2026-10-01', '2026-10-02')).toEqual({ fromYmd: '2026-10-02', toYmd: '2026-10-02' });
     expect(bucketRange('2026-09-28', 'week', '2026-09-30', '2026-12-31')).toEqual({ fromYmd: '2026-09-30', toYmd: '2026-10-04' });
     expect(bucketRange('2026-02', 'month', '2026-01-15', '2026-12-31')).toEqual({ fromYmd: '2026-02-01', toYmd: '2026-02-28' });
+    expect(bucketRange('2024-Q1', 'quarter', '2024-02-10', '2026-10-02')).toEqual({ fromYmd: '2024-02-10', toYmd: '2024-03-31' });
   });
 });
 

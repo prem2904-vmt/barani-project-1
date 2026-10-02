@@ -72,3 +72,16 @@ describe('previousAnalyticsPeriod', () => {
     expect(previousAnalyticsPeriod('2026-09-01', '2026-09-30')).toEqual({ fromYmd: '2026-08-02', toYmd: '2026-08-31' });
   });
 });
+
+describe('All time', () => {
+  const nowUtc = new Date('2026-10-01T20:00:00.000Z');
+  it('runs from the server-provided first order day to IST today', () => {
+    const p = resolveAnalyticsPeriod('all', undefined, undefined, nowUtc, '2024-03-09');
+    expect(p.fromYmd).toBe('2024-03-09');
+    expect(p.toYmd).toBe('2026-10-02');
+  });
+  it('is just today until the server answers (or when there are no orders)', () => {
+    const p = resolveAnalyticsPeriod('all', undefined, undefined, nowUtc);
+    expect(p.fromYmd).toBe(p.toYmd);
+  });
+});
