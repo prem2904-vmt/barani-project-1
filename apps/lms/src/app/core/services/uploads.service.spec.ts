@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injector } from '@angular/core';
+import { Injector, computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -75,6 +75,28 @@ describe('UploadsService', () => {
       // Cached: no second request.
       await svc.objectUrl(PATH);
       expect(get).toHaveBeenCalledTimes(1);
+    } finally {
+      createUrl.mockRestore();
+    }
+  });
+
+  it('src() called from a template (a reactive context) never starts the request THERE — a signal-writing interceptor used to throw NG0600 and leave the thumbnail blank forever', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:graph');
+    try {
+      // The busy interceptor writes a signal as the request starts — legal
+      // only OUTSIDE a reactive context.
+      const busy = signal(0);
+      const get = vi.fn(() => { busy.update(n => n + 1); return of(new Blob(['png'], { type: 'image/png' })); });
+      const { svc } = setup(get);
+      const thumb = computed(() => svc.src(PATH));
+      expect(thumb()).toBe('');
+      expect(get).not.toHaveBeenCalled();          // nothing sent inside the render
+      expect(svc.src(PATH)).toBe('');              // a re-render doesn't queue it twice
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(busy()).toBe(1);
+      await svc.objectUrl(PATH);
+      expect(svc.src(PATH)).toBe('blob:graph');
     } finally {
       createUrl.mockRestore();
     }
