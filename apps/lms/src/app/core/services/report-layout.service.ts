@@ -80,7 +80,7 @@ export class ReportLayoutService {
       const res = await firstValueFrom(this.api.get<ProfileAnalyzerImages>(
         `/api/report-layout/test/${testId}/analyzer-images`
       ));
-      return { linked: !!res?.linked, instruments: res?.instruments ?? [], images: res?.images ?? [] };
+      return { linked: !!res?.linked, mapped: !!res?.mapped, instruments: res?.instruments ?? [], images: res?.images ?? [] };
     } catch {
       return { linked: false, instruments: [], images: [] };
     }
@@ -174,6 +174,9 @@ export class ReportLayoutService {
  *  never image bytes or patient data. */
 export interface ProfileAnalyzerImages {
   linked: boolean;
+  /** True = these are the graphs MAPPED to this profile (Instruments → Code
+   *  mapping); false = discovered from linked instruments' runs (fallback). */
+  mapped?: boolean;
   instruments: Array<{ id: string; name: string; make?: string | null; model?: string | null }>;
   images: Array<{ code: string; label?: string | null; seen: number; instrumentIds?: string[] }>;
 }

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import type { LiveLayout } from '../../../shared/utils/report-profile-layout';
 import { FormsModule } from '@angular/forms';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -425,7 +426,7 @@ export class ReportStructureComponent {
   readonly profileMembers = input<PreviewProfileMember[]>([]);
   readonly columnsOverride = input<ReportColumn[] | null>(null);
   /** The designer's live box set (unsaved) — the host's Live preview shows it. */
-  readonly pageLayoutLive = output<{ enabled: boolean; boxes: PageLayoutBox[] }>();
+  readonly pageLayoutLive = output<LiveLayout>();
 
   onPageLayoutChange(next: ReportSection[]): void {
     this.commit(next as unknown as RawSection[], { debounce: true });

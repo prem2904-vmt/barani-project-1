@@ -87,13 +87,16 @@ describe('Instruments list', () => {
 describe('Instrument editor — web vs Electron', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  function render(opts: { id?: string; bridge?: Partial<ElectronInstrumentsApi>; dto?: InstrumentDto } = {}) {
+  function render(opts: { id?: string; bridge?: Partial<ElectronInstrumentsApi>; dto?: InstrumentDto;
+    imageMaps?: unknown[]; tests?: unknown[] } = {}) {
     const route = { snapshot: { paramMap: convertToParamMap(opts.id ? { id: opts.id } : { id: 'new' }) } };
     const dto = opts.dto ?? instrument();
     return renderBandPage(InstrumentEditorComponent, {
       getFor: (u) => {
         if (u === `/api/instruments/${dto.id}`) return dto;
         if (u.endsWith('/code-maps')) return [];
+        if (u.endsWith('/image-maps')) return opts.imageMaps ?? [];
+        if (u.startsWith('/api/tests')) return opts.tests ?? [];
         if (u.startsWith('/api/instruments/messages')) return { items: [], total: 0, page: 1, pageSize: 20 };
         return [];
       },
@@ -217,5 +220,35 @@ describe('Instrument editor — web vs Electron', () => {
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', title: 'Rotate the device key?' }));
     expect(key).toBeNull();
     expect(p.api.post).not.toHaveBeenCalled();
+  });
+
+  it('Code mapping → Analyzer images: each graph with its thumbnail (received, else a sample) and a multi-profile picker; Save stores the mapped ones', async () => {
+    const imageMaps = [
+      { code: '12003', label: null, seen: 3, lastUrl: '/uploads/t/w.png', lastAt: '2026-10-02T05:00:00Z', profileKeys: ['HEM001'] },
+      { code: '12053', label: null, seen: 0, lastUrl: null, lastAt: null, profileKeys: [] },
+    ];
+    const tests = [
+      { id: 'p1', name: 'CBC Basic', type: 'profile', catalogKey: 'HEM001' },
+      { id: 'p2', name: 'CBC Comprehensive', type: 'profile', catalogKey: 'HEM002' },
+      { id: 't1', name: 'Haemoglobin', type: 'individual', catalogKey: 'HEM011' },
+    ];
+    const p = render({ id: 'i1', imageMaps, tests });
+    await flush();
+    p.cmp.go('mapping'); p.f.detectChanges();
+    const items = p.el.querySelectorAll('.pf-ie-img');
+    expect(items.length).toBe(2);
+    expect(items[0].textContent).toContain('WBC histogram');
+    expect(items[1].textContent).toContain('not received yet');
+    expect(items[1].querySelector('img')!.getAttribute('src')).toBe('assets/analyzer-samples/m51-12053.png');
+    expect(p.cmp.profileOptions().map((o: { value: unknown }) => o.value)).toEqual(['HEM001', 'HEM002']);   // profiles only
+    expect(p.el.querySelector('select, datalist')).toBeNull();
+    p.cmp.setImageProfiles(1, ['HEM001', 'HEM002']);
+    p.api.put.mockImplementation(((u: string) => of(u.endsWith('/image-maps') ? imageMaps : instrument())) as never);
+    await p.cmp.save();
+    const call = (p.api.put.mock.calls as unknown as unknown[][]).find(c => String(c[0]).endsWith('/image-maps'))!;
+    expect(call[1]).toEqual([
+      { code: '12003', label: null, profileKeys: ['HEM001'] },
+      { code: '12053', label: null, profileKeys: ['HEM001', 'HEM002'] },
+    ]);
   });
 });
