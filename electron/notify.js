@@ -33,7 +33,6 @@ let firstRun = false;
 let state = { trayHintShown: false };
 let lastCounts = { chat: 0, bell: 0 };
 let overlayImg = null;
-let trayImgs = null;
 let resumeTimer = null;
 const live = new Map();       // tag → Notification (kept referenced so clicks fire)
 
@@ -78,6 +77,18 @@ function applyLoginItem(open) {
   if (!loginSupported()) return;
   try { app.setLoginItemSettings(core.loginItemOptions(process.platform, open)); }
   catch (err) { console.warn('[notify] login item', err && err.message); }
+}
+
+/** Shared by the IPC handler (any patch from the avatar menu) and
+ *  setOpenAtLogin() (the tray's "Start at login" checkbox) — ONE place that
+ *  merges + persists + (for openAtLogin) syncs the OS, so the two surfaces
+ *  can never drift onto two different stored values. */
+function applyPatch(patch) {
+  const p = core.sanitizePatch(patch);
+  settings = core.sanitizeSettings({ ...load(), ...p }, defaults());
+  save();
+  if ('openAtLogin' in p) applyLoginItem(settings.openAtLogin);
+  return settingsForRenderer();
 }
 
 /** What the OS actually has (the user may have removed it in System
@@ -158,20 +169,6 @@ function overlay() {
   return overlayImg;
 }
 
-function trayImages() {
-  if (trayImgs) return trayImgs;
-  const base = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
-  let unread = base;
-  try {
-    const { width, height } = base.getSize();
-    if (width === height && width > 0) {
-      unread = nativeImage.createFromBitmap(core.withDot(base.toBitmap(), width), { width, height });
-    }
-  } catch { unread = base; }
-  trayImgs = { base, unread };
-  return trayImgs;
-}
-
 function applyBadge(counts = lastCounts) {
   lastCounts = { chat: counts.chat || 0, bell: counts.bell || 0 };
   const total = core.badgeTotal(lastCounts);
@@ -185,15 +182,11 @@ function applyBadge(counts = lastCounts) {
       app.setBadgeCount(total);                                   // Unity launchers
     }
   } catch (err) { console.warn('[notify] badge', err && err.message); }
-  let tray = null;
-  try { tray = require('./calls').getTray(); } catch { tray = null; }
-  if (tray) {
-    try {
-      const imgs = trayImages();
-      tray.setImage(total ? imgs.unread : imgs.base);
-      tray.setToolTip(core.trayTooltip(total));
-    } catch { /* tray gone */ }
-  }
+  // The tray ICON itself (instruments + chat/bell unread, one attention dot,
+  // one tooltip) is owned entirely by electron/tray.js — this just hands it
+  // the unread count rather than touching the Tray object directly, so the
+  // two causes of "needs attention" can never fight over the last setImage.
+  try { require('./tray').setUnreadCount(total); } catch { /* tray not created yet (very early boot) */ }
   return total;
 }
 
@@ -207,14 +200,7 @@ function register(getWindow) {
   getMain = getWindow;
   load();
   ipcMain.handle('notify:settings:get', (e) => (fromMain(e) ? settingsForRenderer() : null));
-  ipcMain.handle('notify:settings:set', (e, patch) => {
-    if (!fromMain(e)) return null;
-    const p = core.sanitizePatch(patch);
-    settings = core.sanitizeSettings({ ...load(), ...p }, defaults());
-    save();
-    if ('openAtLogin' in p) applyLoginItem(settings.openAtLogin);
-    return settingsForRenderer();
-  });
+  ipcMain.handle('notify:settings:set', (e, patch) => (fromMain(e) ? applyPatch(patch) : null));
   ipcMain.handle('window:state:get', (e) => (fromMain(e) ? core.windowState(mainWin()) : null));
   ipcMain.on('notify:alert', (e, info) => { if (fromMain(e)) showAlert(info); });
   ipcMain.on('notify:badge', (e, counts) => {
@@ -237,11 +223,11 @@ function attach(win) {
     state.trayHintShown = true;
     save();
     const how = process.platform === 'darwin'
-      ? 'To quit, choose Prefrontal → Quit (⌘Q).'
-      : 'To quit, right-click the Prefrontal icon in the tray and choose Quit.';
+      ? 'To quit, choose Prefrontal → Quit (⌘Q) or use the menu bar icon.'
+      : 'To quit, right-click the Prefrontal icon in the system tray and choose Quit.';
     show('tray-hint', {
       title: 'Prefrontal is still running',
-      body: `Calls, messages and alerts will keep reaching you. ${how}`,
+      body: `Instruments keep sending results. Find it in the menu bar/system tray. ${how}`,
       silent: true,
     });
   });
@@ -291,6 +277,12 @@ function debugFire() {
 
 module.exports = {
   register, attach, start, launchedHidden, getSettings, applyBadge, showAlert,
+  // electron/tray.js "Start at login" checkbox: the SAME stored setting +
+  // OS sync the avatar-menu toggle uses (applyPatch), so the two surfaces
+  // can never disagree about whether login-item is on.
+  isOpenAtLogin: osOpenAtLogin,
+  setOpenAtLogin: (open) => applyPatch({ openAtLogin: !!open }),
+  loginSupported,
   // for tests
   _reset: () => { settings = null; firstRun = false; live.clear(); lastCounts = { chat: 0, bell: 0 }; },
 };

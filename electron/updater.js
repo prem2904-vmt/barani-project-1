@@ -33,6 +33,7 @@ let state = { phase: 'idle', version: null, progress: null, error: null, deferRe
 let deferTimer = null;
 let pendingRestart = false;
 let intervalHandle = null;
+const stateListeners = new Set(); // electron/tray.js: rebuild the menu's "Check for updates" line
 
 function send(payload) {
   const w = getWindow();
@@ -44,6 +45,15 @@ function send(payload) {
 function setState(patch) {
   state = { ...state, ...patch };
   send(state);
+  for (const cb of stateListeners) { try { cb(state); } catch { /* a bad listener never breaks updates */ } }
+}
+
+/** electron/tray.js subscribes to rebuild its menu label on every phase
+ *  change (checking / downloading / ready / deferred). Returns an
+ *  unsubscribe function. */
+function onState(cb) {
+  stateListeners.add(cb);
+  return () => stateListeners.delete(cb);
 }
 
 function log(line) {
@@ -125,6 +135,15 @@ function tryRestart() {
   pendingRestart = false;
   if (deferTimer) { clearTimeout(deferTimer); deferTimer = null; }
   log('restarting to install update');
+  // electron-updater's quitAndInstall ultimately calls the plain
+  // Electron app.quit() (ElectronAppAdapter.quit), which fires 'before-quit'
+  // before any window's own 'close' handler — so main.js's hide-on-close
+  // (mainWindow.on('close', …)) already steps aside once calls.setQuitting()
+  // is set there. Setting it explicitly here too, before quitAndInstall even
+  // starts, means the real quit never depends on that event-ordering detail:
+  // the window closing for an update install must never be swallowed into a
+  // tray-hide.
+  try { require('./calls').setQuitting(); } catch { /* calls.js always loads before this fires in main.js */ }
   // isSilent=false (the installer's own, minimal UI — NSIS is silent by
   // default on Windows regardless), isForceRunAfter=true relaunches once
   // installed. Never skip this to force a hard kill-and-hope.
@@ -178,6 +197,15 @@ function _resetForTests() {
   pendingRestart = false;
   if (deferTimer) { clearTimeout(deferTimer); deferTimer = null; }
   if (intervalHandle) { clearInterval(intervalHandle); intervalHandle = null; }
+  stateListeners.clear();
 }
 
-module.exports = { register, start, check, getState: () => state, _resetForTests };
+module.exports = {
+  register, start, check, getState: () => state, onState,
+  // electron/tray.js's "Restart to install" click (when phase === 'ready')
+  // calls this directly — same function the IPC handler calls, so the
+  // renderer's update banner and the tray can never apply two different
+  // "is it safe to restart" decisions.
+  restartNow: () => tryRestart(),
+  _resetForTests,
+};
