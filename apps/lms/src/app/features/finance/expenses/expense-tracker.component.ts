@@ -475,6 +475,12 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .ag-cell { display: flex; align-items: center; }
     .pf-xt__main ::ng-deep .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
     .pf-xt__main ::ng-deep .ag-cell > .pf-xt-cell, .pf-xt__main ::ng-deep .ag-cell > .pf-xt-acts { height: auto; }
+    /* A text cell always spans its column (the flex centring above must not
+       shrink it to its text): the phone amount line then right-aligns to the
+       column edge on every row, whatever the title / meta length. */
+    .pf-xt__main ::ng-deep .ag-cell > .ag-cell-wrapper { flex: 1 1 auto; width: 100%; min-width: 0; }
+    .pf-xt__main ::ng-deep .ag-cell-wrapper > .ag-cell-value { flex: 1 1 auto; min-width: 0; }
+    .pf-xt__main ::ng-deep .ag-cell .pf-xt-cell { width: 100%; min-width: 0; }
     .pf-xt__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
     .pf-xt__main ::ng-deep .pf-xt-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-xt__main ::ng-deep .pf-xt-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
