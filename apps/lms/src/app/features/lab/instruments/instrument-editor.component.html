@@ -391,9 +391,17 @@
                             <span class="pf-ie-img__name">{{ imageLabel(r) }}</span>
                             <span class="pf-ie-img__sub nd-num">Code {{ r.code }} · {{ r.seen ? 'received ' + r.seen + '× · last ' + fmtIst(r.lastAt) : 'not received yet — sample shown' }}</span>
                           </div>
-                          <pf-select class="pf-ie-img__profiles" [options]="profileOptions()" [multiple]="true" [searchable]="true"
+                          <pf-select class="pf-ie-img__profiles" [options]="profileOptions()" [multiple]="true" [searchable]="true" [compactMulti]="true"
+                                     [triggerLabel]="r.profileKeys.length ? 'Change profiles' : 'Map to profiles…'"
                                      [values]="r.profileKeys" [value]="''" placeholder="Map to profiles…" [attr.aria-label]="'Profiles for ' + imageLabel(r)"
                                      (valuesChange)="setImageProfiles(i, $event)"></pf-select>
+                          @if (r.profileKeys.length) {
+                            <ul class="pf-ie-img__chips" aria-label="Mapped profiles">
+                              @for (k of r.profileKeys; track k) { <li class="nd-chip nd-chip--static">{{ profileName(k) }}</li> }
+                            </ul>
+                          } @else {
+                            <span class="pf-ie-img__none">Not mapped — no profile shows this graph</span>
+                          }
                         </div>
                       </li>
                     }

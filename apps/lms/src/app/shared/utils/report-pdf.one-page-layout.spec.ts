@@ -310,4 +310,15 @@ describe('profile one-page layout — PDF render', () => {
     expect(pdfText(doc, 1)).not.toContain('Dr. Technician');
     expect(pdfText(doc, doc.getNumberOfPages())).toContain('Dr. Technician');
   });
+
+  it('a signatures box on page 1 while the table CONTINUES on page 2: no early sign-off — the department signs after the table', () => {
+    const sigBox = { id: 'signatures', kind: 'signatures', x: 0, y: 160, w: 188, h: 24 };
+    const { doc, text } = renderCustom({ tableMode: 'auto', pages: [
+      { id: 'p1', boxes: [table('t-a', 0, 45), sigBox] },
+      { id: 'p2', boxes: [table('t-b', 0, 150)] },
+    ] });
+    expect(count(text, 'Dr. Technician')).toBe(1);
+    expect(pdfText(doc, 1)).not.toContain('Dr. Technician');
+    expect(pdfText(doc, doc.getNumberOfPages())).toContain('Dr. Technician');
+  });
 });

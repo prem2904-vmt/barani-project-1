@@ -300,7 +300,7 @@ interface DragState {
             @case ('table') {
               <section class="pld-sec" aria-label="Table">
                 <p class="nd-field__hint">The table prints in your report theme — fonts, header, rules and flags come from the Report template. Here you choose where it sits and which columns print.</p>
-                @if (!fitsBox() && measuredFor(b) != null) {
+                @if (!fitsBox() && measuredFor(b) != null && !continuesFrom(b)) {
                   <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
                 }
                 <h4 class="pld-sec__h">Rows across table boxes</h4>
@@ -312,6 +312,11 @@ interface DragState {
                   <p class="nd-field__hint">{{ autoHint(b) }}</p>
                 } @else {
                   <p class="nd-field__hint">Switch a row on to print it in this box (it leaves any other box), or drag a row onto a table box or a page tab.</p>
+                  @if (rowIssues().length) {
+                    <ul class="pld-issues" role="status">
+                      @for (iss of rowIssues(); track iss.kind) { <li><span>{{ iss.message }}{{ iss.kind === 'missing' || iss.kind === 'duplicate' ? ' (' + rowTitles(iss.rows) + ')' : '.' }}</span></li> }
+                    </ul>
+                  }
                   <ul class="pld-rows">
                     @for (r of rowOptions(); track r.key) {
                       <li class="pld-rowitem" draggable="true" (dragstart)="onRowDragStart($event, r.key)">
@@ -365,6 +370,9 @@ interface DragState {
             @case ('signatures') {
               <section class="pld-sec" aria-label="Signatures">
                 <p class="nd-field__hint">The department's real sign-off. It prints only when this profile is the department's LAST test in the report — if more tests of the department follow, the sign-off moves after them (as on every report) and this space is left out.</p>
+                @if (sigBeforeTable()) {
+                  <ul class="pld-issues" role="status"><li><span>Results continue on a later page, so the sign-off prints after them instead of here. Move this box to the last page with the table.</span></li></ul>
+                }
               </section>
             }
             @case ('notes') {
@@ -470,7 +478,7 @@ interface DragState {
             @if (rowIssues().length) {
               <ul class="pld-issues" role="status">
                 @for (iss of rowIssues(); track iss.kind) {
-                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>{{ iss.message }} ({{ rowTitles(iss.rows) }})</span></li>
+                  <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>{{ iss.message }}{{ iss.kind === 'missing' || iss.kind === 'duplicate' ? ' (' + rowTitles(iss.rows) + ')' : '.' }}</span></li>
                 }
               </ul>
             }
@@ -1005,7 +1013,9 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
           if (pageOf[lp] == null) pageOf[lp] = info.page;
           this.setBody(lp, info.body);
           if (info.boxId) {
-            tables[info.boxId] = { rows: info.rowsPrinted ?? 0, overflow: info.tableBottom === null };
+            const bx = this.pages()[lp]?.boxes.find(b => b.id === info.boxId);
+            const boxBottom = bx ? info.body.top + (bx.y + bx.h) * MM : Infinity;
+            tables[info.boxId] = { rows: info.rowsPrinted ?? 0, overflow: info.tableBottom == null || info.tableBottom > boxBottom + 1 };
             if (info.tableBottom !== undefined && lp === this.activePage()) this.setMeasuredTable(info.tableBottom, info.body, info.boxId);
           }
         },
@@ -1281,7 +1291,16 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     return out;
   });
   private rowKeys(): string[] { return this.rowOptions().map(r => r.key); }
-  readonly rowIssues = computed(() => (this.tableMode() === 'manual' ? rowAssignmentIssues(this.pages(), this.rowKeys()) : []));
+  readonly rowIssues = computed(() => {
+    if (this.tableMode() !== 'manual') return [];
+    const out: Array<{ kind: string; rows: string[]; message: string }> = rowAssignmentIssues(this.pages(), this.rowKeys());
+    const st = this.tableStats();
+    for (const { page, box } of tableChain(this.pages())) {
+      if (st[box.id]?.overflow) out.push({ kind: 'overflow-' + box.id, rows: box.rows ?? [],
+        message: `The table box on page ${page + 1} is too short for its rows — they run below it (onto an extra page if needed). Make it taller or move rows`, });
+    }
+    return out;
+  });
   rowTitles(keys: string[]): string {
     const t = new Map(this.rowOptions().map(r => [r.key, r.title]));
     return keys.map(k => t.get(k) ?? k).join(', ');
@@ -1304,6 +1323,19 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     if (!chain.some(c => (c.box.rows ?? []).includes(key))) return 'Not placed yet';
     return null;
   }
+  /** The signatures box sits on a page BEFORE the last page that prints table rows. */
+  sigBeforeTable(): boolean {
+    const st = this.tableStats();
+    let lastRows = -1;
+    this.pages().forEach((p, i) => { if (p.boxes.some(b => b.kind === 'table' && (st[b.id]?.rows ?? 0) > 0)) lastRows = i; });
+    return this.activePage() < lastRows;
+  }
+  /** AUTO mode: this box hands its overflow to a later table box. */
+  continuesFrom(b: PageLayoutBox): boolean {
+    if (this.tableMode() !== 'auto') return false;
+    const chain = tableChain(this.pages());
+    return chain.length > 1 && chain[chain.length - 1].box.id !== b.id;
+  }
   autoHint(b: PageLayoutBox): string {
     const st = this.tableStats()[b.id];
     const chain = tableChain(this.pages());
@@ -1314,8 +1346,14 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   }
   addTableBox(): void {
     const all = this.pages().flatMap(p => p.boxes);
+    const first = tableChain(this.pages())[0]?.box;
     const r = addPaletteBox(this.boxes().filter(b => b.kind !== 'table'), 'table', this.body(), {});
-    const nb = r.boxes.find(x => x.id === r.id)!;
+    let nb = r.boxes.find(x => x.id === r.id)!;
+    // Same width / columns as the table it continues, as tall as the free body.
+    if (first) {
+      const free = Math.max(30, ptToMm(this.body().h) - nb.y - 4);
+      nb = { ...nb, x: first.x, w: first.w, h: Math.round(free * 10) / 10, columns: first.columns, fontSize: first.fontSize };
+    }
     const box: PageLayoutBox = { ...nb, id: newBoxId('table', all), label: this.tableMode() === 'auto' ? 'Results table (continued)' : 'Results table',
       ...(this.tableMode() === 'manual' ? { rows: [] } : {}) };
     this.commit([...this.boxes(), box]);

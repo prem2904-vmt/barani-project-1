@@ -3447,6 +3447,11 @@ function renderCustomLayout(
   const tableRowsFor = (box: PageLayoutBox): PanelRowData[] => (manual ? (manualRows.get(box.id) ?? []) : remaining);
 
   let opened = 0, signed = false, bottom = opts.topY ?? MARGIN_TOP, lastPdfPage = doc.getNumberOfPages();
+  // The signatures box signs only if NO results print after it (a table
+  // that continues on a later page): decided after all pages, then drawn on
+  // its own page (jsPDF setPage) — else the sign-off follows the profile.
+  let pendingSig: { pdfPage: number; layoutPage: number; x: number; y: number; w: number } | null = null;
+  let lastTableLayoutPage = -1;
   for (let i = 0; i < pages.length; i++) {
     const live = printableBoxes(pages[i].boxes);
     const hasContent = live.some(b =>
@@ -3493,6 +3498,7 @@ function renderCustomLayout(
           const end = renderColumnarTable(doc, [{ ...group, rows }], onePageTableColumns(group, box), r.y, practice, null, 0, false,
             { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, ...(fit ? { fitH: r.h, out } : {}) });
           if (!manual) remaining = remaining.slice(out.consumed);
+          lastTableLayoutPage = i;
           tableEnd = Math.max(tableEnd, end - 6);
           try {
             ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body }, boxId: box.id, rowsPrinted: out.consumed,
@@ -3516,10 +3522,7 @@ function renderCustomLayout(
           break;
         }
         case 'signatures':
-          if (opts.signHere && !signed && deptSigs.length) {
-            drawInlineSignatures(doc, deptSigs, r.y, practice, { x: r.x, w: r.w });
-            signed = true;
-          }
+          if (opts.signHere && !pendingSig && deptSigs.length) pendingSig = { pdfPage: bodyPage, layoutPage: i, x: r.x, y: r.y, w: r.w };
           break;
         case 'notes': {
           const text = (box.text ?? box.label ?? '').trim();
@@ -3532,6 +3535,13 @@ function renderCustomLayout(
     // signatures box, which the layout pins where the lab placed it.
     lastPdfPage = doc.getNumberOfPages();
     bottom = lastPdfPage === bodyPage ? Math.max(pageBottom, tableEnd) : tableEnd;
+  }
+  if (pendingSig && pendingSig.layoutPage >= lastTableLayoutPage) {
+    const cur = doc.getNumberOfPages();
+    doc.setPage(pendingSig.pdfPage);
+    drawInlineSignatures(doc, deptSigs, pendingSig.y, practice, { x: pendingSig.x, w: pendingSig.w });
+    doc.setPage(cur);
+    signed = true;
   }
   // Safety net: rows no table box printed (no table box at all) still print.
   if (!manual && remaining.length && (!chain.length || opened === 0)) {
