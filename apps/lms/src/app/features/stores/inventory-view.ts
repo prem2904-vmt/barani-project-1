@@ -40,6 +40,10 @@ export function expiryView(daysLeft: number): { label: string; tone: DotTone } {
 /** The server's inventory transaction types, in words. */
 const LEDGER_WORDS: Record<string, string> = {
   receipt: 'Received', consumption: 'Used', adjustment: 'Adjusted', wastage: 'Written off', count: 'Counted',
+  // Inventory Phase 1: a shortfall is a Delta=0 flagged record (never a real
+  // stock movement — see InventoryService.ConsumeForSampleAsync), and a
+  // reversal is undo-collect giving stock back to the same batch.
+  shortfall: 'Short at collection', consumption_reversal: 'Returned (undo)',
 };
 export function ledgerWord(type: string | null | undefined): string {
   const t = (type ?? '').toLowerCase();

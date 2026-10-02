@@ -576,16 +576,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** POST /api/orders/, catching a `stock_warning` (Inventory Phase 1 fix 3 —
    *  the gate is a warning, not a hard block) so the desk sees which tests are
-   *  short via DialogService and can choose to order anyway; on confirm,
-   *  resends the SAME body with `overrideStockWarning: true`. Backing out of
-   *  the dialog (or the server refusing the override as `stock_override_forbidden`
-   *  — no manage_inventory) rethrows, so the caller's own catch shows it. */
+   *  short via DialogService. L3: the override is only ever OFFERED to a
+   *  manage_inventory holder — the server would refuse anyone else's override
+   *  as `stock_override_forbidden` anyway, so a desk user without the
+   *  permission gets a plain "ask an inventory manager" notice (no action to
+   *  try, nothing to fail). On confirm, resends the SAME body with
+   *  `overrideStockWarning: true`. Backing out of the dialog rethrows, so the
+   *  caller's own catch shows it. */
   private async postOrderWithStockGate(body: Record<string, unknown>): Promise<Order> {
     try {
       return await firstValueFrom(this.api.post<Order>('/api/orders/', body));
     } catch (e) {
       const err = ApiError.from(e);
       if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        await this.dialog.confirm({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          confirmLabel: 'OK',
+          cancelLabel: 'OK',
+          tone: 'danger',
+        });
+        throw e;
+      }
       const proceed = await this.dialog.confirm({
         title: 'Stock warning',
         message: err.message,
