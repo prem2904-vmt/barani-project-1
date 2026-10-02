@@ -432,15 +432,46 @@ export function summarizeRanges(
   return lines.length ? lines.join(' · ') + (u ? ` ${u}` : '') : '';
 }
 
+/**
+ * "pregnan(t|cy)" is gestational UNLESS it's actually negated right there in
+ * the text ("non-pregnant", "nonpregnant", "not pregnant", "non pregnant") —
+ * a Beta-hCG band's own NEGATIVE tier for a non-pregnant patient must never
+ * be read as the gestational one. Mirrors mw `ReferenceRangeResolver.GestationalRx`.
+ */
+const GESTATIONAL_RX = /\bg-?ogtt\b|\bgestational\b|(?<!non-)(?<!non\s)(?<!not\s)\bpregnan(?:t|cy)\b/i;
+
+/** A band's text (reportText + label) names it gestational ("G-OGTT",
+ *  "gestational", "pregnant"/"pregnancy", never negated). Mirrors mw
+ *  `ReferenceRangeResolver.LooksGestational`. */
+function looksGestational(r: RangeLike): boolean {
+  const text = [r.label, r.reportText].filter(t => t && t.trim()).join(' ');
+  return text.length > 0 && GESTATIONAL_RX.test(text);
+}
+
+/**
+ * A band's sex for EXCLUSION purposes only: the admin-set signal (structured
+ * `sex`, else the segment label) when there is one; otherwise, ONLY for a
+ * band that actually carries numeric bounds, a guess from free text naming
+ * it gestational — a catalogue authoring gap, not a reason to apply it to a
+ * man. This NEVER awards match score (see {@link scoreRange}), only
+ * excludes — an unconstrained band and a text-guessed one must never out-
+ * rank each other by this alone. Mirrors mw `ReferenceRangeResolver.EffectiveSex`.
+ */
+function effectiveSex(r: RangeLike, structuredSex: 'M' | 'F' | null): 'M' | 'F' | null {
+  if (structuredSex) return structuredSex;
+  return (r.min != null || r.max != null) && looksGestational(r) ? 'F' : null;
+}
+
 function scoreRange(r: RangeLike, sex: 'M' | 'F' | 'O' | null, ageYears: number | null): { eligible: boolean; score: number } {
   let score = 0;
 
   // Sex constraint (structured, else parse the segment label).
   const rSex = (r.sex && r.sex !== 'any') ? r.sex : parseSegmentSex(r.segment);
-  if (rSex) {
-    if (sex && rSex !== sex) return { eligible: false, score: 0 };
-    if (sex && rSex === sex) score += 2;
+  const effSex = effectiveSex(r, rSex);
+  if (effSex) {
+    if (sex && effSex !== sex) return { eligible: false, score: 0 }; // contradiction (structured OR text-guessed)
   }
+  if (rSex && sex && rSex === sex) score += 2; // active match — admin-set only, never the text guess
 
   // Age constraint (structured, else parse — only when no structured sex).
   const age = resolveRangeAgeYears(r);

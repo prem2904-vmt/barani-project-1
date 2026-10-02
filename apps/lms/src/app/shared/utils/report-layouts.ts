@@ -22,10 +22,29 @@ export interface LayoutSnapshotTest {
   /** Nearest enclosing profile (package members) — its layout carries the
    *  notes the report prints for that group. */
   profileTestId?: string | null;
+  /** 'profile' | 'package' | null (legacy, pre-packageType snapshot) — see
+   *  {@link profileCodeFor}. */
+  packageType?: string | null;
   result?: { values?: Record<string, unknown> } | null;
   /** show=true image urls from the snapshot — resolve the layout with them
    *  so `has_images` predicates + image sections light up. */
   images?: string[] | null;
+}
+
+/** The nearest enclosing PROFILE a test was ordered under, as mw
+ *  `ReportService.ProfileCodeFor` computes it: a package's direct members
+ *  print standalone (profile scoping doesn't apply — a package is billing
+ *  vocabulary), its profile members compile under the profile, and a legacy
+ *  snapshot (no packageType at all) keeps the old group-by-ordered-bundle
+ *  behaviour. H2 (2026-10-02): this is what lets a profile-tagged band
+ *  (BIO010's Gestational OGTT <92) apply ONLY when the test was actually
+ *  ordered under its own profile (BIO004), on this client-resolved path too. */
+export function profileCodeFor(t: LayoutSnapshotTest): string | null {
+  const legacy = t.packageType == null;
+  return t.profileTestId
+    ?? (t.packageType === 'profile' ? t.packageTestId : null)
+    ?? (legacy ? t.packageTestId : null)
+    ?? null;
 }
 
 /** The subset of ReportLayoutService this needs — passed in so the helper stays
@@ -35,6 +54,7 @@ export type PreviewFn = (
   values: Record<string, unknown>,
   conditions: unknown[],
   patient?: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null },
+  profileCode?: string | null,
 ) => Promise<unknown>;
 
 /** Snapshot values are the flagged wrapper { value, unit, range, flag };
@@ -81,7 +101,7 @@ export async function resolveReportLayouts<T>(
         // layout came back without a results table gets the default one, so
         // its RESULT can never drop off the report (results-table.ts).
         layouts[t.testId] = withResultsTable(await preview(
-          t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient,
+          t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient, profileCodeFor(t),
         ) as T, t);
       } catch (e) {
         // Permission / network → abort the whole render (see isAccessFailure).

@@ -128,14 +128,18 @@ export class ReportLayoutService {
     imageUrls: string[] = [],
     patient?: { sex?: string | null } & AgeSource,
     parametersJson?: string | null,
+    profileCode?: string | null,
   ): Promise<ResolvedReportLayout> {
     // Pass the patient's sex/age so the engine picks the matching reference range
     // (male/female/age-specific) instead of always the first one. The age is
     // the DOB-derived FRACTIONAL band age (shared helper), so an infant's
     // newborn / infant bands resolve — a whole-years 0 never could.
+    // profileCode (H2, 2026-10-02): the nearest enclosing profile this test
+    // was ordered under — a profile-tagged band (Gestational OGTT's <92)
+    // only ever applies when this is set to that profile's own code.
     return firstValueFrom(this.api.post<ResolvedReportLayout>(
       `/api/report-layout/preview/${testId}`,
-      { values, imageUrls, sex: patient?.sex ?? null, age: bandAgeYears(patient), parametersJson: parametersJson ?? null },
+      { values, imageUrls, sex: patient?.sex ?? null, age: bandAgeYears(patient), parametersJson: parametersJson ?? null, profileCode: profileCode ?? null },
     ));
   }
 }

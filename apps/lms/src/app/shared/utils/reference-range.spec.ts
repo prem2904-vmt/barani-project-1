@@ -300,3 +300,61 @@ describe('report text — line breaks and the {u} unit placeholder', () => {
     expect(bandReportText(m, '')).toBe('4.5 – 5.9');
   });
 });
+
+// L2 (2026-10-02): the gestational-text guess, mirroring mw
+// ReferenceRangeResolver.EffectiveSex/LooksGestational — a band naming
+// itself "G-OGTT"/"gestational"/"pregnant" (never negated) is implicitly
+// female for EXCLUSION only, never for match score.
+describe('gestational-text guess (mirrors mw EffectiveSex/LooksGestational)', () => {
+  const gOgtt: RangeLike = { segment: 'g_ogtt', min: null, max: 92, label: 'G-OGTT: <92' };
+
+  it('excludes a male patient from a band whose text names it gestational', () => {
+    // Paired with an equally-unconstrained, non-gestational band (score 0
+    // either way): if gOgtt is correctly EXCLUDED for a male patient, it
+    // drops out of the eligible set entirely and the other band wins
+    // outright, even though neither actively scores. Without the guess,
+    // both would tie and the first-declared (gOgtt) would win instead.
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const { range, isSpecific } = matchReferenceRange([gOgtt, other], 'M', 30);
+    expect(range).toBe(other);
+    expect(isSpecific).toBe(false); // survived by elimination, not a merit match
+  });
+
+  it('does not exclude a female or unknown-sex patient, but never scores it either', () => {
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const female = matchReferenceRange([gOgtt, other], 'F', 28);
+    expect(female.range).toBe(gOgtt); // first-declared tie-winner — not excluded for a woman
+    expect(female.isSpecific).toBe(false); // text guess never AWARDS score
+    const unknown = matchReferenceRange([gOgtt, other], null, 28);
+    expect(unknown.range).toBe(gOgtt); // unknown sex never contradicts either
+    expect(unknown.isSpecific).toBe(false);
+  });
+
+  it('never excludes a band whose gestational wording is explicitly negated', () => {
+    const nonPregnant: RangeLike = { segment: 'nonpregnant', min: null, max: 5, label: 'Non-pregnant: <5 IU/L' };
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const { range } = matchReferenceRange([nonPregnant, other], 'M', 30);
+    expect(range).toBe(nonPregnant); // first-declared tie-winner — never excluded; "non-pregnant" is not a gestational guess
+  });
+
+  it('never guesses gestational from a band with no numeric bounds (a placeholder line)', () => {
+    // Bound-less, so the guess never applies — a MALE patient is never
+    // excluded from this band just because its label mentions "pregnancy".
+    // Paired with an equally-unconstrained band (score 0 either way) so a
+    // wrong exclusion would be visible: if the placeholder were (incorrectly)
+    // excluded as gestational, only the second band would remain eligible
+    // and WIN outright — instead both tie at 0 and the first-declared one
+    // (the placeholder) wins, proving it was never excluded.
+    const placeholder: RangeLike = { segment: 'pregnancy', min: null, max: null, label: 'Pregnancy — see gestational-age table' };
+    const unconstrained: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const both = matchReferenceRange([placeholder, unconstrained], 'M', 30);
+    expect(both.range).toBe(placeholder);
+  });
+
+  it('a REAL sex field still wins the active match score; the text guess never does', () => {
+    const female: RangeLike = { sex: 'F', min: 70, max: 180, label: 'G-OGTT: <180' };
+    const { range, isSpecific } = matchReferenceRange([female], 'F', 28);
+    expect(range).toBe(female);
+    expect(isSpecific).toBe(true); // the STRUCTURED sex match earns the score, not the text guess
+  });
+});
