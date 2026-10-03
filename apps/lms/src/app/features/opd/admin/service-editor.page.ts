@@ -203,16 +203,20 @@ const TAX = [0, 5, 12, 18];
                       <span>The front desk sees the chosen doctor's fee in the cart automatically.</span></p>
                   }
                   @case ('form') {
-                    <div class="oa-field"><span class="oa-field__lbl">Consultation form</span>
+                    <div class="oa-field"><span class="oa-field__lbl">{{ isProc() ? 'Procedure form' : 'Consultation form' }}</span>
                       <pf-select [options]="formOptions()" [value]="d().formId ?? ''" [searchable]="forms().length > 8" (valueChange)="setForm($event)"></pf-select>
-                      <span class="oa-field__hint">{{ d().formId ? "This service overrides its department's form." : "Uses the department's form — pick one to override it for this service only." }}</span></div>
+                      <span class="oa-field__hint">{{ isProc()
+                        ? (d().formId ? 'The doctor fills this form each time the procedure is done (e.g. a laser session: area, fluence, spot size). The last session’s values show beside each field.' : 'No form — pick one to record readings each time this procedure is done.')
+                        : (d().formId ? "This service overrides its department's form." : "Uses the department's form — pick one to override it for this service only.") }}</span></div>
                     <div class="oa-actions">
                       <button type="button" class="nd-btn nd-btn--secondary oa-btn press" [disabled]="!effectiveFormId()" (click)="openBuilder()">Open in form builder</button>
                     </div>
                     <div class="oa-sec">What the doctor fills</div>
                     <div class="se-qs">
+                      @if (!isProc()) {
                       <div class="se-q se-q--built"><span class="se-q__t">Vitals (prefill)<small>Built in — BP, pulse, temperature, SpO₂, weight, height, BMI</small></span>
                         <svg class="se-lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Built-in"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                      }
                       @for (q of formQuestions(); track q.key) {
                         <div class="se-q"><span class="se-q__t">{{ q.label }}<small>{{ typeName(q) }}{{ q.required ? ' · required' : '' }}</small></span></div>
                       } @empty { <p class="oa-field__hint">{{ effectiveFormId() ? 'This form has no questions yet.' : 'No form chosen yet.' }}</p> }
@@ -311,9 +315,13 @@ export class OpdServiceEditorPage {
   readonly dirty = computed(() => JSON.stringify(this.d()) !== this.saved || JSON.stringify(this.docRows()) !== this.savedDocs);
   readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.depts().map((x) => ({ value: x.id, label: x.name, hint: x.isActive ? undefined : 'Off' })));
   readonly dept = computed(() => this.depts().find((x) => x.id === this.d().departmentId) ?? null);
-  readonly effectiveFormId = computed(() => this.d().formId || this.dept()?.defaultFormId || null);
+  /** A procedure's form is its own (a session form) — never the department's consultation form. */
+  readonly isProc = computed(() => this.d().category === 'procedure');
+  readonly effectiveFormId = computed(() => this.d().formId || (this.isProc() ? null : this.dept()?.defaultFormId) || null);
   readonly formOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: 'Department default', hint: this.forms().find((f) => f.id === this.dept()?.defaultFormId)?.name ?? 'No form' },
+    this.isProc()
+      ? { value: '', label: 'No form' }
+      : { value: '', label: 'Department default', hint: this.forms().find((f) => f.id === this.dept()?.defaultFormId)?.name ?? 'No form' },
     ...this.forms().filter((f) => f.isActive).map((f) => ({ value: f.id, label: f.name, hint: f.publishedVersion ? 'v' + f.publishedVersion : 'new' })),
   ]);
   readonly formQuestions = computed(() => {
@@ -323,8 +331,8 @@ export class OpdServiceEditorPage {
   });
   readonly formLine = computed(() => {
     const f = this.forms().find((x) => x.id === this.effectiveFormId());
-    if (!f) return 'No consultation form yet.';
-    return `${f.name} · ${f.publishedVersion ? 'v' + f.publishedVersion : 'not published yet'} · ${this.d().formId ? 'overrides the department form' : 'the department form'}`;
+    if (!f) return this.isProc() ? 'No procedure form.' : 'No consultation form yet.';
+    return `${f.name} · ${f.publishedVersion ? 'v' + f.publishedVersion : 'not published yet'} · ${this.isProc() ? 'filled each time it is done' : this.d().formId ? 'overrides the department form' : 'the department form'}`;
   });
   readonly tabLabel = computed(() => this.tabs.find((t) => t.id === this.tab())?.label ?? '');
   readonly tabNote = computed(() => ({
@@ -400,7 +408,7 @@ export class OpdServiceEditorPage {
   patch(p: Partial<OpdServiceInput>): void {
     const prev = this.d();
     this.d.update((x) => ({ ...x, ...p }));
-    if ('departmentId' in p || 'formId' in p) this.loadForm();
+    if ('departmentId' in p || 'formId' in p || 'category' in p) this.loadForm();
     // A new service follows its department / category in its code until the admin types one.
     if (this.isNew() && ('departmentId' in p || 'category' in p)) {
       const dep = this.depts().find((x) => x.id === this.d().departmentId);
