@@ -819,3 +819,10 @@
 :host ::ng-deep .ag-row.pf-tm-row--off .ag-cell:not([col-id='status']):not([col-id='actions']) {
   opacity: 0.55;
 }
+
+/* Test Master missing-container check: the Container cell of a test with no
+   usable container reads as an error to fix (owner 2026-10-03). */
+:host ::ng-deep .pf-tm-container-missing {
+  color: var(--warning-text, #b45309);
+  font-weight: 600;
+}
