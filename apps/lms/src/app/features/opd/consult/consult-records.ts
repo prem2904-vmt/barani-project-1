@@ -114,14 +114,9 @@ export function visitItems(a: {
   const isToday = dayKey === a.todayKey;
   if (isToday) {
     const v = ws.visit;
-    const steps = [
-      v.checkedInAt ? { at: hm(v.checkedInAt), what: 'Checked in' } : null,
-      ws.vitals?.recordedAt ? { at: hm(ws.vitals.recordedAt), what: 'Vitals' } : null,
-      v.consultStartedAt ? { at: hm(v.consultStartedAt), what: `With ${v.doctorName || 'the doctor'}` } : null,
-      v.completedAt ? { at: hm(v.completedAt), what: 'Consult completed' } : null,
-    ].filter((x): x is { at: string; what: string } => !!x);
-    out.push({ id: 'consult:' + v.id, consultId: v.id, type: 'flow', title: "Today's consult", compare: true, date: dayKey, steps,
-      sub: v.checkedInAt ? `Checked in ${hm(v.checkedInAt)}${v.status === 'in_consult' ? ' · with you now' : ''}` : `Token ${v.tokenLabel}` });
+    // No "Today's consult" tile: the doctor is in it (owner). Compare still
+    // adds today's column itself (the page's consultItem), and past visits
+    // keep their consult tile below.
     if (ws.vitals) {
       const warn = vitalsWarnings(ws.vitals);
       out.push({ id: 'today:vit', type: 'vit', title: 'Vitals record', compare: false, date: dayKey, high: warn.length > 0,
