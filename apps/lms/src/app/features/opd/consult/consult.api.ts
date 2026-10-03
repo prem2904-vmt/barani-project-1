@@ -58,6 +58,8 @@ export interface ConsultProcedureDto {
   when?: ProcedureWhen | null; preferredWithin?: string | null; prepNote?: string | null;
   /** Consult v11: the procedure record (findings / what was done) — newer servers. */
   record?: string | null;
+  /** The procedure's own form answers (e.g. a laser session) — newer servers. */
+  answers?: Record<string, unknown> | null;
 }
 /** Do the procedure in the room now, or book it for later (the desk fixes the date). */
 export type ProcedureWhen = 'now' | 'later';
@@ -68,9 +70,16 @@ export interface ConsultProcedureDraft {
   /** Consult v6: 'later' = booked by the front desk, paid on the procedure day. */
   when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
   record?: string | null;
+  answers?: Record<string, unknown> | null;
 }
 /** A procedure the visit's doctor offers (department procedures + the doctor's own-priced ones). */
-export interface ConsultProcedureOption { serviceId: string; name: string; code?: string | null; price: number; taxSlab: number; departmentName?: string | null; }
+export interface ConsultProcedureOption { serviceId: string; name: string; code?: string | null; price: number; taxSlab: number; departmentName?: string | null;
+  /** The procedure's own form (same OpdFormSchema as consult forms) — newer servers; either inline or as a form ref. */
+  formSchema?: unknown; formId?: string | null; form?: { schema?: unknown; formName?: string | null } | null; formName?: string | null; }
+/** Procedure options with a form → its schema (feature-detected). Pure. */
+export function procedureSchemaOf(o: ConsultProcedureOption): unknown | null {
+  return o.formSchema ?? o.form?.schema ?? null;
+}
 /** OPD workflow → "Doctors can change procedure prices" (+ optional ± % cap). */
 export interface ProcedurePricing { doctorCanChange: boolean; maxChangePercent?: number | null; }
 /** How the visit is paid and what is still due on its consult bill. */
@@ -131,6 +140,8 @@ export interface ConsultProcedureBodyLine {
   when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
   /** Only to servers with the procedure record. */
   record?: string | null;
+  /** Only to servers with procedure forms. */
+  answers?: Record<string, unknown> | null;
 }
 
 /** A consult file (photo / video / report) — `procedureId` when it belongs to a procedure's record. */
@@ -213,6 +224,12 @@ export interface ConsultUsual {
   rx: OpdRxLineDto[]; tests: { testId: string; name: string }[]; fromVisitDate?: string | null;
   source?: 'template' | null; advice?: string | null;
 }
+/** One past session of a procedure (GET …/procedure-history). */
+export interface ProcedureSessionDto {
+  date: string; visitId: string; doctorName?: string | null; procedureName?: string | null;
+  answers?: Record<string, unknown> | null; record?: string | null; media?: ConsultMediaItem[] | null;
+}
+
 export interface ConsultPastConsult {
   visitId: string; visitDate: string; doctorName?: string | null; departmentName?: string | null;
   diagnoses: OpdDiagnosis[]; chiefComplaint?: string | null; advice?: string | null;
@@ -272,6 +289,10 @@ export class ConsultApi {
   /** A fresh signed URL for a stored consult file. */
   mediaUrl(visitId: string, key: string): Observable<string> {
     return this.api.get<string>(`${CONSULT_API}/${visitId}/media?key=${encodeURIComponent(key)}`);
+  }
+  /** Past sessions of one procedure for this patient (procedure forms; newer servers). */
+  procedureHistory(patientId: string, serviceId: string): Observable<ProcedureSessionDto[]> {
+    return this.api.get<ProcedureSessionDto[]>(`${CONSULT_API}/patients/${patientId}/procedure-history?serviceId=${encodeURIComponent(serviceId)}`);
   }
   history(patientId: string): Observable<ConsultPastConsult[]> { return this.api.get<ConsultPastConsult[]>(`${CONSULT_API}/patients/${patientId}/history`); }
   /** The lab catalogue the order screen uses (reuse, no second test search). */

@@ -15,7 +15,7 @@ import { PatientTimelineComponent, type TimelineItem } from '../../frontdesk/pat
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import type { OpdDiagnosis, OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
 import {
-  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
+  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf, procedureSchemaOf,
 } from './consult.api';
 import {
   BodyOpts, ConsultEditState, DraftSection, FRESH_ACKS, SECTION_OF, applyUsual, daysBetween, draftBody, draftPatchBody,
@@ -33,6 +33,7 @@ import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
 import { rxSentence, usualFromJson } from './rx/rx-line';
 import { CompareConsult, compareMatrix } from './consult-compare';
+import { ProcedureSession, sessionsTable } from './procedure-sessions';
 import { ComparePreset, CompareSection, PresetFile, PresetTrend, comparePresets, presetTitle } from './compare-presets';
 import type { RxUsual } from '../shared/rx-schedule';
 import { lineShort } from '../shared/rx-schedule';
@@ -385,6 +386,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
                                                [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'" [laterEnabled]="laterEnabled()"
                                                [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()" [canRemoveFiles]="editable()"
+                                               [sessions]="procSessions()" [todayVisitId]="w.visit.id" [phone]="phone()" (needSessions)="loadSessions($event)" (showSessions)="openSessions($event)"
                                                (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)" (removeFile)="removeProcFile($event.id)"></pf-consult-procedures>
                       } @else { <p class="psum">Procedures aren't available on this server yet.</p> }
                     }
@@ -501,6 +503,39 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                                    (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                    (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
           </aside>
+
+          <!-- ── A procedure's sessions side by side (Sessions / the "readings" preset) ── -->
+          @if (sessionsView(); as sv) {
+            <div class="cw__scrim" (click)="sessionsFor.set(null)" aria-hidden="true"></div>
+            <aside class="nd-card cw__drawer cw__drawer--wide" role="dialog" [attr.aria-label]="sv.name + ' sessions'">
+              <header class="nd-card__head">
+                <span class="nd-card__label">{{ sv.name }} · sessions</span>
+                <span class="nd-card__spacer"></span>
+                <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="sessionsFor.set(null)" aria-label="Close the sessions">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </header>
+              <div class="cw__drawerb">
+                @if (sv.loading) { <p class="cw__muted">Loading the past sessions…</p> }
+                @else if (!sv.table.rows.length) { <p class="cw__muted">No readings recorded for this procedure yet.</p> }
+                @else {
+                  <div class="cmx" [style.--cmx-n]="sv.table.dates.length" role="table" [attr.aria-label]="sv.name + ' sessions'">
+                    <div class="cmx__row cmx__row--head" role="row">
+                      <span class="cmx__lbl" role="columnheader"></span>
+                      @for (d of sv.table.dates; track $index; let i = $index; let last = $last) {
+                        <span class="cmx__col" role="columnheader"><b class="nd-num">Session {{ i + 1 }}</b><small class="nd-num">{{ last && sv.today ? 'Today' : (d + 'T00:00:00' | date:'d MMM y') }}</small></span>
+                      }
+                    </div>
+                    @for (r of sv.table.rows; track r.key) {
+                      <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
+                        @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell nd-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </aside>
+          }
 
           <!-- ── The Findings drawer (C/O): prefill review + the consult form ── -->
           @if (findingsOpen()) {
@@ -717,7 +752,37 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly preferIds = computed(() => (this.usual()?.rx ?? []).map(r => r.drugId).filter((x): x is string => !!x));
   /** Server features (feature-detected; older servers have none). */
   readonly laterEnabled = computed(() => this.ws()?.features?.procedureLater === true);
-  private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled(), procedureRecord: this.recordEnabled() }));
+  private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled(), procedureRecord: this.recordEnabled(), procedureForms: this.formsEnabled() }));
+  /** Procedure forms (feature-detected: an option carries a form). */
+  readonly formsEnabled = computed(() => (this.ws()?.procedureOptions ?? []).some(o => !!procedureSchemaOf(o)));
+  /** Past sessions per procedure (serviceId → list), loaded on demand. */
+  readonly procSessions = signal<Record<string, ProcedureSession[] | undefined>>({});
+  private readonly sessionsAsked = new Set<string>();
+  readonly sessionsFor = signal<string | null>(null);
+  loadSessions(serviceId: string) {
+    const w = this.ws();
+    if (!w || this.sessionsAsked.has(serviceId)) return;
+    this.sessionsAsked.add(serviceId);
+    this.consultApi.procedureHistory(w.patient.id, serviceId).subscribe({
+      next: rows => this.procSessions.update(m => ({ ...m, [serviceId]: rows ?? [] })),
+      error: () => this.procSessions.update(m => ({ ...m, [serviceId]: [] })),   // older server: no history
+    });
+  }
+  openSessions(serviceId: string) { this.loadSessions(serviceId); this.findingsOpen.set(false); this.patientOpen.set(false); this.sessionsFor.set(serviceId); }
+  /** The sessions table for the open procedure: past sessions + today's answers. */
+  readonly sessionsView = computed(() => {
+    const sid = this.sessionsFor(), w = this.ws();
+    if (!sid || !w) return null;
+    const opt = (w.procedureOptions ?? []).find(o => o.serviceId === sid);
+    const list = this.procSessions()[sid];
+    const todayLine = (this.st().procedures ?? []).find(p => p.serviceId === sid && p.when !== 'later' && p.answers && Object.keys(p.answers).length);
+    const name = opt?.name ?? list?.[0]?.procedureName ?? 'Procedure';
+    const past = (list ?? []).filter(s => s.visitId !== w.visit.id);
+    return {
+      name, loading: list === undefined, today: !!todayLine,
+      table: sessionsTable(opt ? procedureSchemaOf(opt) : null, past, todayLine ? { date: this.todayKey(), answers: todayLine.answers! } : null),
+    };
+  });
   /** Page: whenever Messages is on (no assistant → the popover says how to set one). */
   readonly showPage = computed(() => this.entitlements?.moduleEnabled('messages') !== false);
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
@@ -832,12 +897,20 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     }
     const consults = [{ visitId: w.visit.id, date: this.todayKey(), hasRx: this.st().lines.length > 0 },
       ...(this.dock.history() ?? []).filter(h => h.visitId !== w.visit.id).map(h => ({ visitId: h.visitId, date: journeyDayKey(h.visitDate), hasRx: h.rx.length > 0 }))];
-    return comparePresets({ consults, reports, images, trends });
+    // Procedures the patient has had (any visit) → a "readings" preset each.
+    const procs = new Map<string, { serviceId: string; name: string; sessions: number }>();
+    for (const h of this.dock.history() ?? []) for (const p of h.procedures ?? []) {
+      const cur = procs.get(p.serviceId) ?? { serviceId: p.serviceId, name: p.name, sessions: 0 };
+      cur.sessions++;
+      procs.set(p.serviceId, cur);
+    }
+    return comparePresets({ consults, reports, images, trends, procedures: [...procs.values()] });
   });
   /** A preset: fill the picks and open the compare view straight away. */
   applyPreset(p: ComparePreset) {
     if (!p.count) return;
     this.presetsOpen.set(false);
+    if (p.procedureServiceId) { this.openSessions(p.procedureServiceId); return; }
     const items: VisitItem[] = [];
     for (const k of p.picks) {
       if (k.kind === 'consult') { const it = this.consultItem(k.visitId); if (it) items.push(it); }
@@ -1492,6 +1565,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   onEsc() {
     if (this.completeOpen()) return;
     if (this.presetsOpen()) { this.presetsOpen.set(false); return; }
+    if (this.sessionsFor()) { this.sessionsFor.set(null); return; }
     if (this.findingsOpen()) { this.findingsOpen.set(false); return; }
     if (this.patientOpen()) { this.closeRight(true); return; }
     if (this.compareOn()) this.leaveCompare();

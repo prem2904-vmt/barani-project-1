@@ -100,6 +100,9 @@ const SHAPES: Record<string, string[]> = {
                 <span class="ofr-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Not printed</span>
               }
               @if (addonKeys().has(q.key)) { <span class="ofr-tag">Doctor's own</span> }
+              @if (hints()[q.key]; as h) {
+                <button type="button" class="ofr-last" [disabled]="!live()" (click)="hintPick.emit(q.key)" [attr.aria-label]="'Copy last: ' + h" title="Tap to copy">Last: {{ h }}</button>
+              }
             </div>
             <div class="ofr-q__body">
               @if (q.sides) {
@@ -289,6 +292,10 @@ const SHAPES: Record<string, string[]> = {
     .ofr-q.is-addon { border-style: dashed; border-color: var(--nd-line); }
     .ofr-q__lbl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
     .ofr-q__q { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+    .ofr-last { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 999px; border: 1px dashed var(--nd-line); background: none; font: inherit; font-size: 11.5px;
+      color: var(--text-tertiary); white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; }
+    .ofr-last:hover:not(:disabled) { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--nd-line)); }
+    .ofr-last:disabled { cursor: default; }
     .ofr-q__req { color: var(--red-text, #dc2626); margin-left: 2px; }
     .ofr-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
       color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
@@ -384,6 +391,10 @@ export class OpdFormRendererComponent {
   readonly compact = input(false);
 
   readonly answersChange = output<OpdAnswers>();
+  /** A muted "Last: …" chip per question (the previous session's value); empty = none. */
+  readonly hints = input<Record<string, string>>({});
+  /** A "Last: …" chip was tapped (the host copies that value in). */
+  readonly hintPick = output<string>();
   readonly mediaRequest = output<OpdMediaRequest>();
   /** design: a question was clicked. */
   readonly questionSelect = output<string>();
