@@ -36,6 +36,11 @@ export function showsDoctorFilter(isDoctor: boolean, hasAnyPermission: (perms: s
  *  A doctor's own default queue is single-doctor by construction, and an
  *  explicit single-doctor pick already reads as one doctor via the filter
  *  chip, so neither needs the per-row label. Pure. */
+/** The consult action for a visit's status. Pure. */
+export function consultCta(status: string | null | undefined): string {
+  return status === 'in_consult' ? 'Resume consult' : status === 'completed' ? 'Open consult' : 'Start consult';
+}
+
 export function showsDoctorName(isDoctor: boolean, selectedDoctorId: string): boolean {
   return !isDoctor && !selectedDoctorId;
 }
@@ -226,7 +231,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   readonly vitals = computed(() => glanceVitals(this.glance()?.vitals ?? null));
   readonly complaint = computed(() => this.glance()?.consult?.chiefComplaint || this.glance()?.visit.purpose || this.selected()?.purpose || '');
   readonly allergies = computed(() => (this.glance()?.allergies ?? []).filter(a => a.status !== 'inactive'));
-  readonly ctaLabel = computed(() => this.selected()?.status === 'in_consult' ? 'Resume consult' : this.selected()?.status === 'completed' ? 'Open consult' : 'Start consult');
+  readonly ctaLabel = computed(() => consultCta(this.selected()?.status));
 
   // ── Layout (order-create's breakpoints) ─────────────────────────────
   readonly isLg = signal(true);
@@ -268,7 +273,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
     this.load();
     this.timer = setInterval(() => this.load(), 30_000);
   }
-  ngOnDestroy() { if (this.timer) clearInterval(this.timer); this.dock.hide(); }
+  ngOnDestroy() { if (this.timer) clearInterval(this.timer); if (this.previewTimer) clearTimeout(this.previewTimer); this.dock.hide(); }
 
   private watchMedia(q: string, sig: WritableSignal<boolean>, fallback: boolean): void {
     try {
@@ -330,12 +335,23 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   toggleChip(c: QueueChip) {
     this.chips.update(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); return n; });
   }
-  pick(r: ConsultQueueRow) {
-    this.pickedId.set(r.visitId);
-    this.dock.show({ id: r.patientId, name: r.patientName });
-    this.loadGlance();
-    if (!this.isLg()) this.sheetOpen.set(true);
+  /** Hover / keyboard focus on a tile (desktop) → At a glance shows that
+   *  patient (it stays on the last one previewed). Debounced so sweeping the
+   *  pointer across the grid doesn't fetch every tile. Phones don't preview:
+   *  a tap there opens the consult straight away. */
+  private previewTimer: ReturnType<typeof setTimeout> | null = null;
+  preview(r: ConsultQueueRow) {
+    if (!this.isLg() || this.pickedId() === r.visitId) return;
+    if (this.previewTimer) clearTimeout(this.previewTimer);
+    this.previewTimer = setTimeout(() => {
+      this.previewTimer = null;
+      this.pickedId.set(r.visitId);
+      this.dock.show({ id: r.patientId, name: r.patientName });
+      this.loadGlance();
+    }, 120);
   }
+  /** The tile's action, as read out: Start / Resume / Open consult. */
+  openLabel(r: ConsultQueueRow) { return consultCta(r.status); }
   closeSheet() { this.sheetOpen.set(false); }
   info(r: ConsultQueueRow) { return waitInfo(r, this.now()); }
 
@@ -363,7 +379,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
     e.preventDefault(); this.scopeHighlight.update(i => (i + dir + n) % n);
   }
   onPillEnter(e: Event) {
-    if (!this.dropOpen()) { const v = this.visible(); if (v.length === 1) this.pick(v[0]); return; }
+    if (!this.dropOpen()) { const v = this.visible(); if (v.length === 1) this.open(v[0]); return; }
     const rows = this.dropRows(); if (!rows.length) return;
     e.preventDefault(); this.pickDropRow(rows[Math.min(this.scopeHighlight(), rows.length - 1)]);
   }
@@ -396,7 +412,11 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   statusLabel(s: string) {
     return ({ booked: 'Booked', vitals: 'At vitals', waiting: 'Waiting', in_consult: 'In consult', completed: 'Done' } as Record<string, string>)[s] ?? s;
   }
-  open(r: ConsultQueueRow) { this.router.navigate(['/opd/consult', r.visitId]); }
+  /** Tap / click / Enter on a tile → that patient's consult (Start / Resume). */
+  open(r: ConsultQueueRow) {
+    if (this.previewTimer) { clearTimeout(this.previewTimer); this.previewTimer = null; }
+    this.router.navigate(['/opd/consult', r.visitId]);
+  }
   callNext() { const n = this.next(); if (n) this.open(n); }
   startSelected() { const r = this.selected(); if (r) this.open(r); }
   history() { const r = this.selected(); if (r) this.router.navigate(['/opd/patient', r.patientId]); }

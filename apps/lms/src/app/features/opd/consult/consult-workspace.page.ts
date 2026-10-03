@@ -44,7 +44,7 @@ import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 import { JourneyDockComponent } from '../shared/journey-dock.component';
 import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
 import {
-  ConsultSpace, Prefill, SPACES, balancePanels, chromeInsets, recentResultsOf, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
+  ConsultSpace, Prefill, SPACES, balancePanels, recentResultsOf, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
 import { PadAddComponent } from './pad-add.component';
@@ -95,7 +95,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ws(); as w) {
-      <div class="cw" [style.bottom.px]="insets()?.bottom" [style.left.px]="insets()?.left">
+      <div class="cw">
         <!-- ── Patient band: one row ── -->
         <header class="cw__band">
           <div class="cw__row">
@@ -647,20 +647,6 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   /** The overlay shows when opened — and stays while compare mode is on. */
   /** The body's content width + column gaps (ResizeObserver) → auto-balance. */
   readonly bodyW = signal(0);
-  /** The real app-nav insets (bottom bar / floating pill / left rail), measured. */
-  readonly insets = signal<{ bottom: number; left: number } | null>(null);
-  private chromeRo: ResizeObserver | null = null;
-  private readonly onWinResize = () => this.measureChrome();
-  /** Fit the consult exactly beside the visible nav, so neither the dock nor
-   *  the pad sits under it, and nothing starts under a left rail. */
-  measureChrome() {
-    if (typeof window === 'undefined') return;
-    const els = Array.from(this.doc.querySelectorAll<HTMLElement>('.pf-bottom-nav, .pf-chrome'))
-      .filter(el => { const st = getComputedStyle(el); return st.display !== 'none' && st.visibility !== 'hidden'; });
-    const next = chromeInsets(els.map(el => el.getBoundingClientRect()), window.innerWidth, window.innerHeight);
-    const cur = this.insets();
-    if (!cur || cur.bottom !== next.bottom || cur.left !== next.left) this.insets.set(next);
-  }
   private bodyGaps = 16;
   private readonly balance = computed(() => balancePanels(this.bodyW(), this.bodyGaps, this.rightPinned()));
   /** Docked = pinned AND the centre still has room for the form (≥680px). */
@@ -1002,14 +988,6 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.phoneMq?.addEventListener?.('change', this.onPhoneMq);
     this.compactMq?.addEventListener?.('change', this.onCompactMq);
     this.doc.documentElement.classList.add('pf-opd-immersive');
-    // Measure the nav once the immersive chrome rule applies, then on changes.
-    setTimeout(() => this.measureChrome());
-    setTimeout(() => this.measureChrome(), 400);
-    window.addEventListener('resize', this.onWinResize);
-    if (typeof ResizeObserver === 'function') {
-      this.chromeRo = new ResizeObserver(() => this.measureChrome());
-      for (const el of Array.from(this.doc.querySelectorAll<HTMLElement>('.pf-bottom-nav, .pf-chrome'))) this.chromeRo.observe(el);
-    }
     this.rightPinned.set(this.readPin('Right'));
     const id = this.route.snapshot.paramMap.get('visitId');
     if (!id) { this.loading.set(false); return; }
@@ -1032,8 +1010,6 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.doc.documentElement.classList.remove('pf-opd-immersive');
     this.dock.hide();
     this.bodyRo?.disconnect();
-    this.chromeRo?.disconnect();
-    window.removeEventListener('resize', this.onWinResize);
     if (this.saveState() === 'dirty') this.saveNow();
   }
 

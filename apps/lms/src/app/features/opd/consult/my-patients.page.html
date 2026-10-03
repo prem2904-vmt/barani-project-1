@@ -112,8 +112,11 @@
           <div class="mp__grid" role="list">
             @for (r of visible(); track r.visitId) {
               <div class="pf-crow pf-ov-doc mp__tile" role="listitem" [class.pf-crow--in]="selected()?.visitId === r.visitId">
-                <button type="button" class="pf-crow__main" [attr.aria-pressed]="selected()?.visitId === r.visitId" (click)="pick(r)"
-                        [attr.aria-label]="'Token ' + r.tokenLabel + ', ' + r.patientName">
+                <!-- A tap / click / Enter OPENS the consult (Start or Resume);
+                     hover or keyboard focus previews it in At a glance (desktop). -->
+                <button type="button" class="pf-crow__main" data-open (click)="open(r)"
+                        (mouseenter)="preview(r)" (focus)="preview(r)"
+                        [attr.aria-label]="openLabel(r) + ': token ' + r.tokenLabel + ', ' + r.patientName">
                   <span class="mp__token nd-num" aria-hidden="true">{{ r.tokenLabel }}</span>
                   <span class="pf-ov-txt">
                     <span class="pf-ov-name">{{ r.patientName }}@if (r.ageSex) { <span class="mp__agesex nd-num">{{ r.ageSex }}</span> }</span>
@@ -150,7 +153,7 @@
     }
   </div>
 
-  <!-- The journey dock (consult v6) for the patient the doctor tapped. -->
+  <!-- The journey dock (consult v6) for the patient being previewed. -->
   @if (isLg() && pickedId() && dock.patient()) {
     <pf-journey-dock class="mp__dock" (picked)="historyAt($event)"></pf-journey-dock>
   }

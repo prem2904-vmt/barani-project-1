@@ -1,4 +1,5 @@
 import {
+  consultCta,
   doctorFilterOptions,
   doctorsFromRows,
   nextToCall,
@@ -118,5 +119,15 @@ describe('doctorsFromRows (fallback when /api/doctors is not readable)', () => {
 
   it('is empty for an empty row set', () => {
     expect(doctorsFromRows([])).toEqual([]);
+  });
+});
+
+describe('consultCta — what tapping a patient tile does', () => {
+  it('starts a waiting visit, resumes one in consult, opens a finished one', () => {
+    expect(consultCta('booked')).toBe('Start consult');
+    expect(consultCta('waiting')).toBe('Start consult');
+    expect(consultCta('in_consult')).toBe('Resume consult');
+    expect(consultCta('completed')).toBe('Open consult');
+    expect(consultCta(undefined)).toBe('Start consult');
   });
 });

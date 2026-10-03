@@ -91,7 +91,7 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
     .jd__ib:hover, .jd__pill:hover { color: var(--text-primary); }
     .jd__ib[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .jd__ib:focus-visible, .jd__pill:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .jd__body { padding: 0 16px 4px; }
+    .jd__body { padding: 4px 16px 8px; }
     .jd__none { margin: 0; padding: 6px 4px 10px; font-size: 12.5px; color: var(--text-tertiary); }
     @media (max-width: 600px) {
       .jd__bar { padding: 0 12px; }
