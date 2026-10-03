@@ -88,6 +88,7 @@ import {
   overlayDraft,
   prefillFromTests,
   tabMark,
+  testHasValue,
   tabPayload,
   boldFromTests,
   type BoldMap,
@@ -2097,6 +2098,19 @@ export class SampleResultEntryComponent {
       this._submitting.set(false);
       return;
     }
+    // Empty fields → the SAME confirmation Submit all asks (owner bug
+    // 2026-10-03, Salem 26285 / 26262: the tech filled 8 of Urine Routine's
+    // 13 lines, pressed Submit, and the 5 dipstick lines silently stayed
+    // behind — the order never completed and no report was made). Go back →
+    // the first empty field.
+    const live = this.liveSnap();
+    const missing = live ? missingEntries([live]) : [];
+    if (missing.length && writable.some((t) => testHasValue(all, t.id))) {
+      this._submitting.set(false);
+      if (!(await this.confirmEmptyFields(missing))) return;
+      this.submitAct.set('submit');
+      this._submitting.set(true);
+    }
     if (!(await this.confirmNothingPrints(writable.filter((t) => !!all[t.id] && Object.keys(all[t.id]).length > 0), "submit"))) {
       this._submitting.set(false);
       return;
@@ -2364,6 +2378,21 @@ export class SampleResultEntryComponent {
     }, { injector: this.injector });
   }
 
+  /** "Some fields are empty" — the one confirmation BOTH Submit and Submit
+   *  all ask. Go back → the first empty field; true = submit anyway. */
+  private async confirmEmptyFields(missing: MissingEntry[]): Promise<boolean> {
+    const go = await this.dialog.confirm({
+      title: "Some fields are empty",
+      message: "These fields have no value:",
+      items: missing.map(missingLine),
+      question: "Do you still want to submit?",
+      cancelLabel: "Go back",
+      confirmLabel: "Submit anyway",
+    });
+    if (!go) await this.goToMissing(missing[0]);
+    return go;
+  }
+
   /** Move to an empty field: switch tab first when it is on another tube. */
   async goToMissing(m: MissingEntry) {
     if (m.sampleId !== this._sample()?.id) {
@@ -2411,18 +2440,7 @@ export class SampleResultEntryComponent {
       const missing = missingEntries(targets);
       if (missing.length) {
         this._submitting.set(false);
-        const go = await this.dialog.confirm({
-          title: "Some fields are empty",
-          message: "These fields have no value:",
-          items: missing.map(missingLine),
-          question: "Do you still want to submit?",
-          cancelLabel: "Go back",
-          confirmLabel: "Submit anyway",
-        });
-        if (!go) {
-          await this.goToMissing(missing[0]);
-          return;
-        }
+        if (!(await this.confirmEmptyFields(missing))) return;
         this.submitAct.set('all');
         this._submitting.set(true);
       }
