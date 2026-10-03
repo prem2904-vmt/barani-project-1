@@ -57,7 +57,7 @@
           <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h18v12H3zM3 11h18M8 3v4M16 3v4"/></svg></span>
           <span class="nd-card__label">Today's visits</span>
           <div class="nd-seg pf-dk-seg" role="radiogroup" aria-label="Filter visits">
-            @for (f of filters; track f.id) {
+            @for (f of filters(); track f.id) {
               <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="filter() === f.id" (click)="filter.set(f.id)">
                 {{ f.label }} <span class="nd-num pf-dk-n">{{ counts()[f.id] }}</span>
               </button>
@@ -90,6 +90,35 @@
               }
             </ul>
             @if (shownDues().length) { <p class="pf-dk-duesum nd-num">{{ shownDues().length }} bill{{ shownDues().length === 1 ? '' : 's' }} · {{ dueTotal() | inr }} to collect</p> }
+          } @else if (filter() === 'tobook') {
+            <!-- Procedures the doctor ordered for later: pick a date, book; collected on the day. -->
+            <ul class="pf-ob-list" aria-label="Procedures to book">
+              @for (r of shownToBook(); track r.id) {
+                <li class="pf-dk-book" [attr.data-tobook]="r.id">
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                    <span class="pf-ob-row__meta nd-num">@if (r.mrn) { {{ r.mrn }} · }Ordered by {{ r.doctorName || 'the doctor' }} · {{ day(r.orderedAt) }}</span>
+                  </span>
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name">{{ r.procedureName }}</span>
+                    <span class="pf-ob-row__meta">{{ r.preferredWithin || 'No preferred window' }}@if (r.prepNote) { · {{ r.prepNote }} }</span>
+                  </span>
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name nd-num">{{ r.price | inr }}</span>
+                    <span class="pf-ob-row__meta">{{ toBookPriceText(r) }} · collect on the day</span>
+                  </span>
+                  <span class="pf-dk-book__act">
+                    <pf-nd-date [value]="bookDate()[r.id] ?? null" [min]="today" [max]="maxBookDate" label="Procedure date" (valueChange)="setBookDate(r.id, $event)"></pf-nd-date>
+                    <button type="button" class="nd-btn nd-btn--primary" [disabled]="!bookDate()[r.id] || booking() === r.id" (click)="book(r)">
+                      {{ booking() === r.id ? 'Booking…' : 'Book' }}
+                    </button>
+                  </span>
+                </li>
+              } @empty {
+                <li><div class="nd-empty nd-empty--compact"><p class="nd-empty__title">Nothing to book</p>
+                  <p class="nd-empty__body">When a doctor orders a procedure "for later", it appears here to book a date.</p></div></li>
+              }
+            </ul>
           } @else if (rows() === null) {
             <pf-skeleton-rows [rows]="6" label="Loading today's visits…"></pf-skeleton-rows>
           } @else {

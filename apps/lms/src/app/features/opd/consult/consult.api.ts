@@ -54,11 +54,17 @@ export interface ConsultProcedureDto {
   id: string; serviceId: string; name: string; code?: string | null; qty: number; rulePrice: number; price: number; overridden: boolean;
   priceReason?: string | null; priceSetByName?: string | null; side?: 'left' | 'right' | 'both' | null; note?: string | null;
   status: 'draft' | 'billed'; billId?: string | null;
+  // Consult v6 — appended (older servers omit them = 'now').
+  when?: ProcedureWhen | null; preferredWithin?: string | null; prepNote?: string | null;
 }
+/** Do the procedure in the room now, or book it for later (the desk fixes the date). */
+export type ProcedureWhen = 'now' | 'later';
 /** The editor's row (a DTO, or a new pick not saved yet — `id` null). */
 export interface ConsultProcedureDraft {
   key: string; id?: string | null; serviceId: string; name: string; code?: string | null; qty: number; rulePrice: number; price: number;
   priceReason?: string | null; priceSetByName?: string | null; side?: 'left' | 'right' | 'both' | null; note?: string | null; status?: 'draft' | 'billed';
+  /** Consult v6: 'later' = booked by the front desk, paid on the procedure day. */
+  when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
 }
 /** A procedure the visit's doctor offers (department procedures + the doctor's own-priced ones). */
 export interface ConsultProcedureOption { serviceId: string; name: string; code?: string | null; price: number; taxSlab: number; departmentName?: string | null; }
@@ -68,7 +74,7 @@ export interface ProcedurePricing { doctorCanChange: boolean; maxChangePercent?:
 export interface ConsultBilling { mode: 'before_consult' | 'after_consult'; consultCharged: number; consultBalance: number; }
 
 export interface ConsultCurrentMedicine {
-  drugName: string; form: DrugForm; dose: number; schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
+  drugName: string; form: DrugForm; dose: number; schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | 'With' | null;
   prescribedOn: string; doctorName?: string | null; endsOn?: string | null;
 }
 
@@ -103,6 +109,21 @@ export interface ConsultWorkspace {
   procedureOptions?: ConsultProcedureOption[] | null;
   procedurePricing?: ProcedurePricing | null;
   billing?: ConsultBilling | null;
+  // Consult v6 — appended; feature-detected (older servers omit them).
+  /** procedureLater: the server stores when / preferredWithin / prepNote and
+   *  lists "later" procedures for the desk to book. */
+  features?: { procedureLater?: boolean } | null;
+  /** The doctor's assistant (Nudge) — null when none is set. */
+  assistant?: { userId: string; name: string } | null;
+  /** Form answer keys pre-filled before the consult (intake), to review. */
+  prefilledAnswerKeys?: string[] | null;
+}
+
+/** A procedure line as the draft / complete body sends it. The three
+ *  consult-v6 fields ride only when the server has features.procedureLater. */
+export interface ConsultProcedureBodyLine {
+  id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null;
+  when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
 }
 
 export interface ConsultDraftBody {
@@ -117,7 +138,7 @@ export interface ConsultDraftBody {
   rx: OpdRxLineDto[];
   investigationItems: { testId: string; name: string }[];
   /** Omitted = the server leaves the saved procedures as they are. */
-  procedures?: { id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null }[];
+  procedures?: ConsultProcedureBodyLine[];
 }
 
 /** The free-text / follow-up section of a draft PATCH — bundled so "clear the
@@ -140,7 +161,7 @@ export interface ConsultDraftPatchBody {
   diagnoses?: OpdDiagnosis[];
   rx?: OpdRxLineDto[];
   investigationItems?: { testId: string; name: string; specimen?: string | null }[];
-  procedures?: { id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null }[];
+  procedures?: ConsultProcedureBodyLine[];
   notes?: ConsultNotesPatch;
   baseUpdatedAt?: string | null;
 }

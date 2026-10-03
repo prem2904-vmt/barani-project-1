@@ -7,7 +7,7 @@
  * OPD workflow setting "Doctors can change procedure prices" is on; then any
  * exact amount, or — with a cap — at most that % of the rule price up or down.
  */
-import type { ConsultProcedureDraft, ProcedurePricing } from './consult.api';
+import type { ConsultProcedureBodyLine, ConsultProcedureDraft, ProcedurePricing } from './consult.api';
 
 export type ProcedureSide = 'left' | 'right' | 'both';
 export const PROCEDURE_SIDES: { value: ProcedureSide | null; label: string }[] = [
@@ -51,17 +51,59 @@ export function parsePrice(raw: string): number {
   return Math.round(parseFloat(t) * 100) / 100;
 }
 
-/** What the procedures add to the visit's bill (before any desk discount). */
-export function proceduresTotal(items: readonly Pick<ConsultProcedureDraft, 'price' | 'qty'>[]): number {
-  return Math.round(items.reduce((a, p) => a + p.price * p.qty, 0) * 100) / 100;
+/** What the procedures add to the visit's bill (before any desk discount).
+ *  A procedure booked for LATER is not billed today (paid on its day). */
+export function proceduresTotal(items: readonly Pick<ConsultProcedureDraft, 'price' | 'qty' | 'when'>[]): number {
+  return Math.round(items.filter(p => p.when !== 'later').reduce((a, p) => a + p.price * p.qty, 0) * 100) / 100;
 }
 
-/** The draft body's procedure list: the price is sent only when it differs from the rule. */
-export function proceduresBody(items: readonly ConsultProcedureDraft[]) {
-  return items.filter(p => p.status !== 'billed').map(p => ({
-    id: p.id ?? null, serviceId: p.serviceId, qty: p.qty,
-    price: p.price !== p.rulePrice ? p.price : null,
-    priceReason: p.price !== p.rulePrice ? (p.priceReason?.trim() || null) : null,
-    side: p.side ?? null, note: p.note?.trim() || null,
-  }));
+/** The draft body's procedure list: the price is sent only when it differs
+ *  from the rule. `withLater` (server features.procedureLater) adds when /
+ *  preferredWithin / prepNote; an older server never sees them. */
+export function proceduresBody(items: readonly ConsultProcedureDraft[], withLater = false): ConsultProcedureBodyLine[] {
+  return items.filter(p => p.status !== 'billed').map(p => {
+    const line: ConsultProcedureBodyLine = {
+      id: p.id ?? null, serviceId: p.serviceId, qty: p.qty,
+      price: p.price !== p.rulePrice ? p.price : null,
+      priceReason: p.price !== p.rulePrice ? (p.priceReason?.trim() || null) : null,
+      side: p.side ?? null, note: p.note?.trim() || null,
+    };
+    if (withLater) {
+      const later = p.when === 'later';
+      line.when = later ? 'later' : 'now';
+      line.preferredWithin = later ? (p.preferredWithin ?? null) : null;
+      line.prepNote = later ? (p.prepNote?.trim() || null) : null;
+    }
+    return line;
+  });
+}
+
+/** "Preferred within" choices for a procedure booked for later. */
+export const PREFERRED_WITHIN: readonly string[] = ['This week', 'Within 2 weeks', 'Within a month'];
+
+/** The allowed price band under the setting: null = locked (admin hasn't
+ *  allowed changes); hi = null = any amount. Pure. */
+export function priceRange(rule: number, policy: ProcedurePricing | null | undefined): { lo: number; hi: number | null } | null {
+  if (!policy?.doctorCanChange) return null;
+  const cap = policy.maxChangePercent;
+  if (cap == null) return { lo: 0, hi: null };
+  const d = (rule * cap) / 100;
+  return { lo: Math.max(0, Math.round((rule - d) * 100) / 100), hi: Math.round((rule + d) * 100) / 100 };
+}
+
+const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+/** The line under the price: "Preset ₹2,000 · you set +25% · allowed ₹1,500 to ₹2,500". Pure. */
+export function priceHint(rule: number, price: number, policy: ProcedurePricing | null | undefined): string {
+  const r = priceRange(rule, policy);
+  if (!r) return 'Price set by the admin';
+  const pct = rule > 0 ? Math.round(((price - rule) / rule) * 100) : 0;
+  const changed = price !== rule ? ` · you set ${pct > 0 ? '+' : ''}${pct}%` : '';
+  const band = r.hi == null ? 'any amount allowed' : `allowed ${inr(r.lo)} to ${inr(r.hi)}`;
+  return `Preset ${inr(rule)}${changed} · ${band}`;
+}
+
+/** A changed price needs a reason before Complete (the desk sees it). Pure. */
+export function needsPriceReason(p: Pick<ConsultProcedureDraft, 'price' | 'rulePrice' | 'priceReason' | 'status'>): boolean {
+  return p.status !== 'billed' && p.price !== p.rulePrice && !(p.priceReason ?? '').trim();
 }

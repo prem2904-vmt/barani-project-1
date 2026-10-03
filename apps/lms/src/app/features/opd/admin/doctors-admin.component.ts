@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import {
   AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry,
 } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { AgGridAngular, ICellRendererAngularComp } from 'ag-grid-angular';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -24,7 +25,30 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 /** A grid row: the doctor (GET /api/doctors — the existing list: name, reg.
  *  no., fee) + the OPD Master extras (room, prefix, days, per-service fees as
  *  `fee:<serviceId>` keys). `id` = the doctor's user id. */
-interface DoctorRow extends OpdDoctorAdminRow { id: string; [feeKey: `fee:${string}`]: number | null | undefined; }
+interface DoctorRow extends OpdDoctorAdminRow { id: string; assistantUserId?: string | null; [feeKey: `fee:${string}`]: number | null | undefined; }
+
+/** The server's "clear the assistant" value (PATCH: null = unchanged). */
+export const CLEAR_ASSISTANT = '00000000-0000-0000-0000-000000000000';
+
+type AssistantParams = ICellRendererParams<DoctorRow> & { options: PfSelectOption<string>[]; onPick: (row: DoctorRow, userId: string) => void };
+
+/** The Assistant cell: a searchable pf-select of the tenant's users (no native select). */
+@Component({
+  selector: 'pf-da-assistant-cell',
+  standalone: true,
+  imports: [SelectComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `<pf-select size="sm" [searchable]="true" [options]="opts" [value]="value" placeholder="None" (valueChange)="pick($event)"></pf-select>`,
+})
+export class AssistantCellComponent implements ICellRendererAngularComp {
+  private readonly cdr = inject(ChangeDetectorRef);
+  opts: PfSelectOption<string>[] = [];
+  value = '';
+  private params: AssistantParams | null = null;
+  agInit(p: AssistantParams): void { this.params = p; this.opts = p.options; this.value = p.data?.assistantUserId ?? ''; this.cdr.markForCheck(); }
+  refresh(p: AssistantParams): boolean { this.agInit(p); return true; }
+  pick(v: string) { this.value = v; if (this.params?.data) this.params.onPick(this.params.data, v); }
+}
 
 /**
  * OPD → Doctors (admin). Same AG-Grid + theme as Test Master. The EXISTING
@@ -115,6 +139,12 @@ export class DoctorsAdminComponent {
   protected readonly plural = plural;
 
   readonly rowData = signal<DoctorRow[]>([]);
+  /** The tenant's users (GET /api/users/picker) — the Assistant choices. */
+  readonly users = signal<{ id: string; displayName: string; isActive?: boolean }[]>([]);
+  readonly userOpts = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: 'None' },
+    ...this.users().filter(u => u.isActive !== false).map(u => ({ value: u.id, label: u.displayName })),
+  ]);
   readonly services = signal<OpdServiceRow[]>([]);
   readonly q = signal('');
   readonly visibleRows = computed(() =>
@@ -146,6 +176,11 @@ export class DoctorsAdminComponent {
     { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'nd-num',
       valueParser: (p) => { const s = String(p.newValue ?? '').trim().toUpperCase(); return /^[A-Z0-9]{0,4}$/.test(s) ? (s || null) : p.oldValue; },
       valueFormatter: (p) => p.value || '—' },
+    // The doctor's assistant (consult v6 Nudge) — a tenant user; blank = none.
+    { colId: 'assistant', headerName: 'Assistant', minWidth: 200, sortable: false, autoHeight: false,
+      valueGetter: (p) => p.data?.assistantUserId ?? '',
+      cellRenderer: AssistantCellComponent,
+      cellRendererParams: { options: this.userOpts(), onPick: (r: DoctorRow, id: string) => { r.assistantUserId = id || null; this.markDirty(r.id); } } },
     { field: 'days', headerName: 'Sits on', minWidth: 290, flex: 1.6, sortable: false,
       cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) },
     ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => ({
@@ -168,7 +203,12 @@ export class DoctorsAdminComponent {
       valueFormatter: p => '₹' + (p.value ?? 0) },
   ]);
 
-  constructor() { this.load(); }
+  constructor() {
+    this.load();
+    this.api.get<{ id: string; displayName: string; isActive?: boolean }[]>('/api/users/picker').subscribe({
+      next: l => this.users.set(l ?? []), error: () => { /* the Assistant column then offers "None" only */ },
+    });
+  }
 
   private load(): void {
     forkJoin({
@@ -191,13 +231,19 @@ export class DoctorsAdminComponent {
   private toRow(d: OpdDoctorLite, x?: OpdDoctorAdminRow): DoctorRow {
     const r = {
       id: d.id, userId: d.id, name: d.name, department: d.department ?? null, specializations: d.specializations ?? [],
-      regNo: d.regNo ?? null, fee: d.fee ?? 0, room: x?.room ?? null, tokenPrefix: x?.tokenPrefix ?? null,
+      regNo: d.regNo ?? null, fee: d.fee ?? 0, assistantUserId: d.assistantUserId ?? null, room: x?.room ?? null, tokenPrefix: x?.tokenPrefix ?? null,
       days: x?.days ?? [], prices: x?.prices ?? [],
     } as DoctorRow;
     for (const p of r.prices) r[`fee:${p.serviceId}`] = p.isActive ? p.price : null;
     return r;
   }
-  private legacyKey(r: DoctorRow): string { return `${r.regNo ?? ''}|${r.fee ?? 0}`; }
+  private legacyKey(r: DoctorRow): string { return `${r.regNo ?? ''}|${r.fee ?? 0}|${r.assistantUserId ?? ''}`; }
+  /** The PATCH /api/doctors body: the assistant only when it changed (null = unchanged; the empty Guid clears). */
+  private legacyBody(r: DoctorRow): Record<string, unknown> {
+    const was = (this.legacy.get(r.id) ?? '').split('|')[2] ?? '';
+    const now = r.assistantUserId ?? '';
+    return { fee: r.fee, regNo: r.regNo ?? '', ...(was !== now ? { assistantUserId: now || CLEAR_ASSISTANT } : {}) };
+  }
 
   /** The seven day toggles in the cell (whole-cell editing without a native control). */
   private daysCell(r: DoctorRow | undefined): HTMLElement {
@@ -246,7 +292,7 @@ export class DoctorsAdminComponent {
       }).filter((x): x is NonNullable<typeof x> => !!x),
     }));
     const legacyCalls = changed.filter((r) => this.legacy.get(r.id) !== this.legacyKey(r))
-      .map((r) => this.api.patch(`${OPD_API.doctors}/${r.id}`, { fee: r.fee, regNo: r.regNo ?? '' }).pipe(map(() => true), catchError(() => of(false))));
+      .map((r) => this.api.patch(`${OPD_API.doctors}/${r.id}`, this.legacyBody(r)).pipe(map(() => true), catchError(() => of(false))));
     forkJoin({ extras: this.admin.saveDoctors(extras), legacy: legacyCalls.length ? forkJoin(legacyCalls) : of([] as boolean[]) }).subscribe({
       next: ({ extras: rows, legacy }) => {
         this.saving.set(false);
@@ -254,11 +300,11 @@ export class DoctorsAdminComponent {
         const byId = new Map(rows.map((d) => [d.userId, d] as const));
         this.rowData.update((list) => list.map((r) => {
           const fresh = byId.get(r.id);
-          return fresh ? this.toRow({ id: r.id, name: r.name, department: r.department, specializations: r.specializations, regNo: r.regNo, fee: r.fee }, fresh) : r;
+          return fresh ? this.toRow({ id: r.id, name: r.name, department: r.department, specializations: r.specializations, regNo: r.regNo, fee: r.fee, assistantUserId: r.assistantUserId }, fresh) : r;
         }));
         this.legacy = new Map(this.rowData().map((r) => [r.id, this.legacyKey(r)]));
         const failed = legacy.filter((ok) => !ok).length;
-        if (failed) this.toasts.error(`${plural(failed, 'registration number')} failed to save`);
+        if (failed) this.toasts.error(`${plural(failed, 'doctor')}: registration number / assistant failed to save`);
         else this.toasts.success('Doctors saved');
       },
       error: (e: Error) => { this.saving.set(false); this.toasts.error(e.message || 'Could not save doctors'); },

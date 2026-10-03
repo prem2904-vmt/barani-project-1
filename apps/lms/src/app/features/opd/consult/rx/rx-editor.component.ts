@@ -1,19 +1,19 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, model, output, signal,
+  ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, model, output, signal, viewChild,
 } from '@angular/core';
 import type { OpdPatientAllergy, OpdPregnancy } from '../../shared/opd.models';
 import {
-  DURATIONS, FORMS, RxLine, RxSchedule, RxUsual, STEP_DURATIONS, doseShort, formOf, lineShort, newRxLine, parseRx, qtyWords,
-  sayRx, segsOf, stripDays, whenShort,
+  RxLine, RxSchedule, RxUsual, SCHED_DEFAULTS, doseShort, formOf, lineShort, newRxLine, parseRx,
 } from '../../shared/rx-schedule';
 import {
-  ALL_TIMINGS, ConsultDrugRef, ConsultRxLine, THEN_PRESETS, TIMING_GRID, TIMING_MORE, addThen, allergyHit, freeDrug, lineKey,
+  ConsultDrugRef, ConsultRxLine, THEN_PRESETS, TIMING_MORE, addThen, allergyHit, freeDrug, lineKey,
   pregnancyHit, removeStep, sitesFor, swapCandidate, timingIdOf,
 } from './rx-model';
+import {
+  RX_DAYS_OPTIONS, RX_FOOD_OPTIONS, RX_PATTERN_OPTIONS, RxTokenOption, applyDays, applyFood, applyPattern, daysEditable, daysId, daysLabel,
+  defaultUsual, foodLabel, formName, needsDoseToken, patternId, patternLabel, rxSentence,
+} from './rx-line';
 import { RxPopClose, RxPopOption, RxPopoverComponent } from './rx-popover.component';
-
-type Field = 'dose' | 'site' | 'when' | 'dur' | 'food' | 'then' | 'strip';
-interface OpenPop { key: string; step: number; field: Field; anchor: HTMLElement; }
 
 /** Duration label in doctor words: 7 → "1 week", 14 → "2 weeks", else "n days". */
 export function durLabel(n: number): string {
@@ -21,16 +21,22 @@ export function durLabel(n: number): string {
   return n === 1 ? '1 day' : n + ' days';
 }
 
+type Tok = 'dose' | 'pat' | 'days' | 'food' | 'site';
+interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line: RxLine; meta: string; }
+
 /**
- * Step 2 — the prescription (Agent C). ONE line per medicine in doctor
- * shorthand (`Drug · dose · where · 1-0-1 · 5 days · after food`), values in
- * aligned columns; tapping a value opens a small popover with only that
- * value's options (RxPopoverComponent: keyboard Tab / Enter / arrows / Esc).
- * "+ then…" adds a taper step; a calendar glyph shows the 14-day strip. The
- * add box reads shorthand (`clav 1-0-1 5d af`) with a live preview. Every
- * sentence / quantity / strip comes from the SHARED model
- * (features/opd/shared/rx-schedule.ts). Allergy conflicts show inline with a
- * one-tap swap or "Keep, reviewed" (the ack is stored on the line).
+ * The prescription (consult v6) — a fast written list. Type a few letters and
+ * press Enter: the drug goes in with the doctor's usual (its UsualJson, else
+ * their last line, else 1-0-1 · 5 days · after food); focus stays in the bar
+ * for the next one. The shorthand still works ("amox 500 1-0-1 5d af").
+ * Each line: number, name + strength + form, then three tappable tokens —
+ * pattern · days · food (a dose / site token only when the line needs one).
+ * Tapping a token opens ONE row of common choices; "More…" on the pattern
+ * opens the advanced schedules (every few hours, alternate days, weekly,
+ * cycles, "+ then" taper). Under each line, the plain sentence (rxSentence)
+ * and the total quantity. Allergy / pregnancy warnings stay inline with their
+ * one-tap swap and "Keep, reviewed" acknowledgements. Hosts project the
+ * one-tap row (usuals, repeat, diagnosis set) into [rx-quick].
  */
 @Component({
   selector: 'pf-rx-editor',
@@ -39,287 +45,232 @@ export function durLabel(n: number): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rxe">
-      @if (lines().length) {
-        <div class="rxe__card">
-          <div class="rxe__head" aria-hidden="true">
-            <span></span><span>Medicine</span><span>Dose</span><span>Where</span><span>When</span><span>For</span><span>Food</span><span></span><span class="r">Qty</span><span></span>
-          </div>
-          @for (l of lines(); track l.key; let i = $index) {
-            @let hit = hitOf(l);
-            @let pregHit = pregHitOf(l);
-            <div class="rxe__line" [class.rxe__line--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)" [attr.data-key]="l.key">
-              @for (sg of segs(l); track sg.k; let k = $index) {
-                <div class="rxe__row" [class.rxe__row--then]="k > 0">
-                  @if (k === 0) {
-                    <span class="rxe__n">{{ i + 1 }}</span>
-                    <span class="rxe__drug">
-                      <span class="rxe__name" [class.rxe__name--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)">{{ l.drug.name }}</span>
-                      @if (schedBadge(l.drug); as b) { <span class="rxe__sch" [class.rxe__sch--h]="b !== 'OTC'">{{ b }}</span> }
-                      @if (pregnant() && l.drug.pregnancyRisk === 'caution') { <span class="rxe__preg-caution" title="Use with caution in pregnancy">Caution in pregnancy</span> }
-                      @if (l.drug.generic || l.drug.strength) { <span class="rxe__gen">{{ l.drug.generic }}{{ l.drug.generic && l.drug.strength ? ' ' : '' }}{{ l.drug.strength }}</span> }
-                      @if (l.drug.free) { <span class="rxe__gen">Not in the drug master · dispensed by name</span> }
-                    </span>
-                  } @else {
-                    <span class="rxe__n"></span>
-                    <span class="rxe__drug rxe__then-lbl">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v7a4 4 0 0 0 4 4h10"/><path d="m15 11 4 4-4 4"/></svg>
-                      then
-                    </span>
-                  }
-                  <span class="rxe__c">
-                    @if (l.drug.form !== 'cream') {
-                      <button type="button" class="rxv" [disabled]="readonly()" (click)="open($event, l, k, 'dose')" [attr.aria-label]="'Dose ' + doseShort(l.drug, sg.dose)">{{ doseShort(l.drug, sg.dose) }}</button>
-                    } @else { <span class="rxe__static">Thin layer</span> }
+      @if (!readonly()) {
+        <div class="rxe__bar">
+          <label class="rxe__in">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input #addIn type="text" class="rxe__addin" [value]="typed()" (input)="onType(addIn.value)" (keydown)="onAddKey($event)" (blur)="onBlur()"
+                   placeholder="Type a medicine — e.g. para, amox, panto (Enter adds your usual dose)" aria-label="Add a medicine"
+                   role="combobox" [attr.aria-expanded]="!!suggest().length" aria-controls="rxe-sug" autocomplete="off" spellcheck="false" />
+            <kbd aria-hidden="true">Enter</kbd>
+          </label>
+          @if (suggest().length) {
+            <div class="rxe__sug" id="rxe-sug" role="listbox" aria-label="Medicines">
+              @for (s of suggest(); track s.kind + s.drug.id; let i = $index) {
+                <button type="button" class="rxe__sg" role="option" [class.act]="i === active()" [attr.aria-selected]="i === active()"
+                        (mousedown)="$event.preventDefault()" (mouseenter)="active.set(i)" (click)="addSuggestion(s)">
+                  <span class="rxe__sgk">{{ s.kind === 'parsed' ? 'As typed' : s.kind === 'free' ? 'New' : 'Medicine' }}</span>
+                  <span class="rxe__sgt">
+                    <b>{{ s.kind === 'free' ? 'Add “' + s.drug.name + '” as written' : s.drug.name }}</b>@if (s.drug.strength && s.kind !== 'free') { <span class="rxe__sgs"> {{ s.drug.strength }}</span> }
+                    <span class="rxe__sgm">{{ s.meta }}</span>
                   </span>
-                  <span class="rxe__c">
-                    @if (k === 0 && sites(l).length) {
-                      <button type="button" class="rxv" [disabled]="readonly()" (click)="open($event, l, 0, 'site')" aria-label="Where">{{ l.line.site || 'Where?' }}</button>
-                    }
-                  </span>
-                  <span class="rxe__c rxe__when">
-                    <button type="button" class="rxv" [disabled]="readonly()" (click)="open($event, l, k, 'when')" [attr.aria-label]="'When ' + whenShort(sg.sched)">{{ whenShort(sg.sched) }}</button>
-                    @if (k === 0) {
-                      <button type="button" class="rxe__cal" (click)="open($event, l, 0, 'strip')" aria-label="Show the next 14 days" title="Next 14 days">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                      </button>
-                    }
-                  </span>
-                  <span class="rxe__c">
-                    <button type="button" class="rxv" [disabled]="readonly()" (click)="open($event, l, k, 'dur')" aria-label="For how long">{{ durText(l, sg) }}</button>
-                  </span>
-                  <span class="rxe__c">
-                    @if (k === 0 && hasFood(l)) {
-                      <button type="button" class="rxv" [disabled]="readonly()" (click)="open($event, l, 0, 'food')" aria-label="Food">{{ l.line.food ? l.line.food + ' food' : 'Any time' }}</button>
-                    }
-                  </span>
-                  <span class="rxe__c">
-                    @if (!readonly() && k === segs(l).length - 1 && l.line.sched.type !== 'cycle') {
-                      <button type="button" class="rxe__then" (click)="open($event, l, k, 'then')">+ then</button>
-                    }
-                  </span>
-                  <span class="rxe__c r rxe__qty">@if (k === 0) { {{ qty(l) }} }</span>
-                  <span class="rxe__c">
-                    @if (!readonly()) {
-                      <button type="button" class="rxe__x" (click)="k === 0 ? remove(l) : dropStep(l, k)" [attr.aria-label]="k === 0 ? 'Remove ' + l.drug.name : 'Remove this step'">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                      </button>
-                    }
-                  </span>
-                </div>
-              }
-              <p class="rxe__say">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>
-                {{ say(l) }}
-              </p>
-              @if (hit) {
-                @if (!l.allergyAck) {
-                  <div class="rxe__allergy" role="alert">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                    <span class="rxe__allergy-t"><b>Allergy: {{ hit.allergy.allergen }}</b>@if (hit.allergy.reaction) { — {{ hit.allergy.reaction }}}. {{ hit.reason }}</span>
-                    @if (!readonly()) {
-                      @if (swapFor(l); as alt) {
-                        <button type="button" class="rxe__swap" (click)="swap(l, alt)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>
-                          Swap to {{ alt.name }}
-                        </button>
-                      }
-                      <button type="button" class="rxe__keep" (click)="keep(l)">Keep, reviewed</button>
-                    }
-                  </div>
-                } @else {
-                  <p class="rxe__acked">Allergy reviewed — kept on purpose ({{ hit.allergy.allergen }}).
-                    @if (!readonly()) { <button type="button" class="rxe__undo-ack" (click)="unkeep(l)">Undo</button> }</p>
-                }
-              }
-              @if (pregHit) {
-                @if (!l.pregnancyAck) {
-                  <div class="rxe__allergy rxe__preg" role="alert">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                    <span class="rxe__allergy-t"><b>{{ pregHit.risk === 'contraindicated' ? 'Contraindicated in pregnancy' : 'Avoid in pregnancy' }}</b>. {{ pregHit.reason }}</span>
-                    @if (!readonly()) {
-                      @if (swapFor(l); as alt) {
-                        <button type="button" class="rxe__swap" (click)="swap(l, alt)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>
-                          Swap to {{ alt.name }}
-                        </button>
-                      }
-                      <button type="button" class="rxe__keep" (click)="keepPregnancy(l)">Keep, reviewed</button>
-                    }
-                  </div>
-                } @else {
-                  <p class="rxe__acked">Pregnancy risk reviewed — kept on purpose ({{ l.drug.name }}).
-                    @if (!readonly()) { <button type="button" class="rxe__undo-ack" (click)="unkeepPregnancy(l)">Undo</button> }</p>
-                }
+                  @if (s.kind !== 'free' && hitOfDrug(s.drug)) { <span class="rxe__sgw">Allergy</span> }
+                  @else if (s.kind !== 'free' && pregHitOfDrug(s.drug); as ph) { <span class="rxe__sgw">{{ ph.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
+                  @else if (i === active()) { <span class="rxe__sge" aria-hidden="true">Enter</span> }
+                </button>
               }
             </div>
           }
         </div>
-      } @else if (readonly()) {
-        <p class="rxe__none">No medicines prescribed.</p>
       }
 
-      @if (!readonly()) {
-        <div class="rxe__add">
-          <label class="rxe__addbox">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            <input #addIn type="text" class="rxe__addin" [value]="typed()" (input)="onType(addIn.value)" (keydown)="onAddKey($event)"
-                   placeholder="Add a medicine — e.g. clav 1-0-1 5d af" aria-label="Add a medicine in shorthand" autocomplete="off" spellcheck="false" />
-          </label>
-          @if (typed().trim()) {
-            <div class="rxe__suggest">
-              @if (preview(); as p) {
-                <button type="button" class="rxe__asTyped" (click)="addParsed()">
-                  <span class="rxe__k">Add as typed <kbd>Enter</kbd></span>
-                  <span class="rxe__pl"><b>{{ p.drug.name }}</b> {{ lineShortOf(p.line, p.drug) }}</span>
-                  <span class="rxe__ps">{{ sayOf(p.line, p.drug) }}</span>
-                </button>
+      <ng-content select="[rx-quick]"></ng-content>
+
+      <div class="rxe__list" [class.rxe__list--empty]="!lines().length">
+        @for (l of lines(); track l.key; let i = $index) {
+          @let hit = hitOf(l);
+          @let pregHit = pregHitOf(l);
+          @let open = openTok()?.key === l.key ? openTok()!.tok : null;
+          @let sn = sentence(l);
+          <div class="rl" [class.rl--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)" [class.rl--flash]="flash() === l.key" [attr.data-key]="l.key">
+            <span class="rl__no nd-num">{{ i + 1 }}</span>
+            <div class="rl__drug">
+              <b class="rl__name">{{ l.drug.name }}</b>
+              @if (l.drug.strength && !nameHasStrength(l.drug)) { <span class="rl__str">{{ l.drug.strength }}</span> }
+              <span class="rl__form">{{ formWord(l.drug) }}</span>
+              @if (schedBadge(l.drug); as b) { <span class="rl__sch" [class.rl__sch--h]="b !== 'OTC'">{{ b }}</span> }
+              @if (pregnant() && l.drug.pregnancyRisk === 'caution') { <span class="rl__caution" title="Use with caution in pregnancy">Caution in pregnancy</span> }
+              @if (l.drug.free) { <span class="rl__free">Not in the drug master · dispensed by name</span> }
+            </div>
+            <div class="rl__toks">
+              @if (showDose(l)) {
+                <button type="button" class="tok nd-num" data-tok="dose" [disabled]="readonly()" [attr.aria-expanded]="open === 'dose'" (click)="toggleTok(l, 'dose')" [attr.aria-label]="'Dose ' + doseShort(l.drug, l.line.dose)">{{ doseShort(l.drug, l.line.dose) }}</button>
               }
-              @if (matches().length) {
-                <div class="rxe__k rxe__k--pad">Matches</div>
-                @for (d of matches(); track d.id) {
-                  <button type="button" class="rxe__match" (click)="addDrug(d)">
-                    <span class="rxe__pl"><b>{{ d.name }}</b>@if (schedBadge(d); as b) { <span class="rxe__sch" [class.rxe__sch--h]="b !== 'OTC'">{{ b }}</span> }</span>
-                    <span class="rxe__ps">{{ d.generic }} · {{ lineShortOf(usualLine(d), d) }}</span>
-                    @if (hitOfDrug(d)) { <span class="rxe__warnchip">Allergy</span> }
-                    @else if (pregHitOfDrug(d)) { <span class="rxe__warnchip">{{ pregHitOfDrug(d)!.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
-                  </button>
-                }
-              } @else if (!preview()) {
-                <button type="button" class="rxe__match" (click)="addFree()">
-                  <span class="rxe__pl">Add <b>{{ freeName() }}</b> as written</span>
-                  <span class="rxe__ps">Not in the drug master — the pharmacy dispenses it by name.</span>
-                </button>
+              @if (sites(l).length) {
+                <button type="button" class="tok" data-tok="site" [disabled]="readonly()" [attr.aria-expanded]="open === 'site'" (click)="toggleTok(l, 'site')" aria-label="Where">{{ l.line.site || 'Where?' }}</button>
+              }
+              <button #patTok type="button" class="tok nd-num" data-tok="pat" [disabled]="readonly()" [attr.aria-expanded]="open === 'pat'" (click)="toggleTok(l, 'pat')" [attr.aria-label]="'When: ' + pattern(l)">{{ pattern(l) }}</button>
+              @if (canDays(l)) {
+                <button type="button" class="tok nd-num" data-tok="days" [disabled]="readonly()" [attr.aria-expanded]="open === 'days'" (click)="toggleTok(l, 'days')" [attr.aria-label]="'For: ' + days(l)">{{ days(l) }}</button>
+              } @else { <span class="tok tok--static nd-num">{{ days(l) }}</span> }
+              @if (hasFood(l)) {
+                <button type="button" class="tok" data-tok="food" [disabled]="readonly()" [attr.aria-expanded]="open === 'food'" (click)="toggleTok(l, 'food')" [attr.aria-label]="'Food: ' + food(l)">{{ food(l) }}</button>
               }
             </div>
-          }
-        </div>
-      }
+            @if (!readonly()) {
+              <button type="button" class="rl__x" (click)="remove(l)" [attr.aria-label]="'Remove ' + l.drug.name">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            } @else { <span></span> }
+
+            @if (open) {
+              <div class="rl__opts" role="listbox" [attr.aria-label]="tokTitle(open)" (keydown)="onOptsKey($event, l)">
+                @for (o of optionsFor(l, open); track o.id) {
+                  <button type="button" class="nd-num" role="option" [attr.aria-pressed]="o.id === selectedFor(l, open)" [attr.aria-selected]="o.id === selectedFor(l, open)"
+                          [attr.data-opt]="o.id" (click)="pickOpt(l, open, o.id, $event)">{{ o.label }}</button>
+                }
+              </div>
+            }
+
+            <p class="rl__say" [class.rl__say--empty]="!sn.qty">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
+              <span class="rl__sent">{{ sn.text }}</span>
+              @if (sn.qty) { <span class="rl__qty nd-num">{{ sn.qty }}</span> }
+            </p>
+
+            @if (hit) {
+              @if (!l.allergyAck) {
+                <div class="rl__alert" role="alert">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  <span class="rl__alert-t"><b>Allergy: {{ hit.allergy.allergen }}</b>@if (hit.allergy.reaction) { — {{ hit.allergy.reaction }}}. {{ hit.reason }}</span>
+                  @if (!readonly()) {
+                    @if (swapFor(l); as alt) {
+                      <button type="button" class="rl__swap" (click)="swap(l, alt)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>
+                        Swap to {{ alt.name }}
+                      </button>
+                    }
+                    <button type="button" class="rl__keep" (click)="keep(l)">Keep, reviewed</button>
+                  }
+                </div>
+              } @else {
+                <p class="rl__acked">Allergy reviewed — kept on purpose ({{ hit.allergy.allergen }}).
+                  @if (!readonly()) { <button type="button" class="rl__undo" (click)="unkeep(l)">Undo</button> }</p>
+              }
+            }
+            @if (pregHit) {
+              @if (!l.pregnancyAck) {
+                <div class="rl__alert rl__alert--preg" role="alert">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  <span class="rl__alert-t"><b>{{ pregHit.risk === 'contraindicated' ? 'Contraindicated in pregnancy' : 'Avoid in pregnancy' }}</b>. {{ pregHit.reason }}</span>
+                  @if (!readonly()) {
+                    @if (swapFor(l); as alt) {
+                      <button type="button" class="rl__swap" (click)="swap(l, alt)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>
+                        Swap to {{ alt.name }}
+                      </button>
+                    }
+                    <button type="button" class="rl__keep" (click)="keepPregnancy(l)">Keep, reviewed</button>
+                  }
+                </div>
+              } @else {
+                <p class="rl__acked">Pregnancy risk reviewed — kept on purpose ({{ l.drug.name }}).
+                  @if (!readonly()) { <button type="button" class="rl__undo" (click)="unkeepPregnancy(l)">Undo</button> }</p>
+              }
+            }
+          </div>
+        } @empty {
+          <p class="rxe__none">{{ readonly() ? 'No medicines prescribed.' : 'No medicines yet. Type above, or tap one of your usual medicines.' }}</p>
+        }
+      </div>
     </div>
 
-    @if (pop(); as p) {
-      <pf-rx-popover [anchor]="p.anchor" [options]="popOptions()" [selected]="popSelected()" [title]="popTitle()"
-                     [minWidth]="p.field === 'strip' ? 320 : p.field === 'when' ? 300 : 180" (closed)="onPop($event)">
-        @if (p.field === 'strip') {
-          @let l = lineByKey(p.key);
-          @if (l) {
-            <div class="rxs" role="img" [attr.aria-label]="'Doses over the next 14 days for ' + l.drug.name">
-              @for (c of strip(l); track $index) {
-                <span class="rxs__d" [class.rxs__d--today]="c.today" [class.rxs__d--off]="c.day && !c.day.n" [class.rxs__d--done]="!c.day">
-                  <span class="rxs__w">{{ 'SMTWTFS'[c.weekday] }}</span>
-                  <span class="rxs__n">{{ c.date.getDate() }}</span>
-                  <span class="rxs__dots">
-                    @if (c.day) { @for (x of dots(c.day.n); track $index) { <i [class.sos]="c.day.sos"></i> } }
-                  </span>
-                </span>
-              }
-            </div>
-            <p class="rxs__foot">{{ qty(l) }} in total · filled dot = a dose, hollow = only if needed</p>
-          }
-        }
-      </pf-rx-popover>
+    @if (more(); as m) {
+      <pf-rx-popover [anchor]="m.anchor" [options]="moreOptions()" [selected]="moreSelected()" title="More timings" [minWidth]="280" (closed)="onMore($event)"></pf-rx-popover>
     }
   `,
   styles: [`
     :host { display: block; }
     .rxe { display: flex; flex-direction: column; gap: 12px; }
-    .rxe__card { border-radius: var(--nd-radius-card, 16px); background: var(--nd-card-bg); border: 1px solid var(--nd-line); padding: 4px 14px 8px; }
-    .rxe__head, .rxe__row { display: grid; align-items: start; column-gap: 10px;
-      grid-template-columns: 26px minmax(150px, 1.6fr) 74px minmax(76px, 0.9fr) minmax(92px, 1fr) 76px 84px 56px 76px 30px; }
-    .rxe__head { padding: 12px 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); border-bottom: 1px solid var(--nd-line); }
-    .r { text-align: right; justify-self: end; }
-    .rxe__line { padding: 12px 0 10px; border-bottom: 1px solid var(--nd-line); }
-    .rxe__line:last-child { border-bottom: 0; }
-    .rxe__row { padding: 4px 0; }
-    .rxe__row--then { padding-top: 8px; }
-    .rxe__n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); background: var(--nd-chip-bg); margin-top: 2px; }
-    .rxe__line--warn .rxe__n { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 12%, transparent); }
-    .rxe__drug { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
-    .rxe__name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .rxe__name--warn { color: var(--red-text, #dc2626); }
-    .rxe__gen { flex-basis: 100%; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
-    .rxe__sch { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--text-tertiary); }
-    .rxe__sch--h { color: var(--red-text, #dc2626); border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); }
-    .rxe__preg-caution { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, #d97706 45%, transparent); color: #b45309; }
-    :host-context(html.dark) .rxe__preg-caution { color: #fbbf24; border-color: color-mix(in srgb, #fbbf24 45%, transparent); }
-    .rxe__then-lbl { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; font-size: 13px; color: var(--text-tertiary); }
-    .rxe__c { min-width: 0; display: flex; align-items: center; gap: 4px; min-height: 30px; }
-    .rxe__static { font-size: 14px; color: var(--text-primary); }
-    .rxv { max-width: 100%; padding: 2px 0; border: 0; border-bottom: 1.5px dotted color-mix(in srgb, var(--text-primary) 45%, transparent);
-      background: transparent; color: var(--text-primary); font: inherit; font-size: 14.5px; font-weight: 500; font-variant-numeric: tabular-nums;
-      text-align: left; cursor: pointer; border-radius: 0; line-height: 1.35; }
-    .rxv:hover:not(:disabled), .rxv:focus-visible { color: var(--violet-text, #6d28d9); border-bottom-color: currentColor; outline: none; background: var(--nd-in-tint); }
-    .rxv:disabled { border-bottom-color: transparent; cursor: default; }
-    .rxe__cal { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .rxe__cal:hover, .rxe__cal:focus-visible { color: var(--violet-text, #6d28d9); background: var(--nd-chip-bg); outline: none; }
-    .rxe__then { border: 0; background: transparent; padding: 2px 0; font: inherit; font-size: 13px; font-weight: 500; color: var(--violet-text, #6d28d9); cursor: pointer; white-space: nowrap; }
-    .rxe__qty { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .rxe__x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .rxe__x:hover { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent); }
-    .rxe__say { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 0 36px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
-    .rxe__say svg { flex: none; margin-top: 3px; color: var(--text-tertiary); }
-    .rxe__allergy { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 10px 0 2px 36px; padding: 10px 14px; border-radius: 12px;
-      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); color: var(--text-primary); font-size: 13px; line-height: 1.45; }
-    .rxe__allergy > svg { color: var(--red-text, #dc2626); flex: none; }
-    .rxe__allergy-t { flex: 1 1 260px; min-width: 0; }
-    .rxe__allergy-t b { color: var(--red-text, #dc2626); font-weight: 600; }
-    .rxe__swap { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--color-violet-600, #7c3aed);
+    .rxe__bar { position: relative; }
+    .rxe__in { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px; border-radius: 12px; color: var(--text-tertiary);
+      border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
+    .rxe__in:focus-within { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
+    .rxe__addin { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14.5px; }
+    .rxe__addin::placeholder { color: var(--text-tertiary); }
+    .rxe__in kbd { font: inherit; font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--nd-line); border-radius: 6px; padding: 1px 6px; }
+    .rxe__sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; display: grid; gap: 2px; padding: 6px; max-height: 340px; overflow-y: auto;
+      border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+    :host-context(html.dark) .rxe__sug { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
+    .rxe__sg { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; min-height: 44px; padding: 8px 10px;
+      border: 0; border-radius: 9px; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+    .rxe__sg.act { background: var(--nd-chip-bg); }
+    .rxe__sgk { justify-self: start; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px;
+      color: var(--orange-text, #c2410c); background: color-mix(in srgb, #fdba74 18%, transparent); }
+    .rxe__sgt { min-width: 0; font-size: 14px; }
+    .rxe__sgt b { font-weight: 600; }
+    .rxe__sgs { color: var(--text-secondary); }
+    .rxe__sgm { display: block; font-size: 12px; color: var(--text-tertiary); line-height: 1.4; }
+    .rxe__sge { font-size: 11px; color: var(--text-tertiary); }
+    .rxe__sgw { font-size: 11px; font-weight: 600; color: var(--red-text, #dc2626); }
+
+    .rxe__list { border: 1px solid var(--nd-line); border-radius: 12px; overflow: hidden; }
+    .rxe__none { margin: 0; padding: 22px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    .rl { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto 30px; gap: 4px 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--nd-line);
+      transition: background-color 600ms ease; }
+    .rl:last-child { border-bottom: 0; }
+    .rl--flash { background: var(--nd-in-tint); }
+    .rl__no { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--violet-text, #6d28d9);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .rl--warn .rl__no { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 12%, transparent); }
+    .rl__drug { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    .rl__name { font-size: 14.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .rl--warn .rl__name { color: var(--red-text, #dc2626); }
+    .rl__str { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+    .rl__form { font-size: 12px; color: var(--text-tertiary); }
+    .rl__sch { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--text-tertiary); }
+    .rl__sch--h { color: var(--red-text, #dc2626); border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); }
+    .rl__caution { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, #d97706 45%, transparent); color: var(--amber-text, #b45309); }
+    .rl__free { flex-basis: 100%; font-size: 12px; color: var(--text-tertiary); }
+    .rl__toks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .tok { height: 32px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-in-tint); color: var(--text-primary);
+      font: inherit; font-size: 13.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+    .tok:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); }
+    .tok:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .tok[aria-expanded='true'] { background: var(--color-violet-600, #7c3aed); border-color: var(--color-violet-600, #7c3aed); color: #fff; }
+    .tok:disabled, .tok--static { cursor: default; background: transparent; display: inline-flex; align-items: center; }
+    .rl__x { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+    .rl__x:hover { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent); }
+    .rl__opts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+    .rl__opts button { height: 34px; min-width: 52px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      color: var(--text-secondary); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+    .rl__opts button:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
+    .rl__opts button[aria-pressed='true'] { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 60%, transparent);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .rl__opts button:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .rl__say { grid-column: 2 / -1; display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
+    .rl__say svg { flex: none; margin-top: 3px; color: var(--green-text, #047857); }
+    .rl__say--empty svg { color: var(--amber-text, #b45309); }
+    .rl__sent { flex: 1; min-width: 0; }
+    .rl__qty { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+    .rl__alert { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 6px; padding: 10px 14px; border-radius: 12px;
+      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent);
+      color: var(--text-primary); font-size: 13px; line-height: 1.45; }
+    .rl__alert > svg { color: var(--red-text, #dc2626); flex: none; }
+    .rl__alert-t { flex: 1 1 260px; min-width: 0; }
+    .rl__alert-t b { color: var(--red-text, #dc2626); font-weight: 600; }
+    .rl__swap { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--color-violet-600, #7c3aed);
       background: var(--nd-card-bg); color: var(--violet-text, #6d28d9); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .rxe__keep { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 13px; font-weight: 600; color: var(--violet-text, #6d28d9); text-decoration: underline; cursor: pointer; }
-    .rxe__acked { margin: 8px 0 0 36px; font-size: 12.5px; color: var(--text-tertiary); }
-    .rxe__undo-ack { border: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--violet-text, #6d28d9); cursor: pointer; }
-    .rxe__none { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+    .rl__keep { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 13px; font-weight: 600; color: var(--violet-text, #6d28d9); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .rl__acked { grid-column: 2 / -1; margin: 4px 0 0; font-size: 12.5px; color: var(--text-tertiary); }
+    .rl__undo { border: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--violet-text, #6d28d9); cursor: pointer; }
 
-    .rxe__add { display: flex; flex-direction: column; gap: 8px; }
-    .rxe__addbox { display: flex; align-items: center; gap: 10px; max-width: 560px; min-height: 46px; padding: 0 14px; border-radius: 12px;
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-tertiary); }
-    .rxe__addbox:focus-within { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
-    .rxe__addin { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14.5px; }
-    .rxe__suggest { display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 14px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: var(--nd-shadow-sm); }
-    .rxe__asTyped, .rxe__match { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 10px 12px; border-radius: 10px;
-      border: 1px solid transparent; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; position: relative; }
-    .rxe__asTyped { border-color: var(--nd-sel-border); background: var(--nd-in-tint); }
-    .rxe__match:hover, .rxe__match:focus-visible { background: var(--nd-chip-bg); outline: none; }
-    .rxe__k { display: flex; width: 100%; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--violet-text, #6d28d9); }
-    .rxe__k--pad { padding: 8px 12px 2px; color: var(--text-tertiary); }
-    .rxe__k kbd { font: inherit; font-size: 11px; letter-spacing: 0; text-transform: none; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--text-secondary); background: var(--nd-card-bg); }
-    .rxe__pl { font-size: 14px; display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
-    .rxe__pl b { font-weight: 600; }
-    .rxe__ps { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
-    .rxe__warnchip { position: absolute; right: 12px; top: 12px; font-size: 11px; font-weight: 600; color: var(--red-text, #dc2626); }
-
-    .rxs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-    .rxs__d { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; background: var(--nd-chip-bg); }
-    .rxs__d--today { outline: 1.5px solid var(--color-violet-600, #7c3aed); }
-    .rxs__d--off { opacity: 0.55; }
-    .rxs__d--done { background: transparent; opacity: 0.4; }
-    .rxs__w { font-size: 10px; font-weight: 600; color: var(--text-tertiary); }
-    .rxs__n { font-size: 12.5px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .rxs__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: 7px; max-width: 34px; }
-    .rxs__dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-violet-600, #7c3aed); }
-    .rxs__dots i.sos { background: transparent; border: 1.5px solid var(--color-violet-600, #7c3aed); width: 5px; height: 5px; }
-    .rxs__foot { margin: 10px 2px 2px; font-size: 12px; color: var(--text-tertiary); }
-
-    /* Tablet: fold Food/+then under the line; phone: one card per medicine. */
-    @media (max-width: 1280px) {
-      .rxe__head, .rxe__row { grid-template-columns: 24px minmax(130px, 1.4fr) 66px minmax(70px, 0.9fr) minmax(84px, 1fr) 70px 78px 50px 68px 28px; column-gap: 8px; }
-    }
-    @media (max-width: 760px) {
-      .rxe__card { padding: 2px 12px 6px; }
-      .rxe__head { display: none; }
-      .rxe__row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
-      .rxe__drug { flex: 1 1 calc(100% - 70px); }
-      .rxe__row > .rxe__c:last-child { position: absolute; right: 0; top: 8px; }
-      .rxe__line { position: relative; }
-      .rxe__c:empty { display: none; }
-      .rxe__say, .rxe__allergy, .rxe__acked { margin-left: 0; }
-      .rxv { font-size: 16px; }
+    /* Phone: one column — the tokens wrap onto a second row under the name. */
+    @media (max-width: 600px) {
+      .rl { grid-template-columns: 26px minmax(0, 1fr) 30px; row-gap: 8px; }
+      .rl__toks { grid-column: 2 / -1; grid-row: 2; justify-content: flex-start; }
+      .rl__x { grid-column: 3; grid-row: 1; }
       .rxe__addin { font-size: 16px; }
+      .rxe__sg { grid-template-columns: minmax(0, 1fr) auto; }
+      .rxe__sgk { grid-column: 1 / -1; }
     }
-    @media (pointer: coarse) { .rxv { min-height: 36px; } .rxe__x, .rxe__cal { width: 40px; height: 40px; } }
+    @media (pointer: coarse) { .tok { height: 40px; } .rl__opts button { height: 44px; } .rl__x { width: 40px; height: 40px; } }
+    @media (prefers-reduced-motion: reduce) { .rl { transition: none; } }
   `],
 })
 export class RxEditorComponent {
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly addIn = viewChild<ElementRef<HTMLInputElement>>('addIn');
 
   readonly lines = model<ConsultRxLine[]>([]);
   readonly drugs = input<ConsultDrugRef[]>([]);
@@ -329,7 +280,7 @@ export class RxEditorComponent {
   readonly readonly = input(false);
   /** Day 0 of the course (the visit day). */
   readonly start = input<Date>(new Date());
-  /** The doctor's usual line per drug id (last prescribed), null = model default. */
+  /** The doctor's usual line per drug id (UsualJson / last prescribed). */
   readonly usuals = input<Record<string, RxUsual>>({});
   /** Drugs the doctor already uses for today's diagnosis (swap preference). */
   readonly preferIds = input<string[]>([]);
@@ -339,15 +290,23 @@ export class RxEditorComponent {
   readonly notice = output<string>();
 
   readonly typed = signal('');
-  readonly pop = signal<OpenPop | null>(null);
+  readonly active = signal(0);
+  readonly openTok = signal<{ key: string; tok: Tok } | null>(null);
+  readonly more = signal<{ key: string; anchor: HTMLElement } | null>(null);
+  readonly flash = signal<string | null>(null);
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly doseShort = doseShort;
-  readonly whenShort = (s: RxSchedule) => whenShort(s);
 
-  private readonly usualOf = (id: string): RxUsual | null => this.usuals()[id] ?? null;
+  /** The usual for a drug: the doctor's own, else the default (1-0-1 · 5 days · after food). */
+  usualOf(d: ConsultDrugRef): RxUsual { return this.usuals()[d.id] ?? defaultUsual(d); }
+  private readonly usualById = (id: string): RxUsual | null => {
+    const d = this.drugs().find(x => x.id === id);
+    return this.usuals()[id] ?? (d ? defaultUsual(d) : null);
+  };
 
-  readonly parsed = computed(() => parseRx(this.typed(), this.drugs(), this.usualOf));
-  /** The live "add as typed" preview — only when the text carries an instruction. */
+  readonly parsed = computed(() => parseRx(this.typed(), this.drugs(), this.usualById));
+  /** Shorthand with an instruction → "as typed" first. */
   readonly preview = computed(() => {
     const p = this.parsed();
     return p && p.drug && p.line && p.any ? { drug: p.drug as ConsultDrugRef, line: p.line } : null;
@@ -356,180 +315,219 @@ export class RxEditorComponent {
     const p = this.parsed();
     const q = (p?.name ?? this.typed()).trim().toLowerCase();
     if (!q) return [];
-    return this.drugs().filter(d => `${d.name} ${d.generic ?? ''} ${d.aliases ?? ''}`.toLowerCase().includes(q)).slice(0, 6);
+    const starts = (d: ConsultDrugRef) => d.name.toLowerCase().startsWith(q) ? 0 : 1;
+    return this.drugs().filter(d => `${d.name} ${d.generic ?? ''} ${d.aliases ?? ''}`.toLowerCase().includes(q))
+      .sort((a, b) => starts(a) - starts(b)).slice(0, 6);
   });
   readonly freeName = computed(() => (this.parsed()?.name ?? this.typed()).trim().replace(/\b\w/g, c => c.toUpperCase()));
+  /** What Enter / the list offers, in order. */
+  readonly suggest = computed<Suggest[]>(() => {
+    if (!this.typed().trim()) return [];
+    const out: Suggest[] = [];
+    const pv = this.preview();
+    if (pv) out.push({ kind: 'parsed', drug: pv.drug, line: pv.line, meta: rxSentence({ drug: pv.drug, line: pv.line }, this.start()).text });
+    for (const d of this.matches()) {
+      if (pv && pv.drug.id === d.id) continue;
+      const line = newRxLine(d.id, this.usualOf(d));
+      out.push({ kind: 'drug', drug: d, line, meta: `${formName(d)} · your usual: ${lineShort(line, d)}` });
+    }
+    if (!out.length && this.freeName()) {
+      const d = freeDrug(this.freeName());
+      out.push({ kind: 'free', drug: d, line: newRxLine(d.id, defaultUsual(d)), meta: 'Not in the drug master — the pharmacy dispenses it by name.' });
+    }
+    return out;
+  });
 
-  segs(l: ConsultRxLine) { return segsOf(l.line); }
   sites(l: ConsultRxLine) { return sitesFor(l.drug); }
   hasFood(l: ConsultRxLine) { return !!formOf(l.drug).food; }
-  say(l: ConsultRxLine) { return sayRx(l.line, l.drug); }
-  sayOf(line: RxLine, d: ConsultDrugRef) { return sayRx(line, d); }
-  lineShortOf(line: RxLine, d: ConsultDrugRef) { return lineShort(line, d); }
-  qty(l: ConsultRxLine) { return qtyWords(l.line, l.drug, this.start()); }
-  strip(l: ConsultRxLine) { return stripDays(l.line, this.start(), 14); }
-  dots(n: number) { return Array.from({ length: Math.min(n, 8) }); }
+  showDose(l: ConsultRxLine) { return needsDoseToken(l); }
+  canDays(l: ConsultRxLine) { return daysEditable(l.line); }
+  pattern(l: ConsultRxLine) { return patternLabel(l.line); }
+  days(l: ConsultRxLine) { return daysLabel(l); }
+  food(l: ConsultRxLine) { return foodLabel(l.line); }
+  formWord(d: ConsultDrugRef) { return formName(d); }
+  sentence(l: ConsultRxLine) { return rxSentence(l, this.start()); }
+  nameHasStrength(d: ConsultDrugRef) { return !!d.strength && d.name.toLowerCase().includes(String(d.strength).toLowerCase()); }
   hitOf(l: ConsultRxLine) { return allergyHit(l.drug, this.allergies()); }
   hitOfDrug(d: ConsultDrugRef) { return allergyHit(d, this.allergies()); }
   pregHitOf(l: ConsultRxLine) { return pregnancyHit(l.drug, this.pregnant()); }
   pregHitOfDrug(d: ConsultDrugRef) { return pregnancyHit(d, this.pregnant()); }
   swapFor(l: ConsultRxLine) { return swapCandidate(l, this.drugs(), this.allergies(), this.preferIds()); }
-  usualLine(d: ConsultDrugRef) { return newRxLine(d.id, this.usualOf(d.id)); }
   lineByKey(key: string) { return this.lines().find(l => l.key === key) ?? null; }
   schedBadge(d: ConsultDrugRef): string | null {
     if (d.free) return null;
     const s = (d.schedule || 'none').toString();
     return s === 'none' || s === 'G' ? 'OTC' : 'Sch ' + s;
   }
-  durText(l: ConsultRxLine, sg: { dur: number; sched: RxSchedule; k: number }): string {
-    if (l.line.sched.type === 'cycle') { const c = l.line.sched.cycles || 1; return c + (c === 1 ? ' cycle' : ' cycles'); }
-    return durLabel(sg.dur || 0);
+  tokTitle(t: Tok) { return ({ dose: 'Dose', site: 'Where', pat: 'When', days: 'For how long', food: 'Food' } as Record<Tok, string>)[t]; }
+
+  // ── Adding ─────────────────────────────────────────────────────────
+  onType(v: string) {
+    this.typed.set(v);
+    this.active.set(0);
+    const name = (parseRx(v, [], () => null)?.name ?? v).trim();
+    if (name.length >= 2) this.search.emit(name);
+  }
+  onBlur() { /* the list closes when the text is cleared; a click keeps focus via mousedown.preventDefault */ }
+  onAddKey(e: KeyboardEvent) {
+    const n = this.suggest().length;
+    if (e.key === 'ArrowDown' && n) { e.preventDefault(); this.active.set((this.active() + 1) % n); }
+    else if (e.key === 'ArrowUp' && n) { e.preventDefault(); this.active.set((this.active() - 1 + n) % n); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const s = this.suggest()[Math.min(this.active(), Math.max(0, n - 1))];
+      if (s) this.addSuggestion(s);
+    } else if (e.key === 'Escape') { this.typed.set(''); }
+  }
+  addSuggestion(s: Suggest) {
+    this.push(s.drug, s.line);
+    queueMicrotask(() => this.addIn()?.nativeElement?.focus());
+  }
+  /** Add a drug with the doctor's usual dose (the host's one-tap chips). */
+  addDrug(d: ConsultDrugRef) { this.push(d, newRxLine(d.id, this.usualOf(d))); }
+  private push(drug: ConsultDrugRef, line: RxLine) {
+    const key = lineKey();
+    this.lines.update(ls => [...ls, { key, drug, line: { ...line, drugId: drug.id } }]);
+    this.typed.set('');
+    this.active.set(0);
+    this.notice.emit(`${drug.name} added · ${lineShort(line, drug)}`);
+    this.flash.set(key);
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(() => this.flash.set(null), 900);
   }
 
   // ── Editing ────────────────────────────────────────────────────────
   private patch(key: string, f: (l: ConsultRxLine) => ConsultRxLine) {
     this.lines.update(ls => ls.map(l => (l.key === key ? f(l) : l)));
   }
-  private setLine(key: string, fn: (line: RxLine) => void) {
-    this.patch(key, l => { const line = JSON.parse(JSON.stringify(l.line)) as RxLine; fn(line); return { ...l, line }; });
-  }
-
-  remove(l: ConsultRxLine) { this.lines.update(ls => ls.filter(x => x.key !== l.key)); }
-  dropStep(l: ConsultRxLine, k: number) { this.patch(l.key, x => ({ ...x, line: removeStep(x.line, k) })); }
+  remove(l: ConsultRxLine) { this.lines.update(ls => ls.filter(x => x.key !== l.key)); if (this.openTok()?.key === l.key) this.openTok.set(null); }
   keep(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, allergyAck: true, allergyAckNote: 'Kept after review' })); }
   unkeep(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, allergyAck: false, allergyAckNote: null })); }
   keepPregnancy(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, pregnancyAck: true, pregnancyAckNote: 'Kept after review' })); }
   unkeepPregnancy(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, pregnancyAck: false, pregnancyAckNote: null })); }
   swap(l: ConsultRxLine, alt: ConsultDrugRef) {
-    const line = newRxLine(alt.id, this.usualOf(alt.id));
+    const line = newRxLine(alt.id, this.usualOf(alt));
     this.patch(l.key, x => ({ ...x, id: undefined, drug: alt, line, allergyAck: false, allergyAckNote: null, pregnancyAck: false, pregnancyAckNote: null }));
     this.notice.emit(`${l.drug.name} swapped for ${alt.name} · ${lineShort(line, alt)}`);
   }
 
-  onType(v: string) {
-    this.typed.set(v);
-    const name = (parseRx(v, [], () => null)?.name ?? v).trim();
-    if (name.length >= 2) this.search.emit(name);
+  // ── Tokens: one row of common choices ──────────────────────────────
+  toggleTok(l: ConsultRxLine, tok: Tok) {
+    if (this.readonly()) return;
+    const cur = this.openTok();
+    this.openTok.set(cur && cur.key === l.key && cur.tok === tok ? null : { key: l.key, tok });
+    if (this.openTok()) queueMicrotask(() => this.focusOpt(l.key));
   }
-  onAddKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (this.preview()) this.addParsed();
-      else if (this.matches()[0]) this.addDrug(this.matches()[0]);
-      else if (this.typed().trim()) this.addFree();
-    } else if (e.key === 'Escape') { this.typed.set(''); }
-  }
-  private push(drug: ConsultDrugRef, line: RxLine) {
-    this.lines.update(ls => [...ls, { key: lineKey(), drug, line: { ...line, drugId: drug.id } }]);
-    this.typed.set('');
-    this.notice.emit(`${drug.name} added · ${lineShort(line, drug)}`);
-  }
-  addParsed() { const p = this.preview(); if (p) this.push(p.drug, p.line); }
-  addDrug(d: ConsultDrugRef) {
-    const p = this.parsed();
-    this.push(d, p?.drug?.id === d.id && p.line ? p.line : newRxLine(d.id, this.usualOf(d.id)));
-  }
-  addFree() { const d = freeDrug(this.freeName()); this.push(d, newRxLine(d.id, null)); }
-
-  // ── Popovers ───────────────────────────────────────────────────────
-  open(e: Event, l: ConsultRxLine, step: number, field: Field) {
-    if (this.readonly() && field !== 'strip') return;
-    this.pop.set({ key: l.key, step, field, anchor: e.currentTarget as HTMLElement });
-  }
-
-  readonly popTitle = computed(() => {
-    const p = this.pop();
-    return ({ dose: 'Dose', site: 'Where', when: 'When', dur: 'For', food: 'Food', then: 'Then…', strip: 'Next 14 days' } as Record<Field, string>)[p?.field ?? 'dose'];
-  });
-
-  readonly popOptions = computed<RxPopOption[]>(() => {
-    const p = this.pop();
-    const l = p ? this.lineByKey(p.key) : null;
-    if (!p || !l) return [];
-    const f = formOf(l.drug);
-    switch (p.field) {
-      case 'dose': return f.doses.map(n => ({ id: String(n), label: doseShort(l.drug, n), group: 'grid' as const }));
+  optionsFor(l: ConsultRxLine, tok: Tok): readonly RxTokenOption[] {
+    switch (tok) {
+      case 'pat': return RX_PATTERN_OPTIONS;
+      case 'days': return RX_DAYS_OPTIONS;
+      case 'food': return RX_FOOD_OPTIONS;
+      case 'dose': return formOf(l.drug).doses.map(n => ({ id: String(n), label: doseShort(l.drug, n) }));
       case 'site': return sitesFor(l.drug).map(s => ({ id: s, label: s }));
-      case 'when': return [
-        ...TIMING_GRID.map(o => ({ id: o.id, label: o.label, group: 'grid' as const })),
-        ...TIMING_MORE.map(o => ({ id: o.id, label: o.label, hint: o.hint })),
-      ];
-      case 'dur':
-        if (l.line.sched.type === 'cycle') return [1, 2, 3, 6].map(n => ({ id: String(n), label: n + (n === 1 ? ' cycle' : ' cycles'), group: 'grid' as const }));
-        return (p.step > 0 || l.line.sched.type === 'steps' ? STEP_DURATIONS : DURATIONS).map(n => ({ id: String(n), label: durLabel(n), group: 'grid' as const }));
-      case 'food': return [{ id: 'After', label: 'After food' }, { id: 'Before', label: 'Before food' }, { id: '', label: 'Any time' }];
-      case 'then': return THEN_PRESETS.map(t => ({ id: t.id, label: t.label }));
-      case 'strip': return [];
     }
-  });
-
-  readonly popSelected = computed<string | null>(() => {
-    const p = this.pop();
-    const l = p ? this.lineByKey(p.key) : null;
-    if (!p || !l) return null;
-    const sg = segsOf(l.line)[p.step] ?? segsOf(l.line)[0];
-    switch (p.field) {
-      case 'dose': return String(sg.dose);
-      case 'site': return l.line.site ?? null;
-      case 'when': return timingIdOf(sg.sched);
-      case 'dur': return l.line.sched.type === 'cycle' ? String(l.line.sched.cycles || 1) : String(sg.dur);
-      case 'food': return l.line.food ?? '';
-      default: return null;
-    }
-  });
-
-  onPop(c: RxPopClose) {
-    const p = this.pop();
-    this.pop.set(null);
-    if (!p) return;
-    if (c.kind === 'pick') this.apply(p, c.id);
-    if (c.kind === 'tab') this.focusNext(p.anchor, c.back);
-    else queueMicrotask(() => p.anchor.isConnected && p.anchor.focus());
   }
-
-  /** Apply a popover pick to the line / its taper step. */
-  apply(p: Pick<OpenPop, 'key' | 'step' | 'field'>, id: string) {
-    const l = this.lineByKey(p.key);
-    if (!l) return;
-    if (p.field === 'then') {
-      const t = THEN_PRESETS.find(x => x.id === id);
-      if (t) this.patch(l.key, x => ({ ...x, line: addThen(x.line, t.step) }));
+  selectedFor(l: ConsultRxLine, tok: Tok): string | null {
+    switch (tok) {
+      case 'pat': return patternId(l.line);
+      case 'days': return daysId(l);
+      case 'food': return l.line.food ?? '';
+      case 'dose': return String(l.line.dose);
+      case 'site': return l.line.site ?? null;
+    }
+  }
+  pickOpt(l: ConsultRxLine, tok: Tok, id: string, e: Event) {
+    if (tok === 'pat' && id === 'more') {
+      const anchor = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-key="${l.key}"] [data-tok="pat"]`) ?? (e.currentTarget as HTMLElement);
+      this.openTok.set(null);
+      this.more.set({ key: l.key, anchor });
       return;
     }
-    this.setLine(l.key, line => {
-      const s = line.sched;
-      const inStep = s.type === 'steps' ? s.steps[p.step] ?? s.steps[0] : null;
-      switch (p.field) {
-        case 'dose': if (inStep && p.step > 0) inStep.dose = +id; else { line.dose = +id; if (inStep) delete inStep.dose; } break;
-        case 'site': line.site = id; break;
-        case 'food': line.food = id ? (id as RxLine['food']) : undefined; break;
-        case 'dur':
-          if (s.type === 'cycle') s.cycles = +id;
-          else if (inStep) inStep.dur = +id;
-          else line.dur = +id;
-          break;
-        case 'when': {
-          const opt = ALL_TIMINGS.find(o => o.id === id);
-          if (!opt) break;
-          const next = JSON.parse(JSON.stringify(opt.sched)) as RxSchedule;
-          if (next.type === 'days' && next.mode === 'weekly') next.wd = [this.start().getDay()];
-          if (inStep) inStep.sched = next;
-          else if (next.type === 'cycle') { line.sched = next; line.dur = 0; }
-          else { line.sched = next; if (!line.dur) line.dur = next.type === 'sos' ? 3 : 5; }
-          break;
-        }
+    this.patch(l.key, x => {
+      switch (tok) {
+        case 'pat': return { ...x, line: applyPattern(x.line, id) };
+        case 'days': return applyDays(x, id);
+        case 'food': return { ...x, line: applyFood(x.line, id) };
+        case 'dose': return { ...x, line: { ...x.line, dose: +id } };
+        case 'site': return { ...x, line: { ...x.line, site: id } };
       }
     });
+    this.openTok.set(null);
+    queueMicrotask(() => (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-key="${l.key}"] [data-tok="${tok}"]`)?.focus());
+  }
+  onOptsKey(e: KeyboardEvent, l: ConsultRxLine) {
+    const btns = Array.from((this.host.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(`[data-key="${l.key}"] .rl__opts button`));
+    const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'Escape') { const t = this.openTok()?.tok; this.openTok.set(null); e.preventDefault(); e.stopPropagation();
+      queueMicrotask(() => (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-key="${l.key}"] [data-tok="${t}"]`)?.focus()); }
+    else if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && btns.length) { e.preventDefault(); btns[(i + 1) % btns.length].focus(); }
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && btns.length) { e.preventDefault(); btns[(i - 1 + btns.length) % btns.length].focus(); }
+  }
+  private focusOpt(key: string) {
+    const row = (this.host.nativeElement as HTMLElement).querySelector(`[data-key="${key}"] .rl__opts`);
+    (row?.querySelector<HTMLElement>('button[aria-pressed="true"]') ?? row?.querySelector<HTMLElement>('button'))?.focus();
   }
 
-  /** Tab out of a popover → focus the next / previous value on the screen. */
-  private focusNext(anchor: HTMLElement, back: boolean) {
-    const all = Array.from((this.host.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.rxv:not(:disabled), .rxe__cal'));
-    const i = all.indexOf(anchor as HTMLButtonElement);
-    const next = all[i + (back ? -1 : 1)] ?? (back ? null : this.host.nativeElement.querySelector('.rxe__addin'));
-    queueMicrotask(() => (next as HTMLElement | null)?.focus());
+  // ── "More…": the advanced schedules (the existing builder) ─────────
+  readonly moreOptions = computed<RxPopOption[]>(() => {
+    const m = this.more();
+    const l = m ? this.lineByKey(m.key) : null;
+    if (!l) return [];
+    const out: RxPopOption[] = [
+      { id: 'h6', label: 'Every 6 hours', group: 'grid' }, { id: 'h8', label: 'Every 8 hours', group: 'grid' }, { id: 'h12', label: 'Every 12 hours', group: 'grid' },
+      ...[2, 3, 4].map(n => ({ id: 'sos' + n, label: `SOS · up to ${n} a day`, group: 'grid' as const })),
+      ...TIMING_MORE.map(o => ({ id: o.id, label: o.label, hint: o.hint })),
+    ];
+    if (l.line.sched.type !== 'cycle') out.push(...THEN_PRESETS.map(t => ({ id: 'then:' + t.id, label: 'Then: ' + t.label.charAt(0).toLowerCase() + t.label.slice(1) })));
+    if (l.line.sched.type === 'steps') out.push({ id: 'drop-last', label: 'Remove the last step', hint: 'taper' });
+    return out;
+  });
+  readonly moreSelected = computed<string | null>(() => {
+    const m = this.more();
+    const l = m ? this.lineByKey(m.key) : null;
+    if (!l) return null;
+    const s = l.line.sched;
+    if (s.type === 'hours' && !s.awake) return 'h' + s.every;
+    if (s.type === 'sos') return 'sos' + s.max;
+    return timingIdOf(s);
+  });
+  onMore(c: RxPopClose) {
+    const m = this.more();
+    this.more.set(null);
+    if (!m) return;
+    if (c.kind === 'pick') this.applyMore(m.key, c.id);
+    queueMicrotask(() => m.anchor.isConnected && m.anchor.focus());
   }
-
-  /** For hosts: forms that make sense to pick for a free-text drug. */
-  readonly formsList = Object.keys(FORMS);
+  /** Apply an advanced schedule / taper step to a line. */
+  applyMore(key: string, id: string) {
+    const l = this.lineByKey(key);
+    if (!l) return;
+    if (id.startsWith('then:')) {
+      const t = THEN_PRESETS.find(x => x.id === id.slice(5));
+      if (t) this.patch(key, x => ({ ...x, line: addThen(x.line, t.step) }));
+      return;
+    }
+    if (id === 'drop-last') {
+      const s = l.line.sched;
+      if (s.type === 'steps') this.patch(key, x => ({ ...x, line: removeStep(x.line, s.steps.length - 1) }));
+      return;
+    }
+    let next: RxSchedule | null = null;
+    if (/^h\d+$/.test(id)) next = { type: 'hours', every: +id.slice(1), awake: false };
+    else if (/^sos\d$/.test(id)) next = { ...SCHED_DEFAULTS.sos, max: +id.slice(3) } as RxSchedule;
+    else {
+      const o = TIMING_MORE.find(x => x.id === id);
+      if (o) next = JSON.parse(JSON.stringify(o.sched)) as RxSchedule;
+    }
+    if (!next) return;
+    const sched = next;
+    if (sched.type === 'days' && sched.mode === 'weekly') sched.wd = [this.start().getDay()];
+    this.patch(key, x => {
+      const line = JSON.parse(JSON.stringify(x.line)) as RxLine;
+      line.sched = sched;
+      if (sched.type === 'cycle') line.dur = 0;
+      else if (!line.dur) line.dur = sched.type === 'sos' ? 3 : 5;
+      return { ...x, line };
+    });
+  }
 }

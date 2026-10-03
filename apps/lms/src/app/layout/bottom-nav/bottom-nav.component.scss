@@ -33,10 +33,8 @@
 :host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav,
 :host-context(html.device-touch.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
 
-/* OPD dark build: the full-screen consult owns the viewport (html.pf-opd-immersive). */
-:host-context(html.pf-opd-immersive) .pf-bottom-nav,
-:host-context(html.cap-native.pf-opd-immersive) .pf-bottom-nav,
-:host-context(html.device-touch.pf-opd-immersive) .pf-bottom-nav { display: none !important; }
+/* OPD consult (html.pf-opd-immersive): the bottom nav stays VISIBLE — the
+   consult ends above it (owner, consult v6). Nothing to hide here. */
 
 /* Hidden state for Lock Screen: hide the bottom nav entirely. */
 .pf-bottom-nav--hidden,

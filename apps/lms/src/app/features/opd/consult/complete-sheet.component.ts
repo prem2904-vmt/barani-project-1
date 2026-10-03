@@ -123,10 +123,16 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
             <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
             <div class="cs__c">
               <span class="cs__k">Procedures &amp; front desk</span>
-              @if (procedures().length) {
-                <b>{{ procedures().length }} procedure{{ procedures().length === 1 ? '' : 's' }} · {{ procTotal() | inr }}</b>
-                @for (p of procedures(); track p.key) {
+              @if (nowProcs().length) {
+                <b>{{ nowProcs().length }} procedure{{ nowProcs().length === 1 ? '' : 's' }} · {{ procTotal() | inr }}</b>
+                @for (p of nowProcs(); track p.key) {
                   <span class="cs__line"><b>{{ p.name }}</b>@if (p.side) { · {{ p.side }} }@if (p.qty > 1) { · × {{ p.qty }} } · {{ p.price * p.qty | inr }}@if (p.price !== p.rulePrice) { <em class="cs__ovr"> (rule {{ p.rulePrice | inr }})</em> }</span>
+                }
+              }
+              @if (laterProcs().length) {
+                <span class="cs__k cs__k--sub" data-later>To book at the front desk · paid on the day</span>
+                @for (p of laterProcs(); track p.key) {
+                  <span class="cs__line"><b>{{ p.name }}</b> · {{ p.price * p.qty | inr }}@if (p.preferredWithin) { · {{ p.preferredWithin.toLowerCase() }} }@if (p.price !== p.rulePrice) { <em class="cs__ovr"> (rule {{ p.rulePrice | inr }})</em> }</span>
                 }
               }
               @if (deskText(); as t) { <span class="cs__m">{{ t }}</span> }
@@ -185,6 +191,7 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
     .cs__c { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-primary); }
     .cs__c > b { font-size: 15px; font-weight: 600; }
     .cs__k { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .cs__k--sub { margin-top: 6px; }
     .cs__m { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.45; }
     .cs__line { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
     .cs__line b { color: var(--text-primary); font-weight: 600; }
@@ -230,6 +237,8 @@ export class ConsultCompleteSheetComponent {
   readonly testNames = computed(() => this.tests().map(t => t.name).join(', '));
   readonly testTotal = computed(() => this.tests().reduce((a, t) => a + (Number(t.price) || 0), 0));
   readonly procTotal = computed(() => proceduresTotal(this.procedures()));
+  readonly nowProcs = computed(() => this.procedures().filter(p => p.when !== 'later'));
+  readonly laterProcs = computed(() => this.procedures().filter(p => p.when === 'later'));
   readonly deskText = computed(() => deskDueText(this.billing(), this.procTotal()));
   readonly feeText = computed(() => followUpFeeText(this.followUpDays(), this.followUpRule()));
   readonly followUpDate = computed(() => { const d = this.followUpDays(); return d == null ? null : addDaysIso(this.visitDate(), d); });

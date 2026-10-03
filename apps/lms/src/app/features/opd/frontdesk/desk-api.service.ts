@@ -1,9 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { ApiError } from '../../../shared/models/api-response.model';
+import { environment } from '../../../../environments/environment';
 import { OPD_API } from '../shared/opd-api';
 import type {
-  CheckoutRequest, CollectRequest, DeskData, DeskQuote, DoctorUnavailableResult, OpdVisitDetail, OpdVisitRow, OpdVitalsRow, PaymentDue, QueueDoctor, VitalsInput,
+  CheckoutRequest, CollectRequest, DeskData, DeskQuote, DoctorUnavailableResult, OpdVisitDetail, OpdVisitRow, OpdVitalsRow, PaymentDue, ProcedureToBook, QueueDoctor, VitalsInput,
 } from './desk.models';
 
 /** The OPD desk / vitals / queue endpoints (Agent B), through the app's ONE
@@ -12,6 +15,7 @@ import type {
 @Injectable({ providedIn: 'root' })
 export class OpdDeskApi {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
 
   desk(): Observable<DeskData> { return this.api.get(`${OPD_API.visits}/desk`); }
   quote(doctorId: string, patientId?: string | null): Observable<DeskQuote> {
@@ -63,5 +67,19 @@ export class OpdDeskApi {
   }
   doctorUnavailable(doctorUserId: string, policy?: string | null, rescheduleTo?: string | null): Observable<DoctorUnavailableResult> {
     return this.api.post(`${OPD_API.queue}/doctor-unavailable`, { doctorUserId, policy: policy ?? null, rescheduleTo: rescheduleTo ?? null });
+  }
+
+  /** Procedures ordered for later (consult v6). `null` = this server doesn't
+   *  have the endpoint yet (404) — the desk hides its tab. Feature-detected
+   *  through HttpClient because the 404 status is the signal. */
+  proceduresToBook(): Observable<ProcedureToBook[] | null> {
+    return this.http.get<{ success: boolean; data?: ProcedureToBook[]; message?: string; error?: string }>(`${environment.apiUrl}/api/opd/procedures/to-book`).pipe(
+      map(r => (r && typeof r === 'object' && 'success' in r ? (r.success ? r.data ?? [] : []) : (r as unknown as ProcedureToBook[]) ?? [])),
+      catchError((e: HttpErrorResponse) => (e?.status === 404 ? of(null) : throwError(() => ApiError.from(e)))),
+    );
+  }
+  /** Book a later procedure on a date (today … 90 days). 409 already_booked, 400 date_out_of_range. */
+  bookProcedure(id: string, date: string, doctorId?: string | null): Observable<{ visitId: string; date: string }> {
+    return this.api.post(`/api/opd/procedures/${id}/book`, { date, ...(doctorId ? { doctorId } : {}) });
   }
 }

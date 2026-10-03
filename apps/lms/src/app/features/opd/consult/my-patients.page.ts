@@ -16,6 +16,8 @@ import { ADMIN_PERMS, FRONTDESK_PERMS } from '../../../core/auth/route-access';
 import { OpdAdminApi, OpdDoctorLite } from '../admin/opd-admin.api';
 import type { PfSelectOption } from '../../../shared/primitives/select.component';
 import { ConsultApi, ConsultQueueRow } from './consult.api';
+import { JourneyDockComponent } from '../shared/journey-dock.component';
+import { JourneyDockService } from '../shared/journey-dock.service';
 
 export type QueueTab = 'waiting' | 'in_consult' | 'completed';
 
@@ -143,7 +145,7 @@ type BandMode = 'product' | 'patient' | 'doctor';
 @Component({
   selector: 'pf-opd-my-patients',
   standalone: true,
-  imports: [DatePipe, NgTemplateOutlet, HeroBandComponent, SkeletonRowsComponent],
+  imports: [DatePipe, NgTemplateOutlet, HeroBandComponent, SkeletonRowsComponent, JourneyDockComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './my-patients.page.html',
   styleUrls: ['../../frontdesk/order-create/order-create.component.scss', '../frontdesk/book-visit.page.scss', './my-patients.page.scss'],
@@ -156,6 +158,8 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   private readonly adminApi = inject(OpdAdminApi);
   private readonly modules = inject(ModuleScopeService);
   private readonly destroyRef = inject(DestroyRef);
+  /** The journey dock (consult v6): shown for the patient the doctor TAPPED. */
+  readonly dock = inject(JourneyDockService);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
   readonly pillEl = viewChild<ElementRef<HTMLElement>>('pill');
@@ -264,7 +268,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
     this.load();
     this.timer = setInterval(() => this.load(), 30_000);
   }
-  ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
+  ngOnDestroy() { if (this.timer) clearInterval(this.timer); this.dock.hide(); }
 
   private watchMedia(q: string, sig: WritableSignal<boolean>, fallback: boolean): void {
     try {
@@ -328,6 +332,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   }
   pick(r: ConsultQueueRow) {
     this.pickedId.set(r.visitId);
+    this.dock.show({ id: r.patientId, name: r.patientName });
     this.loadGlance();
     if (!this.isLg()) this.sheetOpen.set(true);
   }
@@ -395,5 +400,7 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   callNext() { const n = this.next(); if (n) this.open(n); }
   startSelected() { const r = this.selected(); if (r) this.open(r); }
   history() { const r = this.selected(); if (r) this.router.navigate(['/opd/patient', r.patientId]); }
+  /** A date tapped on the dock: that visit in the patient's history. */
+  historyAt(day: string) { const r = this.selected(); if (r) this.router.navigate(['/opd/patient', r.patientId], { queryParams: { date: day } }); }
   dxText(dx: { label: string }[]): string { return dx.map(d => d.label).join(', '); }
 }

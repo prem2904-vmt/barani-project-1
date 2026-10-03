@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -8,6 +8,8 @@ import { ConsultApi, ConsultPastConsult } from './consult.api';
 import { OpdFormRendererComponent } from '../admin/forms/renderer';
 import { fromDto } from './rx/rx-model';
 import { procedurePrintText } from './rx-print';
+import { JourneyDockComponent } from '../shared/journey-dock.component';
+import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
 
 /**
  * `/opd/patient/:patientId` — the patient's past OPD consults (Agent C), each
@@ -18,7 +20,7 @@ import { procedurePrintText } from './rx-print';
 @Component({
   selector: 'pf-opd-patient-history',
   standalone: true,
-  imports: [DatePipe, HeroBandComponent, OpdFormRendererComponent],
+  imports: [DatePipe, HeroBandComponent, OpdFormRendererComponent, JourneyDockComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page ph">
@@ -33,7 +35,7 @@ import { procedurePrintText } from './rx-print';
           @for (i of [1, 2]; track i) { <div class="ph__skel"></div> }
         }
         @for (c of rows(); track c.visitId) {
-          <article class="nd-card ph__card">
+          <article class="nd-card ph__card" [attr.data-day]="day(c.visitDate)" [class.ph__card--on]="dock.selectedKey() === day(c.visitDate)">
             <div class="nd-card__head">
               <span class="nd-card__label">{{ c.visitDate | date:'EEE, MMM d, y' }}</span>
               <span class="nd-card__note">{{ c.doctorName }}@if (c.departmentName) { · {{ c.departmentName }}}</span>
@@ -63,6 +65,7 @@ import { procedurePrintText } from './rx-print';
           }
         }
       </div>
+      <pf-journey-dock class="ph__dock" (picked)="scrollTo($event)"></pf-journey-dock>
     </section>
   `,
   styles: [`
@@ -77,23 +80,38 @@ import { procedurePrintText } from './rx-print';
     .ph__rx { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
     .ph__rx span { font-size: 12.5px; color: var(--text-tertiary); }
     .ph__muted { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+    .ph__card--on { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent); }
+    .ph__dock { margin-inline: calc(-1 * var(--pf-hb-bleed, 0px)); }
     .ph__skel { height: 140px; border-radius: 16px; background: var(--nd-chip-bg); }
   `],
 })
-export class OpdPatientHistoryPage implements OnInit {
+export class OpdPatientHistoryPage implements OnInit, OnDestroy {
   private readonly api = inject(ConsultApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  /** The journey dock (consult v6): a date tap scrolls to that consult. */
+  readonly dock = inject(JourneyDockService);
   readonly rows = signal<ConsultPastConsult[]>([]);
   readonly loading = signal(true);
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('patientId');
     if (!id) { this.loading.set(false); return; }
+    this.dock.show({ id, name: 'this patient' });
+    const at = this.route.snapshot.queryParamMap?.get('date');
+    if (at) this.dock.select(at);
     this.api.history(id).subscribe({
-      next: r => { this.rows.set(r ?? []); this.loading.set(false); },
+      next: r => { this.rows.set(r ?? []); this.loading.set(false); if (at) queueMicrotask(() => this.scrollTo(at)); },
       error: () => this.loading.set(false),
     });
+  }
+  ngOnDestroy() { this.dock.hide(); }
+  day(iso: string) { return journeyDayKey(iso); }
+  /** Bring the consult of that day into view (no-op for a lab-only day). */
+  scrollTo(day: string) {
+    const el = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-day="${day}"]`);
+    el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
   dx(c: ConsultPastConsult) { return c.diagnoses.map(d => d.label).join(', '); }
   procs(c: ConsultPastConsult) { return (c.procedures ?? []).map(procedurePrintText).join(', '); }

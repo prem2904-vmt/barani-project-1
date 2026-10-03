@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import {
+  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, viewChild,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import type { ConsultVitals } from './consult.api';
 import { RxPopoverComponent } from './rx/rx-popover.component';
@@ -62,12 +64,11 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
 }
 
 /**
- * The consult header's vitals: a row of compact stat tiles — label, the big
- * number, its unit, a state word when out of band (High / Low, the tile
- * tinted) and a small arrow against the previous visit. The pulse heart beats
- * at the patient's REAL rate; SpO₂ carries a ring. Tapping a tile shows the
- * previous visit's value and the trend over the last visits. Reduced motion:
- * a still heart.
+ * The consult band's vitals (consult v6): compact chips in the one-row
+ * patient band — "BP 60/59 mmHg · Low" — amber when out of range. Chips that
+ * don't fit fold into a "+N" chip whose popover lists every vital; on tablet
+ * / phone (`scroll`) the row scrolls instead. Tapping a chip shows the
+ * previous visit's value and the trend over the last visits.
  */
 @Component({
   selector: 'pf-consult-vitals',
@@ -76,52 +77,37 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (vitals(); as v) {
-      <div class="vs" role="list" aria-label="Today's vitals">
-        @for (k of keys(); track k) {
+      <div class="vc" #box role="list" aria-label="Today's vitals" [class.vc--scroll]="scroll()">
+        @for (k of keys(); track k; let i = $index) {
           @let f = flag(k);
-          @let d = delta(k);
-          <button type="button" class="vs__t" role="listitem" [attr.data-flag]="f" (click)="openTrend($event, k)"
-                  [attr.aria-label]="label(k)[0] + ' ' + text(k) + ' ' + label(k)[1] + (f ? ', ' + f : '') + (d ? ', ' + d.text : '') + '. Show trend'">
-            <span class="vs__k">
-              @if (k === 'pulse') {
-                <svg class="vs__heart" [style.animation-duration.s]="beat()" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.3C1.1 8.3 3.2 4.5 7 4.5c2.1 0 3.6 1.2 5 3 1.4-1.8 2.9-3 5-3 3.8 0 5.9 3.8 4.5 7.2C19.5 16.4 12 21 12 21z"/></svg>
-              }
-              @if (k === 'spo2') {
-                <svg class="vs__ring" width="13" height="13" viewBox="0 0 20 20" aria-hidden="true">
-                  <circle cx="10" cy="10" r="7.5" fill="none" stroke="var(--nd-line)" stroke-width="3"/>
-                  <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" [attr.stroke-dasharray]="ringDash()" transform="rotate(-90 10 10)"/>
-                </svg>
-              }
-              {{ label(k)[0] }}
-            </span>
-            <span class="vs__row">
-              <span class="vs__v">{{ text(k) }}</span>
-              @if (label(k)[1]) { <span class="vs__u">{{ label(k)[1] }}</span> }
-            </span>
-            <span class="vs__foot">
-              @if (f) { <span class="vs__state">{{ f === 'high' ? 'High' : 'Low' }}</span> } @else { <span class="vs__ok">Normal</span> }
-              @if (d) {
-                <span class="vs__trend" [attr.data-dir]="d.dir" [title]="d.text">
-                  @switch (d.dir) {
-                    @case ('up') { <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg> }
-                    @case ('down') { <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg> }
-                    @default { <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg> }
-                  }
-                </span>
-              }
-            </span>
+          <button type="button" class="vc__chip" role="listitem" [attr.data-flag]="f" [hidden]="i >= shown()" (click)="openTrend($event, k)"
+                  [attr.aria-label]="label(k)[0] + ' ' + text(k) + ' ' + label(k)[1] + (f ? ', ' + f : '') + '. Show trend'">
+            <span class="vc__k">{{ label(k)[0] }}</span>
+            <b class="nd-num">{{ text(k) }}</b>
+            @if (label(k)[1]) { <span class="vc__u">{{ label(k)[1] }}</span> }
+            @if (f) { <span class="vc__w">· {{ f === 'high' ? 'High' : 'Low' }}</span> }
           </button>
         }
-        <span class="vs__who">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-          <span>{{ v.recordedByName || 'Recorded' }}<br /><span class="vs__when">{{ v.recordedAt | date:'h:mm a' }}</span></span>
-        </span>
+        @if (shown() < keys().length) {
+          <button type="button" class="vc__chip vc__more nd-num" (click)="openAll($event)" [attr.aria-label]="'Show all ' + keys().length + ' vitals'">+{{ keys().length - shown() }}</button>
+        }
       </div>
     } @else {
-      <div class="vs vs--none">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+      <div class="vc vc--none">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
         <span>No vitals taken for this visit yet.</span>
       </div>
+    }
+
+    @if (all(); as a) {
+      <pf-rx-popover [anchor]="a" title="Today's vitals" [minWidth]="260" (closed)="all.set(null)">
+        <div class="vt">
+          @for (k of keys(); track k) {
+            <div class="vt__row" [attr.data-flag]="flag(k)"><span>{{ label(k)[0] }}</span><b class="nd-num">{{ text(k) }} {{ label(k)[1] }}@if (flag(k); as f) { · {{ f === 'high' ? 'High' : 'Low' }} }</b></div>
+          }
+          @if (vitals()?.recordedAt) { <p class="vt__prev">{{ vitals()?.recordedByName || 'Recorded' }} · {{ vitals()?.recordedAt | date:'h:mm a' }}</p> }
+        </div>
+      </pf-rx-popover>
     }
 
     @if (trend(); as t) {
@@ -142,67 +128,82 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
     }
   `,
   styles: [`
-    :host { display: block; min-width: 0; --vs-warn: #b45309; --vs-warn-bg: color-mix(in srgb, #f59e0b 12%, var(--nd-card-bg)); --vs-warn-line: color-mix(in srgb, #f59e0b 45%, transparent); }
-    :host-context(html.dark), :host-context([data-theme='dark']) { --vs-warn: #fbbf24; --vs-warn-bg: color-mix(in srgb, #f59e0b 14%, var(--nd-card-bg)); }
-    .vs { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
-    .vs::-webkit-scrollbar { display: none; }
-    .vs__t {
-      flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-      padding: 8px 12px 8px; border-radius: 12px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
-      color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
-      transition: border-color var(--nd-dur-fast, 200ms) ease, transform var(--nd-dur-fast, 200ms) var(--nd-spring, ease);
-    }
-    .vs__t:hover { border-color: var(--nd-sel-border); }
-    .vs__t:active { transform: scale(0.98); }
-    .vs__t:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .vs__t[data-flag] { background: var(--vs-warn-bg); border-color: var(--vs-warn-line); }
-    .vs__k { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
-    .vs__row { display: inline-flex; align-items: baseline; gap: 4px; }
-    .vs__v { font-size: 20px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-    .vs__u { font-size: 11.5px; color: var(--text-tertiary); }
-    .vs__t[data-flag] .vs__v { color: var(--vs-warn); }
-    .vs__foot { display: inline-flex; align-items: center; gap: 6px; min-height: 16px; }
-    .vs__state { font-size: 11px; font-weight: 600; color: var(--vs-warn); }
-    .vs__ok { font-size: 11px; color: var(--text-tertiary); }
-    .vs__trend { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%;
-      background: var(--nd-chip-bg); color: var(--text-secondary); }
-    .vs__heart { color: #e11d48; transform-origin: 50% 55%; animation: vs-beat 0.71s ease-in-out infinite; }
-    @keyframes vs-beat { 0%, 60%, 100% { transform: scale(1); } 15% { transform: scale(1.2); } 30% { transform: scale(0.95); } 45% { transform: scale(1.08); } }
-    .vs__ring { color: var(--violet-text, #6d28d9); }
-    .vs__t[data-flag] .vs__ring { color: var(--vs-warn); }
-    .vs__who { flex: none; align-self: center; display: inline-flex; align-items: flex-start; gap: 6px; padding: 0 4px 0 8px; font-size: 12px; line-height: 1.35; color: var(--text-tertiary); white-space: nowrap; }
-    .vs__who svg { color: var(--violet-text, #6d28d9); margin-top: 2px; }
-    .vs__when { font-variant-numeric: tabular-nums; }
-    .vs--none { align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 12px; border: 1px dashed var(--nd-line); color: var(--text-tertiary); font-size: 13px; width: fit-content; }
+    :host { display: block; min-width: 0; --vc-warn: #b45309; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, var(--nd-card-bg)); --vc-warn-line: color-mix(in srgb, #f59e0b 45%, transparent); }
+    :host-context(html.dark), :host-context([data-theme='dark']) { --vc-warn: #fbbf24; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, transparent); }
+    .vc { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+    .vc--scroll { overflow-x: auto; scrollbar-width: none; }
+    .vc--scroll::-webkit-scrollbar { display: none; }
+    .vc__chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: var(--nd-radius-chip, 8px);
+      border: 1px solid transparent; background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent);
+      font: inherit; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; cursor: pointer; }
+    .vc__chip[hidden] { display: none; }
+    .vc__chip b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .vc__u { color: var(--text-tertiary); opacity: .8; }
+    .vc__chip:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent); }
+    .vc__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .vc__chip[data-flag] { background: var(--vc-warn-bg); border-color: var(--vc-warn-line); color: var(--vc-warn); }
+    .vc__chip[data-flag] b, .vc__chip[data-flag] .vc__w { color: var(--vc-warn); font-weight: 600; }
+    .vc__more { border: 1px dashed var(--nd-line); background: none; color: var(--text-secondary); font-weight: 600; }
+    .vc--none { gap: 8px; min-height: 28px; font-size: 12.5px; color: var(--text-tertiary); }
     .vt { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; color: var(--violet-text, #6d28d9); }
+    .vt__row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--text-tertiary); }
+    .vt__row b { color: var(--text-primary); font-weight: 600; }
+    .vt__row[data-flag] b { color: var(--vc-warn); }
     .vt__prev { margin: 0; font-size: 13px; color: var(--text-secondary); }
     .vt__prev b { color: var(--text-primary); font-weight: 600; }
     .vt__vals { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--text-secondary); }
     .vt__vals b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    @media (prefers-reduced-motion: reduce) { .vs__heart { animation: none !important; } .vs__t { transition: none; } }
-    @media (pointer: coarse) { .vs__t { min-height: 44px; } }
-    @media (max-width: 760px) { .vs__t { min-width: 92px; padding: 6px 10px; } .vs__v { font-size: 18px; } .vs__who { display: none; } }
+    @media (pointer: coarse) { .vc__chip { height: 36px; } }
   `],
 })
-export class ConsultVitalsComponent {
+export class ConsultVitalsComponent implements AfterViewInit, OnDestroy {
   readonly vitals = input<ConsultVitals | null>(null);
   /** The patient's recent captures across visits (newest first, incl. today's). */
   readonly history = input<ConsultVitals[]>([]);
+  /** Tablet / phone: the chips scroll instead of folding into "+N". */
+  readonly scroll = input(false);
 
   readonly trend = signal<{ key: VitalKey; anchor: HTMLElement } | null>(null);
+  readonly all = signal<HTMLElement | null>(null);
+  /** How many chips fit (the rest fold into "+N"). */
+  readonly shown = signal(99);
+  private readonly box = viewChild<ElementRef<HTMLElement>>('box');
+  private ro: ResizeObserver | null = null;
 
   readonly keys = computed<VitalKey[]>(() => {
     const v = this.vitals();
-    const all: VitalKey[] = ['pulse', 'bp', 'temp', 'spo2', 'rr', 'weight', 'bmi'];
+    const all: VitalKey[] = ['bp', 'pulse', 'temp', 'spo2', 'rr', 'weight', 'bmi'];
     return all.filter(k => (k === 'bmi' ? bmiOf(v) != null : vitalText(k, v) !== '—'));
   });
-  /** One beat's period in seconds at the patient's real rate. */
-  readonly beat = computed(() => { const p = this.vitals()?.pulse; return p && p > 20 ? Math.round((60 / p) * 1000) / 1000 : 0.8; });
-  readonly ringDash = computed(() => {
-    const s = Math.max(0, Math.min(100, this.vitals()?.spo2 ?? 0));
-    const c = 2 * Math.PI * 7.5;
-    return `${(c * s) / 100} ${c}`;
-  });
+
+  constructor() {
+    effect(() => { this.keys(); this.scroll(); queueMicrotask(() => this.fit()); });
+  }
+  ngAfterViewInit() {
+    if (typeof ResizeObserver === 'function') {
+      this.ro = new ResizeObserver(() => this.fit());
+      const host = this.host.nativeElement as HTMLElement;
+      this.ro.observe(host);
+    }
+  }
+  ngOnDestroy() { this.ro?.disconnect(); }
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  /** Fold the trailing chips that don't fit into "+N" (never when scrolling). */
+  fit() {
+    const box = this.box()?.nativeElement;
+    const n = this.keys().length;
+    if (!box || this.scroll() || !box.clientWidth) { this.shown.set(n); return; }
+    const chips = Array.from(box.querySelectorAll<HTMLElement>('.vc__chip:not(.vc__more)'));
+    chips.forEach(c => (c.hidden = false));
+    const widths = chips.map(c => c.offsetWidth);
+    const gap = 6, more = 44, avail = box.clientWidth;
+    const total = widths.reduce((a, w) => a + w + gap, -gap);
+    if (total <= avail) { this.shown.set(n); return; }
+    let used = 0, k = 0;
+    for (; k < widths.length; k++) { if (used + widths[k] + gap + more > avail) break; used += widths[k] + gap; }
+    this.shown.set(Math.max(1, k));
+  }
 
   label(k: VitalKey) { return LABEL[k]; }
   text(k: VitalKey) { return vitalText(k, this.vitals()); }
@@ -211,6 +212,7 @@ export class ConsultVitalsComponent {
   delta(k: VitalKey) { return vitalDelta(k, this.vitals(), this.previous(k)); }
 
   openTrend(e: Event, key: VitalKey) { this.trend.set({ key, anchor: e.currentTarget as HTMLElement }); }
+  openAll(e: Event) { this.all.set(e.currentTarget as HTMLElement); }
 
   /** Latest capture from a DIFFERENT visit than today's. */
   previous(key: VitalKey): ConsultVitals | null {

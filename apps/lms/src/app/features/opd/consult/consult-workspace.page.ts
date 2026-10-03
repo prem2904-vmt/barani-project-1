@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal, viewChild,
+  ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { DOCUMENT, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
@@ -10,31 +10,40 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
-import { PatientTimelineComponent } from '../../frontdesk/patient-profile/patient-timeline.component';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { PatientTimelineComponent, type TimelineItem } from '../../frontdesk/patient-profile/patient-timeline.component';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
-import type { OpdDiagnosis, OpdNoteVisibility, OpdPatientAllergy } from '../shared/opd.models';
+import type { OpdDiagnosis, OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
 import {
-  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultPastConsult, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
+  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
-  ConsultEditState, ConsultStep, DraftSection, FRESH_ACKS, SECTION_OF, STEP_TITLES, applyUsual, daysBetween, draftBody, draftPatchBody,
-  procedureDraftOf, reconcileProcedureIds, reconcileRxIds, stepDone, stepSummary, undoUsual, usualsFrom,
+  BodyOpts, ConsultEditState, DraftSection, FRESH_ACKS, SECTION_OF, applyUsual, daysBetween, draftBody, draftPatchBody,
+  procedureDraftOf, reconcileProcedureIds, reconcileRxIds, undoUsual, usualsFrom,
 } from './consult-state';
 import { ConsultProceduresComponent } from './procedure-editor.component';
-import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
-import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
-import { ConsultTimelineComponent, type HistoryNode, type TimelineStepView } from './consult-timeline.component';
-import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
+import { needsPriceReason } from './procedure-rules';
+import { ConsultVitalsComponent, bmiOf, vitalFlag, vitalText } from './vitals-strip.component';
+import { ConsultCompleteSheetComponent, FOLLOW_UP_PICKS, addDaysIso, followUpFeeText } from './complete-sheet.component';
 import {
   OpdFormRendererComponent, allQuestions, missingRequired, normalizeSchema,
   type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest,
 } from '../admin/forms/renderer';
 import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
+import { rxSentence, usualFromJson } from './rx/rx-line';
+import type { RxUsual } from '../shared/rx-schedule';
 import { newRxLine } from '../shared/rx-schedule';
 import { buildRxPdf } from './rx-print';
 import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
 import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
+import { JourneyDockComponent } from '../shared/journey-dock.component';
+import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
+import {
+  ConsultSpace, Prefill, SPACES, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
+} from './consult-records';
+import { ConsultVisitCardComponent } from './visit-card.component';
+import { ConsultNudgeComponent } from './nudge.component';
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -43,40 +52,41 @@ const EMPTY: ConsultEditState = {
   lines: [], tests: [], followUpDays: null,
 };
 
+/** localStorage key of the prefills the doctor confirmed on a visit. */
+export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
+
 /**
- * `/opd/consult/:visitId` — the FULL-SCREEN consult (Agent C), in the New
- * visit / My patients design language (owner 2026-10-03). ONE screen:
- *  - Header: who (name, age/sex, MRN, token, department, doctor, status),
- *    the draft state, Compare and ONE primary "Complete consult"; today's
- *    vitals as stat tiles under it (High / Low tinted, an arrow vs the last
- *    visit).
- *  - Left TIMELINE card: today's consult with its four steps (tap = go
- *    there), then the patient's dated history — visits, lab results,
- *    prescriptions, files — expanding in place with Open / Compare (which
- *    open the existing patient journey / compare viewer in a sheet).
- *  - Centre card: the current step with a "Step n of 4" header and a sticky
- *    Back / Next footer.
- *  - Right AT A GLANCE card.
- * Tablet: the timeline is a slim rail (expands as a sheet), the glance a
- * slide-over. Phone: one column; timeline + glance are sheets from header
- * buttons. Toggles html.pf-opd-immersive (the shell hides its chrome).
+ * `/opd/consult/:visitId` — the consult (consult v6, owner-approved canvas).
+ *  - Patient band, ONE row: back · avatar · name / meta · In consult · today's
+ *    vitals as compact chips (amber out of range, "+N" overflow) · save
+ *    state · Nudge (to the doctor's assistant) · Compare (n) · Complete.
+ *  - Left VISIT card: the "Always" strip (allergies + Rx conflicts,
+ *    conditions, running medicines, a watch line) and the selected visit's
+ *    records; a record opens in the centre viewer ("Back to the consult").
+ *  - Centre: spaces, not steps — Findings · Diagnosis · Prescription ·
+ *    Procedures · Tests · Advice & notes, in any order, each with a count and
+ *    its own add bar. Findings starts with the prefill review.
+ *  - The journey dock above the bottom navbar (which stays visible); a date
+ *    there selects the visit the left card shows.
+ * Autosave, the Complete gates, print and share are unchanged. Complete only
+ * WARNS about unreviewed prefills (once) — it never blocks on them.
  */
 @Component({
   selector: 'pf-opd-consult-workspace',
   standalone: true,
-  imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent, 
-    DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
-    RxEditorComponent, PatientTimelineComponent, ConsultTimelineComponent,
+  imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent,
+    DatePipe, ConsultVitalsComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
+    RxEditorComponent, PatientTimelineComponent, ConsultVisitCardComponent, ConsultNudgeComponent, JourneyDockComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ws(); as w) {
-      <div class="cw" [class.cw--glance]="glanceOpen()" [class.cw--tl]="timelineOpen()" [class.cw--journey]="journeyOpen()">
-        <!-- ── Header: who + the one action; today's vitals as stat tiles ── -->
-        <header class="cw__top">
-          <div class="cw__bar">
+      <div class="cw">
+        <!-- ── Patient band: one row ── -->
+        <header class="cw__band">
+          <div class="cw__row">
             <button type="button" class="cw__iconbtn" (click)="back()" aria-label="Back to my patients">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <span class="cw__avatar nd-num" aria-hidden="true">{{ initials(w.patient.name) }}</span>
             <div class="cw__who">
@@ -87,320 +97,360 @@ const EMPTY: ConsultEditState = {
                   {{ statusLabel(w.visit.status) }}
                 </span>
               </div>
-              <div class="cw__meta nd-num">
-                @for (m of metaBits(); track $index) { <span>{{ m }}</span> }
-              </div>
+              <div class="cw__meta nd-num">@for (m of metaBits(); track $index) { <span>{{ m }}</span> }</div>
             </div>
-            <span class="cw__grow"></span>
-            @if (editable()) {
-              <span class="nd-savestate cw__save" aria-live="polite">
-                @switch (saveState()) {
-                  @case ('saving') { <span class="nd-savestate__dot"></span> Saving… }
-                  @case ('dirty') { <span class="nd-savestate__dot"></span> Unsaved changes }
-                  @case ('error') { <span class="cw__saveerr">Not saved — retrying</span> }
-                  @default { @if (savedAt()) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Draft saved {{ savedAt() | date:'h:mm a' }} } }
-                }
-              </span>
-            }
-            <button type="button" class="nd-btn nd-btn--quiet cw__tl-btn" (click)="timelineOpen.set(!timelineOpen())" [attr.aria-expanded]="timelineOpen()" aria-label="Timeline">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="6" cy="12" r="2"/><path d="M6 7v3M6 14v3M11 5h9M11 12h9M11 19h9"/></svg>
-              <span class="cw__hide-sm">Timeline</span>
-            </button>
-            <button type="button" class="nd-btn nd-btn--quiet cw__glance-btn" (click)="glanceOpen.set(!glanceOpen())" [attr.aria-expanded]="glanceOpen()" aria-label="At a glance">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-              <span class="cw__hide-sm">At a glance</span>
-              @if (allergies().length) { <span class="cw__alertdot" aria-label="has allergies"></span> }
-            </button>
-            <button type="button" class="nd-btn nd-btn--quiet cw__cmp" (click)="compare()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
-              <span class="cw__hide-sm">Compare</span>
-            </button>
-            @if (editable()) {
-              <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()">
-                Complete consult
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <pf-consult-vitals class="cw__vitals" [vitals]="w.vitals" [history]="w.vitalsHistory" [scroll]="compact()"></pf-consult-vitals>
+            <div class="cw__acts">
+              @if (editable()) {
+                <span class="nd-savestate cw__save" aria-live="polite">
+                  @switch (saveState()) {
+                    @case ('saving') { <span class="nd-savestate__dot"></span> Saving… }
+                    @case ('dirty') { <span class="nd-savestate__dot"></span> Unsaved }
+                    @case ('error') { <span class="cw__saveerr">Not saved — retrying</span> }
+                    @default { @if (savedAt()) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Saved {{ savedAt() | date:'h:mm' }} } }
+                  }
+                </span>
+              }
+              @if (showNudge(); as a) {
+                <pf-consult-nudge [assistantId]="a.userId" [assistantName]="a.name" [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel"></pf-consult-nudge>
+              }
+              <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="openCompare()" [attr.aria-pressed]="compareOn()" data-compare>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
+                <span class="cw__lab">Compare</span><span class="cw__ct nd-num">{{ compareItems().length }}</span>
               </button>
-            } @else if (w.visit.status === 'completed') {
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="share()">Share</button>
-              <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="print()">Print prescription</button>
-            }
+              @if (editable()) {
+                <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
+              } @else if (w.visit.status === 'completed') {
+                <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="share()">Share</button>
+                <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="print()">Print prescription</button>
+              }
+            </div>
           </div>
-          <pf-consult-vitals class="cw__vitals" [vitals]="w.vitals" [history]="w.vitalsHistory"></pf-consult-vitals>
         </header>
 
-        <div class="cw__main">
-          <!-- ── Left: TIMELINE (today's steps + the patient's history) ── -->
-          @if (timelineOpen()) { <div class="cw__scrim cw__scrim--tl" (click)="timelineOpen.set(false)" aria-hidden="true"></div> }
-          <aside class="nd-card cw__tl" aria-label="Timeline">
-            <pf-consult-timeline [steps]="stepViews()" [nodes]="historyNodes()" [visitDate]="w.visit.visitDate" [loading]="historyLoading()"
-                                 [slim]="tablet() && !timelineOpen()" (go)="goFromTimeline($event)" (open)="openNode($event)"
-                                 (compare)="compareNode($event)" (expand)="timelineOpen.set(true)"></pf-consult-timeline>
+        <div class="cw__body">
+          <!-- ── Left: the VISIT card ── -->
+          <aside class="nd-card cw__left" aria-label="Visit records">
+            <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
+                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()"
+                                   [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
+                                   [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
+                                   (open)="openItem($event)" (toggleCompare)="toggleCompare($event)" (today)="dock.select(todayKey())"
+                                   (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
+                                   (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
           </aside>
 
-          <!-- ── Centre: the current step ── -->
-          <section class="nd-card cw__center" [attr.aria-label]="titles[step()]">
-            <header class="nd-card__head cw__stephead">
-              <span class="nd-card__icon" aria-hidden="true">
-                @switch (step()) {
-                  @case (1) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg> }
-                  @case (2) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)"/><path d="m9 9 6 6"/></svg> }
-                  @case (3) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></svg> }
-                  @default { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
+          <!-- ── Centre ── -->
+          <main class="nd-card cw__centre" [class.cw__centre--viewing]="viewing()">
+            @if (viewing()) {
+              <header class="nd-card__head cw__vbar">
+                <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="closeViewer()" aria-label="Back to the consult">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                @if (compareOn()) {
+                  <span class="nd-card__label">Compare · {{ compareItems().length }}</span>
+                } @else if (viewItem(); as it) {
+                  <span class="cw__vt"><b>{{ it.title }}</b><span class="nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span></span>
                 }
-              </span>
-              <span class="nd-card__label">{{ titles[step()] }}</span>
-              <span class="nd-card__spacer"></span>
-              <span class="cw__stepof nd-num">Step {{ step() }} of 4</span>
-              <span class="cw__dots" aria-hidden="true">
-                @for (s of steps; track s) { <span class="cw__dot" [class.on]="s === step()" [class.done]="done(s) && s !== step()"></span> }
-              </span>
-            </header>
-
-            <div class="cw__body" #center>
-              @for (s of [step()]; track s) {
-                <div class="cw__pane">
-                  @switch (s) {
-                    @case (1) {
-                      <!-- Complaint -->
-                      <section class="cw__grp" data-grp="complaint">
-                        <div class="cw__grph">
-                          <span class="cw__grpt">Complaint</span>
-                          @if (w.visit.purpose) { <span class="cw__grpn">Desk note: {{ w.visit.purpose }}</span> }
+                <span class="nd-card__spacer"></span>
+                @if (compareOn() && compareItems().length) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearCompare()">Clear</button> }
+                <button type="button" class="nd-btn nd-btn--secondary cw__back" (click)="closeViewer()" data-back>Back to the consult</button>
+              </header>
+              <div class="cw__viewer" [class.cw__viewer--none]="fileView() && !compareOn()">
+                @if (compareOn()) {
+                  @if (!compareItems().length) { <p class="cw__muted">Tick reports, results, images or prescriptions in the visit card to compare them here.</p> }
+                  <div class="cw__cmpgrid">
+                    @for (it of compareCards(); track it.id) {
+                      <div class="cw__cp">
+                        <span class="cw__cpd nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span>
+                        <b>{{ it.title }}</b>
+                        @if (it.result; as r) {
+                          <span class="cw__big nd-num" [class.cw__big--h]="it.high">{{ r.value }} <small>{{ r.unit }}</small></span>
+                          @if (spark(r.points); as p) { <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg> }
+                        }
+                        @for (d of it.rx ?? []; track $index) { <span class="cw__muted">{{ rxText(d) }}</span> }
+                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="toggleCompare(it)">Remove</button>
+                      </div>
+                    }
+                  </div>
+                } @else if (viewItem(); as it) {
+                  @switch (it.type) {
+                    @case ('flow') {
+                      <div class="cw__flow">
+                        @for (s of it.steps ?? []; track $index; let last = $last) {
+                          <div class="cw__fs" [class.cw__fs--now]="last"><span class="nd-num">{{ s.at }}</span><b>{{ s.what }}</b></div>
+                        } @empty { <p class="cw__muted">No steps recorded for this visit.</p> }
+                      </div>
+                    }
+                    @case ('vit') {
+                      <div class="cw__cp cw__cp--wide">
+                        @for (v of vitalRows(); track v.label) {
+                          <div class="cw__kv" [class.cw__kv--warn]="v.warn"><span>{{ v.label }}</span><b class="nd-num">{{ v.value }}</b></div>
+                        }
+                        <p class="cw__muted">{{ w.vitals?.recordedByName || 'Recorded' }}@if (w.vitals?.recordedAt) { · {{ w.vitals?.recordedAt | date:'h:mm a' }} }</p>
+                      </div>
+                    }
+                    @case ('pre') {
+                      <div class="cw__cp cw__cp--wide">
+                        @if (it.id === 'today:desk') { <p class="cw__p">Complaint: {{ it.text }}</p> }
+                        @else { @for (p of intakePrefills(); track p.id) { <div class="cw__kv"><span>{{ p.label }}</span><b>{{ p.value }}</b></div> } }
+                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="goSpace('find')">Review in Findings</button></div> }
+                      </div>
+                    }
+                    @case ('res') {
+                      @if (it.result; as r) {
+                        <div class="cw__cp cw__cp--wide">
+                          <span class="cw__big nd-num" [class.cw__big--h]="it.high">{{ r.value }} <small>{{ r.unit }}@if (r.range) { · normal {{ r.range }}}</small></span>
+                          @if (spark(r.points); as p) {
+                            <span class="cw__k">Trend</span>
+                            <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                            <p class="cw__muted nd-num">@for (pt of r.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
+                          }
                         </div>
-                        <input class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
-                               (input)="patch({ chiefComplaint: $any($event.target).value })" placeholder="What brings the patient in" />
-                      </section>
+                      }
+                    }
+                    @case ('rx') {
+                      <div class="cw__cp cw__cp--wide">
+                        @for (d of it.rx ?? []; track $index; let i = $index) { <div class="cw__rxl"><span class="nd-num">{{ i + 1 }}</span><span>{{ rxText(d) }}</span></div> }
+                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="repeatRx(it)" data-repeat>Repeat this prescription today</button></div> }
+                      </div>
+                    }
+                  }
+                }
+              </div>
+            }
+            <!-- The patient-journey viewer (reports / images / compare grid) — reused, viewer only. -->
+            <pf-patient-timeline #tl class="cw__tl" [class.cw__tl--on]="fileView()" [patientId]="w.patient.id" [embedded]="true" [hideTitle]="true" [viewerOnly]="true"></pf-patient-timeline>
 
-                      <!-- The service's consult form (History, Known conditions, Examination…) -->
+            @if (!viewing()) {
+              <header class="nd-card__head cw__tabhead">
+                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></svg></span>
+                <div class="cw__tabs" role="tablist" aria-label="Consult">
+                  @for (t of spaces; track t.id) {
+                    <button type="button" class="cw__tab" role="tab" [attr.aria-selected]="space() === t.id" [attr.data-space]="t.id" (click)="goSpace(t.id)">
+                      <span class="cw__tico" aria-hidden="true">
+                        @switch (t.id) {
+                          @case ('find') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg> }
+                          @case ('dx') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg> }
+                          @case ('med') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg> }
+                          @case ('proc') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z"/></svg> }
+                          @case ('test') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L5 19a1 1 0 0 0 1 2h12a1 1 0 0 0 1-2l-5-10V3"/><path d="M7 15h10"/></svg> }
+                          @default { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
+                        }
+                      </span>
+                      <span class="cw__tl2">{{ t.label }}</span>
+                      @if (t.id === 'find' && pending().length) { <span class="cw__dotw" title="Prefills to check" aria-label="prefills to check"></span> }
+                      @if (count(t.id); as c) { <span class="cw__tc nd-num">{{ c }}</span> }
+                    </button>
+                  }
+                </div>
+              </header>
+
+              <div class="cw__space" role="tabpanel" [attr.aria-label]="spaceLabel()">
+                @switch (space()) {
+                  @case ('find') {
+                    <div class="cw__sh"><h2>Findings</h2><p>What the patient tells you and what you find on examination.</p></div>
+                    <div class="cw__single">
+                      @if (editable() && pending().length) {
+                        <div class="cw__review" data-review>
+                          <div class="cw__rh"><span>Check what was filled in before the consult · {{ pending().length }}</span>
+                            <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="confirmAll()">Confirm all</button></div>
+                          @for (p of pending(); track p.id) {
+                            <div class="cw__pf" [class.cw__pf--w]="p.warn" [attr.data-prefill]="p.id">
+                              <div><div class="cw__pfv">{{ p.label }}: {{ p.value }}</div><div class="cw__pfs">{{ p.src }}</div></div>
+                              <div class="cw__pfa">
+                                <button type="button" class="nd-btn nd-btn--tertiary cw__sm" (click)="editPrefill(p)">Edit</button>
+                                <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="confirm(p.id)">Confirm</button>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                      <label class="cw__f" [class.cw__f--pre]="isPending('complaint')">
+                        <span>Complaint @if (isPending('complaint')) { <em class="cw__ptag">From the front desk</em> }</span>
+                        <input id="cw-complaint" class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
+                               (input)="onComplaint($any($event.target).value)" placeholder="What brings the patient in" />
+                      </label>
                       @if (w.form) {
-                        <section class="cw__grp cw__form" data-grp="form">
+                        <section class="cw__form" data-grp="form">
                           <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
                                                 [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [visitDate]="w.visit.visitDate"
                                                 (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
                           <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
                           @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
+                          <p class="cw__muted">These questions come from the {{ w.form.formName }} form set up in OPD admin.</p>
                         </section>
                       } @else {
                         <p class="cw__muted">No consult form is set for this service — the complaint and diagnosis are enough to finish.</p>
                       }
-
-                      <!-- Diagnosis -->
-                      <section class="cw__grp cw__grp--dx" data-grp="diagnosis">
-                        <div class="cw__grph"><span class="cw__grpt">Diagnosis</span>@if (st().diagnoses.length) { <span class="cw__grpn">The first one is the main diagnosis</span> }</div>
-                        @if (st().diagnoses.length) {
-                          <div class="cw__chips">
-                            @for (d of st().diagnoses; track d.label; let i = $index) {
-                              <span class="cw__dx" [class.cw__dx--p]="i === 0">
-                                @if (i === 0) { <span class="cw__dxmain">Main</span> }
-                                {{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }
-                                @if (editable()) {
-                                  <button type="button" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-                                }
-                              </span>
+                    </div>
+                  }
+                  @case ('dx') {
+                    <div class="cw__sh"><h2>Diagnosis</h2><p>The first one you add is the main diagnosis.</p></div>
+                    @if (editable()) {
+                      <div class="cw__addbar">
+                        <label class="cw__qa">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                          <input #dxIn type="text" [value]="dxQuery()" (input)="onDxType(dxIn.value)" (keydown)="onDxKey($event)"
+                                 placeholder="Find a diagnosis, or type your own and press Enter" aria-label="Add a diagnosis"
+                                 role="combobox" [attr.aria-expanded]="dxOpen()" aria-controls="cw-dx-list" autocomplete="off" />
+                          <kbd aria-hidden="true">Enter</kbd>
+                        </label>
+                        @if (dxOpen()) {
+                          <div id="cw-dx-list" class="cw__sug" role="listbox">
+                            @for (o of dxSuggest(); track o.label; let i = $index) {
+                              <button type="button" role="option" class="cw__sg" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
+                                <span class="cw__ty">Diagnosis</span><span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
+                              </button>
                             }
-                          </div>
-                        } @else if (!editable()) { <p class="cw__muted">No diagnosis recorded.</p> }
-                        @if (editable()) {
-                          <div class="cw__dxbox">
-                            <svg class="cw__dxglass" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                            <input #dxIn class="nd-input cw__in cw__dxin" type="text" [value]="dxQuery()" (input)="onDxType(dxIn.value)" (keydown)="onDxKey($event)"
-                                   placeholder="Search a diagnosis — pick one, or press Enter to add it as written" aria-label="Add a diagnosis"
-                                   role="combobox" [attr.aria-expanded]="dxOpen()" aria-controls="cw-dx-list" autocomplete="off" />
-                            @if (dxOpen()) {
-                              <div id="cw-dx-list" class="cw__dxlist" role="listbox">
-                                @for (o of dxSuggest(); track o.label; let i = $index) {
-                                  <button type="button" role="option" class="cw__dxopt" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
-                                    <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
-                                  </button>
-                                }
-                                @if (dxQuery().trim()) {
-                                  <button type="button" class="cw__dxopt" [class.act]="dxActive() === dxSuggest().length" (mousedown)="$event.preventDefault()" (click)="addDx({ label: dxQuery().trim(), source: 'mine' })">
-                                    <span>Add “{{ dxQuery().trim() }}” as written</span>
-                                  </button>
-                                }
-                              </div>
-                            }
-                          </div>
-                          <div class="cw__quick">
-                            @if (usual(); as u) {
-                              @if (!usualApplied()) {
-                                <button type="button" class="cw__usual" (click)="applyUsualSet()">
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-                                  <span><b>{{ u.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
-                                </button>
-                              }
-                            }
-                            @if (w.lastVisit?.rx?.length) {
-                              <button type="button" class="nd-btn nd-btn--quiet" (click)="repeatLast()">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                                Repeat {{ w.lastVisit!.visitDate | date:'MMM d' }} Rx
+                            @if (dxQuery().trim()) {
+                              <button type="button" role="option" class="cw__sg" [class.act]="dxActive() === dxSuggest().length" (mousedown)="$event.preventDefault()" (click)="addDx({ label: dxQuery().trim(), source: 'mine' })">
+                                <span class="cw__ty">New</span><span>Add “{{ dxQuery().trim() }}” as written</span><em></em>
                               </button>
                             }
                           </div>
                         }
+                      </div>
+                    }
+                    <div class="cw__single">
+                      <div class="cw__chips">
+                        @for (d of st().diagnoses; track d.label; let i = $index) {
+                          <span class="cw__dx" [class.cw__dx--p]="i === 0">
+                            {{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }@if (i === 0) { <small>Main</small> }
+                            @if (editable()) {
+                              <button type="button" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                            }
+                          </span>
+                        } @empty { <span class="cw__muted">No diagnosis yet.</span> }
+                      </div>
+                    </div>
+                  }
+                  @case ('med') {
+                    <div class="cw__sh">
+                      <h2>Prescription</h2><span class="cw__grow"></span>
+                      @if (st().lines.length) { <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="preview()" data-preview>Preview prescription</button> }
+                      <p>Type a few letters and press Enter: your usual dose is filled in. Tap a value only to change it.</p>
+                    </div>
+                    <div class="cw__single cw__single--rx">
+                      <pf-rx-editor #rx [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
+                                    [pregnant]="ws()?.pregnancy ?? null" [readonly]="!editable()" [start]="visitDay()" [usuals]="usuals()" [preferIds]="preferIds()"
+                                    (search)="drugSearch$.next($event)" (notice)="toast.info($event)">
+                        @if (editable() && (usualSet() || w.lastVisit?.rx?.length || favs().length)) {
+                          <div rx-quick class="cw__favs" role="group" aria-label="One tap">
+                            @if (usualSet(); as u) {
+                              <button type="button" class="cw__fav cw__fav--set" (click)="applyUsualSet()" data-dxset>+ {{ primaryDx() }} set <small>{{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}}</small></button>
+                            }
+                            @if (w.lastVisit?.rx?.length) {
+                              <button type="button" class="cw__fav cw__fav--set" (click)="repeatLast()" data-repeat-last>+ Repeat {{ w.lastVisit!.visitDate | date:'d MMM' }} <small>{{ w.lastVisit!.rx.length }} medicine{{ w.lastVisit!.rx.length === 1 ? '' : 's' }}</small></button>
+                            }
+                            @for (d of favs(); track d.id) { <button type="button" class="cw__fav" (click)="addFav(d)">+ {{ d.name }}</button> }
+                          </div>
+                        }
                         @if (usualApplied()) {
-                          <div class="cw__banner">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                          <div rx-quick class="cw__banner">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
                             <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in. Tap any value to change just that.</span>
                             <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
                           </div>
                         }
-                      </section>
-                    }
-                  @case (2) {
-                    <div class="cw__h">
-                      @if (primaryDx()) { <span class="cw__dxtag">For {{ primaryDx() }}</span> }
-                      <span class="cw__grow"></span>
-                      @if (editable() && w.lastVisit?.rx?.length) {
-                        <button type="button" class="nd-btn nd-btn--quiet" (click)="repeatLast()">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                          Repeat {{ w.lastVisit!.visitDate | date:'MMM d' }} Rx
-                        </button>
-                      }
+                      </pf-rx-editor>
                     </div>
-                    @if (usualApplied()) {
-                      <div class="cw__banner">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-                        <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in. Tap any value to change just that.</span>
-                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
-                      </div>
-                    } @else if (editable() && usual() && !st().lines.length) {
-                      <button type="button" class="cw__usual" (click)="applyUsualSet()">
-                        <span><b>{{ usual()!.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — add {{ usual()!.rx.length }} medicine{{ usual()!.rx.length === 1 ? '' : 's' }} in one tap</span>
-                      </button>
-                    }
-                    <pf-rx-editor [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
-                                  [pregnant]="ws()?.pregnancy ?? null"
-                                  [readonly]="!editable()" [start]="visitDay()" [usuals]="usuals()" [preferIds]="preferIds()"
-                                  (search)="drugSearch$.next($event)" (notice)="toast.info($event)"></pf-rx-editor>
                   }
-                  @case (3) {
-                    <div class="cw__h"><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult; procedures go to the front desk's bill.</span></div>
-                    @if (suggested().length) {
-                      <div class="cw__sec">
-                        <div class="cw__seck cw__seck--row">Suggested for {{ primaryDx() }}
-                          @if (editable() && suggestedMissing().length) { <button type="button" class="nd-btn nd-btn--quiet" (click)="orderAll()">+ Order all {{ suggestedMissing().length }}</button> }
-                        </div>
-                        <div class="cw__tiles">
-                          @for (t of suggested(); track t.testId) {
-                            <button type="button" class="cw__tile" [class.on]="hasTest(t.testId)" [disabled]="!editable()" (click)="toggleTest(t)" [attr.aria-pressed]="hasTest(t.testId)">
-                              <span class="cw__tico">@if (hasTest(t.testId)) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> } @else { + }</span>
-                              <span class="cw__tn">{{ t.name }}</span>@if (t.price) { <span class="cw__tp">₹{{ t.price }}</span> }
-                            </button>
-                          }
-                        </div>
-                      </div>
-                    }
-                    @if (editable()) {
-                      <div class="cw__sec">
-                        <div class="cw__seck">All tests</div>
-                        <input #tIn class="nd-input cw__in cw__search" type="text" [value]="testQuery()" (input)="testQuery.set(tIn.value)" placeholder="Search the lab's tests — name, code or short name (LFT, CBC…)" aria-label="Search lab tests" />
-                        @if (testLoadError()) { <p class="cw__muted">The lab test list could not be loaded for your role.</p> }
-                        <div class="cw__tiles">
-                          @for (t of testHits(); track t.id) {
-                            <button type="button" class="cw__tile" [class.on]="hasTest(t.id)" (click)="toggleTest({ testId: t.id, name: t.name, price: t.price })" [attr.aria-pressed]="hasTest(t.id)">
-                              <span class="cw__tico">@if (hasTest(t.id)) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> } @else { + }</span>
-                              <span class="cw__tn">{{ t.name }}</span>@if (t.price) { <span class="cw__tp">₹{{ t.price }}</span> }
-                            </button>
-                          }
-                        </div>
-                      </div>
-                    }
-                    <div class="cw__sec">
-                      <div class="cw__seck">Ordered <span>{{ st().tests.length }} test{{ st().tests.length === 1 ? '' : 's' }}@if (testTotal()) { · ₹{{ testTotal() }}}</span></div>
-                      @for (t of st().tests; track t.testId) {
-                        <div class="nd-row cw__ordered">
-                          <span class="nd-row__name">{{ t.name }}</span>
-                          @if (editable()) {
-                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
-                                                    (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
-                          } @else if (t.specimen) {
-                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen" [readonly]="true"></pf-opd-specimen-picker>
-                          }
-                          @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
-                          @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
-                        </div>
-                      } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
-                      @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
-                    </div>
-                    @if (st().procedures; as procs) {
-                      <div class="cw__sec" id="cw-procedures">
-                        <div class="cw__seck">Procedures <span>{{ procs.length ? procs.length + ' added' : (editable() ? 'Did you do one? Add it here — it is billed at the desk.' : '') }}</span></div>
+                  @case ('proc') {
+                    <div class="cw__sh"><h2>Procedures</h2><p>Do it now in the room, or book it for later — the front desk fixes the date.</p></div>
+                    <div class="cw__single cw__single--fill">
+                      @if (st().procedures; as procs) {
                         <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
-                                               [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'"
-                                               (itemsChange)="patch({ procedures: $event })"></pf-consult-procedures>
+                                               [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'" [laterEnabled]="laterEnabled()"
+                                               [showReasonErr]="reasonErr()" (itemsChange)="patch({ procedures: $event })"></pf-consult-procedures>
+                      } @else { <p class="cw__muted">Procedures aren't available on this server yet.</p> }
+                    </div>
+                  }
+                  @case ('test') {
+                    <div class="cw__sh"><h2>Tests</h2><p>Ordered tests go to the lab desk as a normal order when you complete the consult.</p></div>
+                    @if (editable()) {
+                      <div class="cw__addbar">
+                        <label class="cw__qa">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                          <input #tIn type="text" [value]="testQuery()" (input)="testQuery.set(tIn.value); testActive.set(0)" (keydown)="onTestKey($event)"
+                                 placeholder="Add a test: CBC, HbA1c, LFT…" aria-label="Search lab tests" role="combobox" [attr.aria-expanded]="!!testHits().length" autocomplete="off" />
+                          <kbd aria-hidden="true">Enter</kbd>
+                        </label>
+                        @if (testHits().length) {
+                          <div class="cw__sug" role="listbox" aria-label="Lab tests">
+                            @for (t of testHits(); track t.id; let i = $index) {
+                              <button type="button" role="option" class="cw__sg" [class.act]="i === testActive()" [attr.aria-selected]="i === testActive()" (mousedown)="$event.preventDefault()"
+                                      (click)="addTest({ testId: t.id, name: t.name, price: t.price })">
+                                <span class="cw__ty cw__ty--test">Test</span><span>{{ t.name }}@if (hasTest(t.id)) { · ordered }</span><em class="nd-num">@if (t.price) { ₹{{ t.price }} }</em>
+                              </button>
+                            }
+                          </div>
+                        }
+                        @if (testLoadError()) { <p class="cw__muted">The lab test list could not be loaded for your role.</p> }
                       </div>
                     }
+                    <div class="cw__single">
+                      @if (editable() && suggestedMissing().length) {
+                        <div class="cw__grp">
+                          <div class="cw__gh">Suggested for {{ primaryDx() }} <button type="button" class="nd-btn nd-btn--tertiary" (click)="orderAll()">+ Order all {{ suggestedMissing().length }}</button></div>
+                          <div class="cw__chips">@for (t of suggestedMissing(); track t.testId) { <button type="button" class="cw__opt" (click)="toggleTest(t)">+ {{ t.name }}</button> }</div>
+                        </div>
+                      }
+                      <div class="cw__grp">
+                        <div class="cw__gh">Ordered <span class="nd-num">{{ st().tests.length }}@if (testTotal()) { · ₹{{ testTotal() }}}</span></div>
+                        @for (t of st().tests; track t.testId) {
+                          <div class="nd-row cw__ordered">
+                            <span class="nd-row__name">{{ t.name }}</span>
+                            @if (editable()) {
+                              <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
+                                                      (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
+                            } @else if (t.specimen) {
+                              <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen" [readonly]="true"></pf-opd-specimen-picker>
+                            }
+                            @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
+                            @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
+                          </div>
+                        } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
+                        @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
+                      </div>
+                    </div>
                   }
-                  @case (4) {
-                    <div class="cw__sec">
-                      <label class="nd-field">
-                        <span class="nd-field__lbl">Advice for the patient <em class="cw__lblhint">printed on the prescription</em></span>
+                  @case ('adv') {
+                    <div class="cw__sh"><h2>Advice &amp; notes</h2><p>Advice and follow-up print on the prescription. Private notes don't.</p></div>
+                    <div class="cw__single">
+                      <label class="cw__f">
+                        <span>Advice for the patient <em class="cw__ptag cw__ptag--q">printed on the prescription</em></span>
                         <textarea class="nd-input cw__in" rows="3" [value]="st().advice" [disabled]="!editable()" (input)="patch({ advice: $any($event.target).value })" placeholder="Diet, rest, red flags to watch for…"></textarea>
                       </label>
-                    </div>
-                    <div class="cw__sec">
-                      <div class="cw__seck cw__seck--row">Private notes
-                        <span class="cw__lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private</span>
+                      <div class="cw__grp">
+                        <div class="cw__gh">Follow-up</div>
+                        <div class="nd-seg cw__seg" role="radiogroup" aria-label="Follow-up">
+                          @for (p of fuPicks; track p.label) {
+                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="p.days === st().followUpDays" [disabled]="!editable()" (click)="patch({ followUpDays: p.days })">{{ p.label }}</button>
+                          }
+                        </div>
+                        <p class="cw__muted">{{ fuText() }}</p>
                       </div>
-                      @if (w.consult?.privateNotesHidden) {
-                        <p class="cw__muted">The consulting doctor's private notes are not visible to you.</p>
-                      } @else {
-                        <textarea class="nd-input cw__in cw__notes" rows="7" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })" placeholder="Only for you — never printed, never sent to the patient."></textarea>
-                        <p class="cw__muted">{{ visibilityText() }} Never printed, never sent on WhatsApp.</p>
-                      }
+                      <div class="cw__grp">
+                        <div class="cw__gh">Private notes
+                          <span class="cw__lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Only you</span>
+                        </div>
+                        @if (w.consult?.privateNotesHidden) {
+                          <p class="cw__muted">The consulting doctor's private notes are not visible to you.</p>
+                        } @else {
+                          <textarea class="nd-input cw__in cw__notes" rows="5" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })" placeholder="Anything to remember for the next visit — never printed, never sent to the patient."></textarea>
+                          <p class="cw__muted">{{ visibilityText() }} Never printed, never sent on WhatsApp.</p>
+                        }
+                      </div>
                     </div>
                   }
-                  }
-                </div>
-              }
-            </div>
-
-            <footer class="cw__foot">
-              @if (step() > 1) {
-                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn" (click)="go(prevStep(step()))" data-back>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5m6 6-6-6 6-6"/></svg>
-                  Back
-                </button>
-              }
-              <span class="cw__grow"></span>
-              @if (step() < 4) {
-                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn cw__navbtn--next" (click)="go(nextStep(step()))" data-next>
-                  Next: {{ titles[nextStep(step())] }}
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
-                </button>
-              } @else if (editable()) {
-                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn cw__navbtn--next" (click)="openComplete()">
-                  Review &amp; complete
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
-                </button>
-              }
-            </footer>
-          </section>
-
-          <!-- ── Right: AT A GLANCE ── -->
-          @if (glanceOpen()) { <div class="cw__scrim" (click)="glanceOpen.set(false)" aria-hidden="true"></div> }
-          <aside class="nd-card cw__glance" aria-label="At a glance">
-            <pf-consult-glance [ws]="w" [allergies]="allergies()" [lines]="st().lines" [drugs]="drugList()" [results]="results()"
-                               [canEdit]="editable()" [closable]="narrow()" [preferIds]="preferIds()"
-                               (close)="glanceOpen.set(false)" (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
-                               (repeatLast)="repeatLast()" (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-glance>
-          </aside>
+                }
+              </div>
+            }
+          </main>
         </div>
 
-        <!-- Visit journey: reports, images and Compare — opened from the timeline or Compare. -->
-        @if (journeyOpen()) { <div class="cw__scrim cw__scrim--journey" (click)="journeyOpen.set(false)" aria-hidden="true"></div> }
-        <section class="cw__journey" [class.open]="journeyOpen()" aria-label="Visit journey" [attr.aria-hidden]="!journeyOpen()">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4M7 18h5a4 4 0 0 0 4-4"/></svg></span>
-            <span class="nd-card__label">Reports, images &amp; compare</span>
-            <span class="nd-card__spacer"></span>
-            <button type="button" class="cw__iconbtn" (click)="journeyOpen.set(false)" aria-label="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </header>
-          <pf-patient-timeline #tl [patientId]="w.patient.id" [embedded]="true" [hideTitle]="true"></pf-patient-timeline>
-        </section>
+        <pf-journey-dock class="cw__dock"></pf-journey-dock>
 
         @if (completeOpen()) {
           <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
@@ -429,31 +479,36 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private readonly navBack = inject(NavBackService);
   private readonly auth = inject(AuthService);
   private readonly doc = inject(DOCUMENT);
+  private readonly entitlements = inject(TenantEntitlementsService, { optional: true });
   readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  readonly dock = inject(JourneyDockService);
 
-  readonly titles = STEP_TITLES;
-  readonly steps: ConsultStep[] = [1, 2, 3, 4];
+  readonly spaces = SPACES;
+  readonly fuPicks = FOLLOW_UP_PICKS;
 
   readonly ws = signal<ConsultWorkspace | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
   readonly st = signal<ConsultEditState>(EMPTY);
-  readonly step = signal<ConsultStep>(1);
+  readonly space = signal<ConsultSpace>('find');
   readonly allergies = signal<OpdPatientAllergy[]>([]);
-  readonly results = signal<RecentResult[]>([]);
-  readonly glanceOpen = signal(false);
-  /** Tablet / phone: the full timeline as a sheet. */
-  readonly timelineOpen = signal(false);
-  /** The patient journey / compare viewer (pf-patient-timeline) sheet. */
-  readonly journeyOpen = signal(false);
-  /** Past consults of this patient (GET …/patients/{id}/history) — the timeline's visits + prescriptions. */
-  readonly historyRows = signal<ConsultPastConsult[] | null>(null);
-  readonly historyLoading = signal(false);
   readonly completeOpen = signal(false);
   readonly completing = signal(false);
   readonly saveState = signal<SaveState>('idle');
   readonly savedAt = signal<string | null>(null);
+  /** The left card's record open in the centre viewer. */
+  readonly viewItem = signal<VisitItem | null>(null);
+  /** Compare: the ticked records (any visit), and whether the compare view is open. */
+  readonly compareItems = signal<VisitItem[]>([]);
+  readonly compareOn = signal(false);
+  readonly compareIdList = computed(() => this.compareItems().map(i => i.id));
+  /** Prefills the doctor confirmed (per visit, remembered on this device). */
+  readonly confirmed = signal<Set<string>>(new Set());
+  /** Complete warns about unreviewed prefills only once. */
+  private prefillWarned = false;
+  /** Complete was refused for a changed procedure price without a reason. */
+  readonly reasonErr = signal(false);
   /** Autosave (owner 2026-10-01): only the sections edited since the last
    *  save ride the PATCH — set by patch(), drained by saveNow(). */
   private readonly dirty = new Set<DraftSection>();
@@ -470,6 +525,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private staleRetries = 0;
 
   private readonly drugCache = signal<Map<string, ConsultDrugRef>>(new Map());
+  /** The drug master's UsualJson per drug id (doctor favourites). */
+  private readonly drugUsual = signal<Record<string, RxUsual>>({});
   readonly drugList = computed(() => [...this.drugCache().values()]);
   readonly drugSearch$ = new Subject<string>();
 
@@ -479,6 +536,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly testCatalog = signal<LabTestRow[]>([]);
   readonly testLoadError = signal(false);
   readonly testQuery = signal('');
+  readonly testActive = signal(0);
 
   readonly dxQuery = signal('');
   readonly dxSuggest = signal<ConsultDxSuggestion[]>([]);
@@ -487,6 +545,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private readonly dx$ = new Subject<string>();
 
   private readonly tl = viewChild<PatientTimelineComponent>('tl');
+  private readonly rx = viewChild<RxEditorComponent>('rx');
 
   private readonly save$ = new Subject<void>();
 
@@ -495,14 +554,12 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   /** Phone layout for the form renderer (one column) — the renderer's own ≤760px rule. */
   readonly phone = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
-  /** ≤1100px: the glance is a slide-over (tablet + phone). */
-  readonly narrow = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 1100px)').matches);
-  /** 761–1100px: the timeline is a slim rail. */
-  readonly tablet = computed(() => this.narrow() && !this.phone());
-  private readonly narrowMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 1100px)') : null;
-  private readonly onNarrowMq = (e: MediaQueryListEvent) => this.narrow.set(e.matches);
+  /** ≤1180px (tablet + phone): the vitals chips scroll. */
+  readonly compact = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 1180px)').matches);
   private readonly phoneMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 760px)') : null;
   private readonly onPhoneMq = (e: MediaQueryListEvent) => this.phone.set(e.matches);
+  private readonly compactMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 1180px)') : null;
+  private readonly onCompactMq = (e: MediaQueryListEvent) => this.compact.set(e.matches);
   private readonly mediaIn = viewChild<{ nativeElement: HTMLInputElement }>('mediaIn');
   private pendingMedia: OpdMediaRequest | null = null;
   /** The file name being uploaded (null = idle). */
@@ -513,21 +570,42 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     return !!w && w.visit.canEdit && w.visit.status === 'in_consult' && w.consult?.status !== 'completed';
   });
   readonly visitDay = computed(() => { const d = this.ws()?.visit.visitDate; return d ? new Date(d.slice(0, 10) + 'T00:00:00') : new Date(); });
+  readonly todayKey = computed(() => journeyDayKey(this.ws()?.visit.visitDate ?? new Date().toISOString()));
+  readonly dayKey = computed(() => this.dock.selectedKey() ?? this.todayKey());
   readonly primaryDx = computed(() => this.st().diagnoses[0]?.label ?? '');
   readonly unresolved = computed(() => unresolvedAllergies(this.st().lines, this.allergies()));
   /** Pregnancy-safety guard (night/safety, critic P0 #1c) — blocks Complete like unresolved allergies. */
   readonly pregnancyUnresolved = computed(() => unresolvedPregnancyRisks(this.st().lines, this.ws()?.pregnancy ?? null));
   /** Required fields (night/safety, critic P1 #2) — visible, required consult-form questions with no answer. */
   readonly requiredMissing = computed(() => missingRequired(allQuestions(this.formSchema()), this.st().answers));
-  readonly usuals = computed(() => usualsFrom(this.usual()?.rx, this.ws()?.lastVisit?.rx, this.ws()?.rx));
+  /** The usual dose per drug: the doctor's own last line wins over the master's UsualJson. */
+  readonly usuals = computed<Record<string, RxUsual>>(() => ({
+    ...this.drugUsual(), ...usualsFrom(this.usual()?.rx, this.ws()?.lastVisit?.rx, this.ws()?.rx),
+  }));
   readonly preferIds = computed(() => (this.usual()?.rx ?? []).map(r => r.drugId).filter((x): x is string => !!x));
+  /** Server features (feature-detected; older servers have none). */
+  readonly laterEnabled = computed(() => this.ws()?.features?.procedureLater === true);
+  private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled() }));
+  /** Nudge: only with an assistant AND the Messages module on. */
+  readonly showNudge = computed(() => {
+    const a = this.ws()?.assistant;
+    return a?.userId && this.entitlements?.moduleEnabled('messages') !== false ? a : null;
+  });
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
   readonly suggestedMissing = computed(() => this.suggested().filter(t => !this.hasTest(t.testId)));
   readonly testTotal = computed(() => this.st().tests.reduce((a, t) => a + (Number(t.price) || 0), 0));
   readonly testHits = computed(() => {
     const q = this.testQuery().trim().toLowerCase();
     if (!q) return [];
-    return this.testCatalog().filter(t => `${t.name} ${t.testCode ?? ''} ${t.shortName ?? ''}`.toLowerCase().includes(q)).slice(0, 12);
+    return this.testCatalog().filter(t => `${t.name} ${t.testCode ?? ''} ${t.shortName ?? ''}`.toLowerCase().includes(q)).slice(0, 10);
+  });
+  /** The diagnosis set chip (GET usual?dx) while it hasn't been applied. */
+  readonly usualSet = computed(() => (this.usualApplied() ? null : this.usual()) && this.usual()?.rx.length ? this.usual() : null);
+  /** One-tap usual medicines (UsualJson / recent lines) not already on the Rx. */
+  readonly favs = computed(() => {
+    const on = new Set(this.st().lines.map(l => l.drug.id));
+    const ids = Object.keys(this.usuals());
+    return ids.map(id => this.drugCache().get(id)).filter((d): d is ConsultDrugRef => !!d && !on.has(d.id)).slice(0, 7);
   });
   /** Header meta as separate bits (age / sex · MRN · token · department · doctor). */
   readonly metaBits = computed(() => {
@@ -537,77 +615,49 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     return [[w.patient.ageDisplay, sex].filter(Boolean).join(' '), w.patient.mrn ?? '', 'Token ' + w.visit.tokenLabel,
       w.visit.departmentName ?? '', w.visit.doctorName ?? ''].filter(Boolean);
   });
-  /** Today's four steps as the timeline shows them. */
-  readonly stepViews = computed<TimelineStepView[]>(() => this.steps.map(n => {
-    const sum = stepSummary(n, this.st(), this.allergies(), this.st().privateNotesVisibility);
-    return { n, title: this.titles[n], summary: sum.text, warn: sum.warn, done: stepDone(n, this.st()), current: this.step() === n };
-  }));
-  /** The patient's dated history for the timeline: past consults (visits +
-   *  their prescriptions) from the consult history, lab reports and files
-   *  from the patient journey (pf-patient-timeline's own loads). */
-  readonly historyNodes = computed<HistoryNode[]>(() => {
-    const w = this.ws();
-    if (!w) return [];
-    const out: HistoryNode[] = [];
-    const rows = this.historyRows();
-    if (rows) {
-      for (const c of rows) {
-        if (c.visitId === w.visit.id) continue;
-        const key = dayKeyOf(c.visitDate);
-        out.push({
-          id: 'v:' + c.visitId, type: 'visit', date: c.visitDate, dayKey: key, canCompare: true,
-          title: c.diagnoses.length ? c.diagnoses.map(d => d.label).join(', ') : 'No diagnosis recorded',
-          sub: [c.doctorName, c.departmentName].filter(Boolean).join(' · ') || null,
-          lines: [
-            c.chiefComplaint ? 'Complaint: ' + c.chiefComplaint : '',
-            c.investigations.length ? `Tests: ${c.investigations.flatMap(i => i.items).map(t => t.name).join(', ')}` : '',
-            c.procedures?.length ? `Procedures: ${c.procedures.map(p => p.name).join(', ')}` : '',
-            c.advice ? 'Advice: ' + c.advice : '',
-          ].filter(Boolean),
-        });
-        if (c.rx.length) {
-          out.push({
-            id: 'rx:' + c.visitId, type: 'rx', date: c.visitDate, dayKey: key, canCompare: false,
-            title: `${c.rx.length} medicine${c.rx.length === 1 ? '' : 's'}`,
-            sub: c.rx.map(r => r.drugName).join(', '),
-            lines: c.rx.map(r => `${r.drugName} · ${r.durationDays} day${r.durationDays === 1 ? '' : 's'}`),
-          });
-        }
-      }
-    } else {
-      for (const p of w.pastVisits) {
-        out.push({ id: 'v:' + p.visitId, type: 'visit', date: p.visitDate, dayKey: dayKeyOf(p.visitDate), canCompare: true,
-          title: p.diagnoses.length ? p.diagnoses.map(d => d.label).join(', ') : 'No diagnosis recorded',
-          sub: [p.doctorName, p.departmentName].filter(Boolean).join(' · ') || null, lines: [] });
-      }
-    }
-    const tl = this.tl();
-    if (tl) {
-      const abn = tl.abnormalDays();
-      for (const v of tl.visits()) {
-        for (const o of v.orders) {
-          const tests = tl.tests(o).map(t => t.name);
-          out.push({ id: 'lab:' + o.id, type: 'result', date: o.createdAt, dayKey: v.key, canCompare: true, flag: abn.has(v.key),
-            title: tl.orderPanelName(o), sub: o.orderNumber ?? null,
-            lines: [tests.length > 1 ? tests.join(', ') : '', abn.has(v.key) ? 'Has values outside the normal range that day.' : ''].filter(Boolean) });
-        }
-        for (const d of v.docs) {
-          out.push({ id: 'doc:' + d.id, type: 'file', date: d.uploadedAt, dayKey: v.key, canCompare: d.isImage,
-            title: d.fileName, sub: d.isImage ? 'Image' : 'Document', lines: [] });
-        }
-      }
-    }
-    return out;
-  });
-  readonly metaLine = computed(() => {
-    const w = this.ws();
-    if (!w) return '';
-    return [w.patient.ageDisplay && w.patient.sex ? `${w.patient.ageDisplay} ${w.patient.sex.charAt(0).toUpperCase()}` : w.patient.ageDisplay,
-      w.patient.mrn, 'Token ' + w.visit.tokenLabel, w.visit.departmentName, w.visit.doctorName].filter(Boolean).join(' · ');
-  });
   readonly visibilityText = computed(() => {
     const v = this.st().privateNotesVisibility;
     return v === 'doctor' ? 'Visible to you only (OPD workflow setting).' : v === 'department' ? 'Visible to doctors of this department.' : 'Visible to all doctors.';
+  });
+  readonly fuText = computed(() => followUpFeeText(this.st().followUpDays, this.ws()?.followUpRule ?? null));
+  readonly spaceLabel = computed(() => SPACES.find(s => s.id === this.space())?.label ?? '');
+
+  // ── Prefill review ─────────────────────────────────────────────────
+  readonly prefills = computed<Prefill[]>(() => {
+    const w = this.ws();
+    if (!w) return [];
+    const qs = allQuestions(this.formSchema());
+    return prefillsOf(w, this.st(), k => qs.find(q => q.key === k)?.label ?? k);
+  });
+  readonly pending = computed(() => this.prefills().filter(p => !this.confirmed().has(p.id)));
+  readonly intakePrefills = computed(() => this.prefills().filter(p => p.id.startsWith('ans:')));
+
+  // ── The left card's records ────────────────────────────────────────
+  readonly watch = computed(() => watchLine(this.dock.trends()));
+  readonly items = computed<VisitItem[]>(() => {
+    const w = this.ws();
+    if (!w) return [];
+    const tl = this.tl();
+    const orders = tl ? tl.visits().flatMap(v => v.orders.map(o => ({ id: o.id, name: tl.orderPanelName(o), createdAt: o.createdAt, hasReport: !!tl.reportFor(o.id) }))) : [];
+    const docs = tl ? tl.visits().flatMap(v => v.docs.map(d => ({ id: d.id, fileName: d.fileName, isImage: d.isImage, uploadedAt: d.uploadedAt }))) : [];
+    return visitItems({
+      dayKey: this.dayKey(), todayKey: this.todayKey(), ws: w, history: (this.dock.history() ?? []).filter(h => h.visitId !== w.visit.id),
+      orders, docs, trends: this.dock.trends(), intakeCount: (w.prefilledAnswerKeys ?? []).length,
+    });
+  });
+  readonly viewing = computed(() => this.compareOn() || !!this.viewItem());
+  /** The reused journey viewer shows: a report / image, or compared files. */
+  readonly fileView = computed(() => (this.compareOn() && this.compareItems().some(i => !!i.fileId)) || (!this.compareOn() && !!this.viewItem()?.fileId));
+  /** Compare cards for what the journey viewer doesn't draw (results, prescriptions). */
+  readonly compareCards = computed(() => this.compareItems().filter(i => !i.fileId));
+  readonly vitalRows = computed(() => {
+    const v = this.ws()?.vitals;
+    if (!v) return [] as { label: string; value: string; warn: boolean }[];
+    const L: Record<string, [string, string]> = { bp: ['BP', 'mmHg'], pulse: ['Pulse', 'bpm'], temp: ['Temp', '°F'], spo2: ['SpO₂', '%'], rr: ['RR', '/min'], weight: ['Weight', 'kg'], bmi: ['BMI', ''] };
+    return (['bp', 'pulse', 'temp', 'spo2', 'rr', 'weight', 'bmi'] as const)
+      .map(k => ({ k, t: k === 'bmi' ? (bmiOf(v) != null ? String(bmiOf(v)) : '—') : vitalText(k, v) }))
+      .filter(x => x.t !== '—')
+      .map(x => { const f = vitalFlag(x.k, v); return { label: L[x.k][0], value: `${x.t} ${L[x.k][1]}${f ? ' · ' + (f === 'high' ? 'High' : 'Low') : ''}`.trim(), warn: !!f }; });
   });
 
   constructor() {
@@ -626,11 +676,17 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       if (!dx || !this.ws()) { this.usual.set(null); return; }
       this.consultApi.usual(dx).subscribe({ next: u => this.usual.set(u && (u.rx.length || u.tests.length) ? u : null), error: () => this.usual.set(null) });
     });
+    // The journey viewer follows the visit the dock selected (its reports load per day).
+    effect(() => {
+      const k = this.dayKey();
+      const tl = this.tl();
+      if (tl) untracked(() => tl.selectKey(k));
+    });
   }
 
   ngOnInit() {
     this.phoneMq?.addEventListener?.('change', this.onPhoneMq);
-    this.narrowMq?.addEventListener?.('change', this.onNarrowMq);
+    this.compactMq?.addEventListener?.('change', this.onCompactMq);
     this.doc.documentElement.classList.add('pf-opd-immersive');
     const id = this.route.snapshot.paramMap.get('visitId');
     if (!id) { this.loading.set(false); return; }
@@ -649,12 +705,14 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.phoneMq?.removeEventListener?.('change', this.onPhoneMq);
-    this.narrowMq?.removeEventListener?.('change', this.onNarrowMq);
+    this.compactMq?.removeEventListener?.('change', this.onCompactMq);
     this.doc.documentElement.classList.remove('pf-opd-immersive');
+    this.dock.hide();
     if (this.saveState() === 'dirty') this.saveNow();
   }
 
   private hydrate(w: ConsultWorkspace) {
+    const first = !this.ws();
     this.ws.set(w);
     this.loading.set(false);
     this.allergies.set(w.allergies ?? []);
@@ -676,20 +734,26 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.draftUpdatedAt = c?.updatedAt ?? null;
     this.dirty.clear();
     this.saveState.set('idle');
-    this.consultApi.labTrends(w.patient.id).subscribe({ next: t => this.results.set(recentResultsOf(t)), error: () => this.results.set([]) });
-    if (this.historyRows() === null && !this.historyLoading()) {
-      this.historyLoading.set(true);
-      this.consultApi.history(w.patient.id).subscribe({
-        next: rows => { this.historyLoading.set(false); this.historyRows.set(rows ?? []); },
-        error: () => { this.historyLoading.set(false); /* falls back to the workspace's past visits */ },
-      });
+    this.dock.show({ id: w.patient.id, name: w.patient.name }, w.visit.visitDate);
+    if (first) {
+      // The consult opens on today's visit, whatever the dock showed before.
+      this.dock.select(journeyDayKey(w.visit.visitDate));
+      this.confirmed.set(this.readConfirmed(w.visit.id));
+      // Nothing to review → open where the doctor works most: the diagnosis.
+      if (!this.editable() || !this.pending().length) this.space.set(this.editable() ? 'dx' : 'med');
     }
   }
 
   private mergeDrugs(rows: ConsultDrug[]) {
     const m = new Map(this.drugCache());
-    for (const r of rows) m.set(r.id, drugRefOf(r));
+    const u = { ...this.drugUsual() };
+    for (const r of rows) {
+      m.set(r.id, drugRefOf(r));
+      const usual = usualFromJson(r.usual ?? null);
+      if (usual) u[r.id] = usual;
+    }
     this.drugCache.set(m);
+    this.drugUsual.set(u);
     // Upgrade lines that were hydrated before their master row arrived.
     const lines = this.st().lines;
     if (lines.some(l => !l.drug.free && m.has(l.drug.id) && m.get(l.drug.id) !== l.drug)) {
@@ -740,6 +804,9 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       // sections this edit touched — saveNow() PATCHes only those.
       for (const k of Object.keys(p) as (keyof ConsultEditState)[]) this.dirty.add(SECTION_OF[k]);
       this.saveState.set('dirty'); this.save$.next();
+      // The doctor is typing: an unpinned journey dock folds away.
+      this.dock.noteTyping();
+      if ('procedures' in p && this.reasonErr() && !(p.procedures ?? []).some(x => needsPriceReason(x))) this.reasonErr.set(false);
     }
   }
 
@@ -769,7 +836,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.dirty.clear();
     this.inFlight = true;
     this.saveState.set('saving');
-    const body = draftPatchBody(sections, this.st(), this.followUpIso(), this.visitDay());
+    const body = draftPatchBody(sections, this.st(), this.followUpIso(), this.visitDay(), this.bodyOpts());
     body.baseUpdatedAt = this.draftUpdatedAt;
     this.consultApi.patchDraft(w.visit.id, body).subscribe({
       next: res => {
@@ -853,15 +920,48 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     });
   }
 
-  summary(s: ConsultStep) { return stepSummary(s, this.st(), this.allergies(), this.st().privateNotesVisibility); }
-  done(s: ConsultStep) { return stepDone(s, this.st()); }
-  go(s: ConsultStep) { this.step.set(s); }
-  nextStep(s: ConsultStep): ConsultStep { return Math.min(4, s + 1) as ConsultStep; }
-  prevStep(s: ConsultStep): ConsultStep { return Math.max(1, s - 1) as ConsultStep; }
+  count(id: ConsultSpace) { return spaceCount(id, this.st()); }
+  goSpace(id: ConsultSpace) { this.space.set(id); this.viewItem.set(null); this.leaveCompare(); }
   statusLabel(s: string) {
     return ({ booked: 'Booked', vitals: 'At vitals', waiting: 'Waiting', in_consult: 'In consult', completed: 'Completed', cancelled: 'Cancelled', no_show: 'No show' } as Record<string, string>)[s] ?? s;
   }
   dxText(d: OpdDiagnosis[]) { return d.map(x => x.label).join(', '); }
+  initials(name: string): string {
+    return name.replace(/^(dr|mr|mrs|ms|master|baby)\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+  }
+  spark(points: { value: number }[]) { return sparkPoints(points.map(p => p.value), 240, 64); }
+  rxText(d: OpdRxLineDto) { const l = fromDto(d, this.drugList()); return `${l.drug.name} · ${rxSentence(l, this.visitDay()).text}`; }
+
+  // ── Prefill review ─────────────────────────────────────────────────
+  isPending(id: string) { return this.pending().some(p => p.id === id); }
+  confirm(id: string) {
+    this.confirmed.update(s => new Set([...s, id]));
+    this.saveConfirmed();
+  }
+  confirmAll() {
+    this.confirmed.update(s => new Set([...s, ...this.prefills().map(p => p.id)]));
+    this.saveConfirmed();
+  }
+  editPrefill(p: Prefill) {
+    this.confirm(p.id);
+    this.goSpace('find');
+    queueMicrotask(() => {
+      const el = p.id === 'complaint' ? this.doc.getElementById('cw-complaint') : null;
+      if (el) { el.scrollIntoView?.({ block: 'center' }); (el as HTMLInputElement).focus(); }
+    });
+  }
+  onComplaint(v: string) {
+    if (this.isPending('complaint')) this.confirm('complaint');
+    this.patch({ chiefComplaint: v });
+  }
+  private readConfirmed(visitId: string): Set<string> {
+    try { return new Set(JSON.parse(localStorage.getItem(prefillKey(visitId)) || '[]') as string[]); } catch { return new Set(); }
+  }
+  private saveConfirmed() {
+    const id = this.ws()?.visit.id;
+    if (!id) return;
+    try { localStorage.setItem(prefillKey(id), JSON.stringify([...this.confirmed()])); } catch { /* private mode */ }
+  }
 
   // ── Diagnosis ──────────────────────────────────────────────────────
   onDxType(v: string) { this.dxQuery.set(v); this.dx$.next(v); if (!v.trim()) this.dxSuggest.set([]); }
@@ -907,11 +1007,25 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   repeatLast() {
     const lv = this.ws()?.lastVisit;
     if (!lv || !this.editable()) return;
+    this.addRx(lv.rx, new Date(lv.visitDate));
+  }
+  /** "Repeat this prescription today" from a past visit's record. */
+  repeatRx(it: VisitItem) {
+    if (!it.rx?.length || !this.editable()) return;
+    this.addRx(it.rx, new Date(it.date + 'T00:00:00'));
+  }
+  private addRx(rx: OpdRxLineDto[], from: Date) {
     const have = new Set(this.st().lines.map(l => l.drug.id));
-    const add = lv.rx.map(d => fromDto({ ...d, id: undefined, ...FRESH_ACKS }, this.drugList())).filter(l => !have.has(l.drug.id));
+    const add = rx.map(d => fromDto({ ...d, id: undefined, ...FRESH_ACKS }, this.drugList())).filter(l => !have.has(l.drug.id));
     this.patch({ lines: [...this.st().lines, ...add] });
-    this.toast.info(`Repeated ${add.length} medicine${add.length === 1 ? '' : 's'} from ${new Date(lv.visitDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
-    this.step.set(2);
+    this.toast.info(`Repeated ${add.length} medicine${add.length === 1 ? '' : 's'} from ${from.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`);
+    this.goSpace('med');
+  }
+  addFav(d: ConsultDrugRef) {
+    const ed = this.rx();
+    if (ed) { ed.addDrug(d); return; }
+    const line = newRxLine(d.id, this.usuals()[d.id] ?? null);
+    this.patch({ lines: [...this.st().lines, { key: 'fav' + Date.now(), drug: d, line } as ConsultRxLine] });
   }
   swapLine(key: string, alt: ConsultDrugRef) {
     const old = this.st().lines.find(l => l.key === key);
@@ -920,15 +1034,24 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.patch({ lines: this.st().lines.map(l => (l.key === key ? { ...l, id: undefined, drug: alt, line, ...FRESH_ACKS } : l)) });
     this.toast.info(`${old.drug.name} swapped for ${alt.name}`);
   }
-  seeLine() { this.step.set(2); this.glanceOpen.set(false); }
-  /** A step tapped on the timeline (closes the timeline sheet on small screens). */
-  goFromTimeline(n: ConsultStep) { this.step.set(n); this.timelineOpen.set(false); }
-  initials(name: string): string {
-    return name.replace(/^(dr|mr|mrs|ms|master|baby)\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
-  }
+  seeLine() { this.goSpace('med'); }
 
   // ── Tests ──────────────────────────────────────────────────────────
   hasTest(id: string) { return this.st().tests.some(t => t.testId === id); }
+  onTestKey(e: KeyboardEvent) {
+    const hits = this.testHits();
+    if (e.key === 'ArrowDown' && hits.length) { e.preventDefault(); this.testActive.set((this.testActive() + 1) % hits.length); }
+    else if (e.key === 'ArrowUp' && hits.length) { e.preventDefault(); this.testActive.set((this.testActive() - 1 + hits.length) % hits.length); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const t = hits[this.testActive()];
+      if (t) this.addTest({ testId: t.id, name: t.name, price: t.price });
+    } else if (e.key === 'Escape') this.testQuery.set('');
+  }
+  addTest(t: ConsultInvestigationItem) {
+    if (!this.hasTest(t.testId)) this.toggleTest(t);
+    this.testQuery.set(''); this.testActive.set(0);
+  }
 
   // ── Specimen for a Test Master "choose" test (shared/opd-specimen.ts) ──
   readonly specimenErr = signal<Record<string, boolean>>({});
@@ -971,48 +1094,77 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     });
   }
 
-  // ── Journey / compare ──────────────────────────────────────────────
-  journey() { this.journeyOpen.set(true); queueMicrotask(() => this.tl()?.showJourney()); }
-  compare() {
-    this.journeyOpen.set(true);
-    queueMicrotask(() => { const t = this.tl(); if (t && !t.compareMode()) t.toggleCompare(); });
+  // ── The centre viewer + compare ────────────────────────────────────
+  openItem(it: VisitItem) {
+    this.leaveCompare();
+    this.viewItem.set(it);
+    if (it.fileId) queueMicrotask(() => { const t = this.timelineItem(it); if (t) void this.tl()?.openSingle(t); });
   }
-  /** Timeline "Open": the journey viewer at that day — a report or a file opens itself. */
-  openNode(n: HistoryNode) {
-    this.timelineOpen.set(false);
-    this.journeyOpen.set(true);
-    queueMicrotask(() => {
-      const t = this.tl();
-      if (!t) return;
-      if (t.compareMode()) t.toggleCompare();
-      if (n.dayKey) t.selectKey(n.dayKey);
-      const v = t.visits().find(x => x.key === n.dayKey);
-      if (n.type === 'result' && v) {
-        const o = v.orders.find(x => 'lab:' + x.id === n.id);
-        const rep = o ? t.reportFor(o.id) : null;
-        if (o && rep) { void t.openSingle({ id: 'rep:' + o.id, kind: 'report', name: t.orderPanelName(o), date: v.date, report: rep, order: o }); return; }
-      }
-      if (n.type === 'file' && v) {
-        const d = v.docs.find(x => 'doc:' + x.id === n.id);
-        if (d) { void t.openSingle({ id: 'doc:' + d.id, kind: d.isImage ? 'image' : 'doc', name: d.fileName, date: v.date, url: d.url }); return; }
-      }
-      t.showJourney();
-    });
+  closeViewer() { this.viewItem.set(null); this.leaveCompare(); }
+  toggleCompare(it: VisitItem) {
+    this.compareItems.update(l => (l.some(x => x.id === it.id) ? l.filter(x => x.id !== it.id) : [...l, it]));
+    if (this.compareOn()) this.syncCompareFiles();
   }
-  /** Timeline "Compare": the journey viewer in compare mode at that day. */
-  compareNode(n: HistoryNode) {
-    this.timelineOpen.set(false);
-    this.journeyOpen.set(true);
-    queueMicrotask(() => {
-      const t = this.tl();
-      if (!t) return;
-      if (n.dayKey) t.selectKey(n.dayKey);
-      if (!t.compareMode()) t.toggleCompare();
-    });
+  clearCompare() { this.compareItems.set([]); this.syncCompareFiles(); }
+  openCompare() {
+    this.viewItem.set(null);
+    this.compareOn.set(true);
+    queueMicrotask(() => this.syncCompareFiles());
+  }
+  private leaveCompare() {
+    if (!this.compareOn()) return;
+    this.compareOn.set(false);
+    const tl = this.tl();
+    if (tl?.compareMode()) tl.toggleCompare();
+  }
+  private syncCompareFiles() {
+    const tl = this.tl();
+    if (!tl) return;
+    const files = this.compareItems().map(i => this.timelineItem(i)).filter((x): x is TimelineItem => !!x);
+    tl.setPicked(files);
+  }
+  /** A left-card record → the journey viewer's item (report / image / doc). */
+  private timelineItem(it: VisitItem): TimelineItem | null {
+    const tl = this.tl();
+    if (!tl || !it.fileId) return null;
+    for (const v of tl.visits()) {
+      if (it.fileId.startsWith('rep:')) {
+        const o = v.orders.find(x => 'rep:' + x.id === it.fileId);
+        const rep = o ? tl.reportFor(o.id) : null;
+        if (o && rep) return { id: 'rep:' + o.id, kind: 'report', name: tl.orderPanelName(o), date: v.date, report: rep, order: o };
+      } else {
+        const d = v.docs.find(x => 'doc:' + x.id === it.fileId);
+        if (d) return { id: 'doc:' + d.id, kind: d.isImage ? 'image' : 'doc', name: d.fileName, date: v.date, url: d.url };
+      }
+    }
+    return null;
   }
 
   // ── Complete ───────────────────────────────────────────────────────
-  openComplete() { if (this.editable()) this.completeOpen.set(true); }
+  /** Complete: a changed procedure price needs its reason first; unreviewed
+   *  prefills WARN once ("Review now" / "Complete anyway") — never block. */
+  async openComplete() {
+    if (!this.editable()) return;
+    const canChange = !!this.ws()?.procedurePricing?.doctorCanChange;
+    const noReason = canChange ? (this.st().procedures ?? []).find(p => needsPriceReason(p)) : undefined;
+    if (noReason) {
+      this.reasonErr.set(true);
+      this.goSpace('proc');
+      this.toast.error(`${noReason.name}: give a reason for the price change.`);
+      return;
+    }
+    const pend = this.pending();
+    if (pend.length && !this.prefillWarned) {
+      this.prefillWarned = true;
+      const go = await this.dialog.confirm({
+        title: `${pend.length} prefill${pend.length === 1 ? '' : 's'} not reviewed`,
+        message: `${pend.map(p => p.label).join(', ')} came from the desk or the patient and ${pend.length === 1 ? "hasn't" : "haven't"} been checked.`,
+        confirmLabel: 'Complete anyway', cancelLabel: 'Review now',
+      });
+      if (!go) { this.goSpace('find'); return; }
+    }
+    this.completeOpen.set(true);
+  }
   complete() {
     const w = this.ws();
     if (!w || this.completing() || this.unresolved().length || this.pregnancyUnresolved().length) return;
@@ -1023,19 +1175,21 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const noSpecimen = this.missingSpecimenTests();
     if (noSpecimen.length) {
       this.completeOpen.set(false);
-      this.step.set(3);
+      this.goSpace('test');
       this.toast.error(`Choose the specimen for: ${noSpecimen.join(', ')}.`);
       return;
     }
     this.completing.set(true);
-    this.consultApi.complete(w.visit.id, draftBody(this.st(), this.followUpIso(), this.visitDay())).subscribe({
+    this.consultApi.complete(w.visit.id, draftBody(this.st(), this.followUpIso(), this.visitDay(), this.bodyOpts())).subscribe({
       next: done => {
         this.completing.set(false);
         this.completeOpen.set(false);
-        const nRx = this.st().lines.length, nT = this.st().tests.length, nP = this.st().procedures?.length ?? 0;
+        const procs = this.st().procedures ?? [];
+        const nRx = this.st().lines.length, nT = this.st().tests.length;
+        const nNow = procs.filter(p => p.when !== 'later').length, nLater = procs.filter(p => p.when === 'later').length;
         this.hydrate(done);
         this.toast.success(['Consult completed', nRx ? `${nRx} medicine${nRx === 1 ? '' : 's'} to pharmacy` : '', nT ? `${nT} test${nT === 1 ? '' : 's'} to the lab` : '',
-          nP ? `${nP} procedure${nP === 1 ? '' : 's'} to the front desk` : ''].filter(Boolean).join(' · '));
+          nNow ? `${nNow} procedure${nNow === 1 ? '' : 's'} to the front desk` : '', nLater ? `${nLater} procedure${nLater === 1 ? '' : 's'} to book` : ''].filter(Boolean).join(' · '));
       },
       error: e => {
         this.completing.set(false);
@@ -1048,7 +1202,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     });
   }
 
-  // ── Print / share (after completion) ───────────────────────────────
+  // ── Print / share / preview ────────────────────────────────────────
   private async pdfBlob(): Promise<Blob | null> {
     const w = this.ws();
     if (!w) return null;
@@ -1058,7 +1212,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const v = w.vitals;
     const vit = v ? [v.pulse ? `Pulse ${v.pulse}` : '', v.bpSys ? `BP ${v.bpSys}/${v.bpDia ?? ''}` : '', v.tempF ? `Temp ${v.tempF} F` : '',
       v.spo2 ? `SpO2 ${v.spo2}%` : '', v.weightKg ? `Wt ${v.weightKg} kg` : '', bmiOf(v) ? `BMI ${bmiOf(v)}` : ''].filter(Boolean).join(' · ') : null;
-    const fu = w.consult?.followUpDate ? new Date(w.consult.followUpDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : null;
+    const fuIso = this.followUpIso() ?? w.consult?.followUpDate ?? null;
+    const fu = fuIso ? new Date(fuIso.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : null;
     const user = this.auth.user();
     const doc = buildRxPdf({
       practice: { name: tpl?.labName || user?.tenantName, address: tpl?.address, phone: tpl?.phone, email: tpl?.email },
@@ -1067,13 +1222,21 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       visit: { date: this.visitDay(), tokenLabel: w.visit.tokenLabel, visitNumber: w.visit.visitNumber },
       vitals: vit, chiefComplaint: this.st().chiefComplaint, diagnoses: this.st().diagnoses,
       lines: this.st().lines, tests: this.st().tests, advice: this.st().advice, followUp: fu,
-      procedures: (this.st().procedures ?? []).map(p => ({ name: p.name, side: p.side ?? null, qty: p.qty, note: p.note ?? null })),
+      procedures: (this.st().procedures ?? []).map(p => ({ name: p.name, side: p.side ?? null, qty: p.qty, note: p.note ?? null, when: p.when, preferredWithin: p.preferredWithin ?? null, prepNote: p.prepNote ?? null })),
     });
     return doc.output('blob');
   }
   async print() {
     const blob = await this.pdfBlob();
     if (blob) printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
+  }
+  /** "Preview prescription": the slip as it will print, in a new tab. */
+  async preview() {
+    const blob = await this.pdfBlob();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
   async share() {
     const blob = await this.pdfBlob();
@@ -1094,11 +1257,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 }
 
 /** Local yyyy-mm-dd of a date or date-time — the patient journey's day key. Pure. */
-export function dayKeyOf(iso: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+export function dayKeyOf(iso: string): string { return journeyDayKey(iso); }
 
 /** Adds a stored file to a media answer (a left / right question keeps `{ r, l }`). Pure. */
 export function addMedia(answers: OpdAnswers, req: OpdMediaRequest, ref: OpdMediaRef): OpdAnswers {

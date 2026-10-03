@@ -57,3 +57,6 @@
 @media (max-width: 640px) {
   .mp__vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+// The journey dock sits at the bottom of the page, just above the navbar.
+.mp__dock { margin-top: auto; }

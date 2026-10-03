@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import type { OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
+import type { OpdRxLineDto } from '../shared/opd.models';
 import { timesSched } from '../shared/rx-schedule';
 import {
   ConsultEditState, applyUsual, daysBetween, draftBody, draftPatchBody, procedureDraftOf, reconcileProcedureIds, reconcileRxIds,
-  SECTION_OF, stepDone, stepSummary, undoUsual, usualsFrom,
+  SECTION_OF, undoUsual, usualsFrom,
 } from './consult-state';
 import { ConsultCompleteSheetComponent, addDaysIso, followUpFeeText } from './complete-sheet.component';
 import { bmiOf, vitalFlag } from './vitals-strip.component';
@@ -13,37 +13,25 @@ import { ConsultDrugRef, ConsultRxLine } from './rx/rx-model';
 import { addMedia, withoutConsultOwned } from './consult-workspace.page';
 import { mediaRefOf } from './consult.api';
 import { allQuestions, normalizeSchema } from '../admin/forms/renderer';
-import { recentResultsOf } from './glance-panel.component';
+import { recentResultsOf, spaceCount } from './consult-records';
 import { rxPrintRows } from './rx-print';
 
 const CLAV: ConsultDrugRef = { id: 'd-clav', name: 'Clavumox 625', form: 'tab', generic: 'Amoxicillin + Clavulanic acid' };
-const PEN: OpdPatientAllergy = { id: 'a1', patientId: 'p', allergen: 'Penicillin', status: 'active' };
 const LINE: ConsultRxLine = { key: 'k1', drug: CLAV, line: { drugId: CLAV.id, dose: 1, sched: timesSched([1, 0, 1]), dur: 5, food: 'After' } };
 const BASE: ConsultEditState = {
   answers: {}, chiefComplaint: '', diagnoses: [], advice: '', privateNotes: '', privateNotesVisibility: 'doctor', lines: [], tests: [], followUpDays: null,
 };
 const dto = (drugId: string, pat = [1, 0, 1]): OpdRxLineDto => ({ drugId, drugName: drugId, form: 'tab', dose: 1, schedule: timesSched(pat), durationDays: 5, food: 'After' });
 
-describe('Consult stepper summaries + ticks', () => {
-  it('step 1: findings pending → diagnosis', () => {
-    expect(stepSummary(1, BASE, [], 'doctor').text).toBe('Nothing noted yet · diagnosis pending');
-    expect(stepSummary(1, { ...BASE, chiefComplaint: 'Nasal block' }, [], 'doctor').text).toBe('Findings noted · diagnosis pending');
-    const s = { ...BASE, diagnoses: [{ label: 'Acute rhinosinusitis' }] };
-    expect(stepSummary(1, s, [], 'doctor').text).toBe('Acute rhinosinusitis');
-    expect(stepDone(1, BASE)).toBe(false);
-    expect(stepDone(1, s)).toBe(true);
-  });
-  it('step 2 warns about an unreviewed allergy', () => {
-    const s = { ...BASE, lines: [LINE] };
-    expect(stepSummary(2, BASE, [], 'doctor').text).toBe('No medicines yet');
-    expect(stepSummary(2, s, [PEN], 'doctor')).toEqual({ text: '1 medicine · allergy check', warn: true });
-    expect(stepSummary(2, { ...BASE, lines: [{ ...LINE, allergyAck: true }] }, [PEN], 'doctor')).toEqual({ text: '1 medicine' });
-  });
-  it('steps 3 and 4', () => {
-    expect(stepSummary(3, { ...BASE, tests: [{ testId: 't', name: 'Total IgE' }] }, [], 'doctor').text).toBe('Total IgE');
-    expect(stepSummary(4, BASE, [], 'doctor').text).toBe('Private · doctor only');
-    expect(stepSummary(4, BASE, [], 'all_doctors').text).toBe('Private · all doctors');
-    expect(stepDone(4, BASE)).toBe(false);
+describe('Consult spaces (no steps)', () => {
+  it('each tab counts its own content; Findings has none (it has the prefill dot)', () => {
+    const s = { ...BASE, diagnoses: [{ label: 'Acute rhinosinusitis' }], lines: [LINE], tests: [{ testId: 't', name: 'AEC' }], advice: 'Steam', followUpDays: 7 };
+    expect(spaceCount('find', s)).toBe(0);
+    expect(spaceCount('dx', s)).toBe(1);
+    expect(spaceCount('med', s)).toBe(1);
+    expect(spaceCount('test', s)).toBe(1);
+    expect(spaceCount('adv', s)).toBe(2);
+    expect(spaceCount('proc', BASE)).toBe(0);
   });
 });
 
