@@ -56,10 +56,11 @@
 
 // ── Body: nav (left) · centre · patient card (right) ──
 .cw__body { flex: 1 1 auto; min-height: 0; position: relative; display: grid; grid-template-columns: var(--cw-nav-w, 240px) minmax(0, 1fr) var(--cw-right-w, 300px);
-  gap: 20px; padding: 16px 20px; }
-// Pins (per user): an unpinned nav is a 64px icon rail; an unpinned patient card a 56px rail.
-.cw__body--navrail { --cw-nav-w: 64px; }
-.cw__body--rightrail { --cw-right-w: 56px; }
+  gap: 20px; padding: 16px 20px; transition: grid-template-columns 150ms ease; }
+@media (prefers-reduced-motion: reduce) { .cw__body { transition: none; } }
+// Pins (per user) + auto-balance: a folded nav is a 48px icon rail; a folded patient card a 44px rail.
+.cw__body--navrail { --cw-nav-w: 48px; }
+.cw__body--rightrail { --cw-right-w: 44px; }
 .cw__nav, .cw__right, .cw__centre { min-height: 0; }
 .cw__centre { display: flex; flex-direction: column; }
 .cw__patbtn { display: none; position: relative; }
@@ -75,22 +76,26 @@
 .cw__nav { display: flex; flex-direction: column; }
 .cw__body--navrail .cw__navh { display: none; }
 .cw__body--navrail .cw__navfoot { display: flex; }
-.cw__body--navrail .cw__navl { padding: 8px 6px; align-items: center; }
-.cw__body--navrail .cw__ni { justify-content: center; width: 50px; padding: 0; }
+.cw__body--navrail .cw__nav { align-self: start; border-radius: 12px; background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--nd-card-bg)); }
+.cw__body--navrail .cw__navl { padding: 6px 0; gap: 8px; align-items: center; }
+.cw__body--navrail .cw__ni { justify-content: center; width: 36px; min-height: 36px; height: 36px; padding: 0; border-radius: 9px; }
+.cw__body--navrail .cw__nico { width: 28px; height: 28px; background: none; }
+.cw__body--navrail .cw__navfoot { padding: 0 0 6px; margin-top: 0; }
 .cw__body--navrail .cw__nl { display: none; }
 .cw__body--navrail .cw__ni .cw__tc { position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
 
 // The patient card's rail (unpinned): icons with small badges; a tap opens the overlay.
-.cw__rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; min-height: 0; overflow-y: auto; }
-.cw__rb { position: relative; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
+.cw__rail { align-self: start; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0; min-height: 0; max-height: 100%; overflow-y: auto;
+  border: 1px solid var(--nd-line); border-radius: 12px; box-shadow: none; background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--nd-card-bg)); }
+.cw__rb { position: relative; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
 .cw__rb:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
 .cw__rb:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 .cw__rb--red { color: var(--red-text, #dc2626); }
 .cw__rb--amber { color: var(--amber-text, #b45309); }
 :host-context(html.dark) .cw__rb--amber { color: #fbbf24; }
-.cw__rdot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); box-shadow: 0 0 0 2px var(--nd-card-bg); }
+.cw__rdot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); box-shadow: 0 0 0 2px var(--nd-card-bg); }
 .cw__rdot--amber { background: #f59e0b; }
-.cw__rn { position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center;
+.cw__rn { position: absolute; top: -4px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; display: grid; place-items: center;
   font-size: 10px; font-weight: 700; color: #fff; background: var(--color-violet-600, #7c3aed); }
 // Unpinned + open: the full card floats over the centre (the layout doesn't move).
 .cw__right--float { display: none; }

@@ -42,7 +42,7 @@ import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 import { JourneyDockComponent } from '../shared/journey-dock.component';
 import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
 import {
-  ConsultSpace, Prefill, SPACES, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
+  ConsultSpace, Prefill, SPACES, balancePanels, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
 import { ConsultPageAssistantComponent } from './page-assistant.component';
@@ -146,7 +146,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           </div>
         </header>
 
-        <div class="cw__body" [class.cw__body--navrail]="!navPinned()" [class.cw__body--rightrail]="!rightPinned()">
+        <div #body class="cw__body" [class.cw__body--navrail]="!navDocked()" [class.cw__body--rightrail]="!rightDocked()">
           <!-- ── Left: the consult navigation (spaces, in any order) ── -->
           <nav class="nd-card cw__nav" aria-label="Consult">
             <header class="nd-card__head cw__navh">
@@ -177,7 +177,8 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
               }
             </div>
             <div class="cw__navfoot">
-              <button type="button" class="cw__pin" (click)="toggleNavPin()" [attr.aria-pressed]="navPinned()" title="Pin the consult list open" aria-label="Pin the consult list open"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg></button>
+              <button type="button" class="cw__pin" (click)="toggleNavPin()" [attr.aria-pressed]="navPinned()"
+                      [title]="navPinned() ? 'Pinned · collapsed for space' : 'Pin the consult list open'" [attr.aria-label]="navPinned() ? 'Pinned, collapsed for space. Unpin the consult list' : 'Pin the consult list open'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg></button>
             </div>
           </nav>
 
@@ -504,36 +505,36 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           </main>
 
           <!-- ── Right: the patient card (Always strip + the visit's records) ── -->
-          @if (!rightPinned() && !phone()) {
+          @if (!rightDocked() && !phone()) {
             <nav class="nd-card cw__rail" aria-label="Patient card (folded)">
               <button type="button" class="cw__rb" [class.cw__rb--red]="allergies().length" (click)="openRight()" [attr.aria-label]="'Allergies: ' + (allergies().length || 'none')" title="Allergies">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
                 @if (allergies().length) { <span class="cw__rdot"></span> }
               </button>
               <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Conditions: ' + w.conditions.length" title="Conditions">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
                 @if (w.conditions.length) { <span class="cw__rn nd-num">{{ w.conditions.length }}</span> }
               </button>
               <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Running medicines: ' + w.currentMedicines.length" title="Medicines">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
                 @if (w.currentMedicines.length) { <span class="cw__rn nd-num">{{ w.currentMedicines.length }}</span> }
               </button>
               @if (watch()) {
                 <button type="button" class="cw__rb cw__rb--amber" (click)="openRight()" [attr.aria-label]="'Watch: ' + watch()" [title]="'Watch: ' + watch()">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
                   <span class="cw__rdot cw__rdot--amber"></span>
                 </button>
               }
               <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Reports and results: ' + reportCount()" title="Reports">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
                 @if (reportCount()) { <span class="cw__rn nd-num">{{ reportCount() }}</span> }
               </button>
             </nav>
           }
           @if (rightOverlay()) { <div class="cw__scrim" (click)="closeRight()" aria-hidden="true"></div> }
-          <aside class="nd-card cw__right" [class.cw__right--float]="!rightPinned() || phone()" [class.cw__right--open]="rightOverlay()" aria-label="Patient records">
+          <aside class="nd-card cw__right" [class.cw__right--float]="!rightDocked() || phone()" [class.cw__right--open]="rightOverlay()" aria-label="Patient records">
             <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
-                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightPinned() || phone()" [pinned]="rightPinned()" [pinnable]="!phone()"
+                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightDocked() || phone()" [pinned]="rightPinned()" [autoCollapsed]="rightPinned() && !rightDocked()" [pinnable]="!phone()"
                                    [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
                                    [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
                                    (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="closeRight(true)" (togglePin)="toggleRightPin()"
@@ -602,7 +603,16 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly rightPinned = signal(true);
   readonly navPinned = signal(true);
   /** The overlay shows when opened — and stays while compare mode is on. */
-  readonly rightOverlay = computed(() => (!this.rightPinned() || this.phone()) && (this.patientOpen() || (this.compareMode() && !this.phone())));
+  /** The body's content width + column gaps (ResizeObserver) → auto-balance. */
+  readonly bodyW = signal(0);
+  private bodyGaps = 40;
+  private readonly balance = computed(() => balancePanels(this.bodyW(), this.bodyGaps, this.navPinned(), this.rightPinned()));
+  /** Docked = pinned AND the centre still has room for the form (≥680px). */
+  readonly navDocked = computed(() => this.balance().navDocked);
+  readonly rightDocked = computed(() => this.balance().rightDocked);
+  private readonly bodyEl = viewChild<{ nativeElement: HTMLElement }>('body');
+  private bodyRo: ResizeObserver | null = null;
+  readonly rightOverlay = computed(() => (!this.rightDocked() || this.phone()) && (this.patientOpen() || (this.compareMode() && !this.phone())));
   readonly reportCount = computed(() => this.items().filter(i => i.type === 'pdf' || i.type === 'res' || i.type === 'img').length);
   readonly isAdmin = computed(() => { try { return !!this.auth.hasAnyPermission?.(ADMIN_PERMS); } catch { return false; } });
   readonly compareIdList = computed(() => this.compareItems().map(i => i.id));
@@ -808,6 +818,21 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       if (!dx || !this.ws()) { this.usual.set(null); return; }
       this.consultApi.usual(dx).subscribe({ next: u => this.usual.set(u && (u.rx.length || u.tests.length) ? u : null), error: () => this.usual.set(null) });
     });
+    // Auto-balance: watch the body's width (it exists once the workspace renders).
+    effect(() => {
+      const el = this.bodyEl()?.nativeElement;
+      untracked(() => {
+        this.bodyRo?.disconnect();
+        if (!el || typeof ResizeObserver !== 'function') return;
+        this.bodyRo = new ResizeObserver(entries => {
+          const w = entries[0]?.contentRect.width ?? 0;
+          const g = parseFloat(getComputedStyle(el).columnGap) || 20;
+          this.bodyGaps = g * 2;
+          if (Math.abs(w - this.bodyW()) >= 1) this.bodyW.set(w);
+        });
+        this.bodyRo.observe(el);
+      });
+    });
     // Compare mode: a date picked on the timeline opens the patient card (tablet / phone).
     effect(() => {
       this.dock.selectedKey();
@@ -847,6 +872,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.compactMq?.removeEventListener?.('change', this.onCompactMq);
     this.doc.documentElement.classList.remove('pf-opd-immersive');
     this.dock.hide();
+    this.bodyRo?.disconnect();
     if (this.saveState() === 'dirty') this.saveNow();
   }
 
@@ -945,7 +971,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       this.saveState.set('dirty'); this.save$.next();
       // The doctor is typing: an unpinned journey dock folds away.
       this.dock.noteTyping();
-      if (!this.rightPinned() && this.patientOpen() && !this.compareMode()) this.patientOpen.set(false);
+      if (!this.rightDocked() && this.patientOpen() && !this.compareMode()) this.patientOpen.set(false);
       if ('procedures' in p && this.reasonErr() && !(p.procedures ?? []).some(x => needsPriceReason(x))) this.reasonErr.set(false);
     }
   }
