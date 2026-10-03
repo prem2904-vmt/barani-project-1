@@ -150,6 +150,11 @@
     }
   </div>
 
+  <!-- The journey dock (consult v6) for the patient the doctor tapped. -->
+  @if (isLg() && pickedId() && dock.patient()) {
+    <pf-journey-dock class="mp__dock" (picked)="historyAt($event)"></pf-journey-dock>
+  }
+
   <!-- Below 1024px: the New visit bar → the at-a-glance sheet. -->
   @if (!isLg() && selected(); as s) {
     @if (!sheetOpen()) {
