@@ -76,6 +76,8 @@ export interface VisitItem {
   rx?: OpdRxLineDto[];
   /** The timeline file behind a report / image ('rep:' + orderId | 'doc:' + docId). */
   fileId?: string;
+  /** A whole consult (visit flow) — comparable side by side with today's. */
+  consultId?: string;
   /** Free text (desk note / intake). */
   text?: string;
   /** The visit date (compare labels). */
@@ -118,7 +120,7 @@ export function visitItems(a: {
       v.consultStartedAt ? { at: hm(v.consultStartedAt), what: `With ${v.doctorName || 'the doctor'}` } : null,
       v.completedAt ? { at: hm(v.completedAt), what: 'Consult completed' } : null,
     ].filter((x): x is { at: string; what: string } => !!x);
-    out.push({ id: 'today:flow', type: 'flow', title: 'Visit flow', compare: false, date: dayKey, steps,
+    out.push({ id: 'consult:' + v.id, consultId: v.id, type: 'flow', title: "Today's consult", compare: true, date: dayKey, steps,
       sub: v.checkedInAt ? `Checked in ${hm(v.checkedInAt)}${v.status === 'in_consult' ? ' · with you now' : ''}` : `Token ${v.tokenLabel}` });
     if (ws.vitals) {
       const warn = vitalsWarnings(ws.vitals);
@@ -136,9 +138,10 @@ export function visitItems(a: {
         c.rx.length ? { at: '', what: plural(c.rx.length, 'medicine') + ' prescribed' } : null,
         c.investigations.flatMap(i => i.items).length ? { at: '', what: 'Tests · ' + c.investigations.flatMap(i => i.items).map(t => t.name).join(', ') } : null,
       ].filter((x): x is { at: string; what: string } => !!x);
-      out.push({ id: 'flow:' + c.visitId, type: 'flow', title: 'Visit flow', compare: false, date: dayKey, steps,
+      out.push({ id: 'consult:' + c.visitId, consultId: c.visitId, type: 'flow', title: 'Consult', compare: true, date: dayKey, steps,
         sub: [`OPD · ${c.doctorName || 'Doctor'}`, c.diagnoses.length ? dxText(c.diagnoses) : ''].filter(Boolean).join(' · ') });
-      if (c.rx.length) out.push({ id: 'rx:' + c.visitId, type: 'rx', title: 'Prescription', sub: plural(c.rx.length, 'medicine'), compare: true, date: dayKey, rx: c.rx });
+      // The Rx compares as part of its consult (aligned by drug), not on its own.
+      if (c.rx.length) out.push({ id: 'rx:' + c.visitId, type: 'rx', title: 'Prescription', sub: plural(c.rx.length, 'medicine'), compare: false, date: dayKey, rx: c.rx });
     }
   }
   for (const o of a.orders.filter(x => journeyDayKey(x.createdAt) === dayKey)) {

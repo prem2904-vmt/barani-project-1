@@ -27,6 +27,13 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     <header class="nd-card__head vc__head">
       <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
       <span class="nd-card__label">{{ isToday() ? 'Today' : 'Visit' }}</span>
+      @if (pinnable()) {
+        <button type="button" class="vc__pin" (click)="togglePin.emit()" [attr.aria-pressed]="pinned()" data-pin
+                [title]="pinned() ? 'Pinned: stays open beside the consult' : 'Unpinned: folds to a rail'"
+                [attr.aria-label]="pinned() ? 'Unpin the patient card' : 'Pin the patient card open'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg>
+        </button>
+      }
       @if (closable()) {
         <button type="button" class="vc__x" (click)="close.emit()" aria-label="Close the patient card">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -179,6 +186,10 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__row--picked { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent); }
     .vc__ord { flex: none; margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
       color: #fff; background: var(--color-violet-600, #7c3aed); }
+    .vc__pin { order: 8; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--nd-line); background: none;
+      color: var(--text-secondary); display: inline-grid; place-items: center; cursor: pointer; }
+    .vc__pin[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .vc__pin:focus-visible, .vc__x:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .vc__x { order: 9; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
 
     @media (max-width: 760px) { .nd-input { font-size: 16px; } }
@@ -193,8 +204,11 @@ export class ConsultVisitCardComponent {
   readonly compareIds = input<string[]>([]);
   /** Compare mode (band button): a tap adds / removes the record instead of opening it. */
   readonly compareMode = input(false);
-  /** Tablet / phone: the card is a slide-over / sheet with a close button. */
+  /** Unpinned overlay / phone sheet: a close button. */
   readonly closable = input(false);
+  /** The pin (same icon + behaviour as the journey dock); hidden on phones. */
+  readonly pinnable = input(true);
+  readonly pinned = input(true);
   readonly allergies = input<OpdPatientAllergy[]>([]);
   readonly pregnancy = input<OpdPregnancy | null>(null);
   readonly conditions = input<{ label: string }[]>([]);
@@ -207,6 +221,7 @@ export class ConsultVisitCardComponent {
 
   readonly open = output<VisitItem>();
   readonly close = output<void>();
+  readonly togglePin = output<void>();
   readonly today = output<void>();
   readonly swap = output<{ key: string; alt: ConsultDrugRef }>();
   readonly seeLine = output<string>();
