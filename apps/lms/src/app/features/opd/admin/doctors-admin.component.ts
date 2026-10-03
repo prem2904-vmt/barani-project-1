@@ -176,7 +176,7 @@ export class DoctorsAdminComponent {
     { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'nd-num',
       valueParser: (p) => { const s = String(p.newValue ?? '').trim().toUpperCase(); return /^[A-Z0-9]{0,4}$/.test(s) ? (s || null) : p.oldValue; },
       valueFormatter: (p) => p.value || '—' },
-    // The doctor's assistant (consult v6 Nudge) — a tenant user; blank = none.
+    // The doctor's assistant (consult v6 Page) — a tenant user; blank = none.
     { colId: 'assistant', headerName: 'Assistant', minWidth: 200, sortable: false, autoHeight: false,
       valueGetter: (p) => p.data?.assistantUserId ?? '',
       cellRenderer: AssistantCellComponent,

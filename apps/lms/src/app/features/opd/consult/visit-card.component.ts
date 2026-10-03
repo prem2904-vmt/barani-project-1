@@ -14,8 +14,9 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
  * conditions, running medicines and a watch line from abnormal trends.
  * Then All / Reports / Images and the selected visit's records as tiles
  * (visit flow, vitals, desk note, intake, reports, results, images,
- * prescription) with compare ticks. A tile opens in the centre viewer.
- * Phone: the strip folds behind the date; the tiles become a horizontal row.
+ * prescription). A tile opens in the centre viewer — or, in compare mode,
+ * joins / leaves the comparison (selected ring + its order number). It is
+ * the RIGHT card on desktop, a slide-over on tablet and a sheet on phones.
  */
 @Component({
   selector: 'pf-consult-visit-card',
@@ -26,6 +27,11 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     <header class="nd-card__head vc__head">
       <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
       <span class="nd-card__label">{{ isToday() ? 'Today' : 'Visit' }}</span>
+      @if (closable()) {
+        <button type="button" class="vc__x" (click)="close.emit()" aria-label="Close the patient card">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      }
       <span class="nd-card__spacer"></span>
       <button type="button" class="vc__date nd-num" (click)="stripOpen.set(!stripOpen())" [attr.aria-expanded]="stripOpen()" aria-label="Show the patient's allergies, conditions and medicines">
         {{ dayKey() + 'T00:00:00' | date:'EEE, d MMM y' }}
@@ -89,8 +95,12 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     <div class="vc__scroll">
       <div class="vc__items" role="list" [attr.aria-label]="'Records of ' + (isToday() ? 'today' : 'this visit')">
         @for (i of shown(); track i.id) {
-          <div class="vc__row" role="listitem" [attr.aria-current]="selectedId() === i.id" [attr.data-item]="i.type">
-            <button type="button" class="vc__open" (click)="open.emit(i)" [attr.aria-label]="'Open ' + i.title">
+          @let order = compareIds().indexOf(i.id) + 1;
+          <div class="vc__row" role="listitem" [attr.aria-current]="selectedId() === i.id" [attr.data-item]="i.type"
+               [class.vc__row--pick]="compareMode() && i.compare" [class.vc__row--picked]="order > 0">
+            <button type="button" class="vc__open" (click)="open.emit(i)"
+                    [attr.aria-label]="compareMode() && i.compare ? (order ? 'Remove ' + i.title + ' from compare' : 'Add ' + i.title + ' to compare') : 'Open ' + i.title"
+                    [attr.aria-pressed]="compareMode() && i.compare ? order > 0 : null">
               <span class="vc__ic" [attr.data-type]="i.type" aria-hidden="true">
                 @switch (i.type) {
                   @case ('flow') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h5a3 3 0 0 1 0 6h-2a3 3 0 0 0 0 6h5"/></svg> }
@@ -106,12 +116,8 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
                 <span class="vc__n">{{ i.title }}</span>
                 <span class="vc__s nd-num" [class.vc__s--h]="i.high">{{ i.sub }}</span>
               </span>
+              @if (order > 0) { <span class="vc__ord nd-num" aria-hidden="true">{{ order }}</span> }
             </button>
-            @if (i.compare) {
-              <label class="vc__cmp">
-                <input type="checkbox" class="nd-check" [checked]="compareIds().includes(i.id)" (change)="toggleCompare.emit(i)" [attr.aria-label]="'Compare ' + i.title" />
-              </label>
-            }
           </div>
         } @empty {
           <p class="vc__muted vc__pad">{{ loading() ? 'Loading this visit…' : 'Nothing of this kind on this visit.' }}</p>
@@ -155,11 +161,11 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__pill[aria-pressed='true'] { border-color: transparent; color: #fff; font-weight: 600; background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); }
     .vc__scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
     .vc__items { display: grid; gap: 8px; padding: 10px 14px 14px; align-content: start; }
-    .vc__row { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0 10px 0 0; border-radius: var(--nd-radius-sm, 10px);
+    .vc__row { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0; border-radius: var(--nd-radius-sm, 10px);
       border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
     .vc__row:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--nd-line)); }
     .vc__row[aria-current='true'] { background: var(--nd-in-tint); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); }
-    .vc__open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 4px 8px 10px; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+    .vc__open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
     .vc__ic { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--violet-text, #6d28d9);
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent); }
     .vc__ic[data-type='res'] { color: var(--blue-text, #1d4ed8); background: color-mix(in srgb, #60a5fa 12%, transparent); }
@@ -169,19 +175,13 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__n { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
     .vc__s { font-size: 11.5px; color: var(--text-tertiary); }
     .vc__s--h { color: var(--red-text, #dc2626); font-weight: 600; }
-    .vc__cmp { flex: none; display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer; }
+    .vc__row--pick { border-style: dashed; }
+    .vc__row--picked { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent); }
+    .vc__ord { flex: none; margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
+      color: #fff; background: var(--color-violet-600, #7c3aed); }
+    .vc__x { order: 9; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
 
-    /* Phone: one column — the strip folds behind the date, tiles scroll sideways. */
-    @media (max-width: 760px) {
-      .vc__always, .vc__pills { display: none; }
-      .vc__always--open { display: grid; }
-      .vc__pills--open { display: flex; }
-      .vc__scroll { overflow: visible; }
-      .vc__items { display: flex; overflow-x: auto; gap: 8px; padding: 10px 12px; scrollbar-width: none; }
-      .vc__row { flex: none; min-width: 160px; min-height: 48px; }
-      .vc__s { display: none; }
-      .nd-input { font-size: 16px; }
-    }
+    @media (max-width: 760px) { .nd-input { font-size: 16px; } }
   `],
 })
 export class ConsultVisitCardComponent {
@@ -191,6 +191,10 @@ export class ConsultVisitCardComponent {
   readonly loading = input(false);
   readonly selectedId = input<string | null>(null);
   readonly compareIds = input<string[]>([]);
+  /** Compare mode (band button): a tap adds / removes the record instead of opening it. */
+  readonly compareMode = input(false);
+  /** Tablet / phone: the card is a slide-over / sheet with a close button. */
+  readonly closable = input(false);
   readonly allergies = input<OpdPatientAllergy[]>([]);
   readonly pregnancy = input<OpdPregnancy | null>(null);
   readonly conditions = input<{ label: string }[]>([]);
@@ -202,7 +206,7 @@ export class ConsultVisitCardComponent {
   readonly canEdit = input(false);
 
   readonly open = output<VisitItem>();
-  readonly toggleCompare = output<VisitItem>();
+  readonly close = output<void>();
   readonly today = output<void>();
   readonly swap = output<{ key: string; alt: ConsultDrugRef }>();
   readonly seeLine = output<string>();

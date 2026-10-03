@@ -43,7 +43,8 @@ import {
   ConsultSpace, Prefill, SPACES, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
-import { ConsultNudgeComponent } from './nudge.component';
+import { ConsultPageAssistantComponent } from './page-assistant.component';
+import { ADMIN_PERMS } from '../../../core/auth/route-access';
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -59,13 +60,19 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
  * `/opd/consult/:visitId` — the consult (consult v6, owner-approved canvas).
  *  - Patient band, ONE row: back · avatar · name / meta · In consult · today's
  *    vitals as compact chips (amber out of range, "+N" overflow) · save
- *    state · Nudge (to the doctor's assistant) · Compare (n) · Complete.
- *  - Left VISIT card: the "Always" strip (allergies + Rx conflicts,
- *    conditions, running medicines, a watch line) and the selected visit's
- *    records; a record opens in the centre viewer ("Back to the consult").
- *  - Centre: spaces, not steps — Findings · Diagnosis · Prescription ·
- *    Procedures · Tests · Advice & notes, in any order, each with a count and
- *    its own add bar. Findings starts with the prefill review.
+ *    state · Page (the doctor's assistant) · Patient (tablet / phone) ·
+ *    Compare · Complete.
+ *  - LEFT: the consult navigation — Findings · Diagnosis · Prescription ·
+ *    Procedures · Tests · Advice & notes, in any order, each with a count
+ *    (an amber dot on Findings while prefills are unconfirmed). The centre
+ *    shows the selected space with its own header and add bar; Findings
+ *    starts with the prefill review.
+ *  - RIGHT: the patient card — the "Always" strip (allergies + Rx
+ *    conflicts, conditions, running medicines, a watch line) and the
+ *    selected visit's records; a record opens in the centre viewer. Compare
+ *    mode (the band's Compare) turns a tap into select / deselect.
+ *  - Tablet: the nav is a 64px icon rail and the patient card a slide-over;
+ *    phone: the nav is an icon strip on top and the patient card a sheet.
  *  - The journey dock above the bottom navbar (which stays visible); a date
  *    there selects the visit the left card shows.
  * Autosave, the Complete gates, print and share are unchanged. Complete only
@@ -76,7 +83,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
   standalone: true,
   imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent,
     DatePipe, ConsultVitalsComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
-    RxEditorComponent, PatientTimelineComponent, ConsultVisitCardComponent, ConsultNudgeComponent, JourneyDockComponent,
+    RxEditorComponent, PatientTimelineComponent, ConsultVisitCardComponent, ConsultPageAssistantComponent, JourneyDockComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -111,12 +118,18 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                   }
                 </span>
               }
-              @if (showNudge(); as a) {
-                <pf-consult-nudge [assistantId]="a.userId" [assistantName]="a.name" [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel"></pf-consult-nudge>
+              @if (showPage()) {
+                <pf-consult-page-assistant [assistantId]="w.assistant?.userId ?? null" [assistantName]="w.assistant?.name ?? null" [isAdmin]="isAdmin()"
+                                           [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel"></pf-consult-page-assistant>
               }
-              <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="openCompare()" [attr.aria-pressed]="compareOn()" data-compare>
+              <button type="button" class="nd-btn nd-btn--secondary cw__cmp cw__patbtn" (click)="patientOpen.set(!patientOpen())" [attr.aria-expanded]="patientOpen()" aria-label="Patient records" data-patient>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span class="cw__lab">Patient</span>
+                @if (allergies().length) { <span class="cw__alertdot" aria-label="has allergies"></span> }
+              </button>
+              <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
-                <span class="cw__lab">Compare</span><span class="cw__ct nd-num">{{ compareItems().length }}</span>
+                <span class="cw__lab">Compare</span>@if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
               </button>
               @if (editable()) {
                 <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
@@ -129,19 +142,46 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
         </header>
 
         <div class="cw__body">
-          <!-- ── Left: the VISIT card ── -->
-          <aside class="nd-card cw__left" aria-label="Visit records">
-            <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
-                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()"
-                                   [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
-                                   [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
-                                   (open)="openItem($event)" (toggleCompare)="toggleCompare($event)" (today)="dock.select(todayKey())"
-                                   (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
-                                   (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
-          </aside>
+          <!-- ── Left: the consult navigation (spaces, in any order) ── -->
+          <nav class="nd-card cw__nav" aria-label="Consult">
+            <header class="nd-card__head cw__navh">
+              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></svg></span>
+              <span class="nd-card__label">Consult</span>
+            </header>
+            <div class="cw__navl" role="tablist" aria-orientation="vertical" aria-label="Consult">
+              @for (t of spaces; track t.id) {
+                <button type="button" class="cw__ni" role="tab" [attr.aria-selected]="space() === t.id && !viewing()" [attr.data-space]="t.id" (click)="goSpace(t.id)"
+                        [attr.aria-label]="t.label + (count(t.id) ? ', ' + count(t.id) : '') + (t.id === 'find' && pending().length ? ', prefills to check' : '')" [title]="t.label">
+                  <span class="cw__nico" aria-hidden="true">
+                    @switch (t.id) {
+                      @case ('find') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg> }
+                      @case ('dx') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg> }
+                      @case ('med') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg> }
+                      @case ('proc') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z"/></svg> }
+                      @case ('test') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L5 19a1 1 0 0 0 1 2h12a1 1 0 0 0 1-2l-5-10V3"/><path d="M7 15h10"/></svg> }
+                      @default { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
+                    }
+                    @if (t.id === 'find' && pending().length) { <span class="cw__dotw" title="Prefills to check"></span> }
+                  </span>
+                  <span class="cw__nl">{{ t.label }}</span>
+                  @if (count(t.id); as c) { <span class="cw__tc nd-num">{{ c }}</span> }
+                </button>
+              }
+            </div>
+          </nav>
 
           <!-- ── Centre ── -->
           <main class="nd-card cw__centre" [class.cw__centre--viewing]="viewing()">
+            @if (compareMode() && !compareOn()) {
+              <div class="cw__cbar" role="status" data-compare-bar>
+                <b>Compare</b>
+                <span class="cw__cbt">Tap reports on the right or pick dates on the timeline</span>
+                <span class="cw__cbn nd-num">{{ compareItems().length }} selected</span>
+                <span class="cw__grow"></span>
+                <button type="button" class="nd-btn nd-btn--primary cw__sm" [disabled]="!compareItems().length" (click)="openCompare()">View side by side</button>
+                <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="exitCompare()">Done</button>
+              </div>
+            }
             @if (viewing()) {
               <header class="nd-card__head cw__vbar">
                 <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="closeViewer()" aria-label="Back to the consult">
@@ -223,29 +263,6 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <pf-patient-timeline #tl class="cw__tl" [class.cw__tl--on]="fileView()" [patientId]="w.patient.id" [embedded]="true" [hideTitle]="true" [viewerOnly]="true"></pf-patient-timeline>
 
             @if (!viewing()) {
-              <header class="nd-card__head cw__tabhead">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></svg></span>
-                <div class="cw__tabs" role="tablist" aria-label="Consult">
-                  @for (t of spaces; track t.id) {
-                    <button type="button" class="cw__tab" role="tab" [attr.aria-selected]="space() === t.id" [attr.data-space]="t.id" (click)="goSpace(t.id)">
-                      <span class="cw__tico" aria-hidden="true">
-                        @switch (t.id) {
-                          @case ('find') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg> }
-                          @case ('dx') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg> }
-                          @case ('med') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg> }
-                          @case ('proc') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z"/></svg> }
-                          @case ('test') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L5 19a1 1 0 0 0 1 2h12a1 1 0 0 0 1-2l-5-10V3"/><path d="M7 15h10"/></svg> }
-                          @default { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
-                        }
-                      </span>
-                      <span class="cw__tl2">{{ t.label }}</span>
-                      @if (t.id === 'find' && pending().length) { <span class="cw__dotw" title="Prefills to check" aria-label="prefills to check"></span> }
-                      @if (count(t.id); as c) { <span class="cw__tc nd-num">{{ c }}</span> }
-                    </button>
-                  }
-                </div>
-              </header>
-
               <div class="cw__space" role="tabpanel" [attr.aria-label]="spaceLabel()">
                 @switch (space()) {
                   @case ('find') {
@@ -448,6 +465,18 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
               </div>
             }
           </main>
+
+          <!-- ── Right: the patient card (Always strip + the visit's records) ── -->
+          @if (patientOpen()) { <div class="cw__scrim" (click)="patientOpen.set(false)" aria-hidden="true"></div> }
+          <aside class="nd-card cw__right" [class.cw__right--open]="patientOpen()" aria-label="Patient records">
+            <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
+                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="compact()"
+                                   [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
+                                   [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
+                                   (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="patientOpen.set(false)"
+                                   (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
+                                   (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
+          </aside>
         </div>
 
         <pf-journey-dock class="cw__dock"></pf-journey-dock>
@@ -502,6 +531,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   /** Compare: the ticked records (any visit), and whether the compare view is open. */
   readonly compareItems = signal<VisitItem[]>([]);
   readonly compareOn = signal(false);
+  /** Compare mode (the band's pressed Compare): a tile tap adds / removes it. */
+  readonly compareMode = signal(false);
+  /** Tablet / phone: the patient card as a slide-over / sheet. */
+  readonly patientOpen = signal(false);
+  readonly isAdmin = computed(() => { try { return !!this.auth.hasAnyPermission?.(ADMIN_PERMS); } catch { return false; } });
   readonly compareIdList = computed(() => this.compareItems().map(i => i.id));
   /** Prefills the doctor confirmed (per visit, remembered on this device). */
   readonly confirmed = signal<Set<string>>(new Set());
@@ -586,11 +620,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   /** Server features (feature-detected; older servers have none). */
   readonly laterEnabled = computed(() => this.ws()?.features?.procedureLater === true);
   private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled() }));
-  /** Nudge: only with an assistant AND the Messages module on. */
-  readonly showNudge = computed(() => {
-    const a = this.ws()?.assistant;
-    return a?.userId && this.entitlements?.moduleEnabled('messages') !== false ? a : null;
-  });
+  /** Page: whenever Messages is on (no assistant → the popover says how to set one). */
+  readonly showPage = computed(() => this.entitlements?.moduleEnabled('messages') !== false);
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
   readonly suggestedMissing = computed(() => this.suggested().filter(t => !this.hasTest(t.testId)));
   readonly testTotal = computed(() => this.st().tests.reduce((a, t) => a + (Number(t.price) || 0), 0));
@@ -675,6 +706,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       const dx = this.primaryDx();
       if (!dx || !this.ws()) { this.usual.set(null); return; }
       this.consultApi.usual(dx).subscribe({ next: u => this.usual.set(u && (u.rx.length || u.tests.length) ? u : null), error: () => this.usual.set(null) });
+    });
+    // Compare mode: a date picked on the timeline opens the patient card (tablet / phone).
+    effect(() => {
+      this.dock.selectedKey();
+      untracked(() => { if (this.compareMode() && this.compact()) this.patientOpen.set(true); });
     });
     // The journey viewer follows the visit the dock selected (its reports load per day).
     effect(() => {
@@ -1095,6 +1131,24 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   // ── The centre viewer + compare ────────────────────────────────────
+  /** A record tile: in compare mode it joins / leaves the comparison; else it opens. */
+  onTile(it: VisitItem) {
+    if (this.compareMode() && it.compare) { this.toggleCompare(it); return; }
+    this.openItem(it);
+    if (this.compact()) this.patientOpen.set(false);
+  }
+  toggleCompareMode() {
+    if (this.compareMode()) { this.exitCompare(); return; }
+    this.viewItem.set(null);
+    this.compareMode.set(true);
+    if (this.compact()) this.patientOpen.set(true);
+  }
+  /** "Done": leave compare mode and drop the selection. */
+  exitCompare() {
+    this.leaveCompare();
+    this.compareItems.set([]);
+    this.compareMode.set(false);
+  }
   openItem(it: VisitItem) {
     this.leaveCompare();
     this.viewItem.set(it);
@@ -1108,6 +1162,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   clearCompare() { this.compareItems.set([]); this.syncCompareFiles(); }
   openCompare() {
     this.viewItem.set(null);
+    this.patientOpen.set(false);
     this.compareOn.set(true);
     queueMicrotask(() => this.syncCompareFiles());
   }
