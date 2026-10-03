@@ -60,7 +60,7 @@
             <pf-skeleton-rows [rows]="3" label="Opening the patient…"></pf-skeleton-rows>
           } @else {
             <pf-opd-vitals-form></pf-opd-vitals-form>
-            <p class="pf-vs-hint">This step can also run on the front desk screen instead of a separate station — OPD settings → Workflow → Vitals.</p>
+            <p class="pf-vs-hint">The desk opens this step right after the token is issued, the way Collect follows a lab payment. With a separate station, the next patient is picked from the queue. OPD settings → Workflow → Vitals.</p>
           }
         </div>
         @if (visit()) {

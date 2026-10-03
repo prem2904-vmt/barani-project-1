@@ -116,6 +116,8 @@ If a rule blocks you, ask the owner. Don't work around it.
 
 - An AG-Grid that IS an ND card's body uses the ONE ND skin (`shared/utils/nd-grid-theme.ts`: card surface, `--nd-line` row hairlines, quiet header — every colour a token), never Quartz's stock grey; and on phones the global `[role='tablist']` / `[class*='__tabs']` rule in `styles.scss` forces `display: flex !important`, so a full-width segmented tab strip grows its items (`flex: 1 0 0`) instead of trying `display: grid` (silently ignored — Expenses band switch, 2026-10-02).
 
+- The OPD New-visit desk (`features/opd/frontdesk/book-visit.page`) IS the lab's Order & Payments screen for a visit: it loads `order-create.component.scss` FIRST in its `styleUrls` (band pill, cards, tabs, chips, rows, BILLING, cart bar / sheet) and adds only its own columns — never copy those rules into an OPD file (the consult-page copy already drifted); a change to the lab look reaches OPD for free, so check the OPD screen when you restyle order-create. Vitals are a separate step after the token (`/opd/vitals/:visitId`), never a form inside the bill.
+
 ## 7. Process: definition of done
 1. Fetch and merge the latest remote before starting.
 2. Write tests for the change (and one that pins the single source).

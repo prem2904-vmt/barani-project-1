@@ -110,7 +110,7 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
                   @if (s().workflow.vitals !== 'off') {
                     <span class="wf-step__k">Where</span>
                     <span class="nd-seg wf-seg" role="radiogroup" aria-label="Where vitals are taken">
-                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'desk'" (click)="put({ workflow: { vitals: 'desk', vitalsBy: 'front_desk' } })">Front desk screen</button>
+                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'desk'" (click)="put({ workflow: { vitals: 'desk', vitalsBy: 'front_desk' } })">Front desk, after payment</button>
                       <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s().workflow.vitals === 'station'" (click)="put({ workflow: { vitals: 'station' } })">Separate station</button>
                     </span>
                     @if (s().workflow.vitals === 'station') {
