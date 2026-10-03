@@ -1,12 +1,20 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, type WritableSignal, computed, inject, signal, viewChild,
+} from '@angular/core';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ModuleScopeService } from '../../../core/services/module-scope.service';
+import { labOrderTarget } from '../../../shared/opd/order-entry';
+import { ApiError } from '../../../shared/models/api-response.model';
+import { bmi, bmiBand } from '../vitals/vitals-rules';
+import type { ConsultWorkspace } from './consult.api';
 import { ADMIN_PERMS, FRONTDESK_PERMS } from '../../../core/auth/route-access';
 import { OpdAdminApi, OpdDoctorLite } from '../admin/opd-admin.api';
-import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import type { PfSelectOption } from '../../../shared/primitives/select.component';
 import { ConsultApi, ConsultQueueRow } from './consult.api';
 
 export type QueueTab = 'waiting' | 'in_consult' | 'completed';
@@ -68,123 +76,77 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
   return open[0] ?? rows.filter(r => r.status === 'booked' || r.status === 'vitals').sort((a, b) => a.token - b.token)[0] ?? null;
 }
 
+/** Optional chips on the patient list. */
+export type QueueChip = 'followup' | 'vitals';
+
+/** Search a row by name, MRN or token ("A3" / "3"). Pure. */
+export function rowMatches(r: ConsultQueueRow, q: string): boolean {
+  const t = q.trim().toLowerCase();
+  if (!t) return true;
+  return r.patientName.toLowerCase().includes(t) || (r.mrn ?? '').toLowerCase().includes(t)
+    || r.tokenLabel.toLowerCase() === t || String(r.token) === t.replace(/^[a-z]+/, '');
+}
+
+/** Minutes since an ISO time (0 when missing / in the future). Pure. */
+export function minutesSince(iso: string | null | undefined, now: number): number {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / 60000)) : 0;
+}
+
+/** The tile's time line + dot tone, in plain words. Pure. */
+export function waitInfo(r: ConsultQueueRow, now: number): { text: string; tone: 'free' | 'ok' | 'long' | 'live' | 'done' } {
+  if (r.status === 'completed') return { text: 'Done', tone: 'done' };
+  if (r.status === 'in_consult') {
+    const m = minutesSince(r.consultStartedAt, now);
+    return { text: m ? `With you · ${m} min` : 'With you now', tone: 'live' };
+  }
+  const m = minutesSince(r.checkedInAt, now);
+  const where = r.status === 'vitals' ? 'At vitals' : r.status === 'booked' ? 'Booked' : 'Waiting';
+  if (!r.checkedInAt) return { text: where, tone: 'free' };
+  return { text: `${where} · ${m < 1 ? 'just now' : m + ' min'}`, tone: m > 45 ? 'long' : m > 15 ? 'ok' : 'free' };
+}
+
+/** One vitals reading for the at-a-glance grid. */
+export interface GlanceVital { label: string; value: string; }
+/** Today's vitals as label/value pairs (only the ones taken) + BMI. Pure. */
+export function glanceVitals(v: ConsultWorkspace['vitals']): GlanceVital[] {
+  if (!v) return [];
+  const out: GlanceVital[] = [];
+  if (v.bpSys && v.bpDia) out.push({ label: 'BP', value: `${v.bpSys}/${v.bpDia}` });
+  if (v.pulse) out.push({ label: 'Pulse', value: `${v.pulse}/min` });
+  if (v.spo2) out.push({ label: 'SpO₂', value: `${v.spo2}%` });
+  if (v.tempF) out.push({ label: 'Temp', value: `${v.tempF}°F` });
+  if (v.respRate) out.push({ label: 'Breaths', value: `${v.respRate}/min` });
+  if (v.weightKg) out.push({ label: 'Weight', value: `${v.weightKg} kg` });
+  if (v.heightCm) out.push({ label: 'Height', value: `${v.heightCm} cm` });
+  const b = bmi(v.weightKg, v.heightCm);
+  if (b != null) out.push({ label: 'BMI', value: `${b} · ${bmiBand(b)}` });
+  if (v.grbs) out.push({ label: 'Sugar (GRBS)', value: `${v.grbs} mg/dL` });
+  if (v.painScore != null) out.push({ label: 'Pain', value: `${v.painScore}/10` });
+  return out;
+}
+
+type BandMode = 'product' | 'patient' | 'doctor';
+
 /**
- * `/opd/consult` — the doctor's patients today (Agent C). ND pattern: band →
- * one work card; tabs Waiting / In consult / Completed with counts; ONE
- * primary ("Call next") that opens the lowest waiting token in the full-screen
- * consult (opening it moves the visit to "In consult"). Refreshes every 30 s.
+ * `/opd/consult` — the doctor's patients today. The SAME screen language as
+ * OPD New visit / the lab's Order & Payments (it wears order-create's
+ * stylesheet): band (OPD product tile · Doctor tile · one search that finds a
+ * patient in this list by name, MRN or token), the MY PATIENTS work card
+ * (Waiting / In consult / Done today, chips, patient tiles 2 / 1 per row)
+ * and the AT A GLANCE side card for the picked patient (the next in line by
+ * default) whose ONE primary opens the consult. Below 1024px the side card
+ * is a bottom sheet. Refreshes every 30 s. Read-only — nothing is changed
+ * until the doctor presses Start consult.
  */
 @Component({
   selector: 'pf-opd-my-patients',
   standalone: true,
-  imports: [DatePipe, HeroBandComponent, SelectComponent],
+  imports: [DatePipe, NgTemplateOutlet, HeroBandComponent, SkeletonRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="pf-band-page mp">
-      <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx">
-          <span class="nd-ctx__primary">My patients</span>
-          <span class="nd-ctx__chip"><span class="nd-ctx__k">Today</span>{{ today | date:'EEE, MMM d' }}</span>
-          <span class="nd-ctx__chip"><span class="nd-ctx__k">Waiting</span>{{ counts().waiting }}</span>
-        </div>
-        <div band-actions>
-          <button type="button" class="nd-btn nd-btn--primary mp__call" [disabled]="!next()" (click)="callNext()">
-            @if (next(); as n) { Call next · Token {{ n.tokenLabel }} } @else { No one waiting }
-          </button>
-        </div>
-      </pf-hero-band>
-
-      <div class="pf-band-body mp__body">
-        <div class="nd-card mp__card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v6a4 4 0 0 0 8 0V3"/><path d="M8 15a5 5 0 0 0 5 5h1a4 4 0 0 0 4-4v-2"/><circle cx="19" cy="10" r="2"/></svg></span>
-            <span class="nd-card__label">Queue</span>
-            @if (showFilter()) {
-              <span class="mp__docfilter">
-                <pf-select [options]="doctorOptions()" [value]="selectedDoctorId()" size="sm"
-                           placeholder="All doctors" (valueChange)="onDoctorChange($event)"></pf-select>
-              </span>
-            }
-            <span class="nd-card__spacer"></span>
-            <div class="nd-tabs mp__tabs" role="tablist">
-              @for (t of tabs; track t.id) {
-                <button type="button" role="tab" class="nd-tabs__item" [attr.aria-selected]="tab() === t.id" (click)="tab.set(t.id)">
-                  {{ t.label }} <span class="mp__cnt">{{ counts()[t.id] }}</span>
-                </button>
-              }
-            </div>
-          </div>
-          <div class="nd-card__body">
-            @if (loading() && !rows().length) {
-              @for (i of [1, 2, 3]; track i) { <div class="mp__skel"></div> }
-            } @else {
-              @for (r of visible(); track r.visitId) {
-                <button type="button" class="nd-row mp__row" [class.nd-row--in]="r.status === 'in_consult'" (click)="open(r)">
-                  <span class="mp__token">{{ r.tokenLabel }}</span>
-                  <span class="mp__main">
-                    <span class="mp__name">{{ r.patientName }} @if (r.ageSex) { <em>{{ r.ageSex }}</em> } @if (r.isFollowUp) { <span class="mp__tag">Follow-up</span> }
-                      @if (r.allergyCount) { <span class="mp__tag mp__tag--warn">Allergy</span> }</span>
-                    <span class="mp__sub">{{ r.purpose || 'No purpose noted' }}@if (r.departmentName) { · {{ r.departmentName }}}@if (r.serviceName) { · {{ r.serviceName }}}@if (showDoctorName() && r.doctorName) { · {{ r.doctorName }}}</span>
-                  </span>
-                  <span class="mp__side">
-                    <span class="mp__status" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
-                    <span class="mp__time">
-                      @if (r.completedAt) { Done {{ r.completedAt | date:'h:mm a' }} }
-                      @else if (r.consultStartedAt) { Since {{ r.consultStartedAt | date:'h:mm a' }} }
-                      @else if (r.checkedInAt) { In {{ r.checkedInAt | date:'h:mm a' }} }
-                      @if (!r.hasVitals && r.status !== 'completed') { · no vitals }
-                    </span>
-                  </span>
-                  <svg class="mp__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
-              } @empty {
-                <div class="nd-empty">
-                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-                  <p class="nd-empty__title">{{ emptyText() }}</p>
-                  <p class="nd-empty__body">Patients the front desk books with you today appear here.</p>
-                </div>
-              }
-            }
-          </div>
-        </div>
-      </div>
-    </section>
-  `,
-  styles: [`
-    :host { display: block; height: 100%; }
-    .mp { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-    .mp__body { flex: 1; min-height: 0; display: flex; padding: 16px 20px 20px; }
-    .mp__card { flex: 1; max-width: 1080px; margin: 0 auto; width: 100%; }
-    .mp__tabs { flex: 0 1 auto; }
-    .mp__docfilter { flex: 0 0 auto; width: 168px; margin-left: 4px; }
-    @media (max-width: 640px) { .mp__docfilter { width: 100%; order: 3; } }
-    .mp__cnt { font-variant-numeric: tabular-nums; color: var(--text-tertiary); font-weight: 500; }
-    .mp__call { min-width: 180px; }
-    .mp__row { width: 100%; cursor: pointer; min-height: 64px; gap: 14px; }
-    .mp__row:hover { border-color: var(--nd-sel-border); }
-    .mp__token { flex: none; width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--nd-chip-bg); color: var(--text-primary); }
-    .mp__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-    .mp__name { font-size: 14.5px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-    .mp__name em { font-style: normal; font-weight: 400; font-size: 12.5px; color: var(--text-tertiary); }
-    .mp__tag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; background: var(--nd-chip-bg); color: var(--text-secondary); }
-    .mp__tag--warn { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent); }
-    .mp__sub { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
-    .mp__side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .mp__status { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
-    .mp__status[data-status='in_consult'] { color: var(--violet-text, #6d28d9); }
-    .mp__time { font-size: 12px; color: var(--text-tertiary); }
-    .mp__chev { flex: none; color: var(--text-tertiary); }
-    .mp__skel { height: 64px; border-radius: 12px; background: var(--nd-chip-bg); animation: mp-p 1.2s ease-in-out infinite; }
-    @keyframes mp-p { 50% { opacity: 0.5; } }
-    @media (prefers-reduced-motion: reduce) { .mp__skel { animation: none; } }
-    @media (max-width: 640px) {
-      .mp__body { padding: 12px; }
-      .mp__side .mp__time { display: none; }
-      .mp__card .nd-card__head { flex-wrap: wrap; }
-      .mp__tabs { width: 100%; }
-    }
-  `],
+  templateUrl: './my-patients.page.html',
+  styleUrls: ['../../frontdesk/order-create/order-create.component.scss', '../frontdesk/book-visit.page.scss', './my-patients.page.scss'],
 })
 export class OpdMyPatientsPage implements OnInit, OnDestroy {
   private readonly api = inject(ConsultApi);
@@ -192,41 +154,128 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly adminApi = inject(OpdAdminApi);
+  private readonly modules = inject(ModuleScopeService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  readonly pillEl = viewChild<ElementRef<HTMLElement>>('pill');
 
   readonly today = new Date();
+  readonly now = signal(Date.now());
   readonly tabs: { id: QueueTab; label: string }[] = [
-    { id: 'waiting', label: 'Waiting' }, { id: 'in_consult', label: 'In consult' }, { id: 'completed', label: 'Completed' },
+    { id: 'waiting', label: 'Waiting' }, { id: 'in_consult', label: 'In consult' }, { id: 'completed', label: 'Done today' },
+  ];
+  readonly chipDefs: { id: QueueChip; label: string }[] = [
+    { id: 'followup', label: 'Follow-ups' }, { id: 'vitals', label: 'Vitals pending' },
   ];
   readonly rows = signal<ConsultQueueRow[]>([]);
   readonly loading = signal(true);
   readonly tab = signal<QueueTab>('waiting');
+  readonly chips = signal<Set<QueueChip>>(new Set());
+  readonly query = signal('');
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  /** Doctor filter (Task C, staff/staff-doctor only — showFilter()). '' = the
-   *  caller's own default (own queue for a doctor, every doctor's visits for
-   *  staff — the server's existing `doctorId`-omitted behaviour). */
+  /** Doctor filter (staff / staff-doctor only — showFilter()). '' = the
+   *  caller's own default (own queue for a doctor, every doctor for staff). */
   readonly isDoctor = computed(() => this.auth.isDoctor());
   readonly showFilter = computed(() => showsDoctorFilter(this.isDoctor(), p => this.auth.hasAnyPermission(p)));
   readonly showDoctorName = computed(() => showsDoctorName(this.isDoctor(), this.selectedDoctorId()));
   readonly doctors = signal<OpdDoctorLite[]>([]);
   readonly selectedDoctorId = signal('');
   readonly doctorOptions = computed(() => doctorFilterOptions(this.doctors(), this.isDoctor()));
+  readonly doctorLabel = computed(() => {
+    const id = this.selectedDoctorId();
+    if (!id) return this.isDoctor() ? (this.auth.user()?.displayName || 'My patients') : 'All doctors';
+    return this.doctors().find(d => d.id === id)?.name ?? 'Doctor';
+  });
 
   readonly counts = computed(() => {
     const c: Record<QueueTab, number> = { waiting: 0, in_consult: 0, completed: 0 };
-    for (const r of this.rows()) { const t = tabOf(r.status); if (t) c[t]++; }
+    for (const r of this.searched()) { const t = tabOf(r.status); if (t) c[t]++; }
     return c;
   });
-  readonly visible = computed(() => this.rows().filter(r => tabOf(r.status) === this.tab()).sort((a, b) => a.token - b.token));
+  private readonly searched = computed(() => {
+    const q = this.query(); const ch = this.chips();
+    return this.rows().filter(r => rowMatches(r, q)
+      && (!ch.has('followup') || r.isFollowUp)
+      && (!ch.has('vitals') || (!r.hasVitals && r.status !== 'completed')));
+  });
+  readonly visible = computed(() => this.searched().filter(r => tabOf(r.status) === this.tab()).sort((a, b) => a.token - b.token));
   readonly next = computed(() => nextToCall(this.rows()));
-  readonly emptyText = computed(() => ({ waiting: 'No one waiting', in_consult: 'No one in consult', completed: 'No consults completed yet' })[this.tab()]);
+  readonly emptyText = computed(() => {
+    if (this.query().trim() || this.chips().size) return 'No patient matches';
+    return ({ waiting: 'No one waiting', in_consult: 'No one in consult', completed: 'No consults done yet today' })[this.tab()];
+  });
+
+  // ── Selection + at a glance ─────────────────────────────────────────
+  readonly pickedId = signal<string | null>(null);
+  /** The picked patient, else the one in consult, else the next in line. */
+  readonly selected = computed<ConsultQueueRow | null>(() => {
+    const rows = this.rows();
+    return rows.find(r => r.visitId === this.pickedId())
+      ?? rows.find(r => r.status === 'in_consult') ?? this.next() ?? this.visible()[0] ?? null;
+  });
+  readonly glance = signal<ConsultWorkspace | null>(null);
+  readonly glanceLoading = signal(false);
+  readonly glanceError = signal<string | null>(null);
+  private glanceFor: string | null = null;
+  readonly vitals = computed(() => glanceVitals(this.glance()?.vitals ?? null));
+  readonly complaint = computed(() => this.glance()?.consult?.chiefComplaint || this.glance()?.visit.purpose || this.selected()?.purpose || '');
+  readonly allergies = computed(() => (this.glance()?.allergies ?? []).filter(a => a.status !== 'inactive'));
+  readonly ctaLabel = computed(() => this.selected()?.status === 'in_consult' ? 'Resume consult' : this.selected()?.status === 'completed' ? 'Open consult' : 'Start consult');
+
+  // ── Layout (order-create's breakpoints) ─────────────────────────────
+  readonly isLg = signal(true);
+  readonly isPhone = signal(false);
+  readonly sheetOpen = signal(false);
+
+  // ── Band ────────────────────────────────────────────────────────────
+  readonly bandMode = signal<BandMode>('patient');
+  readonly scopeOpen = signal(false);
+  readonly scopeHighlight = signal(0);
+  readonly doctorQuery = signal('');
+  readonly pillFocused = signal(false);
+  readonly products = computed(() => {
+    const list: { id: 'opd' | 'lab'; label: string; meta: string }[] = [{ id: 'opd', label: 'OPD', meta: 'My patients · this screen' }];
+    if (this.modules.labUsable()) list.push({ id: 'lab', label: 'Tests', meta: 'Lab order & payments' });
+    return list;
+  });
+  readonly productSwitchable = computed(() => this.products().length > 1);
+  readonly pillValue = computed(() => (this.bandMode() === 'doctor' ? this.doctorQuery() : this.query()));
+  readonly pillPlaceholder = computed(() => this.bandMode() === 'doctor'
+    ? (this.isPhone() ? 'Find doctor' : 'Find a doctor')
+    : (this.isPhone() ? 'Find patient' : 'Find a patient in this list: name, MRN or token'));
+  readonly dropRows = computed(() => {
+    if (this.bandMode() === 'product') return this.products().map(p => ({ key: p.id, title: p.label, meta: p.meta }));
+    if (this.bandMode() === 'doctor') {
+      const q = this.doctorQuery().trim().toLowerCase();
+      return this.doctorOptions().filter(o => !q || o.label.toLowerCase().includes(q)).map(o => ({ key: o.value, title: o.label, meta: o.value ? 'Doctor' : 'Default view' }));
+    }
+    return [];
+  });
+  readonly dropOpen = computed(() => this.scopeOpen() && this.bandMode() !== 'patient');
+  readonly searchActive = computed(() => this.pillFocused() || this.dropOpen());
+  readonly dropBox = signal<{ left: number; top: number; width: number } | null>(null);
 
   ngOnInit() {
+    this.watchMedia('(min-width: 1024px)', this.isLg, true);
+    this.watchMedia('(max-width: 640px)', this.isPhone, false);
     if (this.showFilter()) this.loadDoctors();
     this.load();
     this.timer = setInterval(() => this.load(), 30_000);
   }
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
+
+  private watchMedia(q: string, sig: WritableSignal<boolean>, fallback: boolean): void {
+    try {
+      const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(q) : null;
+      if (!mq) { sig.set(fallback); return; }
+      sig.set(mq.matches);
+      const on = (e: MediaQueryListEvent) => sig.set(e.matches);
+      mq.addEventListener?.('change', on);
+      this.destroyRef.onDestroy(() => mq.removeEventListener?.('change', on));
+    } catch { sig.set(fallback); }
+  }
 
   /** The doctor picker list. Falls back to the doctors already seen in the
    *  queue rows when /api/doctors isn't readable for this caller (or errors). */
@@ -239,27 +288,112 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
 
   onDoctorChange(id: string) {
     this.selectedDoctorId.set(id);
+    this.pickedId.set(null);
     this.load();
   }
 
   load() {
+    this.now.set(Date.now());
     this.api.myQueue(undefined, this.selectedDoctorId() || undefined).subscribe({
       next: rows => {
         this.rows.set(rows ?? []);
         this.loading.set(false);
         // Someone already in consult → show that tab first.
-        if (this.loading() === false && this.counts().in_consult && this.tab() === 'waiting' && !this.counts().waiting) this.tab.set('in_consult');
-        // Fallback doctor list never got a first fetch (or it failed before
-        // any row existed) — top it up now that rows are in.
+        if (this.counts().in_consult && this.tab() === 'waiting' && !this.counts().waiting) this.tab.set('in_consult');
         if (this.showFilter() && !this.doctors().length && rows?.length) this.doctors.set(doctorsFromRows(rows));
+        this.loadGlance();
       },
       error: e => { this.loading.set(false); this.toast.error(e?.message || 'Could not load your patients'); },
     });
   }
 
+  /** At a glance for the selected visit — the consult's own read-only GET
+   *  (no status change; only Start consult opens it). */
+  private loadGlance(force = false): void {
+    const r = this.selected();
+    if (!r) { this.glance.set(null); this.glanceFor = null; return; }
+    if (!force && this.glanceFor === r.visitId) return;
+    this.glanceFor = r.visitId;
+    this.glance.set(null); this.glanceError.set(null); this.glanceLoading.set(true);
+    this.api.workspace(r.visitId).subscribe({
+      next: w => { if (this.glanceFor === r.visitId) { this.glance.set(w); this.glanceLoading.set(false); } },
+      error: e => { if (this.glanceFor === r.visitId) { this.glanceLoading.set(false); this.glanceError.set(ApiError.from(e).message); } },
+    });
+  }
+
+  setTab(t: QueueTab) { this.tab.set(t); }
+  isChip(c: QueueChip) { return this.chips().has(c); }
+  toggleChip(c: QueueChip) {
+    this.chips.update(s => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); return n; });
+  }
+  pick(r: ConsultQueueRow) {
+    this.pickedId.set(r.visitId);
+    this.loadGlance();
+    if (!this.isLg()) this.sheetOpen.set(true);
+  }
+  closeSheet() { this.sheetOpen.set(false); }
+  info(r: ConsultQueueRow) { return waitInfo(r, this.now()); }
+
+  // ── Band ────────────────────────────────────────────────────────────
+  selectScope(k: BandMode) {
+    if (k === 'product' && !this.productSwitchable()) return;
+    if (k === 'doctor' && !this.showFilter()) return;
+    this.bandMode.set(k);
+    this.doctorQuery.set('');
+    this.scopeHighlight.set(0);
+    this.sizeDropdown();
+    this.scopeOpen.set(k !== 'patient');
+    if (k !== 'product') queueMicrotask(() => this.searchInput()?.nativeElement?.focus?.());
+  }
+  closeScope() { this.scopeOpen.set(false); this.doctorQuery.set(''); this.bandMode.set('patient'); }
+  onPillInput(v: string) {
+    if (this.bandMode() === 'product') this.bandMode.set('patient');
+    if (this.bandMode() === 'doctor') { this.doctorQuery.set(v); this.scopeOpen.set(true); this.scopeHighlight.set(0); return; }
+    this.query.set(v);
+  }
+  onPillFocus() { this.pillFocused.set(true); if (this.bandMode() === 'product') this.closeScope(); }
+  onPillBlur() { setTimeout(() => this.pillFocused.set(false), 0); }
+  onPillArrow(e: Event, dir: number) {
+    const n = this.dropRows().length; if (!n || !this.dropOpen()) return;
+    e.preventDefault(); this.scopeHighlight.update(i => (i + dir + n) % n);
+  }
+  onPillEnter(e: Event) {
+    if (!this.dropOpen()) { const v = this.visible(); if (v.length === 1) this.pick(v[0]); return; }
+    const rows = this.dropRows(); if (!rows.length) return;
+    e.preventDefault(); this.pickDropRow(rows[Math.min(this.scopeHighlight(), rows.length - 1)]);
+  }
+  onPillEscape() { if (this.dropOpen()) this.closeScope(); else this.query.set(''); }
+  pickDropRow(row: { key: string }) {
+    const k = this.bandMode();
+    this.closeScope();
+    if (k === 'product') {
+      if (row.key === 'lab') { const t = labOrderTarget(null); void this.router.navigate(t.commands as string[]); }
+      return;
+    }
+    if (k === 'doctor') this.onDoctorChange(row.key);
+  }
+  @HostListener('document:pointerdown', ['$event'])
+  onDocPointerDown(ev: Event) {
+    if (!this.scopeOpen()) return;
+    const host = this.pillEl()?.nativeElement;
+    if (host && ev.target instanceof Node && host.contains(ev.target)) return;
+    this.closeScope();
+  }
+  private sizeDropdown() {
+    if (typeof window === 'undefined') return;
+    const us = this.pillEl()?.nativeElement;
+    if (!us?.getBoundingClientRect) return;
+    const field = (us.closest('.pf-hb__field') ?? us.closest('.pf-hb__search') ?? us) as HTMLElement;
+    const u = us.getBoundingClientRect(); const p = field.getBoundingClientRect();
+    if (p.width > 0) this.dropBox.set({ left: p.left - u.left, top: p.bottom - u.top + 8, width: p.width });
+  }
+
   statusLabel(s: string) {
-    return ({ booked: 'Booked', vitals: 'At vitals', waiting: 'Waiting', in_consult: 'In consult', completed: 'Completed' } as Record<string, string>)[s] ?? s;
+    return ({ booked: 'Booked', vitals: 'At vitals', waiting: 'Waiting', in_consult: 'In consult', completed: 'Done' } as Record<string, string>)[s] ?? s;
   }
   open(r: ConsultQueueRow) { this.router.navigate(['/opd/consult', r.visitId]); }
   callNext() { const n = this.next(); if (n) this.open(n); }
+  startSelected() { const r = this.selected(); if (r) this.open(r); }
+  history() { const r = this.selected(); if (r) this.router.navigate(['/opd/patient', r.patientId]); }
+  dxText(dx: { label: string }[]): string { return dx.map(d => d.label).join(', '); }
 }
