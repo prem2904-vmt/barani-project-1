@@ -152,10 +152,17 @@ export function invalidNumbers(tab: TabSnapshot): string[] {
 /** The per-tube submit body, in the per-tab submit's shape. Submit all
  *  sends EVERY writable test as-is — a test left empty (after the user
  *  confirmed) goes with empty values. */
+/** Writable tests of a tab with NO value at all — what a confirmed submit
+ *  closes as "not reported" (owner 2026-10-03: a blank line never prints and
+ *  never holds the report back; it is never submitted as an empty result). */
+export function blankTests(tab: TabSnapshot): OrderTest[] {
+  return tab.tests.filter((t) => isWritableTest(t) && !testHasValue(tab.values, t.id));
+}
+
 export function tabPayload(tab: TabSnapshot): { results: Array<{ orderTestId: string; values: Record<string, unknown>; note: undefined; bold?: string[] }> } {
   return {
     results: tab.tests
-      .filter(isWritableTest)
+      .filter((t) => isWritableTest(t) && testHasValue(tab.values, t.id))
       .map((t) => ({
         orderTestId: t.id, values: tab.values[t.id] ?? {}, note: undefined,
         ...(tab.bold ? { bold: tab.bold[t.id] ?? [] } : {}),

@@ -94,7 +94,7 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
 }
 
 
-const submitted = (api: any) => api.post.mock.calls.some(([u]: [string]) => u === '/api/samples/smp-1/results');
+const submitted = (api: any) => api.post.mock.calls.some(([u]: [string, any]) => u === '/api/samples/smp-1/results');
 
 /**
  * Owner bug 2026-10-03 (Salem 26285 / 26262): the tech filled 8 of Urine
@@ -145,7 +145,29 @@ describe('Result entry — Submit with empty fields asks first', () => {
     c.setValue('ot1', 'Hb', 13);
     c.setValue('ot1', 'PCV', 40);
     await c.submitAll();
-    expect(dialog.confirm.mock.calls[0][0].items).toEqual(['26123 · Urine Bilirubin — Urine Bilirubin']);
+    const req = dialog.confirm.mock.calls[0][0];
+    expect(req.title).toBe('1 test has no value');
+    expect(req.message).toContain('Urine Bilirubin');
+    expect(req.question).toBe('Submit without them?');
+    expect(req.items).toEqual(['26123 · Urine Bilirubin — Urine Bilirubin']);
     expect(submitted(api)).toBe(false);
+    expect(api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+  });
+
+  it('Submit without them: the filled test is submitted, the blank one is closed as not reported (never sent as an empty result)', async () => {
+    const smp = sampleFixture({ printPickerDefault: 'all' }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Bilirubin', status: 'pending',
+      test: { id: 't2', name: 'Urine Bilirubin', parameters: JSON.stringify({
+        parameters: [{ name: 'Urine Bilirubin', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    const { c, api } = await render(smp, { confirm: true });
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    await c.submitAll();
+    const results = api.post.mock.calls.find(([u]: [string, any]) => u === '/api/samples/smp-1/results');
+    expect(results![1].results.map((r: any) => r.orderTestId)).toEqual(['ot1']);
+    const skip = api.post.mock.calls.find(([u]: [string, any]) => u === '/api/samples/smp-1/not-reported');
+    expect(skip![1]).toEqual({ orderTestIds: ['ot2'] });
   });
 });

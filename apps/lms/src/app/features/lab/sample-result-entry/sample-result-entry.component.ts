@@ -89,6 +89,7 @@ import {
   prefillFromTests,
   tabMark,
   testHasValue,
+  blankTests,
   tabPayload,
   boldFromTests,
   type BoldMap,
@@ -2098,27 +2099,34 @@ export class SampleResultEntryComponent {
       this._submitting.set(false);
       return;
     }
-    // Empty fields → the SAME confirmation Submit all asks (owner bug
-    // 2026-10-03, Salem 26285 / 26262: the tech filled 8 of Urine Routine's
-    // 13 lines, pressed Submit, and the 5 dipstick lines silently stayed
-    // behind — the order never completed and no report was made). Go back →
-    // the first empty field.
+    // Empty fields → ONE confirmation, the same one Submit all asks (owner
+    // 2026-10-03, Salem 26285: the tech filled 8 of Urine Routine's 13 lines
+    // and the 5 dipstick lines silently stayed behind, so the order never got
+    // a report). A test with NO value at all is closed as "not reported" on
+    // confirm (audited server-side; it never prints and never holds the
+    // report back). Go back → the first empty field.
     const live = this.liveSnap();
     const missing = live ? missingEntries([live]) : [];
-    if (missing.length && writable.some((t) => testHasValue(all, t.id))) {
+    const blank = writable.filter((t) => !testHasValue(all, t.id));
+    const filled = writable.filter((t) => testHasValue(all, t.id));
+    if (writable.length === 0) {
+      const allDone = (s.tests ?? []).length > 0;
+      this.toasts.warning(allDone ? "Every test on this tube is already submitted or validated." : "Enter at least one value before submitting");
       this._submitting.set(false);
-      if (!(await this.confirmEmptyFields(missing))) return;
+      return;
+    }
+    if (missing.length) {
+      this._submitting.set(false);
+      if (!(await this.confirmEmptyFields(missing, blank))) return;
       this.submitAct.set('submit');
       this._submitting.set(true);
     }
-    if (!(await this.confirmNothingPrints(writable.filter((t) => !!all[t.id] && Object.keys(all[t.id]).length > 0), "submit"))) {
+    if (filled.length && !(await this.confirmNothingPrints(filled, "submit"))) {
       this._submitting.set(false);
       return;
     }
     const payload = {
-      results: writable
-        .filter((t) => all[t.id] && Object.keys(all[t.id]).length > 0)
-        .map((t) => ({
+      results: filled.map((t) => ({
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
@@ -2126,13 +2134,17 @@ export class SampleResultEntryComponent {
         })),
     };
     if (payload.results.length === 0) {
-      const allDone = (s.tests ?? []).length > 0 && writable.length === 0;
-      this.toasts.warning(
-        allDone
-          ? "Every test on this tube is already submitted or validated."
-          : "Enter at least one value before submitting",
-      );
-      this._submitting.set(false);
+      // Nothing entered and the tech confirmed: close every blank line.
+      try {
+        await this.closeNotReported(s.id, blank);
+        this.clearDraft();
+        this.toasts.success(`${blank.length} test${blank.length === 1 ? "" : "s"} closed as not reported`);
+        setTimeout(() => this.router.navigate(["/lab/my-work"]), 700);
+      } catch (e) {
+        this.toasts.error(ApiError.from(e).message);
+      } finally {
+        this._submitting.set(false);
+      }
       return;
     }
     try {
@@ -2163,9 +2175,12 @@ export class SampleResultEntryComponent {
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
       await this.loadComments();
+      // The blank tests the tech confirmed: closed as not reported.
+      if (blank.length) await this.closeNotReported(s.id, blank);
       const n = resp?.submitted ?? 0;
       this.toasts.success(
-        `Submitted ${n} test${n === 1 ? "" : "s"} — back to your queue`,
+        `Submitted ${n} test${n === 1 ? "" : "s"}` +
+          (blank.length ? `, ${blank.length} not reported` : "") + " — back to your queue",
       );
       // Hand the tech back to /lab/my-work so they can pick the next
       // tube. Without this nav, submitAll only ever showed a toast and
@@ -2378,19 +2393,31 @@ export class SampleResultEntryComponent {
     }, { injector: this.injector });
   }
 
-  /** "Some fields are empty" — the one confirmation BOTH Submit and Submit
-   *  all ask. Go back → the first empty field; true = submit anyway. */
-  private async confirmEmptyFields(missing: MissingEntry[]): Promise<boolean> {
+  /** "N tests have no value: … Submit without them?" — the one confirmation
+   *  BOTH Submit and Submit all ask. `blank` = tests with no value at all
+   *  (closed as not reported on confirm); the list names every empty field.
+   *  Go back → the first empty field; true = submit anyway. */
+  private async confirmEmptyFields(missing: MissingEntry[], blank: readonly OrderTest[] = []): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
     const go = await this.dialog.confirm({
-      title: "Some fields are empty",
-      message: "These fields have no value:",
+      title: blank.length ? `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value` : "Some fields are empty",
+      message: blank.length
+        ? `${names.join(", ")}. ${blank.length === 1 ? "It is" : "They are"} closed as not reported and never print.`
+        : "These fields have no value:",
       items: missing.map(missingLine),
-      question: "Do you still want to submit?",
+      question: blank.length ? "Submit without them?" : "Do you still want to submit?",
       cancelLabel: "Go back",
-      confirmLabel: "Submit anyway",
+      confirmLabel: blank.length ? "Submit without them" : "Submit anyway",
     });
     if (!go) await this.goToMissing(missing[0]);
     return go;
+  }
+
+  /** Close blank tests of a tube as NOT REPORTED (audited server-side). */
+  private async closeNotReported(sampleId: string, tests: readonly OrderTest[]): Promise<void> {
+    if (!tests.length) return;
+    await firstValueFrom(this.api.post(`/api/samples/${sampleId}/not-reported`,
+      { orderTestIds: tests.map((t) => t.id) }));
   }
 
   /** Move to an empty field: switch tab first when it is on another tube. */
@@ -2437,10 +2464,11 @@ export class SampleResultEntryComponent {
         }
       }
       // 4. Empty fields → ONE confirmation; Go back → the first empty field.
+      //    Tests with no value at all are closed as not reported on confirm.
       const missing = missingEntries(targets);
       if (missing.length) {
         this._submitting.set(false);
-        if (!(await this.confirmEmptyFields(missing))) return;
+        if (!(await this.confirmEmptyFields(missing, targets.flatMap((snap) => blankTests(snap))))) return;
         this.submitAct.set('all');
         this._submitting.set(true);
       }
@@ -2457,9 +2485,11 @@ export class SampleResultEntryComponent {
       const flags: Array<{ label: string; note?: string; critical: boolean }> = [];
       for (const snap of targets) {
         try {
-          const resp = await firstValueFrom(
-            this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, tabPayload(snap)),
-          );
+          const body = tabPayload(snap);
+          const resp = body.results.length
+            ? await firstValueFrom(this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, body))
+            : null;
+          await this.closeNotReported(snap.sampleId, blankTests(snap));
           for (const r of resp?.results ?? []) {
             const name = r.orderTest?.test?.name ?? "Test";
             if (r.flags?.critical) flags.push({ label: `${snap.barcode} · ${name}: critical`, critical: true });

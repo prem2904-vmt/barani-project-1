@@ -69,7 +69,7 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
   // "Submit anyway" here and kept out of the counted spy.
   const confirmSpy = vi.fn(async (_req: any) => !!opts.confirm);
   const dialog = {
-    confirm: vi.fn(async (req: any) => req?.title === 'Some fields are empty' ? true : confirmSpy(req)),
+    confirm: vi.fn(async (req: any) => /fields are empty|no value/.test(req?.title ?? '') ? true : confirmSpy(req)),
     prompt: vi.fn(),
   };
   TestBed.configureTestingModule({
