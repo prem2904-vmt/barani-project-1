@@ -4,11 +4,29 @@
 // the OPD pieces: the three work columns, the doctor / purpose tiles and the
 // editable fee in the bill line. Theme tokens only (light + dark).
 
-// ── Doctor grid: the lab test grid — full card width, 3 / 2 / 1 per row
-// by the CARD's width (.pf-oc-cat__list is an inline-size container). ──
+// ── Card header: the BILLING header (same icon tile, title, height, border).
+.pf-ov-head__date { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+
+// ── Two inner panels: Doctor | Visit purpose. Side by side, each scrolls on
+// its own; stacked on phones (the panes then flow in one scroller).
+.pf-ov-panes {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); grid-template-rows: minmax(0, 1fr);
+}
+.pf-ov-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.pf-ov-pane + .pf-ov-pane { border-left: 1px solid var(--border-muted); }
+.pf-ov-pane__hdr { flex: none; margin: 0; padding: 12px 20px 8px; }
+.pf-ov-main .pf-ov-pane__tabs { padding-top: 0; }
+.pf-ov-pane__body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px; padding: 10px 20px 20px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+}
+
+// ── Doctor grid: the lab test grid — 2 per row at the pane's width, 1 when
+// narrow (.pf-oc-cat__list is an inline-size container). ──
 .pf-ov-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 4px 0 4px; }
-@container (min-width: 520px) { .pf-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (min-width: 820px) { .pf-ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 440px) { .pf-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pf-ov-list { padding-top: 12px; }
 
 // Department chips + the "Free now" toggle chip at the row's end.
@@ -16,21 +34,23 @@
 .pf-ov-chips__spacer { flex: 1 1 auto; }
 .pf-ov-freechip { display: inline-flex; align-items: center; gap: 6px; }
 
-// ── Visit purpose strip: under the grid, outside the scroller ──
-.pf-ov-purpose {
-  flex: none; display: flex; flex-direction: column; gap: 10px;
-  padding: 12px 20px 14px; border-top: 1px solid var(--border-muted);
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--bg-card-solid));
-  animation: pf-ov-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-@keyframes pf-ov-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .pf-ov-purpose { animation: none; } }
-.pf-ov-purpose__head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
-.pf-ov-purpose__t { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
-.pf-ov-seg { display: inline-flex; flex-wrap: wrap; width: fit-content; max-width: 100%; align-self: flex-start; }
-.pf-ov-seg__item { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; white-space: normal; text-align: left; }
-.pf-ov-seg__price { color: var(--text-secondary); font-weight: 500; }
+// ── Visit purpose panel ──
+.pf-ov-who { display: flex; flex-direction: column; gap: 2px; padding: 0 2px 2px; }
+.pf-ov-svcs { display: flex; flex-direction: column; gap: 8px; }
+.pf-ov-svc .pf-crow__main { align-items: flex-start; gap: 10px; padding: 10px 12px; }
+.pf-ov-svc .pf-price { align-self: flex-start; padding-top: 2px; font-size: 13px; font-weight: 600; }
+.pf-ov-radio { border-radius: 50%; margin-top: 1px; }
+.pf-ov-complaint { margin-top: 4px; }
 .pf-ov-complaint .nd-input { height: 40px; width: 100%; }
+
+@media (max-width: 640px) {
+  .pf-ov-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; overflow-y: auto; }
+  .pf-ov-pane { overflow: visible; }
+  .pf-ov-pane + .pf-ov-pane { border-left: 0; border-top: 1px solid var(--border-muted); }
+  .pf-ov-pane .pf-oc-cat__list, .pf-ov-pane__body { overflow: visible; }
+  .pf-ov-pane__hdr, .pf-ov-pane__body { padding-left: 12px; padding-right: 12px; }
+  .pf-ov-pane__body { padding-bottom: 96px; }
+}
 
 // ── Tiles: the catalogue row (.pf-crow) with an avatar / meta lines ──
 .pf-ov-doc .pf-crow__main { align-items: flex-start; gap: 10px; padding: 10px 12px; }
@@ -63,8 +83,6 @@
 
 .pf-ov-muted { color: var(--text-tertiary); font-weight: 400; }
 
-// Context row under the band (where the lab shows the referral row).
-.pf-ov-ctx { flex-wrap: wrap; row-gap: 2px; }
 
 // ── BILLING: the consult fee is editable in its line ──
 .pf-ov-wrap { white-space: normal; overflow-wrap: anywhere; }
@@ -102,7 +120,5 @@
 @media (max-width: 640px) {
   .pf-ov-fee__in { font-size: 16px; } // iOS zoom guard
   .pf-ov-complaint .nd-input { height: 44px; font-size: 16px; }
-  .pf-ov-seg__item { min-height: 44px; flex: 1 1 auto; }
-  .pf-ov-purpose { padding: 10px 12px 12px; }
   .pf-ov-chips { flex-wrap: nowrap; }
 }
