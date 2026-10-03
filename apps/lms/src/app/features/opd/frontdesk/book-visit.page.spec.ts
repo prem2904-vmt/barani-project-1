@@ -1,4 +1,4 @@
-import { sameDoctorOpenVisit } from './book-visit.page';
+import { defaultPurpose, sameDoctorOpenVisit } from './book-visit.page';
 import { TestBed } from '@angular/core/testing';
 import { OpdBookVisitPage } from './book-visit.page';
 import { DESK, PATIENT, QUOTE_D1, TESTS, VISIT, flush, harness, memoryStorage } from './opd-b.spec-helpers';
@@ -11,7 +11,7 @@ import { ModuleScopeService } from '../../../core/services/module-scope.service'
  * columns (doctor · visit purpose · add-ons), the BILLING card with the fee
  * editable in its line, ONE primary, lab tests on their own lab bill, the
  * auto-saving draft, and payment → token → Record vitals (vitals are no
- * longer taken in the bill). "Any doctor in <department>" stays an explicit tap.
+ * longer taken in the bill; lab tests are ordered after the consult). "Any doctor in <department>" stays an explicit tap.
  */
 function render(opts: {
   query?: Record<string, string>; desk?: any; post?: (u: string, b: any) => unknown;
@@ -41,7 +41,8 @@ function render(opts: {
 }
 const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-oc-btn--primary:not([disabled]), .nd-btn--primary');
 const cta = (el: HTMLElement) => el.querySelector('[data-cta]') as HTMLButtonElement;
-const docTiles = (el: HTMLElement) => [...el.querySelectorAll('.pf-ov-col[data-col="doctor"] .pf-ov-doc:not(.pf-ov-anydept)')] as HTMLElement[];
+/** Doctor tiles, each once (a doctor in two departments shows in both groups). */
+const docTiles = (el: HTMLElement) => [...el.querySelectorAll('.pf-ov-grid .pf-ov-doc:not(.pf-ov-anydept)')] as HTMLElement[];
 
 beforeEach(() => Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true }));
 afterEach(() => TestBed.resetTestingModule());
@@ -88,13 +89,28 @@ describe('New visit — the order-create band (product · Patient · Doctor · o
   });
 });
 
-describe('New visit — work card: doctor · purpose · add-ons', () => {
-  it('has the three columns (add-ons drop when the workflow turns desk lab tests off)', () => {
-    const cols = (el: HTMLElement) => [...el.querySelectorAll('.pf-ov-col')].map(c => c.getAttribute('data-col'));
-    expect(cols(render().el)).toEqual(['doctor', 'purpose', 'addons']);
-    TestBed.resetTestingModule();
-    const off = render({ desk: { ...DESK, config: { ...DESK.config, workflow: { vitals: 'off', labTestsAtDesk: false, billing: 'before_consult' } } } });
-    expect(cols(off.el)).toEqual(['doctor', 'purpose']);
+describe('New visit — work card: doctor grid + visit purpose strip', () => {
+  it('no add-ons column, no Urgent switch, no Queue button — lab tests are ordered after the consult', () => {
+    const { el } = render();
+    expect(el.querySelector('[data-col="addons"]')).toBeNull();
+    expect(el.querySelector('[data-urgent]')).toBeNull();
+    expect(el.querySelector('a[routerLink="/opd/queue"], a[href="/opd/queue"]')).toBeNull();
+  });
+
+  it('tabs are In today / All doctors; department chips show the name once; Free now is a toggle chip', () => {
+    const { el } = render();
+    expect([...el.querySelectorAll('.pf-tabs__label')].map(t => t.textContent!.trim())).toEqual(['In today', 'All doctors']);
+    const chips = [...el.querySelectorAll('.pf-deptpill')].map(b => b.textContent!.replace(/\s+/g, ' ').trim());
+    expect(chips).toEqual(['All', 'ENT', 'General Medicine', 'Free now']);
+  });
+
+  it('doctors are grouped by department; "Any doctor" leads only a department with more than one doctor', () => {
+    const { el } = render();
+    const groups = [...el.querySelectorAll('[data-dept-group]')];
+    expect(groups.map(g => g.getAttribute('data-dept'))).toEqual(['ent', 'gm']);
+    expect(groups[0].querySelector('.pf-ov-grid > .pf-ov-anydept')).toBeTruthy();
+    expect(groups[0].querySelector('.pf-ov-grid')!.firstElementChild!.classList).toContain('pf-ov-anydept');
+    expect(groups[1].querySelector('.pf-ov-anydept')).toBeNull();
   });
 
   it('doctor tiles show speciality, wait and fee; picking one quotes its services and pre-picks the follow-up', async () => {
@@ -105,21 +121,22 @@ describe('New visit — work card: doctor · purpose · add-ons', () => {
     expect(tiles[0].textContent).toContain('3 waiting · ~36 min');
     expect(tiles[0].textContent).toContain('₹600');
     expect(tiles[2].textContent).toContain('Free now');
+    expect(el.querySelector('[data-purpose]')).toBeNull();
     (tiles[0].querySelector('.pf-crow__main') as HTMLButtonElement).click();
     f.detectChanges(); await flush(); f.detectChanges();
     expect(api.get).toHaveBeenCalledWith('/api/opd/visits/quote?doctorId=d1&patientId=p1');
     expect(tiles[0].querySelector('[role="radio"]')!.getAttribute('aria-checked')).toBe('true');
-    expect(c.serviceId()).toBe('s1'); // the follow-up
-    const choice = el.querySelector('.pf-ov-col[data-col="purpose"] [role="radio"][aria-checked="true"]')!;
-    expect(choice.textContent).toContain('ENT consultation (follow-up)');
+    expect(c.serviceId()).toBe('s1'); // the follow-up, pre-picked
+    const choice = el.querySelector('[data-purpose] [role="radio"][aria-checked="true"]')!;
+    expect(choice.textContent).toContain('Follow-up');
     expect(choice.textContent).toContain('₹300');
   });
 
-  it('the Free now tab and the department chips filter the doctor column', () => {
+  it('the Free now chip and the department chips filter the doctor grid', () => {
     const { el, f, c } = render();
-    c.setDoctorTab('free'); f.detectChanges();
+    (el.querySelector('[data-free]') as HTMLButtonElement).click(); f.detectChanges();
     expect(docTiles(el).map(t => t.textContent)).toEqual([expect.stringContaining('Dr. Rohan Mehta')]);
-    c.setDoctorTab('all'); f.detectChanges();
+    c.toggleFreeOnly(); f.detectChanges();
     const gm = [...el.querySelectorAll('.pf-deptpill')].find(b => b.textContent!.includes('General Medicine')) as HTMLButtonElement;
     gm.click(); f.detectChanges();
     expect(docTiles(el).length).toBe(1);
@@ -131,7 +148,7 @@ describe('New visit — work card: doctor · purpose · add-ons', () => {
     c.filterByDepartment(DESK.departments[0]); // ENT
     f.detectChanges();
     expect(c.doctorId()).toBeNull(); // filtering ≠ picking
-    const anyRow = el.querySelector('.pf-ov-anydept .pf-crow__main') as HTMLButtonElement;
+    const anyRow = el.querySelector('[data-dept="ent"] .pf-ov-anydept .pf-crow__main') as HTMLButtonElement;
     expect(anyRow.textContent).toContain('Any doctor in ENT');
     anyRow.click(); f.detectChanges();
     expect(c.doctorId()).toBe('d2'); // least-waiting of ENT
@@ -146,19 +163,6 @@ describe('New visit — work card: doctor · purpose · add-ons', () => {
     expect(c.departmentId()).toBeNull();
   });
 
-  it('add-ons: lab tests found by short name / panel abbreviation, ticked into the bill', async () => {
-    const { el, f, c } = render({ query: { patientId: 'p1' } });
-    c.pickDoctor(DESK.doctors[0]); f.detectChanges(); await flush(); f.detectChanges();
-    c.labQuery.set('aec'); f.detectChanges();
-    const rows = el.querySelectorAll('.pf-ov-lab');
-    expect(rows.length).toBe(1);
-    (rows[0].querySelector('.pf-crow__main') as HTMLButtonElement).click(); f.detectChanges();
-    expect(el.querySelectorAll('[data-line="lab"]').length).toBe(1);
-    expect(el.querySelector('.pf-cart-totals')!.textContent).toContain('Lab tests · lab bill');
-    expect(el.querySelector('[data-total]')!.textContent).toContain('₹450');
-    c.labQuery.set('LFT'); f.detectChanges();
-    expect(el.querySelector('.pf-ov-lab')!.textContent).toContain('Liver function test');
-  });
 });
 
 describe('New visit — BILLING card', () => {
@@ -194,14 +198,13 @@ describe('New visit — BILLING card', () => {
 
   it('continue → payment → books once (no vitals in the bill) → token issued → Record vitals goes to the Vitals step', async () => {
     const { el, f, c, api, router } = await ready();
-    c.labIds.set(['t1']); f.detectChanges();
     cta(el).click(); f.detectChanges();
     expect(c.stage()).toBe('pay');
     expect(el.querySelector('pf-inline-payment-panel')).toBeTruthy();
     c.onPaid({ mode: 'upi' });
     await flush(); f.detectChanges();
     const call = api.post.mock.calls.find((x: any[]) => x[0] === '/api/opd/visits');
-    expect(call[1]).toMatchObject({ patientId: 'p1', doctorUserId: 'd1', serviceId: 's1', labTestIds: ['t1'], payments: [{ mode: 'upi', amount: 450 }] });
+    expect(call[1]).toMatchObject({ patientId: 'p1', doctorUserId: 'd1', serviceId: 's1', payments: [{ mode: 'upi', amount: 300 }] });
     expect(call[1].vitals).toBeNull();
     expect(c.stage()).toBe('issued');
     expect(el.querySelector('[data-issued]')!.textContent).toContain('Token A3 issued');
@@ -269,75 +272,6 @@ describe('New visit — vitals moved out of billing + draft', () => {
   });
 });
 
-/** A choose-mode lab test (KOH Mount) — Test Master's own row carries
- *  `specimenMode: 'choose'`, exactly what a real "KOH Mount" / "Bacterial
- *  Culture & Sensitivity" catalogue row has. The fix under test: booking
- *  with one of these picked, but no specimen chosen, must be BLOCKED on the
- *  screen (never sent), and once chosen, `labTestSpecimens` rides the
- *  checkout call the same way the server's `CreateOrderInput.Specimens`
- *  expects it. */
-const KOH = {
-  id: 'tKoh', name: 'KOH Mount', shortName: 'KOH', testCode: 'MIC030', price: 300, taxSlab: 0, type: 'individual', isActive: true,
-  parameters: JSON.stringify({ specimenMode: 'choose' }),
-};
-const KOH_SPECIMENS = [{ testId: 'tKoh', specimens: [{ code: 'SKN', name: 'Skin scraping', isDefault: false }, { code: 'NAIL', name: 'Nail clipping', isDefault: false }] }];
-
-describe('New visit — choose-mode specimen (the KOH Mount / C&S fix)', () => {
-  async function readyWithKoh() {
-    const r = render({ query: { patientId: 'p1' }, tests: [...TESTS, KOH], specimens: KOH_SPECIMENS });
-    r.c.pickDoctor(DESK.doctors[0]);
-    r.f.detectChanges(); await flush(); r.f.detectChanges();
-    r.c.labQuery.set('KOH'); r.f.detectChanges();
-    const res = r.el.querySelectorAll('.pf-ov-lab .pf-crow__main');
-    (res[0] as HTMLButtonElement).click();
-    r.f.detectChanges(); await flush(); r.f.detectChanges();
-    return r;
-  }
-
-  it('shows a specimen picker (pf-select, never a native select) for the picked choose-mode test', async () => {
-    const { el } = await readyWithKoh();
-    const picker = el.querySelector('pf-opd-specimen-picker');
-    expect(picker).toBeTruthy();
-    expect(picker!.querySelector('select')).toBeNull();
-    expect(el.querySelector('pf-select')).toBeTruthy();
-  });
-
-  it('Continue to payment is BLOCKED (no server call) while the specimen is unchosen, and errors the toast', async () => {
-    const { el, f, c, api, toasts } = await readyWithKoh();
-    api.post.mockClear();
-    cta(el).click(); f.detectChanges();
-    expect(c.stage()).toBe('build'); // never advanced to pay
-    expect(toasts.error).toHaveBeenCalled();
-    expect(api.post).not.toHaveBeenCalledWith('/api/opd/visits', expect.anything());
-    expect(c.specimenInvalid('tKoh')).toBe(true);
-  });
-
-  it('choosing the specimen clears the block and the booking carries labTestSpecimens', async () => {
-    const { el, f, c, api } = await readyWithKoh();
-    c.setSpecimen('tKoh', 'SKN');
-    f.detectChanges();
-    expect(c.specimenInvalid('tKoh')).toBe(false);
-    cta(el).click(); f.detectChanges();
-    expect(c.stage()).toBe('pay');
-    c.onPaid({ mode: 'upi' });
-    await flush();
-    const call = api.post.mock.calls.find((x: any[]) => x[0] === '/api/opd/visits');
-    expect(call[1]).toMatchObject({ labTestIds: ['tKoh'], labTestSpecimens: { tKoh: 'SKN' } });
-    expect(c.stage()).toBe('issued');
-  });
-
-  it('a "none"-mode test (no parameters, like the existing fixtures) never shows a picker and never blocks', async () => {
-    const r = render({ query: { patientId: 'p1' } });
-    r.c.pickDoctor(DESK.doctors[0]);
-    r.f.detectChanges(); await flush(); r.f.detectChanges();
-    r.c.labIds.set(['t1']); r.f.detectChanges();
-    expect(r.el.querySelector('pf-opd-specimen-picker pf-select')).toBeNull();
-    r.c.onPaid({ mode: 'upi' });
-    await flush();
-    expect(r.c.stage()).toBe('issued');
-  });
-});
-
 describe('sameDoctorOpenVisit (duplicate-visit nudge)', () => {
   const row = (o: Partial<import('./desk.models').OpdVisitRow>) => ({ id: 'v', patientId: 'p', patientName: 'P', doctorUserId: 'd1', doctorName: 'Dr. A',
     visitDate: '2026-09-30', token: 3, tokenLabel: 'E3', status: 'waiting', isFollowUp: false, charged: 0, hasLabOrder: false, createdAt: '', vitalsFlagged: false, ...o }) as import('./desk.models').OpdVisitRow;
@@ -347,5 +281,15 @@ describe('sameDoctorOpenVisit (duplicate-visit nudge)', () => {
     expect(sameDoctorOpenVisit([row({ status: 'completed' })], 'd1')).toBeNull();
     expect(sameDoctorOpenVisit([row({ status: 'cancelled' })], 'd1')).toBeNull();
     expect(sameDoctorOpenVisit([row({})], null)).toBeNull();
+  });
+});
+
+describe('defaultPurpose (pick a doctor → Continue to payment)', () => {
+  const svc = (o: any) => ({ serviceId: o.id, name: o.id, category: 'consultation', priceSource: 'common', price: 1, taxSlab: 0, isFollowUp: false, quoted: 1, ...o });
+  it('follow-up first, else the consultation, else the first service', () => {
+    expect(defaultPurpose([svc({ id: 'p', category: 'procedure' }), svc({ id: 'c' }), svc({ id: 'f', isFollowUp: true })])?.serviceId).toBe('f');
+    expect(defaultPurpose([svc({ id: 'p', category: 'procedure' }), svc({ id: 'c' })])?.serviceId).toBe('c');
+    expect(defaultPurpose([svc({ id: 'p', category: 'procedure' })])?.serviceId).toBe('p');
+    expect(defaultPurpose([])).toBeUndefined();
   });
 });
