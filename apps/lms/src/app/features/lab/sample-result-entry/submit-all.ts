@@ -72,7 +72,7 @@ export function paramsOfTest(t: OrderTest): TestParameter[] {
 
 /** Can this screen still submit the test? */
 export function isWritableTest(t: OrderTest): boolean {
-  return t.status !== 'entered' && t.status !== 'validated' && t.status !== 'rejected' && !isCultureTest(t);
+  return t.status !== 'entered' && t.status !== 'validated' && t.status !== 'rejected' && t.status !== 'not_reported' && !isCultureTest(t);
 }
 
 /** A real entered value: non-blank text / number, or a ticked box. An

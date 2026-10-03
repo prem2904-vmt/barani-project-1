@@ -76,6 +76,7 @@ import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
 import { normalizePriority } from "../../../shared/utils/lab-priority";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
+import { NOT_REPORTED } from "../../../shared/utils/line-status";
 import {
   MissingEntry,
   TabSnapshot,
@@ -859,7 +860,7 @@ export class SampleResultEntryComponent {
   readonly submitting = this._submitting.asReadonly();
   /** WHICH header action started the running `submitting()` request — only
    *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
-  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | null>(null);
+  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | 'close' | null>(null);
 
   // ── NABL critical-result records of this tube (open / acknowledged) ──
   private readonly _critical = signal<CriticalResultEvent[]>([]);
@@ -983,6 +984,7 @@ export class SampleResultEntryComponent {
         t.status !== "entered" &&
         t.status !== "validated" &&
         t.status !== "rejected" &&
+        t.status !== NOT_REPORTED &&
         !this.isCultureTest(t),
     ),
   );
@@ -1263,7 +1265,7 @@ export class SampleResultEntryComponent {
       return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -1820,9 +1822,56 @@ export class SampleResultEntryComponent {
     return analyzerBadge(applied, t.id, p.name, this._values()[t.id]?.[p.name], (iso) => this.analyzerTime(iso));
   }
 
+  /** Open lines nobody entered (pending / in progress / re-entry, in-house,
+   *  not culture) — what a validator may close as Not reported. */
+  readonly openBlankTests = computed<OrderTest[]>(() =>
+    (this._sample()?.tests ?? []).filter((t) =>
+      (t.status === "pending" || t.status === "in_progress" || t.status === "re_entry") && !this.isCultureTest(t)));
+
+  /** "N tests have no value … Close them as Not reported?" — true = close. */
+  private async askCloseBlank(blank: readonly OrderTest[]): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
+    return this.dialog.confirm({
+      title: `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value`,
+      message: `${names.join(", ")}. Closed as Not reported, ${blank.length === 1 ? "it" : "they"} never print and the report can be issued.`,
+      question: "Close them as Not reported?",
+      cancelLabel: "Leave them open",
+      confirmLabel: "Close as Not reported",
+    });
+  }
+
+  /** Validator, nothing left to validate: close the blank lines. */
+  async closeBlankFromValidation() {
+    const s = this._sample();
+    const blank = this.openBlankTests();
+    if (!s || !blank.length || this.submitting()) return;
+    if (!(await this.askCloseBlank(blank))) return;
+    this.submitAct.set('close');
+    this._submitting.set(true);
+    try {
+      await this.closeNotReported(s.id, blank);
+      this.prestore.afterValidation(s.orderId ?? s.order?.id);
+      this.toasts.success(`${blank.length} test${blank.length === 1 ? "" : "s"} closed as not reported`);
+      void this.router.navigate(['/pathologist']);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this._submitting.set(false);
+    }
+  }
+
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
+    // Blank lines on the same tube would hold the report back: offer to close
+    // them as Not reported first (owner 2026-10-03). "Leave them open" still
+    // validates what was entered.
+    const blank = this.openBlankTests();
+    let closed = false;
+    if (blank.length && (await this.askCloseBlank(blank))) {
+      try { await this.closeNotReported(this._sample()!.id, blank); closed = true; }
+      catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    }
     if (!(await this.confirmNothingPrints(targets, "validate"))) return;
     this.submitAct.set('validate');
     this._submitting.set(true);
@@ -1837,7 +1886,7 @@ export class SampleResultEntryComponent {
     // (background) so the patient's WhatsApp carries it.
     if (ok > 0) this.prestore.afterValidation(this.sample()?.orderId ?? this.sample()?.order?.id);
     if (ok === targets.length) {
-      this.toasts.success(ok === 1 ? 'Result validated' : `${ok} results validated`);
+      this.toasts.success((ok === 1 ? 'Result validated' : `${ok} results validated`) + (closed ? `, ${blank.length} not reported` : ''));
       void this.router.navigate(['/pathologist']);
     } else {
       this.toasts.error(lastErr || 'Some results could not be validated');
@@ -2082,7 +2131,7 @@ export class SampleResultEntryComponent {
     // The form pre-fills values for these from currentResult so they
     // can be SEEN, but submitting them would 409 the whole batch.
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     // A numeric parameter holding a non-parseable value must never be
     // submitted as the result — surface which ones and stop.
@@ -2203,7 +2252,7 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting() || this._savingDraft()) return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable

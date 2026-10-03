@@ -171,3 +171,46 @@ describe('Result entry — Submit with empty fields asks first', () => {
     expect(skip![1]).toEqual({ orderTestIds: ['ot2'] });
   });
 });
+
+describe('Result entry — validator closes blank lines as Not reported (owner 2026-10-03)', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+
+  const withBlank = () => {
+    const smp = sampleFixture({ printPickerDefault: 'all', status: 'entered',
+      currentResult: JSON.stringify({ values: { Hb: 13, PCV: 40 } }) }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Bilirubin', status: 'pending',
+      test: { id: 't2', name: 'Urine Bilirubin', parameters: JSON.stringify({
+        parameters: [{ name: 'Urine Bilirubin', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    return smp;
+  };
+
+  it('the open blank lines are listed for the validator', async () => {
+    const { c } = await render(withBlank());
+    expect(c.openBlankTests().map((t: any) => t.id)).toEqual(['ot2']);
+  });
+
+  it('"Close as Not reported" posts the same endpoint; "Leave them open" posts nothing', async () => {
+    const yes = await render(withBlank(), { confirm: true });
+    await yes.c.closeBlankFromValidation();
+    const req = yes.dialog.confirm.mock.calls[0][0];
+    expect(req.title).toBe('1 test has no value');
+    expect(req.question).toBe('Close them as Not reported?');
+    expect(yes.api.post).toHaveBeenCalledWith('/api/samples/smp-1/not-reported', { orderTestIds: ['ot2'] });
+    TestBed.resetTestingModule();
+
+    const no = await render(withBlank());
+    await no.c.closeBlankFromValidation();
+    expect(no.api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+  });
+
+  it('a Not reported line is closed work: never writable, labelled in words', async () => {
+    const smp = withBlank();
+    smp.tests[1].status = 'not_reported';
+    const { c, el } = await render(smp);
+    expect(c.openBlankTests()).toEqual([]);
+    expect(c.hasWritable()).toBe(false);
+    expect(el.textContent).toContain('Not reported');
+  });
+});

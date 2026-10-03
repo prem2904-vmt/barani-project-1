@@ -977,13 +977,14 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       profileObs.set(pkg, arr);
     }
     let merged = byPkg.get(pkg);
+    if (merged && g.fromResults) merged.fromResults = true;
     if (merged && g.sampleId && !merged.sampleIds?.includes(g.sampleId)) {
       (merged.sampleIds ??= []).push(g.sampleId);
     }
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [],
+      merged = { ...g, fromResults: g.fromResults, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [],
         sampleIds: g.sampleId ? [g.sampleId] : [] };
       // Column cascade for the BLOCK: the PROFILE's own override wins for
       // the whole block; a member's override never leaks into it — the
@@ -1061,6 +1062,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     const panel = byPkg.get(pkg);
     if (panel && obs.length) panel.rows.push(...obs);
   }
+  // A test / profile block whose every value was empty prints nothing at all
+  // (no band, no notes) — and a department left with no block disappears
+  // with it, since sections are built from these groups (owner 2026-10-03).
+  dropValuelessGroups(groups);
 
   // ── Profile ONE-PAGE report layouts (owner, 2026-10-02) ─────────────────
   // A profile whose Printed-report tab has an ENABLED `page_layout` section
@@ -2931,6 +2936,10 @@ function colorSeverity(hex: string | null | undefined): 'high' | 'warn' | 'norma
 
 interface PanelGroup {
   testName: string;
+  /** Built from a REAL saved result (a report, not an editor preview): a
+   *  value-less row is omitted, and a block left with no value is dropped
+   *  (owner 2026-10-03: "if no value, don't show it in the report"). */
+  fromResults?: boolean;
   /** Department name — drives per-department section grouping + its columns. */
   department?: string;
   /** The resolved per-department column layout for this test (incl. linkedNext
@@ -3019,12 +3028,34 @@ function sentencesFitTable(layout: ResolvedReportLayout | undefined): boolean {
  *  rows, in print order — a Sentence above the results table lands before
  *  the rows, one below it after them. Off for a member ordered through a
  *  profile/package (notes follow what was ORDERED). */
+/** A report cell with no value: blank, a lone dash, an empty multi-pick. */
+export function isBlankReportValue(v: unknown): boolean {
+  if (v === undefined || v === null) return true;
+  if (Array.isArray(v)) return v.every(x => isBlankReportValue(x));
+  const s = String(v).trim();
+  return s === '' || s === '—' || s === '-';
+}
+
+/** Drop (in place) every block built from real results that has no value
+ *  row left. Preview blocks and blocks with any value are untouched. */
+export function dropValuelessGroups<T extends { fromResults?: boolean; rows: { kind?: string }[] }>(groups: T[]): T[] {
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const g = groups[i];
+    if (g.fromResults && !g.rows.some(r => r.kind === 'param')) groups.splice(i, 1);
+  }
+  return groups;
+}
+
 function buildPanelGroup(
   t: NonNullable<ReportSnapshot['tests']>[number],
   layout: ResolvedReportLayout | undefined,
   opts: { sentences?: boolean } = {}
 ): PanelGroup {
+  // A real report (a saved result exists) never prints a value-less row; an
+  // editor preview (no saved result) keeps every row as a placeholder.
+  const fromResults = !!t.result;
   const group: PanelGroup = {
+    fromResults,
     testName: t.name ?? reportDisplayName(layout?.testName) ?? 'Test',
     department: (t.department ?? '').trim() || undefined,
     columns: layout?.columns ?? [],
@@ -3097,6 +3128,8 @@ function buildPanelGroup(
         const savedRaw = sv && typeof sv === 'object' && 'flag' in sv ? sv.flag
           : rc.saved ? rc.flag : (rowFlag ?? rc.flag);
         const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
+        // No value → no row (owner 2026-10-03).
+        if (fromResults && isBlankReportValue(resultText)) continue;
         // Range / unit print what was SAVED with the result (the snapshot's
         // per-value `range` / `unit`, frozen at sign-off) — the layout's cell
         // is the live Test Master and only stands in for a value saved
@@ -3167,6 +3200,8 @@ function buildPanelGroup(
   const boldLegacy = printBoldNames(t);
   for (const [paramName, v] of Object.entries(values ?? {})) {
     if (hiddenLegacy.has(paramName)) continue;
+    // No value → no row (owner 2026-10-03).
+    if (isBlankReportValue(v?.value)) continue;
     // Criticals print as H / L — never C (report rule; see report-flag.ts).
     const rf = reportFlag(v?.flag, v?.value, v?.range);
     group.rows.push({
@@ -4890,7 +4925,9 @@ function renderLegacyTest(
   const sampleTypeLine = isConcreteSpecimen(rawSampleType) ? rawSampleType : '';
   const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
   const entries = (values ? Object.entries(values) : [])
-    .filter(([paramName]) => !hiddenNames.has(paramName));
+    .filter(([paramName]) => !hiddenNames.has(paramName))
+    // No value → no row (owner 2026-10-03).
+    .filter(([, v]) => !isBlankReportValue(v?.value));
 
   if (entries.length > 0) {
     entries.forEach(([paramName, v], i) => {

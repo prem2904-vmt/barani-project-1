@@ -8,6 +8,7 @@ import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, O
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -3265,7 +3266,8 @@ export class MyWorkComponent implements OnInit {
         patientMeta: patient ? formatPatientMeta(patient) : '',
         testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
         // A tube reads as validated only once every test on it is signed.
-        status: tests.every(t => t.status === 'validated') ? 'validated' : 'entered',
+        // (a line closed as Not reported is done too.)
+        status: tests.every(t => isSignedOrSkipped(t.status)) ? 'validated' : 'entered',
         completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
       };
     }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
