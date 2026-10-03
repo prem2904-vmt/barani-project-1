@@ -78,6 +78,22 @@ class Connector extends EventEmitter {
     this.lastError = null;
     this.day = istDayKey(this.now());
     this.messagesToday = 0;
+    // A message's upload response carries `state` ('matched' | 'unmatched' |
+    // 'superseded' | …, electron/instruments/e2e/fake-api.js / the server's
+    // real contract) — this just tallies today's 'unmatched' responses for
+    // the tray; the authoritative, cumulative count is the server's own
+    // InstrumentDto.unmatchedCount (apps/lms, the admin Instruments page),
+    // which needs a user session the main process doesn't have.
+    this.unmatchedToday = 0;
+    // null = no heartbeat has completed yet (unknown); true/false = the last
+    // heartbeat (electron/updater-guard.js-style "light periodic ping",
+    // already ~30s by default) reached the server or didn't.
+    this.serverOnline = null;
+    this.serverOfflineSince = null;
+    // Bounded ring of this connector's own short error strings (never raw
+    // analyzer traffic — see electron/diagnostics.js's header comment) for
+    // the tray's "Copy diagnostic info".
+    this.errors = [];
     this.stopped = true;
     this.hbTimer = null;
     this.drainTimer = null;
@@ -179,7 +195,7 @@ class Connector extends EventEmitter {
       if (typeof this.lastError === 'string' && this.lastError.startsWith('config:')) this.lastError = null;
       return remote.config;
     } catch (e) {
-      this.lastError = `config: ${e.message}`;
+      this._recordError(`config: ${e.message}`);
       if (fs.existsSync(cacheFile)) {
         try {
           this.remote = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
@@ -201,7 +217,7 @@ class Connector extends EventEmitter {
     const linkCfg = () => (this.active && this.active.link) || { type: 'auto' };
     const parserCfg = () => (this.active && this.active.parser) || {};
     t.on('status', (s) => this._setState(s));
-    t.on('error', (e) => { this.lastError = e.message; this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
+    t.on('error', (e) => { this._recordError(e.message); this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
     t.on('session-start', (id, info) => {
       this.rawlog.write('note', `session ${id} opened ${info && info.remote ? `(${info.remote})` : ''}`);
       this.links.set(id, this._makeLink(linkCfg(), parserCfg(), id));
@@ -261,7 +277,7 @@ class Connector extends EventEmitter {
     try {
       msgs = parseMessage(text, parserCfg, meta);
     } catch (e) {
-      this.lastError = `parse: ${e.message}`;
+      this._recordError(`parse: ${e.message}`);
       this.rawlog.write('note', `parse failed: ${e.message}`);
     }
     if (!msgs.length) {
@@ -295,8 +311,7 @@ class Connector extends EventEmitter {
       };
       const { added } = this.queue.add({ key, payload });
       this.lastMessageAt = payload.receivedAt;
-      const day = istDayKey(t);
-      if (day !== this.day) { this.day = day; this.messagesToday = 0; }
+      this._rollDay(t);
       if (added) this.messagesToday++;
       this.rawlog.write('note', `${added ? 'queued' : 'already queued'} sample ${m.sampleId || '?'}${m.qc ? ' (QC)' : ''}: ${m.results.length} result(s)`);
       this.emit('message', { message: m, preview: applyMaps(m, (this.remote && this.remote.codeMaps) || []), queued: added });
@@ -324,6 +339,8 @@ class Connector extends EventEmitter {
           const res = await this.uploader.postMessage(it.payload);
           this.queue.done(it.id);
           this.lastUploadAt = new Date(this.now()).toISOString();
+          this._rollDay(this.now());
+          if (res && res.state === 'unmatched') this.unmatchedToday++;
           this.emit('uploaded', { id: it.id, sampleId: it.payload.message.sampleId, result: res });
         } catch (e) {
           if (e.kind === 'permanent') {
@@ -332,7 +349,7 @@ class Connector extends EventEmitter {
           } else {
             this.queue.retry(it.id, e.message);
           }
-          this.lastError = `upload: ${e.message}`;
+          this._recordError(`upload: ${e.message}`);
           if (e.kind !== 'permanent') break;   // keep order; wait for backoff
         }
       }
@@ -357,6 +374,7 @@ class Connector extends EventEmitter {
     if (this.stopped) return;
     this.hbTimer = setTimeout(async () => {
       let hb = null;
+      let reached = false;
       try {
         hb = await this.uploader.heartbeat({
           status: this._wireState(),
@@ -366,7 +384,15 @@ class Connector extends EventEmitter {
           connectorVersion: VERSION,
           host: os.hostname(),
         });
-      } catch { /* heartbeat is best-effort */ }
+        reached = true;
+      } catch (e) {
+        // Heartbeat stays best-effort (never throws out of this timer), but
+        // IS the tray's "server connection status" signal — a light,
+        // already-periodic (~30s) ping, per the owner's ask, reused rather
+        // than adding a second one.
+        this._recordError(`heartbeat: ${e.message}`);
+      }
+      this._setServerOnline(reached);
       // Config poll: a heartbeat answer that carries a config version only
       // triggers a pull when it differs; without one, pull every beat (one
       // small GET) — either way a saved edit reaches the connector.
@@ -388,7 +414,34 @@ class Connector extends EventEmitter {
   }
 
   _setState(s) { if (this.state !== s) { this.state = s; this._emitStatus(); } }
-  _fail(msg) { this.lastError = msg; this.state = 'error'; this.rawlog.write('note', msg); this._emitStatus(); }
+  _fail(msg) { this._recordError(msg); this.state = 'error'; this.rawlog.write('note', msg); this._emitStatus(); }
+
+  /** Record a short operational error string (never raw analyzer/message
+   *  content) for the tray's "Copy diagnostic info" — bounded ring, last 10
+   *  exposed via status(). */
+  _recordError(msg) {
+    this.lastError = msg;
+    this.errors.push({ at: new Date(this.now()).toISOString(), message: String(msg == null ? '' : msg).slice(0, 300) });
+    if (this.errors.length > 20) this.errors.splice(0, this.errors.length - 20);
+  }
+
+  /** IST business-day rollover for the "today" counters (messagesToday,
+   *  unmatchedToday) — same day key as messagesToday has always used. */
+  _rollDay(t) {
+    const day = istDayKey(t);
+    if (day !== this.day) { this.day = day; this.messagesToday = 0; this.unmatchedToday = 0; }
+  }
+
+  _setServerOnline(reached) {
+    const t = this.now();
+    if (reached) {
+      if (this.serverOnline !== true) { this.serverOnline = true; this.serverOfflineSince = null; this._emitStatus(); }
+    } else if (this.serverOnline !== false) {
+      this.serverOnline = false;
+      this.serverOfflineSince = new Date(t).toISOString();
+      this._emitStatus();
+    }
+  }
 
   status() {
     return {
@@ -401,6 +454,10 @@ class Connector extends EventEmitter {
       queueLength: this.queue.length,
       lastError: this.lastError,
       messagesToday: this.messagesToday,
+      unmatchedToday: this.unmatchedToday,
+      serverOnline: this.serverOnline,
+      serverOfflineSince: this.serverOfflineSince,
+      recentErrors: this.errors.slice(-10),
     };
   }
 

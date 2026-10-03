@@ -15,6 +15,10 @@ const instruments = require('./instruments/host-electron');
 // docs/DESKTOP-RELEASES.md. Channel comes from the build's own
 // pfDataProfile; a dev run (unpackaged) or a build with none disables it.
 const updater = require('./updater');
+// Menu bar (macOS) / system tray (Windows): instruments, updates, quit.
+// Close hides to here instead of quitting — see mainWindow.on('close', …)
+// below. electron/tray.js is the single owner of the Tray/icon/menu.
+const tray = require('./tray');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -262,13 +266,15 @@ ipcMain.handle('doc:printPdf', async (_e, opts = {}) => {
 app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   createWindow();
-  calls.createTray(() => mainWindow);
   notify.start();
   // Paired analyzers start with the app and keep running in the tray.
   instruments.start();
   // Check at launch, then every 4h (updater.js); no-op outside a packaged,
   // channel-tagged build.
   updater.start();
+  // Built AFTER instruments.start() so its first menu/icon already reflects
+  // whichever analyzers are paired (status() is empty before load() runs).
+  tray.create(() => mainWindow);
 
   // macOS: re-open / re-show the window when the dock icon is clicked.
   app.on('activate', () => {

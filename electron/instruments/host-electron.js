@@ -104,4 +104,14 @@ function statusSnapshot() {
   try { return manager ? manager.status() : []; } catch { return []; }
 }
 
-module.exports = { register, start, stop, secrets, statusSnapshot };
+/** Live status ticks for electron/tray.js (menu rebuild, attention icon,
+ *  the debounced disconnect/reconnect notification). Call AFTER register()
+ *  (main.js does: instruments.register → updater.register → tray.create) —
+ *  the manager is created inside register(), and the tray only needs the
+ *  stream from app launch onward (statusSnapshot() covers the state as of
+ *  "right now" for anything created first). */
+function onStatus(cb) {
+  if (manager) manager.on('status', cb);
+}
+
+module.exports = { register, start, stop, secrets, statusSnapshot, onStatus };

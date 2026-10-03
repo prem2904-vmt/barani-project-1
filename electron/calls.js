@@ -16,7 +16,7 @@
  * ring ends on any path (renderer calls dismiss) or the main window is
  * focused (its in-app ring card takes over).
  */
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification } = require('electron');
 const path = require('path');
 
 let quitting = false;
@@ -24,7 +24,6 @@ let callWin = null;
 let callInfo = null;          // { callId, callerName, isGroup, groupName }
 let bounceId = null;
 let mainRef = null;
-let tray = null;
 let callNote = null;          // native "Incoming call" notification (Answer / Decline)
 
 const CALL_ID = /^[A-Za-z0-9_-]{6,64}$/;
@@ -200,31 +199,16 @@ ipcMain.on('call-window:action', (e, action) => {
   mainRef.webContents.send('call:action', { action, callId });
 });
 
-/** Tray icon (Windows / Linux) so a closed window is one click away and the
- *  app can be quit; macOS keeps using the dock. */
-function createTray(getMain) {
-  if (process.platform === 'darwin' || tray) return;
-  try {
-    const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
-    tray = new Tray(icon);
-    tray.setToolTip('Prefrontal');
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open Prefrontal', click: () => restore(getMain()) },
-      { type: 'separator' },
-      { label: 'Quit', click: () => { quitting = true; app.quit(); } },
-    ]));
-    tray.on('click', () => restore(getMain()));
-  } catch (err) {
-    console.warn('[tray] unavailable', err);
-  }
-}
-
-function getTray() { return tray; }
-
 /** Dev-build check of the native call notification (notify.js debugFire). */
 function debugNativeCall() {
   callInfo = { callId: 'debug-call', callerName: 'Dr. Debug', isGroup: false, groupName: '' };
   return !!showNativeCall(callInfo);
 }
 
-module.exports = { attach, restore, createTray, getTray, isQuitting, setQuitting, debugNativeCall };
+// The menu-bar / system-tray icon itself (Windows + macOS: instruments,
+// updates, quit, …) lives in electron/tray.js, not here — this module only
+// ever needed a Tray for its Windows "open / quit" fallback, which the full
+// tray now covers. isQuitting()/setQuitting() stay here (calls.js owns the
+// close-vs-quit flag everything else reads) and tray.js's Quit action calls
+// setQuitting() the same way main.js's app-menu/Cmd+Q path already does.
+module.exports = { attach, restore, isQuitting, setQuitting, debugNativeCall };
