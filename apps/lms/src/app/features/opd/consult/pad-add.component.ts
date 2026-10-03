@@ -45,8 +45,8 @@ import { PadOption, entryAction, padSuggest } from './pad';
   `,
   styles: [`
     :host { display: block; }
-    .pa { position: relative; display: grid; gap: 8px; }
-    .pa__in { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text-tertiary);
+    .pa { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .pa__in { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text-tertiary);
       border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
     .pa__in:focus-within { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .pa__in input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--text-primary); }
@@ -59,7 +59,8 @@ import { PadOption, entryAction, padSuggest } from './pad';
     .pa__sg b { font-weight: 600; }
     .pa__sg span { font-size: 12.5px; color: var(--violet-text, #6d28d9); }
     .pa__sg.act, .pa__sg:hover { background: var(--nd-chip-bg); }
-    .pa__quick { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* The one-tap chips sit on the field's line when they fit, else wrap below. */
+    .pa__quick { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: 8px; }
     .pa__chip { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--nd-line); background: none;
       font: inherit; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
     .pa__chip small { font-size: 11.5px; color: var(--text-tertiary); }

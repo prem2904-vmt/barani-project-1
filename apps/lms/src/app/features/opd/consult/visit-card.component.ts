@@ -4,7 +4,7 @@ import type { OpdPatientAllergy, OpdPregnancy } from '../shared/opd.models';
 import { lineShort } from '../shared/rx-schedule';
 import type { ConsultCurrentMedicine } from './consult.api';
 import { ConsultDrugRef, ConsultRxLine, allergyHit, swapCandidate } from './rx/rx-model';
-import { VisitFilter, VisitItem, filterItems } from './consult-records';
+import { RecentResult, VisitFilter, VisitItem, filterItems } from './consult-records';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
 /**
@@ -92,6 +92,16 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
       <div class="vc__ar"><span class="vc__k">Conditions</span><span class="vc__v">{{ conditionsText() || 'None on record' }}</span></div>
       <div class="vc__ar"><span class="vc__k">Medicines</span><span class="vc__v">{{ medsText() || 'None running' }}</span></div>
       @if (watch()) { <div class="vc__ar"><span class="vc__k">Watch</span><span class="vc__v vc__w nd-num">{{ watch() }}</span></div> }
+      @if (results().length) {
+        <div class="vc__ar"><span class="vc__k">Results</span>
+          <span class="vc__v vc__res">
+            @for (r of results(); track r.test + r.param) {
+              @let hl = flagOf(r);
+              <span class="vc__rv nd-num" [attr.data-flag]="hl" [title]="r.test + ' · ' + (r.date | date:'d MMM y')">{{ r.param }} <b>{{ r.value }}</b>@if (r.unit) { {{ ' ' + r.unit }} }@if (hl) { <i>{{ hl }}</i> }</span>
+            }
+          </span>
+        </div>
+      }
     </div>
 
     <div class="vc__pills" role="group" aria-label="Show" [class.vc__pills--open]="stripOpen()">
@@ -146,6 +156,13 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__v { color: var(--text-primary); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
     .vc__w { color: var(--amber-text, #b45309); font-weight: 600; }
     :host-context(html.dark) .vc__w { color: #fbbf24; }
+    .vc__res { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .vc__rv { font-size: 12.5px; color: var(--text-secondary); }
+    .vc__rv b { color: var(--text-primary); font-weight: 600; }
+    .vc__rv i { margin-left: 4px; padding: 0 4px; border-radius: 4px; font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; background: #d97706; }
+    .vc__rv[data-flag='L'] i { background: #2563eb; }
+    .vc__rv[data-flag] b { color: var(--amber-text, #b45309); }
+    :host-context(html.dark) .vc__rv[data-flag] b { color: #fbbf24; }
     .vc__muted { color: var(--text-tertiary); font-size: 12.5px; margin: 0; }
     .vc__pad { padding: 4px 2px; }
     .vc__allergy { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 1px 2px 1px 8px; border-radius: 7px; font-size: 12.5px;
@@ -218,6 +235,8 @@ export class ConsultVisitCardComponent {
   readonly conditions = input<{ label: string }[]>([]);
   readonly medicines = input<ConsultCurrentMedicine[]>([]);
   readonly watch = input<string | null>(null);
+  /** Recent lab results (latest value per test). */
+  readonly results = input<RecentResult[]>([]);
   readonly lines = input<ConsultRxLine[]>([]);
   readonly drugs = input<ConsultDrugRef[]>([]);
   readonly preferIds = input<string[]>([]);
@@ -256,6 +275,8 @@ export class ConsultVisitCardComponent {
     return m.drugName + (s ? ' ' + s : '');
   }).join(' · '));
 
+  /** H / L (or any abnormal flag) for a result; null when normal. */
+  flagOf(r: RecentResult): string | null { const f = (r.flag ?? '').toUpperCase(); return f && f !== 'N' ? (f.startsWith('H') ? 'H' : f.startsWith('L') ? 'L' : f.charAt(0)) : null; }
   saveAllergy() {
     const a = this.newAllergen().trim();
     if (!a) return;

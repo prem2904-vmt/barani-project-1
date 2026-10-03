@@ -155,7 +155,7 @@ let seq = 0;
       @if (options().length) {
         <pf-pad-add placeholder="Add a procedure…" [options]="optionList()" [quick]="quickList()" quickLabel="Common procedures" (pick)="addById($event.id)"></pf-pad-add>
       } @else {
-        <p class="pr__muted">No procedures are set up for this department yet (OPD Master → services, category “Procedure”).</p>
+        <span class="pr__none">No procedures are set up for this department yet · OPD Master → services → “Procedure”</span>
       }
     } @else if (!items().length) { <p class="pr__muted">No procedures.</p> }
   `,
@@ -217,6 +217,7 @@ let seq = 0;
     .pr__badge { justify-self: start; display: inline-flex; align-items: center; min-height: 28px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
       color: var(--green-text, #047857); background: color-mix(in srgb, #34d399 14%, transparent); }
     .pr__badge--later { color: var(--blue-text, #1d4ed8); background: color-mix(in srgb, #60a5fa 14%, transparent); }
+    .pr__none { display: flex; align-items: center; min-height: 42px; font-size: 12.5px; color: var(--text-tertiary); }
     .pr__muted { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
     @media (max-width: 760px) { .pr__field, .pr__rec { font-size: 16px; } .pr__qty { margin-left: 0; } }
   `],

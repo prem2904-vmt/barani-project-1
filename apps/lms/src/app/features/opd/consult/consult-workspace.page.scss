@@ -95,7 +95,7 @@
 // ── Body: the centre, and the patient card when it docks ──
 .cw__body { flex: 1 1 auto; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0;
   padding: 16px; transition: grid-template-columns 150ms ease, column-gap 150ms ease; }
-.cw__body--docked { grid-template-columns: minmax(0, 1fr) 300px; column-gap: 16px; }
+.cw__body--docked { grid-template-columns: minmax(0, 1fr) 320px; column-gap: 16px; }
 @media (prefers-reduced-motion: reduce) { .cw__body { transition: none; } }
 .cw__centre, .cw__right { min-height: 0; }
 .cw__centre { display: flex; flex-direction: column; }
@@ -114,17 +114,17 @@
 // ── The prescription pad: rows in printed order (label · content), one form ──
 .pad { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 48px;
   scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent; }
-.prow { display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 16px; max-width: 976px; padding: 12px 0; border-bottom: 1px solid var(--nd-line); align-items: start; }
+.prow { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--nd-line); align-items: start; }
 .prow:last-child { border-bottom: 0; }
-.plab { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); text-align: left; cursor: pointer; }
+.plab { display: flex; align-items: center; gap: 4px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; color: var(--text-tertiary); text-align: left; cursor: pointer; }
 .plab b { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: none; color: var(--violet-text, #6d28d9); }
 .plab:hover { color: var(--text-primary); }
 .plab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
 .plab__chev { font-size: 10px; color: var(--text-tertiary); transition: transform 150ms ease; }
 .prow--coll .plab__chev { transform: rotate(-90deg); }
 @media (prefers-reduced-motion: reduce) { .plab__chev { transition: none; } }
-.pbody { display: grid; gap: 8px; min-width: 0; }
+.pbody { display: grid; gap: 8px; min-width: 0; max-width: 900px; }
 .psum { margin: 0; display: flex; align-items: center; min-height: 42px; font-size: 13px; color: var(--text-tertiary); overflow-wrap: anywhere; }
 // C/O: the one-line summary that opens the Findings drawer.
 .pfind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--nd-line);
@@ -155,7 +155,8 @@
 .pquick__c:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
 .pquick__c--set { border-style: dashed; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--nd-line)); color: var(--violet-text, #6d28d9); }
 // F/U chips (the same .o chip as every option group).
-.popts { display: flex; flex-wrap: wrap; gap: 8px; }
+.popts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 42px; }
+.phint { font-size: 12.5px; color: var(--text-tertiary); }
 .o { height: 34px; padding: 0 12px; border-radius: var(--nd-radius-chip, 8px); border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
   color: var(--text-secondary); cursor: pointer; }
 .o[aria-checked='true'] { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9); font-weight: 600;

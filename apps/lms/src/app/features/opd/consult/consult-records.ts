@@ -228,7 +228,7 @@ export function spaceCount(id: ConsultSpace, s: ConsultEditState): number {
 // ── Side panels: auto-balance (owner) ───────────────────────────────────
 
 /** The docked patient card's width and the narrowest centre the form still fits in. */
-export const PANEL_W = { right: 300, minCentre: 680 } as const;
+export const PANEL_W = { right: 320, minCentre: 680 } as const;
 
 /** The patient card docks only when pinned AND the centre keeps
  *  ≥ PANEL_W.minCentre px of `width` (the body's content box, minus the

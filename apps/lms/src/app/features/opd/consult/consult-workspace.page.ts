@@ -43,7 +43,7 @@ import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 import { JourneyDockComponent } from '../shared/journey-dock.component';
 import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
 import {
-  ConsultSpace, Prefill, SPACES, balancePanels, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
+  ConsultSpace, Prefill, SPACES, balancePanels, recentResultsOf, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
 import { PadAddComponent } from './pad-add.component';
@@ -294,7 +294,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- C/O -->
                 <section class="prow" [class.prow--coll]="isColl('find')" data-row="find">
                   <button type="button" class="plab" (click)="toggleRow('find')" [attr.aria-expanded]="!isColl('find')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Complaint &amp; findings <b>C/O</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>C/O</b> · Complaint
                   </button>
                   <div class="pbody">
                     @if (isColl('find')) { <p class="psum">{{ coText() || 'Nothing noted yet' }}</p> }
@@ -312,7 +312,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Dx -->
                 <section class="prow" [class.prow--coll]="isColl('dx')" data-row="dx">
                   <button type="button" class="plab" (click)="toggleRow('dx')" [attr.aria-expanded]="!isColl('dx')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Diagnosis <b>Dx</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Dx</b> · Diagnosis
                   </button>
                   <div class="pbody">
                     @if (isColl('dx')) { <p class="psum">{{ dxText(st().diagnoses) || 'None' }}</p> }
@@ -343,7 +343,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Rx -->
                 <section class="prow" [class.prow--coll]="isColl('rx')" data-row="rx">
                   <button type="button" class="plab" (click)="toggleRow('rx')" [attr.aria-expanded]="!isColl('rx')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Medicines <b>Rx</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Rx</b> · Medicines
                   </button>
                   <div class="pbody">
                     @if (isColl('rx')) { <p class="psum">{{ rxSum() }}</p> }
@@ -394,7 +394,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Ix -->
                 <section class="prow" [class.prow--coll]="isColl('test')" data-row="test">
                   <button type="button" class="plab" (click)="toggleRow('test')" [attr.aria-expanded]="!isColl('test')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Tests <b>Ix</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Ix</b> · Tests
                   </button>
                   <div class="pbody">
                     @if (isColl('test')) { <p class="psum">{{ testSum() }}</p> }
@@ -426,7 +426,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Adv -->
                 <section class="prow" [class.prow--coll]="isColl('adv')" data-row="adv">
                   <button type="button" class="plab" (click)="toggleRow('adv')" [attr.aria-expanded]="!isColl('adv')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Advice <b>Adv</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Adv</b> · Advice
                   </button>
                   <div class="pbody">
                     @if (isColl('adv')) { <p class="psum">{{ advice().join(' · ') || 'None' }}</p> }
@@ -457,7 +457,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- F/U -->
                 <section class="prow" [class.prow--coll]="isColl('fu')" data-row="fu">
                   <button type="button" class="plab" (click)="toggleRow('fu')" [attr.aria-expanded]="!isColl('fu')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Follow-up <b>F/U</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>F/U</b> · Follow-up
                   </button>
                   <div class="pbody">
                     @if (isColl('fu')) { <p class="psum">{{ fuLabel() }}</p> }
@@ -466,8 +466,8 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         @for (p of fuPicks; track p.label) {
                           <button type="button" class="o" role="radio" [attr.aria-checked]="p.days === st().followUpDays" [disabled]="!editable()" (click)="patch({ followUpDays: p.days })">{{ p.label }}</button>
                         }
+                        @if (st().followUpDays != null) { <span class="phint">{{ fuText() }}</span> }
                       </div>
-                      <p class="psum">{{ fuText() }}</p>
                     }
                   </div>
                 </section>
@@ -496,7 +496,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
                                    [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightDocked() || phone()" [pinned]="rightPinned()" [autoCollapsed]="rightPinned() && !rightDocked()" [pinnable]="!phone()"
                                    [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
-                                   [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
+                                   [watch]="watch()" [results]="recentResults()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
                                    (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="closeRight(true)" (togglePin)="toggleRightPin()"
                                    (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                    (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
@@ -749,6 +749,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   // ── The left card's records ────────────────────────────────────────
   readonly watch = computed(() => watchLine(this.dock.trends()));
+  /** The patient card's recent results (latest value per test, with H / L). */
+  readonly recentResults = computed(() => recentResultsOf(this.dock.trends(), 6));
   readonly items = computed<VisitItem[]>(() => {
     const w = this.ws();
     if (!w) return [];
@@ -1456,9 +1458,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   togglePatient() { if (this.rightDocked() && !this.phone()) return; this.findingsOpen.set(false); this.patientOpen.update(v => !v); }
   private pinKey(which: 'Right') { return `pf.opd.consult${which}Pin.${this.auth.user()?.id || 'anon'}`; }
   private savePin(which: 'Right', v: boolean) { try { localStorage.setItem(this.pinKey(which), v ? '1' : '0'); } catch { /* private mode */ } }
-  /** Default: unpinned (owner) — the panel opens over the centre. */
+  /** Default: pinned on wide screens (the right column then fills the space
+   *  beside the pad); the doctor's own unpin / pin is remembered. */
   private readPin(which: 'Right'): boolean {
-    try { return localStorage.getItem(this.pinKey(which)) === '1'; } catch { return false; }
+    const wide = typeof matchMedia === 'function' && matchMedia('(min-width: 1280px)').matches;
+    try { const v = localStorage.getItem(this.pinKey(which)); return v == null ? wide : v === '1'; } catch { return wide; }
   }
   @HostListener('document:keydown.escape')
   onEsc() {
