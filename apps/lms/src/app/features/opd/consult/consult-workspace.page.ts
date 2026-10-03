@@ -14,7 +14,7 @@ import { PatientTimelineComponent } from '../../frontdesk/patient-profile/patien
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import type { OpdDiagnosis, OpdNoteVisibility, OpdPatientAllergy } from '../shared/opd.models';
 import {
-  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
+  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultPastConsult, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
   ConsultEditState, ConsultStep, DraftSection, FRESH_ACKS, SECTION_OF, STEP_TITLES, applyUsual, daysBetween, draftBody, draftPatchBody,
@@ -23,6 +23,7 @@ import {
 import { ConsultProceduresComponent } from './procedure-editor.component';
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
+import { ConsultTimelineComponent, type HistoryNode, type TimelineStepView } from './consult-timeline.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
 import {
   OpdFormRendererComponent, allQuestions, missingRequired, normalizeSchema,
@@ -43,190 +44,212 @@ const EMPTY: ConsultEditState = {
 };
 
 /**
- * `/opd/consult/:visitId` — the FULL-SCREEN consult (Agent C). Mirrors the
- * owner's mockup (Consultation v4): a top bar (patient, token, dept, doctor,
- * status, draft saved, Compare, ONE primary "Complete consult"), the vitals
- * strip in the header, a LEFT rail stepper (1 Assessment & diagnosis →
- * 2 Prescription → 3 Investigations → 4 Notes, one-line summaries + ticks,
- * then the visit journey), ONE working step in the centre (only the centre
- * animates on step change), the RIGHT "At a glance" panel (slide-over ≤1100px,
- * bottom sheet on phones) and the patient's time axis at the bottom — the
- * existing <pf-patient-timeline>, embedded. Toggles html.pf-opd-immersive
- * (the shell + bottom nav hide their chrome).
+ * `/opd/consult/:visitId` — the FULL-SCREEN consult (Agent C), in the New
+ * visit / My patients design language (owner 2026-10-03). ONE screen:
+ *  - Header: who (name, age/sex, MRN, token, department, doctor, status),
+ *    the draft state, Compare and ONE primary "Complete consult"; today's
+ *    vitals as stat tiles under it (High / Low tinted, an arrow vs the last
+ *    visit).
+ *  - Left TIMELINE card: today's consult with its four steps (tap = go
+ *    there), then the patient's dated history — visits, lab results,
+ *    prescriptions, files — expanding in place with Open / Compare (which
+ *    open the existing patient journey / compare viewer in a sheet).
+ *  - Centre card: the current step with a "Step n of 4" header and a sticky
+ *    Back / Next footer.
+ *  - Right AT A GLANCE card.
+ * Tablet: the timeline is a slim rail (expands as a sheet), the glance a
+ * slide-over. Phone: one column; timeline + glance are sheets from header
+ * buttons. Toggles html.pf-opd-immersive (the shell hides its chrome).
  */
 @Component({
   selector: 'pf-opd-consult-workspace',
   standalone: true,
   imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent, 
     DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
-    RxEditorComponent, PatientTimelineComponent,
+    RxEditorComponent, PatientTimelineComponent, ConsultTimelineComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ws(); as w) {
-      <div class="cw" [class.cw--glance]="glanceOpen()" [class.cw--dock]="dockOpen()">
-        <!-- ── Top bar ── -->
+      <div class="cw" [class.cw--glance]="glanceOpen()" [class.cw--tl]="timelineOpen()" [class.cw--journey]="journeyOpen()">
+        <!-- ── Header: who + the one action; today's vitals as stat tiles ── -->
         <header class="cw__top">
-          <button type="button" class="cw__back" (click)="back()" aria-label="Back to my patients">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <div class="cw__who">
-            <h1 class="cw__name">{{ w.patient.name }}</h1>
-            <span class="cw__meta">{{ metaLine() }}</span>
+          <div class="cw__bar">
+            <button type="button" class="cw__iconbtn" (click)="back()" aria-label="Back to my patients">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span class="cw__avatar nd-num" aria-hidden="true">{{ initials(w.patient.name) }}</span>
+            <div class="cw__who">
+              <div class="cw__nameline">
+                <h1 class="cw__name">{{ w.patient.name }}</h1>
+                <span class="cw__status" [attr.data-status]="w.visit.status">
+                  @if (w.visit.status === 'in_consult') { <span class="cw__live" aria-hidden="true"></span> }
+                  {{ statusLabel(w.visit.status) }}
+                </span>
+              </div>
+              <div class="cw__meta nd-num">
+                @for (m of metaBits(); track $index) { <span>{{ m }}</span> }
+              </div>
+            </div>
+            <span class="cw__grow"></span>
+            @if (editable()) {
+              <span class="nd-savestate cw__save" aria-live="polite">
+                @switch (saveState()) {
+                  @case ('saving') { <span class="nd-savestate__dot"></span> Saving… }
+                  @case ('dirty') { <span class="nd-savestate__dot"></span> Unsaved changes }
+                  @case ('error') { <span class="cw__saveerr">Not saved — retrying</span> }
+                  @default { @if (savedAt()) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Draft saved {{ savedAt() | date:'h:mm a' }} } }
+                }
+              </span>
+            }
+            <button type="button" class="nd-btn nd-btn--quiet cw__tl-btn" (click)="timelineOpen.set(!timelineOpen())" [attr.aria-expanded]="timelineOpen()" aria-label="Timeline">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="6" cy="12" r="2"/><path d="M6 7v3M6 14v3M11 5h9M11 12h9M11 19h9"/></svg>
+              <span class="cw__hide-sm">Timeline</span>
+            </button>
+            <button type="button" class="nd-btn nd-btn--quiet cw__glance-btn" (click)="glanceOpen.set(!glanceOpen())" [attr.aria-expanded]="glanceOpen()" aria-label="At a glance">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="cw__hide-sm">At a glance</span>
+              @if (allergies().length) { <span class="cw__alertdot" aria-label="has allergies"></span> }
+            </button>
+            <button type="button" class="nd-btn nd-btn--quiet cw__cmp" (click)="compare()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
+              <span class="cw__hide-sm">Compare</span>
+            </button>
+            @if (editable()) {
+              <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()">
+                Complete consult
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              </button>
+            } @else if (w.visit.status === 'completed') {
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="share()">Share</button>
+              <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="print()">Print prescription</button>
+            }
           </div>
-          <span class="cw__status" [attr.data-status]="w.visit.status">{{ statusLabel(w.visit.status) }}</span>
-          <span class="cw__grow"></span>
-          @if (editable()) {
-            <span class="nd-savestate cw__save" aria-live="polite">
-              @switch (saveState()) {
-                @case ('saving') { <span class="nd-savestate__dot"></span> Saving… }
-                @case ('dirty') { <span class="nd-savestate__dot"></span> Unsaved changes }
-                @case ('error') { <span class="cw__saveerr">Not saved — retrying</span> }
-                @default { @if (savedAt()) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Draft saved {{ savedAt() | date:'h:mm a' }} } }
-              }
-            </span>
-          }
-          <button type="button" class="nd-btn nd-btn--quiet cw__glance-btn" (click)="glanceOpen.set(!glanceOpen())" [attr.aria-expanded]="glanceOpen()" aria-label="At a glance">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
-            <span class="cw__hide-sm">At a glance</span>
-          </button>
-          <button type="button" class="nd-btn nd-btn--quiet" (click)="compare()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>
-            Compare
-          </button>
-          @if (editable()) {
-            <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()">Complete consult</button>
-          } @else if (w.visit.status === 'completed') {
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="share()">Share</button>
-            <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="print()">Print prescription</button>
-          }
+          <pf-consult-vitals class="cw__vitals" [vitals]="w.vitals" [history]="w.vitalsHistory"></pf-consult-vitals>
         </header>
 
-        <pf-consult-vitals class="cw__vitals" [vitals]="w.vitals" [history]="w.vitalsHistory"></pf-consult-vitals>
-
         <div class="cw__main">
-          <!-- ── Left rail: stepper + journey ── -->
-          <nav class="cw__rail" aria-label="Consult steps">
-            <div class="cw__date">{{ w.visit.visitDate | date:'EEE, MMM d, y' }}</div>
-            <div class="cw__railk">Today's consult</div>
-            <ol class="cw__steps">
-              @for (s of steps; track s) {
-                @let sum = summary(s);
-                <li>
-                  <button type="button" class="cw__step" [class.on]="step() === s" [class.done]="done(s)" (click)="go(s)" [attr.aria-current]="step() === s ? 'step' : null">
-                    <span class="cw__stepn" aria-hidden="true">
-                      @if (done(s) && step() !== s) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> } @else { {{ s }} }
-                    </span>
-                    <span class="cw__stepb">
-                      <span class="cw__stept">{{ titles[s] }}</span>
-                      <span class="cw__steps2" [class.warn]="sum.warn">
-                        @if (sum.warn) { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/></svg> }
-                        {{ sum.text }}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              }
-            </ol>
-            <div class="cw__railk">Journey</div>
-            <button type="button" class="cw__jour" (click)="journey()">
-              <span class="cw__jico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4M7 18h5a4 4 0 0 0 4-4"/></svg></span>
-              <span><b>Visit journey</b><em>Reports, images, compare</em></span>
-            </button>
-            @if (w.pastVisits.length) {
-              <div class="cw__railk">Earlier OPD visits</div>
-              @for (p of w.pastVisits.slice(0, 5); track p.visitId) {
-                <div class="cw__past"><b>{{ p.visitDate | date:'MMM d, y' }}</b><span>{{ dxText(p.diagnoses) || 'No diagnosis' }} · {{ p.doctorName }}</span></div>
-              }
-            }
-          </nav>
+          <!-- ── Left: TIMELINE (today's steps + the patient's history) ── -->
+          @if (timelineOpen()) { <div class="cw__scrim cw__scrim--tl" (click)="timelineOpen.set(false)" aria-hidden="true"></div> }
+          <aside class="nd-card cw__tl" aria-label="Timeline">
+            <pf-consult-timeline [steps]="stepViews()" [nodes]="historyNodes()" [visitDate]="w.visit.visitDate" [loading]="historyLoading()"
+                                 [slim]="tablet() && !timelineOpen()" (go)="goFromTimeline($event)" (open)="openNode($event)"
+                                 (compare)="compareNode($event)" (expand)="timelineOpen.set(true)"></pf-consult-timeline>
+          </aside>
 
-          <!-- ── Centre: ONE working step (only this animates) ── -->
-          <main class="cw__center" #center>
-            @for (s of [step()]; track s) {
-              <div class="cw__pane">
-                <div class="cw__stepk">Step {{ s }} of 4</div>
-                @switch (s) {
-                  @case (1) {
-                    <div class="cw__h"><h2>Assessment & diagnosis</h2></div>
-                    <div class="cw__sec">
-                      <div class="cw__seck">Findings <span>{{ w.form?.formName || 'No consult form set for this service' }}@if (w.visit.purpose) { · desk note: {{ w.visit.purpose }}}</span></div>
-                      <label class="nd-field">
-                        <span class="nd-field__lbl">Chief complaints</span>
-                        <input class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()"
-                               (input)="patch({ chiefComplaint: $any($event.target).value })" placeholder="What brings the patient in" />
-                      </label>
-                      @if (w.form) {
-                        <!-- Agent A's ONE form renderer (schema v2); media questions upload through the consult. -->
-                        <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
-                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [visitDate]="w.visit.visitDate"
-                                              (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
-                        <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
-                        @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
-                      }
-                    </div>
-                    <div class="cw__sec">
-                      <div class="cw__seck">Diagnosis</div>
-                      <div class="cw__chips">
-                        @for (d of st().diagnoses; track d.label; let i = $index) {
-                          <span class="cw__dx" [class.cw__dx--p]="i === 0">
-                            {{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }
-                            @if (editable()) {
-                              <button type="button" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-                            }
-                          </span>
-                        }
-                      </div>
-                      @if (editable()) {
-                        <div class="cw__dxbox">
-                          <input #dxIn class="nd-input cw__in" type="text" [value]="dxQuery()" (input)="onDxType(dxIn.value)" (keydown)="onDxKey($event)"
-                                 placeholder="Type a diagnosis — pick one or press Enter to add as written" aria-label="Add a diagnosis"
-                                 role="combobox" [attr.aria-expanded]="dxOpen()" aria-controls="cw-dx-list" autocomplete="off" />
-                          @if (dxOpen()) {
-                            <div id="cw-dx-list" class="cw__dxlist" role="listbox">
-                              @for (o of dxSuggest(); track o.label; let i = $index) {
-                                <button type="button" role="option" class="cw__dxopt" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
-                                  <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
-                                </button>
-                              }
-                              @if (dxQuery().trim()) {
-                                <button type="button" class="cw__dxopt" [class.act]="dxActive() === dxSuggest().length" (mousedown)="$event.preventDefault()" (click)="addDx({ label: dxQuery().trim(), source: 'mine' })">
-                                  <span>Add “{{ dxQuery().trim() }}” as written</span>
-                                </button>
-                              }
-                            </div>
-                          }
+          <!-- ── Centre: the current step ── -->
+          <section class="nd-card cw__center" [attr.aria-label]="titles[step()]">
+            <header class="nd-card__head cw__stephead">
+              <span class="nd-card__icon" aria-hidden="true">
+                @switch (step()) {
+                  @case (1) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg> }
+                  @case (2) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-45 12 12)"/><path d="m9 9 6 6"/></svg> }
+                  @case (3) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></svg> }
+                  @default { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
+                }
+              </span>
+              <span class="nd-card__label">{{ titles[step()] }}</span>
+              <span class="nd-card__spacer"></span>
+              <span class="cw__stepof nd-num">Step {{ step() }} of 4</span>
+              <span class="cw__dots" aria-hidden="true">
+                @for (s of steps; track s) { <span class="cw__dot" [class.on]="s === step()" [class.done]="done(s) && s !== step()"></span> }
+              </span>
+            </header>
+
+            <div class="cw__body" #center>
+              @for (s of [step()]; track s) {
+                <div class="cw__pane">
+                  @switch (s) {
+                    @case (1) {
+                      <!-- Complaint -->
+                      <section class="cw__grp" data-grp="complaint">
+                        <div class="cw__grph">
+                          <span class="cw__grpt">Complaint</span>
+                          @if (w.visit.purpose) { <span class="cw__grpn">Desk note: {{ w.visit.purpose }}</span> }
                         </div>
-                        <div class="cw__quick">
-                          @if (usual(); as u) {
-                            @if (!usualApplied()) {
-                              <button type="button" class="cw__usual" (click)="applyUsualSet()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-                                <span><b>{{ u.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
+                        <input class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
+                               (input)="patch({ chiefComplaint: $any($event.target).value })" placeholder="What brings the patient in" />
+                      </section>
+
+                      <!-- The service's consult form (History, Known conditions, Examination…) -->
+                      @if (w.form) {
+                        <section class="cw__grp cw__form" data-grp="form">
+                          <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
+                                                [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [visitDate]="w.visit.visitDate"
+                                                (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
+                          <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
+                          @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
+                        </section>
+                      } @else {
+                        <p class="cw__muted">No consult form is set for this service — the complaint and diagnosis are enough to finish.</p>
+                      }
+
+                      <!-- Diagnosis -->
+                      <section class="cw__grp cw__grp--dx" data-grp="diagnosis">
+                        <div class="cw__grph"><span class="cw__grpt">Diagnosis</span>@if (st().diagnoses.length) { <span class="cw__grpn">The first one is the main diagnosis</span> }</div>
+                        @if (st().diagnoses.length) {
+                          <div class="cw__chips">
+                            @for (d of st().diagnoses; track d.label; let i = $index) {
+                              <span class="cw__dx" [class.cw__dx--p]="i === 0">
+                                @if (i === 0) { <span class="cw__dxmain">Main</span> }
+                                {{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }
+                                @if (editable()) {
+                                  <button type="button" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                                }
+                              </span>
+                            }
+                          </div>
+                        } @else if (!editable()) { <p class="cw__muted">No diagnosis recorded.</p> }
+                        @if (editable()) {
+                          <div class="cw__dxbox">
+                            <svg class="cw__dxglass" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input #dxIn class="nd-input cw__in cw__dxin" type="text" [value]="dxQuery()" (input)="onDxType(dxIn.value)" (keydown)="onDxKey($event)"
+                                   placeholder="Search a diagnosis — pick one, or press Enter to add it as written" aria-label="Add a diagnosis"
+                                   role="combobox" [attr.aria-expanded]="dxOpen()" aria-controls="cw-dx-list" autocomplete="off" />
+                            @if (dxOpen()) {
+                              <div id="cw-dx-list" class="cw__dxlist" role="listbox">
+                                @for (o of dxSuggest(); track o.label; let i = $index) {
+                                  <button type="button" role="option" class="cw__dxopt" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
+                                    <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
+                                  </button>
+                                }
+                                @if (dxQuery().trim()) {
+                                  <button type="button" class="cw__dxopt" [class.act]="dxActive() === dxSuggest().length" (mousedown)="$event.preventDefault()" (click)="addDx({ label: dxQuery().trim(), source: 'mine' })">
+                                    <span>Add “{{ dxQuery().trim() }}” as written</span>
+                                  </button>
+                                }
+                              </div>
+                            }
+                          </div>
+                          <div class="cw__quick">
+                            @if (usual(); as u) {
+                              @if (!usualApplied()) {
+                                <button type="button" class="cw__usual" (click)="applyUsualSet()">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+                                  <span><b>{{ u.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
+                                </button>
+                              }
+                            }
+                            @if (w.lastVisit?.rx?.length) {
+                              <button type="button" class="nd-btn nd-btn--quiet" (click)="repeatLast()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                                Repeat {{ w.lastVisit!.visitDate | date:'MMM d' }} Rx
                               </button>
                             }
-                          }
-                          @if (w.lastVisit?.rx?.length) {
-                            <button type="button" class="nd-btn nd-btn--quiet" (click)="repeatLast()">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                              Repeat {{ w.lastVisit!.visitDate | date:'MMM d' }} Rx
-                            </button>
-                          }
-                        </div>
-                      }
-                      @if (usualApplied()) {
-                        <div class="cw__banner">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-                          <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in. Tap any value to change just that.</span>
-                          <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
-                        </div>
-                      }
-                    </div>
-                  }
+                          </div>
+                        }
+                        @if (usualApplied()) {
+                          <div class="cw__banner">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                            <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in. Tap any value to change just that.</span>
+                            <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
+                          </div>
+                        }
+                      </section>
+                    }
                   @case (2) {
                     <div class="cw__h">
-                      <h2>Prescription</h2>
-                      @if (primaryDx()) { <span class="cw__dxtag">{{ primaryDx() }}</span> }
+                      @if (primaryDx()) { <span class="cw__dxtag">For {{ primaryDx() }}</span> }
                       <span class="cw__grow"></span>
                       @if (editable() && w.lastVisit?.rx?.length) {
                         <button type="button" class="nd-btn nd-btn--quiet" (click)="repeatLast()">
@@ -252,7 +275,7 @@ const EMPTY: ConsultEditState = {
                                   (search)="drugSearch$.next($event)" (notice)="toast.info($event)"></pf-rx-editor>
                   }
                   @case (3) {
-                    <div class="cw__h"><h2>Tests &amp; procedures</h2><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult; procedures go to the front desk's bill.</span></div>
+                    <div class="cw__h"><span class="cw__hint">Tests go to the lab as a normal order when you complete the consult; procedures go to the front desk's bill.</span></div>
                     @if (suggested().length) {
                       <div class="cw__sec">
                         <div class="cw__seck cw__seck--row">Suggested for {{ primaryDx() }}
@@ -271,7 +294,7 @@ const EMPTY: ConsultEditState = {
                     @if (editable()) {
                       <div class="cw__sec">
                         <div class="cw__seck">All tests</div>
-                        <input #tIn class="nd-input cw__in" type="text" [value]="testQuery()" (input)="testQuery.set(tIn.value)" placeholder="Search the lab's tests — name, code or short name (LFT, CBC…)" aria-label="Search lab tests" />
+                        <input #tIn class="nd-input cw__in cw__search" type="text" [value]="testQuery()" (input)="testQuery.set(tIn.value)" placeholder="Search the lab's tests — name, code or short name (LFT, CBC…)" aria-label="Search lab tests" />
                         @if (testLoadError()) { <p class="cw__muted">The lab test list could not be loaded for your role.</p> }
                         <div class="cw__tiles">
                           @for (t of testHits(); track t.id) {
@@ -310,7 +333,6 @@ const EMPTY: ConsultEditState = {
                     }
                   }
                   @case (4) {
-                    <div class="cw__h"><h2>Notes</h2></div>
                     <div class="cw__sec">
                       <label class="nd-field">
                         <span class="nd-field__lbl">Advice for the patient <em class="cw__lblhint">printed on the prescription</em></span>
@@ -329,32 +351,54 @@ const EMPTY: ConsultEditState = {
                       }
                     </div>
                   }
-                }
-                <div class="cw__stepnav">
-                  @if (s > 1) { <button type="button" class="nd-btn nd-btn--secondary" (click)="go(prevStep(s))">Back</button> }
-                  <span class="cw__grow"></span>
-                  @if (s < 4) { <button type="button" class="nd-btn nd-btn--secondary" (click)="go(nextStep(s))">Next: {{ titles[nextStep(s)] }}</button> }
+                  }
                 </div>
-              </div>
-            }
-          </main>
+              }
+            </div>
 
-          <!-- ── Right: at a glance ── -->
+            <footer class="cw__foot">
+              @if (step() > 1) {
+                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn" (click)="go(prevStep(step()))" data-back>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5m6 6-6-6 6-6"/></svg>
+                  Back
+                </button>
+              }
+              <span class="cw__grow"></span>
+              @if (step() < 4) {
+                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn cw__navbtn--next" (click)="go(nextStep(step()))" data-next>
+                  Next: {{ titles[nextStep(step())] }}
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
+                </button>
+              } @else if (editable()) {
+                <button type="button" class="nd-btn nd-btn--secondary cw__navbtn cw__navbtn--next" (click)="openComplete()">
+                  Review &amp; complete
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
+                </button>
+              }
+            </footer>
+          </section>
+
+          <!-- ── Right: AT A GLANCE ── -->
           @if (glanceOpen()) { <div class="cw__scrim" (click)="glanceOpen.set(false)" aria-hidden="true"></div> }
-          <aside class="cw__glance" aria-label="At a glance">
+          <aside class="nd-card cw__glance" aria-label="At a glance">
             <pf-consult-glance [ws]="w" [allergies]="allergies()" [lines]="st().lines" [drugs]="drugList()" [results]="results()"
-                               [canEdit]="editable()" [closable]="true" [preferIds]="preferIds()"
+                               [canEdit]="editable()" [closable]="narrow()" [preferIds]="preferIds()"
                                (close)="glanceOpen.set(false)" (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                (repeatLast)="repeatLast()" (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-glance>
           </aside>
         </div>
 
-        <!-- ── Bottom: the patient's time axis (the existing patient timeline) ── -->
-        <section class="cw__dock" [class.open]="dockOpen()" [class.cw__dock--empty]="!hasJourney()">
-          <button type="button" class="cw__dockbar" (click)="dockOpen.set(!dockOpen())" [attr.aria-expanded]="dockOpen()">
-            {{ dockOpen() ? 'Hide the visit journey' : 'Visit journey · reports & images' }}
-            <svg [class.up]="!dockOpen()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
+        <!-- Visit journey: reports, images and Compare — opened from the timeline or Compare. -->
+        @if (journeyOpen()) { <div class="cw__scrim cw__scrim--journey" (click)="journeyOpen.set(false)" aria-hidden="true"></div> }
+        <section class="cw__journey" [class.open]="journeyOpen()" aria-label="Visit journey" [attr.aria-hidden]="!journeyOpen()">
+          <header class="nd-card__head">
+            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4M7 18h5a4 4 0 0 0 4-4"/></svg></span>
+            <span class="nd-card__label">Reports, images &amp; compare</span>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="cw__iconbtn" (click)="journeyOpen.set(false)" aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
           <pf-patient-timeline #tl [patientId]="w.patient.id" [embedded]="true" [hideTitle]="true"></pf-patient-timeline>
         </section>
 
@@ -399,7 +443,13 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly allergies = signal<OpdPatientAllergy[]>([]);
   readonly results = signal<RecentResult[]>([]);
   readonly glanceOpen = signal(false);
-  readonly dockOpen = signal(false);
+  /** Tablet / phone: the full timeline as a sheet. */
+  readonly timelineOpen = signal(false);
+  /** The patient journey / compare viewer (pf-patient-timeline) sheet. */
+  readonly journeyOpen = signal(false);
+  /** Past consults of this patient (GET …/patients/{id}/history) — the timeline's visits + prescriptions. */
+  readonly historyRows = signal<ConsultPastConsult[] | null>(null);
+  readonly historyLoading = signal(false);
   readonly completeOpen = signal(false);
   readonly completing = signal(false);
   readonly saveState = signal<SaveState>('idle');
@@ -437,7 +487,6 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private readonly dx$ = new Subject<string>();
 
   private readonly tl = viewChild<PatientTimelineComponent>('tl');
-  readonly hasJourney = computed(() => (this.tl()?.visits().length ?? 0) > 0 || this.dockOpen());
 
   private readonly save$ = new Subject<void>();
 
@@ -446,6 +495,12 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   /** Phone layout for the form renderer (one column) — the renderer's own ≤760px rule. */
   readonly phone = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
+  /** ≤1100px: the glance is a slide-over (tablet + phone). */
+  readonly narrow = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 1100px)').matches);
+  /** 761–1100px: the timeline is a slim rail. */
+  readonly tablet = computed(() => this.narrow() && !this.phone());
+  private readonly narrowMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 1100px)') : null;
+  private readonly onNarrowMq = (e: MediaQueryListEvent) => this.narrow.set(e.matches);
   private readonly phoneMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 760px)') : null;
   private readonly onPhoneMq = (e: MediaQueryListEvent) => this.phone.set(e.matches);
   private readonly mediaIn = viewChild<{ nativeElement: HTMLInputElement }>('mediaIn');
@@ -473,6 +528,76 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const q = this.testQuery().trim().toLowerCase();
     if (!q) return [];
     return this.testCatalog().filter(t => `${t.name} ${t.testCode ?? ''} ${t.shortName ?? ''}`.toLowerCase().includes(q)).slice(0, 12);
+  });
+  /** Header meta as separate bits (age / sex · MRN · token · department · doctor). */
+  readonly metaBits = computed(() => {
+    const w = this.ws();
+    if (!w) return [] as string[];
+    const sex = w.patient.sex ? w.patient.sex.charAt(0).toUpperCase() : '';
+    return [[w.patient.ageDisplay, sex].filter(Boolean).join(' '), w.patient.mrn ?? '', 'Token ' + w.visit.tokenLabel,
+      w.visit.departmentName ?? '', w.visit.doctorName ?? ''].filter(Boolean);
+  });
+  /** Today's four steps as the timeline shows them. */
+  readonly stepViews = computed<TimelineStepView[]>(() => this.steps.map(n => {
+    const sum = stepSummary(n, this.st(), this.allergies(), this.st().privateNotesVisibility);
+    return { n, title: this.titles[n], summary: sum.text, warn: sum.warn, done: stepDone(n, this.st()), current: this.step() === n };
+  }));
+  /** The patient's dated history for the timeline: past consults (visits +
+   *  their prescriptions) from the consult history, lab reports and files
+   *  from the patient journey (pf-patient-timeline's own loads). */
+  readonly historyNodes = computed<HistoryNode[]>(() => {
+    const w = this.ws();
+    if (!w) return [];
+    const out: HistoryNode[] = [];
+    const rows = this.historyRows();
+    if (rows) {
+      for (const c of rows) {
+        if (c.visitId === w.visit.id) continue;
+        const key = dayKeyOf(c.visitDate);
+        out.push({
+          id: 'v:' + c.visitId, type: 'visit', date: c.visitDate, dayKey: key, canCompare: true,
+          title: c.diagnoses.length ? c.diagnoses.map(d => d.label).join(', ') : 'No diagnosis recorded',
+          sub: [c.doctorName, c.departmentName].filter(Boolean).join(' · ') || null,
+          lines: [
+            c.chiefComplaint ? 'Complaint: ' + c.chiefComplaint : '',
+            c.investigations.length ? `Tests: ${c.investigations.flatMap(i => i.items).map(t => t.name).join(', ')}` : '',
+            c.procedures?.length ? `Procedures: ${c.procedures.map(p => p.name).join(', ')}` : '',
+            c.advice ? 'Advice: ' + c.advice : '',
+          ].filter(Boolean),
+        });
+        if (c.rx.length) {
+          out.push({
+            id: 'rx:' + c.visitId, type: 'rx', date: c.visitDate, dayKey: key, canCompare: false,
+            title: `${c.rx.length} medicine${c.rx.length === 1 ? '' : 's'}`,
+            sub: c.rx.map(r => r.drugName).join(', '),
+            lines: c.rx.map(r => `${r.drugName} · ${r.durationDays} day${r.durationDays === 1 ? '' : 's'}`),
+          });
+        }
+      }
+    } else {
+      for (const p of w.pastVisits) {
+        out.push({ id: 'v:' + p.visitId, type: 'visit', date: p.visitDate, dayKey: dayKeyOf(p.visitDate), canCompare: true,
+          title: p.diagnoses.length ? p.diagnoses.map(d => d.label).join(', ') : 'No diagnosis recorded',
+          sub: [p.doctorName, p.departmentName].filter(Boolean).join(' · ') || null, lines: [] });
+      }
+    }
+    const tl = this.tl();
+    if (tl) {
+      const abn = tl.abnormalDays();
+      for (const v of tl.visits()) {
+        for (const o of v.orders) {
+          const tests = tl.tests(o).map(t => t.name);
+          out.push({ id: 'lab:' + o.id, type: 'result', date: o.createdAt, dayKey: v.key, canCompare: true, flag: abn.has(v.key),
+            title: tl.orderPanelName(o), sub: o.orderNumber ?? null,
+            lines: [tests.length > 1 ? tests.join(', ') : '', abn.has(v.key) ? 'Has values outside the normal range that day.' : ''].filter(Boolean) });
+        }
+        for (const d of v.docs) {
+          out.push({ id: 'doc:' + d.id, type: 'file', date: d.uploadedAt, dayKey: v.key, canCompare: d.isImage,
+            title: d.fileName, sub: d.isImage ? 'Image' : 'Document', lines: [] });
+        }
+      }
+    }
+    return out;
   });
   readonly metaLine = computed(() => {
     const w = this.ws();
@@ -505,6 +630,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.phoneMq?.addEventListener?.('change', this.onPhoneMq);
+    this.narrowMq?.addEventListener?.('change', this.onNarrowMq);
     this.doc.documentElement.classList.add('pf-opd-immersive');
     const id = this.route.snapshot.paramMap.get('visitId');
     if (!id) { this.loading.set(false); return; }
@@ -523,6 +649,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.phoneMq?.removeEventListener?.('change', this.onPhoneMq);
+    this.narrowMq?.removeEventListener?.('change', this.onNarrowMq);
     this.doc.documentElement.classList.remove('pf-opd-immersive');
     if (this.saveState() === 'dirty') this.saveNow();
   }
@@ -550,6 +677,13 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.dirty.clear();
     this.saveState.set('idle');
     this.consultApi.labTrends(w.patient.id).subscribe({ next: t => this.results.set(recentResultsOf(t)), error: () => this.results.set([]) });
+    if (this.historyRows() === null && !this.historyLoading()) {
+      this.historyLoading.set(true);
+      this.consultApi.history(w.patient.id).subscribe({
+        next: rows => { this.historyLoading.set(false); this.historyRows.set(rows ?? []); },
+        error: () => { this.historyLoading.set(false); /* falls back to the workspace's past visits */ },
+      });
+    }
   }
 
   private mergeDrugs(rows: ConsultDrug[]) {
@@ -787,6 +921,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.toast.info(`${old.drug.name} swapped for ${alt.name}`);
   }
   seeLine() { this.step.set(2); this.glanceOpen.set(false); }
+  /** A step tapped on the timeline (closes the timeline sheet on small screens). */
+  goFromTimeline(n: ConsultStep) { this.step.set(n); this.timelineOpen.set(false); }
+  initials(name: string): string {
+    return name.replace(/^(dr|mr|mrs|ms|master|baby)\.?\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+  }
 
   // ── Tests ──────────────────────────────────────────────────────────
   hasTest(id: string) { return this.st().tests.some(t => t.testId === id); }
@@ -833,10 +972,43 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   // ── Journey / compare ──────────────────────────────────────────────
-  journey() { this.dockOpen.set(true); queueMicrotask(() => this.tl()?.showJourney()); }
+  journey() { this.journeyOpen.set(true); queueMicrotask(() => this.tl()?.showJourney()); }
   compare() {
-    this.dockOpen.set(true);
+    this.journeyOpen.set(true);
     queueMicrotask(() => { const t = this.tl(); if (t && !t.compareMode()) t.toggleCompare(); });
+  }
+  /** Timeline "Open": the journey viewer at that day — a report or a file opens itself. */
+  openNode(n: HistoryNode) {
+    this.timelineOpen.set(false);
+    this.journeyOpen.set(true);
+    queueMicrotask(() => {
+      const t = this.tl();
+      if (!t) return;
+      if (t.compareMode()) t.toggleCompare();
+      if (n.dayKey) t.selectKey(n.dayKey);
+      const v = t.visits().find(x => x.key === n.dayKey);
+      if (n.type === 'result' && v) {
+        const o = v.orders.find(x => 'lab:' + x.id === n.id);
+        const rep = o ? t.reportFor(o.id) : null;
+        if (o && rep) { void t.openSingle({ id: 'rep:' + o.id, kind: 'report', name: t.orderPanelName(o), date: v.date, report: rep, order: o }); return; }
+      }
+      if (n.type === 'file' && v) {
+        const d = v.docs.find(x => 'doc:' + x.id === n.id);
+        if (d) { void t.openSingle({ id: 'doc:' + d.id, kind: d.isImage ? 'image' : 'doc', name: d.fileName, date: v.date, url: d.url }); return; }
+      }
+      t.showJourney();
+    });
+  }
+  /** Timeline "Compare": the journey viewer in compare mode at that day. */
+  compareNode(n: HistoryNode) {
+    this.timelineOpen.set(false);
+    this.journeyOpen.set(true);
+    queueMicrotask(() => {
+      const t = this.tl();
+      if (!t) return;
+      if (n.dayKey) t.selectKey(n.dayKey);
+      if (!t.compareMode()) t.toggleCompare();
+    });
   }
 
   // ── Complete ───────────────────────────────────────────────────────
@@ -919,6 +1091,13 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   back() { this.navBack.backTo('/opd/consult'); }
+}
+
+/** Local yyyy-mm-dd of a date or date-time — the patient journey's day key. Pure. */
+export function dayKeyOf(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Adds a stored file to a media answer (a left / right question keeps `{ r, l }`). Pure. */
