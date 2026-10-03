@@ -47,9 +47,16 @@ describe('report PDF — no value, no row', () => {
     expect(has(runs, 'Clinical Pathology')).toBe(false);
   });
 
-  it('isBlankReportValue: blank, dash, empty pick list', () => {
-    for (const v of [undefined, null, '', '   ', '—', '-', [], ['', ' ']]) expect(isBlankReportValue(v)).toBe(true);
-    for (const v of ['0', 0, 'Negative', ['Few']]) expect(isBlankReportValue(v)).toBe(false);
+  it('isBlankReportValue: only null / undefined / empty string / empty pick list — a dash is a result', () => {
+    for (const v of [undefined, null, '', '   ', [], ['', ' ']]) expect(isBlankReportValue(v)).toBe(true);
+    for (const v of ['0', 0, 'Negative', ['Few'], '-', '—']) expect(isBlankReportValue(v)).toBe(false);
+  });
+
+  it('a user-entered dash prints', () => {
+    const runs = render([{ testId: 'ur', name: 'Urine Routine', department: 'Clinical Pathology', values: {
+      'Urine Odour': { value: '-' }, 'Urine pH': { value: '6.0' },
+    } }]);
+    expect(has(runs, 'Urine Odour')).toBe(true);
   });
 
   it('dropValuelessGroups keeps preview blocks and blocks with any value', () => {

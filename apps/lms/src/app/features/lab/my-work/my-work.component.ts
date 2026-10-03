@@ -3691,7 +3691,7 @@ export class MyWorkComponent implements OnInit {
       const first = tests[0];
       const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
-      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      const allDone = tests.every(x => x.status === 'entered' || isSignedOrSkipped(x.status));
       // A half-finished tube: partial values saved (draft keeps CurrentResult
       // and status in_progress) but not yet submitted. Badged so the tech can
       // spot what they left off.

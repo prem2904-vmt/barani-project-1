@@ -205,6 +205,29 @@ describe('Result entry — validator closes blank lines as Not reported (owner 2
     expect(no.api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
   });
 
+  it('never offers a line another tech claimed, or one holding a saved draft (review H3)', async () => {
+    const smp = withBlank();
+    smp.tests.push({
+      id: 'ot3', subOrderId: 'smp-1', testId: 't3', name: 'Urine Nitrite', status: 'in_progress', assignedTo: 'someone-else',
+      test: { id: 't3', name: 'Urine Nitrite', parameters: JSON.stringify({ parameters: [{ name: 'Urine Nitrite', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    }, {
+      id: 'ot4', subOrderId: 'smp-1', testId: 't4', name: 'Urine Ketones', status: 'in_progress',
+      currentResult: JSON.stringify({ values: { 'Urine Ketones': 'Trace' } }),
+      test: { id: 't4', name: 'Urine Ketones', parameters: JSON.stringify({ parameters: [{ name: 'Urine Ketones', type: 'select', options: ['Negative', 'Trace'] }] }) },
+    });
+    const { c } = await render(smp);
+    expect(c.openBlankTests().map((t: any) => t.id)).toEqual(['ot2']);
+  });
+
+  it('Submit with NOTHING entered is refused — never closes a whole tube (review H1)', async () => {
+    const smp = withBlank();
+    smp.tests[0].status = 'pending'; smp.tests[0].currentResult = undefined;
+    const { c, api, dialog } = await render(smp, { confirm: true });
+    await c.submitAll();
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.post.mock.calls.some(([u]: [string, any]) => /\/(results|not-reported)$/.test(u))).toBe(false);
+  });
+
   it('a Not reported line is closed work: never writable, labelled in words', async () => {
     const smp = withBlank();
     smp.tests[1].status = 'not_reported';

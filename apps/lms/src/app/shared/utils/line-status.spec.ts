@@ -1,4 +1,4 @@
-import { isSignedOrSkipped, lineStatusLabel, NOT_REPORTED } from './line-status';
+import { isSignedOrSkipped, lineStatusLabel, NOT_REPORTED, savedResultHasValue } from './line-status';
 
 describe('line-status', () => {
   it('labels not_reported as "Not reported" — never raw text', () => {
@@ -12,5 +12,13 @@ describe('line-status', () => {
     expect(isSignedOrSkipped('validated')).toBe(true);
     expect(isSignedOrSkipped(NOT_REPORTED)).toBe(true);
     expect(isSignedOrSkipped('entered')).toBe(false);
+  });
+  it('a saved draft with any value is data (never closed as Not reported)', () => {
+    expect(savedResultHasValue(null)).toBe(false);
+    expect(savedResultHasValue('{"values":{}}')).toBe(false);
+    expect(savedResultHasValue('{"values":{"a":"","b":null,"c":[]}}')).toBe(false);
+    expect(savedResultHasValue('{"values":{"a":"Negative"}}')).toBe(true);
+    expect(savedResultHasValue('{"values":{"a":"-"}}')).toBe(true);
+    expect(savedResultHasValue('oops')).toBe(true);
   });
 });

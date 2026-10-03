@@ -3028,12 +3028,13 @@ function sentencesFitTable(layout: ResolvedReportLayout | undefined): boolean {
  *  rows, in print order — a Sentence above the results table lands before
  *  the rows, one below it after them. Off for a member ordered through a
  *  profile/package (notes follow what was ORDERED). */
-/** A report cell with no value: blank, a lone dash, an empty multi-pick. */
+/** A report cell with NO value: null / undefined / an empty (or whitespace)
+ *  string / a multi-pick with nothing in it. A dash is a RESULT the user
+ *  typed and always prints (review 2026-10-03). */
 export function isBlankReportValue(v: unknown): boolean {
   if (v === undefined || v === null) return true;
   if (Array.isArray(v)) return v.every(x => isBlankReportValue(x));
-  const s = String(v).trim();
-  return s === '' || s === '—' || s === '-';
+  return String(v).trim() === '';
 }
 
 /** Drop (in place) every block built from real results that has no value

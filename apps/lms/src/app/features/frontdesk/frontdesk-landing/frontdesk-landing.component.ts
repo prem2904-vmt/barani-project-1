@@ -130,6 +130,7 @@ import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from 
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -2600,7 +2601,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       and to count how many depts are ready in a partial state. */
   isSampleValidated(s: { tests?: Array<{ status: string }> | null }): boolean {
     const tests = s.tests ?? [];
-    return tests.length > 0 && tests.every(t => t.status === 'validated');
+    // Not reported lines are closed (never print); at least one value signed.
+    return tests.length > 0 && tests.every(t => isSignedOrSkipped(t.status)) && tests.some(t => t.status === 'validated');
   }
   /** Glyph for a tube — uses isSampleValidated to upgrade ✓ when the
       whole tube is dept-validated, otherwise falls back to status-glyph. */
