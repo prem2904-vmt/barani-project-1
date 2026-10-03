@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, model, output, signal, viewChild,
+  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, model, output, signal, viewChild,
 } from '@angular/core';
 import type { OpdPatientAllergy, OpdPregnancy } from '../../shared/opd.models';
 import {
@@ -13,6 +13,16 @@ import {
   RX_DAYS_OPTIONS, RX_FOOD_OPTIONS, RX_PATTERN_OPTIONS, RxTokenOption, applyDays, applyFood, applyPattern, daysEditable, daysId, daysLabel,
   defaultUsual, foodLabel, formName, needsDoseToken, patternId, patternLabel, rxSentence,
 } from './rx-line';
+import { entryAction, wordStartMatch } from '../pad';
+
+const COMPOSE_KEY = '__compose';
+
+/** A suggestion's usual dose in a few words: "1-1-1 · 5 days · after food". Pure. */
+export function doseSummary(line: RxLine, drug: Pick<ConsultDrugRef, 'form'>): string {
+  const days = line.sched.type === 'steps' || line.sched.type === 'cycle' ? '' : `${line.dur} day${line.dur === 1 ? '' : 's'}`;
+  const food = formOf(drug).food && line.food ? `${line.food.toLowerCase()} food` : '';
+  return [patternLabel(line), days, food].filter(Boolean).join(' · ');
+}
 import { RxPopClose, RxPopOption, RxPopoverComponent } from './rx-popover.component';
 
 /** Duration label in doctor words: 7 → "1 week", 14 → "2 weeks", else "n days". */
@@ -45,38 +55,8 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rxe">
-      @if (!readonly()) {
-        <div class="rxe__bar">
-          <label class="rxe__in">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input #addIn type="text" class="rxe__addin" [value]="typed()" (input)="onType(addIn.value)" (keydown)="onAddKey($event)" (blur)="onBlur()"
-                   placeholder="Type a medicine — e.g. para, amox, panto (Enter adds your usual dose)" aria-label="Add a medicine"
-                   role="combobox" [attr.aria-expanded]="!!suggest().length" aria-controls="rxe-sug" autocomplete="off" spellcheck="false" />
-            <kbd aria-hidden="true">Enter</kbd>
-          </label>
-          @if (suggest().length) {
-            <div class="rxe__sug" id="rxe-sug" role="listbox" aria-label="Medicines">
-              @for (s of suggest(); track s.kind + s.drug.id; let i = $index) {
-                <button type="button" class="rxe__sg" role="option" [class.act]="i === active()" [attr.aria-selected]="i === active()"
-                        (mousedown)="$event.preventDefault()" (mouseenter)="active.set(i)" (click)="addSuggestion(s)">
-                  <span class="rxe__sgk">{{ s.kind === 'parsed' ? 'As typed' : s.kind === 'free' ? 'New' : 'Medicine' }}</span>
-                  <span class="rxe__sgt">
-                    <b>{{ s.kind === 'free' ? 'Add “' + s.drug.name + '” as written' : s.drug.name }}</b>@if (s.drug.strength && s.kind !== 'free') { <span class="rxe__sgs"> {{ s.drug.strength }}</span> }
-                    <span class="rxe__sgm">{{ s.meta }}</span>
-                  </span>
-                  @if (s.kind !== 'free' && hitOfDrug(s.drug)) { <span class="rxe__sgw">Allergy</span> }
-                  @else if (s.kind !== 'free' && pregHitOfDrug(s.drug); as ph) { <span class="rxe__sgw">{{ ph.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
-                  @else if (i === active()) { <span class="rxe__sge" aria-hidden="true">Enter</span> }
-                </button>
-              }
-            </div>
-          }
-        </div>
-      }
 
-      <ng-content select="[rx-quick]"></ng-content>
-
-      <div class="rxe__list" [class.rxe__list--empty]="!lines().length">
+      <div class="rxe__list" [class.rxe__list--empty]="!lines().length" [hidden]="!lines().length && !readonly()">
         @for (l of lines(); track l.key; let i = $index) {
           @let hit = hitOf(l);
           @let pregHit = pregHitOf(l);
@@ -170,9 +150,72 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
             }
           </div>
         } @empty {
-          <p class="rxe__none">{{ readonly() ? 'No medicines prescribed.' : 'No medicines yet. Type above, or tap one of your usual medicines.' }}</p>
+          @if (readonly()) { <p class="rxe__none">No medicines prescribed.</p> }
         }
       </div>
+
+      @if (!readonly()) {
+        @if (compose(); as c) {
+          <!-- The one-line dose composer: name + pattern / days / food + Add ↵ + Advanced. -->
+          <div class="cmp" (keydown)="onComposeKey($event)" data-composer>
+            <div class="cmp__line">
+              <b class="cmp__name">{{ c.drug.name }}@if (c.drug.strength && !nameHasStrength(c.drug)) { <span> {{ c.drug.strength }}</span> }</b>
+              <span class="cmp__chip-wrap">
+                <button type="button" class="cmp__chip nd-num" [class.on]="cOpen() === 'pat'" (click)="cOpen.set(cOpen() === 'pat' ? null : 'pat')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'pat'">{{ patternOf(c.line) }}<span aria-hidden="true">▾</span></button>
+                @if (cOpen() === 'pat') { <span class="cmp__menu" role="listbox" aria-label="When">@for (o of composePatterns; track o.id) { <button type="button" class="nd-num" [attr.aria-pressed]="o.id === patIdOf(c.line)" (click)="composeSet('pat', o.id)">{{ o.label }}</button> }</span> }
+              </span>
+              @if (daysOk(c.line)) {
+                <span class="cmp__chip-wrap">
+                  <button type="button" class="cmp__chip nd-num" [class.on]="cOpen() === 'days'" (click)="cOpen.set(cOpen() === 'days' ? null : 'days')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'days'">{{ daysOf(c) }}<span aria-hidden="true">▾</span></button>
+                  @if (cOpen() === 'days') { <span class="cmp__menu" role="listbox" aria-label="For how long">@for (o of daysOpts; track o.id) { <button type="button" class="nd-num" [attr.aria-pressed]="o.id === dayIdOf(c)" (click)="composeSet('days', o.id)">{{ o.label }}</button> }</span> }
+                </span>
+              }
+              @if (foodOk(c.drug)) {
+                <span class="cmp__chip-wrap">
+                  <button type="button" class="cmp__chip" [class.on]="cOpen() === 'food'" (click)="cOpen.set(cOpen() === 'food' ? null : 'food')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'food'">{{ foodOf(c.line) }}<span aria-hidden="true">▾</span></button>
+                  @if (cOpen() === 'food') { <span class="cmp__menu" role="listbox" aria-label="Food">@for (o of foodOpts; track o.id) { <button type="button" [attr.aria-pressed]="o.id === (c.line.food ?? '')" (click)="composeSet('food', o.id)">{{ o.label }}</button> }</span> }
+                </span>
+              }
+              <button #cAdd type="button" class="nd-btn nd-btn--primary cmp__add" (click)="composeAdd()" data-cadd>Add ↵</button>
+              <button #cAdv type="button" class="cmp__link" (click)="openComposeMore(cAdv)">Advanced</button>
+              <button type="button" class="rl__x" (click)="cancelCompose()" aria-label="Cancel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <p class="cmp__say">{{ sentenceOf(c).text }}@if (sentenceOf(c).qty) { · <b class="nd-num">{{ sentenceOf(c).qty }}</b> }</p>
+          </div>
+        } @else {
+          <div class="rxe__bar">
+            <label class="rxe__in">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input #addIn type="text" class="rxe__addin" [value]="typed()" (input)="onType(addIn.value)" (keydown)="onAddKey($event)"
+                     placeholder="Type a medicine and press Enter…" aria-label="Add a medicine"
+                     role="combobox" [attr.aria-expanded]="!!suggest().length" aria-controls="rxe-sug" autocomplete="off" spellcheck="false" />
+            </label>
+            @if (suggest().length) {
+              <div class="rxe__sug" id="rxe-sug" role="listbox" aria-label="Medicines">
+                @for (s of suggest(); track s.kind + s.drug.id; let i = $index) {
+                  <div class="rxe__sgm" [class.act]="i === active()" (mouseenter)="active.set(i)">
+                    <button type="button" class="rxe__sg" role="option" [attr.aria-selected]="i === active()" (mousedown)="$event.preventDefault()" (click)="addSuggestion(s)">
+                      @if (s.kind === 'free') { <b>Add “{{ s.drug.name }}” as written</b> }
+                      @else { <b>{{ s.drug.name }}@if (s.drug.strength && !nameHasStrength(s.drug)) { {{ ' ' + s.drug.strength }} }</b> }
+                      <span class="rxe__sgd nd-num">{{ s.kind === 'parsed' ? sentenceOf({ drug: s.drug, line: s.line }).text : s.meta }}</span>
+                      @if (s.kind !== 'free' && hitOfDrug(s.drug)) { <span class="rxe__sgw">Allergy</span> }
+                      @else if (s.kind !== 'free' && pregHitOfDrug(s.drug); as ph) { <span class="rxe__sgw">{{ ph.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
+                    </button>
+                    @if (s.kind === 'drug') {
+                      <button type="button" class="rxe__chg" (mousedown)="$event.preventDefault()" (click)="startCompose(s)" title="Change the dose before adding (Tab)">Change dose</button>
+                    }
+                  </div>
+                }
+                <p class="rxe__hint">Enter adds with this dose · Tab changes it first</p>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <ng-content select="[rx-quick]"></ng-content>
     </div>
 
     @if (more(); as m) {
@@ -181,12 +224,40 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
   `,
   styles: [`
     :host { display: block; }
-    .rxe { display: flex; flex-direction: column; gap: 12px; }
+    .rxe { display: flex; flex-direction: column; gap: 8px; }
     .rxe__bar { position: relative; }
-    .rxe__in { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px; border-radius: 12px; color: var(--text-tertiary);
-      border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
-    .rxe__in:focus-within { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
-    .rxe__addin { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14.5px; }
+    .rxe__sgm { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding-right: 8px; }
+    .rxe__sgm.act { background: var(--nd-chip-bg); }
+    .rxe__sgm .rxe__sg { flex: 1; background: none !important; }
+    .rxe__sgd { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
+    .rxe__chg { flex: none; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      font: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+    .rxe__chg:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
+    .rxe__hint { margin: 4px 0 0; padding: 8px 12px 0; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); }
+    /* The one-line dose composer. */
+    .cmp { display: grid; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); background: var(--nd-in-tint); }
+    .cmp__line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .cmp__name { font-size: 14.5px; font-weight: 600; margin-right: 4px; }
+    .cmp__name span { font-weight: 400; color: var(--text-tertiary); }
+    .cmp__chip-wrap { position: relative; }
+    .cmp__chip { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      font: inherit; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; }
+    .cmp__chip span { font-size: 10px; color: var(--text-tertiary); }
+    .cmp__chip.on { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent); }
+    .cmp__menu { position: absolute; left: 0; top: 40px; z-index: 30; display: flex; flex-wrap: wrap; gap: 8px; width: max-content; max-width: min(420px, 80vw); padding: 8px;
+      border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+    .cmp__menu button { height: 34px; min-width: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+    .cmp__menu button[aria-pressed='true'] { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 60%, transparent);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .cmp__add { height: 34px; min-height: 34px; margin-left: auto; }
+    .cmp__link { border: 0; background: none; padding: 0 4px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); cursor: pointer; }
+    .cmp__say { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+    .cmp__say b { color: var(--text-secondary); }
+    .rxe__in { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text-tertiary);
+      border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
+    .rxe__in:focus-within { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
+    .rxe__addin { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; }
     .rxe__addin::placeholder { color: var(--text-tertiary); }
     .rxe__in kbd { font: inherit; font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--nd-line); border-radius: 6px; padding: 1px 6px; }
     .rxe__sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; display: grid; gap: 2px; padding: 6px; max-height: 340px; overflow-y: auto;
@@ -206,7 +277,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
 
     .rxe__list { border: 1px solid var(--nd-line); border-radius: 12px; overflow: hidden; }
     .rxe__none { margin: 0; padding: 22px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
-    .rl { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto 30px; gap: 4px 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--nd-line);
+    .rl { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 28px; gap: 4px 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--nd-line);
       transition: background-color 600ms ease; }
     .rl:last-child { border-bottom: 0; }
     .rl--flash { background: var(--nd-in-tint); }
@@ -268,9 +339,10 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     @media (prefers-reduced-motion: reduce) { .rl { transition: none; } }
   `],
 })
-export class RxEditorComponent {
+export class RxEditorComponent implements AfterViewInit {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly addIn = viewChild<ElementRef<HTMLInputElement>>('addIn');
+  // (the composer's Add button is declared with the composer below)
 
   readonly lines = model<ConsultRxLine[]>([]);
   readonly drugs = input<ConsultDrugRef[]>([]);
@@ -290,6 +362,8 @@ export class RxEditorComponent {
   readonly notice = output<string>();
 
   readonly typed = signal('');
+  /** Put the cursor in the medicine field on open (the pad's default focus). */
+  readonly autofocus = input(true);
   readonly active = signal(0);
   readonly openTok = signal<{ key: string; tok: Tok } | null>(null);
   readonly more = signal<{ key: string; anchor: HTMLElement } | null>(null);
@@ -315,8 +389,10 @@ export class RxEditorComponent {
     const p = this.parsed();
     const q = (p?.name ?? this.typed()).trim().toLowerCase();
     if (!q) return [];
+    const on = new Set(this.lines().map(l => l.drug.id));
     const starts = (d: ConsultDrugRef) => d.name.toLowerCase().startsWith(q) ? 0 : 1;
-    return this.drugs().filter(d => `${d.name} ${d.generic ?? ''} ${d.aliases ?? ''}`.toLowerCase().includes(q))
+    // Word-start matching ("amo" never matches Paracetamol); never a drug already on the list.
+    return this.drugs().filter(d => !on.has(d.id) && wordStartMatch(`${d.name} ${d.generic ?? ''} ${d.aliases ?? ''}`, q))
       .sort((a, b) => starts(a) - starts(b)).slice(0, 6);
   });
   readonly freeName = computed(() => (this.parsed()?.name ?? this.typed()).trim().replace(/\b\w/g, c => c.toUpperCase()));
@@ -329,7 +405,7 @@ export class RxEditorComponent {
     for (const d of this.matches()) {
       if (pv && pv.drug.id === d.id) continue;
       const line = newRxLine(d.id, this.usualOf(d));
-      out.push({ kind: 'drug', drug: d, line, meta: `${formName(d)} · your usual: ${lineShort(line, d)}` });
+      out.push({ kind: 'drug', drug: d, line, meta: doseSummary(line, d) });
     }
     if (!out.length && this.freeName()) {
       const d = freeDrug(this.freeName());
@@ -371,13 +447,16 @@ export class RxEditorComponent {
   onBlur() { /* the list closes when the text is cleared; a click keeps focus via mousedown.preventDefault */ }
   onAddKey(e: KeyboardEvent) {
     const n = this.suggest().length;
-    if (e.key === 'ArrowDown' && n) { e.preventDefault(); this.active.set((this.active() + 1) % n); }
-    else if (e.key === 'ArrowUp' && n) { e.preventDefault(); this.active.set((this.active() - 1 + n) % n); }
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      const s = this.suggest()[Math.min(this.active(), Math.max(0, n - 1))];
-      if (s) this.addSuggestion(s);
-    } else if (e.key === 'Escape') { this.typed.set(''); }
+    if (e.key === 'ArrowDown' && n) { e.preventDefault(); this.active.set((this.active() + 1) % n); return; }
+    if (e.key === 'ArrowUp' && n) { e.preventDefault(); this.active.set((this.active() - 1 + n) % n); return; }
+    if (e.key === 'Escape') { this.typed.set(''); return; }
+    if (e.key !== 'Enter' && e.key !== 'Tab') return;
+    const s = this.suggest()[Math.min(this.active(), Math.max(0, n - 1))];
+    const act = entryAction(e.key, { hasPick: !!s && s.kind !== 'free', parsed: s?.kind === 'parsed', text: this.typed(), allowFree: s?.kind === 'free', composer: true });
+    if (act === 'none') return;
+    e.preventDefault();
+    if (act === 'compose' && s) this.startCompose(s);
+    else if (s) this.addSuggestion(s);
   }
   addSuggestion(s: Suggest) {
     this.push(s.drug, s.line);
@@ -385,9 +464,9 @@ export class RxEditorComponent {
   }
   /** Add a drug with the doctor's usual dose (the host's one-tap chips). */
   addDrug(d: ConsultDrugRef) { this.push(d, newRxLine(d.id, this.usualOf(d))); }
-  private push(drug: ConsultDrugRef, line: RxLine) {
+  private push(drug: ConsultDrugRef, line: RxLine, notes: string | null = null) {
     const key = lineKey();
-    this.lines.update(ls => [...ls, { key, drug, line: { ...line, drugId: drug.id } }]);
+    this.lines.update(ls => [...ls, { key, drug, line: { ...line, drugId: drug.id }, ...(notes ? { notes } : {}) }]);
     this.typed.set('');
     this.active.set(0);
     this.notice.emit(`${drug.name} added · ${lineShort(line, drug)}`);
@@ -471,7 +550,7 @@ export class RxEditorComponent {
   // ── "More…": the advanced schedules (the existing builder) ─────────
   readonly moreOptions = computed<RxPopOption[]>(() => {
     const m = this.more();
-    const l = m ? this.lineByKey(m.key) : null;
+    const l = m ? this.lineFor(m.key) : null;
     if (!l) return [];
     const out: RxPopOption[] = [
       { id: 'h6', label: 'Every 6 hours', group: 'grid' }, { id: 'h8', label: 'Every 8 hours', group: 'grid' }, { id: 'h12', label: 'Every 12 hours', group: 'grid' },
@@ -484,7 +563,7 @@ export class RxEditorComponent {
   });
   readonly moreSelected = computed<string | null>(() => {
     const m = this.more();
-    const l = m ? this.lineByKey(m.key) : null;
+    const l = m ? this.lineFor(m.key) : null;
     if (!l) return null;
     const s = l.line.sched;
     if (s.type === 'hours' && !s.awake) return 'h' + s.every;
@@ -498,20 +577,22 @@ export class RxEditorComponent {
     if (c.kind === 'pick') this.applyMore(m.key, c.id);
     queueMicrotask(() => m.anchor.isConnected && m.anchor.focus());
   }
-  /** Apply an advanced schedule / taper step to a line. */
+  /** Apply an advanced schedule / taper step to a line (or the composer's). */
   applyMore(key: string, id: string) {
-    const l = this.lineByKey(key);
+    const l = this.lineFor(key);
     if (!l) return;
+    const next = this.moreLine(l.line, id);
+    if (!next) return;
+    if (key === COMPOSE_KEY) { const c = this.compose(); if (c) this.compose.set({ ...c, line: next }); return; }
+    this.patch(key, x => ({ ...x, line: next }));
+  }
+  /** The line after an advanced pick (null = no change). */
+  private moreLine(line: RxLine, id: string): RxLine | null {
     if (id.startsWith('then:')) {
       const t = THEN_PRESETS.find(x => x.id === id.slice(5));
-      if (t) this.patch(key, x => ({ ...x, line: addThen(x.line, t.step) }));
-      return;
+      return t ? addThen(line, t.step) : null;
     }
-    if (id === 'drop-last') {
-      const s = l.line.sched;
-      if (s.type === 'steps') this.patch(key, x => ({ ...x, line: removeStep(x.line, s.steps.length - 1) }));
-      return;
-    }
+    if (id === 'drop-last') return line.sched.type === 'steps' ? removeStep(line, line.sched.steps.length - 1) : null;
     let next: RxSchedule | null = null;
     if (/^h\d+$/.test(id)) next = { type: 'hours', every: +id.slice(1), awake: false };
     else if (/^sos\d$/.test(id)) next = { ...SCHED_DEFAULTS.sos, max: +id.slice(3) } as RxSchedule;
@@ -519,15 +600,63 @@ export class RxEditorComponent {
       const o = TIMING_MORE.find(x => x.id === id);
       if (o) next = JSON.parse(JSON.stringify(o.sched)) as RxSchedule;
     }
-    if (!next) return;
+    if (!next) return null;
     const sched = next;
     if (sched.type === 'days' && sched.mode === 'weekly') sched.wd = [this.start().getDay()];
-    this.patch(key, x => {
-      const line = JSON.parse(JSON.stringify(x.line)) as RxLine;
-      line.sched = sched;
-      if (sched.type === 'cycle') line.dur = 0;
-      else if (!line.dur) line.dur = sched.type === 'sos' ? 3 : 5;
-      return { ...x, line };
-    });
+    const out = JSON.parse(JSON.stringify(line)) as RxLine;
+    out.sched = sched;
+    if (sched.type === 'cycle') out.dur = 0;
+    else if (!out.dur) out.dur = sched.type === 'sos' ? 3 : 5;
+    return out;
   }
+  private lineFor(key: string): Pick<ConsultRxLine, 'line' | 'drug'> | null {
+    return key === COMPOSE_KEY ? this.compose() : this.lineByKey(key);
+  }
+
+  // ── The one-line dose composer (Tab / "Change dose") ───────────────
+  readonly compose = signal<{ drug: ConsultDrugRef; line: RxLine; notes?: string | null } | null>(null);
+  readonly cOpen = signal<'pat' | 'days' | 'food' | null>(null);
+  readonly composePatterns = RX_PATTERN_OPTIONS.filter(o => o.id !== 'more' && o.id !== 'sos');
+  readonly daysOpts = RX_DAYS_OPTIONS;
+  readonly foodOpts = RX_FOOD_OPTIONS;
+  private readonly cAdd = viewChild<ElementRef<HTMLButtonElement>>('cAdd');
+  patternOf(l: RxLine) { return patternLabel(l); }
+  patIdOf(l: RxLine) { return patternId(l); }
+  daysOf(c: { line: RxLine; notes?: string | null }) { return daysLabel({ line: c.line, notes: c.notes }); }
+  dayIdOf(c: { line: RxLine; notes?: string | null }) { return daysId({ line: c.line, notes: c.notes }); }
+  daysOk(l: RxLine) { return daysEditable(l); }
+  foodOf(l: RxLine) { return foodLabel(l); }
+  foodOk(d: ConsultDrugRef) { return !!formOf(d).food; }
+  sentenceOf(c: { drug: ConsultDrugRef; line: RxLine; notes?: string | null }) { return rxSentence({ drug: c.drug, line: c.line, notes: c.notes }, this.start()); }
+  startCompose(s: Suggest) {
+    if (s.kind === 'free') return;
+    this.compose.set({ drug: s.drug, line: JSON.parse(JSON.stringify(s.line)) as RxLine });
+    this.cOpen.set(null);
+    queueMicrotask(() => this.cAdd()?.nativeElement.focus());
+  }
+  composeSet(field: 'pat' | 'days' | 'food', id: string) {
+    const c = this.compose();
+    if (!c) return;
+    if (field === 'pat') this.compose.set({ ...c, line: applyPattern(c.line, id) });
+    else if (field === 'food') this.compose.set({ ...c, line: applyFood(c.line, id) });
+    else { const d = applyDays({ key: COMPOSE_KEY, drug: c.drug, line: c.line, notes: c.notes }, id); this.compose.set({ ...c, line: d.line, notes: d.notes }); }
+    this.cOpen.set(null);
+    queueMicrotask(() => this.cAdd()?.nativeElement.focus());
+  }
+  composeAdd() {
+    const c = this.compose();
+    if (!c) return;
+    this.compose.set(null);
+    this.push(c.drug, c.line, c.notes ?? null);
+    this.focusEntry();
+  }
+  cancelCompose() { this.compose.set(null); this.cOpen.set(null); this.focusEntry(); }
+  onComposeKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') { e.preventDefault(); if (this.cOpen()) this.cOpen.set(null); else this.cancelCompose(); return; }
+    if (e.key === 'Enter' && !this.cOpen()) { e.preventDefault(); this.composeAdd(); }
+  }
+  openComposeMore(anchor: HTMLElement) { this.cOpen.set(null); this.more.set({ key: COMPOSE_KEY, anchor }); }
+  /** Put the cursor back in the medicine field (the pad's default focus). */
+  focusEntry() { queueMicrotask(() => this.addIn()?.nativeElement?.focus()); }
+  ngAfterViewInit() { if (!this.readonly() && this.autofocus()) this.focusEntry(); }
 }
