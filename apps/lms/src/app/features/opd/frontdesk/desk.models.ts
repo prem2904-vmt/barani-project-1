@@ -103,3 +103,13 @@ export interface OpdVisitRow {
 export interface QueueDoctor { id: string; name: string; department?: string | null; waiting: number; vitals: number; inConsult: number; done: number; nowServing?: string | null; next?: string | null; }
 export interface MovedVisit { visitId: string; patientName: string; from: string; to: string; tokenLabel: string; visitDate: string; }
 export interface DoctorUnavailableResult { policy: 'manual' | 'auto_move' | 'reschedule'; moved: MovedVisit[]; unmoved: OpdVisitRow[]; }
+
+/** A procedure the doctor ordered for LATER (consult v6) — the desk books its
+ *  date; the price (the doctor's, within the admin cap) is collected on the
+ *  procedure day. GET /api/opd/procedures/to-book. */
+export interface ProcedureToBook {
+  id: string; visitId: string; patientId: string; patientName: string; mrn?: string | null;
+  procedureName: string; serviceId: string; doctorId: string; doctorName?: string | null;
+  price: number; rulePrice: number; priceReason?: string | null;
+  preferredWithin?: string | null; prepNote?: string | null; orderedAt: string;
+}

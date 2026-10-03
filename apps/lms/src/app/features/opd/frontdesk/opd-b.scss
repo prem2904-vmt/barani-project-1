@@ -186,3 +186,11 @@
 .pf-ob-status--due { color: #b45309; }
 :host-context(.dark) .pf-ob-status--due { color: #fbbf24; }
 .pf-dk-duesum { margin: 10px 2px 0; font-size: 13px; color: var(--text-secondary); text-align: right; }
+
+/* Procedures to book (consult v6): patient · procedure · price · date + Book. */
+.pf-dk-book { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.3fr) auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+.pf-dk-book__act { display: flex; align-items: center; gap: 8px; }
+.pf-dk-book__act pf-nd-date { width: 150px; }
+@media (max-width: 1100px) { .pf-dk-book { grid-template-columns: 1fr 1fr; } .pf-dk-book__act { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .pf-dk-book { grid-template-columns: 1fr; } .pf-dk-book__act pf-nd-date { flex: 1; width: auto; } }
