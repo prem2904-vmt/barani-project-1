@@ -9,6 +9,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ModuleScopeService } from '../../../core/services/module-scope.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
@@ -17,24 +18,19 @@ import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.c
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { type Patient, formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
-import type { Test } from '../../../shared/models/test.model';
 import { formatAge } from '../../../shared/utils/patient-age';
-import { filterTestListStrict } from '../../../shared/utils/test-search';
-import { testListUrl } from '../../../shared/utils/test-list-url';
 import { ApiError } from '../../../shared/models/api-response.model';
 import {
   InlinePaymentPanelComponent, type InlinePaymentResult,
 } from '../../frontdesk/order-create/inline-payment-panel.component';
 import { SCOPE_LABELS, SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, type ScopeRow } from '../../frontdesk/order-create/unified-search';
 import { labOrderTarget } from '../../../shared/opd/order-entry';
-import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
-import { missingSpecimens, specimenPayload, type OpdInvestigationItem, type OpdTestLookup } from '../shared/opd-specimen';
 import { OpdDeskApi } from './desk-api.service';
 import type { OpdVisitDetail, OpdVisitRow } from './desk.models';
 import type { DeskData, DeskDepartment, DeskDoctor, DeskQuote, ServiceQuote } from './desk.models';
 import { printTokenSlip } from './token-slip';
 import {
-  type LabLine, deskBillPreview, draftKey, feeLineLabel, paymentParts, parseOverride, readDraft, waitLabel, waitTone, writeDraft,
+  deskBillPreview, draftKey, feeLineLabel, paymentParts, parseOverride, readDraft, waitLabel, waitTone, writeDraft,
 } from './desk-rules';
 
 /** The band's scope tiles after the product switcher (same vocabulary as the
@@ -43,10 +39,10 @@ export type VisitScope = 'patient' | 'doctor';
 /** The first band tile: the product switcher (static — it only switches screen). */
 type BandMode = VisitScope | 'product';
 /** Doctor column tabs (the order-create tab strip). */
-export type DoctorTab = 'today' | 'free' | 'all';
+export type DoctorTab = 'today' | 'all';
 
-/** Add-ons column: how many lab tests show before the receptionist types. */
-const ADDON_BROWSE_CAP = 60;
+/** One department group of the doctor grid (the lab grid's department groups). */
+export interface DoctorGroup { key: string; name: string; dept: DeskDepartment | null; anyTile: boolean; doctors: DeskDoctor[]; }
 
 /**
  * OPD → New visit (`/opd/visit/new?patientId=`). The SAME screen as the lab's
@@ -56,25 +52,24 @@ const ADDON_BROWSE_CAP = 60;
  * - Band: the product switcher (OPD · Tests — whatever the tenant/user has;
  *   it only switches screen), then the Patient and Doctor scope tiles and ONE
  *   search field — Patient finds patients, Doctor finds the OPD doctors.
- * - Left work card: Doctor tabs (In today / Free now / All doctors) +
- *   department chips, then three columns — (a) doctor, (b) visit purpose
- *   (the doctor's services), (c) add-ons (lab tests on the same visit).
- *   Three columns on a wide card, two on a tablet, one stacked flow on phones.
- * - Right BILLING card: Urgent, the consult line with its fee EDITABLE in
- *   place (the desk override — role cap / billing-admin rules stay on the
- *   server, reason printed on the bill), the lab lines, the total, Save as
- *   draft + Continue to payment → payment → token issued → Record vitals
- *   (the Vitals step, like Collect after a lab payment).
- *
- * "Any doctor in <department>" stays an EXPLICIT tile the receptionist taps
- * (never a silent auto-pick on choosing the department).
+ * - Left work card: In today / All doctors tabs, department chips + a
+ *   "Free now" toggle chip, then the doctors as a full-width tile grid grouped
+ *   by department (the lab test grid: 3 / 2 / 1 per row). "Any doctor in
+ *   <department>" leads a department with more than one doctor. Picking a
+ *   doctor opens the VISIT PURPOSE strip under the grid (the doctor's services
+ *   as segmented choices, the default pre-picked) + the complaint.
+ * - Right BILLING card: the consult line with its fee EDITABLE in place (the
+ *   desk override — role cap / billing-admin rules stay on the server, reason
+ *   printed on the bill), the total, Save as draft + Continue to payment →
+ *   payment → token issued → Record vitals (the Vitals step, like Collect
+ *   after a lab payment). Lab tests are ordered after the consult, from Tests.
  */
 @Component({
   selector: 'pf-opd-book-visit',
   standalone: true,
   imports: [
     RouterLink, NgTemplateOutlet, HeroBandComponent, SkeletonRowsComponent, CurrencyInrPipe, BusyDirective, PfKeysDirective,
-    InlinePaymentPanelComponent, OpdSpecimenPickerComponent, BarcodeScannerModalComponent,
+    InlinePaymentPanelComponent, BarcodeScannerModalComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './book-visit.page.html',
@@ -91,6 +86,7 @@ export class OpdBookVisitPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly navBack = inject(NavBackService);
 
   readonly payPanel = viewChild(InlinePaymentPanelComponent);
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
@@ -102,8 +98,6 @@ export class OpdBookVisitPage {
   readonly loadError = signal<string | null>(null);
   readonly quote = signal<DeskQuote | null>(null);
   readonly quoting = signal(false);
-  readonly tests = signal<Test[]>([]);
-  readonly gstOn = signal(false);
 
   // ── Choices ──────────────────────────────────────────────────────────
   readonly patient = signal<Patient | null>(null);
@@ -114,7 +108,9 @@ export class OpdBookVisitPage {
   readonly departmentId = signal<string | null>(null);
   /** Doctor column tab (the order-create tab strip). */
   readonly doctorTab = signal<DoctorTab>('today');
-  /** Department chip — filters the doctor column; `null` = all departments. */
+  /** "Free now" toggle chip (end of the department chip row). */
+  readonly freeOnly = signal(false);
+  /** Department chip — filters the doctor grid; `null` = all departments. */
   readonly deptFilterId = signal<string | null>(null);
   readonly serviceId = signal<string | null | undefined>(undefined); // undefined = not picked; null = plain consultation
   readonly purpose = signal('');
@@ -122,15 +118,6 @@ export class OpdBookVisitPage {
   readonly overrideReason = signal('');
   /** The fee in the consult bill line is being edited (the desk override). */
   readonly overrideOpen = signal(false);
-  readonly labIds = signal<string[]>([]);
-  /** Add-ons column search (lab tests). */
-  readonly labQuery = signal('');
-  /** testId → the picked specimen (choose-mode tests only) — see
-   *  `features/opd/shared/opd-specimen.ts` / `pf-opd-specimen-picker`. */
-  readonly labSpecimens = signal<Record<string, string>>({});
-  /** Cart rows a blocked Checkout must point at (cleared as each is picked). */
-  readonly specimenErr = signal<Record<string, true>>({});
-  readonly urgent = signal(false);
 
   // ── Flow ─────────────────────────────────────────────────────────────
   /** build → pay → issued (token on screen; next: Record vitals). */
@@ -141,7 +128,6 @@ export class OpdBookVisitPage {
 
   readonly workflow = computed(() => this.data()?.config.workflow ?? { vitals: 'desk', labTestsAtDesk: true, billing: 'before_consult' as const });
   readonly payFirst = computed(() => this.workflow().billing !== 'after_consult');
-  readonly addonsOn = computed(() => this.workflow().labTestsAtDesk);
   readonly doctors = computed(() => this.data()?.doctors ?? []);
   readonly departments = computed(() => this.data()?.departments ?? []);
   readonly doctor = computed<DeskDoctor | null>(() => this.doctors().find(d => d.id === this.doctorId()) ?? null);
@@ -151,22 +137,35 @@ export class OpdBookVisitPage {
   readonly duplicateVisit = computed<OpdVisitRow | null>(() =>
     sameDoctorOpenVisit(this.patientToday(), this.doctorId()));
   readonly deptFilter = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.deptFilterId()) ?? null);
-  /** Doctors after the department chip (tab counts read this). */
-  private readonly deptDoctors = computed(() => {
-    const dep = this.deptFilter();
-    return dep ? this.doctors().filter(d => dep.doctorIds.includes(d.id)) : this.doctors();
-  });
+  /** Doctors after the Free now chip (tab counts read this). */
+  private readonly baseDoctors = computed(() => (this.freeOnly() ? this.doctors().filter(isFreeNow) : this.doctors()));
   readonly tabCounts = computed<Record<DoctorTab, number>>(() => {
-    const l = this.deptDoctors();
-    return { today: l.filter(inToday).length, free: l.filter(isFreeNow).length, all: l.length };
+    const dep = this.deptFilter();
+    const l = dep ? this.baseDoctors().filter(d => dep.doctorIds.includes(d.id)) : this.baseDoctors();
+    return { today: l.filter(inToday).length, all: l.length };
   });
-  readonly filteredDoctors = computed(() => {
+  readonly filteredDoctors = computed(() => this.doctorGroups().flatMap(g => g.doctors).filter((d, i, a) => a.indexOf(d) === i));
+  /** The grid: one group per department (the chip's only, when one is set),
+   *  doctors without a department last. "Any doctor" leads a group that has
+   *  more than one doctor in the department. */
+  readonly doctorGroups = computed<DoctorGroup[]>(() => {
     const tab = this.doctorTab();
-    const l = this.deptDoctors();
-    return tab === 'today' ? l.filter(inToday) : tab === 'free' ? l.filter(isFreeNow) : l;
+    const pool = this.baseDoctors().filter(d => tab === 'all' || inToday(d));
+    const dep = this.deptFilter();
+    const deps = dep ? [dep] : this.departments();
+    const groups: DoctorGroup[] = deps.map(dp => ({
+      key: dp.id, name: dp.name, dept: dp, anyTile: dp.doctorIds.length > 1,
+      doctors: pool.filter(d => dp.doctorIds.includes(d.id)),
+    })).filter(g => g.doctors.length > 0);
+    if (!dep) {
+      const placed = new Set(this.departments().flatMap(dp => dp.doctorIds));
+      const rest = pool.filter(d => !placed.has(d.id));
+      if (rest.length) groups.push({ key: '__none', name: groups.length ? 'Other doctors' : 'Doctors', dept: null, anyTile: false, doctors: rest });
+    }
+    return groups;
   });
   readonly doctorTabs: { id: DoctorTab; label: string }[] = [
-    { id: 'today', label: 'In today' }, { id: 'free', label: 'Free now' }, { id: 'all', label: 'All doctors' },
+    { id: 'today', label: 'In today' }, { id: 'all', label: 'All doctors' },
   ];
   readonly services = computed(() => this.quote()?.services ?? []);
   readonly service = computed<ServiceQuote | null>(() => {
@@ -190,26 +189,8 @@ export class OpdBookVisitPage {
     const s = this.service(); const o = this.override();
     return !!s && o != null && o > s.quoted && !this.auth.hasPermission('manage_billing_config');
   });
-  readonly testById = computed<Map<string, Test>>(() => new Map(this.tests().map(t => [t.id, t])));
-  readonly labTests = computed<LabLine[]>(() => {
-    const byId = this.testById();
-    return this.labIds().map(id => byId.get(id)).filter((t): t is Test => !!t)
-      .map(t => ({ id: t.id, name: t.name, price: t.price ?? 0, slab: this.gstOn() ? t.taxSlab ?? 0 : 0 }));
-  });
-  /** Add-ons column rows: matches while typing, else the picked ones first
-   *  then the catalogue by name (capped — typing finds the rest). */
-  readonly addonRows = computed<Test[]>(() => {
-    const q = this.labQuery().trim();
-    const all = this.tests().filter(t => t.type !== 'package');
-    if (q) return filterTestListStrict(all, q).slice(0, 50);
-    const chosen = new Set(this.labIds());
-    const picked = all.filter(t => chosen.has(t.id));
-    const rest = all.filter(t => !chosen.has(t.id)).sort((a, b) => a.name.localeCompare(b.name));
-    return [...picked, ...rest].slice(0, Math.max(ADDON_BROWSE_CAP, picked.length));
-  });
-  readonly addonMore = computed(() => !this.labQuery().trim() && this.tests().filter(t => t.type !== 'package').length > this.addonRows().length);
-  readonly preview = computed(() => deskBillPreview(this.service(), this.override(), this.labTests()));
-  readonly itemCount = computed(() => (this.service() ? 1 : 0) + this.labTests().length);
+  readonly preview = computed(() => deskBillPreview(this.service(), this.override(), []));
+  readonly itemCount = computed(() => (this.service() ? 1 : 0));
   readonly ready = computed(() => !!this.patient() && !!this.doctor() && !!this.service() && !this.overrideInvalid());
   readonly missing = computed(() =>
     !this.patient() ? 'Find the patient first' : !this.doctor() ? 'Pick a doctor or department' : !this.service() ? 'Pick the visit purpose' : this.overrideInvalid() ? 'Check the fee amount' : '');
@@ -316,13 +297,6 @@ export class OpdBookVisitPage {
       next: d => { this.data.set(d); this.restore(); },
       error: e => this.loadError.set(ApiError.from(e).message),
     });
-    this.api.get<Test[]>(testListUrl({ activeOnly: true })).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: l => this.tests.set((l ?? []).filter(t => t.isEnabled !== false && t.isOffered !== false)),
-      error: () => this.tests.set([]),
-    });
-    this.api.get<{ gstEnabled?: boolean }>('/api/config/billing/visibility').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: c => this.gstOn.set(!!c?.gstEnabled), error: () => this.gstOn.set(false),
-    });
 
     effect(() => {
       const pid = this.patient()?.id ?? null;
@@ -340,11 +314,11 @@ export class OpdBookVisitPage {
       const d = {
         patientId: this.patient()?.id ?? null, doctorId: this.doctorId(), departmentId: this.departmentId(),
         serviceId: this.serviceId() ?? null, purpose: this.purpose(), override: this.overrideRaw(),
-        overrideReason: this.overrideReason(), labIds: this.labIds(), urgent: this.urgent(),
+        overrideReason: this.overrideReason(),
         savedAt: Date.now(),
       };
       if (this.restoring || !this.data() || this.stage() === 'issued') return;
-      const empty = !d.patientId && !d.doctorId && !d.labIds.length && !d.purpose;
+      const empty = !d.patientId && !d.doctorId && !d.purpose;
       untracked(() => writeDraft(this.draftStorage, this.key(), empty ? null : d));
     });
   }
@@ -380,8 +354,6 @@ export class OpdBookVisitPage {
       this.overrideRaw.set(draft.override ?? '');
       this.overrideReason.set(draft.overrideReason ?? '');
       this.overrideOpen.set(!!draft.override);
-      this.labIds.set(draft.labIds ?? []);
-      this.urgent.set(!!draft.urgent);
       this.restoring = false;
     }
     if (pid) { this.bandMode.set('doctor'); this.loadPatient(pid); }
@@ -408,8 +380,7 @@ export class OpdBookVisitPage {
         // Keep a still-valid pick; else pre-pick the single option or the follow-up.
         const cur = this.serviceId();
         if (cur !== undefined && q.services.some(s => s.serviceId === cur)) return;
-        const fu = q.services.find(s => s.isFollowUp);
-        this.serviceId.set(fu ? fu.serviceId : q.services.length === 1 ? q.services[0].serviceId : undefined);
+        this.serviceId.set(defaultPurpose(q.services)?.serviceId);
       },
       error: e => { this.quoting.set(false); this.toasts.error(ApiError.from(e).message); },
     });
@@ -591,6 +562,13 @@ export class OpdBookVisitPage {
 
   // ── Doctor column ────────────────────────────────────────────────────
   setDoctorTab(t: DoctorTab): void { this.doctorTab.set(t); }
+  toggleFreeOnly(): void { this.freeOnly.update(v => !v); }
+  /** Chevron: back to the OPD screen we came from (desk / queue / a visit),
+   *  else the OPD desk. */
+  readonly goBack = (): void => {
+    const from = this.navBack.cameFrom?.() ?? null;
+    this.navBack.backTo(from && from.startsWith('/opd') && !from.startsWith('/opd/visit/new') ? from : '/opd/desk');
+  };
   /** Department chip: only FILTERS the doctor column — picking a doctor is
    *  always its own, separate, explicit click (never silent). */
   filterByDepartment(dep: DeskDepartment | null): void { this.deptFilterId.set(dep?.id ?? null); }
@@ -620,6 +598,11 @@ export class OpdBookVisitPage {
   dayName(k: string): string { return DAY_NAMES[k] ?? k; }
   waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   waitTone(d: { waiting: number; estWaitMinutes?: number }): string { return waitTone(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
+  /** Dept "Any doctor" tile: the least-waiting doctor's wait. */
+  anyWait(g: DoctorGroup): { waiting: number; estWaitMinutes: number } {
+    const best = [...g.doctors].sort((a, b) => a.waiting - b.waiting)[0];
+    return best ? { waiting: best.waiting, estWaitMinutes: best.estWaitMinutes } : { waiting: 0, estWaitMinutes: 0 };
+  }
   deptDoctorsText(dep: DeskDepartment): string {
     const n = dep.doctorIds.length;
     return n === 1 ? '1 doctor' : `${n} doctors`;
@@ -665,51 +648,6 @@ export class OpdBookVisitPage {
     if (ev.key === 'Escape') { ev.preventDefault(); this.clearOverride(); }
   }
 
-  // ── Add-ons column (lab tests) ───────────────────────────────────────
-  isLab(id: string): boolean { return this.labIds().includes(id); }
-  toggleLab(t: Test): void { if (this.isLab(t.id)) this.removeLab(t.id); else this.addLab(t); }
-  addLab(t: Test): void { this.labIds.update(l => (l.includes(t.id) ? l : [...l, t.id])); }
-  removeLab(id: string): void {
-    this.labIds.update(l => l.filter(x => x !== id));
-    this.labSpecimens.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
-    this.specimenErr.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
-    if (!this.labIds().length) this.urgent.set(false);
-  }
-  clearLabs(): void { this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); this.urgent.set(false); }
-  testCode(t: Test): string { return t.shortName || t.testCode || ''; }
-
-  // ── Specimen (choose-mode lab tests) ────────────────────────────────────
-  testForPicker(id: string): { id: string; name: string; parameters?: string | null } {
-    const t = this.testById().get(id);
-    return { id, name: t?.name ?? '', parameters: t?.parameters ?? null };
-  }
-  specimenOf(id: string): string | null { return this.labSpecimens()[id] ?? null; }
-  specimenInvalid(id: string): boolean { return !!this.specimenErr()[id]; }
-  setSpecimen(id: string, v: string): void {
-    this.labSpecimens.update(m => ({ ...m, [id]: v }));
-    if (v) this.specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
-  }
-  private specimenItems(): OpdInvestigationItem[] {
-    return this.labTests().map(l => ({ testId: l.id, name: l.name, specimen: this.labSpecimens()[l.id] }));
-  }
-  /** Blocks Checkout the same way `order-create`'s `requireSpecimens()`
-   *  blocks Save/Pay — a choose-mode test with nothing picked yet would
-   *  otherwise make the server refuse the WHOLE booking (400
-   *  `specimen_required`, thrown before anything OPD is written). */
-  private requireLabSpecimens(): boolean {
-    const byId = this.testById();
-    const testsById: OpdTestLookup = {};
-    for (const l of this.labTests()) { const t = byId.get(l.id); if (t) testsById[l.id] = t; }
-    const missing = missingSpecimens(this.specimenItems(), testsById);
-    if (!missing.length) return true;
-    this.specimenErr.set(Object.fromEntries(missing.map(m => [m.testId, true as const])));
-    if (!this.isLg()) this.cartOpen.set(true);
-    setTimeout(() => {
-      const host = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('.pf-opd-spec--err') : null;
-      host?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-    }, 0);
-    return false;
-  }
 
   // ── Checkout ─────────────────────────────────────────────────────────
   continueToPayment(): void {
@@ -722,7 +660,6 @@ export class OpdBookVisitPage {
     }
     if (!this.ready()) { this.toasts.info(this.missing()); return; }
     if (this.overrideAboveRule()) { this.toasts.error('Only a billing admin can charge more than the fee rule.'); return; }
-    if (!this.requireLabSpecimens()) { this.toasts.error('Choose the specimen for the highlighted lab test(s).'); return; }
     if (!this.payFirst() || this.preview().total <= 0) { void this.book([]); return; }
     this.overrideOpen.set(false);
     this.stage.set('pay');
@@ -748,8 +685,7 @@ export class OpdBookVisitPage {
         patientId: p.id, doctorUserId: d.id, departmentId: this.mode() === 'department' ? this.departmentId() : null,
         serviceId: s.serviceId, purpose: this.purpose().trim() || null,
         feeOverride: this.override(), feeOverrideReason: this.overrideReason().trim() || null,
-        labTestIds: this.labIds(), labTestSpecimens: specimenPayload(this.specimenItems()) ?? undefined,
-        urgent: this.urgent(), vitals: null, payments,
+        vitals: null, payments,
       }));
       writeDraft(this.draftStorage, this.key(), null);
       this.issued.set(v);
@@ -787,8 +723,8 @@ export class OpdBookVisitPage {
   discardDraft(): void {
     writeDraft(this.draftStorage, this.key(), null);
     this.patient.set(null); this.doctorId.set(null); this.departmentId.set(null); this.serviceId.set(undefined);
-    this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); this.urgent.set(false);
-    this.deptFilterId.set(null); this.labQuery.set(''); this.mode.set('doctor');
+    this.purpose.set(''); this.clearOverride();
+    this.deptFilterId.set(null); this.freeOnly.set(false); this.mode.set('doctor');
     this.stage.set('build'); this.cartOpen.set(false); this.bandMode.set('patient');
   }
 
@@ -799,6 +735,13 @@ export class OpdBookVisitPage {
     this.toasts.success('Saved as draft');
     void this.router.navigateByUrl('/opd/desk');
   }
+}
+
+/** The purpose pre-picked for a doctor: the follow-up when its window
+ *  applies (the server only quotes one then), else the consultation, else the
+ *  first service — so the common case is pick a doctor → Continue to payment. */
+export function defaultPurpose(services: readonly ServiceQuote[]): ServiceQuote | undefined {
+  return services.find(s => s.isFollowUp) ?? services.find(s => s.category === 'consultation') ?? services[0];
 }
 
 /** In today: sits today (older servers omit the flag → counted in). */

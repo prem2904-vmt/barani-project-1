@@ -38,6 +38,10 @@ export class NavBackService {
    *  pushing a duplicate parent entry that browser-back would bounce off. */
   private previousUrl: string | null = null;
 
+  /** The URL this page was opened FROM (normalised), or null on a fresh
+   *  load — read-only, for a screen whose back depends on where it came from. */
+  cameFrom(): string | null { return this.previousUrl; }
+
   /** An optional in-page back handler. A screen whose "back" is NOT a route
    *  change (e.g. the chat thread, which closes a conversation via a signal on
    *  the /messages root) registers one so the shared chevron, the edge-swipe
