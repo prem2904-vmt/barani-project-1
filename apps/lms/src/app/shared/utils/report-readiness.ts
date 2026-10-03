@@ -10,6 +10,8 @@
  * every line is validated. This file only turns that answer into the dialog.
  */
 
+import { isSignedOrSkipped } from './line-status';
+
 /** One tube still holding the report back (server `PendingTube`). */
 export interface ReadinessPendingTube {
   sampleId: string;
@@ -109,7 +111,11 @@ export function planReadiness(r: ReportReadiness, canRelease: boolean): Readines
 export type CompletedTubeStatus = 'validated' | 'entered' | 'partial';
 
 export function completedTubeStatus(lineStatuses: string[], openLines: number): CompletedTubeStatus {
-  const allMineValidated = lineStatuses.length > 0 && lineStatuses.every(s => s === 'validated');
-  if (!allMineValidated) return 'entered';
+  // A line closed as Not reported is done (never prints); a tube needs at
+  // least one validated value to read "validated" (same rule as the server's
+  // partial eligibility). openLines already counts not_reported as closed.
+  const allMineDone = lineStatuses.length > 0 && lineStatuses.every(s => isSignedOrSkipped(s))
+    && lineStatuses.some(s => s === 'validated');
+  if (!allMineDone) return 'entered';
   return openLines > 0 ? 'partial' : 'validated';
 }

@@ -58,6 +58,11 @@ describe('completedTubeStatus', () => {
   it('every line validated → validated', () => {
     expect(completedTubeStatus(['validated'], 0)).toBe('validated');
   });
+  it('a Not reported line is closed: validated + not_reported is validated (or partial with open lines)', () => {
+    expect(completedTubeStatus(['validated', 'not_reported'], 0)).toBe('validated');
+    expect(completedTubeStatus(['validated', 'not_reported'], 2)).toBe('partial');
+    expect(completedTubeStatus(['not_reported'], 0)).toBe('entered');   // nothing validated to print
+  });
   it('any own line only submitted → entered', () => {
     expect(completedTubeStatus(['validated', 'entered'], 0)).toBe('entered');
     expect(completedTubeStatus([], 0)).toBe('entered');

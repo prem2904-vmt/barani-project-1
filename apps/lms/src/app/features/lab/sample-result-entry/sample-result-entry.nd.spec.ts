@@ -637,13 +637,14 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     expect(actions.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
   });
 
-  it('a single-tab order is unchanged: "Submit results" posts only this tube, no dialog', async () => {
-    const { f, el, c, api, dialog } = await render({ single: true });
+  it('a single-tab order: "Submit results" posts only this tube; empty fields ask first (owner 2026-10-03)', async () => {
+    const { f, el, c, api, dialog } = await render({ single: true, confirm: true });
     expect(el.querySelector('.pf-sre-submit-all, .pf-sre-submit-one')).toBeNull();
     c.setValue('ot1', 'target', 'Detected');                              // others left empty
     (el.querySelector('pf-hero-band .pf-sre-submit') as HTMLButtonElement).click();
     await settle(f);
-    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(dialog.confirm).toHaveBeenCalledTimes(1);                      // was a silent partial submit
+    expect((dialog.confirm.mock.calls[0] as any[])[0].title).toBe('Some fields are empty');
     expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
       { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined, bold: [] }] });
@@ -652,7 +653,7 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
   it('"Submit this sample" is the per-tab submit: only the open tube', async () => {
     const { f, el, c, api } = await render({ sibling: siblingWith(FULL) });
     await settle(f);
-    c.setValue('ot1', 'target', 'Detected');
+    for (const [k, v] of Object.entries(FULL)) c.setValue('ot1', k, v);
     (el.querySelector('pf-hero-band .pf-sre-submit-one') as HTMLButtonElement).click();
     await settle(f);
     expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
@@ -691,27 +692,29 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     await clickSubmitAll(f, el);
     expect(dialog.confirm).toHaveBeenCalledTimes(1);
     const req = (dialog.confirm.mock.calls[0] as any[])[0];
-    expect(req.title).toBe('Some fields are empty');
+    // The sibling's test has no value at all → named, and closed as not
+    // reported on confirm (owner 2026-10-03).
+    expect(req.title).toBe('1 test has no value');
+    expect(req.message).toContain('Bacterial Identification');
     expect(req.items).toEqual([
       '26123 · Bacterial PCR Detection — Sample Adequacy',
       '26124 · Bacterial Identification — Target Detection, Sample Adequacy, Molecular QC',
     ]);
-    expect(req.question).toBe('Do you still want to submit?');
+    expect(req.question).toBe('Submit without them?');
     expect(req.cancelLabel).toBe('Go back');
-    expect(req.confirmLabel).toBe('Submit anyway');
+    expect(req.confirmLabel).toBe('Submit without them');
     expect(resultPosts(api)).toEqual([]);                                // "Go back" (the mock says no)
   });
 
-  it('"Submit anyway": every tab goes as-is (empty fields stay empty)', async () => {
+  it('"Submit without them": filled tests go; a test with NO value is closed as not reported, never sent empty', async () => {
     const { f, el, c, api } = await render({ sibling: siblingWith(null), confirm: true });
     await settle(f);
     c.setValue('ot1', 'target', 'Detected');
     await clickSubmitAll(f, el);
-    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results', '/api/samples/smp-2/results']);
+    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
       { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined, bold: [] }] });
-    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/results',
-      { results: [{ orderTestId: 'ot2', values: {}, note: undefined, bold: [] }] });
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/not-reported', { orderTestIds: ['ot2'] });
   });
 
   it('"Go back" focuses the first empty field on the open tab', async () => {
