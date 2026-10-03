@@ -26,89 +26,124 @@ function mount(lines: ConsultRxLine[] = [], allergies: OpdPatientAllergy[] = [],
 const clavLine = (): ConsultRxLine => ({ key: 'k1', drug: CLAV, line: { drugId: CLAV.id, dose: 1, sched: timesSched([1, 0, 1]), dur: 5, food: 'After' } });
 const key = (el: Element, k: string, shift = false) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, shiftKey: shift, bubbles: true }));
 
-describe('RxEditorComponent — one line per medicine', () => {
-  it('renders the line in shorthand columns with the patient sentence and quantity', () => {
+const toks = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>('.rl .tok')].map(b => b.textContent!.trim());
+const tok = (el: HTMLElement, t: string) => el.querySelector(`.rl [data-tok="${t}"]`) as HTMLButtonElement;
+const opts = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>('.rl__opts button')];
+
+describe('RxEditorComponent — one line per medicine (consult v6)', () => {
+  it('renders number, name, form, the three tokens, the plain sentence and the total', () => {
     const f = mount([clavLine()]);
     const el: HTMLElement = f.nativeElement;
-    const vals = [...el.querySelectorAll('.rxv')].map(b => b.textContent!.trim());
-    expect(vals).toEqual(['1 tab', '1-0-1', '5 days', 'After food']);
-    expect(el.querySelector('.rxe__say')!.textContent).toContain('Take 1 tablet in the morning and at night, after food, for 5 days.');
-    expect(el.querySelector('.rxe__qty')!.textContent!.trim()).toBe('10 tablets');
-    expect(el.querySelector('.rxe__sch')!.textContent).toContain('Sch H1');
+    expect(el.querySelector('.rl__no')!.textContent!.trim()).toBe('1');
+    expect(el.querySelector('.rl__name')!.textContent).toContain('Clavumox 625');
+    expect(el.querySelector('.rl__form')!.textContent).toContain('Tablet');
+    expect(toks(el)).toEqual(['1-0-1', '5 days', 'After food']);
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('Take 1 tablet in the morning and at night, after food, for 5 days');
+    expect(el.querySelector('.rl__qty')!.textContent!.trim()).toBe('10 tablets');
+    expect(el.querySelector('.rl__sch')!.textContent).toContain('Sch H1');
   });
 
-  it('tapping a value opens a popover with ONLY that value\'s options; arrows + Enter pick', () => {
+  it('tapping a token opens ONE row of common choices; a tap sets it and closes the row', () => {
     const f = mount([clavLine()]);
     const el: HTMLElement = f.nativeElement;
-    (el.querySelectorAll('.rxv')[1] as HTMLButtonElement).click(); // When
-    f.detectChanges();
+    tok(el, 'pat').click(); f.detectChanges();
+    expect(opts(el).map(b => b.textContent!.trim())).toEqual(['1-0-0', '0-0-1', '1-0-1', '1-1-1', '1-1-1-1', '0-1-0', '½-0-½', 'SOS', 'More…']);
+    expect(opts(el).find(b => b.getAttribute('aria-pressed') === 'true')!.textContent!.trim()).toBe('1-0-1');
+    opts(el).find(b => b.textContent!.trim() === '1-1-1')!.click(); f.detectChanges();
+    expect(el.querySelector('.rl__opts')).toBeNull();
+    expect(f.componentInstance.lines()[0].line.sched).toEqual(timesSched([1, 1, 1]));
+    expect(el.querySelector('.rl__qty')!.textContent!.trim()).toBe('15 tablets');
+
+    tok(el, 'days').click(); f.detectChanges();
+    expect(opts(el).map(b => b.textContent!.trim())).toEqual(['1 d', '3 d', '5 d', '7 d', '10 d', '15 d', '30 d', 'Ongoing']);
+    opts(el).find(b => b.textContent!.trim() === '7 d')!.click(); f.detectChanges();
+    expect(f.componentInstance.lines()[0].line.dur).toBe(7);
+
+    tok(el, 'food').click(); f.detectChanges();
+    expect(opts(el).map(b => b.textContent!.trim())).toEqual(['After food', 'Before food', 'With food', 'Any time']);
+    opts(el).find(b => b.textContent!.trim() === 'Before food')!.click(); f.detectChanges();
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('Take 1 tablet in the morning, in the afternoon and at night, before food, for 7 days');
+  });
+
+  it('½-0-½ reads half a tablet; SOS reads "only when needed" with an "up to" total; Ongoing reads "until your next visit"', () => {
+    const f = mount([clavLine()]);
+    const el: HTMLElement = f.nativeElement;
+    tok(el, 'pat').click(); f.detectChanges();
+    opts(el).find(b => b.textContent!.trim() === '½-0-½')!.click(); f.detectChanges();
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('Take ½ tablet in the morning and at night');
+    expect(el.querySelector('.rl__qty')!.textContent!.trim()).toBe('5 tablets');
+    tok(el, 'pat').click(); f.detectChanges();
+    opts(el).find(b => b.textContent!.trim() === 'SOS')!.click(); f.detectChanges();
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('only when needed');
+    expect(el.querySelector('.rl__qty')!.textContent!.trim()).toMatch(/^up to \d+ tablets$/);
+    tok(el, 'pat').click(); f.detectChanges();
+    opts(el).find(b => b.textContent!.trim() === '1-0-1')!.click(); f.detectChanges();
+    tok(el, 'days').click(); f.detectChanges();
+    opts(el).find(b => b.textContent!.trim() === 'Ongoing')!.click(); f.detectChanges();
+    expect(tok(el, 'days').textContent!.trim()).toBe('Ongoing');
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('continue until your next visit');
+    expect(f.componentInstance.lines()[0].line.dur).toBe(30);
+  });
+
+  it('More… opens the advanced schedules (every few hours, taper "then…")', () => {
+    const f = mount([clavLine()]);
+    const el: HTMLElement = f.nativeElement;
+    tok(el, 'pat').click(); f.detectChanges();
+    opts(el).find(b => b.textContent!.trim() === 'More…')!.click(); f.detectChanges();
     const pop = el.querySelector('.rxp')!;
-    expect(pop).toBeTruthy();
-    const chips = [...pop.querySelectorAll('.rxp__chip')].map(c => c.textContent!.trim());
-    expect(chips).toContain('1-0-0');
-    expect(chips).toContain('When needed (SOS)');
+    expect(pop.textContent).toContain('Every 8 hours');
     expect(pop.textContent).toContain('21 days on, 7 off');
-    expect(pop.querySelector('.rxp__chip.on')!.textContent!.trim()).toBe('1-0-1');
-    // 1-0-1 is active; → moves to 1-0-0; Enter picks it.
-    key(pop, 'ArrowRight'); key(pop, 'Enter');
-    f.detectChanges();
-    expect(el.querySelector('.rxp')).toBeNull();
-    expect(f.componentInstance.lines()[0].line.sched).toEqual(timesSched([1, 0, 0]));
-    expect(el.querySelector('.rxe__qty')!.textContent!.trim()).toBe('5 tablets');
+    const then = [...pop.querySelectorAll<HTMLButtonElement>('.rxp__row')].find(r => r.textContent!.includes('once a day, 5 days'))!;
+    then.click(); f.detectChanges();
+    expect(f.componentInstance.lines()[0].line.sched.type).toBe('steps');
+    expect(el.querySelector('.rl__sent')!.textContent).toContain('then in the morning for 5 days');
+    expect(el.querySelector('.rl__qty')!.textContent!.trim()).toBe('15 tablets');
   });
 
-  it('Esc closes without a change; Tab closes and moves focus to the next value', async () => {
+  it('Escape closes the row without a change', () => {
     const f = mount([clavLine()]);
     const el: HTMLElement = f.nativeElement;
-    document.body.appendChild(el);
-    const dose = el.querySelectorAll('.rxv')[0] as HTMLButtonElement;
-    dose.click(); f.detectChanges();
-    key(el.querySelector('.rxp')!, 'Escape'); f.detectChanges();
-    expect(el.querySelector('.rxp')).toBeNull();
-    expect(f.componentInstance.lines()[0].line.dose).toBe(1);
-
-    dose.click(); f.detectChanges();
-    key(el.querySelector('.rxp')!, 'Tab'); f.detectChanges();
-    await Promise.resolve();
-    expect(document.activeElement?.textContent?.trim()).toBe('1-0-1');
-    el.remove();
-  });
-
-  it('+ then… adds a taper continuation line; the sentence reads both steps', () => {
-    const f = mount([clavLine()]);
-    const el: HTMLElement = f.nativeElement;
-    (el.querySelector('.rxe__then') as HTMLButtonElement).click(); f.detectChanges();
-    const row = [...el.querySelectorAll('.rxp__row')].find(r => r.textContent!.includes('Once a day, 5 days')) as HTMLButtonElement;
-    row.click(); f.detectChanges();
-    expect(el.querySelectorAll('.rxe__row--then').length).toBe(1);
-    expect(el.querySelector('.rxe__say')!.textContent).toContain('then in the morning for 5 days');
-    expect(el.querySelector('.rxe__qty')!.textContent!.trim()).toBe('15 tablets');
-  });
-
-  it('the calendar glyph shows the 14-day strip', () => {
-    const f = mount([clavLine()]);
-    const el: HTMLElement = f.nativeElement;
-    (el.querySelector('.rxe__cal') as HTMLButtonElement).click(); f.detectChanges();
-    const days = el.querySelectorAll('.rxs__d');
-    expect(days.length).toBe(14);
-    expect(days[0].querySelectorAll('i').length).toBe(2);
-    expect(days[6].classList.contains('rxs__d--done')).toBe(true); // 5-day course
+    tok(el, 'days').click(); f.detectChanges();
+    key(el.querySelector('.rl__opts')!, 'Escape'); f.detectChanges();
+    expect(el.querySelector('.rl__opts')).toBeNull();
+    expect(f.componentInstance.lines()[0].line.dur).toBe(5);
   });
 });
 
-describe('RxEditorComponent — shorthand add box', () => {
-  it('"clav 1-0-1 5d af" previews live and Enter adds the parsed line', () => {
+describe('RxEditorComponent — type, Enter, done', () => {
+  it('"azi" + Enter adds the drug with the doctor\'s usual and keeps the bar ready', () => {
+    const f = mount();
+    f.componentRef.setInput('usuals', { 'd-azi': { dose: 1, sched: timesSched([1, 0, 0]), dur: 3, food: 'After' } });
+    f.detectChanges();
+    const el: HTMLElement = f.nativeElement;
+    const input = el.querySelector('.rxe__addin') as HTMLInputElement;
+    input.value = 'azi'; input.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(el.querySelector('.rxe__sg')!.textContent).toContain('your usual: 1 tab · 1-0-0 · 3 days · after food');
+    key(input, 'Enter'); f.detectChanges();
+    const l = f.componentInstance.lines()[0];
+    expect(l.drug.id).toBe('d-azi');
+    expect(l.line).toMatchObject({ dose: 1, dur: 3, food: 'After', sched: timesSched([1, 0, 0]) });
+    expect(f.componentInstance.typed()).toBe('');
+  });
+
+  it('no usual on record → 1-0-1 · 5 days · after food', () => {
+    const f = mount();
+    const input = (f.nativeElement as HTMLElement).querySelector('.rxe__addin') as HTMLInputElement;
+    input.value = 'doxyt'; input.dispatchEvent(new Event('input')); f.detectChanges();
+    key(input, 'Enter'); f.detectChanges();
+    expect(f.componentInstance.lines()[0].line).toMatchObject({ dose: 1, dur: 5, food: 'After', sched: timesSched([1, 0, 1]) });
+  });
+
+  it('the shorthand still works: "clav 1-0-1 5d af" previews as typed and Enter adds it', () => {
     const f = mount();
     const el: HTMLElement = f.nativeElement;
     const input = el.querySelector('.rxe__addin') as HTMLInputElement;
-    input.value = 'clav 1-0-1 5d af';
+    input.value = 'clav 1-1-1 7d bf';
     input.dispatchEvent(new Event('input')); f.detectChanges();
-    expect(el.querySelector('.rxe__asTyped')!.textContent).toContain('Clavumox 625');
-    expect(el.querySelector('.rxe__asTyped')!.textContent).toContain('1 tab · 1-0-1 · 5 days · after food');
+    expect(el.querySelector('.rxe__sg')!.textContent).toContain('As typed');
+    expect(el.querySelector('.rxe__sg')!.textContent).toContain('Clavumox 625');
     key(input, 'Enter'); f.detectChanges();
-    const l = f.componentInstance.lines()[0];
-    expect(l.drug.id).toBe('d-clav');
-    expect(l.line).toMatchObject({ dose: 1, dur: 5, food: 'After', sched: timesSched([1, 0, 1]) });
+    expect(f.componentInstance.lines()[0].line).toMatchObject({ dose: 1, dur: 7, food: 'Before', sched: timesSched([1, 1, 1]) });
   });
 
   it('understands q2h + both + days for drops, and falls back to "add as written" for unknown drugs', () => {
@@ -121,9 +156,20 @@ describe('RxEditorComponent — shorthand add box', () => {
     cmp.onType('zzqx'); f.detectChanges();
     expect(cmp.preview()).toBeNull();
     expect((f.nativeElement as HTMLElement).textContent).toContain('as written');
-    cmp.addFree();
+    const input = (f.nativeElement as HTMLElement).querySelector('.rxe__addin') as HTMLInputElement;
+    key(input, 'Enter'); f.detectChanges();
     expect(cmp.lines()[0].drug.free).toBe(true);
     expect(cmp.lines()[0].drug.name).toBe('Zzqx');
+  });
+
+  it('arrow keys move through the suggestions', () => {
+    const f = mount();
+    const cmp = f.componentInstance;
+    cmp.onType('a'); f.detectChanges();
+    const input = (f.nativeElement as HTMLElement).querySelector('.rxe__addin') as HTMLInputElement;
+    expect(cmp.suggest().length).toBeGreaterThan(1);
+    key(input, 'ArrowDown');
+    expect(cmp.active()).toBe(1);
   });
 
   it('asks the host to search the master with the drug words only', () => {
@@ -139,21 +185,21 @@ describe('RxEditorComponent — inline allergy', () => {
   it('shows the conflict with one-tap swap and "Keep, reviewed" (stores the ack)', () => {
     const f = mount([clavLine()], [PEN]);
     const el: HTMLElement = f.nativeElement;
-    expect(el.querySelector('.rxe__allergy')!.textContent).toContain('Allergy: Penicillin');
-    expect(el.querySelector('.rxe__swap')!.textContent).toContain('Swap to Azimax 500');
-    (el.querySelector('.rxe__keep') as HTMLButtonElement).click(); f.detectChanges();
+    expect(el.querySelector('.rl__alert:not(.rl__alert--preg)')!.textContent).toContain('Allergy: Penicillin');
+    expect(el.querySelector('.rl__swap')!.textContent).toContain('Swap to Azimax 500');
+    (el.querySelector('.rl__keep') as HTMLButtonElement).click(); f.detectChanges();
     expect(f.componentInstance.lines()[0].allergyAck).toBe(true);
-    expect(el.querySelector('.rxe__allergy')).toBeNull();
-    expect(el.querySelector('.rxe__acked')).toBeTruthy();
+    expect(el.querySelector('.rl__alert:not(.rl__alert--preg)')).toBeNull();
+    expect(el.querySelector('.rl__acked')).toBeTruthy();
   });
   it('swap replaces the drug with the alternative and clears the warning', () => {
     const f = mount([clavLine()], [PEN]);
     const el: HTMLElement = f.nativeElement;
     const notes: string[] = [];
     f.componentInstance.notice.subscribe(n => notes.push(n));
-    (el.querySelector('.rxe__swap') as HTMLButtonElement).click(); f.detectChanges();
+    (el.querySelector('.rl__swap') as HTMLButtonElement).click(); f.detectChanges();
     expect(f.componentInstance.lines()[0].drug.id).toBe('d-azi');
-    expect(el.querySelector('.rxe__allergy')).toBeNull();
+    expect(el.querySelector('.rl__alert:not(.rl__alert--preg)')).toBeNull();
     expect(notes[0]).toContain('Clavumox 625 swapped for Azimax 500');
   });
 });
@@ -164,30 +210,30 @@ describe('RxEditorComponent — pregnancy-safety guard', () => {
   it('shows the avoid-in-pregnancy banner with a swap + "Keep, reviewed" (stores the ack)', () => {
     const f = mount([doxyLine()], [], PREGNANT);
     const el: HTMLElement = f.nativeElement;
-    expect(el.querySelector('.rxe__preg')!.textContent).toContain('Avoid in pregnancy');
-    (el.querySelector('.rxe__preg .rxe__keep') as HTMLButtonElement).click(); f.detectChanges();
+    expect(el.querySelector('.rl__alert--preg')!.textContent).toContain('Avoid in pregnancy');
+    (el.querySelector('.rl__alert--preg .rl__keep') as HTMLButtonElement).click(); f.detectChanges();
     expect(f.componentInstance.lines()[0].pregnancyAck).toBe(true);
-    expect(el.querySelector('.rxe__preg')).toBeNull();
-    expect(el.querySelector('.rxe__acked')!.textContent).toContain('Pregnancy risk reviewed');
+    expect(el.querySelector('.rl__alert--preg')).toBeNull();
+    expect(el.querySelector('.rl__acked')!.textContent).toContain('Pregnancy risk reviewed');
   });
 
   it('never shows the banner when the patient is not pregnant, even for an avoid drug', () => {
     const f = mount([doxyLine()], [], null);
-    expect((f.nativeElement as HTMLElement).querySelector('.rxe__preg')).toBeNull();
+    expect((f.nativeElement as HTMLElement).querySelector('.rl__alert--preg')).toBeNull();
   });
 
   it('a contraindicated drug reads "Contraindicated in pregnancy"', () => {
     const contra: ConsultDrugRef = { ...DOXY, id: 'd-itra', name: 'Itrazole 100', pregnancyRisk: 'contraindicated' };
     const f = mount([{ key: 'k3', drug: contra, line: { drugId: contra.id, dose: 1, sched: timesSched([1, 0, 0]), dur: 5 } }], [], PREGNANT);
-    expect((f.nativeElement as HTMLElement).querySelector('.rxe__preg')!.textContent).toContain('Contraindicated in pregnancy');
+    expect((f.nativeElement as HTMLElement).querySelector('.rl__alert--preg')!.textContent).toContain('Contraindicated in pregnancy');
   });
 
   it('a caution drug shows a quiet amber chip and never blocks', () => {
     const caution: ConsultDrugRef = { ...DOXY, id: 'd-metf', name: 'Metfor 500', pregnancyRisk: 'caution' };
     const f = mount([{ key: 'k4', drug: caution, line: { drugId: caution.id, dose: 1, sched: timesSched([1, 0, 0]), dur: 5 } }], [], PREGNANT);
     const el: HTMLElement = f.nativeElement;
-    expect(el.querySelector('.rxe__preg-caution')!.textContent).toContain('Caution in pregnancy');
-    expect(el.querySelector('.rxe__preg')).toBeNull();
+    expect(el.querySelector('.rl__caution')!.textContent).toContain('Caution in pregnancy');
+    expect(el.querySelector('.rl__alert--preg')).toBeNull();
   });
 });
 

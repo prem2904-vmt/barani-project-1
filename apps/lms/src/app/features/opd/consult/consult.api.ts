@@ -68,7 +68,7 @@ export interface ProcedurePricing { doctorCanChange: boolean; maxChangePercent?:
 export interface ConsultBilling { mode: 'before_consult' | 'after_consult'; consultCharged: number; consultBalance: number; }
 
 export interface ConsultCurrentMedicine {
-  drugName: string; form: DrugForm; dose: number; schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
+  drugName: string; form: DrugForm; dose: number; schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | 'With' | null;
   prescribedOn: string; doctorName?: string | null; endsOn?: string | null;
 }
 

@@ -142,7 +142,7 @@ export interface OpdConsultRecord {
  *  `quantity` is computed by the SERVER (RxScheduleMath.Quantity). */
 export interface OpdRxLineDto {
   id?: string; drugId?: string | null; drugName: string; form: DrugForm; dose: number; site?: string | null;
-  schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
+  schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | 'With' | null;
   quantity?: number; allergyAck?: boolean; allergyAckNote?: string | null; notes?: string | null;
   dispenseStatus?: 'pending' | 'partial' | 'dispensed' | 'not_dispensed';
   /** Pregnancy-safety guard (night/safety, critic P0 #1c) — mirrors allergyAck/allergyAckNote. */

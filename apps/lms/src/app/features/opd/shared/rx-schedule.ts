@@ -40,7 +40,9 @@ export type RxSchedule =
 /** One taper step. `sched` is any schedule except another 'steps'. */
 export interface RxStep { sched: RxSchedule; dur: number; dose?: number }
 
-export type RxFood = 'Before' | 'After';
+/** 'With' (consult v6) needs the server mirror to accept it too (ConsultService
+ *  keeps only Before / After today — see the hand-off). */
+export type RxFood = 'Before' | 'After' | 'With';
 
 export interface RxLine {
   drugId: string;
@@ -528,6 +530,7 @@ export function parseRx<D extends RxDrugRef>(
     else if ((m = t.match(/^x?(\d{1,3})(d|days?|w|wks?|weeks?)$/))) o.dur = +m[1] * (m[2][0] === 'w' ? 7 : 1);
     else if (/^(af|after|pc)$/.test(t)) o.food = 'After';
     else if (/^(bf|before|ac)$/.test(t)) o.food = 'Before';
+    else if (t === 'wf') o.food = 'With';
     else if ((m = t.match(/^(\d+(?:\.\d+)?|½|half)(tabs?|tablets?|caps?|drops?|sprays?|puffs?|ml|sachets?)?$/)) && name.length
       && (m[2] || +m[1] <= 4 || m[1] === '½' || m[1] === 'half')) o.dose = m[1] === '½' || m[1] === 'half' ? 0.5 : +m[1];
     else if (/^(both|right|left|be|re|le)$/.test(t) && name.length) o.side = t[0] === 'b' ? 0 : t[0] === 'r' ? 1 : 2;
