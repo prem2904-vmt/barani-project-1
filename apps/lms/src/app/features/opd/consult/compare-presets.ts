@@ -6,7 +6,7 @@
  * what each would pick (0 = nothing to compare, shown disabled).
  */
 
-export type ComparePresetId = 'last3' | 'allVisits' | 'reports' | 'images' | 'last6img' | 'trends' | 'rx';
+export type ComparePresetId = 'last3' | 'allVisits' | 'reports' | 'images' | 'last6img' | 'trends' | 'rx' | `proc:${string}`;
 /** Which consult sections the side-by-side table shows. */
 export type CompareSection = 'findings' | 'dx' | 'rx' | 'tests';
 
@@ -22,6 +22,8 @@ export interface PresetInput {
   images: readonly PresetFile[];
   /** Lab parameters with their dated values. */
   trends: readonly PresetTrend[];
+  /** Procedures the patient has had (with how many sessions) — one "readings" preset each. */
+  procedures?: readonly { serviceId: string; name: string; sessions: number }[];
 }
 
 export type PresetPick =
@@ -36,6 +38,8 @@ export interface ComparePreset {
   picks: PresetPick[];
   /** The consult table's sections (all when absent). */
   sections?: CompareSection[];
+  /** A "procedure readings" preset: the host shows that procedure's sessions table. */
+  procedureServiceId?: string;
 }
 
 const newestFirst = <T extends { date: string }>(xs: readonly T[]) => [...xs].sort((a, b) => b.date.localeCompare(a.date));
@@ -58,6 +62,7 @@ export function comparePresets(inp: PresetInput): ComparePreset[] {
     mk('last6img', 'Last 6 images', images.slice(0, 6).map(f => file(f, true))),
     mk('trends', 'Lab trends', trends.map(t => ({ kind: 'trend', trend: t }))),
     mk('rx', 'Prescriptions', rx.map(consult), ['rx']),
+    ...(inp.procedures ?? []).map(p => ({ id: `proc:${p.serviceId}` as const, label: `${p.name} readings`, count: p.sessions, picks: [], procedureServiceId: p.serviceId })),
   ];
 }
 

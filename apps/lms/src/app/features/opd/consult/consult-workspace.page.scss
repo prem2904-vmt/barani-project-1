@@ -26,7 +26,7 @@
 
 // ── Patient band: one compact row (the hero-band surface) ──
 .cw__band {
-  flex: none; position: relative; padding: 8px 16px;
+  flex: none; position: relative; padding: 8px 16px; min-width: 0;
   background-color: var(--pf-band-bg, var(--nd-card-bg));
   background-image: var(--pf-band-fade, none), var(--pf-band-sweep, none);
   border-bottom: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
@@ -42,7 +42,7 @@
 .cw__who { flex: none; min-width: 0; max-width: 340px; display: flex; flex-direction: column; }
 .cw__nameline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cw__name { margin: 0; font-size: 15.5px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-.cw__meta { display: flex; flex-wrap: wrap; font-size: 12px; color: var(--text-tertiary); }
+.cw__meta { display: flex; flex-wrap: nowrap; white-space: nowrap; font-size: 12px; color: var(--text-tertiary); }
 .cw__meta span + span::before { content: '·'; margin: 0 8px; color: var(--nd-sel-border); }
 .cw__status { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px;
   font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); background: var(--nd-chip-bg); }
@@ -97,7 +97,7 @@
   padding: 16px; transition: grid-template-columns 150ms ease, column-gap 150ms ease; }
 .cw__body--docked { grid-template-columns: minmax(0, 1fr) 320px; column-gap: 16px; }
 @media (prefers-reduced-motion: reduce) { .cw__body { transition: none; } }
-.cw__centre, .cw__right { min-height: 0; }
+.cw__centre, .cw__right { min-height: 0; min-width: 0; }
 .cw__centre { display: flex; flex-direction: column; }
 
 // The patient card: docked (a column) or a panel over the centre.
@@ -169,6 +169,7 @@
   box-shadow: -16px 0 40px rgba(15, 23, 42, 0.18); animation: cw-float 220ms var(--nd-spring, ease) both; }
 :host-context(html.dark) .cw__drawer { box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5); }
 @media (prefers-reduced-motion: reduce) { .cw__drawer { animation: none; } }
+.cw__drawer--wide { width: min(880px, calc(100% - 32px)); }
 .cw__drawerb { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
 
 // Compare: consults side by side — one column per consult, matching lines on one row.

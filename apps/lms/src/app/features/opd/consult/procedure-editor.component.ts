@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
 import { LowerCasePipe } from '@angular/common';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import type { ConsultProcedureDraft, ConsultProcedureOption, ProcedurePricing, ProcedureWhen } from './consult.api';
+import { type ConsultProcedureDraft, type ConsultProcedureOption, type ProcedurePricing, type ProcedureWhen, procedureSchemaOf } from './consult.api';
+import { OpdFormRendererComponent } from '../admin/forms/renderer';
+import { ProcedureSession, copyAllFromLast, keyReadings, lastHints, lastValue, sessionNumber } from './procedure-sessions';
 import {
   MAX_PROCEDURE_QTY, PREFERRED_WITHIN, PROCEDURE_SIDES, type ProcedureSide, checkProcedurePrice, needsPriceReason, parsePrice, priceHint, proceduresTotal,
 } from './procedure-rules';
@@ -27,7 +29,7 @@ let seq = 0;
 @Component({
   selector: 'pf-consult-procedures',
   standalone: true,
-  imports: [CurrencyInrPipe, LowerCasePipe, PadAddComponent],
+  imports: [CurrencyInrPipe, LowerCasePipe, PadAddComponent, OpdFormRendererComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pr__lines" role="list" aria-label="Procedures">
@@ -36,6 +38,10 @@ let seq = 0;
         @if (openKey() !== p.key) {
           <button type="button" role="listitem" class="pr__line" [attr.data-row]="p.serviceId" (click)="openKey.set(p.key)" [attr.aria-label]="'Edit ' + p.name">
             <b>{{ p.name }}</b>
+            @if (schemaOf(p)) {
+              <span class="pr__sess nd-num">Session {{ sessionNo(p) }}</span>
+              @for (r of readings(p); track $index) { <span class="pr__read nd-num">{{ r }}</span> }
+            }
             <span class="pr__tag" [class.pr__tag--now]="p.when !== 'later'">{{ p.when === 'later' ? 'Book for later · ' + ((p.preferredWithin || 'Within 2 weeks') | lowercase) : 'Do now' }}</span>
             @if (fileCount(p) || p.record) { <span class="pr__att nd-num">@if (fileCount(p)) { {{ fileCount(p) }} file{{ fileCount(p) === 1 ? '' : 's' }} }@if (fileCount(p) && p.record) { · }@if (p.record) { record }</span> }
             @if (needsReason(p)) { <span class="pr__warn">reason needed</span> }
@@ -93,6 +99,25 @@ let seq = 0;
                      (input)="patch(p.key, { priceReason: $any($event.target).value })" placeholder="Reason for the price change — the front desk sees it"
                      aria-label="Reason for the price change" maxlength="300" data-reason />
               @if (needsReason(p) && showReasonErr()) { <span class="pr__err" role="alert">Give a reason for the price change.</span> }
+            }
+
+            <!-- The procedure's own form (e.g. a laser session), with the last session beside each field. -->
+            @if (p.when !== 'later' && schemaOf(p); as sch) {
+              <div class="pr__form" data-proc-form>
+                <div class="pr__fh">
+                  <b class="nd-num">Session {{ sessionNo(p) }}</b>
+                  @if (formNameOf(p); as fn) { <span class="pr__fhs">{{ fn }}</span> }
+                  <span class="pr__grow"></span>
+                  @if (!locked) {
+                    <button type="button" class="pr__link" [disabled]="!pastCount(p)" (click)="copyAll(p)" data-copy-last>Copy all from last session</button>
+                  }
+                  @if (pastCount(p)) {
+                    <button type="button" class="pr__link" (click)="showSessions.emit(p.serviceId)" data-sessions>Sessions ({{ pastCount(p) }})</button>
+                  }
+                </div>
+                <pf-opd-form-renderer [schema]="sch" [answers]="p.answers ?? {}" [mode]="locked ? 'readonly' : 'edit'" [layout]="phone() ? 'phone' : 'screen'" [compact]="true"
+                                      [hints]="locked ? {} : hintsFor(p)" (hintPick)="onHint(p, $event)" (answersChange)="patch(p.key, { answers: $event })"></pf-opd-form-renderer>
+              </div>
             }
 
             <span class="pr__opts" role="radiogroup" [attr.aria-label]="'Side for ' + p.name">
@@ -218,6 +243,21 @@ let seq = 0;
       color: var(--green-text, #047857); background: color-mix(in srgb, #34d399 14%, transparent); }
     .pr__badge--later { color: var(--blue-text, #1d4ed8); background: color-mix(in srgb, #60a5fa 14%, transparent); }
     .pr__none { display: flex; align-items: center; min-height: 42px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pr__sess { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
+    .pr__read { font-size: 12.5px; color: var(--text-secondary); }
+    .pr__read::before { content: '· '; color: var(--text-tertiary); }
+    .pr__form { display: grid; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pr__fh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+    .pr__fh b { font-size: 13.5px; }
+    .pr__fhs { font-size: 12.5px; color: var(--text-tertiary); }
+    .pr__grow { flex: 1 1 auto; }
+    .pr__link { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); cursor: pointer; }
+    .pr__link:disabled { color: var(--text-tertiary); cursor: default; }
+    .pr__link:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 4px; }
+    .pr__form ::ng-deep .ofr { gap: 12px 24px; }
+    .pr__form ::ng-deep .ofr-q { padding: 0; }
+    .pr__form ::ng-deep .ofr-q__q { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+    .pr__form ::ng-deep .ofr-chip, .pr__form ::ng-deep .ofr-seg .nd-seg__item, .pr__form ::ng-deep .ofr-scale button { height: 32px; }
     .pr__muted { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
     @media (max-width: 760px) { .pr__field, .pr__rec { font-size: 16px; } .pr__qty { margin-left: 0; } }
   `],
@@ -243,6 +283,49 @@ export class ConsultProceduresComponent {
   readonly canRemoveFiles = input(false);
   /** × on a file chip (the host deletes it, optimistically). */
   readonly removeFile = output<{ key: string; id: string }>();
+  /** Past sessions per procedure (serviceId → list; undefined = not loaded yet). */
+  readonly sessions = input<Record<string, ProcedureSession[] | undefined>>({});
+  /** Today's visit (never counted as a "last session"). */
+  readonly todayVisitId = input<string | null>(null);
+  readonly phone = input(false);
+  /** Ask the host to load a procedure's past sessions. */
+  readonly needSessions = output<string>();
+  /** "Sessions": the host shows every past session as a table. */
+  readonly showSessions = output<string>();
+
+  constructor() {
+    // Load the past sessions of every procedure on the pad that has a form.
+    effect(() => {
+      const items = this.items(), loaded = this.sessions();
+      untracked(() => {
+        for (const sid of new Set(items.map(p => p.serviceId))) {
+          if (loaded[sid] === undefined && this.schemaOfService(sid)) this.needSessions.emit(sid);
+        }
+      });
+    });
+  }
+
+  private schemaOfService(serviceId: string): unknown | null {
+    const o = this.options().find(x => x.serviceId === serviceId);
+    return o ? procedureSchemaOf(o) : null;
+  }
+  schemaOf(p: ConsultProcedureDraft): unknown | null { return this.schemaOfService(p.serviceId); }
+  formNameOf(p: ConsultProcedureDraft): string | null {
+    const o = this.options().find(x => x.serviceId === p.serviceId);
+    return o?.form?.formName ?? o?.formName ?? null;
+  }
+  private past(p: ConsultProcedureDraft): ProcedureSession[] { return this.sessions()[p.serviceId] ?? []; }
+  pastCount(p: ConsultProcedureDraft) { return this.past(p).filter(s => s.visitId !== this.todayVisitId()).length; }
+  sessionNo(p: ConsultProcedureDraft) { return sessionNumber(this.past(p), this.todayVisitId()); }
+  hintsFor(p: ConsultProcedureDraft) { return lastHints(this.schemaOf(p), this.past(p), this.todayVisitId()); }
+  readings(p: ConsultProcedureDraft) { return keyReadings(this.schemaOf(p), p.answers, 2); }
+  onHint(p: ConsultProcedureDraft, key: string) {
+    const v = lastValue(key, this.past(p), this.todayVisitId());
+    if (v !== undefined) this.patch(p.key, { answers: { ...(p.answers ?? {}), [key]: v } });
+  }
+  copyAll(p: ConsultProcedureDraft) {
+    this.patch(p.key, { answers: copyAllFromLast(this.schemaOf(p), p.answers ?? {}, this.past(p), this.todayVisitId()) });
+  }
   readonly itemsChange = output<ConsultProcedureDraft[]>();
   /** Files picked for a saved procedure (the host uploads them with its id). */
   readonly upload = output<{ key: string; procedureId: string; files: File[] }>();

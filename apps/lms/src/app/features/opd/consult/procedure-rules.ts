@@ -60,7 +60,7 @@ export function proceduresTotal(items: readonly Pick<ConsultProcedureDraft, 'pri
 /** The draft body's procedure list: the price is sent only when it differs
  *  from the rule. `withLater` (server features.procedureLater) adds when /
  *  preferredWithin / prepNote; an older server never sees them. */
-export function proceduresBody(items: readonly ConsultProcedureDraft[], withLater = false, withRecord = false): ConsultProcedureBodyLine[] {
+export function proceduresBody(items: readonly ConsultProcedureDraft[], withLater = false, withRecord = false, withForms = false): ConsultProcedureBodyLine[] {
   return items.filter(p => p.status !== 'billed').map(p => {
     const line: ConsultProcedureBodyLine = {
       id: p.id ?? null, serviceId: p.serviceId, qty: p.qty,
@@ -75,6 +75,7 @@ export function proceduresBody(items: readonly ConsultProcedureDraft[], withLate
       line.prepNote = later ? (p.prepNote?.trim() || null) : null;
     }
     if (withRecord) line.record = p.when === 'later' ? null : (p.record?.trim() || null);
+    if (withForms) line.answers = p.when === 'later' ? null : (p.answers && Object.keys(p.answers).length ? p.answers : null);
     return line;
   });
 }
