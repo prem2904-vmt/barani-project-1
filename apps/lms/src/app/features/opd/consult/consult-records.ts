@@ -224,3 +224,21 @@ export function spaceCount(id: ConsultSpace, s: ConsultEditState): number {
     case 'adv': return (s.advice.trim() ? 1 : 0) + (s.followUpDays != null ? 1 : 0) + (s.privateNotes.trim() ? 1 : 0);
   }
 }
+
+// ── Side panels: auto-balance (owner) ───────────────────────────────────
+
+/** Panel widths (px) and the narrowest centre the form still fits in. */
+export const PANEL_W = { nav: 240, navRail: 48, right: 300, rightRail: 44, minCentre: 680 } as const;
+
+/** Which pinned panels can stay docked in `width` (the body's content box,
+ *  minus `gaps`): the RIGHT card collapses to its rail first, then the LEFT
+ *  nav to icons; as room comes back they return in reverse. A panel the
+ *  doctor unpinned is never docked. Pure. */
+export function balancePanels(width: number, gaps: number, navPinned: boolean, rightPinned: boolean): { navDocked: boolean; rightDocked: boolean } {
+  if (!width) return { navDocked: navPinned, rightDocked: rightPinned };
+  const centre = (nav: boolean, right: boolean) => width - gaps - (nav ? PANEL_W.nav : PANEL_W.navRail) - (right ? PANEL_W.right : PANEL_W.rightRail);
+  let nav = navPinned, right = rightPinned;
+  if (centre(nav, right) < PANEL_W.minCentre) right = false;
+  if (centre(nav, right) < PANEL_W.minCentre) nav = false;
+  return { navDocked: nav, rightDocked: right };
+}

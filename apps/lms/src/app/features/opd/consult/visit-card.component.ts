@@ -29,10 +29,11 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
       <span class="nd-card__label">{{ isToday() ? 'Today' : 'Visit' }}</span>
       @if (pinnable()) {
         <button type="button" class="vc__pin" (click)="togglePin.emit()" [attr.aria-pressed]="pinned()" data-pin
-                [title]="pinned() ? 'Pinned: stays open beside the consult' : 'Unpinned: folds to a rail'"
-                [attr.aria-label]="pinned() ? 'Unpin the patient card' : 'Pin the patient card open'">
+                [title]="autoCollapsed() ? 'Pinned · collapsed for space' : pinned() ? 'Pinned: stays open beside the consult' : 'Unpinned: folds to a rail'"
+                [attr.aria-label]="autoCollapsed() ? 'Pinned, collapsed for space. Unpin the patient card' : pinned() ? 'Unpin the patient card' : 'Pin the patient card open'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg>
         </button>
+        @if (autoCollapsed()) { <span class="vc__auto">Pinned · collapsed for space</span> }
       }
       @if (closable()) {
         <button type="button" class="vc__x" (click)="close.emit()" aria-label="Close the patient card">
@@ -189,6 +190,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__pin { order: 8; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--nd-line); background: none;
       color: var(--text-secondary); display: inline-grid; place-items: center; cursor: pointer; }
     .vc__pin[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .vc__auto { order: 7; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
     .vc__pin:focus-visible, .vc__x:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .vc__x { order: 9; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
 
@@ -209,6 +211,8 @@ export class ConsultVisitCardComponent {
   /** The pin (same icon + behaviour as the journey dock); hidden on phones. */
   readonly pinnable = input(true);
   readonly pinned = input(true);
+  /** Pinned, but folded because the centre needs the room (auto-balance). */
+  readonly autoCollapsed = input(false);
   readonly allergies = input<OpdPatientAllergy[]>([]);
   readonly pregnancy = input<OpdPregnancy | null>(null);
   readonly conditions = input<{ label: string }[]>([]);
