@@ -27,6 +27,7 @@ import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { summarizeRanges } from '../../../../shared/utils/reference-range';
 import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
+import { containerFlag, MISSING_CONTAINER_URL, MissingContainerResponse, missingContainerIndex } from '../../../../shared/utils/container-check';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
@@ -188,6 +189,10 @@ export class TestsComponent implements OnInit {
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
+  /** id → problem from GET /api/tests/missing-container (read-only check):
+   *  the Container cell flags a test with no usable container as an error to
+   *  fix — the tube grouping never guesses one (owner 2026-10-03). */
+  private readonly _missingContainer = signal<Map<string, string>>(new Map());
   /** The catalogue's FIRST load has answered (later reloads keep the grid). */
   private _testsLoaded = false;
   private readonly listHold = createLoadHold(true);
@@ -821,6 +826,15 @@ export class TestsComponent implements OnInit {
     const text = document.createElement('span');
     text.className = 'pf-tm-clamp2';
     text.textContent = tColor ? tColor.label : '—';
+    // Missing / unknown container: an error to fix, shown — never guessed.
+    const flag = !tColor && params.data?.id
+      ? containerFlag(this._missingContainer().get(params.data.id), params.data.sampleType) : null;
+    if (flag) {
+      text.textContent = flag.label;
+      text.classList.add('pf-tm-container-missing');
+      wrap.title = flag.title;
+      wrap.setAttribute('aria-label', `${flag.label}. ${flag.title}`);
+    }
     wrap.appendChild(text);
     return wrap;
   };
@@ -1020,7 +1034,18 @@ export class TestsComponent implements OnInit {
     this._selectedDept.set(key);
   }
 
+  private loadMissingContainers() {
+    this.api.get<MissingContainerResponse>(MISSING_CONTAINER_URL).subscribe({
+      next: r => {
+        this._missingContainer.set(missingContainerIndex(r));
+        this.gridApi?.refreshCells({ columns: ['tubeColor'], force: true });
+      },
+      error: () => { /* a diagnostic only — the grid works without it */ },
+    });
+  }
+
   private loadTests() {
+    this.loadMissingContainers();
     // status=all: every test, switched-off ones included (flagged isEnabled).
     this.api.get<Test[]>(testListUrl({ status: 'all' })).subscribe({
       next: l => { this._tests.set(l ?? []); this.onFirstLoad(); },
