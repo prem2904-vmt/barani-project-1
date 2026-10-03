@@ -7,10 +7,11 @@
 :host { display: block; }
 
 .cw {
-  position: fixed; inset: 0; z-index: 30;
+  // Ends above the bottom navbar (ND kit: the nav is always visible).
+  position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 30;
   display: flex; flex-direction: column; min-height: 0;
   background: var(--bg-primary, #f6f4fb); color: var(--text-primary);
-  padding: max(env(safe-area-inset-top), 0px) 0 env(safe-area-inset-bottom);
+  padding: max(env(safe-area-inset-top), 0px) 0 0;
 }
 .cw--loading { align-items: center; justify-content: center; }
 .cw__skel { display: flex; flex-direction: column; gap: 10px; width: min(640px, 90vw); }
