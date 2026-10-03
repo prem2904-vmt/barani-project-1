@@ -120,6 +120,11 @@ let seq = 0;
                       <span class="pr__file" [title]="f.name">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@if (f.kind === 'image') { <rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/> } @else { <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/> }</svg>
                         {{ f.name }}
+                        @if (!locked && canRemoveFiles()) {
+                          <button type="button" class="pr__fx" (click)="removeFile.emit({ key: p.key, id: f.id })" [attr.aria-label]="'Remove ' + f.name" data-rmfile>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          </button>
+                        }
                       </span>
                     }
                   </div>
@@ -201,6 +206,9 @@ let seq = 0;
     .pr__rec { width: 100%; min-height: 72px; font-size: 14px; resize: vertical; }
     .pr__err { font-size: 12.5px; color: var(--red-text, #dc2626); }
     .pr__files { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pr__fx { width: 22px; height: 22px; margin-right: -8px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+    .pr__fx:hover { color: var(--red-text, #dc2626); background: var(--nd-chip-bg); }
+    .pr__fx:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pr__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line);
       font-size: 12.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
     .pr__up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -230,6 +238,10 @@ export class ConsultProceduresComponent {
   readonly files = input<Record<string, { id: string; name: string; kind: string }[]>>({});
   /** Rows uploading right now. */
   readonly uploading = input<Record<string, boolean>>({});
+  /** Files can be removed (the consult isn't completed). */
+  readonly canRemoveFiles = input(false);
+  /** × on a file chip (the host deletes it, optimistically). */
+  readonly removeFile = output<{ key: string; id: string }>();
   readonly itemsChange = output<ConsultProcedureDraft[]>();
   /** Files picked for a saved procedure (the host uploads them with its id). */
   readonly upload = output<{ key: string; procedureId: string; files: File[] }>();

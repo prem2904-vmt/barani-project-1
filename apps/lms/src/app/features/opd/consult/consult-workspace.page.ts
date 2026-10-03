@@ -384,8 +384,8 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                       @if (st().procedures; as procs) {
                         <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
                                                [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'" [laterEnabled]="laterEnabled()"
-                                               [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()"
-                                               (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)"></pf-consult-procedures>
+                                               [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()" [canRemoveFiles]="editable()"
+                                               (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)" (removeFile)="removeProcFile($event.id)"></pf-consult-procedures>
                       } @else { <p class="psum">Procedures aren't available on this server yet.</p> }
                     }
                   </div>
@@ -1224,6 +1224,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly recordEnabled = computed(() => this.ws()?.features?.procedureRecord === true || (this.ws()?.procedures ?? []).some(p => 'record' in p));
   private readonly procUploads = signal<Record<string, { id: string; name: string; kind: string; procedureId?: string | null }[]>>({});
   readonly procUploading = signal<Record<string, boolean>>({});
+  /** Files removed here (hidden at once; restored if the server refuses). */
+  private readonly removedMedia = signal<ReadonlySet<string>>(new Set());
   readonly procFiles = computed(() => {
     const media = this.ws()?.media ?? [];
     const up = this.procUploads();
@@ -1231,10 +1233,26 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     for (const p of this.st().procedures ?? []) {
       const saved = p.id ? media.filter(m => m.procedureId === p.id) : [];
       const mine = Object.values(up).flat().filter(m => p.id && m.procedureId === p.id && !saved.some(x => x.id === m.id));
-      out[p.key] = [...saved, ...mine];
+      const gone = this.removedMedia();
+      out[p.key] = [...saved, ...mine].filter(f => !gone.has(f.id));
     }
     return out;
   });
+  /** × on a procedure file: hide it now, delete it, put it back if that fails
+   *  (404 = already gone, so it stays hidden). */
+  removeProcFile(id: string) {
+    const visitId = this.ws()?.visit.id;
+    if (!visitId || !this.editable()) return;
+    this.removedMedia.update(s => new Set([...s, id]));
+    this.consultApi.deleteMedia(visitId, id).subscribe({
+      error: e => {
+        const err = e as { status?: number; code?: string; message?: string };
+        if (err?.status === 404 || /not found/i.test(err?.message ?? '')) return;
+        this.removedMedia.update(s => { const n = new Set(s); n.delete(id); return n; });
+        this.toast.error(err?.code === 'consult_completed' ? 'The consult is completed — its files can no longer be removed.' : (err?.message || 'Could not remove the file'));
+      },
+    });
+  }
   uploadProcFiles(e: { key: string; procedureId: string; files: File[] }) {
     const visitId = this.ws()?.visit.id;
     if (!visitId) return;
