@@ -698,7 +698,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly favs = computed(() => {
     const on = new Set(this.st().lines.map(l => l.drug.id));
     const ids = Object.keys(this.usuals());
-    return ids.map(id => this.drugCache().get(id)).filter((d): d is ConsultDrugRef => !!d && !on.has(d.id)).slice(0, 7);
+    return ids.map(id => this.drugCache().get(id)).filter((d): d is ConsultDrugRef => !!d && !on.has(d.id)).slice(0, 3);
   });
   /** Header meta as separate bits (age / sex · MRN · token · department · doctor). */
   readonly metaBits = computed(() => {
