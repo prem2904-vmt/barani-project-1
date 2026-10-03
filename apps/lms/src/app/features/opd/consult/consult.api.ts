@@ -134,7 +134,7 @@ export interface ConsultProcedureBodyLine {
 }
 
 /** A consult file (photo / video / report) — `procedureId` when it belongs to a procedure's record. */
-export interface ConsultMediaItem { id: string; name: string; kind: 'image' | 'video' | 'file'; contentType?: string; size?: number; url?: string | null; procedureId?: string | null; }
+export interface ConsultMediaItem { id: string; name: string; kind: 'image' | 'video' | 'pdf' | 'file'; contentType?: string; size?: number; url?: string | null; procedureId?: string | null; }
 
 export interface ConsultDraftBody {
   answers?: Record<string, unknown>;
@@ -263,6 +263,11 @@ export class ConsultApi {
         if (!r?.success || !r.data) throw new Error(r?.message || r?.error || 'Upload failed');
         return r.data;
       }));
+  }
+  /** Remove a consult file (the id is its storage key). 404 = already gone;
+   *  400 / 409 consult_completed once the consult is completed. */
+  deleteMedia(visitId: string, key: string): Observable<unknown> {
+    return this.api.delete(`${CONSULT_API}/${visitId}/media?key=${encodeURIComponent(key)}`);
   }
   /** A fresh signed URL for a stored consult file. */
   mediaUrl(visitId: string, key: string): Observable<string> {

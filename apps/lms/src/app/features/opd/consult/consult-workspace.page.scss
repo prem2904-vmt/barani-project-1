@@ -68,11 +68,34 @@
 .cw__ndot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); }
 .cw__ndot--amber { background: #f59e0b; }
 .cw__icon { width: 36px; padding: 0; }
+// Compare: a split button — the main part opens compare, ▾ the one-tap presets.
+.cw__split { position: relative; display: inline-flex; height: 36px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+.cw__split--on { border-color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--nd-card-bg)); }
+.cw__split-main, .cw__split-more { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 100%; border: 0; background: none;
+  font: inherit; color: var(--text-primary); cursor: pointer; }
+.cw__split-main { padding: 0 8px 0 12px; border-radius: var(--nd-radius-sm, 10px) 0 0 var(--nd-radius-sm, 10px); }
+.cw__split-more { width: 28px; border-left: 1px solid var(--nd-line); border-radius: 0 var(--nd-radius-sm, 10px) var(--nd-radius-sm, 10px) 0; color: var(--text-secondary); }
+.cw__split--on .cw__split-main { color: var(--violet-text, #6d28d9); }
+.cw__split-main:hover, .cw__split-more:hover { background: var(--nd-chip-bg); }
+.cw__split-main:focus-visible, .cw__split-more:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.cw__pscrim { position: fixed; inset: 0; z-index: 59; }
+.cw__pmenu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: grid; width: 240px; padding: 8px; border-radius: 12px;
+  background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+:host-context(html.dark) .cw__pmenu { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
+.cw__pmh { padding: 4px 8px 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.cw__pmi { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: none;
+  font: inherit; font-size: 13.5px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.cw__pmi:hover:not(:disabled) { background: var(--nd-chip-bg); }
+.cw__pmi:disabled { color: var(--text-tertiary); cursor: default; }
+.cw__pmi[aria-checked='true'] { color: var(--violet-text, #6d28d9); font-weight: 600; }
+.cw__pmi:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.cw__pmc { min-width: 24px; height: 20px; padding: 0 8px; border-radius: 10px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary); background: var(--nd-chip-bg); }
 
 // ── Body: the centre, and the patient card when it docks ──
 .cw__body { flex: 1 1 auto; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0;
   padding: 16px; transition: grid-template-columns 150ms ease, column-gap 150ms ease; }
-.cw__body--docked { grid-template-columns: minmax(0, 1fr) 300px; column-gap: 16px; }
+.cw__body--docked { grid-template-columns: minmax(0, 1fr) 320px; column-gap: 16px; }
 @media (prefers-reduced-motion: reduce) { .cw__body { transition: none; } }
 .cw__centre, .cw__right { min-height: 0; }
 .cw__centre { display: flex; flex-direction: column; }
@@ -91,17 +114,17 @@
 // ── The prescription pad: rows in printed order (label · content), one form ──
 .pad { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 48px;
   scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent; }
-.prow { display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 16px; max-width: 976px; padding: 12px 0; border-bottom: 1px solid var(--nd-line); align-items: start; }
+.prow { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--nd-line); align-items: start; }
 .prow:last-child { border-bottom: 0; }
-.plab { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); text-align: left; cursor: pointer; }
+.plab { display: flex; align-items: center; gap: 4px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; color: var(--text-tertiary); text-align: left; cursor: pointer; }
 .plab b { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: none; color: var(--violet-text, #6d28d9); }
 .plab:hover { color: var(--text-primary); }
 .plab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
 .plab__chev { font-size: 10px; color: var(--text-tertiary); transition: transform 150ms ease; }
 .prow--coll .plab__chev { transform: rotate(-90deg); }
 @media (prefers-reduced-motion: reduce) { .plab__chev { transition: none; } }
-.pbody { display: grid; gap: 8px; min-width: 0; }
+.pbody { display: grid; gap: 8px; min-width: 0; max-width: 900px; }
 .psum { margin: 0; display: flex; align-items: center; min-height: 42px; font-size: 13px; color: var(--text-tertiary); overflow-wrap: anywhere; }
 // C/O: the one-line summary that opens the Findings drawer.
 .pfind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--nd-line);
@@ -132,7 +155,8 @@
 .pquick__c:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
 .pquick__c--set { border-style: dashed; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--nd-line)); color: var(--violet-text, #6d28d9); }
 // F/U chips (the same .o chip as every option group).
-.popts { display: flex; flex-wrap: wrap; gap: 8px; }
+.popts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 42px; }
+.phint { font-size: 12.5px; color: var(--text-tertiary); }
 .o { height: 34px; padding: 0 12px; border-radius: var(--nd-radius-chip, 8px); border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
   color: var(--text-secondary); cursor: pointer; }
 .o[aria-checked='true'] { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9); font-weight: 600;
@@ -307,6 +331,13 @@
   .cw__acts { order: 2; width: 100%; }
   .cw__acts > * { flex: 1; }
   .cw__lab { display: none; }
+  // The presets menu: a bottom sheet.
+  .cw__split { flex: 1; justify-content: center; }
+  .cw__split-main { flex: 1; }
+  .cw__pscrim { z-index: 59; background: rgba(15, 23, 42, 0.32); }
+  .cw__pmenu { position: fixed; top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); width: auto; padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0; }
+  .cw__pmi { min-height: 44px; }
   .cw__cmp, .cw__cta { justify-content: center; padding: 0 8px; }
   .cw__body, .cw__body--docked { display: flex; flex-direction: column; overflow-y: auto; padding: 8px; }
   .cw__centre { flex: none; overflow: visible; }

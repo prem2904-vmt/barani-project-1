@@ -33,6 +33,7 @@ import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
 import { rxSentence, usualFromJson } from './rx/rx-line';
 import { CompareConsult, compareMatrix } from './consult-compare';
+import { ComparePreset, CompareSection, PresetFile, PresetTrend, comparePresets, presetTitle } from './compare-presets';
 import type { RxUsual } from '../shared/rx-schedule';
 import { lineShort } from '../shared/rx-schedule';
 import { newRxLine } from '../shared/rx-schedule';
@@ -42,7 +43,7 @@ import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 import { JourneyDockComponent } from '../shared/journey-dock.component';
 import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.service';
 import {
-  ConsultSpace, Prefill, SPACES, balancePanels, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
+  ConsultSpace, Prefill, SPACES, balancePanels, recentResultsOf, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
 import { PadAddComponent } from './pad-add.component';
@@ -131,11 +132,28 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <pf-consult-page-assistant [assistantId]="w.assistant?.userId ?? null" [assistantName]="w.assistant?.name ?? null" [isAdmin]="isAdmin()"
                                            [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [iconOnly]="true"></pf-consult-page-assistant>
               }
-              <button type="button" class="nd-btn nd-btn--secondary cw__cmp cw__icon" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare
-                      title="Compare visits side by side" aria-label="Compare visits side by side">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
-                @if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
-              </button>
+              <span class="cw__split" [class.cw__split--on]="compareMode()">
+                <button type="button" class="cw__split-main" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare
+                        title="Compare visits side by side" aria-label="Compare visits side by side">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
+                  @if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
+                </button>
+                <button type="button" class="cw__split-more" (click)="presetsOpen.set(!presetsOpen())" [attr.aria-expanded]="presetsOpen()" aria-haspopup="menu"
+                        title="Compare presets" aria-label="Compare presets" data-compare-presets>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                @if (presetsOpen()) {
+                  <span class="cw__pscrim" (click)="presetsOpen.set(false)" aria-hidden="true"></span>
+                  <span class="cw__pmenu" role="menu" aria-label="Compare presets">
+                    <span class="cw__pmh">Compare</span>
+                    @for (p of presets(); track p.id) {
+                      <button type="button" class="cw__pmi" role="menuitem" [disabled]="!p.count" [attr.aria-checked]="activePreset()?.id === p.id" [attr.data-preset]="p.id" (click)="applyPreset(p)">
+                        <span>{{ p.label }}</span><span class="nd-num cw__pmc">{{ p.count }}</span>
+                      </button>
+                    }
+                  </span>
+                }
+              </span>
               @if (editable()) {
                 <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
               } @else if (w.visit.status === 'completed') {
@@ -156,7 +174,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                 </button>
                 @if (compareOn()) {
-                  <span class="cw__vt"><b>Compare · {{ compareItems().length }} picked</b><span class="cw__hide-sm">Tap dates on the timeline or records on the right to add or remove</span></span>
+                  <span class="cw__vt"><b>{{ activePreset() ? presetTitle(activePreset()!.label) : 'Compare' }} · {{ compareItems().length }} picked</b><span class="cw__hide-sm">Tap dates on the timeline or records on the right to add or remove</span></span>
                 } @else if (viewItem(); as it) {
                   <span class="cw__vt"><b>{{ it.title }}</b><span class="nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span></span>
                 }
@@ -182,26 +200,30 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                           </span>
                         }
                       </div>
-                      @if (m.findings.length) { <div class="cmx__sec" role="row"><span role="cell">Findings</span></div> }
-                      @for (r of m.findings; track r.key) {
+                      @if (showSec('findings') && m.findings.length) { <div class="cmx__sec" role="row"><span role="cell">Findings</span></div> }
+                      @for (r of showSec('findings') ? m.findings : []; track r.key) {
                         <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
                           @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
                         </div>
                       }
-                      <div class="cmx__sec" role="row"><span role="cell">Diagnosis</span></div>
-                      <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Diagnosis</span>
-                        @for (c of m.diagnosis.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.diagnosis.changed[i]">{{ c || '—' }}</span> }
-                      </div>
+                      @if (showSec('dx')) {
+                        <div class="cmx__sec" role="row"><span role="cell">Diagnosis</span></div>
+                        <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Diagnosis</span>
+                          @for (c of m.diagnosis.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.diagnosis.changed[i]">{{ c || '—' }}</span> }
+                        </div>
+                      }
                       <div class="cmx__sec" role="row"><span role="cell">Prescription</span></div>
                       @for (r of m.rx; track r.key) {
                         <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
                           @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell nd-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
                         </div>
                       } @empty { <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">—</span>@for (c of compareCols(); track c.id) { <span class="cmx__cell" role="cell">No medicines</span> }</div> }
-                      <div class="cmx__sec" role="row"><span role="cell">Tests</span></div>
-                      <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Tests</span>
-                        @for (c of m.tests.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.tests.changed[i]">{{ c || '—' }}</span> }
-                      </div>
+                      @if (showSec('tests')) {
+                        <div class="cmx__sec" role="row"><span role="cell">Tests</span></div>
+                        <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Tests</span>
+                          @for (c of m.tests.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.tests.changed[i]">{{ c || '—' }}</span> }
+                        </div>
+                      }
                     </div>
                   }
                   @if (resultGroups().length) {
@@ -272,7 +294,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- C/O -->
                 <section class="prow" [class.prow--coll]="isColl('find')" data-row="find">
                   <button type="button" class="plab" (click)="toggleRow('find')" [attr.aria-expanded]="!isColl('find')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Complaint &amp; findings <b>C/O</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>C/O</b> · Complaint
                   </button>
                   <div class="pbody">
                     @if (isColl('find')) { <p class="psum">{{ coText() || 'Nothing noted yet' }}</p> }
@@ -290,7 +312,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Dx -->
                 <section class="prow" [class.prow--coll]="isColl('dx')" data-row="dx">
                   <button type="button" class="plab" (click)="toggleRow('dx')" [attr.aria-expanded]="!isColl('dx')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Diagnosis <b>Dx</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Dx</b> · Diagnosis
                   </button>
                   <div class="pbody">
                     @if (isColl('dx')) { <p class="psum">{{ dxText(st().diagnoses) || 'None' }}</p> }
@@ -321,7 +343,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Rx -->
                 <section class="prow" [class.prow--coll]="isColl('rx')" data-row="rx">
                   <button type="button" class="plab" (click)="toggleRow('rx')" [attr.aria-expanded]="!isColl('rx')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Medicines <b>Rx</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Rx</b> · Medicines
                   </button>
                   <div class="pbody">
                     @if (isColl('rx')) { <p class="psum">{{ rxSum() }}</p> }
@@ -362,8 +384,8 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                       @if (st().procedures; as procs) {
                         <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
                                                [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'" [laterEnabled]="laterEnabled()"
-                                               [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()"
-                                               (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)"></pf-consult-procedures>
+                                               [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()" [canRemoveFiles]="editable()"
+                                               (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)" (removeFile)="removeProcFile($event.id)"></pf-consult-procedures>
                       } @else { <p class="psum">Procedures aren't available on this server yet.</p> }
                     }
                   </div>
@@ -372,7 +394,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Ix -->
                 <section class="prow" [class.prow--coll]="isColl('test')" data-row="test">
                   <button type="button" class="plab" (click)="toggleRow('test')" [attr.aria-expanded]="!isColl('test')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Tests <b>Ix</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Ix</b> · Tests
                   </button>
                   <div class="pbody">
                     @if (isColl('test')) { <p class="psum">{{ testSum() }}</p> }
@@ -404,7 +426,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- Adv -->
                 <section class="prow" [class.prow--coll]="isColl('adv')" data-row="adv">
                   <button type="button" class="plab" (click)="toggleRow('adv')" [attr.aria-expanded]="!isColl('adv')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Advice <b>Adv</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>Adv</b> · Advice
                   </button>
                   <div class="pbody">
                     @if (isColl('adv')) { <p class="psum">{{ advice().join(' · ') || 'None' }}</p> }
@@ -435,7 +457,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <!-- F/U -->
                 <section class="prow" [class.prow--coll]="isColl('fu')" data-row="fu">
                   <button type="button" class="plab" (click)="toggleRow('fu')" [attr.aria-expanded]="!isColl('fu')">
-                    <span class="plab__chev" aria-hidden="true">▾</span>Follow-up <b>F/U</b>
+                    <span class="plab__chev" aria-hidden="true">▾</span><b>F/U</b> · Follow-up
                   </button>
                   <div class="pbody">
                     @if (isColl('fu')) { <p class="psum">{{ fuLabel() }}</p> }
@@ -444,8 +466,8 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         @for (p of fuPicks; track p.label) {
                           <button type="button" class="o" role="radio" [attr.aria-checked]="p.days === st().followUpDays" [disabled]="!editable()" (click)="patch({ followUpDays: p.days })">{{ p.label }}</button>
                         }
+                        @if (st().followUpDays != null) { <span class="phint">{{ fuText() }}</span> }
                       </div>
-                      <p class="psum">{{ fuText() }}</p>
                     }
                   </div>
                 </section>
@@ -474,7 +496,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
                                    [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightDocked() || phone()" [pinned]="rightPinned()" [autoCollapsed]="rightPinned() && !rightDocked()" [pinnable]="!phone()"
                                    [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
-                                   [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
+                                   [watch]="watch()" [results]="recentResults()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
                                    (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="closeRight(true)" (togglePin)="toggleRightPin()"
                                    (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                    (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
@@ -727,6 +749,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   // ── The left card's records ────────────────────────────────────────
   readonly watch = computed(() => watchLine(this.dock.trends()));
+  /** The patient card's recent results (latest value per test, with H / L). */
+  readonly recentResults = computed(() => recentResultsOf(this.dock.trends(), 6));
   readonly items = computed<VisitItem[]>(() => {
     const w = this.ws();
     if (!w) return [];
@@ -769,6 +793,57 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     return out.sort((a, b) => a.date.localeCompare(b.date));
   });
   readonly matrix = computed(() => compareMatrix(this.compareCols()));
+
+  // ── Compare presets (the Compare ▾ menu) ───────────────────────────
+  readonly presetsOpen = signal(false);
+  readonly activePreset = signal<ComparePreset | null>(null);
+  readonly presetTitle = presetTitle;
+  showSec(s: CompareSection) { const p = this.activePreset(); return !p?.sections || p.sections.includes(s); }
+  /** What each preset would pick, from the data the consult already loads. */
+  readonly presets = computed<ComparePreset[]>(() => {
+    const w = this.ws();
+    if (!w) return [];
+    const tl = this.tl();
+    const reports: PresetFile[] = [], images: PresetFile[] = [];
+    for (const v of tl?.visits() ?? []) {
+      for (const o of v.orders) reports.push({ fileId: 'rep:' + o.id, date: journeyDayKey(o.createdAt), title: tl!.orderPanelName(o) });
+      for (const d of v.docs) (d.isImage ? images : reports).push({ fileId: 'doc:' + d.id, date: journeyDayKey(d.uploadedAt), title: d.fileName });
+    }
+    const trends: PresetTrend[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const t of (this.dock.trends() as any)?.tests ?? []) for (const p of t.parameters ?? []) {
+      const pts = [...(p.points ?? [])].map((x: { date: string; value: unknown; flag?: string | null }) => ({ date: journeyDayKey(String(x.date)), value: Number(x.value), flag: x.flag ?? null }))
+        .filter(x => Number.isFinite(x.value)).sort((a, b) => a.date.localeCompare(b.date));
+      trends.push({ key: `${t.testName}:${p.name ?? p.parameter ?? t.testName}`, title: p.name ?? p.parameter ?? t.testName, unit: p.unit ?? null, points: pts });
+    }
+    const consults = [{ visitId: w.visit.id, date: this.todayKey(), hasRx: this.st().lines.length > 0 },
+      ...(this.dock.history() ?? []).filter(h => h.visitId !== w.visit.id).map(h => ({ visitId: h.visitId, date: journeyDayKey(h.visitDate), hasRx: h.rx.length > 0 }))];
+    return comparePresets({ consults, reports, images, trends });
+  });
+  /** A preset: fill the picks and open the compare view straight away. */
+  applyPreset(p: ComparePreset) {
+    if (!p.count) return;
+    this.presetsOpen.set(false);
+    const items: VisitItem[] = [];
+    for (const k of p.picks) {
+      if (k.kind === 'consult') { const it = this.consultItem(k.visitId); if (it) items.push(it); }
+      else if (k.kind === 'file') items.push({ id: k.fileId, type: k.image ? 'img' : 'pdf', title: k.title, sub: '', compare: true, date: k.date, fileId: k.fileId });
+      else {
+        const last = k.trend.points[k.trend.points.length - 1];
+        const flag = String(last?.flag ?? '').toUpperCase();
+        items.push({ id: 'trend:' + k.trend.key, type: 'res', title: k.trend.title, sub: '', compare: true, date: last?.date ?? this.todayKey(), high: !!flag && flag !== 'N',
+          result: { value: String(last?.value ?? ''), unit: k.trend.unit, flag: last?.flag ?? null, points: k.trend.points.map(x => ({ date: x.date, value: x.value })) } });
+      }
+    }
+    // Reports need their summaries before the viewer can show them.
+    const tl = this.tl();
+    if (tl) tl.loadReports(tl.visits().flatMap(v => v.orders).filter(o => items.some(i => i.fileId === 'rep:' + o.id)));
+    this.compareItems.set(items);
+    this.activePreset.set(p);
+    this.viewItem.set(null);
+    this.compareOn.set(true);
+    queueMicrotask(() => this.syncCompareFiles());
+  }
   /** Picked lab results, one card per test (its trend over time). */
   readonly resultGroups = computed(() => {
     const m = new Map<string, VisitItem[]>();
@@ -820,6 +895,13 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     effect(() => {
       this.dock.selectedKey();
       untracked(() => { if (this.compareOn() && this.phone()) this.patientOpen.set(true); });
+    });
+    // Compare: picked reports show once their summaries arrive.
+    effect(() => {
+      const tl = this.tl();
+      if (!tl || !this.compareOn()) return;
+      tl.reportCache();
+      untracked(() => this.syncCompareFiles());
     });
     // The journey viewer follows the visit the dock selected (its reports load per day).
     effect(() => {
@@ -1144,6 +1226,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly recordEnabled = computed(() => this.ws()?.features?.procedureRecord === true || (this.ws()?.procedures ?? []).some(p => 'record' in p));
   private readonly procUploads = signal<Record<string, { id: string; name: string; kind: string; procedureId?: string | null }[]>>({});
   readonly procUploading = signal<Record<string, boolean>>({});
+  /** Files removed here (hidden at once; restored if the server refuses). */
+  private readonly removedMedia = signal<ReadonlySet<string>>(new Set());
   readonly procFiles = computed(() => {
     const media = this.ws()?.media ?? [];
     const up = this.procUploads();
@@ -1151,10 +1235,26 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     for (const p of this.st().procedures ?? []) {
       const saved = p.id ? media.filter(m => m.procedureId === p.id) : [];
       const mine = Object.values(up).flat().filter(m => p.id && m.procedureId === p.id && !saved.some(x => x.id === m.id));
-      out[p.key] = [...saved, ...mine];
+      const gone = this.removedMedia();
+      out[p.key] = [...saved, ...mine].filter(f => !gone.has(f.id));
     }
     return out;
   });
+  /** × on a procedure file: hide it now, delete it, put it back if that fails
+   *  (404 = already gone, so it stays hidden). */
+  removeProcFile(id: string) {
+    const visitId = this.ws()?.visit.id;
+    if (!visitId || !this.editable()) return;
+    this.removedMedia.update(s => new Set([...s, id]));
+    this.consultApi.deleteMedia(visitId, id).subscribe({
+      error: e => {
+        const err = e as { status?: number; code?: string; message?: string };
+        if (err?.status === 404 || /not found/i.test(err?.message ?? '')) return;
+        this.removedMedia.update(s => { const n = new Set(s); n.delete(id); return n; });
+        this.toast.error(err?.code === 'consult_completed' ? 'The consult is completed — its files can no longer be removed.' : (err?.message || 'Could not remove the file'));
+      },
+    });
+  }
   uploadProcFiles(e: { key: string; procedureId: string; files: File[] }) {
     const visitId = this.ws()?.visit.id;
     if (!visitId) return;
@@ -1358,13 +1458,16 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   togglePatient() { if (this.rightDocked() && !this.phone()) return; this.findingsOpen.set(false); this.patientOpen.update(v => !v); }
   private pinKey(which: 'Right') { return `pf.opd.consult${which}Pin.${this.auth.user()?.id || 'anon'}`; }
   private savePin(which: 'Right', v: boolean) { try { localStorage.setItem(this.pinKey(which), v ? '1' : '0'); } catch { /* private mode */ } }
-  /** Default: unpinned (owner) — the panel opens over the centre. */
+  /** Default: pinned on wide screens (the right column then fills the space
+   *  beside the pad); the doctor's own unpin / pin is remembered. */
   private readPin(which: 'Right'): boolean {
-    try { return localStorage.getItem(this.pinKey(which)) === '1'; } catch { return false; }
+    const wide = typeof matchMedia === 'function' && matchMedia('(min-width: 1280px)').matches;
+    try { const v = localStorage.getItem(this.pinKey(which)); return v == null ? wide : v === '1'; } catch { return wide; }
   }
   @HostListener('document:keydown.escape')
   onEsc() {
     if (this.completeOpen()) return;
+    if (this.presetsOpen()) { this.presetsOpen.set(false); return; }
     if (this.findingsOpen()) { this.findingsOpen.set(false); return; }
     if (this.patientOpen()) { this.closeRight(true); return; }
     if (this.compareOn()) this.leaveCompare();
@@ -1373,6 +1476,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
    *  latest earlier one + anything already picked); pressing it again leaves. */
   toggleCompareMode() { if (this.compareOn()) this.leaveCompare(); else this.enterCompare(); }
   enterCompare() {
+    this.activePreset.set(null);
     this.viewItem.set(null);
     const w = this.ws();
     if (w) {
@@ -1418,7 +1522,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.compareItems.update(l => (l.some(x => x.id === it.id) ? l.filter(x => x.id !== it.id) : [...l, it]));
     if (this.compareOn()) this.syncCompareFiles();
   }
-  clearCompare() { this.compareItems.set([]); this.syncCompareFiles(); }
+  clearCompare() { this.compareItems.set([]); this.activePreset.set(null); this.syncCompareFiles(); }
   private leaveCompare() {
     if (!this.compareOn()) return;
     this.compareOn.set(false);

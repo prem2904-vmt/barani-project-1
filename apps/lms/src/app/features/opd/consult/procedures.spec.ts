@@ -149,6 +149,13 @@ describe('<pf-consult-procedures> — list + detail (consult v6)', () => {
     expect(el.querySelector('[data-record]')).toBeTruthy();
     expect(el.querySelector('[data-upload]')).toBeTruthy();
     expect((el.querySelector('input[capture]') as HTMLInputElement).accept).toBe('image/*');
+    f.componentRef.setInput('files', { k1: [{ id: 'm1', name: 'scope.jpg', kind: 'image' }] }); f.detectChanges();
+    expect(el.querySelector('[data-rmfile]')).toBeNull();
+    f.componentRef.setInput('canRemoveFiles', true); f.detectChanges();
+    const got: { key: string; id: string }[] = [];
+    f.componentInstance.removeFile.subscribe(x => got.push(x));
+    (el.querySelector('[data-rmfile]') as HTMLButtonElement).click();
+    expect(got).toEqual([{ key: 'k1', id: 'm1' }]);
   });
   it('locked (admin hasn\'t allowed changes): the price shows with a lock and "Price set by the admin"', () => {
     const { el } = render({ items: [row()] });

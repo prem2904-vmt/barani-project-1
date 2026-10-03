@@ -120,6 +120,11 @@ let seq = 0;
                       <span class="pr__file" [title]="f.name">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@if (f.kind === 'image') { <rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/> } @else { <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/> }</svg>
                         {{ f.name }}
+                        @if (!locked && canRemoveFiles()) {
+                          <button type="button" class="pr__fx" (click)="removeFile.emit({ key: p.key, id: f.id })" [attr.aria-label]="'Remove ' + f.name" data-rmfile>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          </button>
+                        }
                       </span>
                     }
                   </div>
@@ -150,7 +155,7 @@ let seq = 0;
       @if (options().length) {
         <pf-pad-add placeholder="Add a procedure…" [options]="optionList()" [quick]="quickList()" quickLabel="Common procedures" (pick)="addById($event.id)"></pf-pad-add>
       } @else {
-        <p class="pr__muted">No procedures are set up for this department yet (OPD Master → services, category “Procedure”).</p>
+        <span class="pr__none">No procedures are set up for this department yet · OPD Master → services → “Procedure”</span>
       }
     } @else if (!items().length) { <p class="pr__muted">No procedures.</p> }
   `,
@@ -201,6 +206,9 @@ let seq = 0;
     .pr__rec { width: 100%; min-height: 72px; font-size: 14px; resize: vertical; }
     .pr__err { font-size: 12.5px; color: var(--red-text, #dc2626); }
     .pr__files { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pr__fx { width: 22px; height: 22px; margin-right: -8px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+    .pr__fx:hover { color: var(--red-text, #dc2626); background: var(--nd-chip-bg); }
+    .pr__fx:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pr__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line);
       font-size: 12.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
     .pr__up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -209,6 +217,7 @@ let seq = 0;
     .pr__badge { justify-self: start; display: inline-flex; align-items: center; min-height: 28px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
       color: var(--green-text, #047857); background: color-mix(in srgb, #34d399 14%, transparent); }
     .pr__badge--later { color: var(--blue-text, #1d4ed8); background: color-mix(in srgb, #60a5fa 14%, transparent); }
+    .pr__none { display: flex; align-items: center; min-height: 42px; font-size: 12.5px; color: var(--text-tertiary); }
     .pr__muted { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
     @media (max-width: 760px) { .pr__field, .pr__rec { font-size: 16px; } .pr__qty { margin-left: 0; } }
   `],
@@ -230,6 +239,10 @@ export class ConsultProceduresComponent {
   readonly files = input<Record<string, { id: string; name: string; kind: string }[]>>({});
   /** Rows uploading right now. */
   readonly uploading = input<Record<string, boolean>>({});
+  /** Files can be removed (the consult isn't completed). */
+  readonly canRemoveFiles = input(false);
+  /** × on a file chip (the host deletes it, optimistically). */
+  readonly removeFile = output<{ key: string; id: string }>();
   readonly itemsChange = output<ConsultProcedureDraft[]>();
   /** Files picked for a saved procedure (the host uploads them with its id). */
   readonly upload = output<{ key: string; procedureId: string; files: File[] }>();

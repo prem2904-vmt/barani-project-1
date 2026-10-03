@@ -711,18 +711,7 @@ export class PatientTimelineComponent implements OnDestroy {
     effect(() => {
       const v = this.selectedVisit();
       if (!v) return;
-      untracked(() => {
-        for (const o of v.orders) {
-          if (o.id in this.reportCache()) continue;
-          this.reportCache.update(m => ({ ...m, [o.id]: null }));
-          // Summary (no rendered snapshot): the list only needs "is there a
-          // report"; opening one reads the full report (buildReportUrl).
-          this.api.get<Report | null>(reportByOrderSummaryUrl(o.id)).subscribe({
-            next: r => { if (r) this.reportCache.update(m => ({ ...m, [o.id]: r })); },
-            error: () => { /* leave null */ },
-          });
-        }
-      });
+      untracked(() => this.loadReports(v.orders));
     });
     // On visit change, default the right panel to the visit journey (not a file).
     effect(() => {
@@ -775,6 +764,19 @@ export class PatientTimelineComponent implements OnDestroy {
   private dayKey(iso: string): string {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  /** Fetch the report summary of these orders once each (the list only needs
+   *  "is there a report"; opening one reads the full report). Public so a
+   *  host (the OPD consult's compare presets) can ask for every visit's. */
+  loadReports(orders: readonly Order[]) {
+    for (const o of orders) {
+      if (o.id in this.reportCache()) continue;
+      this.reportCache.update(m => ({ ...m, [o.id]: null }));
+      this.api.get<Report | null>(reportByOrderSummaryUrl(o.id)).subscribe({
+        next: r => { if (r) this.reportCache.update(m => ({ ...m, [o.id]: r })); },
+        error: () => { /* leave null */ },
+      });
+    }
   }
   tests(o: Order): OrderTest[] { return (o.samples ?? []).flatMap(s => s.tests ?? []); }
   reportFor(orderId: string): Report | null { return this.reportCache()[orderId] ?? null; }
