@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import type { ConsultProcedureDraft, ConsultProcedureOption } from './consult.api';
-import { checkProcedurePrice, parsePrice, procedureLineLabel, proceduresBody, proceduresTotal } from './procedure-rules';
+import { checkProcedurePrice, needsPriceReason, parsePrice, priceHint, priceRange, procedureLineLabel, proceduresBody, proceduresTotal } from './procedure-rules';
 import { ConsultProceduresComponent } from './procedure-editor.component';
 import { ConsultEditState, draftBody, procedureDraftOf, stepDone, stepSummary } from './consult-state';
 import { ConsultCompleteSheetComponent, deskDueText } from './complete-sheet.component';
-import { procedurePrintText } from './rx-print';
+import { laterPrintText, procedurePrintText } from './rx-print';
 
 /**
  * Consult procedures (owner: "pay after consult has no way to collect"). The
@@ -103,59 +103,94 @@ describe('Front-desk money line on Complete', () => {
   });
 });
 
-describe('<pf-consult-procedures> — the doctor\'s picker', () => {
-  function render(inputs: { items?: ConsultProcedureDraft[]; pricing?: unknown; readonly?: boolean } = {}) {
+describe('<pf-consult-procedures> — list + detail (consult v6)', () => {
+  function render(inputs: { items?: ConsultProcedureDraft[]; pricing?: unknown; readonly?: boolean; later?: boolean } = {}) {
     const f = TestBed.createComponent(ConsultProceduresComponent);
     f.componentRef.setInput('options', [ENDO, WAX]);
     f.componentRef.setInput('items', inputs.items ?? []);
     f.componentRef.setInput('pricing', inputs.pricing ?? OFF);
     f.componentRef.setInput('readonly', inputs.readonly ?? false);
+    f.componentRef.setInput('laterEnabled', inputs.later ?? false);
     const emitted: ConsultProcedureDraft[][] = [];
-    f.componentInstance.itemsChange.subscribe(v => emitted.push(v));
+    f.componentInstance.itemsChange.subscribe(v => { emitted.push(v); f.componentRef.setInput('items', v); });
     f.detectChanges();
     return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance, emitted };
   }
-  it('shows the department\'s procedures with their fixed price; a tap adds one at the rule price', () => {
-    const { el, emitted } = render();
-    const tiles = el.querySelectorAll('[data-proc]');
-    expect(tiles.length).toBe(2);
-    expect(tiles[0].textContent).toContain('Diagnostic nasal endoscopy');
-    expect(tiles[0].textContent).toContain('1,500');
-    (tiles[1] as HTMLButtonElement).click();
+  it('the add bar searches this department\'s procedures with their preset price; Enter adds the match at the rule price', () => {
+    const { el, f, c, emitted } = render();
+    c.onQuery('wax'); f.detectChanges();
+    const hits = el.querySelectorAll('[data-proc]');
+    expect(hits.length).toBe(1);
+    expect(hits[0].textContent).toContain('Ear wax removal');
+    expect(hits[0].textContent).toContain('400');
+    c.onKey(new KeyboardEvent('keydown', { key: 'Enter' })); f.detectChanges();
     expect(emitted[0]).toHaveLength(1);
-    expect(emitted[0][0]).toMatchObject({ serviceId: 's-wax', qty: 1, price: 400, rulePrice: 400, status: 'draft' });
+    expect(emitted[0][0]).toMatchObject({ serviceId: 's-wax', qty: 1, price: 400, rulePrice: 400, status: 'draft', when: 'now' });
+    expect(el.querySelector('.pr__row')!.textContent).toContain('Do now');
     expect(el.querySelector('select')).toBeNull();
   });
-  it('setting off: the price is read-only (no input)', () => {
+  it('locked (admin hasn\'t allowed changes): the price shows with a lock and "Price set by the admin"', () => {
     const { el } = render({ items: [row()] });
-    expect(el.querySelector('.pr__price')).toBeNull();
-    expect(el.querySelector('.pr__fixed')!.textContent).toContain('1,500');
+    expect(el.querySelector('.pr__pin')).toBeNull();
+    expect(el.querySelector('[data-locked]')!.textContent).toContain('1,500');
+    expect(el.querySelector('[data-locked] svg')).toBeTruthy();
+    expect(el.querySelector('[data-hint]')!.textContent).toContain('Price set by the admin');
   });
-  it('setting on: the doctor types a price within the cap; over the cap shows why and is not emitted', () => {
+  it('allowed with a cap: the range shows inline; over the cap says why and is not emitted; a change needs a reason', () => {
     const { el, f, c, emitted } = render({ items: [row()], pricing: ON_20 });
-    const input = el.querySelector('.pr__price') as HTMLInputElement;
-    expect(input).toBeTruthy();
+    expect(el.querySelector('[data-hint]')!.textContent).toContain('Preset ₹1,500 · allowed ₹1,200 to ₹1,800');
     c.onPrice(row(), '1000'); f.detectChanges();
     expect(emitted).toHaveLength(0);
-    expect(el.querySelector('.pr__err')!.textContent).toContain('at most 20%');
-    c.onPrice(row(), '1300'); f.detectChanges();
-    expect(emitted.at(-1)![0].price).toBe(1300);
-    expect(el.querySelector('.pr__err')).toBeNull();
+    expect(el.querySelector('[data-hint]')!.textContent).toContain('at most 20%');
+    c.onPrice(row(), '1800'); f.detectChanges();
+    expect(emitted.at(-1)![0].price).toBe(1800);
+    c.settlePrice('k1'); f.detectChanges();
+    expect(el.querySelector('[data-hint]')!.textContent).toContain('you set +20%');
+    expect(el.querySelector('[data-reason]')).toBeTruthy();
+    expect(c.needsReason(emitted.at(-1)![0])).toBe(true);
+    expect(needsPriceReason({ price: 1800, rulePrice: 1500, priceReason: 'Both sides', status: 'draft' })).toBe(false);
+    f.componentRef.setInput('showReasonErr', true); f.detectChanges();
+    expect(el.textContent).toContain('Give a reason for the price change.');
+  });
+  it('no cap: any amount allowed', () => {
+    expect(priceHint(2000, 2000, ON_ANY)).toBe('Preset ₹2,000 · any amount allowed');
+    expect(priceRange(2000, ON_20)).toEqual({ lo: 1600, hi: 2400 });
+    expect(priceRange(2000, OFF)).toBeNull();
+  });
+  it('Book for later (server supports it): preferred window, prep note and the desk badge; not on today\'s bill', () => {
+    const { el, f, emitted } = render({ items: [row()], later: true });
+    (el.querySelector('[data-when="later"]') as HTMLButtonElement).click(); f.detectChanges();
+    expect(emitted.at(-1)![0]).toMatchObject({ when: 'later', preferredWithin: 'Within 2 weeks' });
+    expect(el.textContent).toContain('Front desk books the date · paid on the procedure day');
+    const prep = el.querySelector('[data-prep]') as HTMLInputElement;
+    prep.value = 'Nothing to eat for 8 hours'; prep.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(emitted.at(-1)![0].prepNote).toBe('Nothing to eat for 8 hours');
+    expect(proceduresTotal(emitted.at(-1)!)).toBe(0);
+    expect(proceduresBody(emitted.at(-1)!, true)[0]).toMatchObject({ when: 'later', preferredWithin: 'Within 2 weeks', prepNote: 'Nothing to eat for 8 hours' });
+    expect('when' in proceduresBody(emitted.at(-1)!, false)[0]).toBe(false);
+  });
+  it('older server (no features.procedureLater): no Book for later', () => {
+    const { el } = render({ items: [row()] });
+    expect(el.querySelector('[data-when]')).toBeNull();
   });
   it('qty, side and remove', () => {
     const { el, emitted } = render({ items: [row()] });
     (el.querySelector('[aria-label="More Diagnostic nasal endoscopy"]') as HTMLButtonElement).click();
     expect(emitted.at(-1)![0].qty).toBe(2);
-    const sides = el.querySelectorAll('[role="radio"]');
+    const sides = el.querySelectorAll('[aria-label="Side for Diagnostic nasal endoscopy"] [role="radio"]');
     (sides[1] as HTMLButtonElement).click();
     expect(emitted.at(-1)![0].side).toBe('left');
     (el.querySelector('[aria-label="Remove Diagnostic nasal endoscopy"]') as HTMLButtonElement).click();
     expect(emitted.at(-1)).toEqual([]);
   });
-  it('read-only (completed consult): no picker, no edits', () => {
+  it('read-only (completed consult): no add bar, no edits', () => {
     const { el } = render({ items: [row({ status: 'billed' })], readonly: true });
-    expect(el.querySelector('[data-proc]')).toBeNull();
+    expect(el.querySelector('.pr__q')).toBeNull();
     expect(el.querySelector('.pr__x')).toBeNull();
-    expect(el.textContent).toContain('Billed to the front desk.');
+    expect(el.textContent).toContain('Billed to the front desk');
+  });
+  it('the slip prints a later procedure with its window and preparation', () => {
+    expect(laterPrintText({ name: 'Upper GI endoscopy', preferredWithin: 'Within 2 weeks', prepNote: 'Nothing to eat for 8 hours before' }))
+      .toBe('Upper GI endoscopy — within 2 weeks. Preparation: Nothing to eat for 8 hours before');
   });
 });

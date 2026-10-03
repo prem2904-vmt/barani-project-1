@@ -64,7 +64,10 @@ export function stepDone(step: ConsultStep, s: ConsultEditState): boolean {
   }
 }
 
-export function draftBody(s: ConsultEditState, followUpDate: string | null, start?: Date): ConsultDraftBody {
+/** Server capabilities the body depends on (feature-detected from the workspace). */
+export interface BodyOpts { procedureLater?: boolean }
+
+export function draftBody(s: ConsultEditState, followUpDate: string | null, start?: Date, opts: BodyOpts = {}): ConsultDraftBody {
   return {
     answers: s.answers,
     chiefComplaint: s.chiefComplaint.trim() || null,
@@ -75,7 +78,7 @@ export function draftBody(s: ConsultEditState, followUpDate: string | null, star
     followUpDate,
     rx: s.lines.map(l => toDto(l, start)),
     investigationItems: s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) })),
-    ...(s.procedures ? { procedures: proceduresBody(s.procedures) } : {}),
+    ...(s.procedures ? { procedures: proceduresBody(s.procedures, !!opts.procedureLater) } : {}),
   };
 }
 
@@ -95,14 +98,14 @@ export const SECTION_OF: Record<keyof ConsultEditState, DraftSection> = {
 /** The PATCH body for only the given dirty sections — the UI mirror of mw's
  *  ApplyPatchAsync null-section-skipping. A section not in `dirty` is simply
  *  left off the body (server: untouched). */
-export function draftPatchBody(dirty: ReadonlySet<DraftSection>, s: ConsultEditState, followUpDate: string | null, start?: Date): ConsultDraftPatchBody {
+export function draftPatchBody(dirty: ReadonlySet<DraftSection>, s: ConsultEditState, followUpDate: string | null, start?: Date, opts: BodyOpts = {}): ConsultDraftPatchBody {
   const body: ConsultDraftPatchBody = {};
   if (dirty.has('answers')) body.answers = s.answers;
   if (dirty.has('diagnoses')) body.diagnoses = s.diagnoses;
   if (dirty.has('rx')) body.rx = s.lines.map(l => toDto(l, start));
   if (dirty.has('investigations'))
     body.investigationItems = s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) }));
-  if (dirty.has('procedures') && s.procedures) body.procedures = proceduresBody(s.procedures);
+  if (dirty.has('procedures') && s.procedures) body.procedures = proceduresBody(s.procedures, !!opts.procedureLater);
   if (dirty.has('notes'))
     body.notes = {
       chiefComplaint: s.chiefComplaint.trim() || null, advice: s.advice.trim() || null,
@@ -139,6 +142,7 @@ export function procedureDraftOf(p: ConsultProcedureDto): ConsultProcedureDraft 
   return {
     key: 'p' + (++procSeq), id: p.id, serviceId: p.serviceId, name: p.name, code: p.code ?? null, qty: p.qty, rulePrice: p.rulePrice, price: p.price,
     priceReason: p.priceReason ?? null, priceSetByName: p.priceSetByName ?? null, side: p.side ?? null, note: p.note ?? null, status: p.status,
+    when: p.when === 'later' ? 'later' : 'now', preferredWithin: p.preferredWithin ?? null, prepNote: p.prepNote ?? null,
   };
 }
 

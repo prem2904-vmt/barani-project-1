@@ -25,7 +25,7 @@ export interface RxPrintInput {
   lines: ConsultRxLine[];
   tests: { name: string }[];
   /** Procedures done in the consult (no prices — the bill is the desk's). */
-  procedures?: { name: string; side?: string | null; qty?: number; note?: string | null }[];
+  procedures?: { name: string; side?: string | null; qty?: number; note?: string | null; when?: 'now' | 'later'; preferredWithin?: string | null; prepNote?: string | null }[];
   advice?: string | null;
   followUp?: string | null;
   lang?: string;
@@ -57,6 +57,11 @@ export function rxPrintDots(lines: readonly ConsultRxLine[]): { dots: [number, n
 export function procedurePrintText(p: { name: string; side?: string | null; qty?: number; note?: string | null }): string {
   const side = p.side === 'both' ? 'both sides' : p.side ? p.side : null;
   return p.name + (side ? ` (${side})` : '') + ((p.qty ?? 1) > 1 ? ` × ${p.qty}` : '') + (p.note?.trim() ? ` — ${p.note.trim()}` : '');
+}
+
+/** "Upper GI endoscopy — within 2 weeks. Preparation: nothing to eat for 8 hours before". */
+export function laterPrintText(p: { name: string; preferredWithin?: string | null; prepNote?: string | null }): string {
+  return p.name + (p.preferredWithin ? ` — ${p.preferredWithin.toLowerCase()}` : '') + (p.prepNote?.trim() ? `. Preparation: ${p.prepNote.trim()}` : '');
 }
 
 export function buildRxPdf(inp: RxPrintInput): jsPDF {
@@ -137,7 +142,8 @@ export function buildRxPdf(inp: RxPrintInput): jsPDF {
     y = ((doc as any).lastAutoTable?.finalY ?? y) + 16;
   }
   block('Investigations', inp.tests.map(t => t.name).join(', '));
-  block('Procedures done', (inp.procedures ?? []).map(procedurePrintText).join('\n'));
+  block('Procedures done', (inp.procedures ?? []).filter(p => p.when !== 'later').map(procedurePrintText).join('\n'));
+  block('Procedure to book at the front desk', (inp.procedures ?? []).filter(p => p.when === 'later').map(laterPrintText).join('\n'));
   block('Advice', inp.advice);
   block('Follow-up', inp.followUp);
 
