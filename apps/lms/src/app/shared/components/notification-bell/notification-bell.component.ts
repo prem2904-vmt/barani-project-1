@@ -453,6 +453,9 @@ export class NotificationBellComponent implements OnInit {
       case 'sample_rejection': return 'amber';
       case 'tat_breach':       return 'amber';
       case 'report_ready':     return 'emerald';
+      // Urgent-priority order ready to report — amber (same urgency tone as
+      // tat_breach/sample_rejection), distinct from the routine report_ready.
+      case 'urgent_report_ready': return 'amber';
       default:                 return 'violet';
     }
   }
@@ -463,6 +466,7 @@ export class NotificationBellComponent implements OnInit {
       case 'critical_value':   return 'critical value';
       case 'sample_rejection': return 'sample rejected';
       case 'report_ready':     return 'report ready';
+      case 'urgent_report_ready': return 'urgent — ready to report';
       case 'tat_breach':       return 'TAT breach';
       case 'result_rejected':  return 'result rejected';
       default:                 return t.replace(/_/g, ' ');
@@ -479,6 +483,9 @@ export class NotificationBellComponent implements OnInit {
         return '<path d="M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z"/><path d="M2 22 22 2"/>';
       // report ready — file check
       case 'report_ready':
+      // urgent order ready to report — same file-check (it IS a report-ready
+      // moment), amber tone above is what marks it urgent.
+      case 'urgent_report_ready':
         return '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>';
       // TAT breach — clock with alert
       case 'tat_breach':

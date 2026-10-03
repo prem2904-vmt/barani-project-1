@@ -40,6 +40,16 @@ describe('notificationRoute', () => {
       .toEqual({ commands: ['/lab/collect'], queryParams: { orderId: 'o9' } });
   });
 
+  // Work Register #6: urgent_report_ready shares referenceType 'order' with
+  // the Collect-bound events above, so only the TYPE check routes it right
+  // — to the report queue, not Collect (nothing left to collect).
+  it('routes urgent_report_ready to the report queue, not Collect', () => {
+    expect(notificationRoute('urgent_report_ready', 'order', 'o9', false))
+      .toEqual({ commands: ['/reports'] });
+    expect(notificationRoute('lms.urgent_report_ready', 'order', 'o9', false))
+      .toEqual({ commands: ['/reports'] });
+  });
+
   it('routes a bill to the frontdesk queue', () => {
     expect(notificationRoute('refund_owed', 'bill', 'b1', false))
       .toEqual({ commands: ['/frontdesk'] });

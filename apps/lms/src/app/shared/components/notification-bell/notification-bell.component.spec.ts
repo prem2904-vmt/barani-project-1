@@ -55,6 +55,11 @@ describe('NotificationBellComponent — type keys', () => {
     expect(c.typeLabel('lms.tat_breach')).toBe('TAT breach');
     expect(c.typeLabel('lms.user_created')).toBe('user created');
     expect(c.toneFor('critical_value')).toBe('rose');
+    // Work Register #6: urgent_report_ready is amber (distinct from the
+    // routine report_ready's emerald) and shares report_ready's icon.
+    expect(c.toneFor('urgent_report_ready')).toBe('amber');
+    expect(c.typeLabel('urgent_report_ready')).toBe('urgent — ready to report');
+    expect(c.pathFor('urgent_report_ready')).toBe(c.pathFor('report_ready'));
   });
 
   it('renders prefixed and unprefixed rows identically in the list', () => {
