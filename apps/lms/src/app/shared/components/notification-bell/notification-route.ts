@@ -32,6 +32,13 @@ export function notificationRoute(
   if (t === 'dispatch_not_received') {
     return { commands: ['/lab/receive'] };
   }
+  // Urgent order ready to report (Work Register #6): referenceType is the
+  // generic 'order' (shared with Collect-bound events like billed_not_collected
+  // above), so the TYPE decides here — the desk's actionable screen is the
+  // report queue, not Collect (nothing left to collect on a validated order).
+  if (t === 'urgent_report_ready') {
+    return { commands: ['/reports'] };
+  }
 
   switch (referenceType) {
     case 'report':           return { commands: id ? ['/reports/view', id] : ['/reports'] };
