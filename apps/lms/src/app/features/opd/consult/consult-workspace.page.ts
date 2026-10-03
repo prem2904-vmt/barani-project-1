@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild,
+  ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { DOCUMENT, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
@@ -71,8 +71,11 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
  *    conflicts, conditions, running medicines, a watch line) and the
  *    selected visit's records; a record opens in the centre viewer. Compare
  *    mode (the band's Compare) turns a tap into select / deselect.
- *  - Tablet: the nav is a 64px icon rail and the patient card a slide-over;
- *    phone: the nav is an icon strip on top and the patient card a sheet.
+ *  - Both side cards pin (per user; pinned by default at ≥1280px): an
+ *    unpinned nav folds to a 64px icon rail; an unpinned patient card to a
+ *    56px rail of badges whose tap opens the card as an overlay (outside tap
+ *    / Esc closes it; it stays open while comparing). Phone: the nav is an
+ *    icon strip on top and the patient card a sheet.
  *  - The journey dock above the bottom navbar (which stays visible); a date
  *    there selects the visit the left card shows.
  * Autosave, the Complete gates, print and share are unchanged. Complete only
@@ -141,12 +144,15 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           </div>
         </header>
 
-        <div class="cw__body">
+        <div class="cw__body" [class.cw__body--navrail]="!navPinned()" [class.cw__body--rightrail]="!rightPinned()">
           <!-- ── Left: the consult navigation (spaces, in any order) ── -->
           <nav class="nd-card cw__nav" aria-label="Consult">
             <header class="nd-card__head cw__navh">
               <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></svg></span>
               <span class="nd-card__label">Consult</span>
+              <span class="nd-card__spacer"></span>
+              <button type="button" class="cw__pin" (click)="toggleNavPin()" [attr.aria-pressed]="navPinned()" data-nav-pin
+                      title="Pinned: the full list · unpin to fold it to icons" aria-label="Unpin the consult list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg></button>
             </header>
             <div class="cw__navl" role="tablist" aria-orientation="vertical" aria-label="Consult">
               @for (t of spaces; track t.id) {
@@ -167,6 +173,9 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                   @if (count(t.id); as c) { <span class="cw__tc nd-num">{{ c }}</span> }
                 </button>
               }
+            </div>
+            <div class="cw__navfoot">
+              <button type="button" class="cw__pin" (click)="toggleNavPin()" [attr.aria-pressed]="navPinned()" title="Pin the consult list open" aria-label="Pin the consult list open"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7l2-3.2Z"/></svg></button>
             </div>
           </nav>
 
@@ -467,13 +476,39 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           </main>
 
           <!-- ── Right: the patient card (Always strip + the visit's records) ── -->
-          @if (patientOpen()) { <div class="cw__scrim" (click)="patientOpen.set(false)" aria-hidden="true"></div> }
-          <aside class="nd-card cw__right" [class.cw__right--open]="patientOpen()" aria-label="Patient records">
+          @if (!rightPinned() && !phone()) {
+            <nav class="nd-card cw__rail" aria-label="Patient card (folded)">
+              <button type="button" class="cw__rb" [class.cw__rb--red]="allergies().length" (click)="openRight()" [attr.aria-label]="'Allergies: ' + (allergies().length || 'none')" title="Allergies">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                @if (allergies().length) { <span class="cw__rdot"></span> }
+              </button>
+              <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Conditions: ' + w.conditions.length" title="Conditions">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                @if (w.conditions.length) { <span class="cw__rn nd-num">{{ w.conditions.length }}</span> }
+              </button>
+              <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Running medicines: ' + w.currentMedicines.length" title="Medicines">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+                @if (w.currentMedicines.length) { <span class="cw__rn nd-num">{{ w.currentMedicines.length }}</span> }
+              </button>
+              @if (watch()) {
+                <button type="button" class="cw__rb cw__rb--amber" (click)="openRight()" [attr.aria-label]="'Watch: ' + watch()" [title]="'Watch: ' + watch()">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+                  <span class="cw__rdot cw__rdot--amber"></span>
+                </button>
+              }
+              <button type="button" class="cw__rb" (click)="openRight()" [attr.aria-label]="'Reports and results: ' + reportCount()" title="Reports">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                @if (reportCount()) { <span class="cw__rn nd-num">{{ reportCount() }}</span> }
+              </button>
+            </nav>
+          }
+          @if (rightOverlay()) { <div class="cw__scrim" (click)="closeRight()" aria-hidden="true"></div> }
+          <aside class="nd-card cw__right" [class.cw__right--float]="!rightPinned() || phone()" [class.cw__right--open]="rightOverlay()" aria-label="Patient records">
             <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
-                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="compact()"
+                                   [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightPinned() || phone()" [pinned]="rightPinned()" [pinnable]="!phone()"
                                    [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
                                    [watch]="watch()" [lines]="st().lines" [drugs]="drugList()" [preferIds]="preferIds()" [canEdit]="editable()"
-                                   (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="patientOpen.set(false)"
+                                   (open)="onTile($event)" (today)="dock.select(todayKey())" (close)="closeRight(true)" (togglePin)="toggleRightPin()"
                                    (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                    (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
           </aside>
@@ -533,8 +568,14 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly compareOn = signal(false);
   /** Compare mode (the band's pressed Compare): a tile tap adds / removes it. */
   readonly compareMode = signal(false);
-  /** Tablet / phone: the patient card as a slide-over / sheet. */
+  /** The unpinned patient card open as an overlay (phone: the sheet). */
   readonly patientOpen = signal(false);
+  /** Pins (per user, localStorage). Default: pinned at ≥1280px, a rail below. */
+  readonly rightPinned = signal(true);
+  readonly navPinned = signal(true);
+  /** The overlay shows when opened — and stays while compare mode is on. */
+  readonly rightOverlay = computed(() => (!this.rightPinned() || this.phone()) && (this.patientOpen() || (this.compareMode() && !this.phone())));
+  readonly reportCount = computed(() => this.items().filter(i => i.type === 'pdf' || i.type === 'res' || i.type === 'img').length);
   readonly isAdmin = computed(() => { try { return !!this.auth.hasAnyPermission?.(ADMIN_PERMS); } catch { return false; } });
   readonly compareIdList = computed(() => this.compareItems().map(i => i.id));
   /** Prefills the doctor confirmed (per visit, remembered on this device). */
@@ -710,7 +751,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     // Compare mode: a date picked on the timeline opens the patient card (tablet / phone).
     effect(() => {
       this.dock.selectedKey();
-      untracked(() => { if (this.compareMode() && this.compact()) this.patientOpen.set(true); });
+      untracked(() => { if (this.compareMode() && this.phone()) this.patientOpen.set(true); });
     });
     // The journey viewer follows the visit the dock selected (its reports load per day).
     effect(() => {
@@ -724,6 +765,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.phoneMq?.addEventListener?.('change', this.onPhoneMq);
     this.compactMq?.addEventListener?.('change', this.onCompactMq);
     this.doc.documentElement.classList.add('pf-opd-immersive');
+    this.rightPinned.set(this.readPin('Right'));
+    this.navPinned.set(this.readPin('Nav'));
     const id = this.route.snapshot.paramMap.get('visitId');
     if (!id) { this.loading.set(false); return; }
     this.consultApi.workspace(id).subscribe({
@@ -842,6 +885,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       this.saveState.set('dirty'); this.save$.next();
       // The doctor is typing: an unpinned journey dock folds away.
       this.dock.noteTyping();
+      if (!this.rightPinned() && this.patientOpen() && !this.compareMode()) this.patientOpen.set(false);
       if ('procedures' in p && this.reasonErr() && !(p.procedures ?? []).some(x => needsPriceReason(x))) this.reasonErr.set(false);
     }
   }
@@ -1135,13 +1179,30 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   onTile(it: VisitItem) {
     if (this.compareMode() && it.compare) { this.toggleCompare(it); return; }
     this.openItem(it);
-    if (this.compact()) this.patientOpen.set(false);
+    this.patientOpen.set(false);
   }
+  openRight() { this.patientOpen.set(true); }
+  /** Outside tap / Esc / ×: closes the overlay — but not while comparing (keep tapping reports). */
+  closeRight(force = false) {
+    if (this.compareMode() && !force && !this.phone()) return;
+    if (force && this.compareMode() && !this.phone()) { this.exitCompare(); }
+    this.patientOpen.set(false);
+  }
+  toggleRightPin() { this.rightPinned.update(v => !v); this.patientOpen.set(false); this.savePin('Right', this.rightPinned()); }
+  toggleNavPin() { this.navPinned.update(v => !v); this.savePin('Nav', this.navPinned()); }
+  private pinKey(which: 'Right' | 'Nav') { return `pf.opd.consult${which}Pin.${this.auth.user()?.id || 'anon'}`; }
+  private savePin(which: 'Right' | 'Nav', v: boolean) { try { localStorage.setItem(this.pinKey(which), v ? '1' : '0'); } catch { /* private mode */ } }
+  private readPin(which: 'Right' | 'Nav'): boolean {
+    const wide = typeof matchMedia === 'function' ? matchMedia('(min-width: 1280px)').matches : true;
+    try { const v = localStorage.getItem(this.pinKey(which)); return v == null ? wide : v === '1'; } catch { return wide; }
+  }
+  @HostListener('document:keydown.escape')
+  onEsc() { if (this.rightOverlay() && !this.completeOpen()) this.closeRight(true); }
   toggleCompareMode() {
     if (this.compareMode()) { this.exitCompare(); return; }
     this.viewItem.set(null);
     this.compareMode.set(true);
-    if (this.compact()) this.patientOpen.set(true);
+    if (this.phone()) this.patientOpen.set(true);
   }
   /** "Done": leave compare mode and drop the selection. */
   exitCompare() {
