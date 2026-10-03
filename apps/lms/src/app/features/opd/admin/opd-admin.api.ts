@@ -73,7 +73,9 @@ export interface OpdWorkflowSettings {
 }
 export type OpdWorkflowPatch = { workflow?: Partial<OpdWorkflowSettings['workflow']>; queue?: Partial<OpdWorkflowSettings['queue']>; pharmacy?: Partial<OpdWorkflowSettings['pharmacy']> };
 
-export interface OpdDoctorLite { id: string; name: string; department?: string | null; specializations: string[]; regNo?: string | null; fee: number; }
+export interface OpdDoctorLite { id: string; name: string; department?: string | null; specializations: string[]; regNo?: string | null; fee: number;
+  /** The doctor's assistant (Nudge, consult v6) — newer servers only. */
+  assistantUserId?: string | null; assistantName?: string | null; }
 
 @Injectable({ providedIn: 'root' })
 export class OpdAdminApi {
