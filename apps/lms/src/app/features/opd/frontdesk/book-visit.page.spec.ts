@@ -89,7 +89,16 @@ describe('New visit — the order-create band (product · Patient · Doctor · o
   });
 });
 
-describe('New visit — work card: doctor grid + visit purpose strip', () => {
+describe('New visit — work card: Doctor panel | Visit purpose panel', () => {
+  it('has a NEW VISIT header like BILLING (date on its right) and two inner panels', () => {
+    const { el } = render();
+    const head = el.querySelector('.pf-ov-main > .pf-oc-bill__head')!;
+    expect(head.querySelector('.pf-oc-bill__title')!.textContent!.trim()).toBe('NEW VISIT');
+    expect(head.querySelector('[data-date]')!.textContent).toContain('OPD ·');
+    expect(el.querySelector('.pf-ov-ctx')).toBeNull();
+    expect([...el.querySelectorAll('.pf-ov-panes > .pf-ov-pane')].length).toBe(2);
+  });
+
   it('no add-ons column, no Urgent switch, no Queue button — lab tests are ordered after the consult', () => {
     const { el } = render();
     expect(el.querySelector('[data-col="addons"]')).toBeNull();
@@ -121,14 +130,14 @@ describe('New visit — work card: doctor grid + visit purpose strip', () => {
     expect(tiles[0].textContent).toContain('3 waiting · ~36 min');
     expect(tiles[0].textContent).toContain('₹600');
     expect(tiles[2].textContent).toContain('Free now');
-    expect(el.querySelector('[data-purpose]')).toBeNull();
+    expect(el.querySelector('[data-purpose-empty]')!.textContent).toContain('Pick a doctor to see their visit types');
     (tiles[0].querySelector('.pf-crow__main') as HTMLButtonElement).click();
     f.detectChanges(); await flush(); f.detectChanges();
     expect(api.get).toHaveBeenCalledWith('/api/opd/visits/quote?doctorId=d1&patientId=p1');
     expect(tiles[0].querySelector('[role="radio"]')!.getAttribute('aria-checked')).toBe('true');
     expect(c.serviceId()).toBe('s1'); // the follow-up, pre-picked
     const choice = el.querySelector('[data-purpose] [role="radio"][aria-checked="true"]')!;
-    expect(choice.textContent).toContain('Follow-up');
+    expect(choice.textContent).toContain('ENT consultation (follow-up)');
     expect(choice.textContent).toContain('₹300');
   });
 
