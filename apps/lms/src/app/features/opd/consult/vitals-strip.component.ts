@@ -130,7 +130,7 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
   styles: [`
     :host { display: block; min-width: 0; --vc-warn: #b45309; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, var(--nd-card-bg)); --vc-warn-line: color-mix(in srgb, #f59e0b 45%, transparent); }
     :host-context(html.dark), :host-context([data-theme='dark']) { --vc-warn: #fbbf24; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, transparent); }
-    .vc { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+    .vc { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
     .vc--scroll { overflow-x: auto; scrollbar-width: none; }
     .vc--scroll::-webkit-scrollbar { display: none; }
     .vc__chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: var(--nd-radius-chip, 8px);
@@ -153,7 +153,6 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
     .vt__prev b { color: var(--text-primary); font-weight: 600; }
     .vt__vals { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--text-secondary); }
     .vt__vals b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    @media (pointer: coarse) { .vc__chip { height: 36px; } }
   `],
 })
 export class ConsultVitalsComponent implements AfterViewInit, OnDestroy {
@@ -197,7 +196,7 @@ export class ConsultVitalsComponent implements AfterViewInit, OnDestroy {
     const chips = Array.from(box.querySelectorAll<HTMLElement>('.vc__chip:not(.vc__more)'));
     chips.forEach(c => (c.hidden = false));
     const widths = chips.map(c => c.offsetWidth);
-    const gap = 6, more = 44, avail = box.clientWidth;
+    const gap = 8, more = 44, avail = box.clientWidth;
     const total = widths.reduce((a, w) => a + w + gap, -gap);
     if (total <= avail) { this.shown.set(n); return; }
     let used = 0, k = 0;
