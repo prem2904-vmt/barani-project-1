@@ -1833,6 +1833,8 @@ export class SampleResultEntryComponent {
   /** May THIS user close the line as Not reported (server enforces the
    *  same, review H3)? Unclaimed or claimed by me, and no saved value. */
   isClosableBlank(t: OrderTest): boolean {
+    // The server's verdict wins (department scope, live-final check, …).
+    if (typeof t.closable === 'boolean') return t.closable;
     const me = this.auth.user()?.id;
     if (t.assignedTo && t.assignedTo !== me) return false;
     return !savedResultHasValue(t.currentResult);
@@ -2168,6 +2170,10 @@ export class SampleResultEntryComponent {
     const missing = live ? missingEntries([live]) : [];
     // Only lines the tech may close: unclaimed or their own, no saved draft.
     const blank = writable.filter((t) => !testHasValue(all, t.id) && this.isClosableBlank(t));
+    // Blank on screen but NOT closable (a value saved on the server — e.g. the
+    // tech cleared a drafted value — or another tech's claim): stays open, and
+    // the tech is told which (never a silent skip).
+    const leftOpen = writable.filter((t) => !testHasValue(all, t.id) && !this.isClosableBlank(t));
     const filled = writable.filter((t) => testHasValue(all, t.id));
     if (filled.length === 0) {
       // Nothing entered: never close a whole tube from Submit (review H1).
@@ -2228,6 +2234,7 @@ export class SampleResultEntryComponent {
       await this.loadComments();
       // The blank tests the tech confirmed: closed as not reported.
       if (closeBlank.length) await this.closeNotReported(s.id, closeBlank);
+      if (leftOpen.length) this.toasts.info(this.leftOpenMessage(leftOpen));
       const n = resp?.submitted ?? 0;
       this.toasts.success(
         `Submitted ${n} test${n === 1 ? "" : "s"}` +
@@ -2464,6 +2471,13 @@ export class SampleResultEntryComponent {
     return go;
   }
 
+  /** "Left open: Urine Nitrite, … — a value is saved for them (or another
+   *  technician has them); clear or submit it to close." */
+  leftOpenMessage(tests: readonly OrderTest[]): string {
+    const names = tests.map((t) => t.test?.name || t.name || "Test");
+    return `Left open: ${names.join(", ")} — ${tests.length === 1 ? "it has" : "they have"} a saved value or another technician's claim, so ${tests.length === 1 ? "it was" : "they were"} not closed as not reported.`;
+  }
+
   /** Close blank tests of a tube as NOT REPORTED (audited server-side). */
   private async closeNotReported(sampleId: string, tests: readonly OrderTest[]): Promise<void> {
     if (!tests.length) return;
@@ -2550,6 +2564,8 @@ export class SampleResultEntryComponent {
             ? await firstValueFrom(this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, body))
             : null;
           if (closeBlankOk) await this.closeNotReported(snap.sampleId, closable(snap));
+          const notClosed = blankTests(snap).filter((t) => !this.isClosableBlank(t));
+          if (notClosed.length) this.toasts.info(`${snap.barcode || "Tube"} · ${this.leftOpenMessage(notClosed)}`);
           for (const r of resp?.results ?? []) {
             const name = r.orderTest?.test?.name ?? "Test";
             if (r.flags?.critical) flags.push({ label: `${snap.barcode} · ${name}: critical`, critical: true });

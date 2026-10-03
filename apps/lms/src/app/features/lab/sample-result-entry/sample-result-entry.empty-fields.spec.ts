@@ -69,12 +69,13 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
   // also asks "Some fields are empty" (empty-fields spec) — answered
   // "Submit anyway" here and kept out of the counted spy.
   const dialog = { confirm: vi.fn(async (_req: any) => !!opts.confirm), prompt: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
       { provide: HttpClient, useValue: {} },
       { provide: PlatformService, useValue: { getApiUrl: () => '' } },
-      { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
+      { provide: ToastService, useValue: toasts },
       { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
       { provide: AuthService, useValue: { user: () => ({ displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: () => true } },
       { provide: DialogService, useValue: dialog },
@@ -90,7 +91,7 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
   await f.whenStable();
   await new Promise(r => setTimeout(r, 0));
   f.detectChanges();
-  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog };
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog, toasts };
 }
 
 
@@ -226,6 +227,29 @@ describe('Result entry — validator closes blank lines as Not reported (owner 2
     await c.submitAll();
     expect(dialog.confirm).not.toHaveBeenCalled();
     expect(api.post.mock.calls.some(([u]: [string, any]) => /\/(results|not-reported)$/.test(u))).toBe(false);
+  });
+
+  it("the server's closable verdict wins: a line it refuses (e.g. another department) is never offered", async () => {
+    const smp = withBlank();
+    smp.tests[1].closable = false;
+    const { c } = await render(smp);
+    expect(c.openBlankTests()).toEqual([]);
+  });
+
+  it('a blank line that cannot be closed (cleared draft) is NAMED in a toast, never silently skipped', async () => {
+    const smp = sampleFixture({ printPickerDefault: 'all' }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Nitrite', status: 'in_progress', closable: false,
+      currentResult: JSON.stringify({ values: { 'Urine Nitrite': 'Positive' } }),
+      test: { id: 't2', name: 'Urine Nitrite', parameters: JSON.stringify({ parameters: [{ name: 'Urine Nitrite', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    const { c, api, toasts } = await render(smp, { confirm: true });
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    c.setValue('ot2', 'Urine Nitrite', '');                // the tech cleared the drafted value
+    await c.submitAll();
+    expect(api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+    expect(toasts.info).toHaveBeenCalledWith(expect.stringContaining('Left open: Urine Nitrite'));
   });
 
   it('a Not reported line is closed work: never writable, labelled in words', async () => {
