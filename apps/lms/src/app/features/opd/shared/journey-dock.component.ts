@@ -60,8 +60,8 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
         @if (dock.open()) {
           <div class="jd__body" id="jd-body">
             @if (dock.events().length) {
-              <pf-journey-axis [events]="dock.events()" [selectedKey]="dock.selectedKey()" [maxLanes]="2" [railBase]="76" [laneGap]="30"
-                               [stemBase]="20" [minWidth]="420" [gutter]="4" (select)="pick($event)"></pf-journey-axis>
+              <pf-journey-axis [events]="dock.events()" [selectedKey]="dock.selectedKey()" [maxLanes]="2" [railBase]="72" [laneGap]="28"
+                               [stemBase]="10" [minWidth]="420" [gutter]="8" [tight]="true" (select)="pick($event)"></pf-journey-axis>
             } @else if (!dock.loading()) {
               <p class="jd__none">No earlier visits, lab reports or files for this patient.</p>
             }
@@ -73,7 +73,7 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
   styles: [`
     :host { display: block; flex: none; min-width: 0; }
     .jd { position: relative; z-index: 5; background: var(--nd-card-bg); border-top: 1px solid var(--nd-card-border, var(--nd-line)); }
-    .jd__bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 20px; }
+    .jd__bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 16px; }
     .jd__ttl { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
     .jd__ttl:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; border-radius: 8px; }
     .jd__ci { flex: none; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: var(--violet-text, #6d28d9);
@@ -91,9 +91,8 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
     .jd__ib:hover, .jd__pill:hover { color: var(--text-primary); }
     .jd__ib[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .jd__ib:focus-visible, .jd__pill:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .jd__body { padding: 0 16px 8px; }
+    .jd__body { padding: 0 16px 4px; }
     .jd__none { margin: 0; padding: 6px 4px 10px; font-size: 12.5px; color: var(--text-tertiary); }
-    @media (max-width: 1180px) { .jd__bar { padding: 0 16px; } }
     @media (max-width: 600px) {
       .jd__bar { padding: 0 12px; }
       .jd__sum, .jd__pills { display: none; }

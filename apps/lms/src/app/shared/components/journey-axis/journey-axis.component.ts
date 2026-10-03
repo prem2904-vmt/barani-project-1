@@ -19,7 +19,7 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ja__scroll" #scrollRef [style.padding-inline.px]="gutter()">
-      <div class="ja__axis" #axisRef [style.height.px]="railHeight()" [style.width.%]="zoom() * 100" [style.min-width.px]="minWidth()">
+      <div class="ja__axis" [class.ja__axis--tight]="tight()" #axisRef [style.height.px]="railHeight()" [style.width.%]="zoom() * 100" [style.min-width.px]="minWidth()">
         @for (e of model().events; track e.key) {
           <button type="button" class="ja__ev" [class.ja__ev--on]="selectedKey() === e.key"
                   [style.left.%]="e.x" [style.height.px]="stemBase() + e.lane * laneGap()"
@@ -62,6 +62,7 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
     /* flex: 0 0 auto → the axis keeps its (zoom-scaled) width instead of being
        shrunk to fit the flex scroll container, so horizontal zoom + scroll work. */
     .ja__axis { position: relative; margin-top: 10px; flex: 0 0 auto; }
+    .ja__axis--tight { margin-top: 0; }
     .ja__line { position: absolute; left: 0; right: 0; bottom: 26px; height: 1px; background: var(--glass-border, var(--nd-line)); }
     .ja__tick { position: absolute; bottom: 0; height: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .ja__tick-mark { width: 1px; height: 6px; background: var(--glass-border, var(--nd-line)); }
@@ -106,6 +107,8 @@ export class JourneyAxisComponent implements OnDestroy {
   readonly stemBase = input(30);
   readonly minWidth = input(560);
   readonly gutter = input(20);
+  /** No top margin (the journey dock keeps its height ≤ ~120px). */
+  readonly tight = input(false);
   readonly select = output<string>();
 
   readonly zoom = signal(1);

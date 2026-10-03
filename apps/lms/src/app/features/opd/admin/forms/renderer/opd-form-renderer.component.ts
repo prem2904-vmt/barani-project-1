@@ -380,6 +380,8 @@ export class OpdFormRendererComponent {
   readonly printBlanks = input<boolean>(false);
   /** The anchor "today" for a `calc` pog field (the visit date); defaults to today. */
   readonly visitDate = input<string | null>(null);
+  /** OPD consult: short controls (yes/no, a pick of ≤5, a scale) sit two to a row. Default off. */
+  readonly compact = input(false);
 
   readonly answersChange = output<OpdAnswers>();
   readonly mediaRequest = output<OpdMediaRequest>();
@@ -432,7 +434,12 @@ export class OpdFormRendererComponent {
   }
 
   met(q: OpdQuestion): boolean { return conditionMet(q, this.byKey(), this.answers()); }
-  wide(q: OpdQuestion): boolean { return isWide(q); }
+  wide(q: OpdQuestion): boolean {
+    // Compact (OPD consult): short pick / scale controls share the 2-column
+    // grid instead of taking a full row — unless the form says wide.
+    if (this.compact() && q.wide == null && !q.sides && (q.type === 'scale' || q.type === 'yn' || (q.type === 'one' && (q.choices?.length ?? 0) <= 5))) return false;
+    return isWide(q);
+  }
   srcLabel(q: OpdQuestion): string { return (this.byKey().get(q.when?.key ?? '')?.label ?? '').replace(/\?$/, ''); }
   aria(q: OpdQuestion, side: Side | null): string { return q.label + (side ? (side === 'r' ? ', right' : ', left') : ''); }
   sideVal(q: OpdQuestion, sd: Side): unknown { return ((this.answers()[q.key] ?? {}) as OpdSided)[sd]; }

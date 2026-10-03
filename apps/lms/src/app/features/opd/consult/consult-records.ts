@@ -227,18 +227,15 @@ export function spaceCount(id: ConsultSpace, s: ConsultEditState): number {
 
 // ── Side panels: auto-balance (owner) ───────────────────────────────────
 
-/** Panel widths (px) and the narrowest centre the form still fits in. */
-export const PANEL_W = { nav: 240, navRail: 48, right: 300, rightRail: 44, minCentre: 680 } as const;
+/** The docked patient card's width and the narrowest centre the form still fits in. */
+export const PANEL_W = { right: 300, minCentre: 680 } as const;
 
-/** Which pinned panels can stay docked in `width` (the body's content box,
- *  minus `gaps`): the RIGHT card collapses to its rail first, then the LEFT
- *  nav to icons; as room comes back they return in reverse. A panel the
- *  doctor unpinned is never docked. Pure. */
-export function balancePanels(width: number, gaps: number, navPinned: boolean, rightPinned: boolean): { navDocked: boolean; rightDocked: boolean } {
-  if (!width) return { navDocked: navPinned, rightDocked: rightPinned };
-  const centre = (nav: boolean, right: boolean) => width - gaps - (nav ? PANEL_W.nav : PANEL_W.navRail) - (right ? PANEL_W.right : PANEL_W.rightRail);
-  let nav = navPinned, right = rightPinned;
-  if (centre(nav, right) < PANEL_W.minCentre) right = false;
-  if (centre(nav, right) < PANEL_W.minCentre) nav = false;
-  return { navDocked: nav, rightDocked: right };
+/** The patient card docks only when pinned AND the centre keeps
+ *  ≥ PANEL_W.minCentre px of `width` (the body's content box, minus the
+ *  column `gap`); otherwise it opens over the centre. A pin is never
+ *  overwritten — the layout just can't honour it until there is room. Pure. */
+export function balancePanels(width: number, gap: number, rightPinned: boolean): { rightDocked: boolean } {
+  if (!rightPinned) return { rightDocked: false };
+  if (!width) return { rightDocked: true };
+  return { rightDocked: width - gap - PANEL_W.right >= PANEL_W.minCentre };
 }
