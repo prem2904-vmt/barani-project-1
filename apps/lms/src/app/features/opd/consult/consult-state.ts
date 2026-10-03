@@ -1,6 +1,6 @@
 /**
- * Consult workspace state helpers (Agent C) — pure, so the stepper summaries,
- * the draft body and the "usual" set are unit-tested without a DOM.
+ * Consult workspace state helpers (Agent C) — pure, so the draft body and the
+ * "usual" set are unit-tested without a DOM.
  */
 import type { OpdDiagnosis, OpdNoteVisibility } from '../shared/opd.models';
 import type { RxUsual } from '../shared/rx-schedule';
@@ -8,10 +8,8 @@ import type {
   ConsultDraftBody, ConsultDraftPatchBody, ConsultInvestigationItem, ConsultProcedureDraft, ConsultProcedureDto, ConsultUsual,
 } from './consult.api';
 import { proceduresBody } from './procedure-rules';
-import { ConsultDrugRef, ConsultRxLine, fromDto, toDto, unresolvedAllergies } from './rx/rx-model';
-import type { OpdPatientAllergy, OpdRxLineDto } from '../shared/opd.models';
-
-export type ConsultStep = 1 | 2 | 3 | 4;
+import { ConsultDrugRef, ConsultRxLine, fromDto, toDto } from './rx/rx-model';
+import type { OpdRxLineDto } from '../shared/opd.models';
 
 export interface ConsultEditState {
   answers: Record<string, unknown>;
@@ -25,43 +23,6 @@ export interface ConsultEditState {
   followUpDays: number | null;
   /** Procedures done in the consult; undefined = not loaded (the draft leaves them alone). */
   procedures?: ConsultProcedureDraft[];
-}
-
-export const STEP_TITLES: Record<ConsultStep, string> = {
-  1: 'Assessment & diagnosis', 2: 'Prescription', 3: 'Tests & procedures', 4: 'Notes',
-};
-
-const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-
-/** The one-line summary under each rail step. */
-export function stepSummary(step: ConsultStep, s: ConsultEditState, allergies: readonly OpdPatientAllergy[], visibility: string): { text: string; warn?: boolean } {
-  switch (step) {
-    case 1: {
-      const findings = s.chiefComplaint.trim() || Object.values(s.answers).some(v => v != null && v !== '' && !(Array.isArray(v) && !v.length));
-      if (s.diagnoses.length) return { text: s.diagnoses.map(d => d.label).join(', ') };
-      return { text: (findings ? 'Findings noted' : 'Nothing noted yet') + ' · diagnosis pending' };
-    }
-    case 2: {
-      if (!s.lines.length) return { text: 'No medicines yet' };
-      const bad = unresolvedAllergies(s.lines, allergies).length;
-      return bad ? { text: plural(s.lines.length, 'medicine') + ' · allergy check', warn: true } : { text: plural(s.lines.length, 'medicine') };
-    }
-    case 3: {
-      const names = [...s.tests.map(t => t.name), ...(s.procedures ?? []).map(p => p.name)];
-      return { text: names.length ? names.join(', ') : 'No tests yet' };
-    }
-    case 4: return { text: 'Private · ' + (visibility === 'doctor' ? 'doctor only' : visibility === 'department' ? 'department doctors' : 'all doctors') };
-  }
-}
-
-/** A step is "done" (tick) once it has content. Notes is never required. */
-export function stepDone(step: ConsultStep, s: ConsultEditState): boolean {
-  switch (step) {
-    case 1: return s.diagnoses.length > 0;
-    case 2: return s.lines.length > 0;
-    case 3: return s.tests.length > 0 || (s.procedures?.length ?? 0) > 0;
-    case 4: return s.privateNotes.trim().length > 0 || s.advice.trim().length > 0;
-  }
 }
 
 /** Server capabilities the body depends on (feature-detected from the workspace). */

@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import type { ConsultProcedureDraft, ConsultProcedureOption } from './consult.api';
 import { checkProcedurePrice, needsPriceReason, parsePrice, priceHint, priceRange, procedureLineLabel, proceduresBody, proceduresTotal } from './procedure-rules';
 import { ConsultProceduresComponent } from './procedure-editor.component';
-import { ConsultEditState, draftBody, procedureDraftOf, stepDone, stepSummary } from './consult-state';
+import { ConsultEditState, draftBody, procedureDraftOf } from './consult-state';
+import { spaceCount } from './consult-records';
 import { ConsultCompleteSheetComponent, deskDueText } from './complete-sheet.component';
 import { laterPrintText, procedurePrintText } from './rx-print';
 
@@ -68,11 +69,9 @@ describe('Consult state carries procedures', () => {
     ]);
     expect(proceduresBody([row({ price: 1500, priceReason: 'stale' })])[0].priceReason).toBeNull();
   });
-  it('step 3 summary + tick include procedures', () => {
-    const s = { ...BASE, tests: [{ testId: 't', name: 'AEC' }], procedures: [row()] };
-    expect(stepSummary(3, s, [], 'doctor').text).toBe('AEC, Diagnostic nasal endoscopy');
-    expect(stepDone(3, { ...BASE, procedures: [row()] })).toBe(true);
-    expect(stepDone(3, { ...BASE, procedures: [] })).toBe(false);
+  it('the Procedures tab counts the procedures', () => {
+    expect(spaceCount('proc', { ...BASE, procedures: [row(), row({ key: 'k2' })] })).toBe(2);
+    expect(spaceCount('proc', { ...BASE, procedures: [] })).toBe(0);
   });
   it('a saved procedure hydrates into an editor row', () => {
     const d = procedureDraftOf({ id: 'p1', serviceId: 's', name: 'X', qty: 2, rulePrice: 500, price: 450, overridden: true, priceSetByName: 'Dr A', status: 'draft', side: 'right' });
