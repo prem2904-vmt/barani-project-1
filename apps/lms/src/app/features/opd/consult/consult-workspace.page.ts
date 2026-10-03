@@ -32,7 +32,9 @@ import {
 import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
 import { rxSentence, usualFromJson } from './rx/rx-line';
+import { CompareConsult, compareMatrix } from './consult-compare';
 import type { RxUsual } from '../shared/rx-schedule';
+import { lineShort } from '../shared/rx-schedule';
 import { newRxLine } from '../shared/rx-schedule';
 import { buildRxPdf } from './rx-print';
 import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
@@ -181,47 +183,73 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
 
           <!-- ── Centre ── -->
           <main class="nd-card cw__centre" [class.cw__centre--viewing]="viewing()">
-            @if (compareMode() && !compareOn()) {
-              <div class="cw__cbar" role="status" data-compare-bar>
-                <b>Compare</b>
-                <span class="cw__cbt">Tap reports on the right or pick dates on the timeline</span>
-                <span class="cw__cbn nd-num">{{ compareItems().length }} selected</span>
-                <span class="cw__grow"></span>
-                <button type="button" class="nd-btn nd-btn--primary cw__sm" [disabled]="!compareItems().length" (click)="openCompare()">View side by side</button>
-                <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="exitCompare()">Done</button>
-              </div>
-            }
             @if (viewing()) {
               <header class="nd-card__head cw__vbar">
                 <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="closeViewer()" aria-label="Back to the consult">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                 </button>
                 @if (compareOn()) {
-                  <span class="nd-card__label">Compare · {{ compareItems().length }}</span>
+                  <span class="cw__vt"><b>Compare · {{ compareItems().length }} picked</b><span class="cw__hide-sm">Tap dates on the timeline or records on the right to add or remove</span></span>
                 } @else if (viewItem(); as it) {
                   <span class="cw__vt"><b>{{ it.title }}</b><span class="nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span></span>
                 }
                 <span class="nd-card__spacer"></span>
                 @if (compareOn() && compareItems().length) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearCompare()">Clear</button> }
-                <button type="button" class="nd-btn nd-btn--secondary cw__back" (click)="closeViewer()" data-back>Back to the consult</button>
+                <button type="button" class="nd-btn nd-btn--secondary cw__back" (click)="closeViewer()" data-back>{{ compareOn() ? 'Back to consult' : 'Back to the consult' }}</button>
               </header>
               <div class="cw__viewer" [class.cw__viewer--none]="fileView() && !compareOn()">
                 @if (compareOn()) {
-                  @if (!compareItems().length) { <p class="cw__muted">Tick reports, results, images or prescriptions in the visit card to compare them here.</p> }
-                  <div class="cw__cmpgrid">
-                    @for (it of compareCards(); track it.id) {
-                      <div class="cw__cp">
-                        <span class="cw__cpd nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span>
-                        <b>{{ it.title }}</b>
-                        @if (it.result; as r) {
-                          <span class="cw__big nd-num" [class.cw__big--h]="it.high">{{ r.value }} <small>{{ r.unit }}</small></span>
-                          @if (spark(r.points); as p) { <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg> }
+                  @if (!compareItems().length) { <p class="cw__muted">Tap dates on the timeline, or consults and reports on the right, to compare them here.</p> }
+                  @if (compareCols().length; as n) {
+                    @let m = matrix();
+                    <div class="cmx" [style.--cmx-n]="n" role="table" aria-label="Consults side by side">
+                      <div class="cmx__row cmx__row--head" role="row">
+                        <span class="cmx__lbl" role="columnheader"></span>
+                        @for (c of compareCols(); track c.id; let i = $index) {
+                          <span class="cmx__col" role="columnheader">
+                            <span class="cmx__ord nd-num">{{ orderOf('consult:' + c.id) }}</span>
+                            <b>{{ c.label }}</b><small>{{ c.sub }}</small>
+                            <button type="button" class="cmx__x" (click)="unpick('consult:' + c.id)" [attr.aria-label]="'Remove ' + c.label + ' from compare'">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                          </span>
                         }
-                        @for (d of it.rx ?? []; track $index) { <span class="cw__muted">{{ rxText(d) }}</span> }
-                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="toggleCompare(it)">Remove</button>
                       </div>
-                    }
-                  </div>
+                      @if (m.findings.length) { <div class="cmx__sec" role="row"><span role="cell">Findings</span></div> }
+                      @for (r of m.findings; track r.key) {
+                        <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
+                          @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
+                        </div>
+                      }
+                      <div class="cmx__sec" role="row"><span role="cell">Diagnosis</span></div>
+                      <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Diagnosis</span>
+                        @for (c of m.diagnosis.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.diagnosis.changed[i]">{{ c || '—' }}</span> }
+                      </div>
+                      <div class="cmx__sec" role="row"><span role="cell">Prescription</span></div>
+                      @for (r of m.rx; track r.key) {
+                        <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
+                          @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell nd-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
+                        </div>
+                      } @empty { <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">—</span>@for (c of compareCols(); track c.id) { <span class="cmx__cell" role="cell">No medicines</span> }</div> }
+                      <div class="cmx__sec" role="row"><span role="cell">Tests</span></div>
+                      <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">Tests</span>
+                        @for (c of m.tests.cells; track $index; let i = $index) { <span class="cmx__cell" role="cell" [class.cmx__cell--chg]="m.tests.changed[i]">{{ c || '—' }}</span> }
+                      </div>
+                    </div>
+                  }
+                  @if (resultGroups().length) {
+                    <div class="cw__cmpgrid">
+                      @for (g of resultGroups(); track g.title) {
+                        <div class="cw__cp">
+                          <b>{{ g.title }} @for (it of g.items; track it.id) { <span class="cmx__ord nd-num">{{ orderOf(it.id) }}</span> }</b>
+                          <span class="cw__big nd-num" [class.cw__big--h]="g.last.high">{{ g.last.result!.value }} <small>{{ g.last.result!.unit }} · {{ g.last.date + 'T00:00:00' | date:'d MMM y' }}</small></span>
+                          @if (spark(g.last.result!.points); as p) { <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg> }
+                          <p class="cw__muted nd-num">@for (pt of g.last.result!.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
+                          <button type="button" class="nd-btn nd-btn--tertiary" (click)="unpickAll(g.items)">Remove</button>
+                        </div>
+                      }
+                    </div>
+                  }
                 } @else if (viewItem(); as it) {
                   @switch (it.type) {
                     @case ('flow') {
@@ -514,7 +542,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           </aside>
         </div>
 
-        <pf-journey-dock class="cw__dock"></pf-journey-dock>
+        <pf-journey-dock class="cw__dock" (picked)="onDockPick($event)"></pf-journey-dock>
 
         @if (completeOpen()) {
           <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
@@ -567,7 +595,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly compareItems = signal<VisitItem[]>([]);
   readonly compareOn = signal(false);
   /** Compare mode (the band's pressed Compare): a tile tap adds / removes it. */
-  readonly compareMode = signal(false);
+  readonly compareMode = computed(() => this.compareOn());
   /** The unpinned patient card open as an overlay (phone: the sheet). */
   readonly patientOpen = signal(false);
   /** Pins (per user, localStorage). Default: pinned at ≥1280px, a rail below. */
@@ -721,7 +749,39 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   /** The reused journey viewer shows: a report / image, or compared files. */
   readonly fileView = computed(() => (this.compareOn() && this.compareItems().some(i => !!i.fileId)) || (!this.compareOn() && !!this.viewItem()?.fileId));
   /** Compare cards for what the journey viewer doesn't draw (results, prescriptions). */
-  readonly compareCards = computed(() => this.compareItems().filter(i => !i.fileId));
+  /** The picked consults as columns, oldest → newest. */
+  readonly compareCols = computed<CompareConsult[]>(() => {
+    const w = this.ws();
+    if (!w) return [];
+    const hist = this.dock.history() ?? [];
+    const out: CompareConsult[] = [];
+    for (const it of this.compareItems()) {
+      if (!it.consultId) continue;
+      if (it.consultId === w.visit.id) {
+        const s = this.st();
+        out.push({ id: w.visit.id, date: this.todayKey(), label: 'Today', sub: w.visit.doctorName ?? '', complaint: s.chiefComplaint,
+          schema: this.formSchema(), answers: s.answers, diagnoses: s.diagnoses.map(d => d.label),
+          rx: s.lines.map(l => ({ key: l.drug.free ? l.drug.name.toLowerCase() : l.drug.id, name: l.drug.name, text: lineShort(l.line, l.drug) })),
+          tests: s.tests.map(t => t.name) });
+      } else {
+        const c = hist.find(h => h.visitId === it.consultId);
+        if (!c) continue;
+        out.push({ id: c.visitId, date: journeyDayKey(c.visitDate), label: new Date(journeyDayKey(c.visitDate) + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+          sub: c.doctorName ?? '', complaint: c.chiefComplaint ?? '', schema: c.form?.schema ?? null, answers: (c.answers as Record<string, unknown>) ?? {},
+          diagnoses: c.diagnoses.map(d => d.label),
+          rx: c.rx.map(d => { const l = fromDto(d, this.drugList()); return { key: d.drugId ?? d.drugName.toLowerCase(), name: d.drugName, text: lineShort(l.line, l.drug) }; }),
+          tests: c.investigations.flatMap(i => i.items).map(t => t.name) });
+      }
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  });
+  readonly matrix = computed(() => compareMatrix(this.compareCols()));
+  /** Picked lab results, one card per test (its trend over time). */
+  readonly resultGroups = computed(() => {
+    const m = new Map<string, VisitItem[]>();
+    for (const it of this.compareItems()) if (it.type === 'res' && it.result) m.set(it.title, [...(m.get(it.title) ?? []), it]);
+    return [...m.entries()].map(([title, items]) => ({ title, items, last: [...items].sort((a, b) => b.date.localeCompare(a.date))[0] }));
+  });
   readonly vitalRows = computed(() => {
     const v = this.ws()?.vitals;
     if (!v) return [] as { label: string; value: string; warn: boolean }[];
@@ -751,7 +811,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     // Compare mode: a date picked on the timeline opens the patient card (tablet / phone).
     effect(() => {
       this.dock.selectedKey();
-      untracked(() => { if (this.compareMode() && this.phone()) this.patientOpen.set(true); });
+      untracked(() => { if (this.compareOn() && this.phone()) this.patientOpen.set(true); });
     });
     // The journey viewer follows the visit the dock selected (its reports load per day).
     effect(() => {
@@ -1177,15 +1237,14 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   // ── The centre viewer + compare ────────────────────────────────────
   /** A record tile: in compare mode it joins / leaves the comparison; else it opens. */
   onTile(it: VisitItem) {
-    if (this.compareMode() && it.compare) { this.toggleCompare(it); return; }
+    if (this.compareOn() && it.compare) { this.toggleCompare(it); return; }
     this.openItem(it);
     this.patientOpen.set(false);
   }
   openRight() { this.patientOpen.set(true); }
   /** Outside tap / Esc / ×: closes the overlay — but not while comparing (keep tapping reports). */
   closeRight(force = false) {
-    if (this.compareMode() && !force && !this.phone()) return;
-    if (force && this.compareMode() && !this.phone()) { this.exitCompare(); }
+    if (this.compareOn() && !force && !this.phone()) return;
     this.patientOpen.set(false);
   }
   toggleRightPin() { this.rightPinned.update(v => !v); this.patientOpen.set(false); this.savePin('Right', this.rightPinned()); }
@@ -1197,19 +1256,50 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     try { const v = localStorage.getItem(this.pinKey(which)); return v == null ? wide : v === '1'; } catch { return wide; }
   }
   @HostListener('document:keydown.escape')
-  onEsc() { if (this.rightOverlay() && !this.completeOpen()) this.closeRight(true); }
-  toggleCompareMode() {
-    if (this.compareMode()) { this.exitCompare(); return; }
+  onEsc() {
+    if (this.completeOpen()) return;
+    if (this.patientOpen()) { this.closeRight(true); return; }
+    if (this.compareOn()) this.leaveCompare();
+  }
+  /** Compare: straight into the side-by-side view (today's consult + the
+   *  latest earlier one + anything already picked); pressing it again leaves. */
+  toggleCompareMode() { if (this.compareOn()) this.leaveCompare(); else this.enterCompare(); }
+  enterCompare() {
     this.viewItem.set(null);
-    this.compareMode.set(true);
-    if (this.phone()) this.patientOpen.set(true);
+    const w = this.ws();
+    if (w) {
+      const have = new Set(this.compareIdList());
+      const add: VisitItem[] = [];
+      const today = this.consultItem(w.visit.id);
+      if (today && !have.has(today.id)) add.push(today);
+      const prev = [...(this.dock.history() ?? [])].filter(h => h.visitId !== w.visit.id).sort((a, b) => b.visitDate.localeCompare(a.visitDate))[0];
+      const p = prev ? this.consultItem(prev.visitId) : null;
+      if (p && !have.has(p.id)) add.push(p);
+      if (add.length) this.compareItems.update(l => [...add, ...l]);
+    }
+    this.compareOn.set(true);
+    queueMicrotask(() => this.syncCompareFiles());
   }
-  /** "Done": leave compare mode and drop the selection. */
-  exitCompare() {
-    this.leaveCompare();
-    this.compareItems.set([]);
-    this.compareMode.set(false);
+  /** A whole consult as a compare pick (today's draft or a past one). */
+  private consultItem(visitId: string): VisitItem | null {
+    const w = this.ws();
+    if (!w) return null;
+    if (visitId === w.visit.id) return { id: 'consult:' + visitId, consultId: visitId, type: 'flow', title: "Today's consult", sub: '', compare: true, date: this.todayKey() };
+    const c = (this.dock.history() ?? []).find(h => h.visitId === visitId);
+    return c ? { id: 'consult:' + visitId, consultId: visitId, type: 'flow', title: 'Consult', sub: c.doctorName ?? '', compare: true, date: journeyDayKey(c.visitDate) } : null;
   }
+  /** A date tapped on the timeline while comparing: that day's consult joins / leaves. */
+  onDockPick(day: string) {
+    if (!this.compareOn()) return;
+    const w = this.ws();
+    if (!w) return;
+    const visitId = day === this.todayKey() ? w.visit.id : (this.dock.history() ?? []).find(h => journeyDayKey(h.visitDate) === day && h.visitId !== w.visit.id)?.visitId;
+    const it = visitId ? this.consultItem(visitId) : null;
+    if (it) this.toggleCompare(it);
+  }
+  orderOf(id: string) { return this.compareIdList().indexOf(id) + 1; }
+  unpick(id: string) { this.compareItems.update(l => l.filter(x => x.id !== id)); this.syncCompareFiles(); }
+  unpickAll(items: VisitItem[]) { const ids = new Set(items.map(i => i.id)); this.compareItems.update(l => l.filter(x => !ids.has(x.id))); this.syncCompareFiles(); }
   openItem(it: VisitItem) {
     this.leaveCompare();
     this.viewItem.set(it);
@@ -1221,12 +1311,6 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     if (this.compareOn()) this.syncCompareFiles();
   }
   clearCompare() { this.compareItems.set([]); this.syncCompareFiles(); }
-  openCompare() {
-    this.viewItem.set(null);
-    this.patientOpen.set(false);
-    this.compareOn.set(true);
-    queueMicrotask(() => this.syncCompareFiles());
-  }
   private leaveCompare() {
     if (!this.compareOn()) return;
     this.compareOn.set(false);

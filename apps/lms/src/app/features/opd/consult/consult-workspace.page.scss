@@ -118,12 +118,26 @@
   color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
 .cw__dotw { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
 
-// Compare mode: the slim bar on top of the centre.
-.cw__cbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 14px; border-bottom: 1px solid var(--nd-line);
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--nd-card-bg)); font-size: 13px; }
-.cw__cbar b { font-weight: 600; color: var(--violet-text, #6d28d9); }
-.cw__cbt { color: var(--text-secondary); }
-.cw__cbn { font-weight: 600; color: var(--text-primary); }
+// Compare: consults side by side — one column per consult, matching lines on one row.
+.cw__hide-sm { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.cmx { display: grid; grid-template-columns: 170px repeat(var(--cmx-n, 2), minmax(220px, 1fr)); overflow-x: auto; border: 1px solid var(--nd-line);
+  border-radius: 12px; scroll-snap-type: x proximity; }
+.cmx__row, .cmx__sec { display: contents; }
+.cmx__row > *, .cmx__sec > * { padding: 8px 12px; border-bottom: 1px solid var(--nd-line); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.cmx__sec > * { grid-column: 1 / -1; padding-top: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+.cmx__lbl { position: sticky; left: 0; z-index: 1; color: var(--text-tertiary); background: var(--nd-card-bg); }
+.cmx__cell { color: var(--text-primary); scroll-snap-align: start; }
+.cmx__cell--chg { background: color-mix(in srgb, #f59e0b 12%, transparent); font-weight: 600; }
+.cmx__row--head > * { position: sticky; top: 0; z-index: 2; background: var(--nd-card-bg); }
+.cmx__row--head .cmx__lbl { z-index: 3; }
+.cmx__col { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cmx__col b { font-size: 13.5px; }
+.cmx__col small { flex-basis: 100%; font-size: 11.5px; color: var(--text-tertiary); }
+.cmx__ord { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--color-violet-600, #7c3aed); }
+.cmx__x { margin-left: auto; width: 26px; height: 26px; border: 0; border-radius: 7px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+.cmx__x:hover { color: var(--red-text, #dc2626); }
 
 // A space: header, its own add bar, then the content.
 .cw__space { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
@@ -305,4 +319,7 @@
   .cw__single { padding: 12px 14px 20px; }
   .cw__viewer { padding: 14px; }
   .cw__in, .cw__qa input, .cw__form ::ng-deep .nd-input { font-size: 16px; }
+  // Compare on a phone: one or two consult columns at a time, swiped sideways.
+  .cmx { grid-template-columns: 96px repeat(var(--cmx-n, 2), minmax(calc((100vw - 140px) / 2), 1fr)); scroll-snap-type: x mandatory; }
+  .cw__hide-sm { display: none; }
 }
