@@ -22,7 +22,7 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
       <div class="ja__axis" [class.ja__axis--tight]="tight()" #axisRef [style.height.px]="railHeight()" [style.width.%]="zoom() * 100" [style.min-width.px]="minWidth()">
         @for (e of model().events; track e.key) {
           <button type="button" class="ja__ev" [class.ja__ev--on]="selectedKey() === e.key"
-                  [style.left.%]="e.x" [style.height.px]="stemBase() + e.lane * laneGap()"
+                  [style.left.%]="e.x"
                   [attr.aria-pressed]="selectedKey() === e.key"
                   (click)="select.emit(e.key)" [title]="e.title || (e.date | date:'MMM d, y')"
                   [attr.aria-label]="e.title || (e.date | date:'d MMM y')">
@@ -41,7 +41,7 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
               <span class="ja__lbl">{{ e.label || (e.date | date:'MMM d') }}</span>
               @if (e.alert) { <span class="ja__alert" aria-label="Has results outside the normal range"></span> }
             </span>
-            <span class="ja__stem"></span>
+            <span class="ja__stem" [style.height.px]="stemBase() + e.lane * laneGap()"></span>
             <span class="ja__dot" [attr.data-type]="e.type" [class.abn]="e.alert"></span>
           </button>
         }
@@ -63,11 +63,18 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
        shrunk to fit the flex scroll container, so horizontal zoom + scroll work. */
     .ja__axis { position: relative; margin-top: 10px; flex: 0 0 auto; }
     .ja__axis--tight { margin-top: 0; }
+    /* Geometry: the hairline sits 26px up (over the 24px ticks); a date is a
+       column (pill · stem · 11px dot) whose height is its content, anchored
+       21px up so the dot's centre lands on the line. Nothing overflows the
+       axis box, so a host's padding really contains it. */
     .ja__line { position: absolute; left: 0; right: 0; bottom: 26px; height: 1px; background: var(--glass-border, var(--nd-line)); }
     .ja__tick { position: absolute; bottom: 0; height: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .ja__tick-mark { width: 1px; height: 6px; background: var(--glass-border, var(--nd-line)); }
     .ja__tick-lbl { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .ja__ev { position: absolute; bottom: 26px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; cursor: pointer; z-index: 1; }
+    .ja__ev { position: absolute; bottom: 21px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; cursor: pointer; z-index: 1; }
+    /* The new design's light theme tints any button[class*=--on] (styles.scss);
+       a date is only its pill + stem + dot, never a tinted box. */
+    .ja__ev, .ja__ev.ja__ev--on { background: none !important; box-shadow: none !important; }
     .ja__ev:hover { z-index: 2; }
     .ja__ev:focus-visible { outline: none; }
     .ja__ev:focus-visible .ja__card { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
@@ -78,7 +85,7 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
     .ja__ico[data-type="ipd"] { color: var(--amber-text); }
     .ja__ico[data-type="pharmacy"] { color: var(--pink-text); }
     .ja__ico[data-type="doc"] { color: var(--sky-text); }
-    .ja__stem { width: 1px; flex: 1 1 auto; min-height: 8px; background: var(--glass-border, var(--nd-line)); }
+    .ja__stem { width: 1px; flex: none; background: var(--glass-border, var(--nd-line)); }
     .ja__dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; background: var(--bg-card-solid, var(--nd-card-bg)); border: 2.5px solid #a855f7; }
     .ja__dot[data-type="opd"] { border-color: #34d399; }
     .ja__dot[data-type="ipd"] { border-color: #fbbf24; }

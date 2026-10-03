@@ -1,20 +1,4 @@
-import { chromeInsets } from './consult-records';
 import { fitChips } from './vitals-strip.component';
-
-const rect = (left: number, top: number, width: number, height: number) => ({ left, top, width, height, right: left + width, bottom: top + height });
-
-describe('Consult layout — beside the real app nav', () => {
-  it('a bottom bar reserves its full height from its top edge (safe area included)', () => {
-    expect(chromeInsets([rect(0, 900 - 91, 1440, 91)], 1440, 900)).toEqual({ bottom: 91, left: 0 });
-  });
-  it('a floating pill reserves its height plus the gap under it', () => {
-    expect(chromeInsets([rect(400, 900 - 16 - 56, 640, 56)], 1440, 900)).toEqual({ bottom: 72, left: 0 });
-  });
-  it('a left rail (iPad) reserves its width; a hidden / top element reserves nothing', () => {
-    expect(chromeInsets([rect(8, 0, 60, 1024)], 1366, 1024)).toEqual({ bottom: 0, left: 68 });
-    expect(chromeInsets([rect(0, 0, 1440, 64), rect(0, 0, 0, 0)], 1440, 900)).toEqual({ bottom: 0, left: 0 });
-  });
-});
 
 describe('Vitals chips — whole chips only', () => {
   it('all fit → all show', () => {

@@ -1,6 +1,8 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   ElementRef,
@@ -15,6 +17,7 @@ import {
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs/operators";
+import { NAV_SELECTORS, publishNavInsets } from "./nav-insets";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastService } from "../../core/services/toast.service";
 import { AmbientBgComponent } from "../../shared/components/ambient-bg/ambient-bg.component";
@@ -477,7 +480,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
       :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
       /* OPD consult (features/opd/consult) toggles html.pf-opd-immersive while
          open: it hides only the TOP chrome. The bottom navbar stays visible
-         (owner rule, ND kit) — the consult ends at bottom: var(--nd-nav-h). */
+         (owner rule, ND kit) — the consult ends at the measured --pf-nav-h. */
       :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
       :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
 
@@ -630,7 +633,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
       }
       /* OPD consult: under the bottom-navbar experiment the docked bar (the
          rule above, more specific than the immersive top-chrome hide) STAYS
-         visible — the consult sits above it (bottom: var(--nd-nav-h)). */
+         visible — the consult sits above it (height: 100dvh − --pf-nav-h). */
 
       /* Phones: the home-indicator space goes UNDER the icons (not split
          above/below), and the ends keep clear of the rounded screen corners. */
@@ -758,6 +761,37 @@ export class ShellComponent {
   /** Tracks the current URL so the back-chip reacts to navigation. */
   private readonly _url = signal<string>(this.router.url);
   constructor() {
+    // The nav's real footprint → --pf-nav-h / --pf-nav-left on <html>. The
+    // shell renders the nav, so it is the one that measures it: on every
+    // size change of the bar / pill / rail (ResizeObserver), on a viewport
+    // resize, and when <html>'s classes flip (bottom-bar mode, immersive
+    // pages, device class) — which can move the nav without resizing it.
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      const doc = document;
+      let raf = 0;
+      const publish = () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; publishNavInsets(doc, window); });
+      };
+      publishNavInsets(doc, window);
+      const ro = typeof ResizeObserver === "function" ? new ResizeObserver(publish) : null;
+      const observeAll = () => {
+        if (!ro) return;
+        for (const el of Array.from(doc.querySelectorAll<HTMLElement>(NAV_SELECTORS))) ro.observe(el);
+      };
+      observeAll();
+      const mo = new MutationObserver(() => { observeAll(); publish(); });
+      mo.observe(doc.documentElement, { attributes: true, attributeFilter: ["class"] });
+      window.addEventListener("resize", publish);
+      destroyRef.onDestroy(() => {
+        ro?.disconnect();
+        mo.disconnect();
+        window.removeEventListener("resize", publish);
+        if (raf) cancelAnimationFrame(raf);
+      });
+    });
+
     // The frame covers the VISIBLE part of <main> (it may be scrolled).
     effect(() => {
       const on = !!this.pageOpen.frame();
