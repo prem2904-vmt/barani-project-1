@@ -4,8 +4,10 @@
 // ONE 16px gutter everywhere (edge → centre → panel → edge, band → body,
 // body → dock). Spacing steps: 8 / 12 / 16 / 24 only. nd-kit tokens; light +
 // dark via the app's CSS variables.
+// The centre is the prescription pad (C/O · Dx · Rx · Procedures · Ix · Adv ·
+// F/U · Private note), one scrolling card.
 // Breakpoints: ≤1180 tablet (the vitals take their own scrolling row) ·
-// ≤760 phone (tab icons + the active label; the patient card is a sheet).
+// ≤760 phone (labels above the content; drawers are sheets).
 :host { display: block; }
 
 .cw {
@@ -59,6 +61,14 @@
 .cw__alertdot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); box-shadow: 0 0 0 2px var(--nd-card-bg); }
 .cw__alertdot--amber { background: #f59e0b; }
 
+// ── Band: the patient's name opens the patient panel; Page / Compare are icons ──
+.cw__namebtn { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.cw__namebtn:hover { color: var(--violet-text, #6d28d9); }
+.cw__namebtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
+.cw__ndot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); }
+.cw__ndot--amber { background: #f59e0b; }
+.cw__icon { width: 36px; padding: 0; }
+
 // ── Body: the centre, and the patient card when it docks ──
 .cw__body { flex: 1 1 auto; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0;
   padding: 16px; transition: grid-template-columns 150ms ease, column-gap 150ms ease; }
@@ -78,20 +88,64 @@
 @keyframes cw-float { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .cw__right--float.cw__right--open { animation: none; } }
 
-// The spaces: a compact tab strip in the centre card's head (underline style).
-.cw__tabhead { flex-wrap: nowrap; min-height: 48px; padding-block: 0; }
-.cw__tabs { flex: 1; min-width: 0; display: flex; gap: 24px; align-self: stretch; overflow-x: auto; scrollbar-width: none; }
-.cw__tabs::-webkit-scrollbar { display: none; }
-.cw__tab { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 12px 0; border: 0; background: none; font: inherit; font-size: 14px;
-  font-weight: 500; color: var(--text-tertiary); white-space: nowrap; cursor: pointer; box-shadow: inset 0 -2px 0 transparent; }
-.cw__tab:hover { color: var(--text-primary); }
-.cw__tab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; border-radius: 8px; }
-.cw__tab[aria-selected='true'] { color: var(--text-primary); font-weight: 600; box-shadow: inset 0 -2px 0 var(--color-violet-600, #7c3aed); }
-.cw__tab[aria-selected='true'] .cw__tico { color: var(--violet-text, #6d28d9); opacity: 1; }
-.cw__tico { display: inline-flex; opacity: 0.8; }
-.cw__tc { min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; display: grid; place-items: center; font-size: 11px; font-weight: 700;
-  color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-.cw__dotw { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+// ── The prescription pad: rows in printed order (label · content), one form ──
+.pad { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 48px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent; }
+.prow { display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 16px; max-width: 976px; padding: 12px 0; border-bottom: 1px solid var(--nd-line); align-items: start; }
+.prow:last-child { border-bottom: 0; }
+.plab { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); text-align: left; cursor: pointer; }
+.plab b { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: none; color: var(--violet-text, #6d28d9); }
+.plab:hover { color: var(--text-primary); }
+.plab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
+.plab__chev { font-size: 10px; color: var(--text-tertiary); transition: transform 150ms ease; }
+.prow--coll .plab__chev { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .plab__chev { transition: none; } }
+.pbody { display: grid; gap: 8px; min-width: 0; }
+.psum { margin: 0; display: flex; align-items: center; min-height: 42px; font-size: 13px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+// C/O: the one-line summary that opens the Findings drawer.
+.pfind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--nd-line);
+  background: none; font: inherit; font-size: 13.5px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.pfind:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); }
+.pfind:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pfind__w { color: var(--amber-text, #b45309); font-weight: 600; }
+:host-context(html.dark) .pfind__w, :host-context(html.dark) .pfind__rv { color: #fbbf24; }
+.pfind__a { color: var(--text-secondary); }
+.pfind__rv { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--amber-text, #b45309);
+  background: color-mix(in srgb, #f59e0b 12%, transparent); }
+// Added items: editable chips (tap to edit, × to remove).
+.pchips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pchip { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 4px 0 12px; border-radius: var(--nd-radius-chip, 8px);
+  font-size: 13.5px; font-weight: 600; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.pchip__t { display: inline-flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: text; text-align: left; overflow-wrap: anywhere; }
+.pchip__t em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--text-tertiary); }
+.pchip__t small { font-size: 11px; font-weight: 500; opacity: 0.8; }
+.pchip__x { width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: inherit; opacity: 0.75; font-size: 16px; line-height: 1; cursor: pointer; }
+.pchip__x:hover { opacity: 1; color: var(--red-text, #dc2626); }
+.pchip--main { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
+.pchip-edit { width: min(320px, 100%); min-height: 32px; height: 32px; font-size: 13.5px; }
+// One-tap row under the Rx list (Repeat, the diagnosis set, a few usual drugs).
+.pquick { display: flex; flex-wrap: wrap; gap: 8px; }
+.pquick__c { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--nd-line); background: none;
+  font: inherit; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.pquick__c small { font-size: 11px; color: var(--text-tertiary); }
+.pquick__c:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
+.pquick__c--set { border-style: dashed; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--nd-line)); color: var(--violet-text, #6d28d9); }
+// F/U chips (the same .o chip as every option group).
+.popts { display: flex; flex-wrap: wrap; gap: 8px; }
+.o { height: 34px; padding: 0 12px; border-radius: var(--nd-radius-chip, 8px); border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); cursor: pointer; }
+.o[aria-checked='true'] { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9); font-weight: 600;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.o:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pnote { width: 100%; min-height: 42px; font-size: 14px; resize: vertical; border-style: dashed; }
+
+// The Findings drawer (the same right-side panel as the patient card).
+.cw__drawer { position: absolute; top: 16px; right: 16px; bottom: 16px; z-index: 13; width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column;
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.18); animation: cw-float 220ms var(--nd-spring, ease) both; }
+:host-context(html.dark) .cw__drawer { box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5); }
+@media (prefers-reduced-motion: reduce) { .cw__drawer { animation: none; } }
+.cw__drawerb { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
 
 // Compare: consults side by side — one column per consult, matching lines on one row.
 .cw__hide-sm { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
@@ -113,36 +167,6 @@
   color: #fff; background: var(--color-violet-600, #7c3aed); }
 .cmx__x { margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
 .cmx__x:hover { color: var(--red-text, #dc2626); }
-
-// A space: header, its own add bar, then the content — it scrolls inside its
-// own padding (24px, extra at the bottom so the last control is never cut).
-.cw__space { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
-  padding-bottom: 24px; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent; }
-.cw__space > * { flex: none; }
-.cw__sh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 24px 24px 0; max-width: 928px; }
-.cw__sh h2 { margin: 0; font-size: 18px; font-weight: 600; }
-.cw__sh p { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--text-tertiary); }
-// The content column: capped at ~880px, left-aligned in the card.
-.cw__single { padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 928px; }
-.cw__single--rx { max-width: 1104px; }
-.cw__single--fill { flex: 1 1 auto; min-height: 0; max-width: none; }
-.cw__addbar { position: relative; padding: 16px 24px 0; width: 100%; max-width: 928px; }
-.cw__qa { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-radius: 12px; color: var(--text-tertiary);
-  border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
-.cw__qa:focus-within { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
-.cw__qa input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 14.5px; color: var(--text-primary); }
-.cw__qa input::placeholder { color: var(--text-tertiary); }
-.cw__qa kbd { font: inherit; font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--nd-line); border-radius: 8px; padding: 0 8px; }
-.cw__sug { position: absolute; left: 24px; right: 24px; top: calc(100% + 8px); z-index: 20; display: grid; padding: 8px; max-height: 320px; overflow-y: auto;
-  border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
-:host-context(html.dark) .cw__sug { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
-.cw__sg { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-.cw__sg.act, .cw__sg:hover { background: var(--nd-chip-bg); }
-.cw__sg em { font-style: normal; font-size: 12px; color: var(--text-tertiary); }
-.cw__ty { justify-self: start; padding: 2px 8px; border-radius: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-.cw__ty--test { color: var(--green-text, #047857); background: color-mix(in srgb, #34d399 14%, transparent); }
 
 // Findings: a compact prefill review — amber edge, tinted, 44px rows.
 .cw__review { display: flex; flex-direction: column; border-radius: 12px; border-left: 3px solid #f59e0b;
@@ -286,22 +310,17 @@
   .cw__cmp, .cw__cta { justify-content: center; padding: 0 8px; }
   .cw__body, .cw__body--docked { display: flex; flex-direction: column; overflow-y: auto; padding: 8px; }
   .cw__centre { flex: none; overflow: visible; }
-  .cw__space { overflow: visible; }
-  .cw__tabs { gap: 16px; }
-  .cw__tl2 { display: none; }
-  .cw__tab[aria-selected='true'] .cw__tl2 { display: inline; }
+  .pad { overflow: visible; padding: 8px 16px 24px; }
+  // Phone: the label sits above the row's content; drawers are full sheets.
+  .prow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .plab { min-height: 32px; }
+  .cw__drawer { position: fixed; top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); width: auto; height: 92dvh; z-index: 35; border-radius: 24px 24px 0 0; }
   .cw__right, .cw__right--float { display: none; }
   .cw__right.cw__right--open, .cw__right--float.cw__right--open { display: flex; position: fixed; top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px);
     width: auto; height: 86dvh; z-index: 35; border-radius: 24px 24px 0 0; box-shadow: 0 -16px 40px rgba(15, 23, 42, 0.22); }
   .cw__scrim { position: fixed; z-index: 34; background: rgba(15, 23, 42, 0.32); }
-  .cw__sh, .cw__addbar { padding-left: 16px; padding-right: 16px; }
-  .cw__sh { padding-top: 16px; }
-  .cw__sug { left: 16px; right: 16px; }
-  .cw__sg { grid-template-columns: minmax(0, 1fr) auto; }
-  .cw__ty { grid-column: 1 / -1; }
-  .cw__single { padding: 12px 16px 16px; }
   .cw__viewer { padding: 16px; }
-  .cw__in, .cw__qa input, .cw__form ::ng-deep .nd-input { font-size: 16px; }
+  .cw__in, .pnote, .pchip-edit, .cw__form ::ng-deep .nd-input { font-size: 16px; }
   // Compare on a phone: one or two consult columns at a time, swiped sideways.
   .cmx { grid-template-columns: 96px repeat(var(--cmx-n, 2), minmax(calc((100vw - 136px) / 2), 1fr)); scroll-snap-type: x mandatory; }
   .cw__hide-sm { display: none; }

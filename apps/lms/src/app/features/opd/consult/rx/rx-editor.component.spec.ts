@@ -118,7 +118,7 @@ describe('RxEditorComponent — type, Enter, done', () => {
     const el: HTMLElement = f.nativeElement;
     const input = el.querySelector('.rxe__addin') as HTMLInputElement;
     input.value = 'azi'; input.dispatchEvent(new Event('input')); f.detectChanges();
-    expect(el.querySelector('.rxe__sg')!.textContent).toContain('your usual: 1 tab · 1-0-0 · 3 days · after food');
+    expect(el.querySelector('.rxe__sg')!.textContent).toContain('1-0-0 · 3 days · after food');
     key(input, 'Enter'); f.detectChanges();
     const l = f.componentInstance.lines()[0];
     expect(l.drug.id).toBe('d-azi');
@@ -140,7 +140,6 @@ describe('RxEditorComponent — type, Enter, done', () => {
     const input = el.querySelector('.rxe__addin') as HTMLInputElement;
     input.value = 'clav 1-1-1 7d bf';
     input.dispatchEvent(new Event('input')); f.detectChanges();
-    expect(el.querySelector('.rxe__sg')!.textContent).toContain('As typed');
     expect(el.querySelector('.rxe__sg')!.textContent).toContain('Clavumox 625');
     key(input, 'Enter'); f.detectChanges();
     expect(f.componentInstance.lines()[0].line).toMatchObject({ dose: 1, dur: 7, food: 'Before', sched: timesSched([1, 1, 1]) });
@@ -160,6 +159,34 @@ describe('RxEditorComponent — type, Enter, done', () => {
     key(input, 'Enter'); f.detectChanges();
     expect(cmp.lines()[0].drug.free).toBe(true);
     expect(cmp.lines()[0].drug.name).toBe('Zzqx');
+  });
+
+  it('word start only ("amo" never offers a drug that merely contains it) and never a drug already on the list', () => {
+    const f = mount([clavLine()]);
+    const cmp = f.componentInstance;
+    cmp.onType('cla'); f.detectChanges();
+    expect(cmp.matches().map(d => d.id)).toEqual([]);
+    cmp.onType('azi'); f.detectChanges();
+    expect(cmp.matches().map(d => d.id)).toEqual(['d-azi']);
+    cmp.onType('max'); f.detectChanges();
+    expect(cmp.matches().map(d => d.id)).toEqual([]);
+  });
+
+  it('Tab (or "Change dose") opens the one-line composer; a chip drops its options; Add puts it on the list', () => {
+    const f = mount();
+    const el: HTMLElement = f.nativeElement;
+    const input = el.querySelector('.rxe__addin') as HTMLInputElement;
+    input.value = 'azi'; input.dispatchEvent(new Event('input')); f.detectChanges();
+    key(input, 'Tab'); f.detectChanges();
+    expect(el.querySelector('[data-composer]')).toBeTruthy();
+    (el.querySelector('.cmp__chip') as HTMLButtonElement).click(); f.detectChanges();
+    const opt = [...el.querySelectorAll<HTMLButtonElement>('.cmp__menu button')].find(b => b.textContent!.trim() === '1-1-1')!;
+    opt.click(); f.detectChanges();
+    expect(el.querySelector('.cmp__menu')).toBeNull();
+    expect(el.querySelector('.cmp__say')!.textContent).toContain('in the morning, in the afternoon and at night');
+    (el.querySelector('[data-cadd]') as HTMLButtonElement).click(); f.detectChanges();
+    expect(f.componentInstance.lines()[0].line.sched).toEqual(timesSched([1, 1, 1]));
+    expect(el.querySelector('[data-composer]')).toBeNull();
   });
 
   it('arrow keys move through the suggestions', () => {

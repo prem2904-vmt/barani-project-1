@@ -38,7 +38,7 @@ export function firstName(name: string | null | undefined): string {
     <button type="button" class="nd-btn nd-btn--secondary ng__btn" (click)="open.set(!open())" [attr.aria-expanded]="open()" aria-haspopup="dialog"
             title="Page your assistant" aria-label="Page your assistant" data-page>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>
-      <span class="ng__lab">Page</span>
+      @if (!iconOnly()) { <span class="ng__lab">Page</span> }
     </button>
     @if (open()) {
       <div class="ng__pop" role="dialog" [attr.aria-label]="title()">
@@ -115,6 +115,8 @@ export class ConsultPageAssistantComponent {
   readonly assistantName = input<string | null>(null);
   /** Admins get a link to OPD → Doctors when no assistant is set. */
   readonly isAdmin = input(false);
+  /** The pad's band: just the icon (the tooltip names it). */
+  readonly iconOnly = input(false);
   readonly patientId = input.required<string>();
   readonly patientName = input.required<string>();
   readonly token = input('');
