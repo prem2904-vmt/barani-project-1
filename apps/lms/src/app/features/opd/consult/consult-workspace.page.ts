@@ -156,7 +156,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 @if (compareOn() && compareItems().length) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearCompare()">Clear</button> }
                 <button type="button" class="nd-btn nd-btn--secondary cw__back" (click)="closeViewer()" data-back>Back to the consult</button>
               </header>
-              <div class="cw__viewer">
+              <div class="cw__viewer" [class.cw__viewer--none]="fileView() && !compareOn()">
                 @if (compareOn()) {
                   @if (!compareItems().length) { <p class="cw__muted">Tick reports, results, images or prescriptions in the visit card to compare them here.</p> }
                   <div class="cw__cmpgrid">
@@ -736,6 +736,8 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     this.saveState.set('idle');
     this.dock.show({ id: w.patient.id, name: w.patient.name }, w.visit.visitDate);
     if (first) {
+      // The consult opens on today's visit, whatever the dock showed before.
+      this.dock.select(journeyDayKey(w.visit.visitDate));
       this.confirmed.set(this.readConfirmed(w.visit.id));
       // Nothing to review → open where the doctor works most: the diagnosis.
       if (!this.editable() || !this.pending().length) this.space.set(this.editable() ? 'dx' : 'med');
