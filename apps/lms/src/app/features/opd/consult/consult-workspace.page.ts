@@ -45,6 +45,10 @@ import {
   ConsultSpace, Prefill, SPACES, balancePanels, VisitItem, prefillsOf, sparkPoints, spaceCount, visitItems, watchLine,
 } from './consult-records';
 import { ConsultVisitCardComponent } from './visit-card.component';
+import { PadAddComponent } from './pad-add.component';
+import { COMMON_ADVICE, PadOption, PadRow, adviceLines, padCollapseKey, parseCollapsed, toggleRow as toggleRowSet } from './pad';
+import { vitalsWarnings } from './consult-records';
+import { printRows } from '../admin/forms/renderer';
 import { ConsultPageAssistantComponent } from './page-assistant.component';
 import { ADMIN_PERMS } from '../../../core/auth/route-access';
 
@@ -84,7 +88,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
   standalone: true,
   imports: [OpdSpecimenPickerComponent, ConsultProceduresComponent,
     DatePipe, ConsultVitalsComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
-    RxEditorComponent, PatientTimelineComponent, ConsultVisitCardComponent, ConsultPageAssistantComponent, JourneyDockComponent,
+    RxEditorComponent, PatientTimelineComponent, ConsultVisitCardComponent, ConsultPageAssistantComponent, JourneyDockComponent, PadAddComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -99,7 +103,11 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <span class="cw__avatar nd-num" aria-hidden="true">{{ initials(w.patient.name) }}</span>
             <div class="cw__who">
               <div class="cw__nameline">
-                <h1 class="cw__name">{{ w.patient.name }}</h1>
+                <h1 class="cw__name"><button type="button" class="cw__namebtn" (click)="togglePatient()" [attr.aria-expanded]="rightDocked() || rightOverlay()" data-patient
+                        title="Allergies, history and reports" [attr.aria-label]="w.patient.name + ' — allergies, history and reports'">{{ w.patient.name }}
+                  @if (allergies().length) { <span class="cw__ndot" aria-label="has allergies"></span> }
+                  @else if (watch()) { <span class="cw__ndot cw__ndot--amber" aria-label="a value to watch"></span> }
+                </button></h1>
                 <span class="cw__status" [attr.data-status]="w.visit.status">
                   @if (w.visit.status === 'in_consult') { <span class="cw__live" aria-hidden="true"></span> }
                   {{ statusLabel(w.visit.status) }}
@@ -121,17 +129,12 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
               }
               @if (showPage()) {
                 <pf-consult-page-assistant [assistantId]="w.assistant?.userId ?? null" [assistantName]="w.assistant?.name ?? null" [isAdmin]="isAdmin()"
-                                           [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel"></pf-consult-page-assistant>
+                                           [patientId]="w.patient.id" [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [iconOnly]="true"></pf-consult-page-assistant>
               }
-              <button type="button" class="nd-btn nd-btn--secondary cw__cmp cw__patbtn" (click)="togglePatient()" [attr.aria-expanded]="rightDocked() || rightOverlay()" [attr.aria-pressed]="rightDocked() || rightOverlay()" aria-label="Patient records" data-patient>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <span class="cw__lab">Patient</span>
-                @if (allergies().length) { <span class="cw__alertdot" aria-label="has allergies"></span> }
-                @else if (watch()) { <span class="cw__alertdot cw__alertdot--amber" aria-label="a value to watch"></span> }
-              </button>
-              <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare>
+              <button type="button" class="nd-btn nd-btn--secondary cw__cmp cw__icon" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare
+                      title="Compare visits side by side" aria-label="Compare visits side by side">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
-                <span class="cw__lab">Compare</span>@if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
+                @if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
               </button>
               @if (editable()) {
                 <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
@@ -235,7 +238,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                       <div class="cw__cp cw__cp--wide">
                         @if (it.id === 'today:desk') { <p class="cw__p">Complaint: {{ it.text }}</p> }
                         @else { @for (p of intakePrefills(); track p.id) { <div class="cw__kv"><span>{{ p.label }}</span><b>{{ p.value }}</b></div> } }
-                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="goSpace('find')">Review in Findings</button></div> }
+                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="closeViewer(); openFindings()">Review in Findings</button></div> }
                       </div>
                     }
                     @case ('res') {
@@ -264,228 +267,203 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <pf-patient-timeline #tl class="cw__tl" [class.cw__tl--on]="fileView()" [patientId]="w.patient.id" [embedded]="true" [hideTitle]="true" [viewerOnly]="true"></pf-patient-timeline>
 
             @if (!viewing()) {
-              <header class="nd-card__head cw__tabhead">
-                <div class="cw__tabs" role="tablist" aria-label="Consult">
-                  @for (t of spaces; track t.id) {
-                    <button type="button" class="cw__tab" role="tab" [attr.aria-selected]="space() === t.id" [attr.data-space]="t.id" (click)="goSpace(t.id)"
-                            [attr.aria-label]="t.label + (count(t.id) ? ', ' + count(t.id) : '') + (t.id === 'find' && pending().length ? ', prefills to check' : '')" [title]="t.label">
-                  <span class="cw__tico" aria-hidden="true">
-                    @switch (t.id) {
-                      @case ('find') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg> }
-                      @case ('dx') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg> }
-                      @case ('med') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg> }
-                      @case ('proc') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z"/></svg> }
-                      @case ('test') { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L5 19a1 1 0 0 0 1 2h12a1 1 0 0 0 1-2l-5-10V3"/><path d="M7 15h10"/></svg> }
-                      @default { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> }
+              <!-- ── The prescription pad: rows in printed order; a label folds its row ── -->
+              <div class="pad" role="form" aria-label="Prescription pad">
+                <!-- C/O -->
+                <section class="prow" [class.prow--coll]="isColl('find')" data-row="find">
+                  <button type="button" class="plab" (click)="toggleRow('find')" [attr.aria-expanded]="!isColl('find')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Complaint &amp; findings <b>C/O</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('find')) { <p class="psum">{{ coText() || 'Nothing noted yet' }}</p> }
+                    @else {
+                      <button type="button" class="pfind" (click)="openFindings()" data-findings>
+                        <span class="pfind__t">{{ st().chiefComplaint || 'Add the complaint and examination' }}</span>
+                        @for (w of coWarn(); track w) { <span class="pfind__w">· {{ w }}</span> }
+                        @for (a of coAnswers(); track a) { <span class="pfind__a">· {{ a }}</span> }
+                        @if (editable() && pending().length) { <span class="pfind__rv">Check {{ pending().length }}</span> }
+                      </button>
                     }
-                  </span>
-                      <span class="cw__tl2">{{ t.label }}</span>
-                      @if (t.id === 'find' && pending().length) { <span class="cw__dotw" title="Prefills to check"></span> }
-                      @if (count(t.id); as c) { <span class="cw__tc nd-num">{{ c }}</span> }
-                    </button>
-                  }
-                </div>
-              </header>
+                  </div>
+                </section>
 
-              <div class="cw__space" role="tabpanel" [attr.aria-label]="spaceLabel()">
-                @switch (space()) {
-                  @case ('find') {
-                    <div class="cw__sh"><h2>Findings</h2><p>What the patient tells you and what you find on examination.</p></div>
-                    <div class="cw__single">
-                      @if (editable() && pending().length) {
-                        <div class="cw__review" data-review>
-                          <div class="cw__rh"><span>Check what was filled in before the consult · {{ pending().length }}</span>
-                            <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="confirmAll()">Confirm all</button></div>
-                          @for (p of pending(); track p.id) {
-                            <div class="cw__pf" [class.cw__pf--w]="p.warn" [attr.data-prefill]="p.id">
-                              <div class="cw__pfm"><span class="cw__pfv">{{ p.label }}: {{ p.value }}</span><span class="cw__pfs">{{ p.src }}</span></div>
-                              <div class="cw__pfa">
-                                <button type="button" class="nd-btn nd-btn--tertiary cw__sm" (click)="editPrefill(p)">Edit</button>
-                                <button type="button" class="nd-btn nd-btn--secondary cw__sm cw__xs" (click)="confirm(p.id)">Confirm</button>
-                              </div>
-                            </div>
+                <!-- Dx -->
+                <section class="prow" [class.prow--coll]="isColl('dx')" data-row="dx">
+                  <button type="button" class="plab" (click)="toggleRow('dx')" [attr.aria-expanded]="!isColl('dx')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Diagnosis <b>Dx</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('dx')) { <p class="psum">{{ dxText(st().diagnoses) || 'None' }}</p> }
+                    @else {
+                      @if (st().diagnoses.length) {
+                        <div class="pchips">
+                          @for (d of st().diagnoses; track d.label; let i = $index) {
+                            @if (editDx() === i) {
+                              <input class="nd-input pchip-edit" type="text" [value]="d.label" (keydown.enter)="renameDx(i, $any($event.target).value)" (blur)="renameDx(i, $any($event.target).value)"
+                                     (keydown.escape)="editDx.set(null)" aria-label="Edit the diagnosis" />
+                            } @else {
+                              <span class="pchip" [class.pchip--main]="i === 0">
+                                <button type="button" class="pchip__t" (click)="editable() && editDx.set(i)" [attr.aria-label]="'Edit ' + d.label">{{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }@if (i === 0) { <small>Main</small> }</button>
+                                @if (editable()) { <button type="button" class="pchip__x" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label">×</button> }
+                              </span>
+                            }
                           }
                         </div>
+                      } @else if (!editable()) { <p class="psum">No diagnosis recorded.</p> }
+                      @if (editable()) {
+                        <pf-pad-add placeholder="Add a diagnosis…" [options]="dxOptions()" [exclude]="dxLabels()" [quick]="dxQuick()" quickLabel="Suggested" [allowFree]="true"
+                                    (query)="onDxType($event)" (pick)="addDx({ label: $event.label, code: $event.meta ?? null })" (free)="addDx({ label: $event, source: 'mine' })"></pf-pad-add>
                       }
-                      <label class="cw__f" [class.cw__f--pre]="isPending('complaint')">
-                        <span>Complaint @if (isPending('complaint')) { <em class="cw__ptag">From the front desk</em> }</span>
-                        <input id="cw-complaint" class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
-                               (input)="onComplaint($any($event.target).value)" placeholder="What brings the patient in" />
-                      </label>
-                      @if (w.form) {
-                        <section class="cw__form" data-grp="form">
-                          <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
-                                                [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [compact]="true" [visitDate]="w.visit.visitDate"
-                                                (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
-                          <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
-                          @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
-                          <p class="cw__muted">These questions come from the {{ w.form.formName }} form set up in OPD admin.</p>
-                        </section>
-                      } @else {
-                        <p class="cw__muted">No consult form is set for this service — the complaint and diagnosis are enough to finish.</p>
-                      }
-                    </div>
-                  }
-                  @case ('dx') {
-                    <div class="cw__sh"><h2>Diagnosis</h2><p>The first one you add is the main diagnosis.</p></div>
-                    @if (editable()) {
-                      <div class="cw__addbar">
-                        <label class="cw__qa">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                          <input #dxIn type="text" [value]="dxQuery()" (input)="onDxType(dxIn.value)" (keydown)="onDxKey($event)"
-                                 placeholder="Find a diagnosis, or type your own and press Enter" aria-label="Add a diagnosis"
-                                 role="combobox" [attr.aria-expanded]="dxOpen()" aria-controls="cw-dx-list" autocomplete="off" />
-                          <kbd aria-hidden="true">Enter</kbd>
-                        </label>
-                        @if (dxOpen()) {
-                          <div id="cw-dx-list" class="cw__sug" role="listbox">
-                            @for (o of dxSuggest(); track o.label; let i = $index) {
-                              <button type="button" role="option" class="cw__sg" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
-                                <span class="cw__ty">Diagnosis</span><span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
-                              </button>
-                            }
-                            @if (dxQuery().trim()) {
-                              <button type="button" role="option" class="cw__sg" [class.act]="dxActive() === dxSuggest().length" (mousedown)="$event.preventDefault()" (click)="addDx({ label: dxQuery().trim(), source: 'mine' })">
-                                <span class="cw__ty">New</span><span>Add “{{ dxQuery().trim() }}” as written</span><em></em>
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
                     }
-                    <div class="cw__single">
-                      <div class="cw__chips">
-                        @for (d of st().diagnoses; track d.label; let i = $index) {
-                          <span class="cw__dx" [class.cw__dx--p]="i === 0">
-                            {{ d.label }}@if (d.code) { <em>{{ d.code }}</em> }@if (i === 0) { <small>Main</small> }
-                            @if (editable()) {
-                              <button type="button" (click)="removeDx(i)" [attr.aria-label]="'Remove ' + d.label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-                            }
-                          </span>
-                        } @empty { <span class="cw__muted">No diagnosis yet.</span> }
-                      </div>
-                    </div>
-                  }
-                  @case ('med') {
-                    <div class="cw__sh">
-                      <h2>Prescription</h2><span class="cw__grow"></span>
-                      @if (st().lines.length) { <button type="button" class="nd-btn nd-btn--secondary cw__sm" (click)="preview()" data-preview>Preview prescription</button> }
-                      <p>Type a few letters and press Enter: your usual dose is filled in. Tap a value only to change it.</p>
-                    </div>
-                    <div class="cw__single cw__single--rx">
+                  </div>
+                </section>
+
+                <!-- Rx -->
+                <section class="prow" [class.prow--coll]="isColl('rx')" data-row="rx">
+                  <button type="button" class="plab" (click)="toggleRow('rx')" [attr.aria-expanded]="!isColl('rx')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Medicines <b>Rx</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('rx')) { <p class="psum">{{ rxSum() }}</p> }
+                    <div [hidden]="isColl('rx')">
                       <pf-rx-editor #rx [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
                                     [pregnant]="ws()?.pregnancy ?? null" [readonly]="!editable()" [start]="visitDay()" [usuals]="usuals()" [preferIds]="preferIds()"
                                     (search)="drugSearch$.next($event)" (notice)="toast.info($event)">
                         @if (editable() && (usualSet() || w.lastVisit?.rx?.length || favs().length)) {
-                          <div rx-quick class="cw__favs" role="group" aria-label="One tap">
-                            @if (usualSet(); as u) {
-                              <button type="button" class="cw__fav cw__fav--set" (click)="applyUsualSet()" data-dxset>+ {{ primaryDx() }} set <small>{{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}}</small></button>
-                            }
+                          <div rx-quick class="pquick" role="group" aria-label="One tap">
                             @if (w.lastVisit?.rx?.length) {
-                              <button type="button" class="cw__fav cw__fav--set" (click)="repeatLast()" data-repeat-last>+ Repeat {{ w.lastVisit!.visitDate | date:'d MMM' }} <small>{{ w.lastVisit!.rx.length }} medicine{{ w.lastVisit!.rx.length === 1 ? '' : 's' }}</small></button>
+                              <button type="button" class="pquick__c pquick__c--set" (click)="repeatLast()" data-repeat-last>+ Repeat {{ w.lastVisit!.visitDate | date:'d MMM' }}</button>
                             }
-                            @for (d of favs(); track d.id) { <button type="button" class="cw__fav" (click)="addFav(d)">+ {{ d.name }}</button> }
+                            @if (usualSet(); as u) {
+                              <button type="button" class="pquick__c pquick__c--set" (click)="applyUsualSet()" data-dxset>+ {{ primaryDx() }} set <small>{{ u.rx.length }}</small></button>
+                            }
+                            @for (d of favs(); track d.id) { <button type="button" class="pquick__c" (click)="addFav(d)">+ {{ d.name }}</button> }
                           </div>
                         }
                         @if (usualApplied()) {
                           <div rx-quick class="cw__banner">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
-                            <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in. Tap any value to change just that.</span>
+                            <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in.</span>
                             <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
                           </div>
                         }
                       </pf-rx-editor>
                     </div>
-                  }
-                  @case ('proc') {
-                    <div class="cw__sh"><h2>Procedures</h2><p>Do it now in the room, or book it for later — the front desk fixes the date.</p></div>
-                    <div class="cw__single cw__single--fill">
+                  </div>
+                </section>
+
+                <!-- Procedures -->
+                <section class="prow" [class.prow--coll]="isColl('proc')" data-row="proc">
+                  <button type="button" class="plab" (click)="toggleRow('proc')" [attr.aria-expanded]="!isColl('proc')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Procedures
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('proc')) { <p class="psum">{{ procSum() }}</p> }
+                    @else {
                       @if (st().procedures; as procs) {
                         <pf-consult-procedures [options]="w.procedureOptions ?? []" [items]="procs" [pricing]="w.procedurePricing ?? null"
                                                [readonly]="!editable()" [payAfter]="w.billing?.mode === 'after_consult'" [laterEnabled]="laterEnabled()"
-                                               [showReasonErr]="reasonErr()" (itemsChange)="patch({ procedures: $event })"></pf-consult-procedures>
-                      } @else { <p class="cw__muted">Procedures aren't available on this server yet.</p> }
-                    </div>
-                  }
-                  @case ('test') {
-                    <div class="cw__sh"><h2>Tests</h2><p>Ordered tests go to the lab desk as a normal order when you complete the consult.</p></div>
-                    @if (editable()) {
-                      <div class="cw__addbar">
-                        <label class="cw__qa">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                          <input #tIn type="text" [value]="testQuery()" (input)="testQuery.set(tIn.value); testActive.set(0)" (keydown)="onTestKey($event)"
-                                 placeholder="Add a test: CBC, HbA1c, LFT…" aria-label="Search lab tests" role="combobox" [attr.aria-expanded]="!!testHits().length" autocomplete="off" />
-                          <kbd aria-hidden="true">Enter</kbd>
-                        </label>
-                        @if (testHits().length) {
-                          <div class="cw__sug" role="listbox" aria-label="Lab tests">
-                            @for (t of testHits(); track t.id; let i = $index) {
-                              <button type="button" role="option" class="cw__sg" [class.act]="i === testActive()" [attr.aria-selected]="i === testActive()" (mousedown)="$event.preventDefault()"
-                                      (click)="addTest({ testId: t.id, name: t.name, price: t.price })">
-                                <span class="cw__ty cw__ty--test">Test</span><span>{{ t.name }}@if (hasTest(t.id)) { · ordered }</span><em class="nd-num">@if (t.price) { ₹{{ t.price }} }</em>
-                              </button>
-                            }
-                          </div>
-                        }
-                        @if (testLoadError()) { <p class="cw__muted">The lab test list could not be loaded for your role.</p> }
-                      </div>
+                                               [showReasonErr]="reasonErr()" [recordEnabled]="recordEnabled()" [files]="procFiles()" [uploading]="procUploading()"
+                                               (itemsChange)="patch({ procedures: $event })" (upload)="uploadProcFiles($event)"></pf-consult-procedures>
+                      } @else { <p class="psum">Procedures aren't available on this server yet.</p> }
                     }
-                    <div class="cw__single">
-                      @if (editable() && suggestedMissing().length) {
-                        <div class="cw__grp">
-                          <div class="cw__gh">Suggested for {{ primaryDx() }} <button type="button" class="nd-btn nd-btn--tertiary" (click)="orderAll()">+ Order all {{ suggestedMissing().length }}</button></div>
-                          <div class="cw__chips">@for (t of suggestedMissing(); track t.testId) { <button type="button" class="cw__opt" (click)="toggleTest(t)">+ {{ t.name }}</button> }</div>
-                        </div>
-                      }
-                      <div class="cw__grp">
-                        <div class="cw__gh">Ordered <span class="nd-num">{{ st().tests.length }}@if (testTotal()) { · ₹{{ testTotal() }}}</span></div>
-                        @for (t of st().tests; track t.testId) {
-                          <div class="nd-row cw__ordered">
-                            <span class="nd-row__name">{{ t.name }}</span>
-                            @if (editable()) {
-                              <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
-                                                      (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
-                            } @else if (t.specimen) {
-                              <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen" [readonly]="true"></pf-opd-specimen-picker>
-                            }
-                            @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
-                            @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
-                          </div>
-                        } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
-                        @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
-                      </div>
-                    </div>
-                  }
-                  @case ('adv') {
-                    <div class="cw__sh"><h2>Advice &amp; notes</h2><p>Advice and follow-up print on the prescription. Private notes don't.</p></div>
-                    <div class="cw__single">
-                      <label class="cw__f">
-                        <span>Advice for the patient <em class="cw__ptag cw__ptag--q">printed on the prescription</em></span>
-                        <textarea class="nd-input cw__in" rows="3" [value]="st().advice" [disabled]="!editable()" (input)="patch({ advice: $any($event.target).value })" placeholder="Diet, rest, red flags to watch for…"></textarea>
-                      </label>
-                      <div class="cw__grp">
-                        <div class="cw__gh">Follow-up</div>
-                        <div class="nd-seg cw__seg" role="radiogroup" aria-label="Follow-up">
-                          @for (p of fuPicks; track p.label) {
-                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="p.days === st().followUpDays" [disabled]="!editable()" (click)="patch({ followUpDays: p.days })">{{ p.label }}</button>
+                  </div>
+                </section>
+
+                <!-- Ix -->
+                <section class="prow" [class.prow--coll]="isColl('test')" data-row="test">
+                  <button type="button" class="plab" (click)="toggleRow('test')" [attr.aria-expanded]="!isColl('test')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Tests <b>Ix</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('test')) { <p class="psum">{{ testSum() }}</p> }
+                    @else {
+                      @if (st().tests.length) {
+                        <div class="pchips">
+                          @for (t of st().tests; track t.testId) {
+                            <span class="pchip">
+                              <span class="pchip__t">{{ t.name }}@if (t.price) { <small class="nd-num">₹{{ t.price }}</small> }</span>
+                              @if (editable() || t.specimen) {
+                                <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)" [readonly]="!editable()"
+                                                        (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
+                              }
+                              @if (editable()) { <button type="button" class="pchip__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name">×</button> }
+                            </span>
                           }
                         </div>
-                        <p class="cw__muted">{{ fuText() }}</p>
-                      </div>
-                      <div class="cw__grp">
-                        <div class="cw__gh">Private notes
-                          <span class="cw__lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Only you</span>
+                      } @else if (!editable()) { <p class="psum">No tests were ordered.</p> }
+                      @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="psum">Sent to the lab as a normal order.</p> }
+                      @if (editable()) {
+                        <pf-pad-add placeholder="Add a test…" [options]="testOptions()" [exclude]="testIds()" [quick]="testQuick()" quickLabel="Common for the diagnosis"
+                                    (pick)="addTestById($event.id)"></pf-pad-add>
+                        @if (testLoadError()) { <p class="psum">The lab test list could not be loaded for your role.</p> }
+                      }
+                    }
+                  </div>
+                </section>
+
+                <!-- Adv -->
+                <section class="prow" [class.prow--coll]="isColl('adv')" data-row="adv">
+                  <button type="button" class="plab" (click)="toggleRow('adv')" [attr.aria-expanded]="!isColl('adv')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Advice <b>Adv</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('adv')) { <p class="psum">{{ advice().join(' · ') || 'None' }}</p> }
+                    @else {
+                      @if (advice().length) {
+                        <div class="pchips">
+                          @for (a of advice(); track $index; let i = $index) {
+                            @if (editAdv() === i) {
+                              <input class="nd-input pchip-edit" type="text" [value]="a" (keydown.enter)="renameAdvice(i, $any($event.target).value)" (blur)="renameAdvice(i, $any($event.target).value)"
+                                     (keydown.escape)="editAdv.set(null)" aria-label="Edit the advice" />
+                            } @else {
+                              <span class="pchip">
+                                <button type="button" class="pchip__t" (click)="editable() && editAdv.set(i)" [attr.aria-label]="'Edit ' + a">{{ a }}</button>
+                                @if (editable()) { <button type="button" class="pchip__x" (click)="removeAdvice(i)" aria-label="Remove this advice">×</button> }
+                              </span>
+                            }
+                          }
                         </div>
-                        @if (w.consult?.privateNotesHidden) {
-                          <p class="cw__muted">The consulting doctor's private notes are not visible to you.</p>
-                        } @else {
-                          <textarea class="nd-input cw__in cw__notes" rows="5" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })" placeholder="Anything to remember for the next visit — never printed, never sent to the patient."></textarea>
-                          <p class="cw__muted">{{ visibilityText() }} Never printed, never sent on WhatsApp.</p>
+                      } @else if (!editable()) { <p class="psum">No advice.</p> }
+                      @if (editable()) {
+                        <pf-pad-add placeholder="Add advice…" [options]="adviceOptions()" [exclude]="advice()" [quick]="adviceQuick()" quickLabel="Common advice" [allowFree]="true"
+                                    (pick)="addAdvice($event.label)" (free)="addAdvice($event)"></pf-pad-add>
+                      }
+                    }
+                  </div>
+                </section>
+
+                <!-- F/U -->
+                <section class="prow" [class.prow--coll]="isColl('fu')" data-row="fu">
+                  <button type="button" class="plab" (click)="toggleRow('fu')" [attr.aria-expanded]="!isColl('fu')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Follow-up <b>F/U</b>
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('fu')) { <p class="psum">{{ fuLabel() }}</p> }
+                    @else {
+                      <div class="popts" role="radiogroup" aria-label="Follow-up">
+                        @for (p of fuPicks; track p.label) {
+                          <button type="button" class="o" role="radio" [attr.aria-checked]="p.days === st().followUpDays" [disabled]="!editable()" (click)="patch({ followUpDays: p.days })">{{ p.label }}</button>
                         }
                       </div>
-                    </div>
-                  }
-                }
+                      <p class="psum">{{ fuText() }}</p>
+                    }
+                  </div>
+                </section>
+
+                <!-- Private note -->
+                <section class="prow" [class.prow--coll]="isColl('note')" data-row="note">
+                  <button type="button" class="plab" (click)="toggleRow('note')" [attr.aria-expanded]="!isColl('note')">
+                    <span class="plab__chev" aria-hidden="true">▾</span>Private note
+                  </button>
+                  <div class="pbody">
+                    @if (isColl('note')) { <p class="psum">{{ st().privateNotes ? 'Written · only you see it' : 'None' }}</p> }
+                    @else if (w.consult?.privateNotesHidden) { <p class="psum">The consulting doctor's private notes are not visible to you.</p> }
+                    @else {
+                      <textarea class="nd-input pnote" rows="1" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })"
+                                placeholder="Only you see this. Never printed or sent." [attr.aria-label]="'Private note. ' + visibilityText()"></textarea>
+                    }
+                  </div>
+                </section>
               </div>
             }
           </main>
@@ -501,6 +479,54 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                                    (swap)="swapLine($event.key, $event.alt)" (seeLine)="seeLine()"
                                    (addAllergy)="addAllergy($event)" (removeAllergy)="removeAllergy($event)"></pf-consult-visit-card>
           </aside>
+
+          <!-- ── The Findings drawer (C/O): prefill review + the consult form ── -->
+          @if (findingsOpen()) {
+            <div class="cw__scrim" (click)="findingsOpen.set(false)" aria-hidden="true"></div>
+            <aside class="nd-card cw__drawer" role="dialog" aria-label="Complaint and findings">
+              <header class="nd-card__head">
+                <span class="nd-card__label">Complaint &amp; findings</span>
+                <span class="nd-card__spacer"></span>
+                <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="findingsOpen.set(false)" aria-label="Close the findings">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </header>
+              <div class="cw__drawerb">
+                @if (editable() && pending().length) {
+                  <div class="cw__review" data-review>
+                    <div class="cw__rh"><span>Check what was filled in before the consult · {{ pending().length }}</span>
+                      <button type="button" class="nd-btn nd-btn--secondary cw__xs" (click)="confirmAll()">Confirm all</button></div>
+                    @for (p of pending(); track p.id) {
+                      <div class="cw__pf" [class.cw__pf--w]="p.warn" [attr.data-prefill]="p.id">
+                        <div class="cw__pfm"><span class="cw__pfv">{{ p.label }}: {{ p.value }}</span><span class="cw__pfs">{{ p.src }}</span></div>
+                        <div class="cw__pfa">
+                          <button type="button" class="nd-btn nd-btn--tertiary cw__xs" (click)="editPrefill(p)">Edit</button>
+                          <button type="button" class="nd-btn nd-btn--secondary cw__xs" (click)="confirm(p.id)">Confirm</button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+                <label class="cw__f" [class.cw__f--pre]="isPending('complaint')">
+                  <span>Complaint @if (isPending('complaint')) { <em class="cw__ptag">From the front desk</em> }</span>
+                  <input id="cw-complaint" class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
+                         (input)="onComplaint($any($event.target).value)" placeholder="What brings the patient in" />
+                </label>
+                @if (w.form) {
+                  <section class="cw__form" data-grp="form">
+                    <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
+                                          [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [compact]="true" [visitDate]="w.visit.visitDate"
+                                          (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
+                    <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
+                    @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
+                    <p class="cw__muted">These questions come from the {{ w.form.formName }} form set up in OPD admin.</p>
+                  </section>
+                } @else {
+                  <p class="cw__muted">No consult form is set for this service — the complaint and diagnosis are enough to finish.</p>
+                }
+              </div>
+            </aside>
+          }
         </div>
 
         <pf-journey-dock class="cw__dock" (picked)="onDockPick($event)"></pf-journey-dock>
@@ -655,7 +681,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly preferIds = computed(() => (this.usual()?.rx ?? []).map(r => r.drugId).filter((x): x is string => !!x));
   /** Server features (feature-detected; older servers have none). */
   readonly laterEnabled = computed(() => this.ws()?.features?.procedureLater === true);
-  private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled() }));
+  private readonly bodyOpts = computed<BodyOpts>(() => ({ procedureLater: this.laterEnabled(), procedureRecord: this.recordEnabled() }));
   /** Page: whenever Messages is on (no assistant → the popover says how to set one). */
   readonly showPage = computed(() => this.entitlements?.moduleEnabled('messages') !== false);
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
@@ -861,7 +887,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       this.dock.select(journeyDayKey(w.visit.visitDate));
       this.confirmed.set(this.readConfirmed(w.visit.id));
       // Nothing to review → open where the doctor works most: the diagnosis.
-      if (!this.editable() || !this.pending().length) this.space.set(this.editable() ? 'dx' : 'med');
+      this.collapsed.set((() => { try { return parseCollapsed(localStorage.getItem(padCollapseKey(this.auth.user()?.id))); } catch { return new Set<PadRow>(); } })());
     }
   }
 
@@ -1043,7 +1069,105 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   count(id: ConsultSpace) { return spaceCount(id, this.st()); }
-  goSpace(id: ConsultSpace) { this.space.set(id); this.viewItem.set(null); this.leaveCompare(); }
+  /** Bring a pad row into view (unfolded); 'find' opens the Findings drawer. */
+  goSpace(id: ConsultSpace) {
+    this.space.set(id);
+    this.viewItem.set(null);
+    this.leaveCompare();
+    const row = ({ find: 'find', dx: 'dx', med: 'rx', proc: 'proc', test: 'test', adv: 'adv' } as Record<ConsultSpace, PadRow>)[id];
+    if (id === 'find') { this.openFindings(); return; }
+    if (this.collapsed().has(row)) this.toggleRow(row);
+    queueMicrotask(() => this.doc.querySelector(`[data-row="${row}"]`)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
+  }
+
+  // ── The pad ────────────────────────────────────────────────────────
+  readonly collapsed = signal<Set<PadRow>>(new Set());
+  readonly findingsOpen = signal(false);
+  readonly editDx = signal<number | null>(null);
+  readonly editAdv = signal<number | null>(null);
+  isColl(r: PadRow) { return this.collapsed().has(r); }
+  toggleRow(r: PadRow) {
+    this.collapsed.set(toggleRowSet(this.collapsed(), r));
+    try { localStorage.setItem(padCollapseKey(this.auth.user()?.id), JSON.stringify([...this.collapsed()])); } catch { /* private mode */ }
+  }
+  openFindings() { this.findingsOpen.set(true); this.patientOpen.set(false); }
+  /** C/O summary: the complaint, what's out of range, a few key answers. */
+  readonly coWarn = computed(() => vitalsWarnings(this.ws()?.vitals));
+  readonly coAnswers = computed(() => printRows(allQuestions(this.formSchema()), this.st().answers ?? {})
+    .filter(r => r.text).slice(0, 3).map(r => `${r.label}: ${r.text}`));
+  readonly coText = computed(() => [this.st().chiefComplaint, ...this.coWarn(), ...this.coAnswers()].filter(Boolean).join(' · '));
+  readonly rxSum = computed(() => { const l = this.st().lines; return l.length ? `${l.length} medicine${l.length === 1 ? '' : 's'}: ${l.map(x => x.drug.name).join(', ')}` : 'None'; });
+  readonly procSum = computed(() => (this.st().procedures ?? []).map(p => p.name).join(', ') || 'None');
+  readonly testSum = computed(() => this.st().tests.map(t => t.name).join(', ') || 'None');
+  readonly fuLabel = computed(() => FOLLOW_UP_PICKS.find(p => p.days === this.st().followUpDays)?.label ?? (this.st().followUpDays != null ? `${this.st().followUpDays} days` : 'Not set'));
+  // Dx
+  readonly dxOptions = computed<PadOption[]>(() => this.dxSuggest().map(o => ({ id: o.label, label: o.label, meta: o.code ?? undefined })));
+  readonly dxLabels = computed(() => this.st().diagnoses.map(d => d.label));
+  /** One-tap diagnoses: the patient's known conditions and the last visit's diagnoses. */
+  readonly dxQuick = computed<PadOption[]>(() => {
+    const have = new Set(this.dxLabels().map(x => x.toLowerCase()));
+    const src = [...(this.ws()?.lastVisit?.diagnoses ?? []), ...(this.ws()?.conditions ?? [])];
+    const seen = new Set<string>();
+    return src.filter(d => { const k = d.label.toLowerCase(); if (have.has(k) || seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 4).map(d => ({ id: d.label, label: d.label, meta: d.code ?? undefined }));
+  });
+  renameDx(i: number, v: string) {
+    this.editDx.set(null);
+    const label = v.trim();
+    const cur = this.st().diagnoses[i];
+    if (!cur || !label || label === cur.label) return;
+    this.patch({ diagnoses: this.st().diagnoses.map((d, k) => (k === i ? { ...d, label, code: undefined } : d)) });
+  }
+  // Tests
+  readonly testOptions = computed<PadOption[]>(() => this.testCatalog().map(t => ({ id: t.id, label: t.name, meta: [t.shortName, t.testCode].filter(Boolean).join(' · ') || undefined })));
+  readonly testIds = computed(() => this.st().tests.map(t => t.testId));
+  readonly testQuick = computed<PadOption[]>(() => this.suggestedMissing().slice(0, 4).map(t => ({ id: t.testId, label: t.name })));
+  addTestById(id: string) {
+    const t = this.testCatalog().find(x => x.id === id) ?? this.suggested().find(x => x.testId === id);
+    if (!t) return;
+    if ('testId' in t) this.addTest(t); else this.addTest({ testId: t.id, name: t.name, price: t.price });
+  }
+  // Advice (one chip per line of the advice text)
+  readonly advice = computed(() => adviceLines(this.st().advice));
+  readonly adviceOptions = computed<PadOption[]>(() => [...new Set([...adviceLines(this.usual()?.advice ?? ''), ...COMMON_ADVICE])].map(a => ({ id: a, label: a })));
+  readonly adviceQuick = computed<PadOption[]>(() => this.adviceOptions().filter(o => !this.advice().includes(o.label)).slice(0, 3));
+  addAdvice(text: string) { const t = text.trim(); if (t && !this.advice().includes(t)) this.patch({ advice: [...this.advice(), t].join('\n') }); }
+  removeAdvice(i: number) { this.patch({ advice: this.advice().filter((_, k) => k !== i).join('\n') }); }
+  renameAdvice(i: number, v: string) {
+    this.editAdv.set(null);
+    const t = v.trim();
+    const list = this.advice();
+    if (!t || t === list[i]) return;
+    this.patch({ advice: list.map((a, k) => (k === i ? t : a)).join('\n') });
+  }
+  // Procedure record files (feature-detected)
+  readonly recordEnabled = computed(() => this.ws()?.features?.procedureRecord === true || (this.ws()?.procedures ?? []).some(p => 'record' in p));
+  private readonly procUploads = signal<Record<string, { id: string; name: string; kind: string; procedureId?: string | null }[]>>({});
+  readonly procUploading = signal<Record<string, boolean>>({});
+  readonly procFiles = computed(() => {
+    const media = this.ws()?.media ?? [];
+    const up = this.procUploads();
+    const out: Record<string, { id: string; name: string; kind: string }[]> = {};
+    for (const p of this.st().procedures ?? []) {
+      const saved = p.id ? media.filter(m => m.procedureId === p.id) : [];
+      const mine = Object.values(up).flat().filter(m => p.id && m.procedureId === p.id && !saved.some(x => x.id === m.id));
+      out[p.key] = [...saved, ...mine];
+    }
+    return out;
+  });
+  uploadProcFiles(e: { key: string; procedureId: string; files: File[] }) {
+    const visitId = this.ws()?.visit.id;
+    if (!visitId) return;
+    this.procUploading.update(m => ({ ...m, [e.key]: true }));
+    let left = e.files.length;
+    for (const f of e.files) {
+      this.consultApi.uploadMedia(visitId, f, e.procedureId).subscribe({
+        next: stored => this.procUploads.update(m => ({ ...m, [e.key]: [...(m[e.key] ?? []), { ...stored, procedureId: e.procedureId }] })),
+        error: err => this.toast.error(err?.message || `Could not upload ${f.name}`),
+        complete: () => { if (--left <= 0) this.procUploading.update(m => ({ ...m, [e.key]: false })); },
+      });
+    }
+  }
   statusLabel(s: string) {
     return ({ booked: 'Booked', vitals: 'At vitals', waiting: 'Waiting', in_consult: 'In consult', completed: 'Completed', cancelled: 'Cancelled', no_show: 'No show' } as Record<string, string>)[s] ?? s;
   }
@@ -1231,7 +1355,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
   toggleRightPin() { this.rightPinned.update(v => !v); this.patientOpen.set(false); this.savePin('Right', this.rightPinned()); }
   /** The band's "Patient" button: docked → nothing to open (it's there); else the panel toggles. */
-  togglePatient() { if (this.rightDocked() && !this.phone()) return; this.patientOpen.update(v => !v); }
+  togglePatient() { if (this.rightDocked() && !this.phone()) return; this.findingsOpen.set(false); this.patientOpen.update(v => !v); }
   private pinKey(which: 'Right') { return `pf.opd.consult${which}Pin.${this.auth.user()?.id || 'anon'}`; }
   private savePin(which: 'Right', v: boolean) { try { localStorage.setItem(this.pinKey(which), v ? '1' : '0'); } catch { /* private mode */ } }
   /** Default: unpinned (owner) — the panel opens over the centre. */
@@ -1241,6 +1365,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   @HostListener('document:keydown.escape')
   onEsc() {
     if (this.completeOpen()) return;
+    if (this.findingsOpen()) { this.findingsOpen.set(false); return; }
     if (this.patientOpen()) { this.closeRight(true); return; }
     if (this.compareOn()) this.leaveCompare();
   }

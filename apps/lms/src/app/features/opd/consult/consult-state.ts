@@ -26,7 +26,7 @@ export interface ConsultEditState {
 }
 
 /** Server capabilities the body depends on (feature-detected from the workspace). */
-export interface BodyOpts { procedureLater?: boolean }
+export interface BodyOpts { procedureLater?: boolean; procedureRecord?: boolean }
 
 export function draftBody(s: ConsultEditState, followUpDate: string | null, start?: Date, opts: BodyOpts = {}): ConsultDraftBody {
   return {
@@ -39,7 +39,7 @@ export function draftBody(s: ConsultEditState, followUpDate: string | null, star
     followUpDate,
     rx: s.lines.map(l => toDto(l, start)),
     investigationItems: s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) })),
-    ...(s.procedures ? { procedures: proceduresBody(s.procedures, !!opts.procedureLater) } : {}),
+    ...(s.procedures ? { procedures: proceduresBody(s.procedures, !!opts.procedureLater, !!opts.procedureRecord) } : {}),
   };
 }
 
@@ -66,7 +66,7 @@ export function draftPatchBody(dirty: ReadonlySet<DraftSection>, s: ConsultEditS
   if (dirty.has('rx')) body.rx = s.lines.map(l => toDto(l, start));
   if (dirty.has('investigations'))
     body.investigationItems = s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) }));
-  if (dirty.has('procedures') && s.procedures) body.procedures = proceduresBody(s.procedures, !!opts.procedureLater);
+  if (dirty.has('procedures') && s.procedures) body.procedures = proceduresBody(s.procedures, !!opts.procedureLater, !!opts.procedureRecord);
   if (dirty.has('notes'))
     body.notes = {
       chiefComplaint: s.chiefComplaint.trim() || null, advice: s.advice.trim() || null,
@@ -103,7 +103,7 @@ export function procedureDraftOf(p: ConsultProcedureDto): ConsultProcedureDraft 
   return {
     key: 'p' + (++procSeq), id: p.id, serviceId: p.serviceId, name: p.name, code: p.code ?? null, qty: p.qty, rulePrice: p.rulePrice, price: p.price,
     priceReason: p.priceReason ?? null, priceSetByName: p.priceSetByName ?? null, side: p.side ?? null, note: p.note ?? null, status: p.status,
-    when: p.when === 'later' ? 'later' : 'now', preferredWithin: p.preferredWithin ?? null, prepNote: p.prepNote ?? null,
+    when: p.when === 'later' ? 'later' : 'now', preferredWithin: p.preferredWithin ?? null, prepNote: p.prepNote ?? null, record: p.record ?? null,
   };
 }
 

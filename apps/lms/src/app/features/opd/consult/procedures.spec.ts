@@ -113,20 +113,42 @@ describe('<pf-consult-procedures> — list + detail (consult v6)', () => {
     const emitted: ConsultProcedureDraft[][] = [];
     f.componentInstance.itemsChange.subscribe(v => { emitted.push(v); f.componentRef.setInput('items', v); });
     f.detectChanges();
+    // A saved line is one row on the pad; tap it to open its editor.
+    const line = (f.nativeElement as HTMLElement).querySelector('.pr__line') as HTMLButtonElement | null;
+    if (line) { line.click(); f.detectChanges(); }
     return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance, emitted };
   }
-  it('the add bar searches this department\'s procedures with their preset price; Enter adds the match at the rule price', () => {
-    const { el, f, c, emitted } = render();
-    c.onQuery('wax'); f.detectChanges();
-    const hits = el.querySelectorAll('[data-proc]');
+  it('the pad field finds this department\'s procedures (word start) with their preset price; Enter adds at the rule price', () => {
+    const { el, f, emitted } = render();
+    const input = el.querySelector('pf-pad-add input') as HTMLInputElement;
+    input.dispatchEvent(new Event('focus'));
+    input.value = 'wax'; input.dispatchEvent(new Event('input')); f.detectChanges();
+    const hits = el.querySelectorAll('.pa__sg');
     expect(hits.length).toBe(1);
     expect(hits[0].textContent).toContain('Ear wax removal');
     expect(hits[0].textContent).toContain('400');
-    c.onKey(new KeyboardEvent('keydown', { key: 'Enter' })); f.detectChanges();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); f.detectChanges();
     expect(emitted[0]).toHaveLength(1);
     expect(emitted[0][0]).toMatchObject({ serviceId: 's-wax', qty: 1, price: 400, rulePrice: 400, status: 'draft', when: 'now' });
-    expect(el.querySelector('.pr__row')!.textContent).toContain('Do now');
+    expect(el.querySelector('.pr__detail')!.textContent).toContain('Billed to the front desk when you complete the consult');
     expect(el.querySelector('select')).toBeNull();
+  });
+  it('one line per procedure: name · when · price (preset when changed); one-tap common procedures under the field', () => {
+    const { f, el } = render({ items: [row({ price: 1800, priceReason: 'Both sides' })], pricing: ON_20 });
+    (el.querySelector('.pr__done') as HTMLButtonElement).click(); f.detectChanges();
+    const line = el.querySelector('.pr__line')!;
+    expect(line.textContent).toContain('Diagnostic nasal endoscopy');
+    expect(line.textContent).toContain('Do now');
+    expect(line.textContent).toContain('preset ₹1,500');
+    expect([...el.querySelectorAll('.pa__chip')].map(b => b.textContent!.trim())).toEqual([expect.stringContaining('Ear wax removal')]);
+  });
+  it('Do now with the record feature: a record box and Upload / Take photo (hidden without it)', () => {
+    const { f, el } = render({ items: [row({ id: 'p1' })] });
+    expect(el.querySelector('[data-record]')).toBeNull();
+    f.componentRef.setInput('recordEnabled', true); f.detectChanges();
+    expect(el.querySelector('[data-record]')).toBeTruthy();
+    expect(el.querySelector('[data-upload]')).toBeTruthy();
+    expect((el.querySelector('input[capture]') as HTMLInputElement).accept).toBe('image/*');
   });
   it('locked (admin hasn\'t allowed changes): the price shows with a lock and "Price set by the admin"', () => {
     const { el } = render({ items: [row()] });
@@ -166,6 +188,8 @@ describe('<pf-consult-procedures> — list + detail (consult v6)', () => {
     expect(emitted.at(-1)![0].prepNote).toBe('Nothing to eat for 8 hours');
     expect(proceduresTotal(emitted.at(-1)!)).toBe(0);
     expect(proceduresBody(emitted.at(-1)!, true)[0]).toMatchObject({ when: 'later', preferredWithin: 'Within 2 weeks', prepNote: 'Nothing to eat for 8 hours' });
+    expect(proceduresBody([row({ record: ' Polyp seen ' })], false, true)[0].record).toBe('Polyp seen');
+    expect('record' in proceduresBody([row({ record: 'x' })], false, false)[0]).toBe(false);
     expect('when' in proceduresBody(emitted.at(-1)!, false)[0]).toBe(false);
   });
   it('older server (no features.procedureLater): no Book for later', () => {
@@ -184,7 +208,7 @@ describe('<pf-consult-procedures> — list + detail (consult v6)', () => {
   });
   it('read-only (completed consult): no add bar, no edits', () => {
     const { el } = render({ items: [row({ status: 'billed' })], readonly: true });
-    expect(el.querySelector('.pr__q')).toBeNull();
+    expect(el.querySelector('pf-pad-add')).toBeNull();
     expect(el.querySelector('.pr__x')).toBeNull();
     expect(el.textContent).toContain('Billed to the front desk');
   });

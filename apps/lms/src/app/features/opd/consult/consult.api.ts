@@ -56,6 +56,8 @@ export interface ConsultProcedureDto {
   status: 'draft' | 'billed'; billId?: string | null;
   // Consult v6 — appended (older servers omit them = 'now').
   when?: ProcedureWhen | null; preferredWithin?: string | null; prepNote?: string | null;
+  /** Consult v11: the procedure record (findings / what was done) — newer servers. */
+  record?: string | null;
 }
 /** Do the procedure in the room now, or book it for later (the desk fixes the date). */
 export type ProcedureWhen = 'now' | 'later';
@@ -65,6 +67,7 @@ export interface ConsultProcedureDraft {
   priceReason?: string | null; priceSetByName?: string | null; side?: 'left' | 'right' | 'both' | null; note?: string | null; status?: 'draft' | 'billed';
   /** Consult v6: 'later' = booked by the front desk, paid on the procedure day. */
   when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
+  record?: string | null;
 }
 /** A procedure the visit's doctor offers (department procedures + the doctor's own-priced ones). */
 export interface ConsultProcedureOption { serviceId: string; name: string; code?: string | null; price: number; taxSlab: number; departmentName?: string | null; }
@@ -112,7 +115,9 @@ export interface ConsultWorkspace {
   // Consult v6 — appended; feature-detected (older servers omit them).
   /** procedureLater: the server stores when / preferredWithin / prepNote and
    *  lists "later" procedures for the desk to book. */
-  features?: { procedureLater?: boolean } | null;
+  features?: { procedureLater?: boolean; procedureRecord?: boolean } | null;
+  /** The visit's consult files (procedure records' photos / videos / reports carry procedureId). */
+  media?: ConsultMediaItem[] | null;
   /** The doctor's assistant (Nudge) — null when none is set. */
   assistant?: { userId: string; name: string } | null;
   /** Form answer keys pre-filled before the consult (intake), to review. */
@@ -124,7 +129,12 @@ export interface ConsultWorkspace {
 export interface ConsultProcedureBodyLine {
   id: string | null; serviceId: string; qty: number; price: number | null; priceReason: string | null; side: string | null; note: string | null;
   when?: ProcedureWhen; preferredWithin?: string | null; prepNote?: string | null;
+  /** Only to servers with the procedure record. */
+  record?: string | null;
 }
+
+/** A consult file (photo / video / report) — `procedureId` when it belongs to a procedure's record. */
+export interface ConsultMediaItem { id: string; name: string; kind: 'image' | 'video' | 'file'; contentType?: string; size?: number; url?: string | null; procedureId?: string | null; }
 
 export interface ConsultDraftBody {
   answers?: Record<string, unknown>;
@@ -188,7 +198,7 @@ export interface ConsultDrug {
 }
 
 /** A stored consult file (POST /api/opd/consult/{visitId}/media). */
-export interface ConsultStoredFile { id: string; name: string; kind: 'image' | 'video' | 'file'; contentType: string; size: number; url?: string | null; }
+export interface ConsultStoredFile { id: string; name: string; kind: 'image' | 'video' | 'file'; contentType: string; size: number; url?: string | null; procedureId?: string | null; }
 
 /** The renderer's media answer entry for a stored file. */
 export function mediaRefOf(f: ConsultStoredFile): OpdMediaRef {
@@ -244,9 +254,10 @@ export class ConsultApi {
   drugs(q = ''): Observable<ConsultDrug[]> { return this.api.get<ConsultDrug[]>(`${CONSULT_API}/drugs${q ? '?q=' + encodeURIComponent(q) : ''}`); }
   /** Upload one file for a media question (any format). File uploads post
    *  FormData through HttpClient (the app's convention — ApiService is JSON). */
-  uploadMedia(visitId: string, file: File): Observable<ConsultStoredFile> {
+  uploadMedia(visitId: string, file: File, procedureId?: string | null): Observable<ConsultStoredFile> {
     const fd = new FormData();
     fd.append('file', file, file.name);
+    if (procedureId) fd.append('procedureId', procedureId);
     return this.http.post<{ success: boolean; data?: ConsultStoredFile; message?: string; error?: string }>(
       `${environment.apiUrl}${CONSULT_API}/${visitId}/media`, fd).pipe(map(r => {
         if (!r?.success || !r.data) throw new Error(r?.message || r?.error || 'Upload failed');
