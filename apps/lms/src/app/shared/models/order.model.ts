@@ -118,6 +118,11 @@ export interface OrderTest {
    *  terms (a SHARED tube spans several departments). Annotated by the queue
    *  / My Work / sample endpoints; absent on older payloads. */
   routingDepartment?: TubeDepartment | null;
+  /** May the current user close this line as Not reported? Stamped by the
+   *  server's ONE rule (sample-tests read): open, in-house, no saved value,
+   *  unclaimed or own, inside a scoped validator's departments, not printed
+   *  on the live final. Absent on older servers → the client's own check. */
+  closable?: boolean | null;
   testId: string;
   name: string;
   packageTestId?: string;

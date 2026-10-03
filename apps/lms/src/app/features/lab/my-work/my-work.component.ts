@@ -10,6 +10,7 @@ import { firstValueFrom } from 'rxjs';
 import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { completedTubeStatus, planReadiness, ReportReadiness, reportReadinessUrl } from '../../../shared/utils/report-readiness';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -3751,7 +3752,7 @@ export class MyWorkComponent implements OnInit {
       const first = tests[0];
       const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
-      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      const allDone = tests.every(x => x.status === 'entered' || isSignedOrSkipped(x.status));
       // A half-finished tube: partial values saved (draft keeps CurrentResult
       // and status in_progress) but not yet submitted. Badged so the tech can
       // spot what they left off.

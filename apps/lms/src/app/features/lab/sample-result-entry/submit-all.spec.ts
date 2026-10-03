@@ -9,6 +9,7 @@ import {
   prefillFromTests,
   tabMark,
   tabPayload,
+  blankTests,
   boldFromTests,
 } from './submit-all';
 
@@ -86,12 +87,12 @@ describe('Submit all — the empty-field rule', () => {
     expect(tabMark(tab('a', '1', t, { t1: { target: 'Detected', adequacy: 'Adequate', qc: 'Pass' } }))).toBe('complete');
   });
 
-  it('the payload carries EVERY writable test as-is (empty ones with empty values)', () => {
+  it('the payload carries the writable tests WITH a value; a blank one is closed as not reported instead (owner 2026-10-03)', () => {
     const snap = tab('a', '1', [test('t1', 'A'), test('t2', 'B'), test('t3', 'C', { status: 'entered' })], { t1: { target: 'Detected' } });
     expect(tabPayload(snap).results).toEqual([
       { orderTestId: 't1', values: { target: 'Detected' }, note: undefined },
-      { orderTestId: 't2', values: {}, note: undefined },
     ]);
+    expect(blankTests(snap).map((t) => t.id)).toEqual(['t2']);
   });
 
   it('a number field holding text is reported (the per-tab submit check)', () => {
@@ -109,11 +110,11 @@ describe('Submit all — the empty-field rule', () => {
 });
 
 describe('Submit all — "print in bold" rides the per-tab payload', () => {
-  it('a known bold map goes with every writable test ([] when none); an unknown one is omitted', () => {
-    const snap = tab('a', '1', [test('t1', 'A'), test('t2', 'B')], { t1: { target: 'Detected' } });
+  it('a known bold map goes with every submitted test ([] when none); an unknown one is omitted', () => {
+    const snap = tab('a', '1', [test('t1', 'A'), test('t2', 'B')], { t1: { target: 'Detected' }, t2: { target: 'Detected' } });
     expect(tabPayload({ ...snap, bold: { t1: ['target'] } }).results).toEqual([
       { orderTestId: 't1', values: { target: 'Detected' }, note: undefined, bold: ['target'] },
-      { orderTestId: 't2', values: {}, note: undefined, bold: [] },
+      { orderTestId: 't2', values: { target: 'Detected' }, note: undefined, bold: [] },
     ]);
     // No map (not known) → the server keeps each saved list.
     expect(tabPayload(snap).results.every(r => !('bold' in r))).toBe(true);

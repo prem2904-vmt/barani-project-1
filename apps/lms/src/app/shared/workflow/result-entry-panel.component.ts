@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { OrderTest } from '../models/order.model';
+import { lineStatusLabel } from '../utils/line-status';
 
 /**
  * Self-contained result-entry queue — the portable panel for `result_entry`.
@@ -25,7 +26,7 @@ import { OrderTest } from '../models/order.model';
             <li class="rp__row press" (click)="enter(t)">
               <span class="rp__test">{{ t.name }}</span>
               <span class="rp__pt">{{ t.subOrder?.order?.patient?.displayName ?? 'Patient' }}</span>
-              <span class="rp__status" [attr.data-s]="t.status">{{ t.status }}</span>
+              <span class="rp__status" [attr.data-s]="t.status">{{ statusLabel(t.status) }}</span>
             </li>
           }
         </ul>
@@ -50,6 +51,7 @@ import { OrderTest } from '../models/order.model';
   `]
 })
 export class ResultEntryPanelComponent implements OnInit {
+  readonly statusLabel = lineStatusLabel;
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   readonly rows = signal<OrderTest[]>([]);
