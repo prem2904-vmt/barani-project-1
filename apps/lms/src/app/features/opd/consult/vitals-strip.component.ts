@@ -53,6 +53,21 @@ const LABEL: Record<VitalKey, [string, string]> = {
   pulse: ['Pulse', 'bpm'], bp: ['BP', 'mmHg'], temp: ['Temp', '°F'], spo2: ['SpO₂', '%'], rr: ['RR', '/min'], weight: ['Weight', 'kg'], bmi: ['BMI', ''],
 };
 
+/** How many chips (in order) fit in `avail` px with `gap` between them,
+ *  leaving room for a `more`-px "+N" chip when some don't fit. 0 is allowed —
+ *  then only "+N" shows; a chip is never clipped. Pure. */
+export function fitChips(widths: readonly number[], avail: number, gap = 8, more = 48): number {
+  const total = widths.reduce((a, w) => a + w, 0) + gap * Math.max(0, widths.length - 1);
+  if (total <= avail) return widths.length;
+  let used = 0, k = 0;
+  for (; k < widths.length; k++) {
+    const next = used + (k ? gap : 0) + widths[k];
+    if (next + gap + more > avail) break;
+    used = next;
+  }
+  return k;
+}
+
 /** Trend vs the patient's previous visit: which way, and by how much. Pure. */
 export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined, prev: ConsultVitals | null | undefined): { dir: 'up' | 'down' | 'same'; text: string } | null {
   if (!cur || !prev) return null;
@@ -176,32 +191,32 @@ export class ConsultVitalsComponent implements AfterViewInit, OnDestroy {
   });
 
   constructor() {
-    effect(() => { this.keys(); this.scroll(); queueMicrotask(() => this.fit()); });
+    // Re-measure after the chips render (vitals load / mode change).
+    effect(() => { this.keys(); this.scroll(); this.box(); setTimeout(() => this.fit()); });
   }
   ngAfterViewInit() {
     if (typeof ResizeObserver === 'function') {
       this.ro = new ResizeObserver(() => this.fit());
-      const host = this.host.nativeElement as HTMLElement;
-      this.ro.observe(host);
+      this.ro.observe(this.host.nativeElement as HTMLElement);
     }
+    // Web fonts change the chip widths once they arrive.
+    (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready?.then(() => this.fit());
   }
   ngOnDestroy() { this.ro?.disconnect(); }
   private readonly host = inject(ElementRef<HTMLElement>);
 
-  /** Fold the trailing chips that don't fit into "+N" (never when scrolling). */
+  /** Fold the trailing chips that don't fit into "+N" (never when
+   *  scrolling) — whole chips only, never one clipped mid-word. */
   fit() {
     const box = this.box()?.nativeElement;
     const n = this.keys().length;
     if (!box || this.scroll() || !box.clientWidth) { this.shown.set(n); return; }
     const chips = Array.from(box.querySelectorAll<HTMLElement>('.vc__chip:not(.vc__more)'));
     chips.forEach(c => (c.hidden = false));
-    const widths = chips.map(c => c.offsetWidth);
-    const gap = 8, more = 44, avail = box.clientWidth;
-    const total = widths.reduce((a, w) => a + w + gap, -gap);
-    if (total <= avail) { this.shown.set(n); return; }
-    let used = 0, k = 0;
-    for (; k < widths.length; k++) { if (used + widths[k] + gap + more > avail) break; used += widths[k] + gap; }
-    this.shown.set(Math.max(1, k));
+    const k = fitChips(chips.map(c => c.offsetWidth), box.clientWidth, 8, 48);
+    // Keep the DOM in step even when the count didn't change (the measure unhid them).
+    chips.forEach((c, i) => (c.hidden = i >= k));
+    this.shown.set(k);
   }
 
   label(k: VitalKey) { return LABEL[k]; }

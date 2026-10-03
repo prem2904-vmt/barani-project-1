@@ -239,3 +239,21 @@ export function balancePanels(width: number, gap: number, rightPinned: boolean):
   if (!width) return { rightDocked: true };
   return { rightDocked: width - gap - PANEL_W.right >= PANEL_W.minCentre };
 }
+
+// ── The consult's box beside the app's own nav (layout) ─────────────────
+
+export interface ChromeRect { top: number; left: number; right: number; bottom: number; width: number; height: number; }
+
+/** Where the visible app nav sits, as insets for the full-screen consult:
+ *  a bar or floating pill along the bottom reserves its height from its top
+ *  edge down (its safe area and float gap included); a rail down the left
+ *  edge reserves its width. Pure — the page measures the real elements. */
+export function chromeInsets(rects: readonly ChromeRect[], vw: number, vh: number): { bottom: number; left: number } {
+  let bottom = 0, left = 0;
+  for (const r of rects) {
+    if (!r.width || !r.height) continue;
+    if (r.top >= vh / 2 && r.height <= vh / 3) bottom = Math.max(bottom, Math.ceil(vh - r.top));
+    else if (r.left <= 8 && r.height >= vh / 2 && r.width <= vw / 3) left = Math.max(left, Math.ceil(r.right));
+  }
+  return { bottom, left };
+}
