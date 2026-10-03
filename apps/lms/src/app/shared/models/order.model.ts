@@ -52,6 +52,9 @@ export interface OrderSample {
   id: string;
   orderId: string;
   departmentId: string;
+  /** Lines on this tube not yet validated — set by My Work → Completed
+   *  (`GET /api/results/completed`), which lists only the tech's own lines. */
+  openLines?: number | null;
   /** When set, this vial is destined for an outsourced/referral lab (null = in-house). */
   outsourcedVendorId?: string | null;
   /** The lab space this vial belongs to (grouping key with tubeColor). */
