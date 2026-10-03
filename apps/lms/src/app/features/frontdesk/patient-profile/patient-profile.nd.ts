@@ -8,6 +8,7 @@ import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { workRowTone, WorkRowTone } from '../frontdesk-landing/work-selection';
 import { ageInYears, formatAge } from '../../../shared/utils/patient-age';
+import { lineStatusLabel, NOT_REPORTED } from '../../../shared/utils/line-status';
 
 export type PpView = 'orders' | 'trends' | 'timeline';
 export type PpRange = 'all' | '30' | '90' | 'custom';
@@ -90,19 +91,15 @@ export function orderTone(status: string | null | undefined): WorkRowTone {
   return workRowTone(s, orderStatusLabel(s));
 }
 
-const TEST_STATUS: Record<string, string> = {
-  pending: 'Pending', in_progress: 'In progress', resulted: 'Resulted', validated: 'Validated',
-  completed: 'Completed', reported: 'Reported', rejected: 'Rejected', cancelled: 'Cancelled',
-};
+/** Line status words — the one home (shared/utils/line-status). */
 export function testStatusLabel(status: string | null | undefined): string {
-  const s = (status || '').trim();
-  if (!s) return '—';
-  return TEST_STATUS[s] ?? (s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' '));
+  return lineStatusLabel(status);
 }
 export function testTone(status: string | null | undefined): WorkRowTone {
   switch (status) {
     case 'validated': case 'completed': case 'reported': return 'green';
     case 'rejected': case 'cancelled': return 'red';
+    case NOT_REPORTED: return 'violet';
     default: return 'amber';
   }
 }

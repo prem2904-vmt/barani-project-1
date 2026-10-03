@@ -64,7 +64,14 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
   };
   const params$ = new BehaviorSubject(convertToParamMap({ sampleId: 'smp-1' }));
   const query$ = new BehaviorSubject(convertToParamMap({}));
-  const dialog = { confirm: vi.fn(async (_req: any) => !!opts.confirm), prompt: vi.fn() };
+  // The print-choice dialogs are what these specs assert. A half-filled tube
+  // also asks "Some fields are empty" (empty-fields spec) — answered
+  // "Submit anyway" here and kept out of the counted spy.
+  const confirmSpy = vi.fn(async (_req: any) => !!opts.confirm);
+  const dialog = {
+    confirm: vi.fn(async (req: any) => /fields are empty|no value/.test(req?.title ?? '') ? true : confirmSpy(req)),
+    prompt: vi.fn(),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -86,7 +93,7 @@ async function render(sample: any, opts: { confirm?: boolean } = {}) {
   await f.whenStable();
   await new Promise(r => setTimeout(r, 0));
   f.detectChanges();
-  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog };
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog: { ...dialog, confirm: confirmSpy } };
 }
 
 const picks = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLInputElement>('input.pf-sre__printpick')).map(i => i.checked);

@@ -1,0 +1,263 @@
+import { TestBed } from '@angular/core/testing';
+import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { signal } from '@angular/core';
+import { BehaviorSubject, Subject, of } from 'rxjs';
+import { vi } from 'vitest';
+import { SampleResultEntryComponent } from './sample-result-entry.component';
+import { ApiService } from '../../../core/services/api.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { PlatformService } from '../../../core/services/platform.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
+
+/**
+ * (harness copied from the print-bold spec)
+ * Owner 2026-09-30, result entry:
+ *  1. "Tech picks what prints" gets a "Start with": None ticked → every value
+ *     starts UNTICKED until the tech ticks it; a SAVED pick always wins (never
+ *     reset on reload); the stamped (ordered-as) value wins over the test's
+ *     own. No per-row nag; ONE dialog before submit / validate only when
+ *     nothing at all would print. Entering a value ticks its row.
+ *  2. A "B" toggle beside every result (and Ctrl/Cmd+B inside the field)
+ *     marks that value "print in bold"; it rides every draft / submit.
+ */
+const PARAMS = (extra: Record<string, unknown> = {}) => JSON.stringify({
+  printPicker: true, ...extra,
+  parameters: [
+    { name: 'Hb', title: 'Haemoglobin', type: 'numeric', unit: 'g/dL' },
+    { name: 'PCV', title: 'Packed Cell Volume', type: 'numeric', unit: '%' },
+  ],
+});
+
+function sampleFixture(line: Record<string, unknown> = {}, testParams = PARAMS({ printPickerDefault: 'none' })): any {
+  return {
+    id: 'smp-1', orderId: 'o1', departmentId: 'd1', status: 'received', barcode: '26123', rejectionCount: 0,
+    createdAt: '2026-09-25T03:00:00Z',
+    department: { id: 'd1', name: 'Haematology', code: 'HEM' },
+    order: {
+      id: 'o1', patientId: 'p1', branchId: 'b1', priority: 'routine', source: 'walkin', status: 'open',
+      collectionType: 'walkin', createdAt: '2026-09-25T03:00:00Z', samples: [],
+      patient: { id: 'p1', displayName: 'Test Patient', age: 29, sex: 'Male', mrn: 'AA0012' },
+    },
+    siblings: [],
+    tests: [{
+      id: 'ot1', subOrderId: 'smp-1', testId: 't1', name: 'Haemogram', status: 'in_progress',
+      printPicker: true, printPickerDefault: 'none',
+      test: { id: 't1', name: 'Haemogram', parameters: testParams },
+      ...line,
+    }],
+  };
+}
+
+async function render(sample: any, opts: { confirm?: boolean } = {}) {
+  const api = {
+    get: vi.fn((url: string) => {
+      if (url.endsWith('/tests')) return of(sample);
+      if (url.includes('lab-trends')) return of({ tests: [] });
+      return of([]);
+    }),
+    post: vi.fn((_url: string, _body: any) => of({ sample, submitted: 1, results: [] })),
+    patch: vi.fn(() => of({})), put: vi.fn(() => of({})),
+  };
+  const params$ = new BehaviorSubject(convertToParamMap({ sampleId: 'smp-1' }));
+  const query$ = new BehaviorSubject(convertToParamMap({}));
+  // The print-choice dialogs are what these specs assert. A half-filled tube
+  // also asks "Some fields are empty" (empty-fields spec) — answered
+  // "Submit anyway" here and kept out of the counted spy.
+  const dialog = { confirm: vi.fn(async (_req: any) => !!opts.confirm), prompt: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: ApiService, useValue: api },
+      { provide: HttpClient, useValue: {} },
+      { provide: PlatformService, useValue: { getApiUrl: () => '' } },
+      { provide: ToastService, useValue: toasts },
+      { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
+      { provide: AuthService, useValue: { user: () => ({ displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: () => true } },
+      { provide: DialogService, useValue: dialog },
+      { provide: DraftShelfService, useValue: { drop: vi.fn() } },
+      { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
+      { provide: ActivatedRoute, useValue: { paramMap: params$, queryParamMap: query$,
+        snapshot: { paramMap: new Map([['sampleId', 'smp-1']]), queryParamMap: new Map() } } },
+      { provide: Router, useValue: { url: '/lab/sample/smp-1', navigate: vi.fn(() => Promise.resolve(true)) } },
+    ],
+  });
+  const f = TestBed.createComponent(SampleResultEntryComponent);
+  f.detectChanges();
+  await f.whenStable();
+  await new Promise(r => setTimeout(r, 0));
+  f.detectChanges();
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog, toasts };
+}
+
+
+const submitted = (api: any) => api.post.mock.calls.some(([u]: [string, any]) => u === '/api/samples/smp-1/results');
+
+/**
+ * Owner bug 2026-10-03 (Salem 26285 / 26262): the tech filled 8 of Urine
+ * Routine's 13 lines and pressed Submit — the 5 dipstick lines silently stayed
+ * behind, the order never completed and no report was made. Submit (one tube)
+ * now asks the SAME "Some fields are empty" question as Submit all.
+ */
+describe('Result entry — Submit with empty fields asks first', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+
+  it('a half-filled tube lists the empty fields; Go back submits nothing', async () => {
+    const { c, api, dialog } = await render(sampleFixture({ printPickerDefault: 'all' }, PARAMS()));
+    c.setValue('ot1', 'Hb', 13);
+    await c.submitAll();
+    expect(dialog.confirm).toHaveBeenCalledTimes(1);
+    const req = dialog.confirm.mock.calls[0][0];
+    expect(req.title).toBe('Some fields are empty');
+    expect(req.items).toEqual(['26123 · Haemogram — Packed Cell Volume']);
+    expect(req.confirmLabel).toBe('Submit anyway');
+    expect(submitted(api)).toBe(false);
+  });
+
+  it('Submit anyway sends what was entered', async () => {
+    const { c, api, dialog } = await render(sampleFixture({ printPickerDefault: 'all' }, PARAMS()), { confirm: true });
+    c.setValue('ot1', 'Hb', 13);
+    await c.submitAll();
+    expect(dialog.confirm).toHaveBeenCalledTimes(1);
+    expect(submitted(api)).toBe(true);
+  });
+
+  it('every field filled → no question', async () => {
+    const { c, api, dialog } = await render(sampleFixture({ printPickerDefault: 'all' }, PARAMS()));
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    await c.submitAll();
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(submitted(api)).toBe(true);
+  });
+
+  it('a second, entirely blank test on the tube is named too (the dipstick case)', async () => {
+    const smp = sampleFixture({ printPickerDefault: 'all' }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Bilirubin', status: 'pending',
+      test: { id: 't2', name: 'Urine Bilirubin', parameters: JSON.stringify({
+        parameters: [{ name: 'Urine Bilirubin', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    const { c, api, dialog } = await render(smp);
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    await c.submitAll();
+    const req = dialog.confirm.mock.calls[0][0];
+    expect(req.title).toBe('1 test has no value');
+    expect(req.message).toContain('Urine Bilirubin');
+    expect(req.question).toBe('Submit without them?');
+    expect(req.items).toEqual(['26123 · Urine Bilirubin — Urine Bilirubin']);
+    expect(submitted(api)).toBe(false);
+    expect(api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+  });
+
+  it('Submit without them: the filled test is submitted, the blank one is closed as not reported (never sent as an empty result)', async () => {
+    const smp = sampleFixture({ printPickerDefault: 'all' }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Bilirubin', status: 'pending',
+      test: { id: 't2', name: 'Urine Bilirubin', parameters: JSON.stringify({
+        parameters: [{ name: 'Urine Bilirubin', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    const { c, api } = await render(smp, { confirm: true });
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    await c.submitAll();
+    const results = api.post.mock.calls.find(([u]: [string, any]) => u === '/api/samples/smp-1/results');
+    expect(results![1].results.map((r: any) => r.orderTestId)).toEqual(['ot1']);
+    const skip = api.post.mock.calls.find(([u]: [string, any]) => u === '/api/samples/smp-1/not-reported');
+    expect(skip![1]).toEqual({ orderTestIds: ['ot2'] });
+  });
+});
+
+describe('Result entry — validator closes blank lines as Not reported (owner 2026-10-03)', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+
+  const withBlank = () => {
+    const smp = sampleFixture({ printPickerDefault: 'all', status: 'entered',
+      currentResult: JSON.stringify({ values: { Hb: 13, PCV: 40 } }) }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Bilirubin', status: 'pending',
+      test: { id: 't2', name: 'Urine Bilirubin', parameters: JSON.stringify({
+        parameters: [{ name: 'Urine Bilirubin', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    return smp;
+  };
+
+  it('the open blank lines are listed for the validator', async () => {
+    const { c } = await render(withBlank());
+    expect(c.openBlankTests().map((t: any) => t.id)).toEqual(['ot2']);
+  });
+
+  it('"Close as Not reported" posts the same endpoint; "Leave them open" posts nothing', async () => {
+    const yes = await render(withBlank(), { confirm: true });
+    await yes.c.closeBlankFromValidation();
+    const req = yes.dialog.confirm.mock.calls[0][0];
+    expect(req.title).toBe('1 test has no value');
+    expect(req.question).toBe('Close them as Not reported?');
+    expect(yes.api.post).toHaveBeenCalledWith('/api/samples/smp-1/not-reported', { orderTestIds: ['ot2'] });
+    TestBed.resetTestingModule();
+
+    const no = await render(withBlank());
+    await no.c.closeBlankFromValidation();
+    expect(no.api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+  });
+
+  it('never offers a line another tech claimed, or one holding a saved draft (review H3)', async () => {
+    const smp = withBlank();
+    smp.tests.push({
+      id: 'ot3', subOrderId: 'smp-1', testId: 't3', name: 'Urine Nitrite', status: 'in_progress', assignedTo: 'someone-else',
+      test: { id: 't3', name: 'Urine Nitrite', parameters: JSON.stringify({ parameters: [{ name: 'Urine Nitrite', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    }, {
+      id: 'ot4', subOrderId: 'smp-1', testId: 't4', name: 'Urine Ketones', status: 'in_progress',
+      currentResult: JSON.stringify({ values: { 'Urine Ketones': 'Trace' } }),
+      test: { id: 't4', name: 'Urine Ketones', parameters: JSON.stringify({ parameters: [{ name: 'Urine Ketones', type: 'select', options: ['Negative', 'Trace'] }] }) },
+    });
+    const { c } = await render(smp);
+    expect(c.openBlankTests().map((t: any) => t.id)).toEqual(['ot2']);
+  });
+
+  it('Submit with NOTHING entered is refused — never closes a whole tube (review H1)', async () => {
+    const smp = withBlank();
+    smp.tests[0].status = 'pending'; smp.tests[0].currentResult = undefined;
+    const { c, api, dialog } = await render(smp, { confirm: true });
+    await c.submitAll();
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.post.mock.calls.some(([u]: [string, any]) => /\/(results|not-reported)$/.test(u))).toBe(false);
+  });
+
+  it("the server's closable verdict wins: a line it refuses (e.g. another department) is never offered", async () => {
+    const smp = withBlank();
+    smp.tests[1].closable = false;
+    const { c } = await render(smp);
+    expect(c.openBlankTests()).toEqual([]);
+  });
+
+  it('a blank line that cannot be closed (cleared draft) is NAMED in a toast, never silently skipped', async () => {
+    const smp = sampleFixture({ printPickerDefault: 'all' }, PARAMS());
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'Urine Nitrite', status: 'in_progress', closable: false,
+      currentResult: JSON.stringify({ values: { 'Urine Nitrite': 'Positive' } }),
+      test: { id: 't2', name: 'Urine Nitrite', parameters: JSON.stringify({ parameters: [{ name: 'Urine Nitrite', type: 'select', options: ['Negative', 'Positive'] }] }) },
+    });
+    const { c, api, toasts } = await render(smp, { confirm: true });
+    c.setValue('ot1', 'Hb', 13);
+    c.setValue('ot1', 'PCV', 40);
+    c.setValue('ot2', 'Urine Nitrite', '');                // the tech cleared the drafted value
+    await c.submitAll();
+    expect(api.post.mock.calls.some(([u]: [string, any]) => u.endsWith('/not-reported'))).toBe(false);
+    expect(toasts.info).toHaveBeenCalledWith(expect.stringContaining('Left open: Urine Nitrite'));
+  });
+
+  it('a Not reported line is closed work: never writable, labelled in words', async () => {
+    const smp = withBlank();
+    smp.tests[1].status = 'not_reported';
+    const { c, el } = await render(smp);
+    expect(c.openBlankTests()).toEqual([]);
+    expect(c.hasWritable()).toBe(false);
+    expect(el.textContent).toContain('Not reported');
+  });
+});

@@ -76,6 +76,7 @@ import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
 import { normalizePriority } from "../../../shared/utils/lab-priority";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
+import { NOT_REPORTED, savedResultHasValue } from "../../../shared/utils/line-status";
 import {
   MissingEntry,
   TabSnapshot,
@@ -88,6 +89,8 @@ import {
   overlayDraft,
   prefillFromTests,
   tabMark,
+  testHasValue,
+  blankTests,
   tabPayload,
   boldFromTests,
   type BoldMap,
@@ -857,7 +860,7 @@ export class SampleResultEntryComponent {
   readonly submitting = this._submitting.asReadonly();
   /** WHICH header action started the running `submitting()` request — only
    *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
-  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | null>(null);
+  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | 'close' | null>(null);
 
   // ── NABL critical-result records of this tube (open / acknowledged) ──
   private readonly _critical = signal<CriticalResultEvent[]>([]);
@@ -971,7 +974,8 @@ export class SampleResultEntryComponent {
   readonly hasReopenable = computed(() =>
     this.canEditResult() &&
     (this._sample()?.tests ?? []).some(
-      (t) => t.status === "entered" || t.status === "validated",
+      // A line closed as Not reported reopens the same way (audited).
+      (t) => t.status === "entered" || t.status === "validated" || t.status === NOT_REPORTED,
     ),
   );
   /** At least one test is in an editable/submittable state. */
@@ -981,6 +985,7 @@ export class SampleResultEntryComponent {
         t.status !== "entered" &&
         t.status !== "validated" &&
         t.status !== "rejected" &&
+        t.status !== NOT_REPORTED &&
         !this.isCultureTest(t),
     ),
   );
@@ -1261,7 +1266,7 @@ export class SampleResultEntryComponent {
       return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -1818,9 +1823,67 @@ export class SampleResultEntryComponent {
     return analyzerBadge(applied, t.id, p.name, this._values()[t.id]?.[p.name], (iso) => this.analyzerTime(iso));
   }
 
+  /** Open lines nobody entered (pending / in progress / re-entry, in-house,
+   *  not culture) — what a validator may close as Not reported. */
+  readonly openBlankTests = computed<OrderTest[]>(() =>
+    (this._sample()?.tests ?? []).filter((t) =>
+      (t.status === "pending" || t.status === "in_progress" || t.status === "re_entry")
+      && !this.isCultureTest(t) && this.isClosableBlank(t)));
+
+  /** May THIS user close the line as Not reported (server enforces the
+   *  same, review H3)? Unclaimed or claimed by me, and no saved value. */
+  isClosableBlank(t: OrderTest): boolean {
+    // The server's verdict wins (department scope, live-final check, …).
+    if (typeof t.closable === 'boolean') return t.closable;
+    const me = this.auth.user()?.id;
+    if (t.assignedTo && t.assignedTo !== me) return false;
+    return !savedResultHasValue(t.currentResult);
+  }
+
+  /** "N tests have no value … Close them as Not reported?" — true = close. */
+  private async askCloseBlank(blank: readonly OrderTest[]): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
+    return this.dialog.confirm({
+      title: `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value`,
+      message: `${names.join(", ")}. Closed as Not reported, ${blank.length === 1 ? "it" : "they"} never print and the report can be issued.`,
+      question: "Close them as Not reported?",
+      cancelLabel: "Leave them open",
+      confirmLabel: "Close as Not reported",
+    });
+  }
+
+  /** Validator, nothing left to validate: close the blank lines. */
+  async closeBlankFromValidation() {
+    const s = this._sample();
+    const blank = this.openBlankTests();
+    if (!s || !blank.length || this.submitting()) return;
+    if (!(await this.askCloseBlank(blank))) return;
+    this.submitAct.set('close');
+    this._submitting.set(true);
+    try {
+      await this.closeNotReported(s.id, blank);
+      this.prestore.afterValidation(s.orderId ?? s.order?.id);
+      this.toasts.success(`${blank.length} test${blank.length === 1 ? "" : "s"} closed as not reported`);
+      void this.router.navigate(['/pathologist']);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this._submitting.set(false);
+    }
+  }
+
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
+    // Blank lines on the same tube would hold the report back: offer to close
+    // them as Not reported first (owner 2026-10-03). "Leave them open" still
+    // validates what was entered.
+    const blank = this.openBlankTests();
+    let closed = false;
+    if (blank.length && (await this.askCloseBlank(blank))) {
+      try { await this.closeNotReported(this._sample()!.id, blank); closed = true; }
+      catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    }
     if (!(await this.confirmNothingPrints(targets, "validate"))) return;
     this.submitAct.set('validate');
     this._submitting.set(true);
@@ -1835,7 +1898,7 @@ export class SampleResultEntryComponent {
     // (background) so the patient's WhatsApp carries it.
     if (ok > 0) this.prestore.afterValidation(this.sample()?.orderId ?? this.sample()?.order?.id);
     if (ok === targets.length) {
-      this.toasts.success(ok === 1 ? 'Result validated' : `${ok} results validated`);
+      this.toasts.success((ok === 1 ? 'Result validated' : `${ok} results validated`) + (closed ? `, ${blank.length} not reported` : ''));
       void this.router.navigate(['/pathologist']);
     } else {
       this.toasts.error(lastErr || 'Some results could not be validated');
@@ -2080,7 +2143,7 @@ export class SampleResultEntryComponent {
     // The form pre-fills values for these from currentResult so they
     // can be SEEN, but submitting them would 409 the whole batch.
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     // A numeric parameter holding a non-parseable value must never be
     // submitted as the result — surface which ones and stop.
@@ -2097,30 +2160,50 @@ export class SampleResultEntryComponent {
       this._submitting.set(false);
       return;
     }
-    if (!(await this.confirmNothingPrints(writable.filter((t) => !!all[t.id] && Object.keys(all[t.id]).length > 0), "submit"))) {
+    // Empty fields → ONE confirmation, the same one Submit all asks (owner
+    // 2026-10-03, Salem 26285: the tech filled 8 of Urine Routine's 13 lines
+    // and the 5 dipstick lines silently stayed behind, so the order never got
+    // a report). A test with NO value at all is closed as "not reported" on
+    // confirm (audited server-side; it never prints and never holds the
+    // report back). Go back → the first empty field.
+    const live = this.liveSnap();
+    const missing = live ? missingEntries([live]) : [];
+    // Only lines the tech may close: unclaimed or their own, no saved draft.
+    const blank = writable.filter((t) => !testHasValue(all, t.id) && this.isClosableBlank(t));
+    // Blank on screen but NOT closable (a value saved on the server — e.g. the
+    // tech cleared a drafted value — or another tech's claim): stays open, and
+    // the tech is told which (never a silent skip).
+    const leftOpen = writable.filter((t) => !testHasValue(all, t.id) && !this.isClosableBlank(t));
+    const filled = writable.filter((t) => testHasValue(all, t.id));
+    if (filled.length === 0) {
+      // Nothing entered: never close a whole tube from Submit (review H1).
+      const allDone = (s.tests ?? []).length > 0 && writable.length === 0;
+      this.toasts.warning(allDone ? "Every test on this tube is already submitted or validated." : "Enter at least one value before submitting");
+      this._submitting.set(false);
+      return;
+    }
+    // Blank lines are closed ONLY when the dialog naming them was shown and
+    // confirmed (review L3).
+    let closeBlank: OrderTest[] = [];
+    if (missing.length) {
+      this._submitting.set(false);
+      if (!(await this.confirmEmptyFields(missing, blank))) return;
+      closeBlank = blank;
+      this.submitAct.set('submit');
+      this._submitting.set(true);
+    }
+    if (filled.length && !(await this.confirmNothingPrints(filled, "submit"))) {
       this._submitting.set(false);
       return;
     }
     const payload = {
-      results: writable
-        .filter((t) => all[t.id] && Object.keys(all[t.id]).length > 0)
-        .map((t) => ({
+      results: filled.map((t) => ({
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
           bold: this.boldFor(t.id),
         })),
     };
-    if (payload.results.length === 0) {
-      const allDone = (s.tests ?? []).length > 0 && writable.length === 0;
-      this.toasts.warning(
-        allDone
-          ? "Every test on this tube is already submitted or validated."
-          : "Enter at least one value before submitting",
-      );
-      this._submitting.set(false);
-      return;
-    }
     try {
       const resp = await firstValueFrom(
         this.api.post<BulkSubmitResponse>(
@@ -2149,9 +2232,13 @@ export class SampleResultEntryComponent {
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
       await this.loadComments();
+      // The blank tests the tech confirmed: closed as not reported.
+      if (closeBlank.length) await this.closeNotReported(s.id, closeBlank);
+      if (leftOpen.length) this.toasts.info(this.leftOpenMessage(leftOpen));
       const n = resp?.submitted ?? 0;
       this.toasts.success(
-        `Submitted ${n} test${n === 1 ? "" : "s"} — back to your queue`,
+        `Submitted ${n} test${n === 1 ? "" : "s"}` +
+          (closeBlank.length ? `, ${closeBlank.length} not reported` : "") + " — back to your queue",
       );
       // Hand the tech back to /lab/my-work so they can pick the next
       // tube. Without this nav, submitAll only ever showed a toast and
@@ -2174,7 +2261,7 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting() || this._savingDraft()) return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -2364,6 +2451,40 @@ export class SampleResultEntryComponent {
     }, { injector: this.injector });
   }
 
+  /** "N tests have no value: … Submit without them?" — the one confirmation
+   *  BOTH Submit and Submit all ask. `blank` = tests with no value at all
+   *  (closed as not reported on confirm); the list names every empty field.
+   *  Go back → the first empty field; true = submit anyway. */
+  private async confirmEmptyFields(missing: MissingEntry[], blank: readonly OrderTest[] = []): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
+    const go = await this.dialog.confirm({
+      title: blank.length ? `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value` : "Some fields are empty",
+      message: blank.length
+        ? `${names.join(", ")}. ${blank.length === 1 ? "It is" : "They are"} closed as not reported and never print.`
+        : "These fields have no value:",
+      items: missing.map(missingLine),
+      question: blank.length ? "Submit without them?" : "Do you still want to submit?",
+      cancelLabel: "Go back",
+      confirmLabel: blank.length ? "Submit without them" : "Submit anyway",
+    });
+    if (!go) await this.goToMissing(missing[0]);
+    return go;
+  }
+
+  /** "Left open: Urine Nitrite, … — a value is saved for them (or another
+   *  technician has them); clear or submit it to close." */
+  leftOpenMessage(tests: readonly OrderTest[]): string {
+    const names = tests.map((t) => t.test?.name || t.name || "Test");
+    return `Left open: ${names.join(", ")} — ${tests.length === 1 ? "it has" : "they have"} a saved value or another technician's claim, so ${tests.length === 1 ? "it was" : "they were"} not closed as not reported.`;
+  }
+
+  /** Close blank tests of a tube as NOT REPORTED (audited server-side). */
+  private async closeNotReported(sampleId: string, tests: readonly OrderTest[]): Promise<void> {
+    if (!tests.length) return;
+    await firstValueFrom(this.api.post(`/api/samples/${sampleId}/not-reported`,
+      { orderTestIds: tests.map((t) => t.id) }));
+  }
+
   /** Move to an empty field: switch tab first when it is on another tube. */
   async goToMissing(m: MissingEntry) {
     if (m.sampleId !== this._sample()?.id) {
@@ -2407,22 +2528,21 @@ export class SampleResultEntryComponent {
           return;
         }
       }
+      // 3b. Nothing entered on ANY tab → refuse (never close whole tubes).
+      if (!targets.some((snap) => snap.tests.some((t) => isWritableTest(t) && testHasValue(snap.values, t.id)))) {
+        this.toasts.warning("Enter at least one value before submitting");
+        return;
+      }
       // 4. Empty fields → ONE confirmation; Go back → the first empty field.
+      //    Tests with no value at all are closed as not reported — only on
+      //    this confirmed dialog, and only lines the tech may close.
       const missing = missingEntries(targets);
+      const closable = (snap: TabSnapshot) => blankTests(snap).filter((t) => this.isClosableBlank(t));
+      let closeBlankOk = false;
       if (missing.length) {
         this._submitting.set(false);
-        const go = await this.dialog.confirm({
-          title: "Some fields are empty",
-          message: "These fields have no value:",
-          items: missing.map(missingLine),
-          question: "Do you still want to submit?",
-          cancelLabel: "Go back",
-          confirmLabel: "Submit anyway",
-        });
-        if (!go) {
-          await this.goToMissing(missing[0]);
-          return;
-        }
+        if (!(await this.confirmEmptyFields(missing, targets.flatMap(closable)))) return;
+        closeBlankOk = true;
         this.submitAct.set('all');
         this._submitting.set(true);
       }
@@ -2439,9 +2559,13 @@ export class SampleResultEntryComponent {
       const flags: Array<{ label: string; note?: string; critical: boolean }> = [];
       for (const snap of targets) {
         try {
-          const resp = await firstValueFrom(
-            this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, tabPayload(snap)),
-          );
+          const body = tabPayload(snap);
+          const resp = body.results.length
+            ? await firstValueFrom(this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, body))
+            : null;
+          if (closeBlankOk) await this.closeNotReported(snap.sampleId, closable(snap));
+          const notClosed = blankTests(snap).filter((t) => !this.isClosableBlank(t));
+          if (notClosed.length) this.toasts.info(`${snap.barcode || "Tube"} · ${this.leftOpenMessage(notClosed)}`);
           for (const r of resp?.results ?? []) {
             const name = r.orderTest?.test?.name ?? "Test";
             if (r.flags?.critical) flags.push({ label: `${snap.barcode} · ${name}: critical`, critical: true });

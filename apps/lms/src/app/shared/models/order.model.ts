@@ -52,6 +52,9 @@ export interface OrderSample {
   id: string;
   orderId: string;
   departmentId: string;
+  /** Lines on this tube not yet validated — set by My Work → Completed
+   *  (`GET /api/results/completed`), which lists only the tech's own lines. */
+  openLines?: number | null;
   /** When set, this vial is destined for an outsourced/referral lab (null = in-house). */
   outsourcedVendorId?: string | null;
   /** The lab space this vial belongs to (grouping key with tubeColor). */
@@ -115,6 +118,11 @@ export interface OrderTest {
    *  terms (a SHARED tube spans several departments). Annotated by the queue
    *  / My Work / sample endpoints; absent on older payloads. */
   routingDepartment?: TubeDepartment | null;
+  /** May the current user close this line as Not reported? Stamped by the
+   *  server's ONE rule (sample-tests read): open, in-house, no saved value,
+   *  unclaimed or own, inside a scoped validator's departments, not printed
+   *  on the live final. Absent on older servers → the client's own check. */
+  closable?: boolean | null;
   testId: string;
   name: string;
   packageTestId?: string;

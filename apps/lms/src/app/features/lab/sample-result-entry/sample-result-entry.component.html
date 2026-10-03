@@ -134,6 +134,16 @@
     <span class="pf-sre-techavatar" role="img"
           [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">{{ techInitials() }}</span>
     @if (validateMode()) {
+      @if (openBlankTests().length > 0 && enteredTests().length === 0) {
+        <!-- Nothing left to validate but blank lines hold the order (owner
+             2026-10-03): the validator can close them as Not reported. -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-close-blank"
+                [attr.aria-label]="'Close ' + openBlankTests().length + ' as Not reported'"
+                [disabled]="submitting()" (click)="closeBlankFromValidation()"
+                [pfBusy]="submitting() && submitAct() === 'close'" pfBusyLabel="Closing…">
+          <span class="pf-sre-act__t">Close {{ openBlankTests().length }} as Not reported</span>
+        </button>
+      }
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reject"
               aria-label="Reject" title="Reject — send back to the technician"
               [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()"
@@ -454,6 +464,8 @@
                                   <span class="pf-sre__gdot pf-sre__gdot--rejected" title="Re-entry needed"></span>
                                 } @else if (t.status === "entered" || t.status === "validated") {
                                   <span class="pf-sre__gdot pf-sre__gdot--done" title="Entered"></span>
+                                } @else if (t.status === "not_reported") {
+                                  <span class="pf-sre__gwho" title="Closed without a value; never prints">Not reported</span>
                                 }
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, null).length > 0, label: 'Note on ' + (t.test?.name ?? 'this test'), tid: t.id, pname: null }"></ng-container>
                                 <pf-report-note-button scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-button>
@@ -762,6 +774,8 @@
               }
               @if (t.status === "re_entry") {
                 <span class="nd-chip nd-chip--static pf-sre__test-pill pf-sre__test-pill--rejected">Re-entry needed</span>
+              } @else if (t.status === "not_reported") {
+                <span class="nd-chip nd-chip--static pf-sre__test-pill" title="Closed without a value; never prints">Not reported</span>
               } @else if (t.status === "entered" || t.status === "validated") {
                 <span class="nd-chip nd-chip--static pf-sre__test-pill">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>

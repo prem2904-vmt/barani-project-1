@@ -2,6 +2,7 @@ import { Patient, patientDisplayName } from '../../../shared/models/patient.mode
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { isDrawn, isNotCollected, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 import { formatAge } from '../../../shared/utils/patient-age';
+import { NOT_REPORTED } from '../../../shared/utils/line-status';
 
 type DrawerPatient = Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex'> & { dateOfBirth?: string | null } | null | undefined;
 
@@ -74,8 +75,9 @@ export function drawerPipeline(o: DrawerOrder): PipelineStep[] {
   // or already validated. Differs from reportDone — entered values
   // still need a pathologist's signature before the report exists.
   const allTests = live.flatMap(s => s.tests ?? []);
+  // A line closed as Not reported is done — it never holds a step open.
   const allTestsResulted = allTests.length > 0
-    && allTests.every(t => t.status === 'validated' || t.status === 'entered');
+    && allTests.every(t => t.status === 'validated' || t.status === 'entered' || t.status === NOT_REPORTED);
   const anyResult = allTests.some(t => t.status === 'validated' || t.status === 'entered');
   const sample: PipelineState = nc > 0 ? 'stopped' : collected ? 'done' : billDone ? 'active' : 'pending';
   return [
@@ -107,7 +109,7 @@ export function drawerStepCaption(o: DrawerOrder, step: PipelineStep): string {
     }
     case 'Result': {
       const all = samples.filter(s => !isNotCollected(s)).flatMap(s => s.tests ?? []);
-      const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
+      const validated = all.filter(t => t.status === 'validated' || t.status === 'entered' || t.status === NOT_REPORTED).length;
       return `${validated}/${all.length} tests resulted`;
     }
     case 'Report': {

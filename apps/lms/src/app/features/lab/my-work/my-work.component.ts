@@ -6,8 +6,11 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { firstValueFrom } from 'rxjs';
 import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
+import { completedTubeStatus, planReadiness, ReportReadiness, reportReadinessUrl } from '../../../shared/utils/report-readiness';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -663,9 +666,10 @@ const COUNTERS: CounterSpec[] = [
                      (keydown.enter)="viewCompletedTube(tube)">
                   <div class="pf-tq__line">
                     <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
-                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered' && !theme.isNewDesign()"
-                          [class.pf-tq__tag--validated]="tube.status === 'validated'">
-                      {{ tube.status === 'validated' ? 'Validated' : 'Submitted' }}
+                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status !== 'validated' && !theme.isNewDesign()"
+                          [class.pf-tq__tag--validated]="tube.status === 'validated'"
+                          [attr.title]="tube.status === 'partial' ? tube.openLines + ' test(s) on this sample are not validated yet' : null">
+                      {{ tube.status === 'validated' ? 'Validated' : tube.status === 'partial' ? 'Partly validated · ' + tube.openLines + ' open' : 'Submitted' }}
                     </span>
                   </div>
                   <p class="pf-tq__sub">
@@ -687,7 +691,7 @@ const COUNTERS: CounterSpec[] = [
                     }
                   </span>
                   <div class="pf-tq__acts">
-                  @if (tube.status === 'validated') {
+                  @if (tube.status === 'validated' || tube.status === 'partial') {
                     <button type="button" class="pf-tq__act--print" title="Print report"
                             [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                             [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
@@ -3218,16 +3222,71 @@ export class MyWorkComponent implements OnInit {
     this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`).subscribe({
       next: async rep => {
         try {
-          if (!rep) { this.toasts.info('Report is not generated yet for this order.'); return; }
-          // Letterpad setting on → asks letterhead vs plain paper for this job.
-          const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
-          if (url === null) return;   // dismissed
-          if (url) printPdfBlobUrl(url, { revokeOnDone: true });
-          else this.toasts.error('Could not build the report to print.');
+          if (!rep) { await this.explainNoReport(orderId); return; }
+          await this.printReport(rep);
         } finally { this._printingTubeId.set(null); }
       },
-      error: e => { this._printingTubeId.set(null); this.toasts.error(ApiError.from(e).message); },
+      error: async e => {
+        // No report yet is NOT an error to toast blankly: say why (lines
+        // still open on which tube), offer a preliminary report when some
+        // tubes are fully validated, or "Generate now" when all are.
+        try {
+          if (ApiError.from(e).code === 'not_found') await this.explainNoReport(orderId);
+          else this.toasts.error(ApiError.from(e).message);
+        } finally { this._printingTubeId.set(null); }
+      },
     });
+  }
+
+  private async printReport(rep: Record<string, unknown>) {
+    // Letterpad setting on → asks letterhead vs plain paper for this job.
+    const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
+    if (url === null) return;   // dismissed
+    if (url) printPdfBlobUrl(url, { revokeOnDone: true });
+    else this.toasts.error('Could not build the report to print.');
+  }
+
+  /** generate / generate/partial guard (ReportsController). */
+  private readonly canReleaseReport = computed(() =>
+    this.auth.hasPermission('deliver_report') || this.auth.hasPermission('validate_result'));
+
+  /** Print found no report: ask the server why (GET /api/reports/readiness)
+   *  and act on it — never just "No report for this order". */
+  private async explainNoReport(orderId: string) {
+    let r: ReportReadiness | null = null;
+    try { r = await firstValueFrom(this.api.get<ReportReadiness>(reportReadinessUrl(orderId))); }
+    catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    if (!r) { this.toasts.error('Order not found.'); return; }
+    const plan = planReadiness(r, this.canReleaseReport());
+    if (plan.kind === 'ready') {
+      const rep = await firstValueFrom(this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`));
+      if (rep) await this.printReport(rep);
+      return;
+    }
+    if (plan.kind === 'generate') {
+      const ok = await this.dialog.confirm({ title: plan.title, message: plan.message, confirmLabel: 'Generate now', icon: 'printer' });
+      if (!ok) return;
+      await this.releaseAndPrint('/api/reports/generate', { orderId, type: 'final' });
+      return;
+    }
+    const actions: { value: string; label: string; variant?: 'primary' | 'secondary' }[] = [];
+    if (plan.kind === 'partial') actions.push({ value: 'partial', label: 'Print preliminary report', variant: 'primary' });
+    if (plan.openSampleId) actions.push({ value: 'open', label: 'Open pending sample', variant: plan.kind === 'partial' ? 'secondary' : 'primary' });
+    const res = await this.dialog.actions({ title: plan.title, message: plan.message, items: plan.items, actions, cancelLabel: 'Close' });
+    if (res.action === 'partial') {
+      await this.releaseAndPrint('/api/reports/generate/partial', { orderId, sampleIds: plan.partialSampleIds });
+    } else if (res.action === 'open' && plan.openSampleId) {
+      void this.router.navigate(['/lab/sample', plan.openSampleId], { queryParams: { view: 1 } });
+    }
+  }
+
+  private async releaseAndPrint(url: string, body: unknown) {
+    try {
+      const rep = await firstValueFrom(this.api.post<Record<string, unknown>>(url, body));
+      if (rep) await this.printReport(rep);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    }
   }
 
   /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
@@ -3264,8 +3323,12 @@ export class MyWorkComponent implements OnInit {
         patientName: patient?.displayName ?? 'Patient',
         patientMeta: patient ? formatPatientMeta(patient) : '',
         testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
-        // A tube reads as validated only once every test on it is signed.
-        status: tests.every(t => t.status === 'validated') ? 'validated' : 'entered',
+        // A tube reads as validated only once every test on it is signed —
+        // including lines that are not this tech's (subOrder.openLines):
+        // 8 of 13 urine lines validated is "partly validated", not done.
+        status: completedTubeStatus(tests.map(t => t.status),
+          Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0))),
+        openLines: Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0)),
         completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
       };
     }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
@@ -3689,7 +3752,7 @@ export class MyWorkComponent implements OnInit {
       const first = tests[0];
       const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
-      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      const allDone = tests.every(x => x.status === 'entered' || isSignedOrSkipped(x.status));
       // A half-finished tube: partial values saved (draft keeps CurrentResult
       // and status in_progress) but not yet submitted. Badged so the tech can
       // spot what they left off.
