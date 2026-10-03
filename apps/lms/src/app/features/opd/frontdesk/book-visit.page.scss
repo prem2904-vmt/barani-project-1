@@ -27,7 +27,7 @@
 @media (prefers-reduced-motion: reduce) { .pf-ov-purpose { animation: none; } }
 .pf-ov-purpose__head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 .pf-ov-purpose__t { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
-.pf-ov-seg { display: flex; flex-wrap: wrap; width: 100%; }
+.pf-ov-seg { display: inline-flex; flex-wrap: wrap; width: fit-content; max-width: 100%; align-self: flex-start; }
 .pf-ov-seg__item { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; white-space: normal; text-align: left; }
 .pf-ov-seg__price { color: var(--text-secondary); font-weight: 500; }
 .pf-ov-complaint .nd-input { height: 40px; width: 100%; }
