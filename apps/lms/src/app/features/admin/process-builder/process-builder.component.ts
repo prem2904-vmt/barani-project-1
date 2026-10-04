@@ -85,17 +85,12 @@ const LANE_COLOR = '#7c3aed';
         </div>
         <div class="pb-bar-actions">
           @if (branches().length > 0) {
-            <select class="pb-select pb-select--scope" [ngModel]="scope()" (ngModelChange)="setScope($event)" title="Branch this workflow applies to">
-              <option [ngValue]="null">⌂ All branches (default)</option>
-              @for (b of branches(); track b.id) { <option [ngValue]="b.id">⌥ {{ b.name }}</option> }
-            </select>
+            <pf-select class="pb-select pb-select--scope" [options]="scopeOptions()" [value]="scope() ?? ''"
+                       [searchable]="branches().length > 8"
+                       (valueChange)="setScope($event || null)" aria-label="Branch this workflow applies to"></pf-select>
           }
-          <select class="pb-select" [ngModel]="currentId()" (ngModelChange)="selectWorkflow($event)">
-            @for (w of scopedWorkflows(); track w.id) {
-              <option [value]="w.id">{{ w.name }}{{ w.isActive ? '  ● active' : '' }}</option>
-            }
-            @if (scopedWorkflows().length === 0) { <option [ngValue]="null">— new draft —</option> }
-          </select>
+          <pf-select class="pb-select" [options]="workflowOptions()" [value]="currentId() ?? ''"
+                     placeholder="— new draft —" (valueChange)="selectWorkflow($event)" aria-label="Workflow"></pf-select>
           <button type="button" class="pb-btn" (click)="newWorkflow()" title="New workflow">+ New</button>
           <button type="button" class="pb-btn" [disabled]="!currentId()" (click)="duplicate()">Duplicate</button>
           <button type="button" class="pb-btn" [disabled]="!currentId() || isActive()" (click)="activate()">Set active</button>

@@ -1014,7 +1014,7 @@ export class ReportViewerComponent implements OnInit {
     // snapshot images, and the ordered PROFILES' layouts.
     try {
       const next = await resolveReportLayouts<ResolvedReportLayout>(
-        (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
+        (id, values, images, pt, profileCode) => this.layoutSvc.preview(id, values, images as never, pt, null, profileCode),
         tests as unknown as LayoutSnapshotTest[], patient);
       this._resolved.set(next);
     } catch (err) {

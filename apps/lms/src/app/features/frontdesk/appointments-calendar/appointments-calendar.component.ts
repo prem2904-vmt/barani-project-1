@@ -470,17 +470,17 @@ const STATUS_CLASS: Record<string, string> = {
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(-1)" aria-label="Previous">‹</button>
           <button type="button" class="pf-cal-nav__btn pf-cal-nav__today" (click)="goToday()">Today</button>
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(1)" aria-label="Next">›</button>
-          <label class="pf-cal-nav__jump" title="Jump to date">
+          <button type="button" class="pf-cal-nav__jump" title="Jump to date" (click)="openJump(jumpClassic)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
               <path d="M16 2v4M8 2v4M3 10h18"/>
             </svg>
             <span>Jump</span>
-            <input type="date" class="pf-cal-nav__jump-input"
-                   [value]="cursorIso()"
-                   (change)="jumpToDate($any($event.target).value)" />
-          </label>
+          </button>
+          <input #jumpClassic type="date" class="pf-cal-nav__jump-input" tabindex="-1" aria-hidden="true"
+                 [value]="cursorIso()"
+                 (change)="jumpToDate($any($event.target).value)" />
           <span class="pf-cal-nav__title">{{ rangeLabel() }}</span>
         </div>
       </div>
@@ -675,9 +675,10 @@ const STATUS_CLASS: Record<string, string> = {
           } @else {
             <div class="mt-3 flex flex-col gap-2">
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New date
-                <input type="date" class="pf-input" [(ngModel)]="rDate" /></label>
+                <pf-nd-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-nd-date></label>
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New time
-                <input type="time" class="pf-input" [(ngModel)]="rTime" /></label>
+                <pf-select [options]="timeOptions()" [value]="rTime" [searchable]="true" placeholder="Pick a time"
+                           (valueChange)="rTime = $any($event)"></pf-select></label>
               <div class="flex gap-2 justify-end mt-1">
                 <button class="pf-appt-btn" (click)="rescheduleOpen.set(false)">Back</button>
                 <button class="pf-appt-btn pf-appt-btn--primary" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save</button>
@@ -810,9 +811,9 @@ const STATUS_CLASS: Record<string, string> = {
       border-color: rgba(168, 85, 247, 0.35);
     }
     .pf-cal-nav__jump-input {
-      position: absolute; inset: 0;
-      opacity: 0; cursor: pointer;
-      width: 100%; height: 100%; border: 0; padding: 0;
+      /* Hidden native picker trigger (never visible — showPicker() only). */
+      position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+      opacity: 0; pointer-events: none; border: 0; padding: 0;
     }
     .pf-cal-nav__title {
       margin-left: 12px; font-size: 14px; font-weight: 600;

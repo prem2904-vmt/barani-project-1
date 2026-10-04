@@ -72,7 +72,7 @@ describe('Order & Payments — loading feedback', () => {
     expect(list().querySelector('pf-skeleton-rows')).toBeNull();
   });
 
-  it('Modify → "Update order & reconcile": disabled + aria-busy at once, dots after 150ms, released on answer', () => {
+  it('Modify → "Update order & reconcile": disabled + aria-busy at once, dots after 150ms, released on answer', async () => {
     const patch$ = new Subject<any>();
     const { f, el, c, api } = render({ patch$ });
     c.editOrderId.set('o1');
@@ -94,6 +94,12 @@ describe('Order & Payments — loading feedback', () => {
     btn().click();                                       // swallowed
     expect(api.patch).toHaveBeenCalledTimes(1);
     patch$.error({ status: 500 });
+    // R1 review fix: the PATCH now goes through patchTestsWithStockGate()
+    // (an async helper, so the error reaches submit()'s catch via a couple
+    // of Promise microtask hops instead of a plain Observable subscribe's
+    // SYNCHRONOUS error callback) — flush those microtasks before the fake
+    // timer advance, or _saving is still true when we assert below.
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     vi.advanceTimersByTime(400);
     f.detectChanges();
     expect(btn().disabled).toBe(false);

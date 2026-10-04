@@ -382,6 +382,18 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   /** Small second line under the create row (e.g. "Add as a new methodology"). */
   @Input() createHint?: string;
 
+  /** Opt-in (default off — every existing select keeps today's behaviour):
+   *  when the panel is CLOSED and a real value is already selected
+   *  (`matched`), Enter is left alone — never `preventDefault`/
+   *  `stopPropagation` — so it bubbles to a host's own `(keydown.enter)`
+   *  "advance to the next field" handler, the way a native `<select>`
+   *  always let it. Closed with NO value, Enter still opens the panel
+   *  (nothing to advance past yet); OPEN, Enter still picks the focused
+   *  option exactly as before. Turned on only where a result-entry-style
+   *  Enter-chain needs it (lab result entry grid/cards, sample result
+   *  entry, the dynamic-input data-entry field) — never the app default. */
+  @Input() enterAdvances = false;
+
   @Output() valueChange = new EventEmitter<T>();
   @Output() valuesChange = new EventEmitter<T[]>();
 
@@ -683,6 +695,11 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     if ((ev.target as HTMLElement | null)?.classList?.contains('pf-dd__combox')) return;
 
     if (!this.isOpen()) {
+      // enterAdvances: a filled, closed select lets Enter bubble (never
+      // intercepted) so a parent's advance-to-next-field handler fires —
+      // same as a native <select> always did. An EMPTY select still opens
+      // on Enter (nothing to advance past yet).
+      if (this.enterAdvances && ev.key === 'Enter' && this.matched) return;
       if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
         ev.preventDefault();
         ev.stopPropagation();

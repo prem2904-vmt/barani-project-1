@@ -22,6 +22,7 @@ import { APP_BASE_HREF } from '@angular/common';
 import { appRoutes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { opdPreviewInterceptor } from './features/opd/shared/opd-preview.interceptor';
+import { storageErrorInterceptor } from './core/services/storage-error.interceptor';
 
 /**
  * Pick the location strategy at boot. Electron loads the bundle
@@ -98,7 +99,9 @@ export const appConfig: ApplicationConfig = {
     // httpActivityInterceptor only counts in-flight /api calls (the branch
     // switch holds its skeleton until the new screen's data has landed).
     // opdPreviewInterceptor: X-PF-OPD: 1 on API calls only after pf.opd() (OPD dark build).
-    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, authInterceptor])),
+    // storageErrorInterceptor: a real storage_error (or a masked HTML 502/503/504
+    // gateway page on an upload) becomes one clear ApiError message everywhere.
+    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, authInterceptor, storageErrorInterceptor])),
     // Private uploads: register the session-authenticated fetcher the PDF
     // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
     provideAppInitializer(() => { inject(UploadsService); }),

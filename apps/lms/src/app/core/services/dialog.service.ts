@@ -32,6 +32,11 @@ export interface DialogRequest {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: DialogTone;
+  /** A plain notice with nothing to choose — the footer renders ONE button
+   *  (confirmLabel only), never a Cancel beside it. Set by `alert()`; never
+   *  set this directly on `confirm()` (two differently-labelled buttons is
+   *  the normal case there). */
+  singleButton?: boolean;
   /** Header glyph override (default: info / pencil / warning by kind+tone). */
   icon?: 'printer';
   /** Optional list under the message (scrolls when long) — e.g. the empty
@@ -105,6 +110,26 @@ export class DialogService {
         tone: 'primary',
         ...req,
         resolve: (result) => resolve(!!result)
+      });
+    });
+  }
+
+  /** A notice to acknowledge — nothing to decide, so there is exactly ONE
+   *  button. Review fix: callers used to fake this with
+   *  `confirm({ confirmLabel: 'OK', cancelLabel: 'OK' })`, which rendered two
+   *  identical "OK" buttons. Resolves once the single button is pressed (or
+   *  the dialog is dismissed via Escape/backdrop) — there's no "false" to
+   *  distinguish, so this always resolves `void`. */
+  alert(req: Omit<DialogRequest, 'kind' | 'cancelLabel' | 'singleButton'>): Promise<void> {
+    return new Promise<void>(resolve => {
+      this._active.set({
+        id: this.mkId(),
+        kind: 'confirm',
+        confirmLabel: 'OK',
+        tone: 'primary',
+        ...req,
+        singleButton: true,
+        resolve: () => resolve(),
       });
     });
   }

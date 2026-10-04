@@ -15,6 +15,7 @@ import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.c
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
 import { labToday } from '../../shared/utils/lab-clock';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
 
 interface ModeTotal { mode: string; count: number; total: number; }
 
@@ -85,7 +86,8 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
     TouchButtonComponent,
     HeroBandComponent,
     BusyDirective,
-    SkeletonCardComponent
+    SkeletonCardComponent,
+    NdDateComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -97,8 +99,8 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
                       [value]="closureQ()" (valueChange)="closureQ.set($event)">
           <ng-container band-tools>
             <div class="pf-ds-band" role="group" aria-label="Business day and shift">
-              <input type="date" class="pf-ds-band__in" aria-label="Business day" [max]="todayStr"
-                     [ngModel]="dateStr()" (ngModelChange)="setDate($event)" />
+              <pf-nd-date label="Business day" class="pf-ds-band__in" [max]="todayStr"
+                          [value]="dateStr()" (valueChange)="setDate($event)"></pf-nd-date>
               <input type="text" class="pf-ds-band__in pf-ds-band__shift" aria-label="Shift (optional)"
                      placeholder="Shift (optional)"
                      [ngModel]="shiftName()" (ngModelChange)="shiftName.set($event)" (change)="load()" />
@@ -131,8 +133,8 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
       <div class="flex flex-wrap items-end gap-3 mb-5 pf-classic-only">
         <div>
           <label class="pf-label">Business day</label>
-          <input type="date" class="pf-input" [max]="todayStr"
-                 [ngModel]="dateStr()" (ngModelChange)="setDate($event)" />
+          <pf-nd-date label="Business day" [max]="todayStr"
+                      [value]="dateStr()" (valueChange)="setDate($event)"></pf-nd-date>
         </div>
         <div>
           <label class="pf-label">Shift (optional)</label>
@@ -466,7 +468,7 @@ export class DailyStatementComponent implements OnInit {
     this.loadClosures();
   }
 
-  setDate(d: string) {
+  setDate(d: string | null) {
     if (!d) return;
     this.dateStr.set(d);
     this.load();

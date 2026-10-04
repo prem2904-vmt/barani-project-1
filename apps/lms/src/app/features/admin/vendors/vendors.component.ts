@@ -18,6 +18,7 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -77,7 +78,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
   imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent
+    HeroBandComponent, NdDateComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -268,9 +269,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
                       <input type="number" min="1" step="1" class="nd-input"
                              [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
                              placeholder="50000"/></div>
-                    <div><label class="nd-field__lbl pf-vn-lbl">Payment date</label>
-                      <input type="date" class="nd-input"
-                             [ngModel]="paymentDate()" (ngModelChange)="paymentDate.set($event)"/></div>
+                    <div><label class="nd-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
+                      <pf-nd-date label="Payment date" inputId="pf-vn-payment-date"
+                                  [value]="paymentDate() || null"
+                                  (valueChange)="paymentDate.set($event ?? '')"></pf-nd-date></div>
                     <div><label class="nd-field__lbl pf-vn-lbl">Note / reference</label>
                       <input type="text" class="nd-input"
                              [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
@@ -414,6 +416,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vn-card { padding: 16px 18px; overflow: visible; }
     .pf-vn-lbl { display: block; margin-bottom: 6px; }
     .pf-vn-hint { margin-top: 4px; }
+    /* pf-nd-date defaults to inline-block (shrink to content) so it sits
+     * next to other inline controls elsewhere; here it's the sole control
+     * in its grid cell and must fill it exactly like the Amount / Note
+     * inputs beside it. */
+    .pf-topup pf-nd-date { display: block; width: 100%; }
 
     /* Inline top-up panel */
     .pf-topup {

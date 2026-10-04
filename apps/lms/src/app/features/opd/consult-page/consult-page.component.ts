@@ -11,6 +11,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConsultDoctor, ConsultDraft } from '../../../shared/opd/consult';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
 /**
  * OPD consult screen. The separate, non-lab screen the "new order" fork routes
@@ -26,7 +27,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 @Component({
   selector: 'pf-consult-page',
   standalone: true,
-  imports: [FormsModule, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, BusyDirective],
+  imports: [FormsModule, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, BusyDirective, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consult-page.component.html',
   styleUrl: './consult-page.component.scss',
@@ -47,6 +48,8 @@ export class ConsultPageComponent {
   /** Doctors pickable at the current branch — empty until the doctor-onboarding
    *  slice lands. */
   readonly doctors = signal<ConsultDoctor[]>([]);
+  readonly doctorOptions = computed<PfSelectOption<string>[]>(() =>
+    this.doctors().map(d => ({ value: d.id, label: d.name + (d.department ? ' · ' + d.department : '') })));
   readonly doctorId = signal<string | null>(null);
   readonly fee = signal<number>(0);
 

@@ -17,6 +17,7 @@ import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit
 import { BusyDirective } from '../../directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { ageInYears, ageParts } from '../../../shared/utils/patient-age';
+import { NdDateComponent } from '../nd-date/nd-date.component';
 
 interface HistoryRow {
   id: string;
@@ -63,7 +64,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [SkeletonDetailComponent, BusyDirective, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent],
+  imports: [SkeletonDetailComponent, BusyDirective, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
@@ -130,8 +131,8 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                     </label>
                     <label>
                       <span>Date of birth</span>
-                      <input type="date" class="pf-pp-input" [value]="draft().dateOfBirth"
-                             (input)="setDob($any($event.target).value)" />
+                      <pf-nd-date label="Date of birth" [value]="draft().dateOfBirth || null"
+                                  (valueChange)="setDob($event)"></pf-nd-date>
                     </label>
                     <label>
                       <span>Age</span>
@@ -1161,7 +1162,7 @@ export class PatientProfileModalComponent {
    * sends the age alone — the server stores an estimated DOB when it differs
    * from the current DOB's age.
    */
-  setDob(value: string) {
+  setDob(value: string | null) {
     if (!value) {
       this._draft.update(d => ({ ...d, dateOfBirth: '', dobTouched: false }));
       return;
