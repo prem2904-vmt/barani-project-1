@@ -119,7 +119,13 @@ export type ReportSectionType = 'grid' | 'paragraph' | 'chart' | 'image'
   /* Culture-only building blocks (offered ONLY for culture_sensitivity
      tests): a labelled summary line bound to a bench data source, and the
      per-organism AST tables block. Other tests never see these types. */
-  | 'culture_line' | 'culture_ast';
+  | 'culture_line' | 'culture_ast'
+  /* Profile one-page report layout designer (docs/REPORT-CHARTS.md's sibling
+     feature): ONE section per profile, carrying the body-area box
+     arrangement (table / chart / analyzer-image / signatures / notes boxes)
+     in millimetres. Same jsonb section-array storage as every other
+     section — no migration. See shared/utils/report-profile-layout.ts. */
+  | 'page_layout';
 
 interface ReportSectionBase {
   id: string;
@@ -200,8 +206,79 @@ export interface ChartZone {
   label?: string;
 }
 
+/** One box of the profile's one-page body layout — see
+ *  shared/utils/report-profile-layout.ts for the geometry helpers and the
+ *  CBC default. Position/size in millimetres from the BODY area's top-left
+ *  (the designer's page-frame origin), not the page's. */
+export type PageLayoutBoxKind = 'table' | 'chart' | 'analyzer' | 'signatures' | 'notes';
+
+export interface PageLayoutBox {
+  id: string;
+  kind: PageLayoutBoxKind;
+  /** `chart:<blockId>` → the report-chart section id. `analyzer:<code>` →
+   *  the instrument image code (e.g. "12003"). Absent for table/signatures/notes. */
+  ref?: string | null;
+  /** A lab-facing label, e.g. "WBC histogram". */
+  label?: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** table box only: which report columns print, and at what width (%). */
+  columns?: Array<{ name: string; visible: boolean; width?: number }>;
+  /** table box only: results font size in pt (the fit meter may shrink this
+   *  further at print time, down to MIN_BODY_FONT_PT). */
+  fontSize?: number;
+  /** Kept in the layout but not printed (the designer's "Hide" — the box
+   *  stays where it was, ready to show again). Absent = prints. */
+  hidden?: boolean;
+  /** notes box only: the text it prints (older layouts used `label`). */
+  text?: string | null;
+  /** table box only: where the rows sit when the box is taller than they
+   *  need — 'top' (default), 'fill' (rows spread evenly to fill the box) or
+   *  'center'. The report draws exactly this. */
+  vAlign?: PageLayoutRowAlign | null;
+  /** table box only: space between rows — 'compact', 'normal' (default) or
+   *  'relaxed'. The report draws exactly this. */
+  rowSpacing?: PageLayoutRowSpacing | null;
+  /** table box, MANUAL row mode only: the member rows (parameter names) this
+   *  box prints, in the profile's order. Every row belongs to exactly one box. */
+  rows?: string[] | null;
+}
+
+/** One page of a profile's Custom layout. */
+export interface PageLayoutPage {
+  id: string;
+  boxes: PageLayoutBox[];
+}
+
+/** How the results table spreads across table boxes:
+ *  'auto' — rows flow from the first table box into the next ("continued");
+ *  'manual' — each table box prints the rows chosen for it. */
+export type PageLayoutTableMode = 'auto' | 'manual';
+
+export type PageLayoutRowAlign = 'top' | 'fill' | 'center';
+export type PageLayoutRowSpacing = 'compact' | 'normal' | 'relaxed';
+
+export interface PageLayoutSection extends ReportSectionBase {
+  type: 'page_layout';
+  /** 1 = single page (`boxes`); 2 = Custom layout (`pages`; `boxes` mirrors
+   *  page 1 so an older reader still prints page 1). */
+  v: 1 | 2;
+  enabled: boolean;
+  /** Page 1's boxes (v1 storage; kept in sync for older readers). */
+  boxes: PageLayoutBox[];
+  pages?: PageLayoutPage[];
+  tableMode?: PageLayoutTableMode;
+  /** Analyzer image codes mapped to this profile (Instruments → Code mapping
+   *  owns it; the designer only carries it through a save). */
+  analyzerImages?: PageLayoutAnalyzerImage[];
+}
+
+export interface PageLayoutAnalyzerImage { code: string; label?: string; }
+
 export type ReportSection = GridSection | ParagraphSection | ImageSection | ChartSection
-  | CultureLineSection | CultureAstSection;
+  | CultureLineSection | CultureAstSection | PageLayoutSection;
 
 // ═══════════════════════════════════════════════════════════════
 // Per-test layout response
@@ -245,7 +322,7 @@ export interface ResolvedReportLayout {
   /** Specimen / sample type for this test (e.g. "Serum", "EDTA Whole
    *  Blood"). Surfaced from TestEntity.Parameters JSON's `sampleType`
    *  wrapper key. The PDF prints this as an italic dim sub-line under
-   *  each test name, like Drlogy's "CREATININE, SERUM" rendering. */
+   *  each test name, like the classic "CREATININE, SERUM" rendering. */
   sampleType?: string | null;
   columns: ReportColumn[];
   /** True when `columns` is this test's OWN override (Test Master →
@@ -280,6 +357,12 @@ export interface ResolvedSection {
   content?: string;
   imageUrls?: string[];
   chart?: ResolvedChart;
+  /** Report chart block (type 'chart' with a Test Master chart spec) — the
+   *  stored spec, passed through by mw (docs/REPORT-CHARTS.md). */
+  trend?: unknown | null;
+  /** Profile one-page layout (type 'page_layout') — the stored box array,
+   *  passed through by mw verbatim (same pattern as `trend`). */
+  pageLayout?: unknown | null;
 }
 
 export interface ResolvedRow {

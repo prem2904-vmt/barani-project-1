@@ -2,25 +2,15 @@ import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, effect, inje
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
-import { ReportTemplate } from '../../../shared/models/report.model';
-import { ReportColumn, ResolvedReportLayout } from '../../../shared/models/report-layout.model';
+import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { firstValueFrom } from 'rxjs';
-import { ReportPdfInput, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
-import { resolveReportLayouts } from '../../../shared/utils/report-layouts';
+import { ReportPdfInput, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
+import { buildSamplePreviewInput, type PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
+import type { LiveLayout } from '../../../shared/utils/report-profile-layout';
+import type { PageLayoutBox } from '../../../shared/models/report-layout.model';
 
-/** A profile member fed to the preview so a PROFILE previews exactly as it
- *  prints: one fabricated snapshot row per member, resolved through the same
- *  layout pipeline the real report uses. */
-export interface PreviewProfileMember {
-  id: string;
-  name: string;
-  /** TestEntity.Parameters JSON (wrapper or bare array) — sample values are
-   *  harvested from it so member results resolve to something visible. */
-  parameters?: string | null;
-  /** The member's OWN department (a package has none — its members print
-   *  under theirs). Falls back to the previewed test's department. */
-  department?: string | null;
-}
+export type { PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
 
 /**
  * EXACT-output report preview: runs the engine's /preview per test, fabricates
@@ -105,29 +95,14 @@ export class ReportPdfPreviewComponent implements OnDestroy {
    *  so the PDF shows the real culture block instead of an empty grid. */
   readonly culture = input<boolean>(false);
 
-  private static readonly SAMPLE_CULTURE = {
-    microFormat: 'culture_sensitivity',
-    values: {
-      specimen: 'Urine',
-      colonyCount: '>100,000 CFU/mL',
-      organisms: [{ name: 'Escherichia coli', antibiotics: [
-        { name: 'Amikacin', interpretation: 'S' },
-        { name: 'Ciprofloxacin', interpretation: 'R' },
-        { name: 'Meropenem', interpretation: 'S' },
-      ]}],
-      resistancePattern: 'Ampicillin-resistant; carbapenems retained.',
-      clinicalNotes: 'Significant bacteriuria — correlate clinically.',
-    },
-    stages: [
-      { key: 'gram', label: 'Gram / Direct smear', values: { fields: [
-        { name: 'pus_cells', title: 'Pus Cells', value: 'Many' },
-        { name: 'gram_negative_bacilli', title: 'Gram-negative bacilli', value: 'Many' },
-      ], notes: 'GNB seen' } },
-      { key: 'growth', label: 'Growth check', values: { fields: [
-        { name: 'growth', title: 'Growth', value: 'Significant growth' },
-      ] } },
-    ],
-  };
+  /** The profile one-page layout as the designer has it RIGHT NOW (unsaved
+   *  boxes) — the preview renders it while the lab drags, instead of
+   *  waiting for the autosave round trip. Null = whatever is saved. */
+  readonly pageLayout = input<LiveLayout | null>(null);
+  /** The test's department — the sample report signs with its REAL sign-off. */
+  readonly departmentId = input<string | null>(null);
+  private readonly signoff = signal<{ signatures: ReportSignature[] } | null>(null);
+  private signoffFor: string | null = null;
   /** Bump to force a re-render (after Save, or a manual Refresh). */
   readonly refreshToken = input(0);
 
@@ -163,7 +138,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     effect(() => {
       this.testId(); this.testName(); this.department(); this.sampleType();
       this.parameters(); this.values(); this.profileMembers();
-      this.columnsOverride(); this.refreshToken(); this.tpl();
+      this.columnsOverride(); this.refreshToken(); this.tpl(); this.pageLayout(); this.departmentId();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       if (!this.testId()) { this.setUrl(null); return; }
       this.rendering.set(true);
@@ -191,26 +166,6 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     if (prev) URL.revokeObjectURL(prev);
     this._url.set(raw);
     this.hasUrl.set(raw !== null);
-  }
-
-  /** Plausible sample values for a list of parameter names — mirrors the old
-   *  notes-editor harvesting so result/range/unit cells resolve visibly. */
-  private static valuesFor(names: string[]): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
-    for (const n of names) if (n) out[n] = '1.0';
-    return out;
-  }
-
-  /** Parameter names out of a TestEntity.Parameters JSON (wrapper or array). */
-  private static namesFromParametersJson(raw: string | null | undefined): string[] {
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      const list: Array<{ name?: string }> = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.parameters) ? parsed.parameters : [];
-      return list.map(p => (p?.name ?? '').trim()).filter(Boolean);
-    } catch { return []; }
   }
 
   /**
@@ -256,102 +211,38 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     }
   }
 
+  /** The department's real sign-off, fetched once per department. */
+  private async signoffOf(dept: string | null): Promise<{ signatures: ReportSignature[] } | null> {
+    if (!dept) return null;
+    if (this.signoffFor !== dept) {
+      this.signoffFor = dept;
+      this.signoff.set(await this.layout.signoffPreview(dept));
+    }
+    return this.signoff();
+  }
+
   /** The fabricated report + resolved layouts, exactly as buildReportPdf will
-   *  receive them. Null when `superseded()` turns true mid-way. */
+   *  receive them (shared/utils/report-sample-preview.ts — the SAME builder
+   *  the profile one-page layout designer draws its page with). Null when
+   *  `superseded()` turns true mid-way. */
   async buildPreviewInput(superseded: () => boolean = () => false): Promise<ReportPdfInput | null> {
-    const testId = this.testId();
-    const preview = async (id: string, vals: Record<string, unknown>, imgs: string[] = [],
-                           p?: { sex?: string | null; age?: number | null }) =>
-      this.layout.preview(await this.effectiveId(id), vals, imgs, p,
-        id === testId ? this.parametersJson() : null);
-    const patient = { sex: 'Female', age: 35 };
-    const members = this.profileMembers();
-    let layouts: Record<string, ResolvedReportLayout> = {};
-    let snapshotTests: Array<Record<string, unknown>>;
-
-    if (members.length > 0) {
-      // PROFILE: one fabricated row per member, resolved through the same
-      // helper the real report uses — so the profile merge, notes rule and
-      // the profile's own column override all exercise the true path.
-      snapshotTests = members.map(m => {
-        const vals = ReportPdfPreviewComponent.valuesFor(
-          ReportPdfPreviewComponent.namesFromParametersJson(m.parameters));
-        return {
-          testId: m.id,
-          name: m.name,
-          department: m.department || this.department() || 'Department',
-          packageTestId: testId,
-          profileTestId: testId,
-          packageType: 'profile',
-          packageName: this.testName(),
-          profileName: this.testName(),
-          sampleType: this.sampleType() || undefined,
-          result: { values: vals },
-        };
-      });
-      layouts = await resolveReportLayouts<ResolvedReportLayout>(
-        (id, vals, _c, p) => preview(id, vals, [], p),
-        snapshotTests as never,
-        patient,
-      );
-    } else {
-      // INDIVIDUAL test: one row from typed or generated sample values.
-      const vals = this.values() && Object.keys(this.values()!).length > 0
-        ? this.values()!
-        : ReportPdfPreviewComponent.valuesFor(this.parameters());
-      const resolved = await preview(testId, vals, [], patient);
-      layouts = { [testId]: resolved };
-      snapshotTests = [{
-        testId,
-        name: this.testName() || resolved.testName,
-        department: this.department() || resolved.departmentName || 'Department',
-        sampleType: this.sampleType() || resolved.sampleType || undefined,
-        result: this.culture() ? ReportPdfPreviewComponent.SAMPLE_CULTURE : { values: vals },
-      }];
-    }
-    if (superseded()) return null;
-
-    // Live unsaved column edits: patch the TARGET layout so the preview is
-    // what Save would produce. departmentColumns keeps the pre-override set
-    // for the renderer's profile-block fallback.
-    const override = this.columnsOverride();
-    const target = layouts[testId];
-    if (override && override.length > 0 && target) {
-      layouts[testId] = {
-        ...target,
-        columns: override,
-        hasColumnOverride: true,
-        departmentColumns: target.hasColumnOverride
-          ? (target.departmentColumns ?? null)
-          : target.columns,
-      };
-    }
-
-    const snapshot = {
-      patient: { displayName: 'Sita Raman', age: 35, sex: 'Female', phone: '9080706050' },
-      order: {
-        id: 'preview-order',
-        orderNumber: 'LAB-2608-000042',
-        createdAt: new Date().toISOString(),
-        refDoctorName: 'Dr. A. Sharma',
-        branchName: 'Preview',
-      },
-      type: 'final',
-      tests: snapshotTests,
-    };
-    const baseInput = {
-      report: {
-        id: 'preview-' + testId,
-        type: 'final',
-        createdAt: new Date().toISOString(),
-        data: JSON.stringify(snapshot),
-      },
+    return buildSamplePreviewInput({
+      testId: this.testId(),
+      testName: this.testName(),
+      department: this.department(),
+      sampleType: this.sampleType(),
+      parameters: this.parameters(),
+      values: this.values(),
+      parametersJson: this.parametersJson(),
+      members: this.profileMembers(),
+      columnsOverride: this.columnsOverride(),
+      culture: this.culture(),
       template: this.tpl(),
-      resolvedLayouts: layouts,
-      previewKeepEmptyColumns: true,
-    };
-    const imageCache = await preloadReportImages(baseInput as ReportPdfInput, this.platform.getApiUrl());
-    if (superseded()) return null;
-    return { ...baseInput, imageCache } as ReportPdfInput;
+      apiUrl: this.platform.getApiUrl(),
+      preview: async (id, vals, imgs, p, pj) => this.layout.preview(await this.effectiveId(id), vals, imgs, p, pj),
+      pageLayout: this.pageLayout(),
+      signoff: await this.signoffOf(this.departmentId()),
+      assetBase: typeof document !== 'undefined' ? document.baseURI : null,
+    }, superseded);
   }
 }

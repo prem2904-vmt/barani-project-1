@@ -11,10 +11,16 @@ import { ThemeService } from "../../core/services/theme.service";
 import { HeroBandComponent } from "../../shared/components/hero-band/hero-band.component";
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
+import { OpdGateService } from "../opd/shared/opd-gate.service";
 import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
+import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
+import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
+import { testListUrl } from '../../shared/utils/test-list-url';
+import { addDays, istDayRange, labToday } from "../../shared/utils/lab-clock";
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface SeedSummary {
   tenants: number;
@@ -60,7 +66,7 @@ interface KpiCard {
 @Component({
   selector: "pf-admin-overview",
   standalone: true,
-  imports: [RouterLink, DatePipe, HeroBandComponent],
+  imports: [BusyDirective, RouterLink, DatePipe, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov pf-band-page">
@@ -471,6 +477,7 @@ interface KpiCard {
   `,
   styles: [
     `
+    @use '../../shared/styles/device-tier' as dt;
       /* Use the full screen width on web — the KPI / config / manage grids all
        auto-fit, so they spread into the freed space instead of sitting in a
        narrow centred column. A high cap (2200px) just stops absurd stretch on
@@ -1040,7 +1047,7 @@ interface KpiCard {
       }
 
       /* ---- Web-below-desktop band (641-1279, incl. iPad + narrow browsers) ---- */
-      @media (min-width: 641px) and (max-width: 1279px) {
+      @include dt.tablet-band {
         .pf-ov__stats {
           grid-template-columns: repeat(3, 1fr);
         }
@@ -1053,6 +1060,10 @@ export class AdminOverviewComponent implements OnInit {
   /** Design gate: new design hides the big overview title. */
   readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
+  private readonly process = inject(ProcessWorkflowService);
+  private readonly entitlements = inject(TenantEntitlementsService);
+  /** OPD dark build: the OPD module card shows only when the OPD gate is open. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly toasts = inject(ToastService);
 
   readonly today = new Date();
@@ -1149,11 +1160,18 @@ export class AdminOverviewComponent implements OnInit {
   /** Route-access context for filtering links (ROUTE_ACCESS — same rule as the
    *  guards), so a custom admin role never sees a card that lands on /403. */
   protected canOpen(href: string): boolean {
-    // hasAnyPermission already honours '*' (super-admin).
-    return canOpenRoute(href, { hasAny: (p) => this.auth.hasAnyPermission(p) });
+    // hasAnyPermission already honours '*' (super-admin). Workflow actions and
+    // module entitlements too (the same ROUTE_ACCESS the guards read), so a
+    // switched-off feature — e.g. Home collection — never surfaces here.
+    return canOpenRoute(href, {
+      hasAny: (p) => this.auth.hasAnyPermission(p),
+      isEnabled: (a) => this.process.isEnabled(a),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+    });
   }
   private openable<T extends { href?: string }>(items: T[]): T[] {
-    return items.filter((i) => !i.href || this.canOpen(i.href));
+    return items.filter((i) => (!i.href || this.canOpen(i.href))
+      && (!i.href?.startsWith('/admin/opd') || this.opdGate.visible()));
   }
 
   readonly groups: Array<{
@@ -1348,6 +1366,14 @@ export class AdminOverviewComponent implements OnInit {
       kw: "billing gst tax slab hsn sac invoice number numbering series discount cap approval upi online payment razorpay payment gateway bank account place of supply interstate",
     },
     {
+      label: "Expenses",
+      href: "/expenses",
+      g: "finance",
+      hint: "Staff expenses, bills, cashier day closing",
+      icon: "M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5ZM8 8h8M8 12h8M8 16h5",
+      kw: "expense expenses spend spending petty cash bill receipt voucher opening closing balance day book cash book vendor payment rent salary consumables cashier day closing counted cash variance",
+    },
+    {
       label: "Vendor Credit Wallets",
       href: "/admin/vendors",
       g: "finance",
@@ -1473,7 +1499,7 @@ export class AdminOverviewComponent implements OnInit {
       g: "automation",
       hint: "Enable products & their features",
       icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
-      kw: "module extension enable disable feature lab opd ipd pharmacy radiology inventory payroll insurance entitlement product plan",
+      kw: "module extension enable disable feature lab ipd pharmacy radiology inventory payroll insurance entitlement product plan",
     },
     {
       label: "Settings hub",
@@ -1487,13 +1513,15 @@ export class AdminOverviewComponent implements OnInit {
   readonly results = computed(() => {
     const term = this._q().trim().toLowerCase();
     if (!term) return [];
+    // Re-checked live: the workflow / entitlements may load after construction.
+    const pages = this.pages.filter((p) => this.canOpen(p.href));
     // Rank: label/hint matches first, then keyword-only matches (a nested setting
     // name surfacing its page) — so the most relevant page leads.
-    const head = this.pages.filter((p) =>
+    const head = pages.filter((p) =>
       `${p.label} ${p.hint}`.toLowerCase().includes(term),
     );
     const headSet = new Set(head);
-    const kwOnly = this.pages.filter(
+    const kwOnly = pages.filter(
       (p) => !headSet.has(p) && p.kw.toLowerCase().includes(term),
     );
     return [...head, ...kwOnly];
@@ -1546,24 +1574,14 @@ export class AdminOverviewComponent implements OnInit {
     });
   }
 
-  /** Local-midnight window boundaries for the chosen range, as ISO instants. */
+  /** IST-midnight window boundaries for the chosen range, as ISO instants
+   *  (lab-clock — the business day is strictly IST, whatever the device). */
   private windowFor(r: RangeKey): { from: string; to: string } {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-
-    let from = new Date(startOfToday);
-    let to = new Date(startOfTomorrow);
-    if (r === "yesterday") {
-      from.setDate(from.getDate() - 1);
-      to = new Date(startOfToday);
-    } else if (r === "7d") {
-      from.setDate(from.getDate() - 6);
-    } else if (r === "30d") {
-      from.setDate(from.getDate() - 29);
-    }
-    return { from: from.toISOString(), to: to.toISOString() };
+    const today = labToday();
+    if (r === "yesterday") return istDayRange(addDays(today, -1));
+    if (r === "7d") return istDayRange(addDays(today, -6), today);
+    if (r === "30d") return istDayRange(addDays(today, -29), today);
+    return istDayRange(today);
   }
 
   formatCard(c: KpiCard): string {

@@ -15,7 +15,6 @@ import {
   ModuleRegistry,
   CellValueChangedEvent,
   RowClassParams,
-  RowStyle,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../../core/services/api.service';
@@ -23,18 +22,20 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { TEST_PRICING_PERMS } from '../../../../core/auth/route-access';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { summarizeRanges } from '../../../../shared/utils/reference-range';
 import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
+import { containerFlag, MISSING_CONTAINER_URL, MissingContainerResponse, missingContainerIndex } from '../../../../shared/utils/container-check';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
 import { PricingComponent } from '../../pricing/pricing.component';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
-import { notOfferedElement } from '../../../../shared/primitives/price-flag.component';
-import { isOffered } from '../../../../shared/utils/test-pricing';
+import { inactiveElement } from '../../../../shared/primitives/price-flag.component';
+import { isTestEnabled } from '../../../../shared/utils/test-pricing';
 import { originBadgeElement } from '../../../../shared/primitives/origin-badge.component';
 import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
@@ -47,6 +48,13 @@ import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.compon
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
+import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { prefetch, prefetchWhenIdle } from '../../../../shared/utils/prefetch';
+import { PageOpenService } from '../../../../core/navigation/page-open.service';
+import { afterNextPaint } from '../../../../shared/utils/busy';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
+import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -76,6 +84,7 @@ interface DeptRecord {
 /** AG Grid themes live in ./grid-theme (re-exported for existing importers). */
 export { gridThemeDark, gridThemeLight } from './grid-theme';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
+import { testListUrl } from '../../../../shared/utils/test-list-url';
 
 /** Extended row model supporting manual tree hierarchy for profiles/packages. */
 export type TestRow = Test & {
@@ -129,11 +138,15 @@ export function actionsWidth(web: boolean, revert: boolean): { width: number; mi
 
 /** Views the band pill's switch can select. */
 type TmView = TestType | 'og' | 'micro' | 'pricing';
+/** Test Master status filter (the Active/Inactive switch). */
+type TmStatus = 'all' | 'active' | 'inactive';
 
 @Component({
   selector: 'pf-tests',
   standalone: true,
   imports: [
+    ...SKELETON_KIT,
+    BusyDirective,
     AgGridAngular,
     FormsModule,
     NgTemplateOutlet,
@@ -176,6 +189,16 @@ export class TestsComponent implements OnInit {
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
+  /** id → problem from GET /api/tests/missing-container (read-only check):
+   *  the Container cell flags a test with no usable container as an error to
+   *  fix — the tube grouping never guesses one (owner 2026-10-03). */
+  private readonly _missingContainer = signal<Map<string, string>>(new Map());
+  /** The catalogue's FIRST load has answered (later reloads keep the grid). */
+  private _testsLoaded = false;
+  private readonly listHold = createLoadHold(true);
+  /** Skeleton rows over the grid until the first load lands (held, no flash). */
+  readonly listSkeleton = this.listHold.active;
+  private readonly pageOpen = inject(PageOpenService);
   private readonly _depts = signal<DeptRecord[]>([]);
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
@@ -281,6 +304,14 @@ export class TestsComponent implements OnInit {
   // per user — and on narrow widths it is a bottom sheet opened from the
   // band pill's "Departments" button.
   private readonly auth = inject(AuthService, { optional: true });
+  /** Price cells + the Pricing view are editable only with a pricing grant
+   *  (manage_tests / manage_test_pricing — the server enforces the same on
+   *  PATCH api/tests/prices/bulk). No session / no permission list (unit
+   *  hosts) = unrestricted. */
+  readonly canEditPrices = computed(() => {
+    const a = this.auth;
+    return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission(TEST_PRICING_PERMS);
+  });
   private readonly destroyRef = inject(DestroyRef);
   /** ≤900px: no room for a side column — the card becomes a sheet. */
   readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
@@ -327,20 +358,41 @@ export class TestsComponent implements OnInit {
     revert: (row: TestRow) => this.revertToMaster(row),
   };
 
-  /** Toggle a test row's active/inactive state immediately via API patch. */
+  /** The Active/Inactive switch, saved immediately. It reads and sets the ONE
+   *  switch state (`isTestEnabled`: isActive AND offered here) — reference mode
+   *  stores "off" as not-offered and keeps isActive true, so flipping only
+   *  isActive made the row vanish from the default view and come back as ON.
+   *  The row never leaves the list: an inactive test stays listed (greyed,
+   *  still editable) and the status filter finds it. The server's row replaces
+   *  the optimistic one. */
   toggleTestActive(row: TestRow) {
     if (!row.id) return;
     const id = row.id;
-    const next = !row.isActive;
+    const prev = this._tests().find(t => t.id === id);
+    const next = !isTestEnabled(row);
     const testName = row.name || 'Test';
+    const flip = (on: boolean) => (t: Test): Test => ({
+      ...t, isEnabled: on,
+      // Clone mode: the row itself; reference mode: the pricing flag.
+      isActive: on ? true : t.catalogMode === 'reference' ? t.isActive : false,
+      isOffered: on ? true : t.catalogMode === 'reference' ? false : t.isOffered,
+    });
 
-    this._tests.update(list => list.map(t => (t.id === id ? { ...t, isActive: next } : t)));
+    this._tests.update(list => list.map(t => (t.id === id ? flip(next)(t) : t)));
     this.api.patch<Test>(`/api/tests/${id}`, { isActive: next }).subscribe({
-      next: () => {
-        this.toasts.success(next ? `'${testName}' activated` : `'${testName}' deactivated`);
+      next: saved => {
+        // Keep the row under its listed id (a reference-mode edit may answer
+        // with the effective row); take the server's switch state.
+        if (saved && typeof saved === 'object') {
+          this._tests.update(list => list.map(t => (t.id === id
+            ? { ...t, isActive: saved.isActive ?? t.isActive, isOffered: saved.isOffered ?? t.isOffered,
+                isEnabled: isTestEnabled(saved) }
+            : t)));
+        }
+        this.toasts.success(next ? `'${testName}' is active again` : `'${testName}' is inactive — find it under Inactive`);
       },
       error: e => {
-        this._tests.update(list => list.map(t => (t.id === id ? { ...t, isActive: !next } : t)));
+        if (prev) this._tests.update(list => list.map(t => (t.id === id ? prev : t)));
         this.toasts.error(ApiError.from(e).message);
       },
     });
@@ -349,20 +401,34 @@ export class TestsComponent implements OnInit {
   /** Stable row identity keeps expansion state + row animation coherent. */
   readonly getRowId = (p: GetRowIdParams<TestRow>) => p.data._key ?? p.data.id;
 
-  /** A test this tenant/branch doesn't offer stays listed, greyed out. */
-  protected getRowStyle = (p: RowClassParams<TestRow>): RowStyle | undefined =>
-    p.data && !isOffered(p.data) ? { opacity: '0.55' } : undefined;
+  /** An inactive test stays listed, its data greyed — the switch and Edit
+   *  stay at full strength so it can be turned back on (scss: .pf-tm-row--off). */
+  protected getRowClass = (p: RowClassParams<TestRow>): string | undefined =>
+    p.data && p.data.id && !isTestEnabled(p.data) ? 'pf-tm-row--off' : undefined;
 
   private gridApi?: GridApi<TestRow>;
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
-  readonly showInactive = signal(false);
-  readonly inactiveCount = computed(() =>
-    this._tests().filter(t => t.type === this._type() && !t.isActive).length);
+  /** Status filter (card header): All (default — inactive tests listed,
+   *  greyed, so nothing ever disappears) · Active · Inactive. */
+  readonly statusFilter = signal<TmStatus>('all');
+  private readonly ofType = computed(() => this._tests().filter(t => t.type === this._type()));
+  readonly inactiveCount = computed(() => this.ofType().filter(t => !isTestEnabled(t)).length);
+  readonly statusOptions = computed<SegmentedOption<TmStatus>[]>(() => {
+    const all = this.ofType().length;
+    const off = this.inactiveCount();
+    return [
+      { value: 'all', label: 'All', count: all, iconPath: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'] },
+      { value: 'active', label: 'Active', count: all - off, iconPath: ['M20 6 9 17l-5-5'] },
+      { value: 'inactive', label: 'Inactive', count: off, iconPath: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M5.6 5.6l12.8 12.8'] },
+    ];
+  });
 
-  readonly typeTests = computed(() => this._tests().filter(t =>
-    t.type === this._type() && (this.showInactive() || t.isActive)));
+  readonly typeTests = computed(() => {
+    const st = this.statusFilter();
+    return this.ofType().filter(t => st === 'all' || (st === 'active') === isTestEnabled(t));
+  });
 
   readonly search = signal('');
   private matchesSearch(t: Test, q: string): boolean {
@@ -514,7 +580,7 @@ export class TestsComponent implements OnInit {
 
   protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
     if (!this.isPhone) return cols;
-    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status']);
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status', 'standardCode']);
     return cols.filter(c => !drop.has(String(c.field ?? c.colId ?? '')));
   }
 
@@ -560,7 +626,9 @@ export class TestsComponent implements OnInit {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
           cellEditor: 'agNumberCellEditor',
         },
-        this.priceColDef(true),
+        this.priceColDef(this.canEditPrices()),
+        // Standard code (LOINC) — plain free text like Short / Section, set on the master catalogue.
+        { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180 },
         this.statusColDef(),
         this.actionsColDef(),
       ];
@@ -592,7 +660,8 @@ export class TestsComponent implements OnInit {
       },
       { ...this.derivedRangeColDef(), minWidth: 180, sortable: false, filter: false },
       { ...this.derivedUnitColDef(), sortable: false, filter: false },
-      { ...this.priceColDef(true), sortable: false, filter: false },
+      { ...this.priceColDef(this.canEditPrices()), sortable: false, filter: false },
+      { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180, sortable: false, filter: false },
       this.statusColDef(),
       this.actionsColDef(),
     ];
@@ -663,7 +732,7 @@ export class TestsComponent implements OnInit {
       headerName: 'Status', colId: 'status', field: 'isActive',
       minWidth: 95, maxWidth: 110, editable: false, sortable: true, filter: false,
       cellRenderer: this.statusSwitchRenderer,
-      valueGetter: p => (p.data?.isActive ? 'Active' : 'Inactive'),
+      valueGetter: p => (p.data && isTestEnabled(p.data) ? 'Active' : 'Inactive'),
     };
   }
 
@@ -673,7 +742,7 @@ export class TestsComponent implements OnInit {
     wrap.style.cssText = 'display:flex;align-items:center;height:100%;';
     if (!data || !data.id) return wrap;
 
-    const isActive = data.isActive ?? true;
+    const isActive = isTestEnabled(data);
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -729,7 +798,7 @@ export class TestsComponent implements OnInit {
     name.className = 'pf-tm-clamp2';
     name.textContent = params.value ?? params.data?.name ?? '';
     wrap.appendChild(name);
-    if (params.data && !isOffered(params.data)) wrap.appendChild(notOfferedElement());
+    if (params.data && !isTestEnabled(params.data)) wrap.appendChild(inactiveElement());
     return wrap;
   };
 
@@ -757,6 +826,15 @@ export class TestsComponent implements OnInit {
     const text = document.createElement('span');
     text.className = 'pf-tm-clamp2';
     text.textContent = tColor ? tColor.label : '—';
+    // Missing / unknown container: an error to fix, shown — never guessed.
+    const flag = !tColor && params.data?.id
+      ? containerFlag(this._missingContainer().get(params.data.id), params.data.sampleType) : null;
+    if (flag) {
+      text.textContent = flag.label;
+      text.classList.add('pf-tm-container-missing');
+      wrap.title = flag.title;
+      wrap.setAttribute('aria-label', `${flag.label}. ${flag.title}`);
+    }
     wrap.appendChild(text);
     return wrap;
   };
@@ -785,9 +863,23 @@ export class TestsComponent implements OnInit {
       b.addEventListener('click', e => { e.stopPropagation(); run(); });
       return b;
     };
-    wrap.appendChild(act('Edit', 'Edit ' + (data?.name || 'test'),
+    // "Edit" opens the lazy test editor: warm its code on hover / focus, and
+    // mark the pressed button busy in the same frame (cleared when the
+    // navigation settles — see PageOpenService.markSource).
+    const warm = () => { void prefetch(TEST_EDITOR_PREFETCH_KEY, loadTestEditor); };
+    const edit = act('Edit', 'Edit ' + (data?.name || 'test'),
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
-      () => { if (data?.id) this.editTest(data.id); }));
+      () => {
+        if (!data?.id) return;
+        const id = data.id;
+        // Paint the pressed state FIRST, then navigate: opening the editor
+        // is heavy synchronous work that would otherwise swallow the frame.
+        this.pageOpen.markSource(edit);
+        afterNextPaint(() => this.editTest(id));
+      });
+    edit.addEventListener('pointerenter', warm);
+    edit.addEventListener('focus', warm);
+    wrap.appendChild(edit);
     if (data && canRevertToMaster(data)) {
       wrap.appendChild(act('Revert', 'Revert ' + (data.name || 'test') + ' to master',
         '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>',
@@ -836,7 +928,7 @@ export class TestsComponent implements OnInit {
     label.className = 'pf-tm-tree-name' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
     label.textContent = data?.name ?? '';
     wrap.appendChild(label);
-    if (data && !isOffered(data)) wrap.appendChild(notOfferedElement());
+    if (data && data.id && !isTestEnabled(data)) wrap.appendChild(inactiveElement());
     return wrap;
   };
 
@@ -849,8 +941,9 @@ export class TestsComponent implements OnInit {
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);
-      if (params['view'] === 'pricing') this.pricingView.set(true);
+      if (params['view'] === 'pricing' && this.canEditPrices()) this.pricingView.set(true);
     });
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.loadTests();
     this.loadDepartments();
     this.loadProposals();
@@ -868,7 +961,7 @@ export class TestsComponent implements OnInit {
   // ── Band pill (owner, "band pill everywhere") ──────────────────────────
   /** The ONE view switch in the pill: the three catalogue types plus the
    *  side views that replace the grid. */
-  readonly viewOptions: SegmentedOption<TmView>[] = [
+  private readonly allViewOptions: SegmentedOption<TmView>[] = [
     { value: 'individual', label: 'Individual' },
     { value: 'profile', label: 'Profiles' },
     { value: 'package', label: 'Packages' },
@@ -876,6 +969,9 @@ export class TestsComponent implements OnInit {
     { value: 'micro', label: 'Microbiology' },
     { value: 'pricing', label: 'Pricing' },
   ];
+  /** Pricing (the view) only for someone who may change prices. */
+  readonly viewOptions = computed<SegmentedOption<TmView>[]>(() =>
+    this.canEditPrices() ? this.allViewOptions : this.allViewOptions.filter(o => o.value !== 'pricing'));
   readonly view = computed<TmView>(() =>
     this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
   /** True while the tests/profiles/packages grid (not a side view) shows. */
@@ -938,11 +1034,33 @@ export class TestsComponent implements OnInit {
     this._selectedDept.set(key);
   }
 
-  private loadTests() {
-    this.api.get<Test[]>('/api/tests/').subscribe({
-      next: l => this._tests.set(l ?? []),
-      error: e => this.toasts.error(ApiError.from(e).message),
+  private loadMissingContainers() {
+    this.api.get<MissingContainerResponse>(MISSING_CONTAINER_URL).subscribe({
+      next: r => {
+        this._missingContainer.set(missingContainerIndex(r));
+        this.gridApi?.refreshCells({ columns: ['tubeColor'], force: true });
+      },
+      error: () => { /* a diagnostic only — the grid works without it */ },
     });
+  }
+
+  private loadTests() {
+    this.loadMissingContainers();
+    // status=all: every test, switched-off ones included (flagged isEnabled).
+    this.api.get<Test[]>(testListUrl({ status: 'all' })).subscribe({
+      next: l => { this._tests.set(l ?? []); this.onFirstLoad(); },
+      error: e => { this._testsLoaded = true; this.listHold.done(); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  /** Once the grid is on screen, warm the test editor's code while the
+   *  browser is idle, so "Edit" never waits on a chunk download. */
+  private onFirstLoad() {
+    if (this._testsLoaded) return;
+    this._testsLoaded = true;
+    this.listHold.done();
+    const cancel = prefetchWhenIdle(TEST_EDITOR_PREFETCH_KEY, loadTestEditor);
+    this.destroyRef.onDestroy(cancel);
   }
 
   private loadDepartments() {

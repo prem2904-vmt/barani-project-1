@@ -77,12 +77,18 @@ export interface PdfSafeTextOptions {
   /** Leave the Symbol-font characters (≥ ≤ ≠ ≈ ∞ and Greek) in place for a
    *  symbol-aware draw — see {@link installPdfTextSanitizer}. */
   keepSymbols?: boolean;
+  /** The text will be drawn in an EMBEDDED Unicode font (a report theme's
+   *  TTF — see report-fonts.ts): it carries ⁹ ≥ µ ₹ … natively, so nothing
+   *  is transliterated here. A glyph the font lacks is replaced at draw time
+   *  (see {@link unicodeFontSafeText}). */
+  native?: boolean;
 }
 
 /** Transliterate one string into something the PDF fonts can actually draw. */
 export function pdfSafeText(value: unknown, opts: PdfSafeTextOptions = {}): string {
   if (value == null) return '';
   const s = String(value);
+  if (opts.native) return s;
   if (!/[^\x20-\x7e]/.test(s)) return s;   // fast path: plain ASCII
   return s
     .replace(SUP_RUN_RE, run => '^' + [...run].map(c => SUPERSCRIPTS[c] ?? c).join(''))
@@ -120,6 +126,51 @@ export function symbolRunUnitWidth(run: string): number {
   return [...run].reduce((w, c) => w + (SYMBOL_GLYPHS[c]?.[1] ?? 500), 0) / 1000;
 }
 
+// ──────────────────────────────────────────────────────────────
+// Embedded Unicode fonts (report themes)
+// ──────────────────────────────────────────────────────────────
+
+/** An embedded TTF font's glyph lookup (jsPDF TTFFont metadata). */
+type GlyphFont = { metadata?: { characterToGlyph?: (code: number) => number } };
+
+/**
+ * Text for an EMBEDDED Unicode font: every character the font has prints as
+ * itself (×10⁹/L, ≥ 126, µIU/mL, ₹, °C — no transliteration). jsPDF's
+ * Identity-H writer STOPS at the first character the font has no glyph for
+ * (it silently drops the rest of the line), so each missing character is
+ * replaced: the cp1252 transliteration when the font can draw that, a space
+ * for an exotic space, nothing for a zero-width one, else "?".
+ */
+export function unicodeFontSafeText(text: string, font: GlyphFont): string {
+  const meta = font.metadata;
+  if (!meta?.characterToGlyph || !/[^\x20-\x7e]/.test(text)) return text;
+  // A method of the TTF metadata — call it on its object.
+  const has = (c: string) => c === '\n' || c === '\r' || meta.characterToGlyph!(c.charCodeAt(0)) !== 0;
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (has(c)) { out += c; continue; }
+    const alt = SUPERSCRIPTS[c] ?? SUBSCRIPTS[c] ?? OTHER[c];
+    if (alt !== undefined && [...alt].every(has)) { out += alt; continue; }
+    out += /\s/.test(c) ? ' ' : '?';
+  }
+  return out;
+}
+
+/** Mark `fontName` (a family registered with doc.addFont) as an embedded
+ *  Unicode font on this document: the sanitizer then draws its text natively. */
+export function registerUnicodeFont(doc: jsPDF, fontName: string): void {
+  const d = doc as unknown as WrappableDoc;
+  (d.__pfUnicodeFonts ??= new Set<string>()).add(fontName.toLowerCase());
+}
+
+/** The current font when it is a registered embedded Unicode font, else null. */
+function activeUnicodeFont(d: WrappableDoc): GlyphFont | null {
+  if (!d.__pfUnicodeFonts?.size) return null;
+  const f = d.getFont() as unknown as { fontName: string } & GlyphFont;
+  return d.__pfUnicodeFonts.has(String(f.fontName).toLowerCase()) ? f : null;
+}
+
 type TextOptions = Record<string, unknown> & {
   align?: string; maxWidth?: number; lineHeightFactor?: number;
 };
@@ -133,6 +184,7 @@ type WrappableDoc = {
   getLineHeightFactor?: () => number;
   internal: { scaleFactor: number };
   __pfSanitized?: boolean;
+  __pfUnicodeFonts?: Set<string>;
 };
 
 /**
@@ -166,15 +218,25 @@ export function installPdfTextSanitizer(doc: jsPDF): void {
     splitSymbolRuns(line).reduce((w, r) =>
       w + (r.sym ? symbolRunUnitWidth(r.t) : originalUnitWidth(r.t, options)), 0);
 
-  d.getStringUnitWidth = (text: string, options?: unknown) =>
-    typeof text === 'string' && hasSymbolGlyph(text)
+  d.getStringUnitWidth = (text: string, options?: unknown) => {
+    // An embedded Unicode font measures what it will actually draw.
+    const uf = typeof text === 'string' ? activeUnicodeFont(d) : null;
+    if (uf) return originalUnitWidth(unicodeFontSafeText(text, uf), options);
+    return typeof text === 'string' && hasSymbolGlyph(text)
       ? unitWidth(pdfSafeText(text, { keepSymbols: true }), options)
       : originalUnitWidth(text, options);
+  };
 
   const flat = (text: unknown) =>
     Array.isArray(text) ? text.map(t => pdfSafeText(t)) : pdfSafeText(text);
 
   d.text = (text: unknown, x: unknown, y: unknown, options?: unknown, ...rest: unknown[]) => {
+    // Embedded Unicode font (a report theme): native glyphs, no Symbol runs.
+    const uf = activeUnicodeFont(d);
+    if (uf) {
+      const native = (t: unknown) => unicodeFontSafeText(t == null ? '' : String(t), uf);
+      return original(Array.isArray(text) ? text.map(native) : native(text), x, y, options, ...rest);
+    }
     const opts = (options ?? {}) as TextOptions;
     const plainCall = typeof x === 'number' && typeof y === 'number'
       && (options == null || (typeof options === 'object' && !Array.isArray(options)))

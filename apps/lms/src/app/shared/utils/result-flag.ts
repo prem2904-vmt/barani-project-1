@@ -43,10 +43,15 @@ export interface SavedFlag {
   allRanges?: string[] | null;
 }
 
-/** The parts of a result snapshot (`OrderTest.currentResult`) flags read. */
+/** The parts of a result snapshot (`OrderTest.currentResult`) flags read.
+ *  `flags.critical` is the line's OVERALL critical flag (mw ResultService —
+ *  a reference-range CL/CH OR a Conditions-engine rule), independent of
+ *  which — if any — single parameter in `flagged` carries CL/CH; the
+ *  print-picker's whole-line fallback reads it (owner 2026-10-01, critic P1-4). */
 export interface ResultSnapshotLike {
   values?: Record<string, unknown>;
   flagged?: Record<string, SavedFlag>;
+  flags?: { critical?: boolean; hasAbnormal?: boolean };
 }
 
 let lastJson: string | null = null;
@@ -195,14 +200,23 @@ export function savedValueRows(
 // ── Live hint while typing (pre-save only) ────────────────────────────
 
 /** Profile-scoped bands (body fluids): under a profile its own bands win,
- *  else the untagged generics; standalone, every band. Mirrors mw. */
+ *  else the untagged generics; standalone / no profile context, every
+ *  UNTAGGED band when at least one exists (H1, 2026-10-02) — a profile-
+ *  tagged band (BIO010's Gestational OGTT <92) must never show or flag on a
+ *  routine standalone Fasting Blood Sugar, which has its own untagged
+ *  generic band. An ALL-tagged parameter (CLP body fluids, no untagged
+ *  alternative) keeps every band eligible exactly as before profile scoping
+ *  existed. Mirrors mw `ReferenceRangeResolver.DisplayBands`/`Select`. */
 export function bandsForProfile<T extends RangeLike & { profileCode?: string | null }>(
   bands: readonly T[] | null | undefined,
   profileCode?: string | null,
 ): T[] {
   const all = [...(bands ?? [])];
   const pc = (profileCode ?? '').trim().toUpperCase();
-  if (!pc) return all;
+  if (!pc) {
+    const untagged = all.filter(b => !b.profileCode);
+    return untagged.length ? untagged : all;
+  }
   const scoped = all.filter(b => (b.profileCode ?? '').trim().toUpperCase() === pc);
   return scoped.length ? scoped : all.filter(b => !b.profileCode);
 }

@@ -1,0 +1,197 @@
+// Public patient report page — phone-first (360–430px), calm on tablet /
+// desktop. Theme tokens only (light + dark follow the system through the
+// root theme class set in index.html). New-design rules: ONE primary per
+// view, neutral chips, stroked SVG icons, 44px targets, 16px inputs.
+
+:host {
+  // The app locks html/body scrolling; this page owns its own scroll.
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Noto Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pr-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  min-height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding:
+    calc(20px + env(safe-area-inset-top))
+    calc(16px + env(safe-area-inset-right))
+    calc(20px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
+}
+@media (min-width: 641px) {
+  .pr-page { padding-top: calc(48px + env(safe-area-inset-top)); gap: 20px; }
+}
+
+.pr-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ── Lab identity ─────────────────────────────────────────────────────── */
+.pr-lab { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 4px; }
+.pr-lab__logo {
+  width: 48px; height: 48px; flex: none; object-fit: contain; border-radius: 12px;
+  background: #fff; border: 1px solid var(--nd-line); padding: 4px; box-sizing: border-box;
+}
+.pr-lab__mono {
+  width: 48px; height: 48px; flex: none; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, var(--nd-card-bg));
+  color: var(--violet-text, #6d28d9); font-weight: 700; font-size: 17px; letter-spacing: 0.02em;
+}
+.pr-lab__who { min-width: 0; }
+.pr-lab__name { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+.pr-lab__sub { margin: 2px 0 0; font-size: 13px; color: var(--text-tertiary); }
+
+/* ── The one card ─────────────────────────────────────────────────────── */
+.pr-card {
+  background: var(--nd-card-bg);
+  border: 1px solid var(--nd-line);
+  border-radius: var(--nd-radius-card, 16px);
+  box-shadow: var(--nd-shadow-sm);
+  padding: 22px 18px 20px;
+}
+@media (min-width: 641px) { .pr-card { padding: 28px 28px 24px; } }
+
+.pr-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 12px; margin-bottom: 14px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+.pr-icon--warn { background: color-mix(in srgb, var(--red-text, #dc2626) 12%, transparent); color: var(--red-text, #dc2626); }
+.pr-icon--muted { background: var(--nd-chip-bg); color: var(--text-secondary); }
+
+.pr-h1 { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+.pr-h1:focus { outline: none; }
+.pr-h1:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 4px; border-radius: 4px; }
+.pr-sub { margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
+.pr-sub strong { color: var(--text-primary); font-weight: 600; }
+
+/* ── Identity step ────────────────────────────────────────────────────── */
+.pr-verify { display: flex; flex-direction: column; }
+.pr-label { margin: 18px 0 6px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.pr-input {
+  box-sizing: border-box; width: 100%; height: 56px; padding: 0 16px;
+  border-radius: var(--nd-radius, 12px);
+  background: var(--input-bg); color: var(--input-text);
+  border: 1.5px solid var(--input-border);
+  font: inherit; font-size: 18px; font-weight: 500;   // ≥16px: no iOS zoom
+  scroll-margin: 96px;
+  transition: border-color var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease;
+}
+.pr-input--num { font-size: 24px; letter-spacing: 0.22em; font-variant-numeric: tabular-nums; }
+.pr-input--num::placeholder { letter-spacing: 0.04em; font-size: 18px; }
+.pr-input::placeholder { color: var(--input-placeholder); font-weight: 400; }
+.pr-input:focus { outline: none; border-color: var(--input-border-focus, #8b5cf6); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent); }
+.pr-input[aria-invalid='true'] { border-color: var(--red-text, #dc2626); }
+.pr-err { min-height: 20px; margin: 8px 0 0; font-size: 14px; line-height: 1.4; color: var(--red-text, #dc2626); font-weight: 500; }
+.pr-err:empty { min-height: 4px; }
+
+.pr-cta { width: 100%; height: 52px; min-height: 52px; margin-top: 14px; font-size: 16px; border-radius: var(--nd-radius, 12px); text-decoration: none; box-sizing: border-box; }
+a.pr-cta { display: inline-flex; }
+.pr-alt { align-self: center; min-height: 44px; margin-top: 6px; font-size: 14px; font-weight: 600; }
+
+.pr-spin {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: pr-spin 0.8s linear infinite;
+}
+@keyframes pr-spin { to { transform: rotate(360deg); } }
+
+/* ── States ───────────────────────────────────────────────────────────── */
+.pr-state { display: flex; flex-direction: column; }
+.pr-state .pr-cta { margin-top: 18px; }
+
+/* ── Report card ──────────────────────────────────────────────────────── */
+.pr-ready { display: flex; flex-direction: column; }
+.pr-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.pr-chip {
+  display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px;
+  border-radius: 999px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+}
+.pr-chip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary, #7c3aed); }
+.pr-chip--partial .pr-chip__dot { background: transparent; box-shadow: inset 0 0 0 2px var(--color-primary, #7c3aed); }
+.pr-chip--quiet { font-weight: 500; color: var(--text-secondary); }
+.pr-date { margin-left: auto; font-size: 13px; color: var(--text-tertiary); }
+
+.pr-name { font-size: 24px; overflow-wrap: anywhere; }
+.pr-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; font-size: 15px; color: var(--text-secondary); }
+.pr-meta:empty { display: none; }
+
+.pr-notice {
+  display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 0; padding: 12px 14px;
+  border-radius: var(--nd-radius, 12px); background: var(--nd-in-tint); border: 1px solid var(--nd-line);
+  font-size: 14px; line-height: 1.45; color: var(--text-secondary);
+}
+.pr-notice svg { flex: none; margin-top: 2px; color: var(--violet-text, #6d28d9); }
+
+.pr-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+.pr-download { width: 100%; height: 56px; min-height: 56px; font-size: 17px; gap: 10px; border-radius: var(--nd-radius, 12px); }
+.pr-actions__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+.pr-actions__row .nd-btn { height: 48px; min-height: 48px; font-size: 15px; text-decoration: none; gap: 8px; }
+.pr-file { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); text-align: center; overflow-wrap: anywhere; }
+.pr-toast { min-height: 18px; margin: 0; font-size: 13px; font-weight: 600; text-align: center; color: var(--violet-text, #6d28d9); }
+.pr-toast:empty { min-height: 0; }
+
+.pr-partners { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--nd-line); display: flex; flex-direction: column; gap: 8px; }
+.pr-partners__label { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.pr-partner {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px;
+  border-radius: var(--nd-radius, 12px); border: 1px solid var(--nd-line);
+  color: var(--text-primary); text-decoration: none;
+}
+.pr-partner:hover { border-color: var(--nd-sel-border); }
+.pr-partner > svg { flex: none; color: var(--text-tertiary); }
+.pr-partner__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pr-partner__name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.pr-partner__sub { font-size: 13px; color: var(--text-tertiary); }
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.pr-foot { margin-top: auto; padding: 8px 4px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+.pr-foot p { margin: 0 0 8px; }
+.pr-foot a { color: var(--violet-text, #6d28d9); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; }
+.pr-foot__secure { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+
+/* ── Focus: visible on every control ──────────────────────────────────── */
+.nd-btn:focus-visible, .pr-partner:focus-visible, .pr-foot a:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 2px;
+}
+
+/* ── Skeleton (static shapes + a soft pulse; none under reduced motion) ─ */
+.pr-loading { display: flex; flex-direction: column; gap: 12px; }
+.pr-skel { display: block; border-radius: 10px; background: var(--nd-chip-bg); animation: pr-pulse 1.4s ease-in-out infinite; }
+.pr-skel--logo { width: 48px; height: 48px; border-radius: 12px; flex: none; }
+.pr-skel--line { width: 160px; height: 18px; }
+.pr-skel--icon { width: 44px; height: 44px; border-radius: 12px; }
+.pr-skel--chip { width: 84px; height: 28px; border-radius: 999px; }
+.pr-skel--title { width: 62%; height: 24px; }
+.pr-skel--text { width: 88%; height: 16px; }
+.pr-skel--field { width: 100%; height: 56px; border-radius: 12px; margin-top: 10px; }
+.pr-skel--btn { width: 100%; height: 48px; border-radius: 12px; }
+.pr-skel--tall { height: 56px; margin-top: 10px; }
+@keyframes pr-pulse { 50% { opacity: 0.55; } }
+
+/* Entrance: the card content fades up once per state. */
+.pr-verify, .pr-state, .pr-ready { animation: pr-in var(--nd-dur, 320ms) var(--nd-spring, ease-out) both; }
+@keyframes pr-in { from { opacity: 0; transform: translateY(6px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-skel, .pr-verify, .pr-state, .pr-ready, .pr-spin { animation: none; }
+}

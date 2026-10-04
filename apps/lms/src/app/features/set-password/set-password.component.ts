@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { BusyComponent } from '../../shared/primitives/skeleton-kit.component';
@@ -28,6 +29,7 @@ import { BusyComponent } from '../../shared/primitives/skeleton-kit.component';
 export class SetPasswordComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionService);
 
   protected readonly pw = signal('');
   protected readonly confirm = signal('');
@@ -77,8 +79,8 @@ export class SetPasswordComponent {
     }
   }
 
+  /** Full sign-out sequence (revoke, push, sockets, clear, /login). */
   async signOut() {
-    await this.auth.signOut();
-    await this.router.navigateByUrl('/login');
+    await this.session.logout();
   }
 }

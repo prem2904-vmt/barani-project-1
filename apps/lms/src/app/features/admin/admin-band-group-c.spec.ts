@@ -212,14 +212,15 @@ describe('Admin band — Inventory', () => {
     const p = renderBandPage(InventoryComponent, {
       getFor: (url) => url === '/api/inventory/items' ? items
         : url === '/api/inventory/alerts' ? { lowStock: [], expiring: [] }
-          : url === '/api/tests/' ? [{ id: 't1', name: 'CBC' }, { id: 't2', name: 'Glucose' }]
+          : url === '/api/tests/?view=summary' ? [{ id: 't1', name: 'CBC' }, { id: 't2', name: 'Glucose' }]
             : [],
     });
     await p.f.whenStable();
     p.f.detectChanges();
     return p;
   };
-  const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr td:first-child .pf-inv-name')).map(b => text(b));
+  // The item grid is AG-Grid (rows virtualised): read what it is fed.
+  const rows = (p: { cmp: any }) => (p.cmp.visibleItems() as { name: string }[]).map(i => i.name);
 
   it('band present, custom header classic-only, tabs + category filter in the pill', async () => {
     const p = await render();
@@ -227,7 +228,8 @@ describe('Admin band — Inventory', () => {
     expect(p.el.querySelector('h1')!.closest('.pf-classic-only')).not.toBeNull();
     expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
     expect(p.tools()!.querySelector('pf-select')).not.toBeNull();
-    expect(rows(p.el).length).toBe(2);
+    expect(rows(p).length).toBe(2);
+    expect(p.el.querySelector('ag-grid-angular.pf-inv-grid')).not.toBeNull();
   });
 
   it('"New item" in the band opens the item form', async () => {
@@ -241,23 +243,50 @@ describe('Admin band — Inventory', () => {
   it('pill search + category narrow the items; empty state', async () => {
     const p = await render();
     p.type('edta');
-    expect(rows(p.el)).toEqual(['EDTA tube 3ml']);
+    expect(rows(p)).toEqual(['EDTA tube 3ml']);
     p.type('');
     p.cmp.category.set('reagent'); p.f.detectChanges();
-    expect(rows(p.el)).toEqual(['Glucose reagent']);
+    expect(rows(p)).toEqual(['Glucose reagent']);
     p.type('edta');
-    expect(rows(p.el).length).toBe(0);
+    expect(rows(p).length).toBe(0);
     expect(text(p.body())).toContain('No items match');
   });
 
-  it('Test consumables tab: tabs-only pill with the test picker; items table hidden', async () => {
+  it('Test consumables tab: the band search finds tests (left list); the picked test\'s consumables are the main card', async () => {
     const p = await render();
     p.cmp.setTab('bom'); p.f.detectChanges();
-    expect(p.bandInput()).toBeNull();
-    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
-    expect(p.tools()!.querySelector('.pf-inv-bandsel--test')).not.toBeNull();
-    expect(p.body()!.querySelector('table')).toBeNull();
+    expect(p.bandInput()).not.toBeNull();
+    expect(p.bandInput()!.placeholder).toContain('Search tests');
+    expect(p.tools()!.querySelector('.pf-inv-bandsel')).toBeNull();   // no category filter here
+    expect(p.body()!.querySelector('ag-grid-angular')).toBeNull();
+    const tests = () => Array.from(p.el.querySelectorAll('.pf-band-body .inv-row .inv-row__name')).map(n => text(n).trim());
+    expect(tests()).toEqual(['CBC', 'Glucose']);
+    p.type('glu');
+    expect(tests()).toEqual(['Glucose']);
     expect(text(p.body())).toContain('Per-test consumables');
+    expect(text(p.body())).toContain('Pick a test');
+  });
+
+  it('Test consumables: picking a test loads its lines; the card shows how many tests the stock covers; Save is the ONE primary', async () => {
+    const p = renderBandPage(InventoryComponent, {
+      getFor: (url) => url === '/api/inventory/items' ? items
+        : url === '/api/inventory/alerts' ? { lowStock: [], expiring: [] }
+          : url === '/api/tests/?view=summary' ? [{ id: 't1', name: 'CBC' }]
+            : url === '/api/inventory/tests/t1/consumables' ? [{ itemId: 'i1', qtyPerTest: 2 }]
+              : [],
+    });
+    await p.f.whenStable(); p.f.detectChanges();
+    p.cmp.setTab('bom'); p.f.detectChanges();
+    p.el.querySelector<HTMLButtonElement>('.pf-band-body .inv-row')!.click();
+    await p.f.whenStable(); p.f.detectChanges();
+    expect(p.api.get).toHaveBeenCalledWith('/api/inventory/tests/t1/consumables');
+    expect(p.el.querySelectorAll('.bom-line').length).toBe(1);
+    expect(text(p.el.querySelector('.bom-line__cover'))).toContain('250 tests');   // 500 on hand / 2 per test
+    const prim = Array.from(p.el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary')).filter(b => !b.closest('.pf-classic-only'));
+    expect(prim.map(b => text(b).trim())).toEqual(['Save consumables']);
+    prim[0].dispatchEvent(new Event('click'));
+    await p.f.whenStable();
+    expect(p.api.put).toHaveBeenCalledWith('/api/inventory/tests/t1/consumables', { lines: [{ itemId: 'i1', qtyPerTest: 2 }] });
   });
 });
 

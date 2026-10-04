@@ -47,9 +47,9 @@ function make(list: any[] = tests, opts: { isolation?: boolean; active?: string;
 }
 
 describe('PricingComponent — reads the pricing-table DTO', () => {
-  it('loads GET /api/tests/ (effective price for the acting branch); a missing price reads as the ₹1 default', () => {
+  it('loads GET /api/tests/?view=summary (effective price for the acting branch); a missing price reads as the ₹1 default', () => {
     const { c, api } = make([...tests, { id: 't9', name: 'New', department: { id: 'd1', name: 'H' } }]);
-    expect(api.get).toHaveBeenCalledWith('/api/tests/');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?view=summary');
     const byId = Object.fromEntries(c.filtered().map(r => [r.id, r]));
     expect(byId['t1'].orig).toBe(300);
     expect(byId['t3'].orig).toBe(0);          // a real ₹0 price stays ₹0
@@ -146,7 +146,7 @@ describe('PricingComponent — branch isolation', () => {
   it('isolation ON → picking a branch reloads that branch\'s prices and writes to it', async () => {
     const { c, api } = make(tests, { isolation: true });
     c.setScope('b2');
-    expect(api.get).toHaveBeenCalledWith('/api/tests/?branchId=b2');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?branchId=b2&view=summary');
     c.setPrice('t1', 250);
     await c.save();
     expect(api.patch).toHaveBeenLastCalledWith('/api/tests/prices/bulk', { updates: [{ testId: 't1', price: 250 }], branchId: 'b2' });
@@ -155,7 +155,7 @@ describe('PricingComponent — branch isolation', () => {
   it('isolation ON → "All branches" reads the tenant view and writes the tenant default (no branchId)', async () => {
     const { c, api } = make(tests, { isolation: true });
     c.setScope(TENANT_PRICE_SCOPE);
-    expect(api.get).toHaveBeenCalledWith(`/api/tests/?branchId=${TENANT_PRICE_SCOPE}`);
+    expect(api.get).toHaveBeenCalledWith(`/api/tests/?branchId=${TENANT_PRICE_SCOPE}&view=summary`);
     c.setPrice('t1', 275);
     await c.save();
     expect(api.patch).toHaveBeenLastCalledWith('/api/tests/prices/bulk', { updates: [{ testId: 't1', price: 275 }] });

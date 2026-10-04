@@ -1,42 +1,36 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { ModuleScopeService } from './module-scope.service';
-import { DialogService } from './dialog.service';
-import { NavTarget, consultTarget, labOrderTarget, newOrderTarget } from '../../shared/opd/order-entry';
+import { consultTarget, labOrderTarget } from '../../shared/opd/order-entry';
 
 /**
- * Single entry point for starting a NEW order from anywhere (frontdesk landing,
- * patient profile, search, post-register). Routes lab / OPD by the user's module
- * scope so every call site shares one rule.
+ * Single entry point for starting a new LAB order or a new OPD CONSULT from
+ * anywhere (frontdesk landing, patient profile, search, post-register).
  *
- * PRODUCTION-SAFETY: with OPD off/unscoped, {@link ModuleScopeService.mode} is
- * `'lab'`, so this navigates to the existing lab order screen exactly as the
- * direct `router.navigate(['/frontdesk/order'], …)` calls do today. Call sites
- * can swap to this with no behavioural change until OPD is switched on.
+ * OWNER DECISION (2026-09-30): the front-desk cart is LAB, always — never a
+ * "choose" dialog. OPD gets its OWN icon next to the cart wherever the cart
+ * exists (see OpdGateService.visible()); the two entry points are separate
+ * buttons, not one button with a fork inside it.
+ *
+ * PRODUCTION-SAFETY: `startNewOrder` is byte-identical to the direct
+ * `router.navigate(['/frontdesk/order'], …)` calls it replaces — it never
+ * branches on OPD. `startConsult` is additive and only ever reached from a
+ * button that is itself gated on `OpdGateService.visible()`.
  */
 @Injectable({ providedIn: 'root' })
 export class OrderEntryService {
   private readonly router = inject(Router);
-  private readonly scope = inject(ModuleScopeService);
-  private readonly dialog = inject(DialogService);
 
-  /** Navigate to the right "new order" screen. Returns the router's navigation
+  /** Navigate to the lab order screen. Returns the router's navigation
    *  result so callers that gate UI on it (e.g. the register button's settle
    *  logic, OPS-49) keep working. */
   async startNewOrder(patientId?: string | null): Promise<boolean> {
-    let target: NavTarget | 'choose' = newOrderTarget(this.scope.mode(), patientId);
-    if (target === 'choose') {
-      // Both modules usable — ask. (Temporary two-option picker; becomes the
-      // Test/Consultation dropdown when both-module tenants exist. Dormant today.)
-      const consult = await this.dialog.confirm({
-        title: 'New order',
-        message: 'What would you like to create for this patient?',
-        confirmLabel: 'Consultation',
-        cancelLabel: 'Lab test order',
-        tone: 'primary',
-      });
-      target = consult ? consultTarget(patientId) : labOrderTarget(patientId);
-    }
+    const target = labOrderTarget(patientId);
+    return this.router.navigate(target.commands, target.queryParams ? { queryParams: target.queryParams } : {});
+  }
+
+  /** Navigate to the OPD "book a visit" screen (OPD dark build). */
+  async startConsult(patientId?: string | null): Promise<boolean> {
+    const target = consultTarget(patientId);
     return this.router.navigate(target.commands, target.queryParams ? { queryParams: target.queryParams } : {});
   }
 }

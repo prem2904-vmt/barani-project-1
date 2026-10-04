@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../../models/process-workflow.model';
@@ -30,7 +31,7 @@ import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (visible()) {
-      <button type="button" class="pf-hb-btn pf-cbb press" (click)="go()"
+      <button type="button" class="pf-hb-btn pf-cbb press" (click)="go($event)"
               aria-label="Collect" [title]="title()">
         <span class="pf-collect-nav-icon pf-cbb__icon" aria-hidden="true"></span>
         <span class="pf-cbb__label">Collect</span>
@@ -67,6 +68,7 @@ import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../
 })
 export class CollectBandButtonComponent {
   private readonly router = inject(Router);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   // Optional + duck-typed: host screens' specs stub these services partially,
   // and a missing workflow simply means "no band button".
@@ -104,9 +106,12 @@ export class CollectBandButtonComponent {
     return { commands: ['/lab/collect'], queryParams: oid ? { orderId: oid, from } : { from } };
   }
 
-  go(): void {
+  go(ev?: Event): void {
     const local = this.inPlace();
     if (local) { local(); return; }
+    // The Collect screen is a lazy route: the pressed button turns "held"
+    // the same frame, until the navigation settles (ND-PATTERN "Loading feedback").
+    this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     const t = this.target();
     this.router.navigate(t.commands, { queryParams: t.queryParams });
   }

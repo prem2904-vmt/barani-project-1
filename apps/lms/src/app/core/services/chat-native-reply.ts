@@ -23,6 +23,8 @@ export interface PfChatReplyPlugin {
   clear(): Promise<void>;
   status(): Promise<{ stored: boolean; userId: string | null; expiresAt: number }>;
   dismissConversation(o: { conversationId: string }): Promise<void>;
+  /** iOS: the APNs environment of this build's push tokens (newer native shells). */
+  apnsEnvironment(): Promise<{ environment: string | null }>;
 }
 
 export const PfChatReply = registerPlugin<PfChatReplyPlugin>('PfChatReply');
@@ -59,6 +61,24 @@ export async function syncReplyCredentials(i: SyncReplyInput): Promise<boolean> 
 /** Logout / account switch: the native copy goes first. Never throws. */
 export async function clearReplyCredentials(plugin: Pick<PfChatReplyPlugin, 'clear'> = PfChatReply): Promise<void> {
   try { await plugin.clear(); } catch { /* plugin missing on an old native build */ }
+}
+
+export type ApnsEnvironment = 'production' | 'development';
+
+/** iOS: which APNs gateway this build's push tokens are valid on ("production"
+ *  for TestFlight / App Store, "development" for an Xcode Debug build), for the
+ *  device registration. Null when unknown — an older native shell without the
+ *  method, or an unreadable profile; the server then learns it from the first
+ *  push. Never throws. */
+export async function readApnsEnvironment(
+  plugin: Pick<PfChatReplyPlugin, 'apnsEnvironment'> = PfChatReply,
+): Promise<ApnsEnvironment | null> {
+  try {
+    const env = (await plugin.apnsEnvironment())?.environment;
+    return env === 'production' || env === 'development' ? env : null;
+  } catch {
+    return null; // "not implemented" on an older native shell
+  }
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

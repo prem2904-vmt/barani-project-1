@@ -266,7 +266,9 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(base).toMatch(/pointer-events: none/);
     expect(base).toMatch(/animation: nd-ai-spin 3\.5s linear infinite/);
     expect(kit).toMatch(/\.nd-ai-glow\[data-ai-working='true'\]::before/);
-    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+    // The reduced-motion block that carries the AI glow (the kit has others
+    // after it, e.g. the loading-feedback "held" pulse).
+    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)', kit.lastIndexOf('.nd-ai-glow::before, .nd-ai-glow::after, .nd-ai-glow-mark')));
     expect(rm).toMatch(/\.nd-ai-glow::before, \.nd-ai-glow::after[^{]*\{[^}]*animation: none/);
   });
 

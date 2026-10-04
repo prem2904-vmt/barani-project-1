@@ -109,7 +109,7 @@ interface DirectoryUser {
             @if (webrtc.outgoingPeer(); as op) { @if (!op.isGroup) { <pf-presence-dot [userId]="op.id" /> } }
           </div>
           <h2 class="pf-call-ring__name" data-testid="call-outgoing-name">{{ outgoingName() }}</h2>
-          <p class="pf-call-ring__sub" aria-live="polite" data-testid="call-outgoing-status">{{ webrtc.ringingDevices() ? 'Ringing their devices…' : 'Ringing…' }}</p>
+          <p class="pf-call-ring__sub" aria-live="polite" data-testid="call-outgoing-status">{{ webrtc.calleeAnswering() ? 'Answered — connecting…' : webrtc.ringingDevices() ? 'Ringing their devices…' : 'Ringing…' }}</p>
           <div class="pf-call-ring__actions">
             <div class="pf-call-ctl">
               <button type="button" class="pf-call-round pf-call-round--lg pf-call-round--danger"

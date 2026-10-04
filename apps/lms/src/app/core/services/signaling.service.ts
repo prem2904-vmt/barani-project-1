@@ -96,6 +96,10 @@ export class SignalingService implements OnDestroy {
   /** This user accepted/declined the call on ANOTHER device — dismiss the
    *  ring here (multi-device). */
   readonly callHandledElsewhere = new Subject<{ sessionId: string }>();
+  /** The callee ANSWERED on a native call screen (iOS CallKit on the lock
+   *  screen) and their app is coming up to join — sent by the server from the
+   *  phone's native "answering" POST. Caller side: stop showing "Ringing". */
+  readonly callAnswering = new Subject<{ sessionId: string; userId: string }>();
   readonly participantJoined = new Subject<{ sessionId: string; userId: string }>();
   readonly participantLeft = new Subject<{ sessionId: string; userId: string }>();
 
@@ -286,6 +290,7 @@ export class SignalingService implements OnDestroy {
     on('CallRejected',  (p: { sessionId: string; userId: string; sessionEnded?: boolean }) => this.callRejected.next(p));
     on('CallCancelled', (p: { sessionId: string }) => this.callCancelled.next(p));
     on('CallHandledElsewhere', (p: { sessionId: string }) => this.callHandledElsewhere.next(p));
+    on('CallAnswering', (p: { sessionId: string; userId: string }) => this.callAnswering.next(p));
     on('ParticipantJoined', (p: { sessionId: string; userId: string }) => this.participantJoined.next(p));
     on('ParticipantLeft',   (p: { sessionId: string; userId: string }) => this.participantLeft.next(p));
 

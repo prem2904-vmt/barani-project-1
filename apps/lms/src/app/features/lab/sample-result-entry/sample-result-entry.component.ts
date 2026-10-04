@@ -1,3 +1,8 @@
+import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
 import {
   Component,
   DestroyRef,
@@ -12,6 +17,7 @@ import {
   signal,
   viewChild,
 } from "@angular/core";
+import { criticalNames, effectiveHidden, hasEnteredValue, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
@@ -24,12 +30,12 @@ import {
 } from "../../../shared/utils/reference-range";
 import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
-import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
+import { choiceOptionsFor, isMultiChoice, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
+import { ageInYears, bandAgeYears } from "../../../shared/utils/patient-age";
 import {
   CalcContext,
   CalcDef,
-  ageYearsFromDob,
   evaluateCalc,
   parseCalc,
 } from "../../../shared/utils/calculation";
@@ -68,7 +74,9 @@ import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { NumpadDirective, NumpadScopeDirective } from "../../../shared/components/numpad/numpad.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
+import { normalizePriority } from "../../../shared/utils/lab-priority";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
+import { NOT_REPORTED, savedResultHasValue } from "../../../shared/utils/line-status";
 import {
   MissingEntry,
   TabSnapshot,
@@ -81,8 +89,35 @@ import {
   overlayDraft,
   prefillFromTests,
   tabMark,
+  testHasValue,
+  blankTests,
   tabPayload,
+  boldFromTests,
+  type BoldMap,
 } from "./submit-all";
+import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
+import { formatDate } from "@angular/common";
+import { LAB_TIME_ZONE } from "../../../shared/utils/lab-clock";
+import { InstrumentsApiService } from "../../../shared/instruments/instruments-api.service";
+import type { RunDto } from "../../../shared/instruments/instrument.models";
+import { ReportLayoutService } from "../../../core/services/report-layout.service";
+import { KNOWN_ANALYZER_IMAGES, missingAnalyzerWarning, readPageLayout } from "../../../shared/utils/report-profile-layout";
+import { AnalyzerGraphsComponent, type AnalyzerGraph } from "./analyzer-graphs.component";
+import type { PageLayoutBox } from "../../../shared/models/report-layout.model";
+import {
+  AnalyzerBadge,
+  AppliedMap,
+  PrefillLine,
+  analyzerBadge,
+  defaultRun,
+  planPrefill,
+  runOptions,
+} from "../../../shared/instruments/instrument-prefill";
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNoteButtonComponent, ReportNoteSlotComponent } from '../../../shared/components/report-note/report-note-slot.component';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -125,15 +160,26 @@ function calcKey(testId: string, paramName: string): string {
   selector: "pf-sample-result-entry",
   standalone: true,
   imports: [
+    AnalyzerGraphsComponent,
+    DailyNoComponent,
     CommonModule,
     FormsModule,
     CommentThreadComponent,
+    RegnoPromptComponent,
+    CriticalAckStripComponent,
     SelectComponent,
     HeroBandComponent,
     ZoomTargetDirective,
     NumpadDirective,
     NumpadScopeDirective,
+    BusyDirective,
+    ReportNoteButtonComponent,
+    ReportNoteSlotComponent,
+    ReportNotesCardComponent,
+    NdDateComponent,
   ],
+  // Technician report notes (Lab settings switch) — one store per screen.
+  providers: [ReportNotesStore],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
 })
@@ -145,6 +191,9 @@ export class SampleResultEntryComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
+  /** Technician notes that print on the report (per line, profile,
+   *  department and the whole order) — see ReportNotesStore. */
+  protected readonly notes = inject(ReportNotesStore);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
   private readonly auth = inject(AuthService);
@@ -153,6 +202,9 @@ export class SampleResultEntryComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly draftShelf = inject(DraftShelfService);
+  private readonly criticalSvc = inject(CriticalResultsService);
+  private readonly instrumentsApi = inject(InstrumentsApiService);
+  private readonly layoutSvc = inject(ReportLayoutService);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -167,6 +219,8 @@ export class SampleResultEntryComponent {
 
   /** Full patient name — never cut in code (ND rule 5). */
   readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");
+  /** The ORDER priority is Urgent (urgent / STAT) — the lab has Urgent / Normal only. */
+  readonly urgent = computed(() => normalizePriority(this._sample()?.order?.priority) === "urgent");
   /** "29/M · AA0012". */
   readonly patientMeta = computed(() => formatPatientMeta(this._sample()?.order?.patient));
 
@@ -446,7 +500,8 @@ export class SampleResultEntryComponent {
     const p = this._sample()?.order?.patient;
     return {
       sex: normalizeSex(p?.sex),
-      age: typeof p?.age === "number" ? p.age : null,
+      // DOB-derived fractional age — the server's band-pick metric.
+      age: bandAgeYears(p),
     };
   }
 
@@ -492,7 +547,11 @@ export class SampleResultEntryComponent {
    *  several normals joined with "/". Mirrors mw ResultFlaggingService. */
   private qualitativeFlagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
     const raw = this.getValue(t.id, p.name);
-    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    // A multi-select holds several picks: abnormal when ANY pick is not normal.
+    const picks = (Array.isArray(raw) ? raw : [raw])
+      .map((x) => (x === undefined || x === null ? "" : String(x).trim().toLowerCase()))
+      .filter((x) => x !== "");
+    if (!picks.length) return null;
     // The embedded table's Normal rows decide; normalValue is the fallback
     // for legacy parameters. No normals configured = not flaggable (e.g.
     // stone colours, which have no clinical "normal").
@@ -504,8 +563,7 @@ export class SampleResultEntryComponent {
       if (!nv) return null;
       normals = nv.split("/").map(x => x.trim()).filter(Boolean);
     }
-    const v = String(raw).trim().toLowerCase();
-    const isNormal = normals.some(n => n.toLowerCase() === v);
+    const isNormal = picks.every(v => normals.some(n => n.toLowerCase() === v));
     return isNormal
       ? null
       : { tone: "high", label: "Abnormal" };
@@ -530,6 +588,22 @@ export class SampleResultEntryComponent {
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || raw === "") return false;
     return Number.isNaN(Number(String(raw).trim()));
+  }
+
+  /** A choice list where the tech may pick several answers (stored as string[]). */
+  isMultiSelect(p: TestParameter): boolean {
+    return isMultiChoice(p);
+  }
+
+  /** The current picks of a multi-select (a legacy single string reads as one pick). */
+  multiValuesOf(testId: string, paramName: string): string[] {
+    const v = this.getValue(testId, paramName);
+    if (Array.isArray(v)) return v.map((x) => String(x ?? "")).filter((x) => x.trim() !== "");
+    return v === undefined || v === null || String(v).trim() === "" ? [] : [String(v)];
+  }
+
+  onMultiSelectChange(testId: string, paramName: string, values: unknown[]) {
+    this.setValue(testId, paramName, (values ?? []).map((x) => String(x ?? "")).filter((x) => x.trim() !== ""));
   }
 
   onSelectChange(testId: string, paramName: string, value: any) {
@@ -561,7 +635,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-ndd__in",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -612,7 +686,8 @@ export class SampleResultEntryComponent {
     this.techName().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "T");
 
   /** Medical registration ID beside the name — a dash until the user sets one
-   *  (editable on the My signature screen). */
+   *  (editable on the My signature screen; a validator without one sees the
+   *  pf-regno-prompt line in the strip). */
   readonly techRegId = computed(
     () => this.auth.user()?.registrationId?.trim() || "—",
   );
@@ -785,6 +860,31 @@ export class SampleResultEntryComponent {
   readonly sample = this._sample.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
+  /** WHICH header action started the running `submitting()` request — only
+   *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
+  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | 'close' | null>(null);
+
+  // ── NABL critical-result records of this tube (open / acknowledged) ──
+  private readonly _critical = signal<CriticalResultEvent[]>([]);
+  readonly critical = this._critical.asReadonly();
+  /** The channel stored on the acknowledgement: the validator's review or the bench. */
+  readonly criticalVia = computed(() => (this.validateMode() ? "validate" : "result_entry") as "validate" | "result_entry");
+  hasOpenCritical(t: { id: string }): boolean {
+    return this._critical().some((e) => e.orderTestId === t.id && e.status === "open");
+  }
+  /** Every record of the tube's tests that still needs a hand — after load and after each submit. */
+  loadCritical(): void {
+    const ids = (this._sample()?.tests ?? []).map((t) => t.id);
+    if (ids.length === 0) { this._critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({
+      next: (list) => this._critical.set(list ?? []),
+      error: () => { /* the badge is advisory — the register is the record */ },
+    });
+  }
+  onCriticalChanged(updated: CriticalResultEvent): void {
+    this._critical.update((list) =>
+      updated.status === "communicated" ? list.filter((e) => e.id !== updated.id) : list.map((e) => (e.id === updated.id ? updated : e)));
+  }
 
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);
@@ -792,7 +892,28 @@ export class SampleResultEntryComponent {
   readonly trendogramDuration = signal("5");
   private trendPatientId: string | null = null;
 
+  /** This tube's lines — the report-notes card lists their departments. */
+  readonly noteLineIds = computed(() => (this.sample()?.tests ?? []).map((t) => t.id));
+
+  /** The profile a flat block prints under (server-resolved), for its
+   *  "profile note" — null for a run of single tests. */
+  blockProfileId(blk: { title?: string | null; tests: OrderTest[] }): string | null {
+    if (!blk.title || !blk.tests.length) return null;
+    return this.notes.line(blk.tests[0].id)?.profileId ?? null;
+  }
+
   constructor() {
+    // Report notes follow the order, and re-read whenever a line's status
+    // changes (submit / validate / Edit result lock or unlock them).
+    let notesKey = "";
+    effect(() => {
+      const s = this.sample();
+      const oid = s?.orderId ?? s?.order?.id ?? null;
+      const key = oid ? `${oid}|${(s?.tests ?? []).map((t) => `${t.id}:${t.status}`).join(",")}` : "";
+      if (key === notesKey) return;
+      notesKey = key;
+      void this.notes.load(oid);
+    });
     afterRenderEffect(() => {
       this.tubeTabs();
       this.activeTubeId();
@@ -855,7 +976,8 @@ export class SampleResultEntryComponent {
   readonly hasReopenable = computed(() =>
     this.canEditResult() &&
     (this._sample()?.tests ?? []).some(
-      (t) => t.status === "entered" || t.status === "validated",
+      // A line closed as Not reported reopens the same way (audited).
+      (t) => t.status === "entered" || t.status === "validated" || t.status === NOT_REPORTED,
     ),
   );
   /** At least one test is in an editable/submittable state. */
@@ -865,6 +987,7 @@ export class SampleResultEntryComponent {
         t.status !== "entered" &&
         t.status !== "validated" &&
         t.status !== "rejected" &&
+        t.status !== NOT_REPORTED &&
         !this.isCultureTest(t),
     ),
   );
@@ -872,6 +995,8 @@ export class SampleResultEntryComponent {
   /** Load each test's last saved values into the form (used on first load and
    *  after a re-open, so the prior submitted values come back for editing). */
   private prefillValues(sample: OrderSample | null) {
+    // "Print in bold" picks come back with the saved result, like its values.
+    this._bold.set(boldFromTests(sample?.tests ?? []));
     if (!sample?.tests) {
       this._values.set({});
       return;
@@ -907,6 +1032,7 @@ export class SampleResultEntryComponent {
     });
     if (!reason || !reason.trim()) return;
 
+    this.submitAct.set('reopen');
     this._submitting.set(true);
     try {
       await firstValueFrom(
@@ -1142,7 +1268,7 @@ export class SampleResultEntryComponent {
       return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -1151,6 +1277,7 @@ export class SampleResultEntryComponent {
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
+          bold: this.boldFor(t.id),
         })),
     };
     if (payload.results.length === 0) return;
@@ -1229,7 +1356,13 @@ export class SampleResultEntryComponent {
     return this._values()[testId]?.[paramName] ?? "";
   }
 
+  /** The kit date input needs a plain ISO string or null, not `unknown`. */
+  asDateStr(v: unknown): string | null {
+    return typeof v === "string" && v ? v : null;
+  }
+
   setValue(testId: string, paramName: string, v: unknown) {
+    const before = this._values()[testId]?.[paramName];
     this._values.update((all) => ({
       ...all,
       [testId]: { ...(all[testId] ?? {}), [paramName]: v },
@@ -1239,6 +1372,7 @@ export class SampleResultEntryComponent {
     // Typing into anything else re-runs the dependent formulas.
     this.markCalcOverride(testId, paramName, v);
     this.recomputeCalcFields(calcKey(testId, paramName));
+    this.autoTickOnEntry(testId, paramName, before, v);
     this.scheduleDraftSave();
     this.scheduleServerAutosave();
   }
@@ -1301,10 +1435,8 @@ export class SampleResultEntryComponent {
     const byCode = this._testByCode();
     const consts = this._calcConstants();
     const patient = this._sample()?.order?.patient;
-    const age =
-      typeof patient?.age === "number"
-        ? patient.age
-        : ageYearsFromDob(patient?.dateOfBirth);
+    // Formula AGE: whole years from the DOB (shared helper).
+    const age = ageInYears(patient);
     const resolveParam = (t: OrderTest, name: string | null) => {
       if (!name) return this.calcTargetParam(t);
       const want = name.trim().toLowerCase();
@@ -1527,18 +1659,253 @@ export class SampleResultEntryComponent {
     catch { return ''; }
   }
 
+  private readonly prestore = inject(ReportPrestoreService);
+
+  // ── Analyzer prefill (instrument connector) ─────────────────────────
+  // GET /api/instruments/results/by-sample/{id} → runs (newest first). The
+  // selected run PREFILLS empty fields only (pure rules: shared/instruments/
+  // instrument-prefill.ts): never overwrites typed values, never submits,
+  // never validates, never saves a draft by itself. Errors / 404 → silent.
+  readonly analyzerRuns = signal<RunDto[]>([]);
+  readonly analyzerRunId = signal<string | null>(null);
+  private readonly _analyzerApplied = signal<AppliedMap>({});
+  readonly analyzerRunOptions = computed(() => runOptions(this.analyzerRuns(), (iso) => this.analyzerTime(iso)));
+
+  private analyzerTime(iso: string | null): string {
+    if (!iso) return "";
+    try { return formatDate(iso, "h:mm a", "en-US", LAB_TIME_ZONE); } catch { return ""; }
+  }
+
+  private resetAnalyzerPrefill() {
+    this.analyzerRuns.set([]);
+    this.analyzerRunId.set(null);
+    this._analyzerApplied.set({});
+  }
+
+  /** The writable lines on screen and the fields an analyzer value may take. */
+  private analyzerLines(): PrefillLine[] {
+    const out: PrefillLine[] = [];
+    const s = this._sample();
+    const skip = new Set(["boolean", "checkbox", "toggle", "yesno"]);
+    for (const t of splitOutsourced(s?.tests ?? [], s?.outsourcedVendorId).inHouse) {
+      if (!isWritableTest(t)) continue;
+      const params = this.parametersFor(t).filter((p) => !this.isMultiSelect(p) && !skip.has(String(p.type)));
+      if (params.length) out.push({ orderTestId: t.id, params: params.map((p) => ({ name: p.name, title: p.title ?? null })) });
+    }
+    return out;
+  }
+
+  // ── "Analyzer graphs not received" (owner decision 2, 2026-10-02) ───
+  // A profile's one-page layout can expect analyzer image boxes (M51
+  // histograms etc.) that haven't arrived on this sample yet. Shown in
+  // BOTH normal entry and validate mode — purely informational, never
+  // blocks anything.
+  private readonly _profileLayouts = signal<Record<string, { enabled: boolean; boxes: PageLayoutBox[] } | null>>({});
+
+  private profileBundlesOf(sample: OrderSample | null): Array<{ id: string; name: string }> {
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const t of sample?.tests ?? []) {
+      const g = this.benchGroup(t);
+      if (g && !seen.has(g.id)) seen.set(g.id, g);
+    }
+    return [...seen.values()];
+  }
+
+  private async loadProfileLayouts(sample: OrderSample | null): Promise<void> {
+    for (const { id } of this.profileBundlesOf(sample)) {
+      if (id in this._profileLayouts()) continue;
+      try {
+        const res = await this.layoutSvc.getTestLayout(id);
+        const pl = readPageLayout((res?.sections as unknown[]) ?? []);
+        this._profileLayouts.update(m => ({ ...m, [id]: pl?.enabled ? { enabled: true, boxes: pl.boxes } : null }));
+      } catch {
+        this._profileLayouts.update(m => ({ ...m, [id]: null }));
+      }
+    }
+  }
+
+  /** Instrument-tagged codes ("instrument:<code>") actually attached across
+   *  a profile's member lines — the same attachmentsFor() this screen's
+   *  gallery already reads, never a second attachment model. */
+  private attachedAnalyzerCodes(sample: OrderSample | null, profileId: string): Set<string> {
+    const codes = new Set<string>();
+    for (const t of sample?.tests ?? []) {
+      if (this.benchGroup(t)?.id !== profileId) continue;
+      for (const a of this.attachmentsFor(t)) {
+        if (a.param?.startsWith("instrument:")) codes.add(a.param.slice("instrument:".length));
+      }
+    }
+    return codes;
+  }
+
+  readonly missingAnalyzerWarnings = computed(() => {
+    const sample = this._sample();
+    const layouts = this._profileLayouts();
+    const out: Array<{ profileId: string; message: string }> = [];
+    for (const { id } of this.profileBundlesOf(sample)) {
+      const pl = layouts[id];
+      if (!pl?.enabled) continue;
+      const attached = this.attachedAnalyzerCodes(sample, id);
+      for (const w of missingAnalyzerWarning(pl.boxes, attached)) out.push({ profileId: id, message: w.message });
+    }
+    return out;
+  });
+
+  // ── Fetch from analyzer (owner, 2026-10-02) ─────────────────────────
+  // The connector pushes automatically — this button just RE-QUERIES for
+  // (a) newly arrived instrument images/values already matched to this
+  // tube (a plain reload) and (b) unmatched messages reported against this
+  // tube's barcode (a timing miss at ingest) — attaching those, then
+  // reloading. Never a device command.
+  readonly fetchingAnalyzer = signal(false);
+  showFetchFromAnalyzer(): boolean { return !this.validateMode() && !this.viewOnly(); }
+
+  async fetchFromAnalyzer(): Promise<void> {
+    const s = this._sample();
+    if (!s?.id || this.fetchingAnalyzer()) return;
+    this.fetchingAnalyzer.set(true);
+    let attached = 0;
+    try {
+      const barcode = (s.barcode ?? "").trim();
+      if (barcode) {
+        const page = await firstValueFrom(this.instrumentsApi.messages({ state: "unmatched", sampleId: barcode, pageSize: 20 }));
+        for (const m of page?.items ?? []) {
+          try {
+            await firstValueFrom(this.instrumentsApi.attach(m.id, barcode));
+            attached++;
+          } catch { /* lost a race to another attach, or no longer unmatched — skip */ }
+        }
+      }
+      await this.load(s.id);
+      if (attached > 0) this.toasts.success(attached === 1 ? "1 new analyzer result attached." : `${attached} new analyzer results attached.`);
+      else this.toasts.info("No new analyzer results yet.");
+    } catch {
+      this.toasts.error("Could not reach the analyzer — try again.");
+    } finally {
+      this.fetchingAnalyzer.set(false);
+    }
+  }
+
+  private async loadAnalyzerPrefill(seq: number, sampleId: string) {
+    if (this.validateMode() || this.viewOnly()) return;
+    try {
+      const dto = await firstValueFrom(this.instrumentsApi.prefillForSample(sampleId));
+      if (seq !== this.loadSeq || this.validateMode() || this.viewOnly()) return;
+      const runs = Array.isArray(dto?.runs) ? dto.runs.filter((r) => !!r?.messageId) : [];
+      this.analyzerRuns.set(runs);
+      const first = defaultRun(runs);
+      if (first) this.applyAnalyzerRun(first.messageId);
+    } catch {
+      /* no analyzer / endpoint not there yet — result entry works as before */
+    }
+  }
+
+  /** Apply one run (the picker): fills empty fields and fields still equal to
+   *  the previous run's prefill; typed values are never touched. */
+  applyAnalyzerRun(messageId: string | null) {
+    const run = this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
+    if (!run) return;
+    const plan = planPrefill({
+      run,
+      lines: this.analyzerLines(),
+      current: (ot, p) => this._values()[ot]?.[p],
+      previous: this._analyzerApplied(),
+    });
+    if (plan.writes.length) {
+      this._values.update((all) => {
+        const next = { ...all };
+        for (const w of plan.writes) next[w.orderTestId] = { ...(next[w.orderTestId] ?? {}), [w.paramName]: w.value };
+        return next;
+      });
+      this.recomputeCalcFields();
+    }
+    this._analyzerApplied.set(plan.applied);
+    this.analyzerRunId.set(run.messageId);
+  }
+
+  /** The small "From Sysmex · 10:42 am" badge (+ analyzer H/L chips). */
+  analyzerBadgeFor(t: { id: string }, p: { name: string }): AnalyzerBadge | null {
+    const applied = this._analyzerApplied();
+    if (!Object.keys(applied).length) return null;
+    return analyzerBadge(applied, t.id, p.name, this._values()[t.id]?.[p.name], (iso) => this.analyzerTime(iso));
+  }
+
+  /** Open lines nobody entered (pending / in progress / re-entry, in-house,
+   *  not culture) — what a validator may close as Not reported. */
+  readonly openBlankTests = computed<OrderTest[]>(() =>
+    (this._sample()?.tests ?? []).filter((t) =>
+      (t.status === "pending" || t.status === "in_progress" || t.status === "re_entry")
+      && !this.isCultureTest(t) && this.isClosableBlank(t)));
+
+  /** May THIS user close the line as Not reported (server enforces the
+   *  same, review H3)? Unclaimed or claimed by me, and no saved value. */
+  isClosableBlank(t: OrderTest): boolean {
+    // The server's verdict wins (department scope, live-final check, …).
+    if (typeof t.closable === 'boolean') return t.closable;
+    const me = this.auth.user()?.id;
+    if (t.assignedTo && t.assignedTo !== me) return false;
+    return !savedResultHasValue(t.currentResult);
+  }
+
+  /** "N tests have no value … Close them as Not reported?" — true = close. */
+  private async askCloseBlank(blank: readonly OrderTest[]): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
+    return this.dialog.confirm({
+      title: `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value`,
+      message: `${names.join(", ")}. Closed as Not reported, ${blank.length === 1 ? "it" : "they"} never print and the report can be issued.`,
+      question: "Close them as Not reported?",
+      cancelLabel: "Leave them open",
+      confirmLabel: "Close as Not reported",
+    });
+  }
+
+  /** Validator, nothing left to validate: close the blank lines. */
+  async closeBlankFromValidation() {
+    const s = this._sample();
+    const blank = this.openBlankTests();
+    if (!s || !blank.length || this.submitting()) return;
+    if (!(await this.askCloseBlank(blank))) return;
+    this.submitAct.set('close');
+    this._submitting.set(true);
+    try {
+      await this.closeNotReported(s.id, blank);
+      this.prestore.afterValidation(s.orderId ?? s.order?.id);
+      this.toasts.success(`${blank.length} test${blank.length === 1 ? "" : "s"} closed as not reported`);
+      void this.router.navigate(['/pathologist']);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this._submitting.set(false);
+    }
+  }
+
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
+    // Blank lines on the same tube would hold the report back: offer to close
+    // them as Not reported first (owner 2026-10-03). "Leave them open" still
+    // validates what was entered.
+    const blank = this.openBlankTests();
+    let closed = false;
+    if (blank.length && (await this.askCloseBlank(blank))) {
+      try { await this.closeNotReported(this._sample()!.id, blank); closed = true; }
+      catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    }
+    if (!(await this.confirmNothingPrints(targets, "validate"))) return;
+    this.submitAct.set('validate');
     this._submitting.set(true);
+    await this.hiddenSettled();
     let ok = 0, lastErr = '';
     for (const t of targets) {
       try { await firstValueFrom(this.api.post(`/api/validation/${t.id}/validate`, { note: null })); ok++; }
       catch (e) { lastErr = ApiError.from(e).message; }
     }
     this._submitting.set(false);
+    // The tube's validation can complete the final report — store its PDF now
+    // (background) so the patient's WhatsApp carries it.
+    if (ok > 0) this.prestore.afterValidation(this.sample()?.orderId ?? this.sample()?.order?.id);
     if (ok === targets.length) {
-      this.toasts.success(ok === 1 ? 'Result validated' : `${ok} results validated`);
+      this.toasts.success((ok === 1 ? 'Result validated' : `${ok} results validated`) + (closed ? `, ${blank.length} not reported` : ''));
       void this.router.navigate(['/pathologist']);
     } else {
       this.toasts.error(lastErr || 'Some results could not be validated');
@@ -1559,6 +1926,7 @@ export class SampleResultEntryComponent {
       confirmLabel: 'Reject results',
     });
     if (!reason) return;
+    this.submitAct.set('reject');
     this._submitting.set(true);
     let ok = 0, lastErr = '';
     for (const t of targets) {
@@ -1639,6 +2007,8 @@ export class SampleResultEntryComponent {
     this._calcOverridden.set(new Set());
     this._attach.set({});
     this._reportHidden.set({});
+    this._autoTicked.clear();
+    this.resetAnalyzerPrefill();
     this.draftKey = null;                // no stray debounced write under the old key
     if (!this._tubeTabs().some((t) => t.id === nextId)) {
       // A different ORDER, not a sibling tube: order-level UI resets too.
@@ -1689,6 +2059,14 @@ export class SampleResultEntryComponent {
         this.focusFirstEmpty(focusTest);
       }
       await this.loadComments();
+      this.loadCritical();
+      // Analyzer results (instrument connector): PREFILL only, after the
+      // tube + drafts are on screen; never blocks or fails the load.
+      void this.loadAnalyzerPrefill(seq, id);
+      // "Analyzer graphs not received" — fetch each bundle's page_layout
+      // once (its box arrangement is static; the sample reloads above
+      // already refresh what's attached, which is all this warning needs).
+      void this.loadProfileLayouts(this._sample());
     } catch (e) {
       if (seq === this.loadSeq) this.toasts.error("Could not load sample");
     } finally {
@@ -1761,7 +2139,9 @@ export class SampleResultEntryComponent {
   async submitAll() {
     const s = this._sample();
     if (!s || this._submitting()) return;
+    this.submitAct.set('submit');
     this._submitting.set(true);
+    await this.hiddenSettled();
     const all = this._values();
     // Skip tests that the backend will refuse:
     //   - 'validated' is signed off (must be rejected before re-entry)
@@ -1770,7 +2150,7 @@ export class SampleResultEntryComponent {
     // The form pre-fills values for these from currentResult so they
     // can be SEEN, but submitting them would 409 the whole batch.
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     // A numeric parameter holding a non-parseable value must never be
     // submitted as the result — surface which ones and stop.
@@ -1787,25 +2167,50 @@ export class SampleResultEntryComponent {
       this._submitting.set(false);
       return;
     }
-    const payload = {
-      results: writable
-        .filter((t) => all[t.id] && Object.keys(all[t.id]).length > 0)
-        .map((t) => ({
-          orderTestId: t.id,
-          values: all[t.id],
-          note: undefined,
-        })),
-    };
-    if (payload.results.length === 0) {
+    // Empty fields → ONE confirmation, the same one Submit all asks (owner
+    // 2026-10-03, Salem 26285: the tech filled 8 of Urine Routine's 13 lines
+    // and the 5 dipstick lines silently stayed behind, so the order never got
+    // a report). A test with NO value at all is closed as "not reported" on
+    // confirm (audited server-side; it never prints and never holds the
+    // report back). Go back → the first empty field.
+    const live = this.liveSnap();
+    const missing = live ? missingEntries([live]) : [];
+    // Only lines the tech may close: unclaimed or their own, no saved draft.
+    const blank = writable.filter((t) => !testHasValue(all, t.id) && this.isClosableBlank(t));
+    // Blank on screen but NOT closable (a value saved on the server — e.g. the
+    // tech cleared a drafted value — or another tech's claim): stays open, and
+    // the tech is told which (never a silent skip).
+    const leftOpen = writable.filter((t) => !testHasValue(all, t.id) && !this.isClosableBlank(t));
+    const filled = writable.filter((t) => testHasValue(all, t.id));
+    if (filled.length === 0) {
+      // Nothing entered: never close a whole tube from Submit (review H1).
       const allDone = (s.tests ?? []).length > 0 && writable.length === 0;
-      this.toasts.warning(
-        allDone
-          ? "Every test on this tube is already submitted or validated."
-          : "Enter at least one value before submitting",
-      );
+      this.toasts.warning(allDone ? "Every test on this tube is already submitted or validated." : "Enter at least one value before submitting");
       this._submitting.set(false);
       return;
     }
+    // Blank lines are closed ONLY when the dialog naming them was shown and
+    // confirmed (review L3).
+    let closeBlank: OrderTest[] = [];
+    if (missing.length) {
+      this._submitting.set(false);
+      if (!(await this.confirmEmptyFields(missing, blank))) return;
+      closeBlank = blank;
+      this.submitAct.set('submit');
+      this._submitting.set(true);
+    }
+    if (filled.length && !(await this.confirmNothingPrints(filled, "submit"))) {
+      this._submitting.set(false);
+      return;
+    }
+    const payload = {
+      results: filled.map((t) => ({
+          orderTestId: t.id,
+          values: all[t.id],
+          note: undefined,
+          bold: this.boldFor(t.id),
+        })),
+    };
     try {
       const resp = await firstValueFrom(
         this.api.post<BulkSubmitResponse>(
@@ -1825,6 +2230,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
+      this.loadCritical();
       this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Values reached the server — the local crash-recovery draft is done.
       this.clearDraft();
@@ -1833,9 +2239,13 @@ export class SampleResultEntryComponent {
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
       await this.loadComments();
+      // The blank tests the tech confirmed: closed as not reported.
+      if (closeBlank.length) await this.closeNotReported(s.id, closeBlank);
+      if (leftOpen.length) this.toasts.info(this.leftOpenMessage(leftOpen));
       const n = resp?.submitted ?? 0;
       this.toasts.success(
-        `Submitted ${n} test${n === 1 ? "" : "s"} — back to your queue`,
+        `Submitted ${n} test${n === 1 ? "" : "s"}` +
+          (closeBlank.length ? `, ${closeBlank.length} not reported` : "") + " — back to your queue",
       );
       // Hand the tech back to /lab/my-work so they can pick the next
       // tube. Without this nav, submitAll only ever showed a toast and
@@ -1858,7 +2268,7 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting() || this._savingDraft()) return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
+      (t) => t.status !== "validated" && t.status !== "entered" && t.status !== NOT_REPORTED && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -1867,6 +2277,7 @@ export class SampleResultEntryComponent {
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
+          bold: this.boldFor(t.id),
         })),
     };
     if (payload.results.length === 0) {
@@ -1920,7 +2331,7 @@ export class SampleResultEntryComponent {
 
   private readonly liveSnap = computed<TabSnapshot | null>(() => {
     const s = this._sample();
-    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values() } : null;
+    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values(), bold: this._bold() } : null;
   });
 
   /** One snapshot per tab, in tab order (null = that tube not fetched yet). */
@@ -1961,6 +2372,7 @@ export class SampleResultEntryComponent {
       barcode: s.barcode || "",
       tests,
       values: overlayDraft(prefillFromTests(tests), this.readLocalDraft(s.id)),
+      bold: boldFromTests(tests),
     };
   }
 
@@ -2046,6 +2458,40 @@ export class SampleResultEntryComponent {
     }, { injector: this.injector });
   }
 
+  /** "N tests have no value: … Submit without them?" — the one confirmation
+   *  BOTH Submit and Submit all ask. `blank` = tests with no value at all
+   *  (closed as not reported on confirm); the list names every empty field.
+   *  Go back → the first empty field; true = submit anyway. */
+  private async confirmEmptyFields(missing: MissingEntry[], blank: readonly OrderTest[] = []): Promise<boolean> {
+    const names = blank.map((t) => t.test?.name || t.name || "Test");
+    const go = await this.dialog.confirm({
+      title: blank.length ? `${blank.length} test${blank.length === 1 ? " has" : "s have"} no value` : "Some fields are empty",
+      message: blank.length
+        ? `${names.join(", ")}. ${blank.length === 1 ? "It is" : "They are"} closed as not reported and never print.`
+        : "These fields have no value:",
+      items: missing.map(missingLine),
+      question: blank.length ? "Submit without them?" : "Do you still want to submit?",
+      cancelLabel: "Go back",
+      confirmLabel: blank.length ? "Submit without them" : "Submit anyway",
+    });
+    if (!go) await this.goToMissing(missing[0]);
+    return go;
+  }
+
+  /** "Left open: Urine Nitrite, … — a value is saved for them (or another
+   *  technician has them); clear or submit it to close." */
+  leftOpenMessage(tests: readonly OrderTest[]): string {
+    const names = tests.map((t) => t.test?.name || t.name || "Test");
+    return `Left open: ${names.join(", ")} — ${tests.length === 1 ? "it has" : "they have"} a saved value or another technician's claim, so ${tests.length === 1 ? "it was" : "they were"} not closed as not reported.`;
+  }
+
+  /** Close blank tests of a tube as NOT REPORTED (audited server-side). */
+  private async closeNotReported(sampleId: string, tests: readonly OrderTest[]): Promise<void> {
+    if (!tests.length) return;
+    await firstValueFrom(this.api.post(`/api/samples/${sampleId}/not-reported`,
+      { orderTestIds: tests.map((t) => t.id) }));
+  }
+
   /** Move to an empty field: switch tab first when it is on another tube. */
   async goToMissing(m: MissingEntry) {
     if (m.sampleId !== this._sample()?.id) {
@@ -2064,6 +2510,8 @@ export class SampleResultEntryComponent {
     try {
       // 1. The unsaved typing first (local copy + server draft, awaited).
       await this.flushPendingNow();
+      await this.hiddenSettled();
+      this.submitAct.set('all');
       this._submitting.set(true);
       this.submitReport.set([]);
       // 2. Every tab's latest state.
@@ -2087,33 +2535,44 @@ export class SampleResultEntryComponent {
           return;
         }
       }
+      // 3b. Nothing entered on ANY tab → refuse (never close whole tubes).
+      if (!targets.some((snap) => snap.tests.some((t) => isWritableTest(t) && testHasValue(snap.values, t.id)))) {
+        this.toasts.warning("Enter at least one value before submitting");
+        return;
+      }
       // 4. Empty fields → ONE confirmation; Go back → the first empty field.
+      //    Tests with no value at all are closed as not reported — only on
+      //    this confirmed dialog, and only lines the tech may close.
       const missing = missingEntries(targets);
+      const closable = (snap: TabSnapshot) => blankTests(snap).filter((t) => this.isClosableBlank(t));
+      let closeBlankOk = false;
       if (missing.length) {
         this._submitting.set(false);
-        const go = await this.dialog.confirm({
-          title: "Some fields are empty",
-          message: "These fields have no value:",
-          items: missing.map(missingLine),
-          question: "Do you still want to submit?",
-          cancelLabel: "Go back",
-          confirmLabel: "Submit anyway",
-        });
-        if (!go) {
-          await this.goToMissing(missing[0]);
-          return;
-        }
+        if (!(await this.confirmEmptyFields(missing, targets.flatMap(closable)))) return;
+        closeBlankOk = true;
+        this.submitAct.set('all');
         this._submitting.set(true);
       }
+      // 4b. A test with every value unticked prints nothing — ask first.
+      this._submitting.set(false);
+      const printOk = await this.confirmNothingPrints(
+        targets.flatMap((snap) => snap.tests.filter(isWritableTest)), "submit");
+      if (!printOk) return;
+      this.submitAct.set('all');
+      this._submitting.set(true);
       // 5. Tab by tab, the per-tab endpoint. One tab failing never stops
       //    the others; its data stays (local copy kept, not cleared).
       const report: Array<{ sampleId: string; barcode: string; ok: boolean; message?: string }> = [];
       const flags: Array<{ label: string; note?: string; critical: boolean }> = [];
       for (const snap of targets) {
         try {
-          const resp = await firstValueFrom(
-            this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, tabPayload(snap)),
-          );
+          const body = tabPayload(snap);
+          const resp = body.results.length
+            ? await firstValueFrom(this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, body))
+            : null;
+          if (closeBlankOk) await this.closeNotReported(snap.sampleId, closable(snap));
+          const notClosed = blankTests(snap).filter((t) => !this.isClosableBlank(t));
+          if (notClosed.length) this.toasts.info(`${snap.barcode || "Tube"} · ${this.leftOpenMessage(notClosed)}`);
           for (const r of resp?.results ?? []) {
             const name = r.orderTest?.test?.name ?? "Test";
             if (r.flags?.critical) flags.push({ label: `${snap.barcode} · ${name}: critical`, critical: true });
@@ -2135,6 +2594,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
+      this.loadCritical();
       const ok = report.filter((r) => r.ok);
       // Submitted tubes leave the draft shelf now.
       this.draftShelf.drop("lab", ok.map((r) => "lab:" + r.sampleId));
@@ -2169,6 +2629,8 @@ export class SampleResultEntryComponent {
   // show-on-report toggle (mirrors the culture bench's checkboxes — the
   // bench keeps everything, only `show` images print). Videos never print.
   readonly attachBusy = signal(false);
+  /** `testId|param` of the paperclip whose upload is running (its busy dots). */
+  readonly attachBusyKey = signal<string | null>(null);
   private readonly _attach = signal<Record<string, ResultAttachment[]>>({});
   private attachTargetId: string | null = null;
   private attachTargetParam: string | null = null;
@@ -2206,43 +2668,241 @@ export class SampleResultEntryComponent {
   // ── Per-REPORT value picker (owner 2026-09-20, culture-checkbox pattern):
   // Test Master's `printPicker: true` marker puts a print checkbox on every
   // value row; unticked names ride order_tests.ReportHiddenJson and the
-  // report renderer drops those rows for THIS order only. ────────────────
+  // report renderer drops those rows for THIS order only. The setting follows
+  // what was ORDERED — the profile's for a profile member, else the test's
+  // (resolved by the server; see resolvePrintPicker). ────────────────────
   private readonly _reportHidden = signal<Record<string, string[]>>({});
   private readonly _printPickerByTest = computed<Set<string>>(() => {
     const out = new Set<string>();
     for (const t of this._sample()?.tests ?? []) {
-      try {
-        if (JSON.parse(t.test?.parameters || "{}")?.printPicker === true) out.add(t.id);
-      } catch { /* malformed parameters — picker stays off */ }
+      if (resolvePrintPicker(t)) out.add(t.id);
     }
     return out;
   });
   printPickerEnabled(t: { id: string }): boolean {
     return this._printPickerByTest().has(t.id);
   }
-  private reportHiddenFor(t: { id: string }): string[] {
-    const local = this._reportHidden()[t.id];
-    if (local) return local;
-    const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
-    if (!raw) return [];
-    try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+  /** Parameter names CRITICAL on this line (owner 2026-10-01: live-typed OR
+   *  already saved — the same single check {@link isCriticalValue} the red
+   *  input treatment uses). They always print, whatever the picker says (see
+   *  {@link reportHiddenFor}). The saved-only mirror of mw's
+   *  `PrintPickerRules.CriticalNames` ({@link criticalNames} from
+   *  shared/utils/print-picker) agrees once the value is saved — what the
+   *  server will actually print reads the SAME saved snapshot.
+   *  Critic P1-4: a per-PARAMETER flag isn't the only way a line is critical
+   *  — the Conditions engine can mark the whole result critical with no
+   *  single value carrying CL/CH (e.g. a qualitative "Positive"). When no
+   *  parameter resolves critical this way, fall back to the saved
+   *  snapshot's OVERALL `flags.critical` — every name on the line counts,
+   *  same as mw's EffectiveHidden. */
+  private criticalFor(t: OrderTest): string[] {
+    const perParam = this.parametersFor(t).filter(p => this.isCriticalValue(t, p)).map(p => p.name);
+    return perParam.length ? perParam : criticalNames(t.currentResult, this.parametersFor(t).map(p => p.name));
   }
-  isValuePrinted(t: { id: string }, p: { name: string }): boolean {
+  /** The print-picker checkbox's own critical check (template): per-parameter
+   *  OR the whole-line fallback (critic P1-4) — wider than {@link isCriticalValue}
+   *  (red-input styling stays pinned to an actual per-parameter flag; it never
+   *  reddens every input just because the line's overall flag is critical). */
+  isCriticalForPrint(t: OrderTest, p: TestParameter): boolean {
+    return this.criticalFor(t).some(n => n.toLowerCase() === p.name.toLowerCase());
+  }
+  /** Hidden value names as the tech sees them: this session's pick, else
+   *  the SAVED pick (even "[]" — a saved choice is never reset on reload),
+   *  else the resolved "Start with": 'none' → every value unticked. A
+   *  CRITICAL value is never in this set — it always prints (owner
+   *  2026-10-01), whatever the picker / saved hide-list says. */
+  private reportHiddenFor(t: OrderTest): string[] {
+    const critical = this.criticalFor(t);
+    const local = this._reportHidden()[t.id];
+    let hidden: string[];
+    if (local) {
+      hidden = local;
+    } else {
+      const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
+      return effectiveHidden(raw, resolvePrintPickerDefault(t), this.parametersFor(t).map(p => p.name), critical);
+    }
+    if (critical.length === 0) return hidden;
+    const crit = new Set(critical.map((c) => c.toLowerCase()));
+    return hidden.filter((n) => !crit.has(n.toLowerCase()));
+  }
+  isValuePrinted(t: OrderTest, p: { name: string }): boolean {
     return !this.reportHiddenFor(t).includes(p.name);
   }
-  toggleValuePrinted(t: { id: string }, p: { name: string }) {
+  /** The picker is on and EVERY value is unticked: nothing from this test
+   *  reaches the report. Never shown per row (owner 2026-09-30: "no need to
+   *  tell this") — it only feeds the one whole-batch check below. */
+  nothingPrints(t: OrderTest): boolean {
+    if (!this.printPickerEnabled(t)) return false;
+    const params = this.parametersFor(t);
+    return params.length > 0 && params.every(p => !this.isValuePrinted(t, p));
+  }
+  /** The ONE safeguard left (owner 2026-09-30): ask once, before a submit /
+   *  validate, only when NOTHING AT ALL in the batch (the tube, or every tube
+   *  on Submit all) would print — every line has the picker on with every
+   *  value unticked. One ticked value anywhere, or any line without the
+   *  picker, and there is no dialog. True = go ahead. */
+  private async confirmNothingPrints(tests: readonly OrderTest[], verb: "submit" | "validate"): Promise<boolean> {
+    if (!tests.length || !tests.every(t => this.nothingPrints(t))) return true;
+    return this.dialog.confirm({
+      title: "Nothing will print on this report",
+      message: "Every value is unticked, so the report will leave out:",
+      items: tests.map(t => t.test?.name ?? "Test"),
+      question: `Tick the values that should print, or ${verb} anyway?`,
+      cancelLabel: "Go back",
+      confirmLabel: verb === "submit" ? "Submit anyway" : "Validate anyway",
+    });
+  }
+  toggleValuePrinted(t: OrderTest, p: { name: string }) {
+    // Critical always prints — nothing to toggle (owner 2026-10-01).
+    if (this.criticalFor(t).some(n => n.toLowerCase() === p.name.toLowerCase())) return;
     const cur = this.reportHiddenFor(t);
     const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
-    this._reportHidden.update(m => ({ ...m, [t.id]: next }));
-    this.api.put(`/api/results/${t.id}/report-hidden`, { hidden: next }).subscribe({
-      error: () => this.toasts.error("Could not save the print choice — retry."),
+    // A hand tick / untick makes the row the tech's own choice: clearing its
+    // value later never unticks it, and more keystrokes never re-tick it.
+    this._autoTicked.get(t.id)?.delete(p.name);
+    this.setReportHidden(t.id, next);
+  }
+
+  // ── Entering a value ticks its print box (owner 2026-09-30) ───────────
+  // Typing / picking a value into an EMPTY row ticks that row (the moment
+  // the value appears — later keystrokes are not new entries, so a row the
+  // tech unticked by hand stays unticked). Clearing the value of a row that
+  // was ticked this way unticks it again; a hand-ticked row stays ticked.
+  // In "All ticked" the row is already ticked → no-op. Only the tech's own
+  // input (setValue) counts — load, draft restore, formulas and analyzer
+  // prefill never move a tick, so a SAVED pick always wins on reload. Every
+  // change is saved like a hand tick (order_tests.ReportHiddenJson).
+  private readonly _autoTicked = new Map<string, Set<string>>();
+  private autoTickOnEntry(testId: string, paramName: string, before: unknown, after: unknown) {
+    const t = this._sample()?.tests?.find((x) => x.id === testId);
+    if (!t || !this.printPickerEnabled(t)) return;
+    const had = hasEnteredValue(before);
+    const has = hasEnteredValue(after);
+    if (had === has) return;
+    const hidden = this.reportHiddenFor(t);
+    if (has) {
+      if (!hidden.includes(paramName)) return;          // already ticked
+      let set = this._autoTicked.get(testId);
+      if (!set) this._autoTicked.set(testId, (set = new Set()));
+      set.add(paramName);
+      this.setReportHidden(testId, hidden.filter((n) => n !== paramName));
+    } else {
+      const set = this._autoTicked.get(testId);
+      if (!set?.has(paramName)) return;                 // ticked by hand / by default
+      set.delete(paramName);
+      if (!hidden.includes(paramName)) this.setReportHidden(testId, [...hidden, paramName]);
+    }
+  }
+  /** Record + save a line's hidden list. One request per line in flight; a
+   *  change made meanwhile is sent (as the LATEST list) when it returns, so
+   *  quick ticks can never land on the server out of order. */
+  private readonly _hiddenInFlight = new Set<string>();
+  private readonly _hiddenDirty = new Set<string>();
+  private readonly _hiddenIdle: Array<() => void> = [];
+  /** Resolves once every print-choice save has reached the server (capped).
+   *  Logic audit: Submit / Validate can issue the FINAL report straight away
+   *  (direct flow), and the report reads the SAVED hidden list — a tick still
+   *  in flight left that value off the issued final. */
+  hiddenSettled(maxMs = 10_000): Promise<void> {
+    if (this._hiddenInFlight.size === 0) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      const t = setTimeout(resolve, maxMs);
+      this._hiddenIdle.push(() => { clearTimeout(t); resolve(); });
     });
+  }
+  private setReportHidden(testId: string, next: string[]) {
+    this._reportHidden.update(m => ({ ...m, [testId]: next }));
+    this.saveReportHidden(testId);
+  }
+  private saveReportHidden(testId: string) {
+    if (this._hiddenInFlight.has(testId)) { this._hiddenDirty.add(testId); return; }
+    this._hiddenInFlight.add(testId);
+    const hidden = this._reportHidden()[testId] ?? [];
+    const done = () => {
+      this._hiddenInFlight.delete(testId);
+      if (this._hiddenDirty.delete(testId)) this.saveReportHidden(testId);
+      if (this._hiddenInFlight.size === 0) this._hiddenIdle.splice(0).forEach(r => r());
+    };
+    this.api.put(`/api/results/${testId}/report-hidden`, { hidden }).subscribe({
+      complete: done,
+      error: () => { done(); this.toasts.error("Could not save the print choice — retry."); },
+    });
+  }
+  // ── "Print in bold" per value (owner 2026-09-30) ─────────────────────
+  // A B toggle beside every result input (and Ctrl/Cmd+B inside it) makes
+  // THAT value print bold on the report even when it is normal. It only ADDS
+  // bold — an abnormal value prints bold regardless (Test Master rules).
+  // The picks ride the result snapshot as `bold[]` (value names), sent with
+  // every draft / submit; the report snapshot copies them (mw
+  // BuildResultPayload) and report-pdf bolds the value cell.
+  private readonly _bold = signal<BoldMap>({});
+  boldFor(testId: string): string[] {
+    return this._bold()[testId] ?? [];
+  }
+  isBold(t: { id: string }, p: { name: string }): boolean {
+    return this.boldFor(t.id).includes(p.name);
+  }
+  /** The toggle writes only where the values can still be written. */
+  canBold(t: OrderTest): boolean {
+    return !this.viewOnly() && !this.isCultureTest(t)
+      && t.status !== "entered" && t.status !== "validated" && t.status !== "rejected";
+  }
+  toggleBold(t: OrderTest, p: { name: string }) {
+    if (!this.canBold(t)) return;
+    const cur = this.boldFor(t.id);
+    const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
+    this._bold.update(m => ({ ...m, [t.id]: next }));
+    this.scheduleServerAutosave();
+  }
+  /** Ctrl/Cmd+B while focus is inside a result's input toggles its bold. */
+  onBoldKey(ev: KeyboardEvent, t: OrderTest, p: { name: string }) {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey) return;
+    if (ev.key !== "b" && ev.key !== "B") return;
+    ev.preventDefault();
+    this.toggleBold(t, p);
   }
   /** Chip prefix for a value-tagged attachment — the value's display title. */
   attachParamTitle(t: OrderTest, a: ResultAttachment): string | null {
     if (!a.param) return null;
     const p = this.parametersFor(t).find(x => x.name === a.param);
     return p?.title || p?.name || a.param;
+  }
+
+  /** Tech-captured files only — the chips under each line. The analyzer's
+   *  graphs (instrument-routed, `param` "instrument:<code>") have their own
+   *  card (analyzerGraphs). */
+  benchAttachmentsFor(t: { id: string }): ResultAttachment[] {
+    return this.attachmentsFor(t).filter(a => !isInstrumentAttachment(a));
+  }
+
+  /** Every analyzer graph on this tube, in the analyzer's own order, with a
+   *  human label ("RBC histogram", never "instrument:12053"). */
+  readonly analyzerGraphs = computed((): AnalyzerGraph[] => {
+    const s = this._sample();
+    this._attach();
+    const out: AnalyzerGraph[] = [];
+    for (const t of s?.tests ?? []) {
+      for (const a of this.attachmentsFor(t)) {
+        if (!isInstrumentAttachment(a) || a.kind !== 'image') continue;
+        const code = a.param!.slice('instrument:'.length);
+        out.push({ key: `${t.id}:${code}`, lineId: t.id, attachmentId: a.id, code, url: a.url, show: a.show,
+          label: graphLabel(code, a.name) });
+      }
+    }
+    const rank = (c: string) => { const i = KNOWN_ANALYZER_IMAGES.findIndex(k => k.code === c); return i < 0 ? 99 : i; };
+    return out.sort((x, y) => rank(x.code) - rank(y.code) || x.code.localeCompare(y.code));
+  });
+  /** "From Arun CBC · 5:02 PM" — the newest run on this tube. */
+  readonly analyzerGraphSource = computed((): string | null => {
+    const run = this.analyzerRuns()[0];
+    if (!run) return null;
+    const when = this.analyzerTime(run.runAt ?? run.receivedAt);
+    return `From ${run.instrumentName}${when ? ' · ' + when : ''}`;
+  });
+  toggleGraphShow(g: AnalyzerGraph): void {
+    const t = this._sample()?.tests.find(x => x.id === g.lineId);
+    if (!t) return;
+    void this.saveAttachments(g.lineId, this.attachmentsFor(t).map(x => x.id === g.attachmentId ? { ...x, show: !x.show } : x));
   }
 
   attachmentsFor(t: { id: string }): ResultAttachment[] {
@@ -2256,6 +2916,10 @@ export class SampleResultEntryComponent {
    *  fetched with the session ('' until it lands). */
   attachSrc(a: ResultAttachment): string {
     return this.uploads.src(a.url);
+  }
+  /** The server answered 410 file_missing for it (it sat on a wiped disk). */
+  attachMissing(a: ResultAttachment): boolean {
+    return this.uploads.isMissing(a.url);
   }
   /** Videos aren't pre-fetched: the link opens a signed URL on click. */
   attachHref(a: ResultAttachment): string {
@@ -2277,6 +2941,7 @@ export class SampleResultEntryComponent {
     input.value = "";
     const targetId = this.attachTargetId;
     if (!files.length || !targetId) return;
+    this.attachBusyKey.set(`${targetId}|${this.attachTargetParam ?? ''}`);
     this.attachBusy.set(true);
     try {
       const target = { id: targetId };
@@ -2328,6 +2993,18 @@ export class SampleResultEntryComponent {
       this.toasts.error("Could not save the attachments — retry.");
     }
   }
+}
+
+/** An analyzer graph attached by the instrument connector (mw tags it
+ *  `param: "instrument:<code>"`, InstrumentIngestService.InstrumentImageTag). */
+function isInstrumentAttachment(a: { param?: string | null }): boolean {
+  return !!a.param && a.param.startsWith('instrument:');
+}
+/** Lab-facing label: the known graph name, else what the analyzer called it. */
+function graphLabel(code: string, name?: string | null): string {
+  const known = KNOWN_ANALYZER_IMAGES.find(k => k.code === code);
+  if (known) return known.label;
+  return (name ?? '').trim() || `Analyzer image ${code}`;
 }
 
 interface ResultAttachment {

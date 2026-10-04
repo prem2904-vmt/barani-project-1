@@ -75,7 +75,14 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
   });
 
   it('the shell applies the bottom inset exactly once — on the docked bar, as padding (--pf-home-inset)', () => {
-    expect(count(sh, /pf-home-inset/)).toBe(1);
+    // Every use of the inset in the shell is padding on the docked bar itself
+    // (the base rule + the phone variant, owner 2026-09-28) — never elsewhere.
+    const uses = [...noComments(sh).matchAll(/([^{}]*)\{([^{}]*pf-home-inset[^{}]*)\}/g)];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const [, sel, body] of uses) {
+      expect(sel).toMatch(/\.pf-chrome\s*$/);
+      expect(body).toMatch(/padding(-block|-bottom):\s*(calc\()?var\(--pf-home-inset\)/);
+    }
     const rule = [...sh.matchAll(/:host-context\(\.design-new\.nav-bottom\) \.pf-chrome \{([^}]*)\}/g)]
       .map((m) => m[1])
       .find((b) => /pf-home-inset/.test(b))!;
@@ -100,7 +107,8 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
   });
 
   it('page content clears the bar through the token (no second raw inset on shell-main)', () => {
-    expect(sh).toMatch(/\.shell-main \{\s*padding-bottom:\s*calc\(var\(--pf-botbar-h, 5\dpx\) \+ 12px\) !important;/);
+    // PR #75 (2026-09-28): content ends flush with the bar — no extra 12px.
+    expect(sh).toMatch(/\.shell-main \{\s*padding-bottom:\s*var\(--pf-botbar-h, 5\dpx\) !important;/);
   });
 });
 
@@ -160,5 +168,21 @@ describe('Docked bar steps aside for the soft keyboard (owner 2026-09-28, iPad t
     expect(sh).toMatch(/<div class="pf-chrome" \[class\.pf-chrome--kbd\]="kbd\.visible\(\)">/);
     expect(sh).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.pf-chrome\.pf-chrome--kbd \{ display: none !important; \}/);
     expect(sh).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.shell-main\.shell-main--kbd \{ padding-bottom: 12px !important; \}/);
+  });
+});
+
+describe('iPhone docked bar (owner 2026-09-28): icons clear the home indicator', () => {
+  const read = (p: string) => require('node:fs').readFileSync(require('node:path').resolve(process.cwd(), p), 'utf8');
+  const global = read('apps/lms/src/styles.scss');
+  const shell = read('apps/lms/src/app/layout/shell/shell.component.ts');
+
+  it('phones reserve the FULL bottom inset (iPad keeps the reduced split)', () => {
+    expect(global).toMatch(/:root\.device-phone \{ --pf-home-inset: env\(safe-area-inset-bottom\); \}/);
+    expect(global).toMatch(/--pf-home-inset: max\(calc\(env\(safe-area-inset-bottom\) - 12px\)/);
+  });
+
+  it('on phones the inset sits under the icons, with side clearance for the corners', () => {
+    const rule = shell.slice(shell.indexOf('html.device-phone.design-new.nav-bottom) .pf-chrome'));
+    expect(rule).toMatch(/padding-top: 0;[\s\S]*?padding-bottom: var\(--pf-home-inset\);[\s\S]*?padding-inline: max\(8px/);
   });
 });

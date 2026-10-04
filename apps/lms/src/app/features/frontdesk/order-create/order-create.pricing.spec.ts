@@ -72,14 +72,48 @@ describe('OrderCreate pricing (pricing-table DTO)', () => {
     expect(c.coveringPackageName('cbc')).toBe('PKG');
   });
 
-  it('package suggestion savings = Σ member price − package price (members identified by TEST ID)', () => {
+  it('package suggestion savings = Σ covered price − package price (members identified by TEST ID)', () => {
     const pkg = T('pkg', 350, { type: 'package', parameters: JSON.stringify({ items: [{ testId: 'cbc' }, { testId: 'esr' }] }) });
     const c = make([T('cbc', 300), T('esr', 120), pkg]);
     c._selected.set(['cbc', 'esr']);
     const [s] = c.packageSuggestions();
-    expect(s.package.id).toBe('pkg');
-    expect(s.individualSum).toBe(420);
+    expect(s.kind).toBe('saving');
+    expect(s.bundle.id).toBe('pkg');
+    expect(s.coveredAmount).toBe(420);
     expect(s.savings).toBe(70);
+  });
+
+  it('owner: a ₹100 test and a ₹1,000 package (members ₹1,950) → an UPGRADE of +₹900, not a saving', () => {
+    const ids = ['tsh', 'cbc', 'esr', 'crp', 'fbs', 'hba', 'chol', 'tg', 'crea', 'urea', 'sgpt', 'sgot', 'urine'];
+    const prices = [100, 300, 120, 180, 80, 250, 150, 150, 120, 100, 100, 100, 200];
+    const pkg = T('full', 1000, { type: 'package', parameters: JSON.stringify({ items: ids.map(testId => ({ testId })) }) });
+    const c = make([...ids.map((id, i) => T(id, prices[i])), pkg]);
+    c._selected.set(['tsh']);
+    const [s] = c.packageSuggestions();
+    expect(s).toMatchObject({ kind: 'upgrade', extraCost: 900, savings: 0, extraCount: 12, extraMembersAmount: 1850, membersAmount: 1950 });
+  });
+
+  it('BillMath parity: applying a suggestion moves the cart total by exactly its delta (saving and upgrade, GST on)', () => {
+    const pkg = T('pkg', 350, { type: 'package', taxSlab: 12, parameters: JSON.stringify({ items: [{ testId: 'cbc' }, { testId: 'esr' }, { testId: 'crp' }] }) });
+    const c = make([T('cbc', 300, { taxSlab: 18 }), T('esr', 120, { taxSlab: 5 }), T('crp', 250), pkg]);
+    // Saving: CBC + ESR (354 + 126 = ₹480 gross) → ₹392 package.
+    c._selected.set(['cbc', 'esr']);
+    let [s] = c.packageSuggestions();
+    expect(s.kind).toBe('saving');
+    let before = c.grossTotal();
+    expect(s.coveredAmount).toBe(before);
+    c.applyPackage(s);
+    expect(c._selected()).toEqual(['pkg']);
+    expect(c.grossTotal()).toBeCloseTo(before + s.delta, 2);
+    expect(c.grossTotal()).toBe(392);
+    // Upgrade: CRP alone (₹250) → ₹392 package.
+    c._selected.set(['crp']);
+    [s] = c.packageSuggestions();
+    expect(s.kind).toBe('upgrade');
+    before = c.grossTotal();
+    c.applyPackage(s);
+    expect(c.grossTotal()).toBeCloseTo(before + s.delta, 2);
+    expect(s.extraCost).toBe(142);
   });
 
   it('discount is a preview on (subtotal + GST) and is capped by role permission', () => {
@@ -188,6 +222,6 @@ describe('OrderCreate — not offered here', () => {
     const spy = vi.spyOn(toasts, 'error');
     c.surfaceMutationError({ error: { error: 'not_offered', message: 'Test not offered' } });
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('not offered'));
-    expect(c.api.get).toHaveBeenCalledWith('/api/tests/?activeOnly=true');
+    expect(c.api.get).toHaveBeenCalledWith('/api/tests/?activeOnly=true&view=summary');
   });
 });

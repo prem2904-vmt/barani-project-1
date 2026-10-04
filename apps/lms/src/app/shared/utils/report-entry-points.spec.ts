@@ -55,12 +55,14 @@ describe('report entry points post PLAIN values to the layout preview', () => {
     expect(glu[2]).toEqual(['a.jpg']);                        // snapshot images ride along
   });
 
+  // Not stored yet (the api double has no getBlob) → rendered once from the
+  // snapshot, through the same resolver, then stored.
   it('report queue (download / archive)', async () => {
     const preview = previewSpy();
     const c = Object.create(ReportQueueComponent.prototype) as any;
     c.injector = injectorWith(preview);
     c.api = api;
-    await c.buildReportRender(report);
+    await c.storedPdf({ ...report, id: 'r-queue' });
     expectPlainValues(preview);
   });
 
@@ -69,7 +71,7 @@ describe('report entry points post PLAIN values to the layout preview', () => {
     const c = Object.create(FrontdeskLandingComponent.prototype) as any;
     c.injector = injectorWith(preview);
     c.api = api;
-    await c.reportInput(report);
+    await c.storedReport({ ...report, id: 'r-fd' });
     expectPlainValues(preview);
   });
 

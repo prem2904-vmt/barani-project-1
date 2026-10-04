@@ -12,6 +12,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isAllowedPlacement, isFixedSlotAction, isLockedItem, isMandatoryItem, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -29,7 +30,7 @@ const LANE_COLOR = '#7c3aed';
 @Component({
   selector: 'pf-process-builder',
   standalone: true,
-  imports: [FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pb pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -61,7 +62,7 @@ const LANE_COLOR = '#7c3aed';
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
               Set active
             </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" (click)="save()">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}
             </button>
@@ -84,21 +85,16 @@ const LANE_COLOR = '#7c3aed';
         </div>
         <div class="pb-bar-actions">
           @if (branches().length > 0) {
-            <select class="pb-select pb-select--scope" [ngModel]="scope()" (ngModelChange)="setScope($event)" title="Branch this workflow applies to">
-              <option [ngValue]="null">⌂ All branches (default)</option>
-              @for (b of branches(); track b.id) { <option [ngValue]="b.id">⌥ {{ b.name }}</option> }
-            </select>
+            <pf-select class="pb-select pb-select--scope" [options]="scopeOptions()" [value]="scope() ?? ''"
+                       [searchable]="branches().length > 8"
+                       (valueChange)="setScope($event || null)" aria-label="Branch this workflow applies to"></pf-select>
           }
-          <select class="pb-select" [ngModel]="currentId()" (ngModelChange)="selectWorkflow($event)">
-            @for (w of scopedWorkflows(); track w.id) {
-              <option [value]="w.id">{{ w.name }}{{ w.isActive ? '  ● active' : '' }}</option>
-            }
-            @if (scopedWorkflows().length === 0) { <option [ngValue]="null">— new draft —</option> }
-          </select>
+          <pf-select class="pb-select" [options]="workflowOptions()" [value]="currentId() ?? ''"
+                     placeholder="— new draft —" (valueChange)="selectWorkflow($event)" aria-label="Workflow"></pf-select>
           <button type="button" class="pb-btn" (click)="newWorkflow()" title="New workflow">+ New</button>
           <button type="button" class="pb-btn" [disabled]="!currentId()" (click)="duplicate()">Duplicate</button>
           <button type="button" class="pb-btn" [disabled]="!currentId() || isActive()" (click)="activate()">Set active</button>
-          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
+          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
         </div>
       </header>
 
@@ -229,6 +225,7 @@ const LANE_COLOR = '#7c3aed';
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pb { position: relative; }
     .pb-chip--hidden { display: none !important; }
     .pb-hint-lock { display: inline-block; vertical-align: -1px; }
@@ -421,7 +418,7 @@ const LANE_COLOR = '#7c3aed';
        820px breakpoint missed), then tile the work-area lanes into a grid that
        auto-fills the full width (2-up portrait, 3-up landscape) instead of a
        side-rail + uneven flex-wrap. Desktop (>=1280) keeps its side-rail board. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pb-board { flex-direction: column; }
       .pb-palette { width: 100%; position: static; }
       .pb-palette-list { flex-direction: row; flex-wrap: wrap; }

@@ -4,7 +4,7 @@ import { environment } from '../../../../environments/environment';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -25,12 +25,20 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
-import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { PartnerReport, PdfParts, firstAttachProblem, partnerReportShareLine, partnerWhere } from '../../frontdesk/outsourced/outsourced-view';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
+import { currentRecipient } from '../../../shared/utils/report-recipient';
+import { formatAge } from '../../../shared/utils/patient-age';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface ReportData {
-  patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
+  patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; ageDisplay?: string | null; ageYears?: number | null; sex?: string; phone?: string; mrn?: string };
   order?: { id?: string; orderNumber?: string; createdAt?: string; priority?: string; refDoctorName?: string };
   type?: string;
   amendment?: { isAmended?: boolean; reason?: string } | null;
@@ -131,7 +139,11 @@ export const RV_DONE_MS = 1800;
     ReportWhatsAppStatusComponent,
     HeroBandComponent,
     EditResultDialogComponent,
-    ZoomTargetDirective
+    ZoomTargetDirective,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective,
+    BusyDirective,
+    SkeletonRowsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './report-viewer.component.html',
@@ -165,8 +177,6 @@ export class ReportViewerComponent implements OnInit {
   /** ≤900px: no side column — REPORT opens as a sheet from the pill. */
   readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
   readonly detailsOpen = signal(false);
-  /** Phones: the "More" action sheet. */
-  readonly moreOpen = signal(false);
   /** REPORT side card collapsed to a strip (remembered per user). */
   readonly sideCollapsed = signal(this.readCollapsed());
   toggleSide(): void {
@@ -185,6 +195,9 @@ export class ReportViewerComponent implements OnInit {
   /** Brief success state on an action button, then back to its label. */
   readonly done = signal<'print' | 'whatsapp' | null>(null);
   readonly busy = signal<'print' | null>(null);
+  /** A ⋮ menu action whose work outlives the menu (Download builds the PDF,
+   *  Regenerate posts): the ⋮ trigger shows it busy until it answers. */
+  readonly menuBusy = signal<'download' | 'regenerate' | null>(null);
   private doneTimer: ReturnType<typeof setTimeout> | null = null;
   private flash(kind: 'print' | 'whatsapp'): void {
     this.done.set(kind);
@@ -215,12 +228,16 @@ export class ReportViewerComponent implements OnInit {
   readonly patientMeta = computed(() => {
     const p = this.data()?.patient;
     const q = this._report()?.order?.patient;
-    const age = p?.age ?? q?.age ?? null;
+    // The snapshot's age at collection ("8 M" for an infant), else the live patient.
+    const ageSrc = p && (p.age != null || p.ageDisplay) ? { age: p.age, ageDisplay: p.ageDisplay } : q ?? null;
     const sex = p?.sex ?? q?.sex ?? null;
     const mrn = p?.mrn ?? q?.mrn ?? null;
-    if (age == null && !sex && !mrn) return '';
-    return formatPatientMeta({ age: age as never, sex: sex as never, mrn: mrn as never });
+    if (!formatAge(ageSrc) && !sex && !mrn) return '';
+    return formatPatientMeta({ ...(ageSrc ?? {}), sex: sex as never, mrn: mrn as never } as never);
   });
+  /** Who the report is SENT to — the current patient record (a profile
+   *  correction reaches the share / WhatsApp message), else the snapshot. */
+  readonly recipient = computed(() => currentRecipient(this._report(), this.data()?.patient));
   readonly orderLabel = computed(() => {
     const o = this.data()?.order;
     if (o?.orderNumber) return o.orderNumber;
@@ -271,8 +288,143 @@ export class ReportViewerComponent implements OnInit {
    *  never calls /deliver or archives, so a view-only print records nothing. */
   readonly canPrint = computed(() =>
     ['deliver_report', 'view_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
-  /** The phones' More sheet has something in it. */
-  readonly hasMoreActions = computed(() => this.canPrint() || this.canDeliver() || this.canEditResult());
+  /** Generate / Regenerate change what the patient receives — the backend
+   *  admits deliver_report | validate_result (same rule as the Results list). */
+  readonly canGenerate = computed(() => ['deliver_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
+
+  // ── ⋮ Report actions (shared/components/actions-menu) ─────────────
+  // EVERY action for this report in one place, on every width: share
+  // (patient link / WhatsApp / a colleague), the PDF (download / print), the
+  // workflow steps (edit results, regenerate) and go-to (patient, lab
+  // results). Rows follow the same permission + state rules as the buttons
+  // they mirror; the band keeps ONE primary (Send WhatsApp).
+  private readonly reportActions = inject(ReportActionsService);
+  private readonly dialog = inject(DialogService);
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+  readonly menuActions = computed<PfAction[]>(() => {
+    const r = this._report();
+    if (!r) return [];
+    const a: PfAction[] = [];
+    if (this.reportActions.canLink(r)) {
+      a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
+      a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
+    }
+    if (this.canDeliver()) {
+      // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+      a.push(...this.reportActions.whatsAppActions({ ...r, type: this.isPartial() ? 'partial' : r.type }));
+      if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
+    }
+    a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
+    if (this.canPrint()) a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report' });
+    if (this.canEditResult()) a.push({ id: 'edit', label: 'Edit results', icon: 'edit', group: 'Report', hint: 'Re-opens the results for correction' });
+    if (this.canGenerate() && r.orderId && !this.isPartial()) {
+      a.push({ id: 'regenerate', label: 'Regenerate', icon: 'regenerate', group: 'Report', hint: 'Rebuild with the current report template' });
+    }
+    if (r.patientId && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    if (r.orderId && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  });
+
+  /** The menu opened: warm the patient link so Share… keeps the tap's gesture. */
+  onMenuOpened(): void { this.reportActions.prefetch(this._report()); }
+
+  runAction(id: string): void {
+    const r = this._report();
+    if (!r) return;
+    switch (id) {
+      case 'share': void this.reportActions.share(r, this.recipient().name ?? this.patientName()); break;
+      case 'copy-link': void this.reportActions.copyLink(r); break;
+      case 'whatsapp': this.deliverWhatsApp(); break;
+      case 'whatsapp-mine': this.shareViaMyWhatsApp(); break;
+      case 'colleague': void this.openSharePicker(); break;
+      case 'download': void this.download(); break;
+      case 'print': void this.print(); break;
+      case 'edit': this.openEditDialog(); break;
+      case 'regenerate': void this.regenerate(); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', r.patientId]); break;
+      case 'lab': void this.openLabResults(); break;
+    }
+  }
+
+  /** Download the SAME PDF the preview shows. Native shell: the share sheet
+   *  (Save to Files); web: a file download. */
+  async download(): Promise<void> {
+    const r = this._report();
+    if (!r || this.menuBusy()) return;
+    this.menuBusy.set('download');
+    try {
+      const blob = this._pdfBlob ??= await this.buildPdfBlob(r);
+      const name = `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`;
+      const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+        .Capacitor?.isNativePlatform?.();
+      const file = new File([blob], name, { type: 'application/pdf' });
+      if (isNative && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Download report' });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* */ } }, 60_000);
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not download report'));
+    } finally {
+      if (this.menuBusy() === 'download') this.menuBusy.set(null);
+    }
+  }
+
+  /** Regenerate — the Results list's flow (DialogService confirm, then
+   *  POST /api/reports/generate), and the viewer switches to the new version. */
+  async regenerate(): Promise<void> {
+    const r = this._report();
+    if (!r?.orderId || !this.canGenerate()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Regenerate report?',
+      message: 'Rebuild this report using the current report template and Test Master. The previous version is replaced (it stays in the audit trail).',
+      confirmLabel: 'Regenerate',
+      tone: 'primary',
+    });
+    if (!ok || this.menuBusy()) return;
+    this.menuBusy.set('regenerate');
+    this.api.post<Report>('/api/reports/generate', { orderId: r.orderId, type: 'final' }).pipe(
+      finalize(() => { if (this.menuBusy() === 'regenerate') this.menuBusy.set(null); }),
+    ).subscribe({
+      next: r2 => {
+        this.toasts.success('Report regenerated with the latest template');
+        if (!r2?.id) return;
+        // The new version is rendered from its snapshot + the CURRENT
+        // settings and stored the moment the preview paints it (the previous
+        // version is superseded; its stored PDF stays for audit).
+        this._pdfBlob = null;
+        this.pdfParts.set(null);
+        this._pdfReady.set(false);
+        this._report.set(r2);
+        void this.router.navigate(['/reports/view', r2.id], { replaceUrl: true });
+      },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
+  }
+
+  /** Open the bench's result screen READ-ONLY (the Results list's action). */
+  async openLabResults(): Promise<void> {
+    const r = this._report();
+    if (!r?.orderId) return;
+    try {
+      const order = await firstValueFrom(this.api.get<{ samples?: Array<{ id: string }> }>(`/api/orders/${r.orderId}`));
+      const sid = order?.samples?.[0]?.id;
+      if (!sid) { this.toasts.error('No sample found for this order.'); return; }
+      void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
+    } catch {
+      this.toasts.error('Could not open the lab results.');
+    }
+  }
+
   readonly editDialogOpen = signal(false);
 
   openEditDialog() { this.editDialogOpen.set(true); }
@@ -283,13 +435,9 @@ export class ReportViewerComponent implements OnInit {
     this.editDialogOpen.set(false);
     const id = this._report()?.id;
     if (!id) return;
-    this._pdfBlob = null;
-    this._pdfInput = null;
-    this.api.get<Report>(`/api/reports/${id}`).subscribe({
-      // Re-arm the preview so the pages are rebuilt from the fresh data.
-      next: r => { this._pdfReady.set(false); this._report.set(r); this.resolveLayouts(); },
-      error: () => { /* the toast from the dialog already told the story */ }
-    });
+    // A corrected result is re-signed into a NEW (amended) report — follow
+    // the chain to the live version and show ITS stored PDF.
+    void this.showLive(id);
   }
 
   // ── Inline PDF view ─────────────────────────────────────
@@ -302,9 +450,6 @@ export class ReportViewerComponent implements OnInit {
   readonly pdfReady = this._pdfReady.asReadonly();
   readonly pdfError = this._pdfError.asReadonly();
   private _pdfBlob: Blob | null = null;
-  /** The prepared render input (template + layouts + images), cached so a
-   *  letterpad print job can re-render without refetching. */
-  private _pdfInput: import('../../../shared/utils/report-pdf').ReportPdfInput | null = null;
   private _pdfRendering = false;
   // Kick the render only once BOTH the report data and the #pdfPages host
   // exist (the host is inside the @if(report()) branch, so it appears a
@@ -320,6 +465,10 @@ export class ReportViewerComponent implements OnInit {
   protected readonly chatPickerSearch = signal('');
   protected readonly chatPickerUsers = signal<{ id: string; displayName: string; email: string; isActive: boolean }[]>([]);
   protected readonly chatPickerSending = signal(false);
+  /** The colleague row whose share is running (its busy dots). */
+  protected readonly chatPickerSendingTo = signal<string | null>(null);
+  /** The directory is on its way (first open): skeleton rows, not "No colleagues match". */
+  protected readonly chatPickerLoading = signal(false);
   protected readonly chatPickerFiltered = computed(() => {
     const term = this.chatPickerSearch().toLowerCase().trim();
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
@@ -332,12 +481,13 @@ export class ReportViewerComponent implements OnInit {
     this.chatPickerOpen.set(true);
     this.chatPickerSearch.set('');
     if (this.chatPickerUsers().length === 0) {
+      this.chatPickerLoading.set(true);
       try {
         const users = await firstValueFrom(this.api.get<{ id: string; displayName: string; email: string; isActive: boolean }[]>('/api/directory/users'));
         this.chatPickerUsers.set(users ?? []);
       } catch {
         this.toasts.error('Could not load directory.');
-      }
+      } finally { this.chatPickerLoading.set(false); }
     }
   }
   closeSharePicker(): void { this.chatPickerOpen.set(false); this.chatPickerSending.set(false); }
@@ -346,6 +496,7 @@ export class ReportViewerComponent implements OnInit {
     const r = this.report();
     if (!r) return;
     this.chatPickerSending.set(true);
+    this.chatPickerSendingTo.set(u.id);
     try {
       const label = this.subtitle() || `Report #${r.id.slice(0, 8)}`;
       const convId = await this.chat.openConversationWithContext(u.id, 'report', r.id, label);
@@ -355,7 +506,7 @@ export class ReportViewerComponent implements OnInit {
       this.router.navigate(['/messages']);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
-    } finally { this.chatPickerSending.set(false); }
+    } finally { this.chatPickerSending.set(false); this.chatPickerSendingTo.set(null); }
   }
 
   readonly data = computed<ReportData | null>(() => {
@@ -574,7 +725,7 @@ export class ReportViewerComponent implements OnInit {
    *  renderer: (a) drop text columns whose cells are all blank (the
    *  unused Specimen case), but KEEP typed columns (result/unit/range/
    *  flag) so the header stays consistent across tests; (b) reorder to
-   *  the Drlogy convention `Result → Reference → Unit` so the value
+   *  the classic column order `Result → Reference → Unit` so the value
    *  and its acceptable range sit next to each other. */
   visibleColumns(
     pv: ResolvedReportLayout,
@@ -591,7 +742,7 @@ export class ReportViewerComponent implements OnInit {
     });
     const cols = filtered.length > 0 ? filtered : pv.columns;
 
-    // Reorder typed core into Drlogy convention.
+    // Reorder typed core into the classic column order.
     const result = cols.find(c => c.type === 'result');
     const range  = cols.find(c => c.type === 'range');
     const unit   = cols.find(c => c.type === 'unit');
@@ -607,10 +758,10 @@ export class ReportViewerComponent implements OnInit {
     return ordered;
   }
 
-  /** Drlogy-style column header label. Server defaults emit
-   *  "Reference range" — Drlogy convention says "Reference Value".
+  /** Classic-style column header label. Server defaults emit
+   *  "Reference range" — the classic report says "Reference Value".
    *  Falls back to the layout's original label for custom columns. */
-  drlogyLabelFor(c: ResolvedReportLayout['columns'][number]): string {
+  classicLabelFor(c: ResolvedReportLayout['columns'][number]): string {
     if (c.type === 'range') return 'Reference Value';
     return c.label;
   }
@@ -686,11 +837,55 @@ export class ReportViewerComponent implements OnInit {
   // ── Partner lab reports (outsourced tests) ─────────────
   private readonly outsourcing = inject(OutsourcingService);
   readonly partnerReports = signal<PartnerReport[]>([]);
-  private loadPartnerReports(orderId: string | undefined) {
-    if (!orderId) return;
-    this.outsourcing.partnerReports(orderId).then(
+  private loadPartnerReports(orderId: string | undefined): Promise<void> {
+    if (!orderId) return Promise.resolve();
+    return this.outsourcing.partnerReports(orderId).then(
       l => this.partnerReports.set(l ?? []),
       () => this.partnerReports.set([]));
+  }
+  /** What the delivered PDF REALLY contains per attached partner file (the
+   *  server's answer, read after the preview's PDF was fetched — so it
+   *  describes the same file). Null = not known yet. */
+  readonly pdfParts = signal<PdfParts | null>(null);
+  readonly partnerWhere = partnerWhere;
+  /** The Outsourced tab's permission for "Attach to report". */
+  readonly canAttachPartner = computed(() => this.has(['deliver_report', 'dispatch_sample']));
+  readonly attachingUrl = signal<string | null>(null);
+  private refreshPdfParts(reportId: string) {
+    if (!this._report()?.orderId) return;
+    this.outsourcing.pdfParts(reportId).then(
+      p => { if (this._report()?.id === reportId) this.pdfParts.set(p ?? null); },
+      () => { /* unknown — the row keeps the flag's wording */ });
+  }
+  /** "Attach to report" from the viewer (a file uploaded before the feature,
+   *  or unticked at upload): every line sharing that partner file is
+   *  attached, then the preview reloads — the served PDF is now ours + the
+   *  partner pages, and Print / Download / WhatsApp / the link follow. */
+  async attachPartner(p: PartnerReport) {
+    const r = this._report();
+    if (!r || this.attachingUrl()) return;
+    const ids = this.partnerReports().filter(x => x.url === p.url).map(x => x.orderTestId);
+    this.attachingUrl.set(p.url);
+    try {
+      const updated = await this.outsourcing.setAttachToReport(ids, true);
+      const problem = firstAttachProblem(updated);
+      if (problem) this.toasts.warning(problem);
+      else this.toasts.success('Attached — the patient gets one PDF with the partner report');
+      await this.loadPartnerReports(r.orderId);
+      this.reloadPdf();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.attachingUrl.set(null);
+    }
+  }
+  /** Drop the cached blob and paint the served PDF again. */
+  private reloadPdf() {
+    this._pdfBlob = null;
+    this.pdfParts.set(null);
+    this._pdfError.set(null);
+    this._pdfReady.set(false);
+    void this.renderPdfView();
   }
   /** Opens the partner's file in a new tab — the browser's own viewer
    *  downloads / prints it as is. */
@@ -698,9 +893,10 @@ export class ReportViewerComponent implements OnInit {
     // Private upload → opened through a short-lived signed URL.
     void this.uploads.open(p.url);
   }
-  private readonly uploads = inject(UploadsService);
+  protected readonly uploads = inject(UploadsService);
 
   ngOnInit() {
+    this.waSend.ensure();
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
     this.load();
@@ -715,16 +911,45 @@ export class ReportViewerComponent implements OnInit {
     this.loadError.set(false);
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
       next: r => {
+        // A superseded version (regenerated / amended since) is no longer
+        // what the patient receives — open the live one instead.
+        if (r?.supersededByReportId) { void this.showLive(r.id); return; }
         this._report.set(r);
-        this.resolveLayouts();
         this.loadPartnerReports(r?.orderId);
       },
       error: () => { this.loadError.set(true); this.toasts.error('Could not load report'); }
     });
   }
 
-  /** Build the report PDF (identical to Download) and paint its pages onto
-   *  canvases inside the viewer. Cached: repeated calls reuse the blob. */
+  /** Follow `supersededByReportId` from `id` to the live version (bounded)
+   *  and show it — "the previous report is deleted" means the user no longer
+   *  sees it; its row and stored PDF stay for audit. */
+  private async showLive(id: string): Promise<void> {
+    try {
+      let r = await firstValueFrom(this.api.get<Report>(`/api/reports/${id}`));
+      for (let hops = 0; r?.supersededByReportId && hops < 10; hops++)
+        r = await firstValueFrom(this.api.get<Report>(`/api/reports/${r.supersededByReportId}`));
+      if (!r) throw new Error('not found');
+      const moved = r.id !== this._report()?.id;
+      this._pdfBlob = null;
+      this.pdfParts.set(null);
+      this._pdfReady.set(false);
+      this._report.set(r);
+      this.loadPartnerReports(r.orderId);
+      if (moved && r.id !== id) {
+        this.toasts.info('Showing the latest version of this report');
+        void this.router.navigate(['/reports/view', r.id], { replaceUrl: true });
+      }
+    } catch {
+      this.loadError.set(true);
+      this.toasts.error('Could not load report');
+    }
+  }
+
+  /** Paint the report's STORED PDF (identical to Download / Print / the
+   *  patient link) onto canvases inside the viewer. A report with nothing
+   *  stored yet is rendered once from its saved snapshot and stored here.
+   *  Cached: repeated calls reuse the blob. */
   async renderPdfView() {
     const r = this._report();
     if (!r || this._pdfRendering) return;
@@ -733,6 +958,7 @@ export class ReportViewerComponent implements OnInit {
     this._pdfReady.set(false);
     try {
       this._pdfBlob ??= await this.buildPdfBlob(r);
+      this.refreshPdfParts(r.id);
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
       const doc = await pdfjs.getDocument({ data: await this._pdfBlob.arrayBuffer() }).promise;
@@ -782,13 +1008,13 @@ export class ReportViewerComponent implements OnInit {
     if (tests.length === 0) return;
 
     const p = this.data()?.patient;
-    const patient = { sex: p?.sex ?? null, age: p?.age ?? null };
+    const patient = { sex: p?.sex ?? null, age: p?.age ?? null, ageYears: p?.ageYears ?? null, ageDisplay: p?.ageDisplay ?? null };
     // The ONE resolver: SCALAR values (the snapshot's { value, flag, … }
     // wrappers are unwrapped so "show when result > X" conditions match),
     // snapshot images, and the ordered PROFILES' layouts.
     try {
       const next = await resolveReportLayouts<ResolvedReportLayout>(
-        (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
+        (id, values, images, pt, profileCode) => this.layoutSvc.preview(id, values, images as never, pt, null, profileCode),
         tests as unknown as LayoutSnapshotTest[], patient);
       this._resolved.set(next);
     } catch (err) {
@@ -811,15 +1037,19 @@ export class ReportViewerComponent implements OnInit {
     if (!r || this.busy() === 'print' || !this.canPrint()) return;
     this.busy.set('print');
     try {
-      const input = await this.buildPdfInput(r);
-      const { askPrintLetterhead } = await import('../../../shared/utils/print-letterhead');
-      const { DialogService } = await import('../../../core/services/dialog.service');
-      const job = await askPrintLetterhead(input.template, this.injector.get(DialogService));
+      const [{ askPrintLetterhead }, { DialogService }, { loadReportTemplate }] = await Promise.all([
+        import('../../../shared/utils/print-letterhead'),
+        import('../../../core/services/dialog.service'),
+        import('../../../shared/utils/report-render-input'),
+      ]);
+      const job = await askPrintLetterhead(await loadReportTemplate(this.api), this.injector.get(DialogService));
       if (!job) return;   // dismissed — print nothing
+      // The STORED copy for the paper: the full report, or its letterhead-
+      // paper variant (header & footer blank) — each stored once.
       let blob: Blob;
       if (job.blankLetterhead) {
-        const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-        blob = buildReportPdf({ ...input, blankLetterhead: true }).output('blob');
+        const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+        blob = await storedReportBlob(r, this.api, this.injector, 'letterpad');
       } else {
         blob = this._pdfBlob ??= await this.buildPdfBlob(r);
       }
@@ -851,12 +1081,51 @@ export class ReportViewerComponent implements OnInit {
    *  PDF. (wa.me cannot auto-attach files, so the link stands in for the
    *  attachment.) We still record the delivery best-effort so the queue
    *  reflects it. */
+  // ── Send WhatsApp through the lab's WhatsApp Cloud API number ─────────
+  private readonly waSend = inject(WhatsAppSendService);
+  /** This final report goes out from the server (the lab has a sender). */
+  readonly waCloud = computed(() => {
+    const r = this._report();
+    return !!r && !this.isPartial() && this.waSend.canSend(r);
+  });
+  /** Live phase of the server send for the report on screen. */
+  readonly waState = computed(() => this.waSend.state(this._report()?.id));
+  /** The primary's words: Send WhatsApp → Sending… → Sent → Delivered / Read. */
+  readonly waLabel = computed(() => {
+    const st = this.waState();
+    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'Send WhatsApp';
+  });
+  /** Sent / Delivered / Read: the primary shows the check. */
+  readonly waDone = computed(() => ['sent', 'delivered', 'read'].includes(this.waState()?.phase ?? ''));
+
+  /** THE primary. Lab has WhatsApp Cloud → the server sends the approved
+   *  template with the report link to the patient's number; otherwise (or a
+   *  preliminary report) today's wa.me flow. */
   deliverWhatsApp() {
     const r = this._report();
-    const d = this.data();
+    if (!r || !this.canDeliver()) return;
+    if (this.waCloud()) {
+      if (this.waSend.busy(r.id)) return;
+      // The public link serves the archived PDF — archive it alongside (best-effort).
+      void this.archiveReportPdf(r);
+      void this.waSend.send(r.id).then((m) => {
+        if (!m || m.status === 'failed') return;
+        const cur = this._report();
+        if (cur && cur.id === r.id) this._report.set({ ...cur, deliveryStatus: 'delivered', deliveredVia: 'whatsapp' });
+      });
+      return;
+    }
+    this.shareViaMyWhatsApp();
+  }
+
+  /** Share via my WhatsApp: the click-to-chat deep link (wa.me) on THIS
+   *  device — the fallback when the lab has no Cloud API sender, and the
+   *  secondary ⋮ row when it does. */
+  shareViaMyWhatsApp() {
+    const r = this._report();
     if (!r || !this.canDeliver()) return;
     const lab = this.tpl()?.labName || 'our lab';
-    const name = d?.patient?.name ?? '';
+    const name = this.recipient().name ?? '';
     const link = r.qrToken ? this.verifyCode(r.qrToken) : '';
     const lines = [
       name ? `Hi ${name},` : 'Hi,',
@@ -870,7 +1139,7 @@ export class ReportViewerComponent implements OnInit {
     // resolves to a real file when the patient opens it. Fire before the
     // synchronous window.open so the popup isn't blocked.
     if (r.qrToken) this.archiveReportPdf(r);
-    const url = waLink(d?.patient?.phone, lines.join('\n\n'));
+    const url = waLink(this.recipient().phone, lines.join('\n\n'));
     window.open(url, '_blank', 'noopener');
     this.flash('whatsapp');
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
@@ -884,44 +1153,22 @@ export class ReportViewerComponent implements OnInit {
     });
   }
 
-  /** Render the report to the SAME PDF the Download button in the queue
-   *  produces (jsPDF + tenant template + per-test resolved layouts + images).
-   *  Single source for the inline view, Print and the archive upload. Always
-   *  WITH the letterhead — only a letterpad print job leaves it blank. */
+  /** THE report PDF: the stored file (`GET /api/reports/{id}/pdf`); a report
+   *  with nothing stored yet is rendered ONCE from its saved snapshot (the one
+   *  recipe — template + layouts incl. PROFILE layouts + images + trendograms)
+   *  and stored. Single source for the inline view, Download, Print (plain
+   *  paper) and the patient link. Always WITH the letterhead. */
   private async buildPdfBlob(r: Report): Promise<Blob> {
-    const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-    return buildReportPdf(await this.buildPdfInput(r)).output('blob');
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(r, this.api, this.injector, 'full');
   }
 
-  /** The prepared render input, cached per loaded report. */
-  private async buildPdfInput(r: Report): Promise<import('../../../shared/utils/report-pdf').ReportPdfInput> {
-    if (this._pdfInput && this._pdfInput.report.id === r.id) return this._pdfInput;
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import('../../../core/services/report-layout.service'),
-      import('../../../core/services/platform.service'),
-      import('../../../shared/utils/report-render-input'),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    const platform = this.injector.get(PlatformService);
-    // The ONE recipe (template + layouts incl. PROFILE layouts + images +
-    // trendograms). Throws instead of silently rendering the default design.
-    const input = await prepareReportPdfInput(r, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: platform.getApiUrl(),
-    });
-    this._pdfInput = input;
-    return input;
-  }
-
-  /** Render + archive the report PDF to storage (best-effort, no download) so
-   *  the public /reports/public/{qrToken} link resolves to a real file. */
+  /** Make sure the report's PDF is STORED (best-effort, no download) so the
+   *  public /reports/public/{qrToken} link serves the real file — a no-op
+   *  when it already is. */
   private async archiveReportPdf(r: Report) {
     try {
       this._pdfBlob ??= await this.buildPdfBlob(r);
-      const fd = new FormData();
-      fd.append('file', this._pdfBlob, `${r.id}.pdf`);
-      this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
     } catch { /* best-effort */ }
   }
 }

@@ -15,11 +15,10 @@ describe('patient-fields — phone (validateFieldValue, per country)', () => {
     expect(validateFieldValue(phone, '+9198765432101')).toMatch(/10-digit/);   // 11
     expect(validateFieldValue(phone, '+915876543210')).toMatch(/6, 7, 8, or 9/);
   });
-  it('other codes use their own length (+65 = 8, +971 = 9)', () => {
-    expect(validateFieldValue(phone, '+6581234567')).toBeNull();
-    expect(validateFieldValue(phone, '+65812345678')).not.toBeNull();
-    expect(validateFieldValue(phone, '+971501234567')).toBeNull();
-    expect(validateFieldValue(phone, '+97150123456')).not.toBeNull();
+  it('other countries are rejected — Indian mobiles only (server IndianPhone)', () => {
+    expect(validateFieldValue(phone, '+6581234567')).not.toBeNull();
+    expect(validateFieldValue(phone, '+971501234567')).not.toBeNull();
+    expect(validateFieldValue(phone, '+12025550123')).not.toBeNull();
   });
   it('an OPTIONAL additional contact (a number field) may be empty, but is checked like a phone when filled', () => {
     const extra = { type: 'number', name: 'additional_contact', title: 'Additional contact' };

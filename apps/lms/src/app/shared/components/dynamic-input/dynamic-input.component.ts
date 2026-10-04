@@ -6,8 +6,13 @@ import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { COUNTRY_PHONE_RULES, CountryPhoneRule, getCountryPhoneRule, validatePhoneNumber } from '../../forms/validate';
 import { AGE_LIMITS, AgeUnit, dobFromAge, isContactNumberField, validateAge } from '../../forms/patient-fields';
+import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
+import { labToday } from '../../utils/lab-clock';
+import { NdDateComponent } from '../nd-date/nd-date.component';
+import { NdTimeComponent } from '../nd-time/nd-time.component';
+import { NdDateTimeComponent } from '../nd-date/nd-datetime.component';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -45,7 +50,7 @@ export { isContactNumberField };
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, SelectComponent],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent, NdDateComponent, NdTimeComponent, NdDateTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ndOn()) {
@@ -158,18 +163,17 @@ export { isContactNumberField };
               </div>
               @if (!err) { <p class="nd-field__hint">Type either — an entered age stays current automatically.</p> }
             } @else {
-              <input [id]="inputId" data-pf-stop type="date" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                     [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
-                     [ngModel]="value" (ngModelChange)="emit($event)" />
+              <pf-nd-date [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                          (valueChange)="emit($event)"></pf-nd-date>
             }
           }
           @case ('datetime') {
-            <input [id]="inputId" data-pf-stop type="datetime-local" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                   [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)"
+                            (valueChange)="emit($event)"></pf-nd-datetime>
           }
           @case ('time') {
-            <input [id]="inputId" data-pf-stop type="time" class="nd-input nd-num" [class.nd-input--error]="!!err"
-                   [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-time [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                        (valueChange)="emit($event)"></pf-nd-time>
           }
           @case ('select') {
             @if (opts.length >= 2 && opts.length <= 4) {
@@ -177,7 +181,7 @@ export { isContactNumberField };
               <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true, err: err }"></ng-container>
             } @else {
               <pf-select [options]="selectOptions()" [value]="value" [searchable]="opts.length > 8"
-                         [class.pf-di-select--error]="!!err"
+                         [class.pf-di-select--error]="!!err" [enterAdvances]="enterAdvances"
                          [placeholder]="field.placeholder ?? 'Select…'" (valueChange)="emit($event)"></pf-select>
             }
           }
@@ -353,8 +357,8 @@ export { isContactNumberField };
                  increments over time; either way the field's value is a DOB.
                  Infants: flip the unit to Months (auto-selected under 2 yrs). -->
             <div class="flex items-center gap-2 flex-wrap">
-              <input type="date" class="pf-input" style="flex:1 1 150px" [attr.max]="todayIso"
-                     [ngModel]="value" (ngModelChange)="emit($event)" />
+              <span style="flex:1 1 150px"><pf-nd-date [label]="field.title" [value]="asDateStr(value)" [max]="todayIso"
+                          (valueChange)="emitDob($event, false)"></pf-nd-date></span>
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
               <input type="number" class="pf-input" style="flex:0 0 84px" min="0"
                      [attr.max]="ageLimit()"
@@ -379,20 +383,21 @@ export { isContactNumberField };
               Type either — an entered age stays current automatically.
             </p>
           } @else {
-            <input type="date" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+            <pf-nd-date [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-date>
           }
         }
         @case ('datetime') {
-          <input type="datetime-local" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-datetime>
         }
         @case ('time') {
-          <input type="time" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
+          <pf-nd-time [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-time>
         }
 
         @case ('select') {
           <pf-select
             [options]="selectOptions()"
             [value]="value"
+            [enterAdvances]="enterAdvances"
             [placeholder]="field.placeholder ?? '— Select —'"
             (valueChange)="emit($event)"></pf-select>
         }
@@ -1038,6 +1043,12 @@ export class DynamicInputComponent {
   /** New-design markup (ND-PATTERN §14). Off by default: every existing host
    *  (result entry, workflow preview, …) keeps the classic look. */
   @Input() nd = false;
+  /** Forwarded to the field's own `pf-select` (the 'select' case only — never
+   *  the phone country-code / size / duration unit mini-pickers). Off by
+   *  default; the workflow renderer's test-parameter data-entry fields turn
+   *  it on so a filled, closed dropdown lets Enter advance instead of
+   *  reopening (see `pf-select`'s own `enterAdvances`). */
+  @Input() enterAdvances = false;
   private static readonly ND_TYPES = new Set([
     'text', 'email', 'phone', 'number', 'numeric', 'textarea', 'date', 'datetime', 'time',
     'select', 'button_select', 'image_select', 'radio', 'yesno', 'yes_no_na',
@@ -1080,6 +1091,8 @@ export class DynamicInputComponent {
    *  impossible DOB, an out-of-range age) — the value is emitted as null, so
    *  the host must also be told, or an optional field would submit blank. */
   @Output() localErrorChange = new EventEmitter<string | null>();
+  /** DOB field only: true when the emitted DOB came from the age box. */
+  @Output() dobEstimatedChange = new EventEmitter<boolean>();
   private _blocking: string | null = null;
   /** `show` = put it under the field now; a half-typed date blocks submit
    *  but is only SHOWN once the user leaves the box (or submits). */
@@ -1120,7 +1133,7 @@ export class DynamicInputComponent {
     if (!real) { this.setLocalError('Not a valid date (dd/mm/yyyy)'); this.emit(null); return; }
     if (iso > this.todayIso) { this.setLocalError("Date of birth can't be in the future"); this.emit(null); return; }
     this.setLocalError(null);
-    this.emit(iso);
+    this.emitDob(iso, false);
   }
   onDobBlur(): void {
     // A half-typed date is an error once the user leaves the box.
@@ -1133,7 +1146,7 @@ export class DynamicInputComponent {
     this._dobTyping.set(null);
     this._ageText.set(null);
     this.setLocalError(null);
-    this.emit(v || null);
+    this.emitDob(v || null, false);
   }
   openDobPicker(el: HTMLInputElement): void {
     try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
@@ -1239,6 +1252,12 @@ export class DynamicInputComponent {
   emit(v: unknown) {
     this._value.set(v);
     this.valueChange.emit(v);
+  }
+
+  /** `value` is `unknown` (the field can hold any JSON shape); the kit
+   * date/time/datetime inputs need a plain string or null. */
+  asDateStr(v: unknown): string | null {
+    return typeof v === 'string' && v ? v : null;
   }
 
   // ── Phone Input & Country Code Validation ─────────────────────────
@@ -1354,42 +1373,23 @@ export class DynamicInputComponent {
 
   /** Today (yyyy-MM-dd) — caps the DOB picker so a future birth date can't be
    *  chosen (OPS-34). */
-  readonly todayIso = new Date().toISOString().slice(0, 10);
+  readonly todayIso = labToday();   // IST (lab-clock), not UTC's date
 
+  /** The current DOB value's calendar age — the shared patient-age helper,
+   *  so the box shows exactly what every other screen shows. */
+  private readonly partsFromValue = computed(() => ageParts(this._value() ? String(this._value()) : null));
   /** Age implied by the current DOB value (so the age box mirrors the date). */
   readonly ageFromValue = computed<number | null>(() => {
-    const v = this._value();
-    if (!v) return null;
-    const d = new Date(String(v));
-    if (isNaN(d.getTime())) return null;
-    const now = new Date();
-    let a = now.getFullYear() - d.getFullYear();
-    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
-    return a < 0 || a > 150 ? null : a;
+    const y = this.partsFromValue()?.years ?? null;
+    return y == null || y > 150 ? null : y;
   });
-
   /** Whole months implied by the current DOB value (for the Months unit). */
   readonly monthsFromValue = computed<number | null>(() => {
-    const v = this._value();
-    if (!v) return null;
-    const d = new Date(String(v));
-    if (isNaN(d.getTime())) return null;
-    const now = new Date();
-    let m = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-    if (now.getDate() < d.getDate()) m--;
-    return m < 0 || m > 1800 ? null : m;
+    const m = this.partsFromValue()?.totalMonths ?? null;
+    return m == null || m > 1800 ? null : m;
   });
-
   /** Whole days implied by the current DOB value (for the Days unit). */
-  readonly daysFromValue = computed<number | null>(() => {
-    const m = String(this._value() ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    const dob = new Date(+m[1], +m[2] - 1, +m[3]);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const days = Math.round((today.getTime() - dob.getTime()) / 86_400_000);
-    return days < 0 ? null : days;
-  });
+  readonly daysFromValue = computed<number | null>(() => this.partsFromValue()?.totalDays ?? null);
 
   /** Age unit the user picked; null = auto (Days in the first month, Months
    *  under 2 yrs, else Years). */
@@ -1431,7 +1431,15 @@ export class DynamicInputComponent {
     const err = validateAge(age, unit);
     if (err) { this.setLocalError(err); this.emit(null); return; }
     this.setLocalError(null);
-    this.emit(dobFromAge(age, unit)); // yyyy-MM-dd (local date — no UTC shift)
+    this.emitDob(dobFromAge(age, unit), true); // yyyy-MM-dd (local date — no UTC shift)
+  }
+
+  /** A DOB value, plus whether it was ESTIMATED from the age box (the host
+   *  sends `dobEstimated` so the server can tell a real birth date from an
+   *  age-derived one). */
+  emitDob(v: string | null, estimated: boolean): void {
+    this.emit(v);
+    if (v) this.dobEstimatedChange.emit(estimated);
   }
 
   /** Normalise options to `{value,label}` regardless of whether strings or objects are passed. */
@@ -1613,7 +1621,7 @@ export class DynamicInputComponent {
   applicableRange = computed<ReferenceRange | null>(() => {
     const f = this._field();
     if (!f?.referenceRanges || f.referenceRanges.length === 0) return null;
-    const age = this.context?.patientAge;
+    const age = this.context?.patientBandAge ?? this.context?.patientAge;
     return selectReferenceRange(f.referenceRanges, normalizeSex(this.context?.patientSex),
       typeof age === 'number' ? age : null) ?? null;
   });
@@ -1634,7 +1642,7 @@ export class DynamicInputComponent {
     const f = this._field();
     const v = typeof this._value() === 'number' ? this._value() as number : Number(this._value());
     if (!f || this._value() === null || this._value() === undefined || this._value() === '' || Number.isNaN(v)) return 'none';
-    const age = this.context?.patientAge;
+    const age = this.context?.patientBandAge ?? this.context?.patientAge;
     const lf = liveFlag(f, v, normalizeSex(this.context?.patientSex), typeof age === 'number' ? age : null);
     switch (lf?.code) {
       case 'CL': return 'critical_low';

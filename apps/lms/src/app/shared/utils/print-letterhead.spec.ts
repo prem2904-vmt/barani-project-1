@@ -143,6 +143,7 @@ describe('print entry points', () => {
 
   function queue(template: unknown, dialog: unknown, perms: { deliver: boolean } = { deliver: true }) {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(template);
     c.injector = injectorFor(); c.api = api; c.dialog = dialog;
     // Field initialisers don't run under Object.create — the permission gates.
@@ -184,7 +185,9 @@ describe('print entry points', () => {
     await c.printReport(report);
     expect(d.choose).toHaveBeenCalledTimes(1);
     expect(hasHeader(await pdfText(cap.blobs.at(-1)!))).toBe(false);
-    expect(api.post).not.toHaveBeenCalled();
+    // No delivery recorded (the one post is storing the report's PDF — the
+    // first render of a report is stored, whoever prints it).
+    expect(api.post.mock.calls.some(call => String(call[0]).endsWith('/deliver'))).toBe(false);
   });
 
   it('queue Print, setting OFF → no prompt, full header', async () => {
@@ -205,8 +208,8 @@ describe('print entry points', () => {
     Object.defineProperty(c, 'busy', { value: signal(null) });
     Object.defineProperty(c, 'canPrint', { value: () => true });
     c.flash = vi.fn();
-    c._pdfBlob = null; c._pdfInput = null;
-    return { c, posted };
+    c._pdfBlob = null;
+    return { c, posted, api };
   }
 
   it('report viewer Print, setting ON → asks; each choice renders with / without the header', async () => {
@@ -228,10 +231,15 @@ describe('print entry points', () => {
   });
 
   it('report viewer: a letterhead print never poisons the cached on-screen / archive PDF', async () => {
-    const { c, posted } = viewer(tplOn, dialogPicking(PRINT_CHOICE_LETTERHEAD));
+    const { c, posted, api } = viewer(tplOn, dialogPicking(PRINT_CHOICE_LETTERHEAD));
     await c.print();
     await c.archiveReportPdf(report);
-    expect(hasHeader(await pdfText(posted[0]))).toBe(true);
+    // Two stored copies, each its own variant: the letterhead-paper print …
+    const paths = api.post.mock.calls.map(call => String(call[0]));
+    expect(paths).toEqual(['/api/reports/r1/pdf?variant=letterpad', '/api/reports/r1/pdf']);
+    expect(hasHeader(await pdfText(posted[0]))).toBe(false);
+    // … and the on-screen / archive / patient-link copy, WITH the header.
+    expect(hasHeader(await pdfText(posted[1]))).toBe(true);
   });
 
   it('My Work print (report blob print variant): asks when ON, header-less on letterhead paper', async () => {
@@ -260,6 +268,7 @@ describe('digital outputs always carry the header & footer (setting ON)', () => 
 
   it('queue WhatsApp → archived PDF (StoredPdfKey / public QR copy) has the header', async () => {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(tplOn);
     c.injector = injectorFor(); c.api = api; c.dialog = dialogPicking(PRINT_CHOICE_LETTERHEAD);
     c.auth = { user: () => ({ tenantName: LAB }) };
@@ -276,6 +285,7 @@ describe('digital outputs always carry the header & footer (setting ON)', () => 
 
   it('queue Download → the downloaded (native share sheet) + archived PDF have the header', async () => {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(tplOn);
     c.injector = injectorFor(); c.api = api; c.toasts = { error: vi.fn() };
     // Native shell path: the "download" is the share sheet — capture its file.

@@ -1,0 +1,478 @@
+<section class="pf-page pf-oc pf-ov">
+  <!-- The lab's Order & Payments band: product switcher · Patient · Doctor ·
+       ONE search field, results in the one dropdown under the pill. -->
+  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="searchActive()" [customSearch]="true" [back]="true" [backAction]="goBack">
+    <div band-search #pill class="pf-us">
+      <div class="pf-us__tiles" role="group" aria-label="What to search">
+        <!-- 1 · Product switcher (static: it only switches screen). -->
+        <div class="pf-us__tile pf-us__tile--filled pf-ov-product" [class.pf-us__tile--on]="bandMode() === 'product'">
+          <button type="button" class="pf-us__tile-btn" data-product (click)="selectScope('product')"
+                  [attr.aria-pressed]="bandMode() === 'product'" [attr.aria-disabled]="!productSwitchable()"
+                  [title]="productSwitchable() ? 'OPD — switch product' : 'OPD'" [attr.aria-label]="productSwitchable() ? 'OPD, switch product' : 'OPD'">
+            <svg class="pf-us__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 10v6M9 13h6"/></svg>
+            <span class="pf-us__tile-label">OPD</span>
+            @if (productSwitchable()) {
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            }
+          </button>
+        </div>
+        <!-- 2 · Patient · 3 · Doctor (order-create's scope tiles). -->
+        @for (k of ['patient', 'doctor']; track k) {
+          <div class="pf-us__tile" [class.pf-us__tile--on]="bandMode() === k" [class.pf-us__tile--filled]="!!tilePick($any(k))"
+               [class.pf-us__tile--req]="k === 'patient' && patientMissing() && !patientLoading()"
+               [class.pf-us__tile--nudge]="k === 'patient' && patientNudge()">
+            <button type="button" class="pf-us__tile-btn" [attr.data-scope]="k" (click)="selectScope($any(k))"
+                    [attr.aria-pressed]="bandMode() === k" [title]="tileTitle($any(k))" [attr.aria-label]="tileTitle($any(k))">
+              <svg class="pf-us__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                @if (k === 'patient') { <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /> }
+                @else { <path d="M6 3v6a4 4 0 0 0 8 0V3" /><path d="M10 13v2a5 5 0 0 0 10 0v-2" /><circle cx="20" cy="11" r="2" /> }
+              </svg>
+              <span class="pf-us__tile-label">{{ tileLabel($any(k)) }}</span>
+              @if (tilePick($any(k))) { <span class="pf-us__filled-dot" aria-hidden="true"></span> }
+              @if (k === 'patient' && patientMissing() && !patientLoading()) {
+                <span class="pf-us__req" aria-hidden="true"></span><span class="sr-only">(required)</span>
+              }
+            </button>
+            @if (tileClearable($any(k))) {
+              <button type="button" class="pf-us__tile-x" (click)="clearScope($any(k), $event)" [attr.aria-label]="'Clear ' + k">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <span class="pf-us__div" aria-hidden="true"></span>
+
+      <label class="pf-us__field">
+        <svg class="pf-us__glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <span class="sr-only">{{ pillPlaceholder() }}</span>
+        <input #searchInput type="text" class="pf-us__input" autocomplete="off" role="combobox" data-band-search
+               [pfKeys]="pfKeysKind()" pfKeysEnter="Select" pfKeysEnterAria="Select highlighted row" [pfKeysArrows]="true"
+               aria-autocomplete="list" aria-controls="pf-ov-drop" [attr.aria-expanded]="dropOpen()"
+               [value]="pillValue()" [placeholder]="pillPlaceholder()" [disabled]="stage() === 'issued'"
+               (input)="onPillInput($any($event.target).value)" (focus)="onPillFocus()" (blur)="onPillBlur()"
+               (keydown.arrowDown)="onPillArrow($event, 1)" (keydown.arrowUp)="onPillArrow($event, -1)"
+               (keydown.enter)="onPillEnter($event)" (keydown.escape)="onPillEscape()" (keydown.tab)="scopeOpen.set(false)" />
+      </label>
+      @if (pillValue()) {
+        <button type="button" class="pf-us__clear" (click)="onPillInput(''); focusSearchInput()" aria-label="Clear search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      }
+
+      @if (dropOpen()) {
+        <div id="pf-ov-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeTitle()"
+             [style.max-height.px]="dropMaxH()" [style.left.px]="dropBox()?.left" [style.top.px]="dropBox()?.top"
+             [style.width.px]="dropBox()?.width" (keydown.escape)="onPillEscape(); focusSearchInput()">
+          <div class="pf-us__drop-top">
+            <div class="pf-us__drop-head">
+              <span>{{ scopeTitle() }}</span>
+              <button type="button" class="pf-us__drop-esc" (click)="onPillEscape()" aria-label="Close">Esc</button>
+            </div>
+          </div>
+          @switch (patientStatus()) {
+            @case ('hint') { <p class="pf-us__drop-note">Type at least 2 characters: name, phone, MRN or ABHA.</p> }
+            @case ('loading') { <p class="pf-us__drop-note">Searching for “{{ scopeQuery() }}”…</p> }
+            @case ('empty') { <p class="pf-us__drop-note">No patient matches “{{ scopeQuery() }}”.</p> }
+          }
+          @for (r of scopeRows(); track r.key; let i = $index) {
+            <button type="button" class="pf-us__row" role="option" [class.pf-us__row--hl]="i === scopeHighlight()"
+                    [attr.aria-selected]="i === scopeHighlight()" (mouseenter)="scopeHighlight.set(i)" (click)="pickScopeRow(r)">
+              <span class="pf-us__row-text">
+                <span class="pf-us__row-title">{{ r.title }}</span>
+                @if (r.meta) { <span class="pf-us__row-meta">{{ r.meta }}</span> }
+              </span>
+              <span class="pf-us__row-cta">{{ bandMode() === 'product' ? (r.key === 'opd' ? 'Here' : 'Open') : 'Select' }}</span>
+            </button>
+          }
+          @if (bandMode() === 'doctor' && scopeRows().length === 0) {
+            <p class="pf-us__drop-note">No OPD doctor matches “{{ scopeQuery() }}”.</p>
+          }
+          @if (bandMode() === 'patient') {
+            <div class="pf-us__drop-foot">
+              <button type="button" class="pf-us__drop-act" (click)="openScanner()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16" /></svg>
+                Scan ABHA / QR
+              </button>
+              <button type="button" class="pf-us__drop-act" (click)="newPatient()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                Register a new patient
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </pf-hero-band>
+
+  <div class="pf-oc-scrim" [class.pf-oc-scrim--on]="dropOpen()" aria-hidden="true" (click)="closeScope()"></div>
+
+  <!-- Phone: the picks the compact tiles hide, as removable chips (order-create). -->
+  @if (patient() || doctor()) {
+    <div class="pf-oc-picks" role="group" aria-label="Visit details">
+      @for (k of ['patient', 'doctor']; track k) {
+        @if (tilePick($any(k))) {
+          <span class="pf-oc-pick">
+            <button type="button" class="pf-oc-pick__btn" (click)="selectScope($any(k))" [attr.aria-label]="'Change ' + k + ': ' + tilePick($any(k))">
+              <span>{{ tilePick($any(k)) }}</span>
+            </button>
+            @if (tileClearable($any(k))) {
+              <button type="button" class="pf-oc-pick__x" (click)="clearScope($any(k), $event)" [attr.aria-label]="'Clear ' + k">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            }
+          </span>
+        }
+      }
+    </div>
+  }
+
+  @if (patientNudge() && !patient()) {
+    <p class="pf-oc-need" role="alert">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+      Pick the patient for this visit first: search above, or register a new patient.
+    </p>
+  }
+
+  <div class="pf-page__body pf-oc-body" [class.pf-oc-body--split]="isLg()">
+    @if (loadError(); as err) {
+      <div class="pf-oc-cat"><p class="pf-empty-line">The OPD desk could not load. {{ err }}</p></div>
+    } @else {
+    <!-- ══ Left work card: NEW VISIT — header like BILLING, then two inner
+         panels: Doctor (tabs, chips, the tile grid) | Visit purpose ══ -->
+    <div class="pf-oc-cat pf-ov-main" aria-label="New visit">
+      <header class="pf-oc-bill__head pf-ov-head">
+        <span class="pf-oc-bill__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg>
+        </span>
+        <span class="pf-oc-bill__title">NEW VISIT</span>
+        <span class="pf-oc-bill__spacer"></span>
+        <span class="pf-ov-head__date nd-num" data-date>OPD · {{ today() }}</span>
+      </header>
+
+      <div class="pf-ov-panes">
+        <!-- Doctor panel -->
+        <section class="pf-ov-pane" data-pane="doctor" aria-label="Doctor">
+          <div class="pf-dept-hdr pf-ov-pane__hdr"><span class="pf-dept-hdr__name">Doctor</span><span class="pf-dept-hdr__count">{{ filteredDoctors().length }}</span></div>
+          <div class="pf-oc-cat__head pf-ov-pane__tabs">
+            <div class="pf-tabs pf-no-print" role="tablist" aria-label="Doctors">
+              @for (tab of doctorTabs; track tab.id) {
+                <button type="button" class="pf-tabs__btn" [class.pf-tabs__btn--on]="doctorTab() === tab.id" role="tab"
+                        [attr.aria-selected]="doctorTab() === tab.id" (click)="setDoctorTab(tab.id)"
+                        [attr.aria-label]="tab.label + ' · ' + tabCounts()[tab.id]">
+                  <span class="pf-tabs__label">{{ tab.label }}</span>
+                  @if (tabCounts()[tab.id] > 0) { <span class="pf-tabs__count">{{ tabCounts()[tab.id] }}</span> }
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="pf-deptpills pf-no-print pf-ov-chips" role="group" aria-label="Filter doctors">
+            @if (departments().length > 0) {
+              <button type="button" class="pf-deptpill" [attr.aria-pressed]="!deptFilterId()" (click)="filterByDepartment(null)">All</button>
+              @for (dep of departments(); track dep.id) {
+                <button type="button" class="pf-deptpill" [attr.aria-pressed]="deptFilterId() === dep.id" (click)="filterByDepartment(dep)">
+                  <span class="pf-deptpill__name">{{ dep.name }}</span>
+                </button>
+              }
+            }
+            <span class="pf-ov-chips__spacer" aria-hidden="true"></span>
+            <button type="button" class="pf-deptpill pf-ov-freechip" data-free [attr.aria-pressed]="freeOnly()" (click)="toggleFreeOnly()">
+              <span class="pf-ov-dot" data-tone="free" aria-hidden="true"></span>
+              <span class="pf-deptpill__name">Free now</span>
+            </button>
+          </div>
+
+          <div class="pf-oc-cat__list pf-ov-list">
+            @if (!data()) {
+              <pf-skeleton-rows [rows]="8" [avatar]="false" [dense]="true" label="Loading the OPD desk…"></pf-skeleton-rows>
+            } @else {
+              <div class="flex flex-col gap-5">
+                @for (g of doctorGroups(); track g.key) {
+                  <div data-dept-group [attr.data-dept]="g.key">
+                    <div class="pf-dept-hdr"><span class="pf-dept-hdr__name">{{ g.name }}</span><span class="pf-dept-hdr__count">{{ g.doctors.length }}</span></div>
+                    <div class="pf-ov-grid" role="radiogroup" [attr.aria-label]="g.name">
+                      @if (g.anyTile && g.dept; as dep) {
+                        <!-- Explicit — never a silent auto-pick just from choosing a department. -->
+                        <div class="pf-crow pf-ov-doc pf-ov-anydept" [class.pf-crow--in]="mode() === 'department' && departmentId() === dep.id && !!doctorId()">
+                          <button type="button" class="pf-crow__main" (click)="pickAnyInDepartment(dep)">
+                            <span class="pf-ov-avatar pf-ov-avatar--dept" aria-hidden="true">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 4a3 3 0 0 1 0 6M21 20v-1a5 5 0 0 0-3-4.6"/></svg>
+                            </span>
+                            <span class="pf-ov-txt">
+                              <span class="pf-ov-name">Any doctor in {{ dep.name }}</span>
+                              <span class="pf-ov-meta">Shortest queue · {{ deptDoctorsText(dep) }}</span>
+                              <span class="pf-ov-meta pf-ov-avail nd-num"><span class="pf-ov-dot" [attr.data-tone]="waitTone(anyWait(g))" aria-hidden="true"></span>{{ waitText(anyWait(g)) }}</span>
+                            </span>
+                          </button>
+                        </div>
+                      }
+                      @for (d of g.doctors; track d.id) {
+                        <div class="pf-crow pf-ov-doc" [class.pf-crow--in]="doctorId() === d.id" [class.pf-ov-doc--away]="d.sitsToday === false">
+                          <button type="button" class="pf-crow__main" role="radio" [attr.aria-checked]="doctorId() === d.id" (click)="pickDoctor(d)">
+                            <span class="pf-ov-avatar" aria-hidden="true">{{ initials(d.name) }}</span>
+                            <span class="pf-ov-txt">
+                              <span class="pf-ov-name">{{ d.name }}</span>
+                              <span class="pf-ov-meta">{{ d.department || 'OPD' }}</span>
+                              <span class="pf-ov-meta pf-ov-avail nd-num">
+                                @if (d.sitsToday === false) {
+                                  <span class="pf-ov-dot" data-tone="away" aria-hidden="true"></span>Not in today{{ d.nextSitting ? ' · next ' + dayName(d.nextSitting) : '' }}
+                                } @else {
+                                  <span class="pf-ov-dot" [attr.data-tone]="waitTone(d)" aria-hidden="true"></span>{{ waitText(d) }}
+                                }
+                              </span>
+                            </span>
+                            @if (d.fee != null) { <span class="pf-price">{{ d.fee | inr }}</span> }
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                } @empty {
+                  <p class="pf-empty-line">
+                    @if (doctors().length) { No doctors match. Try All doctors, All departments or turn off Free now. }
+                    @else { No doctors are set up for OPD yet. An admin adds them under OPD settings. }
+                  </p>
+                }
+              </div>
+            }
+          </div>
+        </section>
+
+        <!-- Visit purpose panel: always there; the doctor's services as tiles. -->
+        <section class="pf-ov-pane pf-ov-pane--purpose" data-purpose aria-label="Visit purpose">
+          <div class="pf-dept-hdr pf-ov-pane__hdr"><span class="pf-dept-hdr__name">Visit purpose</span>@if (doctor()) { <span class="pf-dept-hdr__count">{{ services().length }}</span> }</div>
+          <div class="pf-ov-pane__body">
+            @if (doctor(); as doc) {
+              <div class="pf-ov-who">
+                <span class="pf-ov-name">{{ doc.name }}</span>
+                <span class="pf-ov-meta">{{ doc.department || 'OPD' }}@if (lastVisitText(); as lv) { · last visit {{ lv }} }</span>
+              </div>
+              @if (quoting() && !quote()) {
+                <pf-skeleton-rows [rows]="2" [avatar]="false" [dense]="true" label="Loading fees…"></pf-skeleton-rows>
+              } @else {
+                <div class="pf-ov-svcs" role="radiogroup" aria-label="Visit purpose">
+                  @for (s of services(); track s.serviceId ?? 'fee') {
+                    <div class="pf-crow pf-ov-svc" [class.pf-crow--in]="serviceId() === s.serviceId">
+                      <button type="button" class="pf-crow__main" role="radio" [attr.aria-checked]="serviceId() === s.serviceId" (click)="pickService(s)">
+                        <span class="pf-crow__check pf-ov-radio" aria-hidden="true">
+                          @if (serviceId() === s.serviceId) { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg> }
+                        </span>
+                        <span class="pf-ov-txt">
+                          <span class="pf-ov-name">{{ s.name }}@if (s.isFollowUp) { (follow-up) }</span>
+                          <span class="pf-ov-meta">{{ serviceMeta(s) }}</span>
+                        </span>
+                        <span class="pf-price">
+                          @if (s.isFollowUp && s.price !== s.quoted) { <s class="pf-ov-strike">{{ s.price | inr }}</s> }{{ s.quoted | inr }}
+                        </span>
+                      </button>
+                    </div>
+                  } @empty {
+                    <p class="pf-empty-line">No visit types are set up for this doctor yet.</p>
+                  }
+                </div>
+                <label class="nd-field pf-ov-complaint">
+                  <span class="nd-field__lbl">Complaint / reason <span class="pf-ov-muted">· optional, goes to the doctor</span></span>
+                  <input class="nd-input" type="text" maxlength="500" [value]="purpose()" (input)="purpose.set($any($event.target).value)"
+                         placeholder="e.g. Nasal block for 10 days" />
+                </label>
+              }
+            } @else {
+              <p class="pf-empty-line" data-purpose-empty>Pick a doctor to see their visit types.</p>
+            }
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ══ Right: BILLING — a persistent column at lg+, a sheet below ══ -->
+    @if (isLg()) {
+      <aside class="pf-oc-bill pf-ov-bill" aria-label="Billing">
+        <ng-container *ngTemplateOutlet="billBody"></ng-container>
+      </aside>
+    }
+    }
+  </div>
+
+  <!-- Phone + iPad portrait: the order-create cart bar → the billing sheet. -->
+  @if (!isLg() && data() && itemCount() > 0 && !cartOpen() && stage() !== 'issued') {
+    <div class="pf-cartbar">
+      <button type="button" class="pf-cartbar__inner press" (click)="toggleCart()" [attr.aria-label]="'Review and pay, ' + itemCount() + ' items'">
+        <span class="pf-cartbar__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>
+          <span class="pf-cartbar__badge">{{ itemCount() }}</span>
+        </span>
+        <span class="pf-cartbar__info"><span class="pf-cartbar__line1">{{ itemCount() }} item{{ itemCount() === 1 ? '' : 's' }} · {{ preview().total | inr }}</span></span>
+        <span class="pf-cartbar__cta">Review &amp; Pay
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
+        </span>
+      </button>
+    </div>
+  }
+  @if (!isLg() && (cartOpen() || stage() === 'issued')) {
+    <div class="pf-cart-backdrop" (click)="closeCart()"></div>
+    <aside class="pf-cart-drawer pf-cart-drawer--tall pf-ov-bill" aria-label="Billing">
+      <span class="pf-sheet-handle" aria-hidden="true"></span>
+      @if (stage() !== 'issued') {
+        <button type="button" class="pf-cart-drawer__close press" (click)="closeCart()" aria-label="Close billing">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      }
+      <ng-container *ngTemplateOutlet="billBody"></ng-container>
+    </aside>
+  }
+
+  <!-- BILLING body (order-create's designer panel): header · lines · total · footer. -->
+  <ng-template #billBody>
+    <header class="pf-oc-bill__head">
+      <span class="pf-oc-bill__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>
+      </span>
+      <span class="pf-oc-bill__title">BILLING</span>
+      <span class="pf-oc-bill__spacer"></span>
+    </header>
+
+    <div class="pf-oc-bill__body">
+      @if (stage() === 'build') {
+        <div class="pf-oc-phase pf-oc-phase--cart" data-phase="cart">
+          <div class="pf-oc-bill__meta">
+            <span>{{ itemCount() }} item{{ itemCount() === 1 ? '' : 's' }}</span>
+            <span class="pf-oc-bill__spacer"></span>
+            @if (patient() || doctorId()) { <button type="button" class="pf-oc-textbtn" (click)="discardDraft()">Discard draft</button> }
+          </div>
+
+          @if (duplicateVisit(); as dup) {
+            <div class="pf-cart-dup" role="alert">
+              <p class="pf-cart-dup__msg">Already booked today — token {{ dup.tokenLabel }} with {{ dup.doctorName }} ({{ dup.status === 'in_consult' ? 'in consult' : dup.status }}).
+                <a class="pf-oc-textbtn" [routerLink]="['/opd/visit', dup.id]">Open that visit</a></p>
+            </div>
+          }
+
+          <ul class="pf-cart-list pf-cart-list--compact">
+            @if (!service()) {
+              <li class="pf-cart-empty">Nothing on the bill yet. Pick the doctor and the visit purpose.</li>
+            }
+            @if (service(); as s) {
+              <!-- The consult line: the fee is EDITABLE in place (desk override). -->
+              <li class="pf-crt pf-crt--wrap" data-line="consult">
+                <div class="pf-crt__line">
+                  <span class="pf-crt__name pf-ov-wrap">{{ lineName() }}</span>
+                  @if (overrideOpen()) {
+                    <span class="pf-ov-fee">
+                      <span class="pf-ov-fee__cur" aria-hidden="true">₹</span>
+                      <input #feeInput class="pf-ov-fee__in nd-num" type="text" inputmode="decimal" aria-label="Fee charged (₹)" data-fee-input
+                             [class.pf-ov-fee__in--err]="overrideInvalid() || overrideAboveRule()" [attr.aria-invalid]="overrideInvalid() || overrideAboveRule()"
+                             [value]="overrideRaw()" (input)="onOverride($any($event.target).value)" (keydown)="onFeeKey($event)" />
+                    </span>
+                  } @else {
+                    <button type="button" class="pf-ov-feebtn nd-num" data-fee (click)="openOverride()" [attr.aria-label]="'Fee ' + preview().opd.subTotal + ' rupees — change the amount'">
+                      {{ preview().opd.subTotal | inr }}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    </button>
+                  }
+                </div>
+                <p class="pf-cart-meta">{{ lineMeta() }}
+                  @if (overridden() || overrideOpen()) { · <button type="button" class="pf-oc-textbtn" (click)="clearOverride()">Use rule</button> }
+                </p>
+                @if (overrideOpen() || overridden()) {
+                  <label class="nd-field pf-ov-reason">
+                    <span class="nd-field__lbl">Reason <span class="pf-ov-muted">· set at the desk, printed on the bill</span></span>
+                    <input class="nd-input" type="text" maxlength="300" [value]="overrideReason()" (input)="overrideReason.set($any($event.target).value)"
+                           (keydown.enter)="closeOverride()" placeholder="e.g. Senior citizen" />
+                  </label>
+                }
+                @if (overrideAboveRule()) {
+                  <p class="pf-field-error" role="alert">Only a billing admin can charge more than the fee rule (₹{{ s.quoted }}).</p>
+                } @else if (overrideInvalid()) {
+                  <p class="pf-field-error" role="alert">Enter the amount in rupees, e.g. 350.</p>
+                }
+                @if (s.isFollowUp) {
+                  <p class="pf-cart-meta">Follow-up with {{ doctor()?.name }} within {{ s.followUpWithinDays }} days.</p>
+                } @else if (s.followUpWithinDays) {
+                  <p class="pf-cart-meta">Back to {{ doctor()?.name }} within {{ s.followUpWithinDays }} days: follow-up fee {{ (s.followUpFee ?? 0) | inr }}.</p>
+                }
+              </li>
+            }
+          </ul>
+
+          <p class="pf-oc-bill__hint pf-ov-note">
+            @if (payFirst()) { <strong>Pay at booking.</strong> The token is issued after payment, {{ nextStepText() }} }
+            @else { <strong>Pay after the consult.</strong> The token is issued now, {{ nextStepText() }} }
+          </p>
+        </div>
+      } @else if (stage() === 'pay') {
+        <div class="pf-oc-phase pf-oc-phase--pay pf-oc-phase--rise" data-phase="pay">
+          <button type="button" class="pf-oc-sum press" (click)="backToBuild()" [attr.aria-label]="'Bill: ' + itemCount() + ' items. Edit'">
+            <span class="pf-oc-sum__text">{{ itemCount() }} item{{ itemCount() === 1 ? '' : 's' }} · {{ preview().total | inr }}</span>
+            <span class="pf-oc-bill__spacer"></span>
+            <span class="pf-oc-sum__edit">Edit</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
+          <pf-inline-payment-panel [amount]="preview().total" [allowLater]="false" [externalFooter]="true"
+                                   [busy]="submitting()" [patientPhone]="patient()?.phone" (confirm)="onPaid($event)"></pf-inline-payment-panel>
+        </div>
+      } @else if (issued(); as v) {
+        <!-- Token issued (the lab's "Payment recorded"): next = Record vitals. -->
+        <div class="pf-paid" data-issued>
+          <p class="pf-paid__msg">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>
+            Token {{ v.tokenLabel }} issued
+          </p>
+          <div class="pf-paid__summary">
+            <div class="pf-paid__sumline"><span>Patient</span><span>{{ v.patient.name }}</span></div>
+            <div class="pf-paid__sumline"><span>Doctor</span><span>{{ v.doctor.name }}</span></div>
+            @if (v.bill; as b) {
+              <div class="pf-paid__sumline"><span>Paid</span><span class="tabular-nums">{{ b.totalPaid | inr }}</span></div>
+              @if (b.balance > 0) { <div class="pf-paid__sumline pf-paid__sumline--due"><span>Balance due</span><span class="tabular-nums">{{ b.balance | inr }}</span></div> }
+            }
+            @if (v.labOrder; as lo) { <div class="pf-paid__sumline"><span>Lab order</span><span class="nd-num">{{ lo.orderNumber }}</span></div> }
+          </div>
+          <div class="pf-oc-paid-acts">
+            <button type="button" class="pf-oc-act press" [disabled]="printing()" [pfBusy]="printing()" (click)="printToken()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6" /><path d="M6 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1" /><path d="M7 14h10v7H7z" /></svg>
+              Token slip
+            </button>
+            <button type="button" class="pf-oc-act press" (click)="openVisit()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8" /></svg>
+              Open visit
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <footer class="pf-oc-bill__foot pf-oc-bill__foot--sticky" [class.pf-oc-bill__foot--cart]="stage() === 'build'">
+      @if (stage() === 'build') {
+        <div class="pf-oc-foot-total">
+          <span>Total</span>
+          <span class="tabular-nums" data-total>{{ preview().total | inr }}</span>
+        </div>
+        <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" [disabled]="submitting()" (click)="saveDraftAndExit()">Save as draft</button>
+        <button type="button" class="pf-oc-btn pf-oc-btn--primary press" data-cta [disabled]="submitting() || !service()"
+                [pfBusy]="submitting()" (click)="continueToPayment()">
+          {{ ctaLabel() }}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
+        </button>
+      } @else if (stage() === 'pay') {
+        <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" [disabled]="submitting()" (click)="backToBuild()">Back</button>
+        <button type="button" class="pf-oc-btn pf-oc-btn--primary press" data-cta [disabled]="payPanel()?.confirmDisabled()"
+                [pfBusy]="submitting()" pfBusyLabel="Confirming payment…" (click)="payPanel()?.emit()">
+          {{ payPanel()?.confirmLabel() ?? 'Confirm' }}
+        </button>
+      } @else {
+        <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" (click)="startNewVisit()">New visit</button>
+        @if (vitalsNext()) {
+          <button type="button" class="pf-oc-btn pf-oc-btn--primary press" data-cta data-vitals (click)="recordVitals()">
+            Record vitals
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
+          </button>
+        }
+      }
+    </footer>
+  </ng-template>
+</section>
+
+@if (scanning()) {
+  <pf-barcode-scanner-modal title="Scan patient ABHA / QR" (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
+}

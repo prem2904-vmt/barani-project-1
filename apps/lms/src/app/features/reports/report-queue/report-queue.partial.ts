@@ -1,6 +1,7 @@
 import type { Order, OrderSample, OrderTest } from '../../../shared/models/order.model';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { plural } from '../../../shared/utils/plural';
+import { isSignedOrSkipped, NOT_REPORTED } from '../../../shared/utils/line-status';
 
 /**
  * Reports list — the PARTIAL tab's model (docs/ND-PATTERN.md → "Reports list").
@@ -65,6 +66,9 @@ export interface PrelimOrder {
   patientMeta: string;
   /** For the search box. */
   searchText: string;
+  /** The order's daily patient number (on-screen only). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   totalDepts: number;
   readyDepts: number;
   partialDepts: number;
@@ -151,6 +155,7 @@ export function pendingStatus(t: OrderTest, sample: Pick<OrderSample, 'status'>,
   const s = (t.status ?? '').toLowerCase();
   if (s === 'validated') return 'Validated · prints when the rest of its tube is validated';
   if (s === 'rejected') return 'Rejected';
+  if (s === NOT_REPORTED) return 'Not reported';
   if (culture) {
     const done = cultureStagesDone(t.currentResult);
     if (s === 'entered' || s === 'resulted') return 'Culture awaiting sign-out';
@@ -194,7 +199,10 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
   for (const o of orders) {
     const samples = (o.samples ?? []).filter(s => s.status !== 'rejected');
     if (samples.length === 0) continue;
-    const readySamples = samples.filter(s => (s.tests ?? []).length > 0 && s.tests.every(t => t.status === 'validated'));
+    // A line closed as NOT REPORTED is done (it never prints) — same rule as
+    // the server's partial eligibility.
+    const readySamples = samples.filter(s => (s.tests ?? []).some(t => t.status === 'validated')
+      && s.tests.every(t => isSignedOrSkipped(t.status)));
     if (readySamples.length === 0 || readySamples.length === samples.length) continue;
     const readyIds = new Set(readySamples.map(s => s.id));
 
@@ -209,6 +217,7 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       }
       const ready = readyIds.has(s.id);
       for (const t of s.tests ?? []) {
+        if (t.status === NOT_REPORTED) continue;   // never prints, never listed
         const culture = isCultureTest(t);
         d.tests.push({
           id: t.id,
@@ -243,6 +252,8 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       id: o.id,
       patientName: name,
       patientMeta: meta,
+      dailyNo: o.dailyNo ?? null,
+      dailyNoDay: o.dailyNoDay ?? null,
       searchText: [name, p?.mrn, p?.phone, o.orderNumber, o.id].filter(Boolean).join(' ').toLowerCase(),
       totalDepts: all.length,
       readyDepts,

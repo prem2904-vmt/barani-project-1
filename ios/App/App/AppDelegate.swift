@@ -12,6 +12,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // a Reply typed on the lock screen may be what launched us, and it is
         // handled natively (ChatReply.swift) without the web UI.
         ChatNotificationCenter.shared.install()
+        // CallKit answer / decline → the server, natively (CallAnswerNative.swift):
+        // a lock-screen AUDIO answer leaves the web app suspended.
+        CallAnswerNative.shared.install()
         return true
     }
 

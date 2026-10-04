@@ -18,6 +18,7 @@ import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../core/navigation/zoom.directive';
 import { ApiError } from '../../shared/models/api-response.model';
 import { Bill } from '../../shared/models/bill.model';
+import { payBillFromWallet } from '../../shared/utils/wallet-payment';
 import { billRoundOff } from '../../shared/utils/bill-math';
 import { Order } from '../../shared/models/order.model';
 import { Patient, formatPatientMeta, patientDisplayName } from '../../shared/models/patient.model';
@@ -29,11 +30,18 @@ import { CollectBandButtonComponent } from '../../shared/components/collect-band
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonRowsComponent, SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../shared/utils/min-duration';
 import {
   InlinePaymentPanelComponent, InlinePaymentResult,
 } from '../frontdesk/order-create/inline-payment-panel.component';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../frontdesk/billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../frontdesk/billing/invoice-pdf';
 import { environment } from '../../../environments/environment';
+import { phoneMatches } from '../../shared/utils/indian-phone';
+import { labToday } from '../../shared/utils/lab-clock';
+import { matchesDailyNo } from '../../shared/utils/daily-no';
+import { DailyNoComponent } from '../../shared/components/daily-no/daily-no.component';
 
 /** One row of GET /api/billing/outstanding — a bill with money still moving
  *  (balance > 0 → patient owes; balance < 0 → lab owes a refund). */
@@ -86,6 +94,9 @@ export interface QueueRow {
   name: string;
   /** Order number (the token the patient carries), when known. */
   orderLabel: string | null;
+  /** The order's daily patient number (on-screen only), when known. */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   /** Tests on the order, once the order has been read. */
   tests: number | null;
   /** What they still owe. */
@@ -184,9 +195,11 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
   selector: 'pf-billing-counter',
   standalone: true,
   imports: [
+    DailyNoComponent,
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
     InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
+    BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, SkeletonTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './billing-counter.component.html',
@@ -273,6 +286,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _due = signal<OutstandingRow[]>([]);
   private readonly _refundsOwed = signal<OutstandingRow[]>([]);
   protected readonly loadingOutstanding = signal(false);
+  /** Skeleton flag for the queue / balances (held so it never flashes). */
+  protected readonly outstandingSkel = heldFlag(this.loadingOutstanding);
   private outstandingLoaded = false;
   /** Balances due — a balance deferred here this session reads as Pay later
    *  even before the server's flag comes back. */
@@ -333,7 +348,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _laterIds = signal<ReadonlySet<string>>(new Set());
 
   private loadToday() {
-    this.api.get<Order[]>('/api/orders/today').subscribe({
+    // Summary view: the counter reads statuses + billing, never line results.
+    this.api.get<Order[]>('/api/orders/today?view=summary').subscribe({
       next: list => { this._today.set(list ?? []); this.enrich(); },
       error: () => { /* no view_order: the queue still has every bill due */ },
     });
@@ -380,6 +396,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
         orderId: r.orderId, billId: r.billId, patientId: r.patientId,
         name: r.patientName?.trim() || patientDisplayName(o?.patient) || 'Unnamed patient',
         orderLabel: o?.orderNumber || null,
+        dailyNo: o?.dailyNo ?? null, dailyNoDay: o?.dailyNoDay ?? null,
         tests: o ? orderTestCount(o) : null,
         amount: r.balance,
         since: o?.createdAt || r.createdAt,
@@ -395,6 +412,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
         orderId: o.id, billId: null, patientId: o.patientId,
         name: patientDisplayName(o.patient) || 'Unnamed patient',
         orderLabel: o.orderNumber || null,
+        dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
         tests: orderTestCount(o),
         amount: o.totalAmount ?? 0,
         since: o.createdAt,
@@ -405,17 +423,19 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     return rows.sort((a, b) => new Date(a.since).getTime() - new Date(b.since).getTime());
   });
 
-  /** The pill filters the queue as you type (name, phone, MRN, order no.). */
+  /** The pill filters the queue as you type (name, phone, MRN, order no.,
+   *  today's daily number "12" / "#12"). */
   readonly filteredQueue = computed<QueueRow[]>(() => {
     const q = this.query().trim().toLowerCase();
     const all = this.queue();
     if (!q) return all;
     const digits = q.replace(/\D/g, '');
     return all.filter(r =>
-      r.name.toLowerCase().includes(q)
+      matchesDailyNo(q, r)
+      || r.name.toLowerCase().includes(q)
       || (r.orderLabel ?? '').toLowerCase().includes(q)
       || (r.mrn ?? '').toLowerCase().includes(q)
-      || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits))
+      || phoneMatches(r.phone, digits)   // last 10 digits for a full number, else partial
       || r.orderId.toLowerCase().startsWith(q));
   });
 
@@ -470,11 +490,12 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   protected readonly reconcileDate = signal(BillingCounterComponent.todayIso());
   private readonly _reconcile = signal<ReconcileSummary | null>(null);
   protected readonly loadingReconcile = signal(false);
+  protected readonly reconcileSkel = heldFlag(this.loadingReconcile);
   readonly reconcile = this._reconcile.asReadonly();
 
+  /** Today's business date for the day-end reconcile — strictly IST. */
   static todayIso(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return labToday();
   }
 
   setReconcileDate(date: string | null) {
@@ -713,6 +734,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _selectedPatient = signal<Patient | null>(null);
   private readonly _orders = signal<Order[]>([]);
   readonly loadingOrders = signal(false);
+  readonly ordersSkel = heldFlag(this.loadingOrders);
   readonly selectedPatient = this._selectedPatient.asReadonly();
   readonly billableOrders = computed(() => this._orders().filter(o => this.isBillable(o)));
 
@@ -720,6 +742,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   readonly selectedOrder = signal<Order | null>(null);
   readonly selectedBill = signal<Bill | null>(null);
   readonly loadingOrder = signal(false);
+  readonly orderSkel = heldFlag(this.loadingOrder);
   private orderSeq = 0;
 
   /** Narrow: something is open in the Billing pane (the cart or a patient). */
@@ -940,12 +963,10 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       let latest: Bill = bill;
       if (d.mode === 'wallet') {
         if (!d.vendorId) throw new Error('Pick a vendor to bill');
-        await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-          amount, billId: bill.id, reason: `Bill #${bill.invoiceNumber || bill.id.substring(0, 8)}`,
-        }));
-        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-          amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId,
-        }));
+        // H8: ONE call — the payment and the partner's charge commit together.
+        latest = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, amount, {
+          referenceNo: d.referenceNo, reason: `Bill #${bill.invoiceNumber || bill.id.substring(0, 8)}`,
+        }))).bill;
       } else if (d.mode === 'split' && d.splitParts?.length) {
         for (const part of d.splitParts) {
           if (!(part.amount > 0)) continue;
@@ -1101,7 +1122,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined,
           email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
         },
         action: 'print',
       });

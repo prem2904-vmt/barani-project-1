@@ -91,6 +91,25 @@ describe('ChatService — foreground reporting for push suppression', () => {
     vis.mockRestore();
   });
 
+  it('native app going inactive reports "not viewing" at once, and resuming reports the thread again', async () => {
+    const t = setup(ENDPOINT);
+    await t.chat.connect();
+    t.chat.registerViewer('reader', () => ['c1']);
+    await vi.waitFor(() => expect(t.reports().at(-1)).toEqual([true, ['c1'], ENDPOINT]));
+
+    // Minimised: the web view may still claim "visible" (kept alive in the
+    // background) — the native state wins, and the report goes out in the
+    // same tick (no debounce / await the OS could freeze in between).
+    const before = t.reports().length;
+    t.chat.appActiveChanged(false);
+    expect(t.reports().length).toBe(before + 1);
+    expect(t.reports().at(-1)).toEqual([false, [], ENDPOINT]);
+    expect(t.chat.viewedConversationIds()).toEqual([]);
+
+    t.chat.appActiveChanged(true);
+    await vi.waitFor(() => expect(t.reports().at(-1)).toEqual([true, ['c1'], ENDPOINT]));
+  });
+
   it('with no push subscription there is nothing to suppress — no report', async () => {
     const t = setup(null);
     await t.chat.connect();

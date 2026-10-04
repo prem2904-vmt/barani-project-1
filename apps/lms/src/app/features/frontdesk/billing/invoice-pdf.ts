@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { Bill } from "../../../shared/models/bill.model";
 import { billRoundOff } from "../../../shared/utils/bill-math";
 import { Order } from "../../../shared/models/order.model";
+import { formatAge } from "../../../shared/utils/patient-age";
 
 /**
  * Generate a professional A4 PDF invoice directly with jsPDF (sharp, searchable,
@@ -184,7 +185,7 @@ export function generateInvoicePdf(rawInput: InvoicePdfInput): string | void {
   doc.setTextColor(TEXT_MUTED);
   let by = y + 30;
   const ageSex = [
-    patient?.age != null ? `${patient.age}y` : "",
+    formatAge(patient, "y"),
     patient?.sex ?? "",
   ]
     .filter(Boolean)
@@ -628,7 +629,7 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   const { bill, order, invoiceNumber, effectivePayable } = input;
   const patient = order?.patient;
   const ageSex = [
-    patient?.age != null ? String(patient.age) : "",
+    formatAge(patient, "num"),
     patient?.sex ?? "",
   ]
     .filter(Boolean)
@@ -1412,7 +1413,7 @@ function formatDateTime(iso: string | undefined | null): string {
 }
 
 /** Integer rupees → English words, Indian numbering (lakh/crore). */
-function numberToWordsINR(num: number): string {
+export function numberToWordsINR(num: number): string {
   if (!isFinite(num) || num <= 0) return "Zero";
   const ones = [
     "",
@@ -1502,6 +1503,20 @@ export function invoiceTemplateFieldsFrom(
     jurisdiction: (tpl["jurisdiction"] as string) || undefined,
     declaration: (tpl["declaration"] as string) || undefined,
   };
+}
+
+/** The GSTIN an invoice prints: the BILL's GST snapshot (bills.SupplierGstin,
+ *  taken from the branch's GST config when the bill was raised; the server
+ *  fills old bills from the branch config). Never the invoice template —
+ *  the branch GST config is the only GST source. The template's "Show
+ *  GSTIN" toggle still hides it. */
+export function invoiceGstinFrom(
+  bill: { supplierGstin?: string | null } | null | undefined,
+  tpl: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (tpl?.["showGstin"] === false) return undefined;
+  const g = (bill?.supplierGstin ?? "").trim();
+  return g || undefined;
 }
 
 /** Fetch an image URL and return a PNG/JPEG data URL for jsPDF.addImage (which

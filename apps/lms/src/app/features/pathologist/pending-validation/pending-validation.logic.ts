@@ -1,15 +1,25 @@
 import { OrderTest } from '../../../shared/models/order.model';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
+import {
+  OrderPriority, PRIORITY_RANK, TatState, formatDuration, linePriority, tatInfo, tatStateFor,
+} from '../../../shared/utils/lab-priority';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 /**
  * Pathologist queue (/pathologist) — the pure model behind the screen, so the
- * rules are testable without a DOM: TAT urgency, one tile per TUBE, the ONE
- * status word per tile, the department filter and "Review next".
+ * rules are testable without a DOM: order priority (Urgent / Normal — the
+ * lab has no other), the TAT clock, one tile per TUBE, the ONE status word
+ * per tile, the department filter and "Review next".
  */
 
-export type Level = 'urgent' | 'high' | 'normal';
-export type Enriched = OrderTest & { _level: Level; _remainingMin: number };
+export type Enriched = OrderTest & {
+  /** The ORDER's priority (urgent / STAT → urgent; everything else normal). */
+  _priority: OrderPriority;
+  _tat: TatState;
+  /** Minutes to TAT due (negative = overdue); null = no clock. */
+  _remainingMin: number | null;
+};
 
 /** The caller's consultant scope (GET /api/validation/scope). */
 export interface ValidationScope {
@@ -34,8 +44,9 @@ export interface QueueTile {
   patientMeta: string;
   items: Enriched[];
   testNames: string[];
-  level: Level;
-  remainingMin: number;
+  priority: OrderPriority;
+  tat: TatState;
+  remainingMin: number | null;
   anyCritical: boolean;
   mine: boolean;
 }
@@ -43,7 +54,9 @@ export interface QueueTile {
 export type StatusTone = 'red' | 'amber' | 'green';
 export interface TileStatus { key: 'critical' | 'overdue' | 'due' | 'ontime'; label: string; tone: StatusTone }
 
-const RANK: Record<Level, number> = { urgent: 0, high: 1, normal: 2 };
+/** Soonest due first; no clock last. */
+const byDue = (a: { remainingMin: number | null }, b: { remainingMin: number | null }) =>
+  ((a.remainingMin ?? Infinity) - (b.remainingMin ?? Infinity)) || 0;
 
 export function isCritical(t: OrderTest): boolean {
   if (!t.currentResult) return false;
@@ -53,15 +66,11 @@ export function isCritical(t: OrderTest): boolean {
   } catch { return false; }
 }
 
-/** TAT from lab receipt: overdue = urgent, ≤ 60 min left = high. */
+/** Priority from the order; TAT clock from lab receipt + the test's budget. */
 export function enrich(rows: OrderTest[], now: number = Date.now()): Enriched[] {
   return rows.map(t => {
-    const ral = t.subOrder?.receivedAtLab;
-    const budget = (t.test?.tatHours ?? 0) * 60;
-    const elapsed = ral ? (now - new Date(ral).getTime()) / 60000 : 0;
-    const remaining = budget - elapsed;
-    const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-    return { ...t, _level: level, _remainingMin: remaining };
+    const tat = tatInfo(t.subOrder?.receivedAtLab, t.test?.tatHours, now);
+    return { ...t, _priority: linePriority(t), _tat: tat.state, _remainingMin: tat.remainingMin };
   });
 }
 
@@ -91,7 +100,7 @@ export function groupBySample(items: Enriched[], myId: string | null | undefined
     if (list) list.push(t); else bySample.set(key, [t]);
   }
   const tiles = Array.from(bySample.entries()).map(([key, group]): QueueTile => {
-    const worst = [...group].sort((a, b) => RANK[a._level] - RANK[b._level])[0];
+    const worst = [...group].sort((a, b) => byDue({ remainingMin: a._remainingMin }, { remainingMin: b._remainingMin }))[0];
     const patient = worst.subOrder?.order?.patient;
     const d = deptOf(worst);
     return {
@@ -104,36 +113,39 @@ export function groupBySample(items: Enriched[], myId: string | null | undefined
       patientMeta: patient ? formatPatientMeta(patient) : '',
       items: group,
       testNames: group.map(t => t.test?.name ?? 'Test'),
-      level: worst._level,
-      remainingMin: Math.min(...group.map(t => t._remainingMin)),
+      priority: group.some(t => t._priority === 'urgent') ? 'urgent' : 'normal',
+      tat: tatStateFor(worst._remainingMin),
+      remainingMin: worst._remainingMin,
       anyCritical: group.some(isCritical),
       mine: group.some(t => isMine(t, myId)),
     };
   });
   return tiles.sort((a, b) =>
     (a.mine === b.mine ? 0 : a.mine ? -1 : 1)
-    || RANK[a.level] - RANK[b.level]
-    || a.remainingMin - b.remainingMin);
+    || PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+    || byDue(a, b));
 }
 
 /** ONE status per tile: a dot + coloured word (ND §6). Critical outranks
- *  time; then Overdue › Due in N min › On time. */
-export function tileStatus(t: Pick<QueueTile, 'anyCritical' | 'level' | 'remainingMin'>): TileStatus {
+ *  time; then the TAT clock: Overdue › Due in 20m › On time. (Priority is
+ *  the group the tile sits in, not a status word.) */
+export function tileStatus(t: Pick<QueueTile, 'anyCritical' | 'remainingMin'>): TileStatus {
   if (t.anyCritical) return { key: 'critical', label: 'Critical', tone: 'red' };
-  if (t.level === 'urgent') return { key: 'overdue', label: 'Overdue', tone: 'red' };
-  if (t.level === 'high') return { key: 'due', label: `Due in ${Math.max(1, Math.round(t.remainingMin))} min`, tone: 'amber' };
+  const state = tatStateFor(t.remainingMin);
+  if (state === 'overdue') return { key: 'overdue', label: 'Overdue', tone: 'red' };
+  if (state === 'dueSoon') return { key: 'due', label: `Due in ${formatDuration(t.remainingMin!)}`, tone: 'amber' };
   return { key: 'ontime', label: 'On time', tone: 'green' };
 }
 
 /** The ONE primary: the tube to open next — mine first, then critical,
- *  then the most urgent / least time left. */
+ *  then Urgent orders, then the least time left. */
 export function nextTile(tiles: QueueTile[]): QueueTile | null {
   if (!tiles.length) return null;
   return [...tiles].sort((a, b) =>
     (a.mine === b.mine ? 0 : a.mine ? -1 : 1)
     || (a.anyCritical === b.anyCritical ? 0 : a.anyCritical ? -1 : 1)
-    || RANK[a.level] - RANK[b.level]
-    || a.remainingMin - b.remainingMin)[0];
+    || PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+    || byDue(a, b))[0];
 }
 
 /** Departments present in the queue, for the card-header filter (only shown
@@ -150,7 +162,8 @@ export function departmentsIn(tiles: QueueTile[]): { id: string; name: string; c
 
 export function matchesQuery(t: OrderTest, q: string): boolean {
   if (!q) return true;
-  return patientDisplayName(t.subOrder?.order?.patient).toLowerCase().includes(q)
+  return matchesDailyNo(q, t.subOrder)   // "12" / "#12" = today's daily patient number
+    || patientDisplayName(t.subOrder?.order?.patient).toLowerCase().includes(q)
     || (t.subOrder?.order?.patient?.mrn ?? '').toLowerCase().includes(q)
     || (t.subOrder?.barcode ?? '').toLowerCase().includes(q)
     || (t.test?.name ?? '').toLowerCase().includes(q);

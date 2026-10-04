@@ -2,6 +2,7 @@ import { CommonModule, DatePipe } from "@angular/common";
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { firstValueFrom } from "rxjs";
+import { busyWhile } from "../../../shared/utils/busy";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
   ChangeDetectionStrategy,
@@ -43,11 +44,25 @@ import {
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
+import {
+  REPORT_QUEUE_PAGE_SIZE,
+  reportQueuePageUrl,
+  reportQueueServerStatus,
+  type ReportQueueCounts,
+  type ReportQueuePage,
+} from "../../../shared/utils/report-summary";
 import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
+import { WhatsAppSendService, waSendLabel } from "../../../core/services/whatsapp-send.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { formatAge } from "../../../shared/utils/patient-age";
+import { BusyDirective } from "../../../shared/directives/busy.directive";
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -55,6 +70,7 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
   selector: "pf-report-queue",
   standalone: true,
   imports: [
+    DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
     DatePipe,
@@ -66,7 +82,10 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
     TouchButtonComponent,
     EditResultDialogComponent,
     KpiStripComponent,
-    HeroBandComponent
+    HeroBandComponent,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective,
+    BusyDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
@@ -102,17 +121,25 @@ export class ReportQueueComponent implements OnInit {
    *  row meta — a hidden fact, so it rides in the meta line (ND §20). Meta's
    *  "delivered" also flips the report to Delivered server-side. */
   waMeta(r: Report): string {
+    const live = this.waSend?.state(r.id);
+    if (live) {
+      const word = waSendLabel(live.phase).toLowerCase();
+      return live.to && live.phase !== "sending" && live.phase !== "failed" ? `WhatsApp ${word} · ${live.to}` : `WhatsApp ${word}`;
+    }
     const m = this._wa()[r.id];
     if (!m) return "";
     return `WhatsApp ${waStatusLabel(m.status).toLowerCase()}`;
   }
 
   /** One batch call for the final reports on screen. Non-fatal. */
-  private loadWaStatus(list: Report[]): void {
+  private loadWaStatus(list: Report[], append = false): void {
     const ids = list.filter((r) => r.type === "final").map((r) => r.id);
-    if (!ids.length) { this._wa.set({}); return; }
+    if (!ids.length) { if (!append) this._wa.set({}); return; }
     this.wa.statusBatch(ids).subscribe({
-      next: (map) => this._wa.set(map && typeof map === "object" ? map : {}),
+      next: (map) => {
+        const m = map && typeof map === "object" ? map : {};
+        this._wa.update((cur) => (append ? { ...cur, ...m } : m));
+      },
       error: () => { /* no WhatsApp column — nothing else changes */ },
     });
   }
@@ -135,7 +162,7 @@ export class ReportQueueComponent implements OnInit {
   /** ONE status filter, in the band pill: a neutral segmented control
    *  (raised neutral selected tab), plain tabular counts, no colour dots. */
   readonly ndFilters = computed<{ value: Filter; label: string; count: number }[]>(() => [
-    { value: "all", label: "All", count: this.items().length },
+    { value: "all", label: "All", count: this.counts().all },
     { value: "pending", label: "Completed", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
@@ -157,6 +184,7 @@ export class ReportQueueComponent implements OnInit {
   }
   private readonly api = inject(ApiService);
   private readonly wa = inject(WhatsAppService);
+  private readonly waSend = inject(WhatsAppSendService);
   /** Design gate: the hero band renders in the NEW design only. */
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
@@ -182,7 +210,7 @@ export class ReportQueueComponent implements OnInit {
     // Icons mirror the ones the old phone-only filter row used, so the
     // vocabulary is unchanged — they just moved into the search bar and
     // only replace the words on phones.
-    { value: "all", label: "All", dot: "#a78bfa", count: this.items().length,
+    { value: "all", label: "All", dot: "#a78bfa", count: this.counts().all,
       iconPath: ["M4 6h16", "M4 12h16", "M4 18h16"] },
     { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
       iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
@@ -231,7 +259,62 @@ export class ReportQueueComponent implements OnInit {
 
   /** The row's More menu has at least one item (else no empty menu button). */
   hasMore(r: Report): boolean {
-    return !!r.orderId && (this.canOpenLabResults() || this.canEditResult() || this.canGenerate());
+    return (this.rowActions().get(r.id)?.length ?? 0) > 0;
+  }
+
+  // ── ⋮ Report actions per row (shared/components/actions-menu) ─────
+  // EVERY action for the report in one place: share (patient link, WhatsApp,
+  // print-as-delivery), the PDF (view / download / print), the workflow steps
+  // (edit results, regenerate) and go-to (patient, lab results). Each row
+  // follows the SAME permission + state rule as the button it mirrors.
+  private readonly reportActions = inject(ReportActionsService);
+  readonly rowActions = computed<Map<string, PfAction[]>>(() => {
+    const m = new Map<string, PfAction[]>();
+    for (const r of this.visible()) m.set(r.id, this.buildRowActions(r));
+    return m;
+  });
+
+  private buildRowActions(r: Report): PfAction[] {
+    const a: PfAction[] = [];
+    if (this.reportActions.canLink(r)) {
+      a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
+      a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
+    }
+    // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+    a.push(...this.reportActions.whatsAppActions(r));
+    a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
+    a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
+    if (this.canPrint()) {
+      a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.canDeliver() ? 'Recorded as delivered' : undefined });
+    }
+    if (this.canEditResult() && r.orderId) a.push({ id: 'edit', label: 'Edit results', icon: 'edit', group: 'Report' });
+    if (this.canGenerate() && r.orderId) {
+      a.push({ id: 'regenerate', label: 'Regenerate', icon: 'regenerate', group: 'Report', hint: 'Rebuild with the current report template' });
+    }
+    if (r.patientId && PATIENT_PROFILE_PERMS.some(p => this.auth.hasPermission(p))) {
+      a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    }
+    if (this.canOpenLabResults() && r.orderId) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  }
+
+  /** A row's menu opened: warm its patient link (Share… keeps the gesture). */
+  onRowMenuOpened(r: Report): void { this.reportActions.prefetch(r); }
+
+  runRowAction(r: Report, id: string): void {
+    switch (id) {
+      case 'share': void this.reportActions.share(r, this.reportPatientName(r)); break;
+      case 'copy-link': void this.reportActions.copyLink(r); break;
+      case 'whatsapp': this.deliver(r, 'whatsapp'); break;
+      case 'whatsapp-mine': this.deliver(r, 'whatsapp-mine'); break;
+      case 'view': this.view(r); break;
+      case 'download': void this.downloadPdf(r); break;
+      case 'print': void this.printReport(r); break;
+      case 'edit': this.openEditDialog(r); break;
+      case 'regenerate': void this.regenerate(r); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', r.patientId]); break;
+      case 'lab': void this.viewLabResults(r); break;
+    }
   }
 
   openEditDialog(r: Report) {
@@ -251,7 +334,12 @@ export class ReportQueueComponent implements OnInit {
       "All",
   );
   setFilter(f: Filter) {
+    const before = reportQueueServerStatus(this._filter());
     this._filter.set(f);
+    // The report tabs are filtered server-side (paged queue); Partial reads
+    // the whole queue for its counts, so switching to / from it only reloads
+    // when the server status actually changes.
+    if (reportQueueServerStatus(f) !== before) this.loadQueue("reset");
   }
 
   /** Phone-only presentational state: the compact stat summary's
@@ -318,8 +406,15 @@ export class ReportQueueComponent implements OnInit {
   private readonly _query = signal<string>("");
   readonly query = this._query.asReadonly();
   setQuery(q: string) {
+    const before = this._query().trim();
     this._query.set(q);
+    // The loaded rows narrow instantly (client filter below); the server
+    // search follows once typing pauses.
+    if (q.trim() === before) return;
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.loadQueue("reset"), 250);
   }
+  private _searchTimer: ReturnType<typeof setTimeout> | undefined;
   asInput(ev: Event): string {
     return (ev.target as HTMLInputElement).value;
   }
@@ -327,7 +422,9 @@ export class ReportQueueComponent implements OnInit {
   private readonly _items = signal<Report[]>([]);
   readonly items = this._items.asReadonly();
 
-  private readonly _loading = signal(false);
+  // Starts TRUE: the first page is always on its way (after the backfill
+  // call), so the first frame is the list skeleton — never "No reports here".
+  private readonly _loading = signal(true);
   readonly loading = this._loading.asReadonly();
 
   // Order IDs (lower-cased) that still carry an outstanding balance
@@ -344,14 +441,90 @@ export class ReportQueueComponent implements OnInit {
     return this._dueOrderIds().has((r.orderId ?? "").toLowerCase());
   }
 
-  readonly counts = computed(() => {
+  // ── Server paging (DB optimisation phase 3) ─────────────────────
+  // The queue loads a page at a time (status + search applied server-side);
+  // "Load more" appends the next page. `_total` null = an older server that
+  // answered the whole queue as an array (counted client-side, no paging).
+  private readonly _total = signal<number | null>(null);
+  readonly total = this._total.asReadonly();
+  private readonly _serverCounts = signal<ReportQueueCounts | null>(null);
+  private readonly _loadingMore = signal(false);
+  readonly loadingMore = this._loadingMore.asReadonly();
+  private _pages = 0;
+  private _seq = 0;
+  readonly hasMorePages = computed(() => {
+    const t = this._total();
+    return t != null && this._items().length < t;
+  });
+  /** Rows the next page brings ("Load 50 more"). */
+  readonly nextPageCount = computed(() =>
+    Math.max(0, Math.min(REPORT_QUEUE_PAGE_SIZE, (this._total() ?? 0) - this._items().length)));
+
+  readonly counts = computed<ReportQueueCounts>(() => {
+    const sc = this._serverCounts();
+    if (sc) return sc;
     const l = this._items();
     return {
+      all: l.length,
       pending: l.filter((r) => r.deliveryStatus === "pending").length,
       delivered: l.filter((r) => r.deliveryStatus === "delivered").length,
       failed: l.filter((r) => r.deliveryStatus === "failed").length,
     };
   });
+
+  loadMore() {
+    if (this._loadingMore() || !this.hasMorePages()) return;
+    this.loadQueue("more");
+  }
+
+  /** reset = page 1 for the current tab + search; refresh = the same pages
+   *  again (one request, so a live update never collapses a scrolled list);
+   *  more = the next page, appended. Stale answers are dropped. */
+  private loadQueue(mode: "reset" | "refresh" | "more") {
+    const seq = ++this._seq;
+    const pages = Math.max(1, this._pages);
+    const page = mode === "more" ? this._pages + 1 : 1;
+    const pageSize = mode === "refresh" ? REPORT_QUEUE_PAGE_SIZE * pages : REPORT_QUEUE_PAGE_SIZE;
+    if (mode === "more") this._loadingMore.set(true); else this._loading.set(true);
+    const url = reportQueuePageUrl({
+      page, pageSize, status: reportQueueServerStatus(this._filter()), q: this._query(),
+    });
+    this.api.get<Report[] | ReportQueuePage<Report> | null>(url).subscribe({
+      next: (res) => {
+        if (seq !== this._seq) return;
+        this._loading.set(false);
+        this._loadingMore.set(false);
+        if (!res || Array.isArray(res)) {
+          const l = (res as Report[] | null) ?? [];
+          this._items.set(l);
+          this._total.set(null);
+          this._serverCounts.set(null);
+          this._pages = 1;
+          this.loadWaStatus(l);
+          return;
+        }
+        const items = res.items ?? [];
+        if (mode === "more") {
+          const seen = new Set(this._items().map((r) => r.id));
+          const fresh = items.filter((r) => !seen.has(r.id));
+          this._items.update((cur) => [...cur, ...fresh]);
+          this._pages += 1;
+          this.loadWaStatus(fresh, true);
+        } else {
+          this._items.set(items);
+          this._pages = mode === "refresh" ? pages : 1;
+          this.loadWaStatus(items);
+        }
+        this._total.set(res.total ?? items.length);
+        this._serverCounts.set(res.counts ?? null);
+      },
+      error: () => {
+        if (seq !== this._seq) return;
+        this._loading.set(false);
+        this._loadingMore.set(false);
+      },
+    });
+  }
 
   readonly visible = computed(() => {
     const f = this._filter();
@@ -367,6 +540,7 @@ export class ReportQueueComponent implements OnInit {
         // short report id — covers every reasonable lookup reception
         // runs from a paper slip.
         return (
+          matchesDailyNo(q, r.order) ||
           name.includes(q) ||
           phone.includes(q) ||
           mrn.includes(q) ||
@@ -391,14 +565,14 @@ export class ReportQueueComponent implements OnInit {
    *  Renders only what's available; returns '' if both are missing so the
    *  template's `@if … as` skips the element entirely. */
   patientSexAge(
-    p: { sex?: string | null; age?: number | null } | null | undefined,
+    p: { sex?: string | null; age?: number | null; dateOfBirth?: string | null } | null | undefined,
   ): string {
     if (!p) return "";
     const parts: string[] = [];
     const sex = this.formatSex(p.sex);
     if (sex) parts.push(sex);
-    if (p.age != null && Number.isFinite(p.age) && p.age >= 0)
-      parts.push(`${p.age}y`);
+    const age = formatAge(p, "y");
+    if (age) parts.push(age);
     return parts.join(" · ");
   }
 
@@ -431,7 +605,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   // ── Preliminary report state ────────────────────────────────────
-  // Loaded from /api/orders/today and filtered to orders with at
+  // Loaded from /api/orders/partial-ready and filtered to orders with at
   // least one whole sample (department) validated. No PDF here —
   // values are read straight from each OrderTest.currentResult.
   private readonly _todayOrders = signal<Order[]>([]);
@@ -446,6 +620,25 @@ export class ReportQueueComponent implements OnInit {
   // disable just that card's button, not all of them).
   private readonly _generating = signal<string | null>(null);
   readonly generating = this._generating.asReadonly();
+
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──────────────
+  // A row action that renders / posts (Download, Print, Regenerate) keeps
+  // ITS button busy until it answers; keyed "<reportId>:<kind>" so several
+  // rows can run at once and a repeat press on the same one is ignored.
+  private readonly _rowBusy = signal<ReadonlySet<string>>(new Set());
+  isRowBusy(id: string, kind: 'download' | 'print' | 'regenerate'): boolean {
+    return this._rowBusy().has(`${id}:${kind}`);
+  }
+  private setRowBusy(id: string, kind: 'download' | 'print' | 'regenerate', on: boolean): void {
+    const key = `${id}:${kind}`;
+    const next = new Set(this._rowBusy());
+    if (on) next.add(key); else next.delete(key);
+    this._rowBusy.set(next);
+  }
+  /** The row's WhatsApp server send is running (its Share face is busy). */
+  waSending(id: string): boolean { return !!this.waSend?.busy(id); }
+  /** "Generate" (order id prompt) is posting. */
+  readonly generatingReport = signal(false);
 
   generatePartial(po: PrelimOrder) {
     if (this._generating() || !this.canGenerate()) return;
@@ -485,7 +678,7 @@ export class ReportQueueComponent implements OnInit {
   readonly visiblePartials = computed<PrelimOrder[]>(() => {
     const q = this._query().trim().toLowerCase();
     const l = this.partialOrders();
-    return q ? l.filter((po) => po.searchText.includes(q)) : l;
+    return q ? l.filter((po) => matchesDailyNo(q, po) || po.searchText.includes(q)) : l;
   });
 
   /** Preliminary values with the flag + range mw SAVED with the result
@@ -504,8 +697,10 @@ export class ReportQueueComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.waSend.ensure();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+    this.destroyRef.onDestroy(() => clearTimeout(this._searchTimer));
     // Self-healing: ask the backend to generate any missing final
     // reports for orders that are already 'validated' but have no
     // report row yet (e.g. validations done before the
@@ -520,19 +715,14 @@ export class ReportQueueComponent implements OnInit {
   }
 
   refresh() {
-    this._loading.set(true);
-    this.api.get<Report[]>("/api/reports/queue").subscribe({
-      next: (l) => {
-        this._items.set(l ?? []);
-        this._loading.set(false);
-        this.loadWaStatus(l ?? []);
-      },
-      error: () => this._loading.set(false),
-    });
-    // Independent fetch — partial reports come from /api/orders/today
-    // (the report queue endpoint only knows about generated PDFs). A
-    // failure here doesn't block the main queue load.
-    this.api.get<Order[]>("/api/orders/today").subscribe({
+    // Summary rows (no rendered snapshot): render paths read the report by id.
+    // Paged: the pages already on screen, reloaded in one request.
+    this.loadQueue(this._pages > 0 ? "refresh" : "reset");
+    // Independent fetch — partial reports come from today's orders that carry
+    // a validated line, WITH their results (GET /api/orders/partial-ready; the
+    // day feed itself no longer carries results). A failure here doesn't
+    // block the main queue load.
+    this.api.get<Order[]>("/api/orders/partial-ready").subscribe({
       next: (l) => this._todayOrders.set(l ?? []),
       error: () => {
         /* non-fatal */
@@ -581,33 +771,42 @@ export class ReportQueueComponent implements OnInit {
     }
   }
 
-  /** Download the report as a PDF (client-side render via jsPDF). Pulls
-   *  the per-test resolved layouts so the PDF matches the on-screen viewer
-   *  exactly (column widths, row colors + bold from conditions, merged
-   *  rows, paragraphs, charts). */
+  /** Download the report's STORED PDF (owner rule 2026-09-29: the report is
+   *  the file in blob storage). A report with nothing stored yet is rendered
+   *  ONCE from its saved snapshot and stored first. */
   async downloadPdf(r: Report) {
+    if (this.isRowBusy(r.id, 'download')) return;
+    this.setRowBusy(r.id, 'download', true);
     try {
-      const { generateReportPdf, buildReportPdf } = await import('../../../shared/utils/report-pdf');
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      const blob = buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
+      const blob = await this.storedPdf(r);
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: web blob downloads are no-ops. Hand the PDF to
         // the native iOS share sheet (Save to Files, AirDrop, etc.) via the
         // Web Share API — no Capacitor plugin needed.
         await this.sharePdfNative(r, blob, "Download report");
       } else {
-        // Web/desktop: jsPDF's own download path still works.
-        generateReportPdf({ ...baseInput, imageCache, trendograms });
+        const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+        downloadPdfBlob(blob, this.pdfFileName(r));
       }
-      // Archive the rendered PDF to object storage (Spaces) so finished results
-      // are stored and the patient's public report / QR-tracking page can serve
-      // the exact file. Best-effort — never affects the download.
-      this.uploadReportPdf(r, blob);
     } catch (err) {
       console.error("[reports] download failed", err);
       const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
       this.toasts.error(reportRenderErrorMessage(err, "Could not download report"));
+    } finally {
+      this.setRowBusy(r.id, 'download', false);
     }
+  }
+
+  /** "REPORT-XXXXXXXX.pdf" / "PRELIM-…" — the name the jsPDF save used. */
+  private pdfFileName(r: Report): string {
+    const shortId = r.id.replace(/-/g, "").slice(-8).toUpperCase();
+    return `${r.type === "partial" ? "PRELIM" : "REPORT"}-${shortId}.pdf`;
+  }
+
+  /** THE report PDF (stored; rendered + stored once when it has none). */
+  private async storedPdf(r: Report, variant: 'full' | 'letterpad' = 'full'): Promise<Blob> {
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(r, this.api, this.injector, variant);
   }
 
   /** True when running inside the Capacitor native shell (iOS/Android),
@@ -634,9 +833,8 @@ export class ReportQueueComponent implements OnInit {
         await navigator.share({ files: [file], title, text });
       } else {
         // No file-share support — fall back to the web download path.
-        const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-        const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-        generateReportPdf({ ...baseInput, imageCache, trendograms });
+        const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+        downloadPdfBlob(blob, this.pdfFileName(r));
       }
     } catch (err) {
       // User cancelled the share sheet — not an error.
@@ -645,55 +843,24 @@ export class ReportQueueComponent implements OnInit {
     }
   }
 
-  /** Resolve the tenant template + per-test layouts + images needed to render a
-   *  report PDF from its stored snapshot. Shared by download and archive.
-   *  The template carries the admin-tunable chrome (colours, logo, signatures);
-   *  without it the PDF falls back to the hardcoded Drlogy defaults. */
-  private async buildReportRender(r: Report) {
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import("../../../core/services/report-layout.service"),
-      import("../../../core/services/platform.service"),
-      import("../../../shared/utils/report-render-input"),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    const platform = this.injector.get(PlatformService);
-    // The ONE recipe for every report entry point (template + layouts incl.
-    // PROFILE layouts + images + trendograms). It throws instead of silently
-    // falling back to the default design, so a report that can't be rendered
-    // exactly as the lab designed it is never downloaded or archived.
-    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(r, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: platform.getApiUrl(),
-    });
-    return { baseInput, imageCache, trendograms };
-  }
-
-  /** Upload a rendered report PDF blob to storage (best-effort). */
-  private uploadReportPdf(r: Report, blob: Blob) {
-    try {
-      const fd = new FormData();
-      fd.append("file", blob, `${r.id}.pdf`);
-      this.api
-        .post(`/api/reports/${r.id}/pdf`, fd)
-        .subscribe({ next: () => {}, error: () => {} });
-    } catch {
-      /* archive is best-effort */
-    }
-  }
-
-  /** Render + archive the report PDF (no local download) so the public
-   *  /reports/public/{qrToken} link resolves to a real file when shared. */
+  /** Make sure the report's PDF is STORED (no local download) so the public
+   *  /reports/public/{qrToken} link serves the real file — a no-op when it
+   *  already is. Best-effort. */
   private async archiveReportPdf(r: Report) {
-    try {
-      const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'));
-    } catch { /* best-effort */ }
+    try { await this.storedPdf(r); } catch { /* best-effort */ }
   }
 
   deliver(r: Report, via: string) {
     if (!this.canDeliver()) return;
+    // The lab sends WhatsApp from its Cloud API number: "WhatsApp" is the
+    // server send to the patient's number (Sending… → Sent → Delivered / Read
+    // in the row meta). "whatsapp-mine" is the wa.me share from this device.
+    if (via === "whatsapp" && this.waSend?.canSend(r)) {
+      if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
+      void this.waSend.send(r.id).then((m) => { if (m && m.status !== "failed") this.refresh(); });
+      return;
+    }
+    if (via === "whatsapp-mine") via = "whatsapp";
     // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
     // (wa.me) pre-filled with the patient's number + a message carrying the
     // report's QR verify link. wa.me can't auto-attach the PDF, so the link
@@ -735,29 +902,35 @@ export class ReportQueueComponent implements OnInit {
    *  Letterpad setting on → one quick choice (letterhead paper, header &
    *  footer blank — the default — or plain paper) for THIS job only. */
   async printReport(r: Report) {
-    if (!this.canPrint()) return;
-    if (await this.printJob(r) && this.canDeliver()) this.recordDelivery(r, "print");
+    if (!this.canPrint() || this.isRowBusy(r.id, 'print')) return;
+    this.setRowBusy(r.id, 'print', true);
+    let printed = false;
+    try {
+      printed = await this.printJob(r);
+    } finally {
+      this.setRowBusy(r.id, 'print', false);
+    }
+    if (printed && this.canDeliver()) this.recordDelivery(r, "print");
   }
 
   /** Render + hand the report to the printer. True when something was
    *  printed (false: letterpad question dismissed, or the render failed). */
   private async printJob(r: Report): Promise<boolean> {
     try {
-      const [{ buildReportPdf }, { askPrintLetterhead }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
+      const [{ askPrintLetterhead }, { loadReportTemplate }] = await Promise.all([
         import('../../../shared/utils/print-letterhead'),
+        import('../../../shared/utils/report-render-input'),
       ]);
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      const job = await askPrintLetterhead(baseInput.template, this.dialog);
+      const job = await askPrintLetterhead(await loadReportTemplate(this.api), this.dialog);
       if (!job) return false;   // dismissed — nothing printed, nothing recorded
-      const doc = buildReportPdf({ ...baseInput, imageCache, trendograms, blankLetterhead: job.blankLetterhead });
+      // The STORED copy for the paper (full, or the letterhead-paper variant).
+      const blob = await this.storedPdf(r, job.blankLetterhead ? 'letterpad' : 'full');
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: hand the PDF to the native share sheet (Print).
-        await this.sharePdfNative(r, doc.output('blob'), 'Print report');
+        await this.sharePdfNative(r, blob, 'Print report');
       } else {
         // Web: off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-        doc.autoPrint();
-        printPdfBlobUrl(URL.createObjectURL(doc.output('blob')), { revokeOnDone: true });
+        printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
       }
       return true;
     } catch (err) {
@@ -797,9 +970,10 @@ export class ReportQueueComponent implements OnInit {
       required: true,
       confirmLabel: "Generate",
     });
-    if (!oid) return;
+    if (!oid || this.generatingReport()) return;
     this.api
       .post<Report>("/api/reports/generate", { orderId: oid, type: "final" })
+      .pipe(busyWhile(this.generatingReport))
       .subscribe({
         next: (r) => {
           this.toasts.success("Report generated");
@@ -811,26 +985,32 @@ export class ReportQueueComponent implements OnInit {
 
   /** OPS-59: rebuild this order's final report from the CURRENT report template
    *  (admin may have changed columns / layout / signatures since it was issued).
-   *  The backend re-snapshots and supersedes the previous final; we then
-   *  re-render and re-archive the PDF so the stored/QR copy matches too. */
+   *  The backend re-snapshots and supersedes the previous final (kept, with
+   *  its stored PDF, for audit); we then render the NEW report once and store
+   *  it, so every view / the QR link serves the new file. */
   async regenerate(r: Report) {
     if (!r.orderId || !this.canGenerate()) return;
     const ok = await this.dialog.confirm({
       title: "Regenerate report?",
-      message: "Rebuild this report using the current report template. The previous version is replaced.",
+      message: "Rebuild this report using the current report template and Test Master. The previous version is replaced (it stays in the audit trail).",
       confirmLabel: "Regenerate",
       tone: "primary",
     });
-    if (!ok) return;
+    if (!ok || this.isRowBusy(r.id, 'regenerate')) return;
+    this.setRowBusy(r.id, 'regenerate', true);
     this.api
       .post<Report>("/api/reports/generate", { orderId: r.orderId, type: "final" })
       .subscribe({
         next: async (r2) => {
           try { await this.archiveReportPdf(r2); } catch { /* archive is best-effort */ }
+          this.setRowBusy(r.id, 'regenerate', false);
           this.toasts.success("Report regenerated with the latest template");
           this.refresh();
         },
-        error: (e) => this.toasts.error(ApiError.from(e).message),
+        error: (e) => {
+          this.setRowBusy(r.id, 'regenerate', false);
+          this.toasts.error(ApiError.from(e).message);
+        },
       });
   }
 }

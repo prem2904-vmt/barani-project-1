@@ -6,6 +6,10 @@ dist
 tmp
 out-tsc
 
+# Desktop release tooling: pending-notarization bookkeeping only (submission
+# ids, local artifact paths) — never credentials, never committed.
+tools/.release-state
+
 # dependencies
 node_modules
 package-lock.json

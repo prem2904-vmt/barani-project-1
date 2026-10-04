@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, ValueGetterParams } from 'ag-grid-community';
@@ -8,6 +8,9 @@ import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/s
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
+import { SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
 
 interface MicroOrganism {
   code: string; name: string; shortName: string | null; group: string | null;
@@ -61,7 +64,7 @@ interface EdModel {
 @Component({
   selector: 'pf-micro-masters-panel',
   standalone: true,
-  imports: [AgGridAngular, FormsModule, SelectComponent],
+  imports: [AgGridAngular, FormsModule, SelectComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-mm">
@@ -95,6 +98,10 @@ interface EdModel {
         <!-- ── RIGHT: the selected master's grid (+ organism detail) ── -->
         <div class="pf-mm__split" [class.pf-mm__split--detail]="editor() || (section() === 'organisms' && selOrg())">
           <div class="pf-mm__grid">
+            @if (listSkeleton()) {
+              <!-- First load of the masters: the grid's shape (ND-PATTERN "Loading feedback"). -->
+              <pf-skeleton-table class="pf-mm__gridskel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
+            }
             <ag-grid-angular
               style="width: 100%; height: 62vh;"
               [theme]="gridTheme()"
@@ -189,12 +196,13 @@ interface EdModel {
               </div>
               <div class="pf-mm__actions">
                 @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
-                  <button type="button" class="nd-btn nd-btn--tertiary pf-mm__del press" (click)="deleteEd()">
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-mm__del press" (click)="deleteEd()"
+                          [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
                     {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
                   </button>
                 }
                 <span class="pf-mm__spacer"></span>
-                <button type="button" class="nd-btn nd-btn--primary pf-mm__save press" [disabled]="saving() || !edValid()" (click)="saveEd()">
+                <button type="button" class="nd-btn nd-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
                   {{ saving() ? 'Saving…' : 'Save' }}
                 </button>
               </div>
@@ -222,6 +230,7 @@ interface EdModel {
                   <button type="button" class="nd-toggle pf-mm__sw" role="switch" [attr.aria-checked]="b.enabled !== false"
                           [attr.aria-label]="'On the AST table: ' + b.antibiotic"
                           [title]="b.enabled === false ? 'Disabled — hidden from the AST table. Tap to enable.' : 'Enabled — shown on the AST table. Tap to disable.'"
+                          [disabled]="mapBusy() === b.antibiotic" [attr.aria-busy]="mapBusy() === b.antibiotic ? 'true' : null"
                           (click)="toggleMapping(b)">
                     <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                   </button>
@@ -246,6 +255,7 @@ interface EdModel {
                   @if (b.tenant) {
                     <span class="pf-mm__lab" title="Lab-authored mapping">Lab</span>
                     <button type="button" class="pf-mm__mapx" (click)="removeMapping(org, b)"
+                            [disabled]="mapBusy() === b.antibiotic" [pfBusy]="mapBusy() === b.antibiotic" pfBusyLabel="Removing…"
                             [attr.aria-label]="'Remove ' + b.antibiotic" [title]="'Remove ' + b.antibiotic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                   } @else {
                     <span class="pf-mm__clsi" title="Seeded CLSI default">CLSI</span>
@@ -270,7 +280,7 @@ interface EdModel {
                 <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
                   <input type="number" class="nd-input nd-num pf-mm__cutin" [ngModel]="addR()" (ngModelChange)="addR.set($event)" placeholder="mm" /></label>
                 <button type="button" class="nd-btn nd-btn--secondary pf-mm__add press" [disabled]="!canAdd() || saving()"
-                        (click)="saveMapping(org)">{{ saving() ? 'Saving…' : 'Add' }}</button>
+                        [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveMapping(org)">{{ saving() ? 'Saving…' : 'Add' }}</button>
               </div>
               <p class="pf-mm__hint2">The Culture bench builds this organism's panel from these rows — S/I/R auto-interprets from the cutoffs.</p>
               </div>
@@ -309,7 +319,8 @@ interface EdModel {
     .pf-mm__split { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; min-width: 0; }
     .pf-mm__split--detail { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); }
     @media (max-width: 1100px) { .pf-mm__split--detail { grid-template-columns: 1fr; } }
-    .pf-mm__grid { border-radius: 12px; overflow: hidden; min-width: 0; }
+    .pf-mm__grid { position: relative; border-radius: 12px; overflow: hidden; min-width: 0; }
+    .pf-mm__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
     .pf-mm__side { max-height: 62vh; min-height: 0; }
     .pf-mm__side .nd-card__body { gap: 6px; }
     .pf-mm__side:not(.nd-sheet) .nd-sheet__handle { display: none; }
@@ -479,6 +490,15 @@ export class MicroMastersPanelComponent implements OnInit {
   readonly addS = signal<number | null>(null);
   readonly addR = signal<number | null>(null);
   readonly saving = signal(false);
+  /** Delete / Revert on the open editor is running. */
+  readonly deleting = signal(false);
+  /** The organism panel row (antibiotic) whose toggle / remove is running. */
+  readonly mapBusy = signal<string | null>(null);
+  /** First load: the four masters answer before the grid shows (held, no flash). */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  private firstLoadsLeft = 4;
+  private firstLoadDone = () => { if (--this.firstLoadsLeft === 0) this.listHold.done(); };
 
   onRowClicked(e: RowClickedEvent) {
     if (this.section() === 'organisms') {
@@ -570,10 +590,11 @@ export class MicroMastersPanelComponent implements OnInit {
   }
   deleteEd() {
     const ed = this.editor();
-    if (!ed) return;
+    if (!ed || this.deleting()) return;
     const m = ed.model;
-    const done = () => { this.toasts.success('Removed — the standard resurfaces where one exists'); this.editor.set(null); this.reloadSection(ed.kind); };
-    const fail = (e: { message?: string }) => this.toasts.error(e?.message || 'Could not remove');
+    this.deleting.set(true);
+    const done = () => { this.deleting.set(false); this.toasts.success('Removed — the standard resurfaces where one exists'); this.editor.set(null); this.reloadSection(ed.kind); };
+    const fail = (e: { message?: string }) => { this.deleting.set(false); this.toasts.error(e?.message || 'Could not remove'); };
     if (ed.kind === 'breakpoints') {
       this.api.delete(`/api/microbiology/breakpoints?organismGroup=${encodeURIComponent(String(m.organismGroup))}&antibiotic=${encodeURIComponent(String(m.antibiotic))}`)
         .subscribe({ next: done, error: fail });
@@ -701,23 +722,28 @@ export class MicroMastersPanelComponent implements OnInit {
   toggleMapping(b: Breakpoint) {
     const org = this.selOrg();
     const next = b.enabled === false;
+    if (this.mapBusy() === b.antibiotic) return;
+    this.mapBusy.set(b.antibiotic);
     this.api.post('/api/microbiology/breakpoints/toggle', {
       organismGroup: b.organismGroup, antibiotic: b.antibiotic, enabled: next,
       organism: org?.name ?? b.organism ?? null,
     }).subscribe({
       next: () => {
+        this.mapBusy.set(null);
         this.toasts.success(`${b.antibiotic} ${next ? 'enabled' : 'disabled'} for this panel`);
         this.reloadBreakpoints();
       },
-      error: (e: { message?: string }) => this.toasts.error(e?.message || 'Could not toggle'),
+      error: (e: { message?: string }) => { this.mapBusy.set(null); this.toasts.error(e?.message || 'Could not toggle'); },
     });
   }
   removeMapping(org: MicroOrganism, b: Breakpoint) {
     const orgQ = b.organism ? `&organism=${encodeURIComponent(b.organism)}` : '';
+    if (this.mapBusy() === b.antibiotic) return;
+    this.mapBusy.set(b.antibiotic);
     this.api.delete(`/api/microbiology/breakpoints?organismGroup=${encodeURIComponent(b.organismGroup)}&antibiotic=${encodeURIComponent(b.antibiotic)}${orgQ}`)
       .subscribe({
-        next: () => { this.toasts.success(`${b.antibiotic} removed`); this.reloadBreakpoints(); },
-        error: (e: { message?: string }) => this.toasts.error(e?.message || 'Could not remove the mapping'),
+        next: () => { this.mapBusy.set(null); this.toasts.success(`${b.antibiotic} removed`); this.reloadBreakpoints(); },
+        error: (e: { message?: string }) => { this.mapBusy.set(null); this.toasts.error(e?.message || 'Could not remove the mapping'); },
       });
   }
   private reloadBreakpoints() {
@@ -728,21 +754,23 @@ export class MicroMastersPanelComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.api.get<MicroOrganism[]>('/api/microbiology/organisms').subscribe({
-      next: l => this.organisms.set(l ?? []),
-      error: () => this.toasts.error('Could not load the organism master.'),
+      next: l => { this.organisms.set(l ?? []); this.firstLoadDone(); },
+      error: () => { this.firstLoadDone(); this.toasts.error('Could not load the organism master.'); },
     });
     this.api.get<MicroSpecimen[]>('/api/microbiology/specimens').subscribe({
-      next: l => this.specimens.set(l ?? []),
-      error: () => this.toasts.error('Could not load the specimen master.'),
+      next: l => { this.specimens.set(l ?? []); this.firstLoadDone(); },
+      error: () => { this.firstLoadDone(); this.toasts.error('Could not load the specimen master.'); },
     });
     this.api.get<MicroAntibiotic[]>('/api/microbiology/antibiotics?all=true').subscribe({
-      next: l => this.antibiotics.set(l ?? []),
-      error: () => this.toasts.error('Could not load the antibiotic master.'),
+      next: l => { this.antibiotics.set(l ?? []); this.firstLoadDone(); },
+      error: () => { this.firstLoadDone(); this.toasts.error('Could not load the antibiotic master.'); },
     });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
-      next: l => this.breakpoints.set(l ?? []),
-      error: () => this.toasts.error('Could not load the CLSI breakpoints.'),
+      next: l => { this.breakpoints.set(l ?? []); this.firstLoadDone(); },
+      error: () => { this.firstLoadDone(); this.toasts.error('Could not load the CLSI breakpoints.'); },
     });
   }
+  private readonly destroyRef = inject(DestroyRef);
 }

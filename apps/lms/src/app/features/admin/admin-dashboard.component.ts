@@ -182,6 +182,7 @@ interface Category {
     </section>
   `,
   styles: [`
+    @use '../../shared/styles/device-tier' as dt;
     /* Page wrapper: claim the full viewport so the rail + pane fill
        the space and there's no big empty band at the bottom. The KPI
        strip + header stay above and the layout flexes to fill what's
@@ -386,7 +387,7 @@ interface Category {
        crams the lone pane into the 200px track and wastes the rest of the width.
        Use one full-width column and let the tiles go 2-up. Bounded so it can
        never touch desktop (>=1280) or phone (<=640). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-admin-layout {
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;
@@ -482,6 +483,9 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Daily Statement',  href: '/finance/daily', gradient: 'amber',
           iconPath: 'M4 4h16v16H4z', iconExtra: 'M8 9h8M8 13h8M8 17h5',
           subtitle: () => 'Opening / closing balance · cash count · day closure' },
+        { title: 'Expenses',  href: '/expenses', gradient: 'amber',
+          iconPath: 'M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z', iconExtra: 'M8 8h8M8 12h8M8 16h5',
+          subtitle: () => 'Staff expenses · bills · cashier day closing' },
         { title: 'Vendor Credit Wallets',  href: '/admin/vendors', gradient: 'fuchsia',
           iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
           iconExtra: 'M17 14h.01',

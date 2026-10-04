@@ -173,6 +173,62 @@ describe('flagAgainst', () => {
     expect(flagAgainst(null, 5)).toBeNull();
     expect(flagAgainst({ segment: 'normal' }, 5)).toBeNull();
   });
+
+  // Logic review (2026-10-02): a one-sided band with no explicit op derives
+  // its strictness from a comparator glyph sitting immediately before its
+  // OWN number in reportText/label — never from one-sidedness alone. Mirrors
+  // mw ResultFlaggingService.NumericLevel + ReferenceRangeResolver.
+  // EffectiveOneSidedOp; the boundary cases below are duplicated in
+  // ReferenceRangeGlyphParityTests (mw) on purpose — SAME inputs, SAME flag.
+  describe('op-absent one-sided bound: glyph-derived, else inclusive (2026-10-02)', () => {
+    it('no glyph at all stays inclusive (the limit itself is Normal)', () => {
+      expect(flagAgainst({ max: 200, reportText: null }, 200)).toBe('N');
+      expect(flagAgainst({ min: 60 }, 60)).toBe('N');
+    });
+
+    it('a strict "<" / ">" glyph before the bound\'s own number flags the limit', () => {
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 140)).toBe('H');
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 139.9)).toBe('N');
+      expect(flagAgainst({ max: 5, label: 'Nonpregnant — <5 IU/L — Negative' }, 5)).toBe('H');
+    });
+
+    it('an inclusive "≤" / "≥" glyph (even with no space) keeps the limit Normal', () => {
+      expect(flagAgainst({ max: 5, reportText: '≤ 5 {u}' }, 5)).toBe('N');
+      expect(flagAgainst({ min: 90, reportText: '≥ 90 {u}' }, 90)).toBe('N');
+      expect(flagAgainst({ min: 40, reportText: '≥40 {u}' }, 40)).toBe('N');
+    });
+
+    it('an explicit op always wins over a glyph in the text', () => {
+      expect(flagAgainst({ max: 140, maxOp: 'lte', reportText: 'Normal: <140 {u}' }, 140)).toBe('N');
+    });
+
+    it('a glyph near a DIFFERENT number is ignored — falls back to inclusive', () => {
+      expect(flagAgainst({ max: 140, reportText: 'G-OGTT: <180 mg/dL\nSame-tier: 140 mg/dL' }, 140)).toBe('N');
+    });
+
+    // The owner's named boundary cases (real master-catalogue shapes) —
+    // mw ReferenceRangeGlyphParityTests covers the full 158-band sweep.
+    it('CRP 5.0 against "≤ 5" is Normal', () => {
+      expect(flagAgainst({ max: 5, reportText: '≤ 5 mg/L' }, 5.0)).toBe('N');
+    });
+    it('eGFR 90 against "≥ 90" is Normal', () => {
+      expect(flagAgainst({ min: 90, reportText: '≥ 90 mL/min' }, 90.0)).toBe('N');
+    });
+    it('HDL 40 against "≥40" is Normal', () => {
+      expect(flagAgainst({ min: 40, reportText: 'Normal ≥40 mg/dL' }, 40.0)).toBe('N');
+    });
+    it('OGTT 140 against "<140" is High', () => {
+      expect(flagAgainst({ max: 140, reportText: 'Normal <140 mg/dL' }, 140.0)).toBe('H');
+    });
+    it('Postprandial 139 against a band whose text says "<140" is Normal (structured max is 139)', () => {
+      expect(flagAgainst({ max: 139, reportText: '2-hour: <140 mg/dL normal' }, 139.0)).toBe('N');
+    });
+    it('HbA1c 6.4 is not High', () => {
+      expect(flagAgainst(
+        { max: 6.4, reportText: 'Normal: <5.7 %\nPrediabetes: 5.7–6.4%\nDiabetes: ≥6.5%' }, 6.4,
+      )).not.toBe('H');
+    });
+  });
 });
 
 describe('report text — the simple model prints what was typed', () => {
@@ -242,5 +298,63 @@ describe('report text — line breaks and the {u} unit placeholder', () => {
       .toBe('Adult Male: 4.5 – 5.9 ×10¹²/L\nAdult Female: 4–5.2 ×10¹²/L');
     expect(summarizeRanges([m], 'x/L')).toBe('Adult Male: 4.5 – 5.9 x/L');
     expect(bandReportText(m, '')).toBe('4.5 – 5.9');
+  });
+});
+
+// L2 (2026-10-02): the gestational-text guess, mirroring mw
+// ReferenceRangeResolver.EffectiveSex/LooksGestational — a band naming
+// itself "G-OGTT"/"gestational"/"pregnant" (never negated) is implicitly
+// female for EXCLUSION only, never for match score.
+describe('gestational-text guess (mirrors mw EffectiveSex/LooksGestational)', () => {
+  const gOgtt: RangeLike = { segment: 'g_ogtt', min: null, max: 92, label: 'G-OGTT: <92' };
+
+  it('excludes a male patient from a band whose text names it gestational', () => {
+    // Paired with an equally-unconstrained, non-gestational band (score 0
+    // either way): if gOgtt is correctly EXCLUDED for a male patient, it
+    // drops out of the eligible set entirely and the other band wins
+    // outright, even though neither actively scores. Without the guess,
+    // both would tie and the first-declared (gOgtt) would win instead.
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const { range, isSpecific } = matchReferenceRange([gOgtt, other], 'M', 30);
+    expect(range).toBe(other);
+    expect(isSpecific).toBe(false); // survived by elimination, not a merit match
+  });
+
+  it('does not exclude a female or unknown-sex patient, but never scores it either', () => {
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const female = matchReferenceRange([gOgtt, other], 'F', 28);
+    expect(female.range).toBe(gOgtt); // first-declared tie-winner — not excluded for a woman
+    expect(female.isSpecific).toBe(false); // text guess never AWARDS score
+    const unknown = matchReferenceRange([gOgtt, other], null, 28);
+    expect(unknown.range).toBe(gOgtt); // unknown sex never contradicts either
+    expect(unknown.isSpecific).toBe(false);
+  });
+
+  it('never excludes a band whose gestational wording is explicitly negated', () => {
+    const nonPregnant: RangeLike = { segment: 'nonpregnant', min: null, max: 5, label: 'Non-pregnant: <5 IU/L' };
+    const other: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const { range } = matchReferenceRange([nonPregnant, other], 'M', 30);
+    expect(range).toBe(nonPregnant); // first-declared tie-winner — never excluded; "non-pregnant" is not a gestational guess
+  });
+
+  it('never guesses gestational from a band with no numeric bounds (a placeholder line)', () => {
+    // Bound-less, so the guess never applies — a MALE patient is never
+    // excluded from this band just because its label mentions "pregnancy".
+    // Paired with an equally-unconstrained band (score 0 either way) so a
+    // wrong exclusion would be visible: if the placeholder were (incorrectly)
+    // excluded as gestational, only the second band would remain eligible
+    // and WIN outright — instead both tie at 0 and the first-declared one
+    // (the placeholder) wins, proving it was never excluded.
+    const placeholder: RangeLike = { segment: 'pregnancy', min: null, max: null, label: 'Pregnancy — see gestational-age table' };
+    const unconstrained: RangeLike = { segment: 'other', min: 1, max: 2 };
+    const both = matchReferenceRange([placeholder, unconstrained], 'M', 30);
+    expect(both.range).toBe(placeholder);
+  });
+
+  it('a REAL sex field still wins the active match score; the text guess never does', () => {
+    const female: RangeLike = { sex: 'F', min: 70, max: 180, label: 'G-OGTT: <180' };
+    const { range, isSpecific } = matchReferenceRange([female], 'F', 28);
+    expect(range).toBe(female);
+    expect(isSpecific).toBe(true); // the STRUCTURED sex match earns the score, not the text guess
   });
 });

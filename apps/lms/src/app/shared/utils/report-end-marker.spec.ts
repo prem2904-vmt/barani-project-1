@@ -19,3 +19,10 @@ describe('report PDF — end-of-report line', () => {
     expect(endOfReport).toMatch(/doc\.text\(marker/);
   });
 });
+
+describe('report PDF — powered-by footer', () => {
+  it('reads "Powered by Prefrontal" (owner 2026-09-28), never "Prefrontal LMS"', () => {
+    expect(src).toContain("'Powered by Prefrontal'");
+    expect(src).not.toMatch(/Powered by Prefrontal LMS/);
+  });
+});

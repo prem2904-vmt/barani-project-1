@@ -12,8 +12,11 @@ import { downloadCsv } from '../../shared/utils/export-csv';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
+import { OpdGateService } from '../opd/shared/opd-gate.service';
 import { bandFilter } from '../../shared/utils/band-search';
-import { SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
+import { SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
+import { labDaysAgo } from '../../shared/utils/lab-clock';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -51,7 +54,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -66,9 +69,9 @@ interface FinanceSummary {
                           [value]="module()" (valueChange)="selectModule($event)"></pf-segmented>
             @if (module() === 'lab' || module() === 'overall') {
               <div class="pf-fin__bandrange" role="group" aria-label="Date range">
-                <input type="date" class="pf-fin__bdate" aria-label="From date" [(ngModel)]="fromDate" (change)="customRange()">
+                <pf-nd-date label="From date" [value]="fromDate" (valueChange)="setFromDateRange($event)"></pf-nd-date>
                 <span class="pf-fin__bdash" aria-hidden="true">–</span>
-                <input type="date" class="pf-fin__bdate" aria-label="To date" [(ngModel)]="toDate" (change)="customRange()">
+                <pf-nd-date label="To date" [value]="toDate" (valueChange)="setToDateRange($event)"></pf-nd-date>
                 <pf-segmented size="sm" [options]="quickOptions" [value]="quickDays()"
                               (valueChange)="quick($event)"></pf-segmented>
               </div>
@@ -127,8 +130,8 @@ interface FinanceSummary {
 
         <!-- Date range (classic; the new design has it in the band pill) -->
         <div class="pf-fin__range pf-classic-only">
-          <label>From <input type="date" [(ngModel)]="fromDate" (change)="load()"></label>
-          <label>To <input type="date" [(ngModel)]="toDate" (change)="load()"></label>
+          <label>From <pf-nd-date label="From" [value]="fromDate" (valueChange)="setFromDateClassic($event)"></pf-nd-date></label>
+          <label>To <pf-nd-date label="To" [value]="toDate" (valueChange)="setToDateClassic($event)"></pf-nd-date></label>
           <div class="pf-fin__quick">
             <button type="button" (click)="quick(7)">7d</button>
             <button type="button" (click)="quick(30)">30d</button>
@@ -207,7 +210,7 @@ interface FinanceSummary {
         </div>
 
         @if (vendorsLoading()) {
-          <p class="pf-fin__loading">Loading partners…</p>
+          <pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Loading partners…"></pf-skeleton-rows>
         } @else if (vendors().length === 0) {
           <p class="pf-fin__empty">No credit-wallet partners yet.</p>
         } @else {
@@ -355,12 +358,14 @@ export class FinanceHubComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
+  /** OPD dark build: the OPD line appears only when the OPD gate is open. */
+  private readonly opdVisible = inject(OpdGateService).visible();
   readonly modules: { key: Module; label: string }[] = [
     { key: 'overall', label: 'Overall' },
     { key: 'lab', label: 'Lab' },
     { key: 'credit', label: 'Credit Wallet' },
     { key: 'ipd', label: 'IPD' },
-    { key: 'opd', label: 'OPD' },
+    ...(this.opdVisible ? [{ key: 'opd' as Module, label: 'OPD' }] : []),
     { key: 'pharmacy', label: 'Pharmacy' },
   ];
   /** Band pill: product-line switch (lines without billing are marked "soon"). */
@@ -369,7 +374,7 @@ export class FinanceHubComponent implements OnInit {
     { value: 'lab', label: 'Lab' },
     { value: 'credit', label: 'Credit Wallet' },
     { value: 'ipd', label: 'IPD', hint: 'IPD finance — coming soon' },
-    { value: 'opd', label: 'OPD', hint: 'OPD finance — coming soon' },
+    ...(this.opdVisible ? [{ value: 'opd' as Module, label: 'OPD', hint: 'OPD finance — coming soon' }] : []),
     { value: 'pharmacy', label: 'Pharmacy', hint: 'Pharmacy finance — coming soon' },
   ];
   /** Band pill: quick ranges. 0 = a custom from/to. */
@@ -407,10 +412,10 @@ export class FinanceHubComponent implements OnInit {
 
   ngOnInit() { this.load(); }
 
+  /** IST business date n days ago (lab-clock) — the server reads these as
+   *  IST days; the UTC date was yesterday's until 05:30 IST. */
   private isoDaysAgo(n: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    return labDaysAgo(n);
   }
 
   /** A date typed by hand leaves the quick-range chips. */
@@ -418,6 +423,11 @@ export class FinanceHubComponent implements OnInit {
     this.quickDays.set(0);
     this.load();
   }
+
+  setFromDateRange(v: string | null) { if (v) { this.fromDate = v; this.customRange(); } }
+  setToDateRange(v: string | null) { if (v) { this.toDate = v; this.customRange(); } }
+  setFromDateClassic(v: string | null) { if (v) { this.fromDate = v; this.load(); } }
+  setToDateClassic(v: string | null) { if (v) { this.toDate = v; this.load(); } }
 
   quick(days: number) {
     this.quickDays.set(days);

@@ -2,7 +2,7 @@ import { Route } from '@angular/router';
 import { appRoutes } from '../../app.routes';
 import { ADMIN_NAV, MORE_NAV, NavItem, NavVisibilityCtx, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, navItemVisible } from '../../layout/nav-items';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
-import { pickLanding } from './landing.guard';
+import { isOpdOnly, pickLanding } from './landing.guard';
 import { ROUTE_ACCESS, RouteAccessCtx, canOpenRoute } from './route-access';
 
 /**
@@ -33,6 +33,9 @@ const ROLES: Record<string, string[]> = {
   'Store Keeper': ['inventory_count', 'inventory_issue', 'inventory_receive', 'print_barcode', 'view_test'],
   'Inventory Manager': ['inventory_count', 'inventory_issue', 'inventory_receive', 'inventory_transfer', 'manage_inventory', 'print_barcode', 'view_dashboard', 'view_test'],
   'Lab Admin': ['admit_patient', 'approve_discount', 'cancel_order', 'collect_payment', 'collect_sample', 'create_bill', 'create_order', 'culture_workbench', 'deliver_report', 'design_mode', 'dispatch_sample', 'dispense_drug', 'edit_patient', 'edit_result', 'enter_result', 'give_discount', 'inventory_count', 'inventory_issue', 'inventory_receive', 'inventory_transfer', 'manage_billing_config', 'manage_branch', 'manage_branches', 'manage_departments', 'manage_home_collection', 'manage_inventory', 'manage_ipd', 'manage_lab_settings', 'manage_notifications', 'manage_opd', 'manage_pharmacy', 'manage_report_template', 'manage_roles', 'manage_tenant', 'manage_tests', 'manage_users', 'manage_workflows', 'modify_order', 'opd_consult', 'override_discount', 'print_barcode', 'process_refund', 'reassign_result', 'receive_sample', 'register_patient', 'reject_result', 'reject_sample', 'validate_own_result', 'validate_result', 'view_audit_log', 'view_bill', 'view_dashboard', 'view_order', 'view_patient', 'view_report', 'view_tat_dashboard', 'view_test'],
+  // Seeded 2026-09-30 (RoleSeeder.LabAdminTechnical): Test Master + prices +
+  // lab settings + bench, no money / users / org.
+  'Lab Admin (Technical)': ['collect_sample', 'culture_workbench', 'dispatch_sample', 'edit_result', 'enter_result', 'lms.critical_value.notify', 'lms.sample_rejection.notify', 'lms.tat_breach.notify', 'manage_departments', 'manage_lab_settings', 'manage_report_template', 'manage_test_master', 'manage_test_pricing', 'print_barcode', 'reassign_result', 'receive_sample', 'reject_result', 'reject_sample', 'view_audit_log', 'view_order', 'view_patient', 'view_report', 'view_tat_dashboard', 'view_test'],
   'super-admin': ['*'],
 };
 
@@ -268,6 +271,49 @@ describe('RBAC matrix — landing after login', () => {
     const w = who('Billing Counter');
     expect(pickLanding({ hasAny: p => has(w)(p), isEnabled: () => true })).toBe('/frontdesk');
   });
+});
+
+describe('RBAC matrix — OPD-only doctor lands on the queue first', () => {
+  const ctxFor = (perms: string[]): RouteAccessCtx => ({ hasAny: p => p.some(c => perms.includes(c)), isEnabled: () => true });
+  it('an OPD-only doctor lands on /opd/consult even with a lab read permission', () => {
+    const ctx = ctxFor(['view_report', 'view_order', 'view_test']);
+    expect(pickLanding(ctx)).not.toBe('/opd/consult');
+    expect(pickLanding({ ...ctx, opdDoctor: true, opdOnlyDoctor: true })).toBe('/opd/consult');
+  });
+  it('opdOnlyDoctor alone (OPD hidden / not a doctor) changes nothing', () => {
+    const ctx = ctxFor(['view_report']);
+    expect(pickLanding({ ...ctx, opdOnlyDoctor: true })).toBe(pickLanding(ctx));
+  });
+  it('isOpdOnly: only when every role is OPD-scoped', () => {
+    expect(isOpdOnly(['opd'])).toBe(true);
+    expect(isOpdOnly(['lab', 'opd'])).toBe(false);
+    expect(isOpdOnly(['lab'])).toBe(false);
+    expect(isOpdOnly([])).toBe(false);
+    expect(isOpdOnly(undefined)).toBe(false);
+  });
+});
+
+describe('RBAC matrix — OPD doctor landing (opdDoctor)', () => {
+  // A user with NO permission that matches any LANDINGS row — the exact case
+  // that used to fall through to '/403'.
+  const NO_LANDING: RouteAccessCtx = { hasAny: () => false, isEnabled: () => true };
+
+  it('a doctor with no other landing lands on /opd/consult when opdDoctor is set', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: true })).toBe('/opd/consult');
+  });
+
+  it('lab behaviour is IDENTICAL when opdDoctor is false or omitted (still /403)', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: false })).toBe('/403');
+    expect(pickLanding(NO_LANDING)).toBe('/403');
+  });
+
+  for (const role of Object.keys(ROLES)) {
+    it(`${role}: opdDoctor never changes an already-admitted landing (an admin who is also a doctor keeps /admin)`, () => {
+      const w = who(role);
+      const ctx: RouteAccessCtx = { hasAny: p => has(w)(p), hasAnyEffective: p => hasEffective(w)(p), isEnabled: () => true, isSuper: w.perms.includes('*') };
+      expect(pickLanding({ ...ctx, opdDoctor: true })).toBe(pickLanding(ctx));
+    });
+  }
 });
 
 describe('canOpenRoute', () => {

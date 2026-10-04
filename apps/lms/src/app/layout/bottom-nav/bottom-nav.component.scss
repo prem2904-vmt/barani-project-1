@@ -23,18 +23,24 @@
    the nav stayed up while typing. The native-scoped, higher-specificity
    selector here (0,3,0 > the native 0,2,0) reclaims the override. */
 .pf-bottom-nav--kbd,
-:host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--kbd { display: none !important; }
+:host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--kbd,
+:host-context(html.device-touch) .pf-bottom-nav.pf-bottom-nav--kbd { display: none !important; }
 
 /* WhatsApp-style: inside an open chat thread (phone) the composer owns the
    bottom, so the floating nav is hidden entirely. The compound native
    selector (0,3,0) out-specifies the cap-native display:block (0,2,0). */
 :host-context(html.pf-chat-immersive) .pf-bottom-nav,
-:host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
+:host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav,
+:host-context(html.device-touch.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
+
+/* OPD consult (html.pf-opd-immersive): the bottom nav stays VISIBLE — the
+   consult ends above it (owner, consult v6). Nothing to hide here. */
 
 /* Hidden state for Lock Screen: hide the bottom nav entirely. */
 .pf-bottom-nav--hidden,
 :host-context(html) .pf-bottom-nav.pf-bottom-nav--hidden,
-:host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--hidden {
+:host-context(html.cap-native) .pf-bottom-nav.pf-bottom-nav--hidden,
+:host-context(html.device-touch) .pf-bottom-nav.pf-bottom-nav--hidden {
   display: none !important;
 }
 
@@ -44,6 +50,11 @@
    iPad Pro is 1366pt) — override Tailwind's xl:hidden so the rail shows
    instead of the desktop top-strip. Web/Electron desktop is unaffected. */
 :host-context(html.cap-native) .pf-bottom-nav {
+  display: block !important;
+}
+/* Same for any touch-first device on the web (Android tablet, iPad Pro in
+   landscape — html.device-touch, set in index.html before first paint). */
+:host-context(html.device-touch) .pf-bottom-nav {
   display: block !important;
 }
 

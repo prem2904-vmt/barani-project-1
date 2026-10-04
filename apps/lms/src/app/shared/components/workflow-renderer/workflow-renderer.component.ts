@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Input, OnChanges, SimpleChanges, TemplateRef, computed, inject, input, output, signal } from '@angular/core';
+import { BusyDirective } from '../../directives/busy.directive';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ConditionLogic,
@@ -32,7 +33,7 @@ export interface WorkflowStepCompleteEvent {
 @Component({
   selector: 'pf-workflow-renderer',
   standalone: true,
-  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent],
+  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let cfg = config();
@@ -79,10 +80,10 @@ export interface WorkflowStepCompleteEvent {
       @if (!hideActions()) {
         <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
           @for (action of extraActions(); track action.id) {
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()"
+            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                     (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
           }
-          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()"
+          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                   (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
         </div>
       }
@@ -110,11 +111,11 @@ export interface WorkflowStepCompleteEvent {
           <button type="button" class="pf-btn"
                   [class.pf-btn-primary]="action.variant === 'primary'"
                   [class.pf-btn-ghost]="action.variant !== 'primary'"
-                  [disabled]="submitting()"
+                  [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                   (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
         }
         <button type="button" class="pf-btn pf-btn-primary"
-                [disabled]="submitting()"
+                [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                 (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
       </div>
     } @else {
@@ -152,11 +153,11 @@ export interface WorkflowStepCompleteEvent {
               <button type="button" class="pf-btn"
                       [class.pf-btn-primary]="action.variant === 'primary'"
                       [class.pf-btn-ghost]="action.variant !== 'primary'"
-                      [disabled]="submitting()"
+                      [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                       (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
             }
             <button type="button" class="pf-btn pf-btn-primary"
-                    [disabled]="submitting()"
+                    [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                     (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
           </div>
         } @else {
@@ -187,6 +188,7 @@ export interface WorkflowStepCompleteEvent {
                       [value]="valueFor(step, p.name)"
                       [context]="context()"
                       [nd]="nd()"
+                      [enterAdvances]="true"
                       (valueChange)="setValue(step, p.name, $event)"></pf-dynamic-input>
                   </div>
                 }
@@ -252,7 +254,8 @@ export interface WorkflowStepCompleteEvent {
                 [error]="nd() ? fieldError(step, f.name) : null"
                 [defaultCountryCode]="nd() ? $any(context()['defaultPhoneCode'] ?? null) : null"
                 (localErrorChange)="setLocalError(step, f.name, $event)"
-                (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
+                (valueChange)="setValue(step, f.name, $event)"
+                (dobEstimatedChange)="setValue(step, f.name + DOB_ESTIMATED_SUFFIX, $event)"></pf-dynamic-input>
             </div>
           }
         } @empty {
@@ -299,6 +302,7 @@ export interface WorkflowStepCompleteEvent {
   `]
 })
 export class WorkflowRendererComponent implements OnChanges {
+  protected readonly DOB_ESTIMATED_SUFFIX = DOB_ESTIMATED_SUFFIX;
   readonly config = input<WorkflowConfig | null>(null);
   readonly context = input<WorkflowContext>({});
   readonly resources = input<WorkflowRendererResources>({});
@@ -645,7 +649,12 @@ export class WorkflowRendererComponent implements OnChanges {
     }
   }
 
+  /** The last action pressed — the one whose button shows the parent's
+   *  `submitting` state as busy dots (the others just stay disabled). */
+  protected readonly lastAct = signal<string | null>(null);
+
   finish(): void {
+    this.lastAct.set('finish');
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.workflowComplete.emit(this._formValues());
@@ -659,6 +668,7 @@ export class WorkflowRendererComponent implements OnChanges {
   }
 
   triggerExtraAction(actionId: string): void {
+    this.lastAct.set(actionId);
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.extraActionClicked.emit({ actionId, values: this._formValues() });
@@ -818,6 +828,11 @@ export function splitByStep(values: WorkflowFormValues): Record<string, Record<s
 
 /** Helper for callers: given a workflow config + flat values, produce { standard, metadata }
  *  where metadata bundles every custom field (storageKey starting with `metadata.`). */
+/** Companion form-value key suffix: `<step>::<dobField>#estimated` = true
+ *  when the DOB was synthesised from the age box. Not a field, so
+ *  splitByStorage ignores it; the registration host reads it. */
+export const DOB_ESTIMATED_SUFFIX = '#estimated';
+
 export function splitByStorage(
   cfg: WorkflowConfig,
   values: WorkflowFormValues

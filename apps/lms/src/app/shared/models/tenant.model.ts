@@ -25,6 +25,9 @@ export interface Tenant {
    * 'scan' (default) → QR/barcode camera scanning; 'manual' → no QR, the
    * sample number is shown and typed by hand. Absent/empty = 'scan'. */
   scanMode?: 'scan' | 'manual';
+  /** Sample-search preset (Lab settings): true / false = the lab's choice;
+   * null/absent = automatic (on when sample IDs start with yymm). */
+  sampleSearchPreset?: boolean | null;
   /** Lab calculation constants (JSON object string, e.g.
    * '{"ISI":1.1,"MNPT":12.5,"NORMAL_HCT":45}') feeding calculated-result
    * formulas (INR reagent properties, RPI anchor). Absent keys fall back to

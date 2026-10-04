@@ -1,40 +1,83 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal,
+  untracked, viewChild,
+} from '@angular/core';
 import { canOpenRoute } from '../../core/auth/route-access';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountsService } from '../../core/auth/accounts.service';
+import { SessionService } from '../../core/auth/session.service';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
 import { PlatformService } from '../../core/services/platform.service';
+import { KeyboardService } from '../../core/services/keyboard.service';
 import { environment } from '../../../environments/environment';
 
 // Post-login routing is owned by the landing guard ('/' → pickLanding), which
 // reads the same ROUTE_ACCESS table as the route guards and the nav — so a role
 // never lands on a screen that bounces it (Billing Counter used to hit /403).
 
+/** Field order for Enter → next. */
+export type LoginField = 'org' | 'username' | 'password';
+
+/** The note shown above the form after the app ended a session. */
+export function sessionNotice(reason: string | null): string | null {
+  switch (reason) {
+    case 'expired': return 'Your session expired. Please sign in again.';
+    case 'suspended': return 'This organization’s access is currently suspended. Contact your administrator.';
+    case 'elsewhere': return 'You were signed out in another window.';
+    default: return null;
+  }
+}
+
+/** A post-login return URL we may follow: in-app, absolute path, not a
+ *  protocol-relative / external URL and not the auth screens themselves. */
+export function safeReturnUrl(url: string | null): string | null {
+  if (!url) return null;
+  return SessionService.isReturnable(url) ? url : null;
+}
 
 @Component({
   selector: 'pf-login',
   standalone: true,
-  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent],
+  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent, AmbientBgComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.component.html',
-  styleUrl: './login.component.scss'
+  styleUrl: './login.component.scss',
+  host: { '[class.lg-host--kb]': 'kb.visible()' },
 })
-export class LoginComponent {
+export class LoginComponent implements AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
   private readonly platform = inject(PlatformService);
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly kb = inject(KeyboardService);
 
   protected readonly org = signal(this.auth.rememberedOrgs()[0] ?? '');
   protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly busy = signal(false);
+  /** Signed in, the app's first screen is on its way (lazy chunk + guards):
+   *  the button stays busy until the navigation lands, so there is no dead
+   *  "Sign in" button to press again in between (ND-PATTERN "Loading feedback"). */
+  protected readonly entering = signal(false);
+  /** The submit button's busy look: signing in OR entering the app. */
+  protected readonly working = computed(() => this.busy() || this.entering());
   protected readonly error = signal<string | null>(null);
+  /** Which field the error is about (inline + aria-invalid); null = the form. */
+  protected readonly errorField = signal<LoginField | null>(null);
   protected readonly showPassword = signal(false);
+  protected readonly notice = signal<string | null>(null);
+
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
+  private readonly orgInput = viewChild<ElementRef<HTMLInputElement>>('orgInput');
+  private readonly userInput = viewChild<ElementRef<HTMLInputElement>>('userInput');
+  private readonly passInput = viewChild<ElementRef<HTMLInputElement>>('passInput');
+  private readonly submitBtn = viewChild<ElementRef<HTMLButtonElement>>('submitBtn');
 
   /**
    * "Add account" mode (…/login?add=1): a signed-in user is appending another
@@ -48,8 +91,26 @@ export class LoginComponent {
   /** Org field is fixed when adding an account onto an existing tenant. */
   protected readonly orgLocked = computed(() => this.addMode() && !!this.lockedTenantId());
 
+  /** Remembered organizations other than the one in the field — tap to use
+   *  (a themed chip row; never a native datalist). */
+  protected readonly otherOrgs = computed(() => {
+    const cur = this.org().trim().toLowerCase();
+    return this.auth.rememberedOrgs().filter(o => o.toLowerCase() !== cur).slice(0, 4);
+  });
+
+  /** True when running inside Capacitor (iOS/Android), false on web. */
+  protected readonly isNative = computed(() => this.platform.isCapacitor());
+  /** Touch host: never auto-focus (no surprise keyboard); dodge the keyboard. */
+  private readonly touch = typeof window !== 'undefined'
+    && (this.platform.isCapacitor() || (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches));
+  private navigating = false;
+  /** Where to go after signing in (captured on arrival; in-app paths only). */
+  private readonly returnUrl = safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
+  /** Split layout (brand panel + card): iPad landscape and desktop. */
+  protected readonly wide = signal(false);
+
   constructor() {
-    // Credentials-email deep link (…/login?org=<slug>&username=<u>): pre-fill
+    // Credentials-email deep link (…/login?org=<name>&username=<u>): pre-fill
     // org + username so the admin only enters the temp password, then the
     // mustChangePassword gate routes them to /set-password.
     const qp = this.route.snapshot.queryParamMap;
@@ -57,6 +118,7 @@ export class LoginComponent {
     const username = qp.get('username');
     if (org) this.org.set(org);
     if (username) this.username.set(username);
+    this.notice.set(sessionNotice(qp.get('reason')));
 
     // Add-account: lock the organization to the currently-active profile's
     // tenant. Prefer the on-device registry (survives on the login screen);
@@ -72,16 +134,74 @@ export class LoginComponent {
         this.org.set(orgName);
       }
     }
+
+    // A restored session whose profile arrived late (slow cold start): the
+    // guard booted to this screen, but the person IS signed in — follow the
+    // session in instead of asking for the password again.
+    effect(() => {
+      const authed = this.auth.isAuthenticated();
+      untracked(() => {
+        if (!authed || this.addMode() || this.busy() || this.navigating) return;
+        void this.enterApp();
+      });
+    });
+
+    this.wireKeyboardDodge();
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      this.wide.set(mq.matches);
+      const onChange = (e: MediaQueryListEvent) => this.wide.set(e.matches);
+      mq.addEventListener?.('change', onChange);
+      this.destroyRef.onDestroy(() => mq.removeEventListener?.('change', onChange));
+    }
   }
 
-  /** Previously-used organizations for the login dropdown. */
-  protected readonly orgs = this.auth.rememberedOrgs;
-
-  /** True when running inside Capacitor (iOS/Android), false on web. */
-  protected readonly isNative = computed(() => this.platform.isCapacitor());
+  ngAfterViewInit(): void {
+    // Keyboard-first on web: focus the first empty field. Never on touch.
+    if (this.touch) return;
+    queueMicrotask(() => this.focusField(this.firstEmptyField()));
+  }
 
   protected canSubmit(): boolean {
     return this.org().trim().length >= 1 && this.username().trim().length >= 1 && this.password().length >= 1;
+  }
+
+  private firstEmptyField(): LoginField {
+    if (!this.orgLocked() && !this.org().trim()) return 'org';
+    if (!this.username().trim()) return 'username';
+    return 'password';
+  }
+
+  private inputFor(f: LoginField): HTMLInputElement | undefined {
+    return (f === 'org' ? this.orgInput() : f === 'username' ? this.userInput() : this.passInput())?.nativeElement;
+  }
+
+  protected focusField(f: LoginField): void {
+    const el = this.inputFor(f) ?? (f === 'org' ? this.userInput()?.nativeElement : undefined);
+    el?.focus({ preventScroll: true });
+    if (el) this.revealSoon(el);
+  }
+
+  /** Enter moves to the next field in reading order; Enter on the last
+   *  field submits. The soft keyboard's key reads Next / Go to match. */
+  protected onEnter(ev: Event, from: LoginField): void {
+    const kev = ev as KeyboardEvent;
+    if (kev.isComposing) return;
+    ev.preventDefault();
+    if (from === 'org') { this.focusField('username'); return; }
+    if (from === 'username') { this.focusField('password'); return; }
+    void this.submit();
+  }
+
+  protected useOrg(o: string): void {
+    this.org.set(o);
+    this.clearError();
+    this.focusField(this.username().trim() ? 'password' : 'username');
+  }
+
+  protected clearError(): void {
+    this.error.set(null);
+    this.errorField.set(null);
   }
 
   private canVisit(url: string): boolean {
@@ -92,15 +212,40 @@ export class LoginComponent {
     });
   }
 
+  /** Leave the login screen for the app: forced password change first,
+   *  then the return URL when the user may open it, else the landing. */
+  private async enterApp(): Promise<void> {
+    if (this.navigating) return;
+    this.navigating = true;
+    this.entering.set(true);
+    let ok = false;
+    try {
+      if (this.auth.mustChangePassword()) {
+        ok = await this.router.navigateByUrl('/set-password', { replaceUrl: true });
+        return;
+      }
+      const returnUrl = this.returnUrl;
+      if (returnUrl && this.canVisit(returnUrl)) {
+        ok = await this.router.navigateByUrl(returnUrl, { replaceUrl: true });
+        return;
+      }
+      ok = await this.router.navigateByUrl('/', { replaceUrl: true });
+    } finally {
+      // One-shot once we have left: a late auth signal must not navigate again.
+      if (!ok) { this.navigating = false; this.entering.set(false); }
+    }
+  }
+
+  protected cancelAdd(): void {
+    void this.router.navigateByUrl('/');
+  }
+
   async submit(ev?: Event) {
     // Prevent the form's default action so we don't get a duplicate
     // call (button click triggers submit AND form ngSubmit can fire).
     ev?.preventDefault?.();
-    if (this.busy()) return;
+    if (this.busy() || this.entering()) return;
 
-    // Surface what we have RIGHT NOW so we know the handler fired
-    // even if the network step hangs. Visible in Xcode's console
-    // when running on simulator/device.
     console.info('[login] submit', {
       hasOrg: this.org().length > 0,
       hasUsername: this.username().length > 0,
@@ -110,11 +255,16 @@ export class LoginComponent {
     });
 
     if (!this.canSubmit()) {
-      this.error.set('Enter your organization, username and password to continue.');
+      const f = this.firstEmptyField();
+      this.error.set(f === 'org' ? 'Enter your organization name.'
+        : f === 'username' ? 'Enter your username.' : 'Enter your password.');
+      this.errorField.set(f);
+      this.focusField(f);
       return;
     }
 
-    this.error.set(null);
+    this.clearError();
+    this.notice.set(null);
     this.busy.set(true);
     try {
       await Promise.race([
@@ -125,26 +275,21 @@ export class LoginComponent {
           this.orgLocked() ? this.lockedTenantId()! : undefined),
         new Promise<never>((_, rej) => setTimeout(
           () => rej(new Error('Sign-in timed out — check your connection')),
-          15_000
+          20_000
         ))
       ]);
-
-      // First login (or after an admin reset): force a password change.
-      if (this.auth.mustChangePassword()) {
-        await this.router.navigateByUrl('/set-password');
-        return;
+      this.busy.set(false);
+      await this.enterApp();
+    } catch (e: unknown) {
+      const msg = this.humaniseError(e);
+      this.error.set(msg);
+      this.errorField.set(null);
+      // Wrong credentials: keep org + username, clear and refocus the
+      // password. A network error keeps everything — just try again.
+      if (/(wrong|invalid) organization/i.test(msg)) {
+        this.password.set('');
+        if (!this.touch) this.focusField('password');
       }
-
-      // Route by permission — first match wins. Honor returnUrl only if the
-      // user can actually enter it; otherwise let the landing guard pick.
-      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl');
-      if (returnUrl && returnUrl !== '/login' && returnUrl !== '/' && this.canVisit(returnUrl)) {
-        await this.router.navigateByUrl(returnUrl);
-        return;
-      }
-      await this.router.navigateByUrl('/');
-    } catch (e: any) {
-      this.error.set(this.humaniseError(e));
     } finally {
       this.busy.set(false);
     }
@@ -153,8 +298,8 @@ export class LoginComponent {
   /** Map raw errors to readable messages — especially CORS/network failures
    *  on Capacitor, which by default just say "Failed to fetch" and stump
    *  everyone. */
-  private humaniseError(e: any): string {
-    const msg = (e?.message ?? String(e)) as string;
+  private humaniseError(e: unknown): string {
+    const msg = ((e as { message?: string })?.message ?? String(e)) as string;
     // Capacitor WKWebView fetch failures
     if (msg.includes('Failed to fetch') || msg.includes('Load failed') || msg.includes('Network request failed')) {
       // Deliberately no backend host/URL here — this is a professional
@@ -170,5 +315,88 @@ export class LoginComponent {
       return 'Session expired. Try again.';
     }
     return msg || 'Sign-in failed';
+  }
+
+  // ── Soft keyboard: keep the focused field above it ─────────────────
+  // The old screen centred a fixed-height, overflow:hidden column: when the
+  // keyboard came up (Capacitor resize:'native' shrinks the WebView; mobile
+  // Safari overlays it) the 2nd / 3rd field sat under it and nothing could
+  // scroll. Now the page is its own scroller whose content keeps the
+  // pre-keyboard height (no re-centring jump), gains a bottom inset equal to
+  // the keyboard overlap (--lg-kb, for browsers that overlay), and the
+  // focused field is scrolled into the visible viewport.
+
+  private revealTimers: ReturnType<typeof setTimeout>[] = [];
+
+  private wireKeyboardDodge(): void {
+    if (typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    const onViewport = () => {
+      this.syncInsets();
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement && this.scroller()?.nativeElement.contains(el)) this.reveal(el);
+    };
+    const onResize = () => this.syncInsets();
+    vv?.addEventListener('resize', onViewport);
+    vv?.addEventListener('scroll', onViewport);
+    window.addEventListener('resize', onResize);
+    this.destroyRef.onDestroy(() => {
+      vv?.removeEventListener('resize', onViewport);
+      vv?.removeEventListener('scroll', onViewport);
+      window.removeEventListener('resize', onResize);
+      for (const t of this.revealTimers) clearTimeout(t);
+      // Convention: a view that owns an input resets the keyboard latches
+      // on the way out, or the next screen's navbar can stay hidden.
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && this.scroller()?.nativeElement.contains(active)) active.blur();
+      this.kb.reset();
+    });
+    queueMicrotask(() => this.syncInsets());
+  }
+
+  /** Keyboard overlap + the stable content height, as CSS variables. */
+  private syncInsets(): void {
+    const host = this.scroller()?.nativeElement;
+    if (!host || typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    const focused = document.activeElement instanceof HTMLInputElement && host.contains(document.activeElement);
+    const overlap = vv && focused ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+    host.style.setProperty('--lg-kb', `${overlap > 80 ? overlap : 0}px`);
+    // Freeze the content height while the keyboard is up, so a WebView that
+    // shrinks under it doesn't re-centre the card (the "jump").
+    if (!focused && !this.kb.visible()) host.style.setProperty('--lg-h', `${host.clientHeight}px`);
+  }
+
+  /** Reveal after the keyboard has animated in (iOS ~250ms, Android later). */
+  protected revealSoon(el: HTMLElement): void {
+    if (!this.touch) return;
+    for (const t of this.revealTimers) clearTimeout(t);
+    this.revealTimers = [60, 320, 650].map(ms => setTimeout(() => { this.syncInsets(); this.reveal(el); }, ms));
+  }
+
+  protected onFieldFocus(ev: FocusEvent): void {
+    const el = ev.target as HTMLElement | null;
+    if (el) this.revealSoon(el);
+  }
+
+  /** Scroll so the focused field's block (label + input; for the password,
+   *  down to the Sign in button) sits inside the visible viewport. */
+  private reveal(el: HTMLElement): void {
+    const host = this.scroller()?.nativeElement;
+    if (!host || !this.touch) return;
+    const field = (el.closest('.lg-field') as HTMLElement | null) ?? el;
+    const top = field.getBoundingClientRect().top;
+    let bottom = field.getBoundingClientRect().bottom;
+    const btn = this.submitBtn()?.nativeElement;
+    if (el === this.passInput()?.nativeElement && btn) bottom = Math.max(bottom, btn.getBoundingClientRect().bottom);
+    const vv = window.visualViewport;
+    const visTop = (vv?.offsetTop ?? 0) + 12;
+    const visBottom = (vv ? vv.offsetTop + vv.height : window.innerHeight) - 16;
+    let delta = 0;
+    if (bottom > visBottom) delta = bottom - visBottom;
+    if (top - delta < visTop) delta = top - visTop;   // never push the label off the top
+    if (Math.abs(delta) < 2) return;
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    host.scrollTo({ top: host.scrollTop + delta, behavior: reduce ? 'auto' : 'smooth' });
   }
 }

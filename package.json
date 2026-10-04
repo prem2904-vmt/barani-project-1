@@ -1,8 +1,8 @@
 {
   "name": "prefrontal",
   "productName": "Prefrontal",
-  "version": "0.0.0",
-  "description": "Prefrontal \u2014 clinical lab workflow.",
+  "version": "1.0.0",
+  "description": "Prefrontal — clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
     "email": "support@prefrontal.in"
@@ -18,6 +18,7 @@
     "electron:dev": "concurrently \"npx nx serve lms\" \"wait-on http://localhost:4200 && electron .\"",
     "electron:build": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder",
     "electron:build:devapi": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder",
+    "electron:build:dev:mac": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-dev && electron-builder --mac -c.extraMetadata.pfDataProfile=dev",
     "electron:build:win": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --win",
     "electron:build:mac": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --mac",
     "electron:build:linux": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --linux",
@@ -29,22 +30,29 @@
     "cap:open:android": "npx cap open android",
     "cap:run:ios": "npx cap run ios",
     "cap:run:android": "npx cap run android",
-    "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist"
+    "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
+    "test:instruments": "node --test electron/instruments/test/*.test.js",
+    "test:electron": "node --test electron/test/*.test.js",
+    "smoke:fullscreen": "electron electron/test/fullscreen-smoke.js",
+    "sim:cbc": "node electron/instruments/sim/cbc-sim.js"
   },
   "build": {
     "appId": "in.prefrontal.app",
     "productName": "Prefrontal",
-    "copyright": "Copyright \u00a9 2026 Prefrontal Inc",
+    "copyright": "Copyright © 2026 Prefrontal Inc",
     "directories": {
       "output": "dist/electron"
     },
     "files": [
       "electron/**/*",
+      "!electron/test/**",
       "dist/apps/lms/browser/**/*"
     ],
     "asarUnpack": [
       "**/node_modules/usb/**",
-      "**/node_modules/@types/w3c-web-usb/**"
+      "**/node_modules/@types/w3c-web-usb/**",
+      "**/node_modules/serialport/**",
+      "**/node_modules/@serialport/**"
     ],
     "win": {
       "target": [
@@ -91,6 +99,7 @@
     "@angular/cli": "~21.2.0",
     "@angular/compiler-cli": "~21.2.0",
     "@angular/language-service": "~21.2.0",
+    "@aws-sdk/client-s3": "^3.1145.0",
     "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.8.0",
     "@nx/angular": "^22.6.5",
@@ -118,6 +127,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-playwright": "^1.6.2",
     "fake-indexeddb": "^6.2.5",
+    "js-yaml": "^5.4.2",
     "jsdom": "^27.1.0",
     "nx": "22.6.5",
     "patch-package": "^8.0.0",
@@ -171,6 +181,7 @@
     "date-fns": "^4.1.0",
     "echarts": "^5.6.0",
     "electron-is-dev": "^3.0.1",
+    "electron-updater": "^6.8.9",
     "flatpickr": "^4.6.13",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
@@ -180,6 +191,7 @@
     "preact": "^10.29.1",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
+    "serialport": "^13.0.0",
     "tailwindcss": "^4.2.2",
     "temporal-polyfill": "^0.3.0",
     "usb": "^2.18.0",

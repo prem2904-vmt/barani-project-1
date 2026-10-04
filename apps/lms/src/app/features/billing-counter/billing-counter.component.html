@@ -130,8 +130,8 @@
           }
         </header>
         <div class="nd-card__body pf-bc-queue__body">
-          @if (loadingOutstanding() && queue().length === 0) {
-            <p class="pf-bc-muted">Loading the queue…</p>
+          @if (outstandingSkel() && queue().length === 0) {
+            <pf-skeleton-rows [rows]="4" label="Loading the queue…"></pf-skeleton-rows>
           } @else if (queue().length === 0) {
             <div class="pf-bc-empty pf-bc-empty--queue">
               <span class="nd-card__icon pf-bc-empty__icon" aria-hidden="true">
@@ -148,7 +148,7 @@
                   <button type="button" class="pf-bc-qrow" [pfZoomSource]="r.orderId" [attr.data-since]="r.since"
                           [attr.aria-pressed]="selectedOrderId() === r.orderId" (click)="selectRow(r)">
                     <span class="pf-bc-qrow__text">
-                      <span class="pf-bc-qrow__name">{{ r.name }}</span>
+                      <span class="pf-bc-qrow__name"><pf-daily-no [of]="r" />{{ r.name }}</span>
                       <span class="pf-bc-qrow__meta">
                         @if (r.orderLabel) { <span class="nd-num">{{ r.orderLabel }}</span> }
                         @if (r.orderLabel && r.tests != null) { · }
@@ -220,11 +220,11 @@
             </div>
           } @else if (selectedOrderId()) {
             <!-- ── The cart: what is billed, what is owed, then payment ── -->
-            @if (loadingOrder()) {
-              <p class="pf-bc-muted">Loading the order…</p>
+            @if (orderSkel()) {
+              <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading the order…"></pf-skeleton-card>
             } @else if (selectedOrder(); as o) {
               <div class="pf-bc-subject">
-                <p class="pf-bc-subject__name">{{ orderPatientName(o) }}</p>
+                <p class="pf-bc-subject__name"><pf-daily-no [of]="o" />{{ orderPatientName(o) }}</p>
                 <p class="pf-bc-subject__meta">
                   <span class="nd-num">{{ orderLabel(o) }}</span>
                   · {{ o.createdAt | date:'d MMM, h:mm a' }}
@@ -311,8 +311,8 @@
               <p class="pf-bc-subject__meta nd-num">{{ patientMeta(p) }}@if (p.phone) { · {{ p.phone }} }</p>
             </div>
             <p class="pf-bc-sec">Orders to bill</p>
-            @if (loadingOrders()) {
-              <p class="pf-bc-muted">Loading orders…</p>
+            @if (ordersSkel()) {
+              <pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Loading orders…"></pf-skeleton-rows>
             } @else {
               <ul class="pf-bc-list">
                 @for (o of billableOrders(); track o.id) {
@@ -351,7 +351,8 @@
         <!-- Sticky footer: ONE primary per state. -->
         @if (paid()) {
           <footer class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="printing()" (click)="printReceipt()">
+            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="printing()"
+                    [pfBusy]="printing()" pfBusyLabel="Preparing receipt…" (click)="printReceipt()">
               {{ printing() ? 'Preparing…' : (paid()?.later ? 'Print bill' : 'Print receipt') }}
             </button>
             @if (collectsHere()) {
@@ -374,15 +375,18 @@
               <button type="button" class="nd-btn pf-bc-primary"
                       [class.nd-btn--primary]="collectReady()" [class.nd-btn--secondary]="!collectReady()"
                       [class.nd-span]="!selectedPatient()"
-                      [disabled]="!collectReady()" (click)="runCollect()">{{ collectLabel() }}</button>
+                      [disabled]="!collectReady()" [pfBusy]="paying()" pfBusyLabel="Recording payment…"
+                      (click)="runCollect()">{{ collectLabel() }}</button>
             } @else if (billState() === 'refund' && canRefund()) {
               <button type="button" class="nd-btn nd-btn--primary pf-bc-primary" [class.nd-span]="!selectedPatient()"
-                      [disabled]="refunding()" (click)="refund()">
+                      [disabled]="refunding()" [pfBusy]="refunding()" pfBusyLabel="Recording refund…"
+                      (click)="refund()">
                 {{ refunding() ? 'Refunding…' : 'Refund ' + (refundDue() | inr) }}
               </button>
             } @else if (billState() === 'paid') {
               <button type="button" class="nd-btn nd-btn--secondary" [class.nd-span]="!selectedPatient()"
-                      [disabled]="printing()" (click)="printReceipt()">{{ printing() ? 'Preparing…' : 'Print receipt' }}</button>
+                      [disabled]="printing()"
+                    [pfBusy]="printing()" pfBusyLabel="Preparing receipt…" (click)="printReceipt()">{{ printing() ? 'Preparing…' : 'Print receipt' }}</button>
             }
           </footer>
         }
@@ -450,8 +454,8 @@
       <!-- Balances the patient owes + refunds the lab owes. -->
       <section class="pf-bc-msec" aria-labelledby="pf-bc-due-t">
         <h3 class="pf-bc-sec" id="pf-bc-due-t">Balances due / refunds owed</h3>
-        @if (loadingOutstanding()) {
-          <p class="pf-bc-muted">Loading balances…</p>
+        @if (outstandingSkel()) {
+          <pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Loading balances…"></pf-skeleton-rows>
         } @else if (due().length === 0 && refundsOwed().length === 0) {
           <p class="pf-bc-muted">Nothing due and no refunds owed.</p>
         } @else {
@@ -491,8 +495,8 @@
           <pf-nd-date class="pf-bc-date" label="Business day" inputId="pf-bc-date"
                       [value]="reconcileDate()" [max]="today" (valueChange)="setReconcileDate($event)"></pf-nd-date>
         </div>
-        @if (loadingReconcile()) {
-          <p class="pf-bc-muted">Loading summary…</p>
+        @if (reconcileSkel()) {
+          <pf-skeleton-table [rows]="4" [cols]="3" label="Loading summary…"></pf-skeleton-table>
         } @else if (reconcile(); as r) {
           <table class="pf-bc-recon">
             <thead>

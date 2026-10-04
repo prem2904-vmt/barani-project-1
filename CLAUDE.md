@@ -1,3 +1,7 @@
+# Read first
+
+Before any change, read and follow `docs/ENGINEERING-RULES.md` (single source of truth, isolation, query rules, clinical safety, definition of done). When a fix reveals a new kind of mistake, add one line there in the same change.
+
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->
 

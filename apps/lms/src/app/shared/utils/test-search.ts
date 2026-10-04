@@ -261,3 +261,35 @@ export function filterTestListStrict<T extends Test | any>(list: T[], query: str
       || a.i - b.i)
     .map(x => x.t);
 }
+
+/** A row enriched by {@link enrichForCatalogueSearch} — its own fields plus
+ *  whatever of the catalogue's search-relevant ones its `testId` matched. */
+export type SearchableByCatalogue<T extends { testId: string }> =
+  T & Pick<Partial<Test>, 'id' | 'catalogKey' | 'profile' | 'shortName' | 'testCode' | 'type'>;
+
+/**
+ * Lets a screen whose OWN fetched row is narrower than `Test` (e.g. Lab
+ * Trends' `TrendTest` — just testId/testName/count/parameters, no
+ * shortName/profile/catalogKey) still search by panel abbreviation ("LFT" /
+ * "RFT" / "TFT") exactly like order-create / book-visit / book-appointment /
+ * appointment-booking-modal do — WITHOUT a second copy of the catalogue: this
+ * is a read-time JOIN, by `testId` against the catalogue row's own `id`, onto
+ * the ONE already-fetched Test Master catalogue (`testListUrl()` + the same
+ * `ApiService.get<Test[]>` every one of those screens already calls). A row
+ * with no matching catalogue entry (a deleted/retired test) is passed through
+ * unenriched — it still searches by its own name/testId, just without
+ * aliases. Panel MEMBERSHIP keys off `catalogKey` throughout (never code or
+ * name), same as `profileAliases`.
+ */
+export function enrichForCatalogueSearch<T extends { testId: string }>(
+  rows: readonly T[],
+  catalogue: readonly Test[],
+): SearchableByCatalogue<T>[] {
+  const byId = new Map(catalogue.map(c => [c.id, c]));
+  return rows.map(r => {
+    const c = byId.get(r.testId);
+    return c
+      ? { ...r, id: r.testId, catalogKey: c.catalogKey, profile: c.profile, shortName: c.shortName, testCode: c.testCode, type: c.type }
+      : { ...r, id: r.testId };
+  });
+}

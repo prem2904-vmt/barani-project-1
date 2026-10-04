@@ -107,7 +107,7 @@ function render(opts: Opts = {}) {
       if (url.startsWith('/api/billing/b1')) return of(BILL1);
       if (url.startsWith('/api/billing/b3')) return of({ ...BILL1, id: 'b3', orderId: 'o3', totalPayable: 300, totalPaid: 0, balance: 300, totalDiscount: 0, items: [] });
       if (url.startsWith('/api/billing/b2')) return of({ ...BILL1, id: 'b2', orderId: 'o2', totalPayable: 300, totalPaid: 500, balance: -200, totalDiscount: 0, items: [] });
-      if (url === '/api/orders/today') return of(opts.empty ? [] : [ORDER, ORDER4]);
+      if (url === '/api/orders/today?view=summary') return of(opts.empty ? [] : [ORDER, ORDER4]);
       if (url.startsWith('/api/orders/')) {
         const id = url.split('/')[3];
         return of(ORDERS[id] ?? { ...ORDER, id, patient: { id: 'p2', firstName: 'Kavin', fathersName: 'Raj' } });
@@ -123,6 +123,11 @@ function render(opts: Opts = {}) {
         const id = url.split('/')[3];
         bal[id] = Math.max(0, (bal[id] ?? 0) - body.amount);
         return of(billNow(id));
+      }
+      if (url.endsWith('/wallet-payment')) {
+        const id = url.split('/')[3];
+        bal[id] = Math.max(0, (bal[id] ?? 0) - body.amount);
+        return of({ bill: billNow(id), vendor: { id: body.vendorId, name: 'Apollo', usedCredit: body.amount, totalCredit: 0, balance: -body.amount, outstanding: body.amount, isActive: true } });
       }
       if (url.endsWith('/pay-later')) {
         const id = url.split('/')[3];
@@ -237,7 +242,7 @@ describe('Billing counter — the queue (LEFT)', () => {
     c.poll();
     const urls = api.get.mock.calls.map((x: any[]) => x[0]);
     expect(urls).toContain('/api/billing/outstanding');
-    expect(urls).toContain('/api/orders/today');
+    expect(urls).toContain('/api/orders/today?view=summary');
   });
 
   it('live: a bill / order work event refreshes the lists (debounced, once) — no 20 s network poll', () => {
@@ -254,7 +259,7 @@ describe('Billing counter — the queue (LEFT)', () => {
       vi.advanceTimersByTime(500);
       const urls = api.get.mock.calls.map((x: any[]) => x[0]);
       expect(urls.filter((u: string) => u === '/api/billing/outstanding').length).toBe(1);
-      expect(urls).toContain('/api/orders/today');
+      expect(urls).toContain('/api/orders/today?view=summary');
 
       api.get.mockClear();
       work.push({ type: 'result.draft' });            // not a billing list event
@@ -378,6 +383,20 @@ describe('Billing counter — select → cart → pay here', () => {
     await c.confirmPayment({ mode: 'split', splitParts: [{ mode: 'cash', amount: 400 }, { mode: 'upi', amount: 600 }] });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 400, mode: 'cash' });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 600, mode: 'upi' });
+  });
+
+  it('Credit Wallet is ONE call (H8): the payment and the partner charge commit together on the server', async () => {
+    const { f, c, api } = render();
+    c.selectRow(c.queue()[1]);
+    f.detectChanges();
+    await flush();
+    await c.confirmPayment({ mode: 'wallet', vendorId: 'v1' });
+    const posts = api.post.mock.calls.map((x: any[]) => x[0]);
+    expect(api.post).toHaveBeenCalledWith('/api/billing/b1/wallet-payment',
+      { vendorId: 'v1', amount: 1000, referenceNo: 'v1', reason: 'Bill #INV-000123' });
+    expect(posts.filter((u: string) => u.includes('/api/vendors/'))).toEqual([]);
+    expect(posts.filter((u: string) => u.endsWith('/payment'))).toEqual([]);
+    expect(c.paid()?.mode).toBe('wallet');
   });
 });
 

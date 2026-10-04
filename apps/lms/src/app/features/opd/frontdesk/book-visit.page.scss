@@ -1,0 +1,124 @@
+// OPD → New visit. Everything shared with the lab's Order & Payments (band
+// pill, cards, tabs, chips, rows, BILLING, cart bar / sheet) comes from
+// order-create.component.scss, loaded first in styleUrls. This file only adds
+// the OPD pieces: the three work columns, the doctor / purpose tiles and the
+// editable fee in the bill line. Theme tokens only (light + dark).
+
+// ── Card header: the BILLING header (same icon tile, title, height, border).
+.pf-ov-head__date { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+
+// ── Two inner panels: Doctor | Visit purpose. Side by side, each scrolls on
+// its own; stacked on phones (the panes then flow in one scroller).
+.pf-ov-panes {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); grid-template-rows: minmax(0, 1fr);
+}
+.pf-ov-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.pf-ov-pane + .pf-ov-pane { border-left: 1px solid var(--border-muted); }
+.pf-ov-pane__hdr { flex: none; margin: 0; padding: 12px 20px 8px; }
+.pf-ov-main .pf-ov-pane__tabs { padding-top: 0; }
+.pf-ov-pane__body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px; padding: 10px 20px 20px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+}
+
+// ── Doctor grid: the lab test grid — 2 per row at the pane's width, 1 when
+// narrow (.pf-oc-cat__list is an inline-size container). ──
+.pf-ov-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 4px 0 4px; }
+@container (min-width: 440px) { .pf-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pf-ov-list { padding-top: 12px; }
+
+// Department chips + the "Free now" toggle chip at the row's end.
+.pf-ov-chips { display: flex; flex-wrap: wrap; align-items: center; }
+.pf-ov-chips__spacer { flex: 1 1 auto; }
+.pf-ov-freechip { display: inline-flex; align-items: center; gap: 6px; }
+
+// ── Visit purpose panel ──
+.pf-ov-who { display: flex; flex-direction: column; gap: 2px; padding: 0 2px 2px; }
+.pf-ov-svcs { display: flex; flex-direction: column; gap: 8px; }
+.pf-ov-svc .pf-crow__main { align-items: flex-start; gap: 10px; padding: 10px 12px; }
+.pf-ov-svc .pf-price { align-self: flex-start; padding-top: 2px; font-size: 13px; font-weight: 600; }
+.pf-ov-radio { border-radius: 50%; margin-top: 1px; }
+.pf-ov-complaint { margin-top: 4px; }
+.pf-ov-complaint .nd-input { height: 40px; width: 100%; }
+
+@media (max-width: 640px) {
+  .pf-ov-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; overflow-y: auto; }
+  .pf-ov-pane { overflow: visible; }
+  .pf-ov-pane + .pf-ov-pane { border-left: 0; border-top: 1px solid var(--border-muted); }
+  .pf-ov-pane .pf-oc-cat__list, .pf-ov-pane__body { overflow: visible; }
+  .pf-ov-pane__hdr, .pf-ov-pane__body { padding-left: 12px; padding-right: 12px; }
+  .pf-ov-pane__body { padding-bottom: 96px; }
+}
+
+// ── Tiles: the catalogue row (.pf-crow) with an avatar / meta lines ──
+.pf-ov-doc .pf-crow__main { align-items: flex-start; gap: 10px; padding: 10px 12px; }
+.pf-ov-avatar {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent);
+  border: 1px solid var(--border-muted);
+}
+.pf-ov-avatar--dept { border-radius: 10px; font-size: 11px; }
+.pf-crow--in .pf-ov-avatar { border-color: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 55%, transparent); }
+.pf-ov-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+// Names are never cut (ND §5).
+.pf-ov-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-ov-meta { font-size: 12px; line-height: 1.35; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.pf-ov-avail { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.pf-ov-side { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.pf-ov-doc .pf-price { align-self: flex-start; padding-top: 2px; font-size: 13px; font-weight: 600; }
+.pf-ov-doc--away .pf-ov-name { color: var(--text-secondary); }
+
+// Availability dot: neutral when free, amber within the hour, red beyond.
+.pf-ov-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.pf-ov-dot[data-tone='free'] { background: var(--color-violet-600, #7c3aed); }
+.pf-ov-dot[data-tone='ok'] { background: var(--color-warning, #f59e0b); }
+.pf-ov-dot[data-tone='long'] { background: var(--error-text, #dc2626); }
+.pf-ov-dot[data-tone='away'] { background: transparent; border: 1.5px solid var(--text-muted); }
+
+.pf-ov-strike { margin-right: 4px; color: var(--text-muted); font-weight: 400; }
+
+.pf-ov-muted { color: var(--text-tertiary); font-weight: 400; }
+
+
+// ── BILLING: the consult fee is editable in its line ──
+.pf-ov-wrap { white-space: normal; overflow-wrap: anywhere; }
+.pf-ov-feebtn {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 0 8px; margin-right: 2px;
+  border: 1px dashed var(--border-muted); border-radius: 8px; background: transparent;
+  color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.pf-ov-feebtn svg { color: var(--text-muted); }
+.pf-ov-feebtn:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.pf-ov-feebtn:hover svg { color: var(--violet-text, #6d28d9); }
+.pf-ov-feebtn:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 2px; }
+.pf-ov-fee {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px;
+  height: 34px; padding: 0 8px; margin-right: 2px;
+  border: 1px solid var(--color-violet-600, #7c3aed); border-radius: 8px; background: var(--bg-card-solid);
+}
+.pf-ov-fee__cur { font-size: 13px; color: var(--text-tertiary); }
+.pf-ov-fee__in {
+  width: 72px; height: 30px; border: 0; outline: none; background: transparent; text-align: right;
+  color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600;
+}
+.pf-ov-fee:has(.pf-ov-fee__in--err) { border-color: var(--error-text, #dc2626); }
+.pf-ov-reason { margin: 2px 0 0; }
+.pf-ov-reason .nd-input { height: 38px; }
+.pf-ov-bill .pf-field-error { margin: 0; font-size: 12px; }
+.pf-ov-note { text-align: left; line-height: 1.5; }
+.pf-ov-note strong { font-weight: 600; color: var(--text-secondary); }
+
+@media (pointer: coarse) {
+  .pf-ov-feebtn { min-height: 44px; }
+  .pf-ov-fee { height: 44px; }
+}
+@media (max-width: 640px) {
+  .pf-ov-fee__in { font-size: 16px; } // iOS zoom guard
+  .pf-ov-complaint .nd-input { height: 44px; font-size: 16px; }
+  .pf-ov-chips { flex-wrap: nowrap; }
+}

@@ -16,6 +16,9 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ReportActionsService } from '../../../core/services/report-actions.service';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 
 /**
  * Report view on the nd pattern (docs/ND-PATTERN.md → "Report view"):
@@ -35,7 +38,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean };
+type Opts = { current?: { displayName?: string; phone?: string }; narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean | 'attached'; waCloud?: boolean; waStatus?: string; pdfParts?: unknown };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -62,19 +65,33 @@ async function render(opts: Opts = {}) {
   // The real PDF paint (jsPDF + pdf.js) can't run here: the tests drive
   // the ready / error signals themselves.
   const renderSpy = vi.spyOn(ReportViewerComponent.prototype, 'renderPdfView').mockResolvedValue(undefined);
-  const report = opts.partial
+  const report0 = opts.partial
     ? { ...REPORT, type: 'partial', data: JSON.stringify({ ...JSON.parse(REPORT.data), isPartial: true, pendingDepts: ['Microbiology'] }) }
     : REPORT;
+  const report = opts.current ? { ...report0, patient: opts.current } : report0;
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/reports/')) return opts.fail ? throwError(() => new Error('boom')) : of(report);
       if (url === '/api/config/report-template') return of({ dateFormat: 'dd MMM yyyy', timeFormat: '24h' });
       if (url === '/api/directory/users') return of([{ id: 'u2', displayName: 'Priya Nair', email: 'priya@lab', isActive: true }]);
+      if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
       return of([]);
     }),
-    post: vi.fn(() => of({})),
+    post: vi.fn((url: string) => url.endsWith('/resend')
+      ? of({ id: 'm1', reportId: 'rep-1', trigger: 'resend', kind: 'report_ready', status: opts.waStatus ?? 'sent', attempts: 1,
+             to: '••••••••3210', toDisplay: '+91 ••••• 43210', createdAt: '2026-09-28T10:00:00Z', errorReason: opts.waStatus === 'failed' ? 'Message undeliverable.' : null })
+      : of({})),
   };
   const holding = signal(!!opts.holding);
+  const outsourcing = {
+    apiBase: '',
+    partnerReports: vi.fn(async () => opts.partner
+      ? [{ orderTestId: 'ot9', testName: 'Vitamin D', partnerLabName: 'Metro Labs', url: '/x.pdf',
+           ...(opts.partner === 'attached' ? { attachToReport: true, inReport: true } : {}) }]
+      : []),
+    pdfParts: vi.fn(async () => opts.pdfParts ?? { stored: true, combined: false, parts: [] }),
+    setAttachToReport: vi.fn(async () => []),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -86,10 +103,7 @@ async function render(opts: Opts = {}) {
       { provide: ChatService, useValue: { openConversationWithContext: vi.fn(async () => 'c1'), shareReport: vi.fn(async () => {}) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => opts.messages !== false } },
-      { provide: OutsourcingService, useValue: {
-        apiBase: '',
-        partnerReports: async () => opts.partner ? [{ orderTestId: 'ot9', testName: 'Vitamin D', partnerLabName: 'Metro Labs', url: '/x.pdf' }] : [],
-      } },
+      { provide: OutsourcingService, useValue: outsourcing },
       { provide: ReportLayoutService, useValue: { preview: () => of({ sections: [] }) } },
       { provide: ZoomTransitionService, useValue: { holding, attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', 'rep-1']]) } } },
@@ -103,7 +117,7 @@ async function render(opts: Opts = {}) {
   f.detectChanges();
   const c = f.componentInstance as any;
   const ready = () => { c._pdfReady.set(true); c.pageCount.set(2); f.detectChanges(); };
-  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready };
+  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing };
 }
 
 const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
@@ -205,7 +219,6 @@ describe('Report view (nd) — actions', () => {
 
   it('VIEW-ONLY: Print prints (letterpad choice honoured) and records NO delivery', async () => {
     const { c, api } = await render({ perms: ['view_report'] });
-    vi.spyOn(c, 'buildPdfInput').mockResolvedValue({ template: { letterpadMode: false }, report: { id: 'rep-1' } });
     const blob = vi.spyOn(c, 'buildPdfBlob').mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
     const had = (URL as any).createObjectURL;
     (URL as any).createObjectURL = vi.fn(() => 'blob:print');
@@ -220,12 +233,14 @@ describe('Report view (nd) — actions', () => {
     expect(api.post).not.toHaveBeenCalled();   // no /deliver, no archive upload
   });
 
-  it('VIEW-ONLY phones: the More sheet holds Print only', async () => {
+  it('VIEW-ONLY phones: the ⋮ sheet holds Download + Print only (no share, no send)', async () => {
     const { el, f } = await render({ perms: ['view_report'], phone: true });
     (el.querySelector('.pf-rv-act--more') as HTMLButtonElement).click();
     f.detectChanges();
-    const rows = Array.from(el.querySelectorAll('.pf-rv-sheet--more .pf-rv-menu__row')).map(b => b.textContent?.trim());
-    expect(rows).toEqual(['Print']);
+    await new Promise(r => setTimeout(r, 0));
+    const rows = Array.from(document.body.querySelectorAll('[role=menu] [role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
+    expect(rows).toEqual(['Download PDF', 'Print']);
+    document.querySelectorAll('.pf-am-layer').forEach(n => n.remove());
   });
 
   it('no report permission path: without view/deliver/validate there is no Print', async () => {
@@ -330,18 +345,23 @@ describe('Report view (nd) — REPORT side card', () => {
 });
 
 describe('Report view (nd) — phones', () => {
-  it('the More sheet reaches Print, Share with and Edit (the primary stays in the band)', async () => {
+  it('the ⋮ sheet reaches EVERY action (the primary stays in the band)', async () => {
     const { el, f, c } = await render({ phone: true });
     const print = vi.spyOn(c, 'print').mockResolvedValue(undefined);
-    (el.querySelector('.pf-rv-act--more') as HTMLButtonElement).click();
+    const trigger = el.querySelector('.pf-rv-act--more') as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    trigger.click();
     f.detectChanges();
-    const sheet = el.querySelector('.pf-rv-sheet--more') as HTMLElement;
-    expect(sheet.getAttribute('role')).toBe('dialog');
-    const rows = Array.from(sheet.querySelectorAll('.pf-rv-menu__row')).map(b => b.textContent?.trim());
-    expect(rows).toEqual(['Print', 'Share with a colleague', 'Edit results']);
-    (sheet.querySelector('.pf-rv-menu__row--print') as HTMLButtonElement).click();
+    await new Promise(r => setTimeout(r, 0));
+    const menu = document.body.querySelector('[role=menu]') as HTMLElement;
+    expect(menu.classList).toContain('pf-am-panel--sheet');
+    const rows = Array.from(menu.querySelectorAll('[role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
+    expect(rows).toEqual(['Share…', 'Copy patient link', 'Send on WhatsApp', 'Share with a colleague', 'Download PDF', 'Print',
+      'Edit results', 'Regenerate', 'Open patient', 'Open lab results']);
+    (menu.querySelector('[data-action=print]') as HTMLButtonElement).click();
+    f.detectChanges();
     expect(print).toHaveBeenCalled();
-    expect(c.moreOpen()).toBe(false);
+    expect(document.body.querySelector('[role=menu]')).toBeNull();
     // Touch → the band buttons are icon buttons with their words kept for AT.
     expect(el.querySelector('.pf-rv-act--send')?.classList).toContain('pf-rv-act--icon');
     expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('Send WhatsApp');
@@ -387,5 +407,200 @@ describe('Report view (nd) — rules', () => {
     const { el } = await render();
     expect(el.querySelector('.pf-rv-chip--order .nd-num')).not.toBeNull();
     expect(el.querySelector('.pf-rv-ctx__date')?.classList).toContain('nd-num');
+  });
+});
+
+describe('Report view (nd) — ⋮ report actions: permission + state rules', () => {
+  const ids = (c: any) => (c.menuActions() as Array<{ id: string }>).map(a => a.id);
+  afterEach(() => document.querySelectorAll('.pf-am-layer').forEach(n => n.remove()));
+
+  it('the ⋮ shows on web too (not only phones), with a popover beside the button', async () => {
+    const { el, f } = await render();
+    const trigger = el.querySelector('pf-actions-menu .pf-rv-act--more') as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    expect(trigger.getAttribute('aria-label')).toBe('Report actions');
+    trigger.click(); f.detectChanges();
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.body.querySelector('[role=menu]')?.classList).not.toContain('pf-am-panel--sheet');
+  });
+
+  it('pathologist (validate_result only): Download, Print, Regenerate, Open lab results — no share / send / edit', async () => {
+    const { c } = await render({ perms: ['validate_result'] });
+    expect(ids(c)).toEqual(['download', 'print', 'regenerate', 'lab']);
+  });
+
+  it('delivery desk without edit_result / lab access: share rows + WhatsApp, no Edit / Lab results', async () => {
+    const { c } = await render({ perms: ['deliver_report', 'view_order', 'view_patient'], messages: false });
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'regenerate', 'patient']);
+  });
+
+  it('a PRELIMINARY report is never regenerated as final from here', async () => {
+    const { c } = await render({ partial: true });
+    expect(ids(c)).not.toContain('regenerate');
+  });
+
+  it('Regenerate asks first (DialogService) — cancel sends nothing', async () => {
+    const { c, api } = await render();
+    const confirm = vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(false);
+    c.runAction('regenerate');
+    await new Promise(r => setTimeout(r, 0));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Regenerate report?' }));
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('Regenerate confirmed → POST /api/reports/generate and the viewer moves to the new version', async () => {
+    const { c, api } = await render();
+    vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(true);
+    api.post.mockReturnValue(of({ ...REPORT, id: 'rep-2' }) as never);
+    const router = TestBed.inject(Router) as any;
+    await c.regenerate();
+    expect(api.post).toHaveBeenCalledWith('/api/reports/generate', { orderId: 'ord-1', type: 'final' });
+    expect(c.report().id).toBe('rep-2');
+    expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'rep-2'], { replaceUrl: true });
+  });
+
+  it('Share… / Copy patient link go through the shared ReportActionsService (prefetched on open)', async () => {
+    const { c } = await render();
+    const svc = TestBed.inject(ReportActionsService);
+    const share = vi.spyOn(svc, 'share').mockResolvedValue('shared');
+    const copy = vi.spyOn(svc, 'copyLink').mockResolvedValue('copied');
+    const pre = vi.spyOn(svc, 'prefetch').mockImplementation(() => {});
+    c.onMenuOpened();
+    expect(pre).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }));
+    c.runAction('share');
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), FULL_NAME);
+    c.runAction('copy-link');
+    expect(copy).toHaveBeenCalled();
+  });
+
+  it('Open patient / Open lab results navigate to the existing screens', async () => {
+    const { c, api } = await render();
+    const router = TestBed.inject(Router) as any;
+    c.runAction('patient');
+    expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/patients', 'p1']);
+    api.get.mockImplementation(((url: string) => url === '/api/orders/ord-1' ? of({ samples: [{ id: 's9' }] }) : of([])) as never);
+    await c.openLabResults();
+    expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's9'], { queryParams: { view: 1 } });
+  });
+
+  it('Download PDF saves the same PDF the preview shows (no delivery recorded)', async () => {
+    const { c, api } = await render();
+    vi.spyOn(c, 'buildPdfBlob').mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    const had = (URL as any).createObjectURL;
+    (URL as any).createObjectURL = vi.fn(() => 'blob:dl');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try { await c.download(); } finally { (URL as any).createObjectURL = had; }
+    expect(click).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud API number', () => {
+  const sendBtn = (el: HTMLElement) => el.querySelector('.pf-rv-act--send') as HTMLButtonElement;
+
+  it('lab with a sender: the primary sends from the server (no wa.me window) and shows Sent with the check', async () => {
+    const { el, f, c, api } = await render({ waCloud: true });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    expect(c.waCloud()).toBe(true);
+    expect(primaries(el).length).toBe(1);
+    sendBtn(el).click();
+    f.detectChanges();
+    await new Promise(r => setTimeout(r, 0));
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
+    expect(open).not.toHaveBeenCalled();
+    expect(sendBtn(el).textContent).toContain('Sent');
+    expect(sendBtn(el).querySelector('svg')).not.toBeNull();
+    expect(sendBtn(el).getAttribute('aria-label')).toBe('Sent on WhatsApp');
+    expect(c.waState()).toMatchObject({ phase: 'sent', to: '+91 ••••• 43210' });
+    // The delivery is recorded like the wa.me flow; the REPORT card reflects it.
+    expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', { via: 'whatsapp', note: 'WhatsApp Cloud API' });
+    expect(c.deliveryLine()).toBe('Delivered via WhatsApp');
+    (TestBed.inject(WhatsAppSendService) as any).stopWatch('rep-1');
+  });
+
+  it('a Meta failure keeps the label "Send WhatsApp" and records no delivery', async () => {
+    const { el, f, api } = await render({ waCloud: true, waStatus: 'failed' });
+    sendBtn(el).click();
+    await new Promise(r => setTimeout(r, 0));
+    f.detectChanges();
+    expect(sendBtn(el).textContent).toContain('Send WhatsApp');
+    expect(api.post).not.toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.anything());
+  });
+
+  it('the ⋮ keeps wa.me as the secondary "Share via my WhatsApp"', async () => {
+    const { c } = await render({ waCloud: true });
+    const ids = c.menuActions().map((a: { id: string }) => a.id);
+    expect(ids).toContain('whatsapp');
+    expect(ids).toContain('whatsapp-mine');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    c.runAction('whatsapp-mine');
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+  });
+
+  it('wa.me goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
+    const { c } = await render({ waCloud: true, current: { displayName: 'Ms. Yamini Rao', phone: '9123456789' } });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    c.runAction('whatsapp-mine');
+    const url = decodeURIComponent(String(open.mock.calls[0][0]));
+    expect(url).toContain('9123456789');
+    expect(url).not.toContain('9876543210');
+    expect(url).toContain('Hi Ms. Yamini Rao,');
+  });
+
+  it('lab without a sender: today\'s wa.me flow, one WhatsApp row', async () => {
+    const { el, c, api } = await render({ waCloud: false });
+    expect(c.waCloud()).toBe(false);
+    expect(c.menuActions().map((a: { id: string }) => a.id)).not.toContain('whatsapp-mine');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    sendBtn(el).click();
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
+  });
+
+  it('a preliminary report never goes through the server send', async () => {
+    const { c } = await render({ waCloud: true, partial: true });
+    expect(c.waCloud()).toBe(false);
+  });
+});
+
+describe('Report view (nd) — partner reports tell the truth about the PDF', () => {
+  const where = (el: HTMLElement) => el.querySelector('[data-testid="rv-partner-where"]') as HTMLElement;
+
+  it('attached AND joined in the served PDF: "In this PDF, after our report" — no Attach action', async () => {
+    const { el, f, c } = await render({ partner: 'attached',
+      pdfParts: { stored: true, combined: true, parts: [{ url: '/x.pdf', joined: true, problem: null }] } });
+    c.refreshPdfParts('rep-1'); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(where(el).textContent?.trim()).toBe('In this PDF, after our report');
+    expect(el.querySelector('[data-testid="rv-partner-attach"]')).toBeNull();
+  });
+
+  it('attached but the served PDF lacks it (LAB-2609-000154): a red warning with the reason, never "In this PDF"', async () => {
+    const { el, f, c } = await render({ partner: 'attached',
+      pdfParts: { stored: true, combined: false, parts: [{ url: '/x.pdf', joined: false, problem: 'The partner file is no longer on the server.' }] } });
+    expect(where(el).textContent).not.toContain('In this PDF');
+    c.refreshPdfParts('rep-1'); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(where(el).textContent?.trim()).toBe('Not in this PDF — The partner file is no longer on the server.');
+    expect(where(el).classList).toContain('pf-rv-partner__lab--warn');
+  });
+
+  it('a legacy upload (LAB-2609-000153): "Attach to report" attaches every line of that file and reloads the preview', async () => {
+    const { el, f, outsourcing, renderSpy } = await render({ partner: true });
+    expect(where(el).textContent?.trim()).toBe('Sent as a separate file — attach it to send one PDF');
+    const btn = el.querySelector('[data-testid="rv-partner-attach"]') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-label')).toContain('Vitamin D');
+    const before = renderSpy.mock.calls.length;
+    const fetched = outsourcing.partnerReports.mock.calls.length;
+    btn.click();
+    await f.whenStable(); await new Promise(r => setTimeout(r, 0)); f.detectChanges();
+    expect(outsourcing.setAttachToReport).toHaveBeenCalledWith(['ot9'], true);
+    expect(outsourcing.partnerReports.mock.calls.length).toBe(fetched + 1);
+    // The preview is painted again from the server — now ours + the partner pages.
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it('no Attach action without the desk permission', async () => {
+    const { el } = await render({ partner: true, perms: ['view_report'] });
+    expect(el.querySelector('[data-testid="rv-partner-attach"]')).toBeNull();
   });
 });

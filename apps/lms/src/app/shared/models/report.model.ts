@@ -13,11 +13,24 @@ export interface Report {
   deliveryNote?: string;
   generatedBy?: string;
   createdAt: string;
+  /** Storage key of the STORED report PDF (immutable once set — owner rule
+   *  2026-09-29); null until the report is first rendered + stored. */
+  storedPdfKey?: string | null;
+  /** The letterhead-paper print's stored copy (header & footer blank). */
+  storedLetterpadPdfKey?: string | null;
+  /** Set when a newer version (Regenerate / Amend) replaced this report. */
+  supersededByReportId?: string | null;
+  supersededAt?: string | null;
   /** EF eager-loads Order.Patient on the queue endpoint, so the JSON
    *  carries a nested patient under order. Typed loosely so we can
    *  read displayName for the queue search/list without forcing the
    *  full Patient shape on every consumer of Report. */
-  order?: { id: string; createdAt?: string; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null } | null };
+  /** The CURRENT patient record (GET /api/reports/{id} and by-order include
+   *  it). Delivery surfaces outside the PDF — share name, WhatsApp number —
+   *  read THIS, never the snapshot: a profile correction must reach the
+   *  message even though the stored PDF is immutable (2026-09-30). */
+  patient?: { displayName?: string; firstName?: string; fathersName?: string; phone?: string | null; guardianPhone?: string | null } | null;
+  order?: { id: string; createdAt?: string; dailyNo?: number | null; dailyNoDay?: string | null; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null; dateOfBirth?: string | null; ageDisplay?: string | null } | null };
 }
 
 /** One sign-off block in the report footer. Up to three may be present
@@ -50,7 +63,8 @@ export interface ReportTemplate {
   nablLogoUrl?: string;
 
   // ── Header & logo layout ─────────────────────────────────
-  /** 'drlogy' | 'centered' | 'banner' | 'minimal' */
+  /** 'classic' | 'centered' | 'banner' | 'minimal' — read through
+   *  normalizeHeaderPreset(). */
   headerPreset?: string;
   /** 'left' | 'center' | 'right' */
   logoPosition?: string;
@@ -157,4 +171,18 @@ export interface ReportTemplate {
    *  shared/utils/report-header-layout.ts. Absent = print as the header
    *  style always did. */
   metadata?: string | null;
+}
+
+/** The letterhead presets. 'classic' is the default. */
+export type HeaderPreset = 'classic' | 'centered' | 'banner' | 'minimal';
+
+const HEADER_PRESETS: readonly HeaderPreset[] = ['classic', 'centered', 'banner', 'minimal'];
+export const LEGACY_CLASSIC_PRESET = 'drlogy'; // pre-rename stored value of 'classic'; rows migrate server-side
+
+/** Read a stored header preset. Missing / unknown values and the pre-rename
+ *  spelling all mean 'classic', so older rows and older app builds print the
+ *  same letterhead. */
+export function normalizeHeaderPreset(v: string | null | undefined): HeaderPreset {
+  if (v === LEGACY_CLASSIC_PRESET) return 'classic';
+  return (HEADER_PRESETS as readonly string[]).includes(v ?? '') ? (v as HeaderPreset) : 'classic';
 }

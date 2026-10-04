@@ -14,9 +14,11 @@ import { NumericDirective } from '../../../shared/directives/numeric.directive';
 import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/country-codes';
 import { OPD_DEPARTMENTS, SPECIALIZATION_SUGGESTIONS } from '../../../shared/opd/medical-catalog';
 import { hasDoctorRole } from '../../../shared/opd/doctor-role';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ROLE_INFO } from './permission-catalog';
 import { rolePickerRows } from './role-assignability';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
@@ -48,6 +50,7 @@ interface CreateForm {
     HeroBandComponent,
     AlphaDirective,
     NumericDirective,
+    BusyDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -58,7 +61,7 @@ interface CreateForm {
         <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canCreate() || saving()" (click)="submit()"
+                    [disabled]="!canCreate() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()"
                     [attr.aria-label]="saving() ? 'Creating user' : 'Create user'" title="Create user">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
               {{ saving() ? 'Creating…' : 'Create user' }}
@@ -81,7 +84,7 @@ interface CreateForm {
         title="Create user"
         parentRoute="/admin/users?tab=users"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" (pressed)="submit()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" [busy]="saving()" busyLabel="Creating…" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
         </pf-touch-btn>
       </pf-screen-header>
@@ -201,38 +204,43 @@ interface CreateForm {
                     <input type="text" class="nd-input nd-num" [ngModel]="doctorReg()" (ngModelChange)="doctorReg.set($event)"
                            placeholder="NMC / State Medical Council reg. no." />
                   </label>
-                  <div class="nd-field">
-                    <span class="nd-field__lbl">Department</span>
-                    <pf-select [options]="deptOptions()" [value]="deptSelectValue()"
-                               placeholder="Select a department…" (valueChange)="onDeptChange($event)"></pf-select>
-                    @if (deptIsCustom()) {
-                      <input type="text" class="nd-input" [ngModel]="doctorDept()" aria-label="Department name"
-                             (ngModelChange)="doctorDept.set($event)" placeholder="Type the department name" />
-                    }
-                  </div>
-                  <div class="nd-field pf-uf-span">
-                    <span class="nd-field__lbl">Specialisation(s)</span>
-                    <pf-select [options]="specOptions()" [multiple]="true" [values]="doctorSpecs()"
-                               placeholder="Select specialisation(s)…" (valuesChange)="doctorSpecs.set($event)"></pf-select>
-                  </div>
-                  <div class="nd-field pf-uf-span">
-                    <span class="nd-field__lbl">Procedures / surgeries</span>
-                    @if (doctorProcs().length) {
-                      <div class="pf-uf-tags">
-                        @for (p of doctorProcs(); track p) {
-                          <span class="nd-chip nd-chip--static pf-uf-tag">{{ p }}
-                            <button type="button" class="pf-uf-tag__x" (click)="removeProc(p)" [attr.aria-label]="'Remove ' + p">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                            </button>
-                          </span>
-                        }
-                      </div>
-                    }
-                    <input type="text" class="nd-input" [ngModel]="procDraft()" aria-label="Add a procedure"
-                           (ngModelChange)="procDraft.set($event)"
-                           (keydown.enter)="$event.preventDefault(); addProc(procDraft())"
-                           placeholder="Type a procedure, press Enter…" />
-                  </div>
+                  <!-- OPD dark build: department / specialisation / procedures are
+                       OPD fields — shown only while the OPD gate is open. The
+                       registration number above is a lab fact (report signatures). -->
+                  @if (opdGate.visible()) {
+                    <div class="nd-field">
+                      <span class="nd-field__lbl">Department</span>
+                      <pf-select [options]="deptOptions()" [value]="deptSelectValue()"
+                                 placeholder="Select a department…" (valueChange)="onDeptChange($event)"></pf-select>
+                      @if (deptIsCustom()) {
+                        <input type="text" class="nd-input" [ngModel]="doctorDept()" aria-label="Department name"
+                               (ngModelChange)="doctorDept.set($event)" placeholder="Type the department name" />
+                      }
+                    </div>
+                    <div class="nd-field pf-uf-span">
+                      <span class="nd-field__lbl">Specialisation(s)</span>
+                      <pf-select [options]="specOptions()" [multiple]="true" [values]="doctorSpecs()"
+                                 placeholder="Select specialisation(s)…" (valuesChange)="doctorSpecs.set($event)"></pf-select>
+                    </div>
+                    <div class="nd-field pf-uf-span">
+                      <span class="nd-field__lbl">Procedures / surgeries</span>
+                      @if (doctorProcs().length) {
+                        <div class="pf-uf-tags">
+                          @for (p of doctorProcs(); track p) {
+                            <span class="nd-chip nd-chip--static pf-uf-tag">{{ p }}
+                              <button type="button" class="pf-uf-tag__x" (click)="removeProc(p)" [attr.aria-label]="'Remove ' + p">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                              </button>
+                            </span>
+                          }
+                        </div>
+                      }
+                      <input type="text" class="nd-input" [ngModel]="procDraft()" aria-label="Add a procedure"
+                             (ngModelChange)="procDraft.set($event)"
+                             (keydown.enter)="$event.preventDefault(); addProc(procDraft())"
+                             placeholder="Type a procedure, press Enter…" />
+                    </div>
+                  }
                 </div>
               </div>
             </section>
@@ -296,6 +304,8 @@ export class UserInviteComponent implements OnInit {
 
   // ── Doctor details (OPD build) — the section appears when a ticked role is a
   //    doctor-type role (role.kind === 'doctor'). All optional; free-add tags. ──
+  /** OPD dark build: the OPD-only doctor fields render only while OPD is visible. */
+  protected readonly opdGate = inject(OpdGateService);
   readonly isDoctorSelected = computed(() =>
     hasDoctorRole(this._roles(), this._form().roleIds));
 
@@ -428,9 +438,10 @@ export class UserInviteComponent implements OnInit {
       // OPD: send the doctor profile only when a doctor role was selected.
       doctorProfile: this.isDoctorSelected() ? {
         medicalRegNo: this.doctorReg().trim() || undefined,
-        department: this.doctorDept().trim() || undefined,
-        specializations: this.doctorSpecs(),
-        procedures: this.doctorProcs(),
+        // OPD dark build: hidden OPD fields send nothing (exactly as when left blank).
+        department: this.opdGate.visible() ? (this.doctorDept().trim() || undefined) : undefined,
+        specializations: this.opdGate.visible() ? this.doctorSpecs() : [],
+        procedures: this.opdGate.visible() ? this.doctorProcs() : [],
       } : undefined,
     }).subscribe({
       next: u => {

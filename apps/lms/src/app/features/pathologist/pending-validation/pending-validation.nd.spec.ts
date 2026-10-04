@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { signal } from '@angular/core';
-import { of, EMPTY } from 'rxjs';
+import { of, EMPTY, Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { PendingValidationComponent } from './pending-validation.component';
 import { departmentsIn, enrich, groupBySample, nextTile, tileStatus } from './pending-validation.logic';
@@ -31,7 +31,7 @@ const LONG_NAME = 'Ms. Paravai Munusamy Ramalingam';
 
 function line(id: string, o: {
   sample: string; barcode: string; dept: typeof HAEM; receivedMinAgo: number; tatHours: number;
-  critical?: boolean; mine?: boolean; patient?: string; test?: string;
+  critical?: boolean; mine?: boolean; patient?: string; test?: string; priority?: string;
 }): OrderTest {
   return {
     id, status: 'entered', subOrderId: o.sample, testId: 't-' + id,
@@ -42,7 +42,7 @@ function line(id: string, o: {
     subOrder: {
       id: o.sample, barcode: o.barcode, departmentId: o.dept.id, department: o.dept as any,
       receivedAtLab: new Date(NOW - o.receivedMinAgo * 60000).toISOString(),
-      order: { id: 'o-' + o.sample, patient: { displayName: o.patient ?? LONG_NAME, age: 44, sex: 'Female', mrn: 'AA0007' } },
+      order: { id: 'o-' + o.sample, priority: o.priority ?? 'routine', patient: { displayName: o.patient ?? LONG_NAME, age: 44, sex: 'Female', mrn: 'AA0007' } },
     } as any,
   } as unknown as OrderTest;
 }
@@ -51,11 +51,13 @@ const QUEUE: OrderTest[] = [
   // Haematology tube, two tests, on time.
   line('l1', { sample: 's1', barcode: '0126117', dept: HAEM, receivedMinAgo: 10, tatHours: 4 }),
   line('l2', { sample: 's1', barcode: '0126117', dept: HAEM, receivedMinAgo: 10, tatHours: 4, test: 'ESR' }),
-  // Haematology tube, overdue.
+  // Haematology tube, overdue — but a NORMAL order (stays under Normal).
   line('l3', { sample: 's2', barcode: '0126118', dept: HAEM, receivedMinAgo: 300, tatHours: 2, patient: 'Mr. Arun Kumar' }),
   // Microbiology tube, due within the hour, critical, assigned to me.
   line('l4', { sample: 's3', barcode: '1126001', dept: MICRO, receivedMinAgo: 100, tatHours: 2, critical: true, mine: true, patient: 'Mrs. Latha Devi', test: 'Gram Stain' }),
 ];
+/** A STAT order (front-desk emergency) — Urgent, nowhere near due. */
+const STAT_LINE = line('l5', { sample: 's4', barcode: '0126120', dept: HAEM, receivedMinAgo: 5, tatHours: 6, priority: 'STAT', patient: 'Mr. Ravi Shankar' });
 
 const SCOPE_ALL = { scoped: false, departments: [], validatedToday: 7, validatedTodayByMe: 3 };
 const SCOPE_HAEM = { scoped: true, departments: [HAEM], validatedToday: 4, validatedTodayByMe: 2 };
@@ -68,7 +70,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean; touch?: boolean; admin?: boolean } = {}) {
+async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean; touch?: boolean; admin?: boolean; queue$?: Subject<OrderTest[]> } = {}) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   (window as any).matchMedia = (q: string) => ({
@@ -77,7 +79,7 @@ async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean
   });
   const api = {
     get: vi.fn((url: string) => {
-      if (url.startsWith('/api/validation/queue')) return of(opts.queue ?? QUEUE);
+      if (url.startsWith('/api/validation/queue')) return opts.queue$ ?? of(opts.queue ?? QUEUE);
       if (url === '/api/validation/scope') return of(opts.scope ?? SCOPE_ALL);
       return of([]);
     }),
@@ -181,10 +183,13 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(word('1126001')).toBe('Critical');
   });
 
-  it('groups: Urgent / High / On time with neutral dots except urgent (red) / high (amber)', async () => {
-    const { el } = await render();
-    const groups = [...el.querySelectorAll<HTMLElement>('.pv-group')].map(g => g.getAttribute('data-level'));
-    expect(groups).toEqual(['urgent', 'high', 'normal']);
+  it('groups: Urgent / Normal (order priority) with a neutral dot except Urgent (red)', async () => {
+    const { el } = await render({ queue: [...QUEUE, STAT_LINE] });
+    const groups = [...el.querySelectorAll<HTMLElement>('.pv-group')].map(g => g.getAttribute('data-priority'));
+    expect(groups).toEqual(['urgent', 'normal']);
+    const heads = [...el.querySelectorAll<HTMLElement>('.pv-group__h')].map(h => h.textContent!.replace(/\d+/g, '').trim());
+    expect(heads).toEqual(['Urgent', 'Normal']);
+    expect(el.textContent).not.toMatch(/\bHigh\b/);
     expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--nd-toggle-on\)/);
   });
 
@@ -226,6 +231,19 @@ describe('Pathologist queue (nd) — tiles', () => {
     TestBed.resetTestingModule();
     const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
     expect(one.el.querySelector('.pv-depts')).toBeNull();
+  });
+
+  it('first load: the side card numbers are placeholders and Review next says it is loading', async () => {
+    const queue$ = new Subject<OrderTest[]>();
+    const { f, el } = await render({ queue$ });
+    const stats = el.querySelector('.pv-stats')!;
+    expect(stats.querySelectorAll('pf-skeleton').length).toBe(4);
+    expect(el.querySelector('.pv-next')!.textContent).toContain('Loading the queue');
+    expect(el.textContent).not.toContain('Nothing to review');
+    queue$.next(QUEUE); queue$.complete();
+    f.detectChanges();
+    expect(stats.querySelectorAll('pf-skeleton').length).toBe(0);
+    expect(el.querySelector('.pv-next')!.textContent).toContain('Review next');
   });
 
   it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {
@@ -279,28 +297,33 @@ describe('Pathologist queue — classic stays classic', () => {
 });
 
 describe('pending-validation.logic', () => {
-  const tiles = () => groupBySample(enrich(QUEUE, NOW), 'me');
-  it('groups by tube; mine first; worst level wins', () => {
+  const tiles = () => groupBySample(enrich([...QUEUE, STAT_LINE], NOW), 'me');
+  it('groups by tube; mine first, then Urgent, then soonest due', () => {
     const t = tiles();
-    expect(t.map(x => x.sampleLabel)).toEqual(['1126001', '0126118', '0126117']);
-    expect(t[2].items.length).toBe(2);
+    expect(t.map(x => x.sampleLabel)).toEqual(['1126001', '0126120', '0126118', '0126117']);
+    expect(t[1].priority).toBe('urgent'); // STAT → Urgent
+    expect(t[2].priority).toBe('normal'); // overdue but Normal
+    expect(t[2].tat).toBe('overdue');
+    expect(t[3].items.length).toBe(2);
     expect(t[0].mine).toBe(true);
   });
-  it('status word: critical › overdue › due in N min › on time', () => {
-    expect(tileStatus({ anyCritical: true, level: 'normal', remainingMin: 500 }).label).toBe('Critical');
-    expect(tileStatus({ anyCritical: false, level: 'urgent', remainingMin: -5 })).toEqual({ key: 'overdue', label: 'Overdue', tone: 'red' });
-    expect(tileStatus({ anyCritical: false, level: 'high', remainingMin: 19.6 })).toEqual({ key: 'due', label: 'Due in 20 min', tone: 'amber' });
-    expect(tileStatus({ anyCritical: false, level: 'normal', remainingMin: 200 }).tone).toBe('green');
+  it('status word: critical › overdue › due in N › on time', () => {
+    expect(tileStatus({ anyCritical: true, remainingMin: 500 }).label).toBe('Critical');
+    expect(tileStatus({ anyCritical: false, remainingMin: -5 })).toEqual({ key: 'overdue', label: 'Overdue', tone: 'red' });
+    expect(tileStatus({ anyCritical: false, remainingMin: 19.6 })).toEqual({ key: 'due', label: 'Due in 20m', tone: 'amber' });
+    expect(tileStatus({ anyCritical: false, remainingMin: 200 }).tone).toBe('green');
+    expect(tileStatus({ anyCritical: false, remainingMin: null }).label).toBe('On time');
   });
   it('next = mine, then critical, then most urgent', () => {
     const t = tiles();
     expect(nextTile(t)!.sampleLabel).toBe('1126001');
-    expect(nextTile(t.filter(x => !x.mine))!.sampleLabel).toBe('0126118');
+    expect(nextTile(t.filter(x => !x.mine))!.sampleLabel).toBe('0126120');
+    expect(nextTile(t.filter(x => !x.mine && x.priority === 'normal'))!.sampleLabel).toBe('0126118');
     expect(nextTile([])).toBeNull();
   });
   it('departments in the queue, alphabetical with counts', () => {
     expect(departmentsIn(tiles())).toEqual([
-      { id: 'd-hae', name: 'Haematology', count: 2 },
+      { id: 'd-hae', name: 'Haematology', count: 3 }, // incl. the STAT tube
       { id: 'd-mic', name: 'Microbiology', count: 1 },
     ]);
   });

@@ -40,7 +40,7 @@
               {{ ps.amount | inr }}
               @if (order()?.patient?.displayName) {
                 <span class="pf-pp-pay__sep">·</span>
-                <span class="pf-pp-pay__patient">{{ order()!.patient!.displayName }}</span>
+                <span class="pf-pp-pay__patient"><pf-daily-no [of]="order()" />{{ order()!.patient!.displayName }}</span>
               }
             </h2>
             <p class="pf-pp-pay__meta">
@@ -134,7 +134,8 @@
             Download PDF
           </button>
           <button type="button" class="pf-pp-toolbar__print"
-                  [disabled]="selectedCount() === 0" (click)="printSelected()">
+                  [disabled]="selectedCount() === 0 || labelsPrinting()"
+                  [pfBusy]="labelsPrinting()" pfBusyLabel="Printing labels…" (click)="printSelected()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 9V2h12v7"/>
@@ -147,8 +148,10 @@
       </div>
       }
 
-      <!-- Label grid -->
-      @if (order(); as o) {
+      <!-- Label grid (its own shape while the order is on its way) -->
+      @if (orderLoading()) {
+      <pf-skeleton-tiles [count]="4" min="220px" height="180px" label="Loading labels…"></pf-skeleton-tiles>
+      } @else if (order(); as o) {
       <div class="pf-pp-grid pf-print-label">
         @for (s of o.samples; track s.id; let i = $index) {
           <pf-label-card
@@ -172,7 +175,9 @@
     <!-- ══ SIDEBAR (Patient Details + Tubes + Bill Summary) ══ -->
     <aside class="pf-pp-sidebar">
 
-      @if (order(); as o) {
+      @if (orderLoading()) {
+        <pf-skeleton-detail [fields]="5" [sections]="2" label="Loading order…"></pf-skeleton-detail>
+      } @else if (order(); as o) {
         <!-- Patient card -->
         <div class="pf-sb-card">
           <div class="pf-sb-card__hdr">
@@ -183,7 +188,7 @@
               {{ initials(o.patient?.displayName) }}
             </div>
             <div class="pf-sb-patient__body">
-              <p class="pf-sb-patient__name">{{ o.patient?.displayName ?? '—' }}</p>
+              <p class="pf-sb-patient__name"><pf-daily-no [of]="o" />{{ o.patient?.displayName ?? '—' }}</p>
               <p class="pf-sb-patient__sub">{{ ageSex(o.patient) }}</p>
             </div>
           </div>

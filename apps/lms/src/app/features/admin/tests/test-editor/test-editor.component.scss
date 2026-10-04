@@ -1,3 +1,4 @@
+@use '../../../../shared/styles/device-tier' as dt;
 /* The pinned "Selected" group reads as a summary, not another dept. */
 .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--text-primary); }
 .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count {
@@ -557,7 +558,7 @@ select.pf-input--compact {
   .tab-strip::-webkit-scrollbar { display: none; }
 }
 
-@media (min-width: 641px) and (max-width: 1279px) {
+@include dt.tablet-band {
   .param-row__ranges .md\\:grid-cols-6 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -655,6 +656,12 @@ select.pf-input--compact {
 .pf-te2-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px 24px; }
 .pf-uf { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pf-uf--span { grid-column: 1 / -1; }
+/* Profile-level print picker sits between the member summary and the picker. */
+.pf-te2-profile-pick { margin: 12px 0 4px; }
+/* "Start with: All ticked | None ticked" under the print-picker switch. */
+.pf-te2-pickstart { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.pf-te2-pickstart .pf-uf__lbl { margin: 0; }
+.pf-te2-pickstart .pf-hint { flex-basis: 100%; margin: 0; }
 .pf-uf__lbl { font-size: 11px; color: var(--text-tertiary); }
 .pf-uf__in.pf-input {
   background: var(--input-bg);
@@ -1108,3 +1115,8 @@ select.pf-input--compact {
 
 /* "Advanced — edit every field in a grid" under the plain range table. */
 .pf-rr-adv { align-self: flex-start; margin-top: 10px; font-size: 12.5px; }
+
+/* ── Loading feedback: the editor's own shape while the record loads ── */
+.pf-te2-ctx__nameskel { display: inline-block; vertical-align: middle; }
+.pf-te2-loading .nd-card__body { display: flex; flex-direction: column; gap: 18px; }
+.pf-livewrap__skel { display: block; }

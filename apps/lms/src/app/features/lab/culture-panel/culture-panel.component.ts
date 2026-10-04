@@ -9,6 +9,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ThemeService } from '../../../core/services/theme.service';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /** One stage inside a culture case (mirrors the backend CultureStage JSON). */
 export interface CultureStageView {
@@ -38,13 +39,21 @@ export interface CultureCaseView {
   subCultures?: CultureCaseView[] | null;
   /** CASE-LEVEL incubation reference timer (never a lock). */
   incubateUntil?: string | null;
-  /** The ordered test's specimen (picked at billing, editable at the bench). */
+  /** The ordered test's specimen NAME (fixed / picked at billing, editable at
+   *  the bench within the test's allowed list) and its master CODE. */
   specimen?: string | null;
+  specimenCode?: string | null;
+  /** The Test Master test — the bench reads its allowed specimens by it. */
+  testId?: string | null;
   orderTestId: string;
   caseState: string;
   sampleId?: string | null;
   barcode?: string | null;
   patientName?: string | null;
+  /** Daily patient number for this visit (per branch per IST day) and its
+   *  day, yyyy-MM-dd — on-screen only (utils/daily-no.ts). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   testName?: string | null;
   departmentName?: string | null;
   createdAt: string;
@@ -69,7 +78,7 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective],
+  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && cases().length === 0) {
@@ -106,11 +115,11 @@ export interface CultureCaseView {
                 @if (theme.isNewDesign()) {
                   <!-- New design: sample ID is the primary line; patient, then
                        test, as quieter secondary lines (owner). -->
-                  <span class="pf-cc__who">{{ c.patientName || '—' }}</span>
+                  <span class="pf-cc__who"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
                   <span class="pf-cc__sub">{{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }</span>
                 } @else {
                 <span class="pf-cc__sub">
-                  {{ c.patientName || '—' }} · {{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }
+                  <pf-daily-no [of]="c" />{{ c.patientName || '—' }} · {{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }
                 </span>
                 }
                 @if (inc) {

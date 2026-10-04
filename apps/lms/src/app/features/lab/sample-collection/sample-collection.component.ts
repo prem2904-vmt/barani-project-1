@@ -1,4 +1,6 @@
 import { DatePipe } from "@angular/common";
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef,
   ChangeDetectionStrategy,
@@ -44,13 +46,11 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import {
   LabelCardComponent,
   tubeSpec,
-  labelTubeLine,
 } from "../../frontdesk/post-payment/label-card.component";
 import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-specimen";
-import { PrinterService } from "../../../core/printer/printer.service";
-import { PrintConfigService } from "../../../core/printer/print-config.service";
+import { LabelPrintService } from "../../../core/printer/label-print.service";
 import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
-import { printLabelOnly } from "../../../shared/utils/print-label";
+import { printTubeLabels } from "../../../shared/utils/print-label";
 import {
   SeriesState,
   countdownLabel,
@@ -68,8 +68,13 @@ import {
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
-import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
-import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { normalizePriority } from '../../../shared/utils/lab-priority';
+import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile, spinDelay } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -367,12 +372,15 @@ interface OrderGroup {
   /** FULL display name (never the 15-char cut of formatPatientInfo). */
   patientFull?: string;
   patientId?: string;
+  /** The order's daily patient number (on-screen only). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
 }
 
 @Component({
   selector: "pf-sample-collection",
   standalone: true,
-  imports: [SkeletonDetailComponent,
+  imports: [DailyNoComponent, SkeletonDetailComponent, SkeletonRowsComponent, BusyDirective, PfKeysDirective, SamplePresetDirective,
     ZoomSourceDirective,
     ZoomTargetDirective,
     FormsModule,
@@ -398,8 +406,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
-  private readonly printer = inject(PrinterService);
-  private readonly printConfig = inject(PrintConfigService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly labCfg = inject(BranchLabConfigService);
   /** Show the department on a tube only for standalone labs; an integrated lab
    *  (all departments run as one lab) hides it. (Cortex OPS-37) */
@@ -462,6 +469,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  order routinely has one walked-in specimen among several draws. */
   private readonly _sourceBusy = signal(false);
   readonly sourceBusy = this._sourceBusy.asReadonly();
+  /** Which tube's External mark is saving (its flag shows the busy state). */
+  protected readonly sourceBusyId = signal<string | null>(null);
   /** The flag shows on tubes that can still be marked: pending and not a
    *  locked/not-yet-due series time point. */
   canMarkExternal(s: OrderSample): boolean {
@@ -473,6 +482,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._sourceBusy()) return;
     const source = s.source === "external" ? "internal" : "external";
     this._sourceBusy.set(true);
+    this.sourceBusyId.set(s.id);
     try {
       const updated = await firstValueFrom(
         this.api.patch<OrderSample>(`/api/samples/${s.id}/source`, { source }),
@@ -497,6 +507,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.toasts.error(ApiError.from(e).message);
     } finally {
       this._sourceBusy.set(false);
+      this.sourceBusyId.set(null);
     }
   }
 
@@ -642,6 +653,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scanValue = signal("");
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
+  /** The pending queue has answered at least once (success or error). Until
+   *  then the list region is a skeleton of its rows — never the "No samples
+   *  waiting" empty state for a queue that simply hasn't arrived yet. The
+   *  skeleton only appears when the first answer is slower than 150ms (no
+   *  flash for a fast answer) and, once shown, holds 300ms (ND-PATTERN
+   *  "Loading feedback"). */
+  protected readonly queueLoaded = signal(false);
+  protected readonly queueSkeleton = spinDelay(computed(() => !this.queueLoaded()));
+  /** The band / header Refresh button's request is in flight. */
+  protected readonly refreshing = signal(false);
   private readonly _openOrderId = signal<string | null>(null);
   /** Admin-configured container colour/label per department code (Branches →
    *  Departments). Loaded once so the tube guide reflects the lab's own scheme. */
@@ -688,6 +709,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
           patientName: formatPatientInfo(p),
           patientFull: (p && patientDisplayName(p)) || undefined,
           patientId: p?.id,
+          dailyNo: s.order?.dailyNo ?? null,
+          dailyNoDay: s.order?.dailyNoDay ?? null,
           patientMeta: "",
           createdAt: s.createdAt,
           samples: [],
@@ -744,6 +767,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const q = this.scanValue().trim().toLowerCase();
     if (!q) return this.groups();
     return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
       return g.samples.some(
@@ -871,7 +895,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         if ((t as { test?: { fastingRequired?: boolean; name?: string } }).test?.fastingRequired)
           fasting.add((t as { test?: { name?: string } }).test?.name ?? "Test");
     return {
-      urgent: (o?.priority ?? "").toLowerCase() === "urgent",
+      // Order priority, normalised: urgent / STAT → Urgent (the lab has Urgent / Normal only).
+      urgent: normalizePriority(o?.priority) === "urgent",
       fasting: [...fasting],
       refDoctor: (o?.refDoctorName ?? "").trim(),
       refHospital: (o?.refHospitalName ?? "").trim(),
@@ -1186,6 +1211,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     } catch {
       this._pending.set([]);
     }
+    this.queueLoaded.set(true);
   }
 
   tube(s: OrderSample) {
@@ -1474,93 +1500,26 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
-    this.api.get<OrderSample[]>("/api/samples/pending-collection").subscribe({
+    this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
       next: (l) => this._pending.set(l ?? []),
     });
   }
 
-  /** Print every tube label for this order (barcode + QR). The hidden
-   *  `.pf-print-label` block in the drawer already holds the rendered labels;
-   *  `printLabelOnly()` toggles the global label-print stylesheet so ONLY those
-   *  labels reach paper — nothing else on the screen prints. */
+  /** Print every tube label for this order — ONLY to this station's label
+   *  printer (LabelPrintService). No printer → a dialog, never a fallback
+   *  print. The hidden `.pf-print-label` block in the drawer is only used when
+   *  a web user explicitly picks the label-sized system dialog. */
   printLabels(g: OrderGroup) {
-    if (!g.samples.length) {
-      this.toasts.warning("No tubes to label");
-      return;
-    }
-    if (this.printer.directPrintAvailable()) {
-      void this.directPrint(g);
-      return;
-    }
-    printLabelOnly();
+    if (this.printing()) return;
+    this.printing.set(true);
+    void this.labelPrint.printTubeLabels({
+      samples: g.samples,
+      fallbackName: g.patientName,
+      systemPrint: () => printTubeLabels(),
+    }).finally(() => this.printing.set(false));
   }
-
-  /** Render each tube label at the branch's configured size + single code and
-   *  stream it straight to the label printer (Electron USB / iPad BLE). */
-  private async directPrint(g: OrderGroup) {
-    const opts = this.printConfig.labelOpts();
-    this.toasts.info(
-      `Printing ${g.samples.length} label${g.samples.length > 1 ? "s" : ""}…`,
-    );
-    let ok = 0,
-      fail = 0;
-    for (const s of g.samples) {
-      const p = s.order?.patient;
-      const code = s.barcode ?? s.id;
-      const mrn = p?.mrn ?? undefined;
-      const res = await this.printer
-        .printLabelData(
-          {
-            code,
-            qrValue: mrn ? `${mrn}|${code}` : code,
-            // Just the name — age/sex + MRN print as their own lines below, so the
-            // combined "name | age/sex | id" string would duplicate them.
-            patientName: (p && patientDisplayName(p)) || g.patientName,
-            ageSex: this.labelAgeSex(p),
-            mrn,
-            deptCode: tubeDepartmentCodes(s),
-            tube: labelTubeLine(s),
-            outsourced: !!s.outsourcedVendorId,
-          },
-          opts,
-        )
-        .catch((e: unknown) => ({
-          ok: false,
-          direct: true,
-          error: (e as Error)?.message,
-        }));
-      if (res.ok) ok++;
-      else {
-        fail++;
-        if (res.error) this.toasts.error(res.error);
-      }
-    }
-    if (ok) this.toasts.success(`Printed ${ok} label${ok > 1 ? "s" : ""}`);
-    else if (fail) this.toasts.error("Label print failed");
-  }
-
-  private labelAgeSex(
-    p:
-      | {
-          age?: number | null;
-          dateOfBirth?: string | null;
-          sex?: string | null;
-        }
-      | null
-      | undefined,
-  ): string {
-    if (!p) return "";
-    let age = p.age ?? null;
-    if (age == null && p.dateOfBirth) {
-      const d = new Date(p.dateOfBirth),
-        now = new Date();
-      age = now.getFullYear() - d.getFullYear();
-      const m = now.getMonth() - d.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    }
-    const s = p.sex ? p.sex.charAt(0).toUpperCase() : "";
-    return [age != null ? `${age}Y` : null, s].filter(Boolean).join(" ");
-  }
+  /** Print labels is talking to the label printer (busy button). */
+  protected readonly printing = signal(false);
 
   openScanner() {
     this.scannerOpen.set(true);
@@ -1616,6 +1575,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private matchGroups(query: string): OrderGroup[] {
     const q = query.toLowerCase();
     return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
       return g.samples.some(
@@ -1723,10 +1683,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         // first request's late failure.
         const current = this._pending().find((x) => x.id === s.id);
         if (current?.status !== "pending") return;
+        const err = ApiError.from(e);
+        // L-a review fix: "Sample is already pending; cannot uncollect."
+        // means a concurrent uncollect (another tap, another tab) already
+        // won the race — the server's TRUE status is pending, same as what
+        // we're already showing. Rolling back to 'collected' here would
+        // show the desk a tile state the server doesn't have; leave it
+        // pending (matches reality) instead of fighting it back.
+        if (/already pending/i.test(err.message)) {
+          this.toasts.error(err.message);
+          return;
+        }
         this._pending.update((list) =>
           list.map((x) => (x.id === s.id ? { ...x, ...prev } : x)),
         );
-        this.toasts.error(ApiError.from(e).message);
+        this.toasts.error(err.message);
       },
     });
   }

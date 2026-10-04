@@ -9,6 +9,8 @@
  * can't disambiguate the right destination on its own. Falls back to
  * `referenceType`. `referenceId` is the entity id.
  */
+import { canonicalNotificationType } from '../../utils/notification-type';
+
 export interface NotifRoute {
   commands: unknown[];
   queryParams?: Record<string, string>;
@@ -21,7 +23,7 @@ export function notificationRoute(
   canValidate: boolean,
 ): NotifRoute | null {
   const id = referenceId || undefined;
-  const t = (type || '').replace(/^lms\./, '');
+  const t = canonicalNotificationType(type);
 
   // Type-specific: open the exact action screen for the order.
   if ((t === 'billed_not_collected' || t === 'sample_not_collected') && id) {
@@ -29,6 +31,13 @@ export function notificationRoute(
   }
   if (t === 'dispatch_not_received') {
     return { commands: ['/lab/receive'] };
+  }
+  // Urgent order ready to report (Work Register #6): referenceType is the
+  // generic 'order' (shared with Collect-bound events like billed_not_collected
+  // above), so the TYPE decides here — the desk's actionable screen is the
+  // report queue, not Collect (nothing left to collect on a validated order).
+  if (t === 'urgent_report_ready') {
+    return { commands: ['/reports'] };
   }
 
   switch (referenceType) {
@@ -39,6 +48,8 @@ export function notificationRoute(
     case 'appointment':      return { commands: ['/frontdesk/appointments'] };
     case 'user':             return { commands: id ? ['/admin/users', id, 'edit'] : ['/admin/users'] };
     case 'vendor':           return { commands: ['/admin/vendors'] };
+    // WhatsApp billing / credits alerts → Lab settings → Report (the WhatsApp cards).
+    case 'whatsapp_billing': return { commands: ['/admin/lab-settings'], queryParams: { tab: 'report' } };
     case 'process_workflow': return { commands: ['/admin/process'] };
     // Generic order → open its collection drawer (the common actionable case);
     // a bare bill has no per-order screen, so land on the frontdesk queue.

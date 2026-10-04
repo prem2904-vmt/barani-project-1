@@ -32,7 +32,9 @@ import { isOffered } from "../../utils/test-pricing";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { testListUrl } from '../../utils/test-list-url';
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -54,7 +56,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-appointment-booking-modal",
   standalone: true,
-  imports: [SkeletonTilesComponent, CommonModule, AvatarComponent, PatientSearchComponent],
+  imports: [SkeletonTilesComponent, BusyDirective, CommonModule, AvatarComponent, PatientSearchComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
@@ -463,6 +465,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               type="button"
               class="px-5 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 disabled:opacity-50 disabled:pointer-events-none transition-all duration-200"
               [disabled]="!canSubmit() || saving()"
+              [pfBusy]="saving()" pfBusyLabel="Booking…"
               (click)="submit()"
             >
               {{ saving() ? "Booking…" : "Book appointment" }}
@@ -769,7 +772,7 @@ export class AppointmentBookingModalComponent {
    *  cache it on the modal instance for the rest of the session. */
   private loadTestsIfNeeded() {
     if (this._tests().length > 0) return;
-    this.api.get<Test[]>("/api/tests/").subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: (l) => this._tests.set(l ?? []),
       error: () => {
         /* silent — test picker just stays empty */

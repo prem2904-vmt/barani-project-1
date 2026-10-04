@@ -10,6 +10,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface KpiCatalogItem {
   id: string;
@@ -67,7 +68,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent],
+  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page pf-band-page">
@@ -92,7 +93,7 @@ const CATEGORY_LABELS: Record<string, string> = {
               </svg>
               Discard
             </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" (click)="save()">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -203,7 +204,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                         [disabled]="!dirty()"
                         (click)="reload()">Discard</button>
                 <button type="button" class="pf-kpi-btn pf-kpi-btn--primary"
-                        [disabled]="!dirty() || saving()"
+                        [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                         (click)="save()">
                   {{ saving() ? 'Saving…' : 'Save changes' }}
                 </button>
@@ -263,6 +264,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     </div>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     :host { display: block; }
 
     .pf-kpi-page {
@@ -711,7 +713,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
     /* Below desktop (<=1279): guard long KPI labels/names from overflowing
        their grid cells. Desktop-web (>=1280) keeps its existing rendering. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-kpi-cat__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       .pf-kpi-tile__label,
       .pf-kpi-tile__meta {
@@ -726,7 +728,7 @@ const CATEGORY_LABELS: Record<string, string> = {
        The base rule collapses to one column below 900px; for the 901–1279
        band the base two-column layout already applies, so nothing extra is
        needed there. Below 900 we tune spacing for the stacked layout. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-kpi-page { padding-top: 20px; }
     }
 

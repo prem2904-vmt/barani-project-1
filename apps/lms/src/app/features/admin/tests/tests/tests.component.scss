@@ -40,26 +40,6 @@
   box-shadow: inset 0 0 0 1px var(--nd-sel-border);
 }
 
-.pf-tm-inactive-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-left: 10px;
-  padding: 0 12px;
-  height: 36px;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-
-.pf-tm-inactive-toggle input {
-  accent-color: #a855f7;
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-}
 
 /* ── Two cards (ND-PATTERN "two jobs on one screen") ─────────────────
    LEFT the DEPARTMENTS side card (a FILTER companion: filter first, then
@@ -110,6 +90,20 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* First-load skeleton rows sit OVER the (mounted, empty) grid so the grid
+   keeps its size and state; content lands where the rows were. */
+.pf-tm-grid-skel {
+  position: absolute;
+  inset: 0;
+  /* Above AG Grid's own overlay (z-index 2, later in the DOM), so its
+     "No Rows To Show" never reads through the first-load skeleton. */
+  z-index: 6;
+  overflow: hidden;
+  background: var(--nd-card-bg, var(--bg-primary));
+  border-radius: inherit;
 }
 
 .pf-tm-deptbtn {
@@ -690,11 +684,6 @@
 }
 
 /* ── Band pill (new design) ─────────────────────────────────────────── */
-/* "Inactive (n)" chip inside the pill: quiet until on. */
-.pf-tm-inactive-chip {
-  flex-shrink: 0;
-  height: 32px;
-}
 
 /* On = the kit's neutral selected state (.nd-chip[aria-pressed='true']). */
 .pf-tm-bandseg {
@@ -818,4 +807,22 @@
 :host ::ng-deep .pf-tm-rowact-sm>svg {
   width: 14px;
   height: 14px;
+}
+/* ── Status filter + inactive rows ─────────────────────────────────────
+   The card-header segmented (All · Active · Inactive) filters on the
+   Active/Inactive switch. An inactive row stays listed: its DATA is greyed,
+   the switch and Edit keep full strength so it is re-enabled in place. */
+.pf-tm-status {
+  flex-shrink: 0;
+}
+
+:host ::ng-deep .ag-row.pf-tm-row--off .ag-cell:not([col-id='status']):not([col-id='actions']) {
+  opacity: 0.55;
+}
+
+/* Test Master missing-container check: the Container cell of a test with no
+   usable container reads as an error to fix (owner 2026-10-03). */
+:host ::ng-deep .pf-tm-container-missing {
+  color: var(--warning-text, #b45309);
+  font-weight: 600;
 }

@@ -3,6 +3,7 @@ import type { ReportTemplate } from '../models/report.model';
 import type { ResolvedReportLayout } from '../models/report-layout.model';
 import type { ReportPdfInput } from './report-pdf';
 import { LayoutSnapshotTest, PreviewFn, resolveReportLayouts } from './report-layouts';
+import { ORDER_QR_KEY, patientStripPlaces } from './patient-strip-qr';
 
 /**
  * The ONE recipe that turns a stored report into the input of `buildReportPdf`.
@@ -71,11 +72,16 @@ type RenderableReport = ReportPdfInput['report'];
  *  for a stored report. Throws `ReportRenderError` instead of degrading. */
 export async function prepareReportPdfInput(report: RenderableReport, deps: ReportRenderDeps): Promise<ReportPdfInput> {
   let tests: LayoutSnapshotTest[] = [];
-  let patient: { sex?: string | null; age?: number | null } | undefined;
+  let patient: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null } | undefined;
+  let order: { id?: string; trackToken?: string | null } | undefined;
   try {
     const snap = JSON.parse(report.data ?? '{}');
     tests = snap?.tests ?? [];
-    patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
+    order = snap?.order ?? undefined;
+    // Age at collection from the snapshot (DOB-derived server-side); the
+    // fractional `ageYears` drives the band pick (older snapshots: `age`).
+    patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null,
+                ageYears: snap?.patient?.ageYears ?? null, ageDisplay: snap?.patient?.ageDisplay ?? null };
   } catch { /* malformed snapshot — render without layouts (same for everyone) */ }
 
   const [template, resolvedLayouts] = await Promise.all([
@@ -86,7 +92,8 @@ export async function prepareReportPdfInput(report: RenderableReport, deps: Repo
   ]);
 
   const { preloadReportImages } = await import('./report-pdf');
-  const baseInput: ReportPdfInput = { report, resolvedLayouts, template };
+  const orderTrackToken = await legacyOrderTrackToken(deps.api, order, template, resolvedLayouts);
+  const baseInput: ReportPdfInput = { report, resolvedLayouts, template, ...(orderTrackToken ? { orderTrackToken } : {}) };
   const [imageCache, trendograms] = await Promise.all([
     preloadReportImages(baseInput, deps.apiUrl),
     deps.trendograms === false
@@ -96,4 +103,28 @@ export async function prepareReportPdfInput(report: RenderableReport, deps: Repo
         }),
   ]);
   return { ...baseInput, imageCache, trendograms };
+}
+
+/**
+ * Reports generated before the snapshot carried `order.trackToken` can still
+ * print the patient-strip Order QR: when a strip that could print places it,
+ * fetch (get-or-create) the order's tracking token — the same one the invoice
+ * QR uses. Best-effort: a viewer without the order/bill permission, or any
+ * failure, prints the report without that QR rather than not at all.
+ */
+export async function legacyOrderTrackToken(
+  api: ApiLike,
+  order: { id?: string; trackToken?: string | null } | undefined,
+  template: ReportTemplate | null,
+  resolvedLayouts: Record<string, ResolvedReportLayout>,
+): Promise<string | null> {
+  if (!order?.id || order.trackToken) return null;
+  const strips = Object.values(resolvedLayouts ?? {}).map(l => l?.patientStrip);
+  if (!patientStripPlaces(ORDER_QR_KEY, template?.patientColumnsJson, strips)) return null;
+  try {
+    const r = await firstValueFrom(api.get<{ token?: string } | null>(`/api/orders/${encodeURIComponent(order.id)}/track-token`));
+    return r?.token || null;
+  } catch {
+    return null;
+  }
 }

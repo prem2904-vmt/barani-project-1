@@ -30,7 +30,13 @@ export interface TabSnapshot {
   /** In-house tests of the tube (outsourced lines already split off). */
   tests: OrderTest[];
   values: ValuesMap;
+  /** "Print in bold" value names per order-test id (the B toggle). Absent =
+   *  not known → the submit omits it and the server keeps the saved list. */
+  bold?: BoldMap;
 }
+
+/** "Print in bold" picks per order-test id → value names. */
+export type BoldMap = Record<string, string[]>;
 
 /** A writable test with one or more empty fields. */
 export interface MissingEntry {
@@ -66,7 +72,7 @@ export function paramsOfTest(t: OrderTest): TestParameter[] {
 
 /** Can this screen still submit the test? */
 export function isWritableTest(t: OrderTest): boolean {
-  return t.status !== 'entered' && t.status !== 'validated' && t.status !== 'rejected' && !isCultureTest(t);
+  return t.status !== 'entered' && t.status !== 'validated' && t.status !== 'rejected' && t.status !== 'not_reported' && !isCultureTest(t);
 }
 
 /** A real entered value: non-blank text / number, or a ticked box. An
@@ -75,6 +81,8 @@ export function isWritableTest(t: OrderTest): boolean {
 export function isFilled(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (typeof v === 'boolean') return v;
+  // Multi-select: filled when at least one pick is non-blank.
+  if (Array.isArray(v)) return v.some((x) => String(x ?? '').trim() !== '');
   return String(v).trim() !== '';
 }
 
@@ -144,12 +152,38 @@ export function invalidNumbers(tab: TabSnapshot): string[] {
 /** The per-tube submit body, in the per-tab submit's shape. Submit all
  *  sends EVERY writable test as-is — a test left empty (after the user
  *  confirmed) goes with empty values. */
-export function tabPayload(tab: TabSnapshot): { results: Array<{ orderTestId: string; values: Record<string, unknown>; note: undefined }> } {
+/** Writable tests of a tab with NO value at all — what a confirmed submit
+ *  closes as "not reported" (owner 2026-10-03: a blank line never prints and
+ *  never holds the report back; it is never submitted as an empty result). */
+export function blankTests(tab: TabSnapshot): OrderTest[] {
+  return tab.tests.filter((t) => isWritableTest(t) && !testHasValue(tab.values, t.id));
+}
+
+export function tabPayload(tab: TabSnapshot): { results: Array<{ orderTestId: string; values: Record<string, unknown>; note: undefined; bold?: string[] }> } {
   return {
     results: tab.tests
-      .filter(isWritableTest)
-      .map((t) => ({ orderTestId: t.id, values: tab.values[t.id] ?? {}, note: undefined })),
+      .filter((t) => isWritableTest(t) && testHasValue(tab.values, t.id))
+      .map((t) => ({
+        orderTestId: t.id, values: tab.values[t.id] ?? {}, note: undefined,
+        ...(tab.bold ? { bold: tab.bold[t.id] ?? [] } : {}),
+      })),
   };
+}
+
+/** The saved "print in bold" picks (each result snapshot's `bold[]`). */
+export function boldFromTests(tests: readonly OrderTest[]): BoldMap {
+  const out: BoldMap = {};
+  for (const t of tests) {
+    if (!t.currentResult) continue;
+    try {
+      const b = JSON.parse(t.currentResult)?.bold;
+      if (Array.isArray(b)) {
+        const names = b.filter((x: unknown): x is string => typeof x === 'string' && x.trim() !== '');
+        if (names.length) out[t.id] = names;
+      }
+    } catch { /* ignore */ }
+  }
+  return out;
 }
 
 /** Server prefill (each test's saved draft / result) — what the entry

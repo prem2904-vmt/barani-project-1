@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import QRCode from 'qrcode';
 import { environment } from '../../../environments/environment';
 import { upiLink } from '../../shared/utils/upi';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface Stage { key: string; label: string; done: boolean; }
 interface TrackResult {
@@ -26,7 +27,7 @@ interface TrackResult {
 @Component({
   selector: 'pf-track',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wrap">
@@ -37,7 +38,7 @@ interface TrackResult {
           <p class="sub">Enter your date of birth or registered phone number to view your status.</p>
           <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (DD/MM), last 4 of phone, or invoice no." autocomplete="off"/>
           @if (error()) { <p class="err">{{ error() }}</p> }
-          <button class="btn" [disabled]="busy() || !secret.trim()" (click)="verify()">{{ busy() ? 'Checking…' : 'View status' }}</button>
+          <button class="btn" [disabled]="busy() || !secret.trim()" [pfBusy]="busy()" pfBusyLabel="Checking…" (click)="verify()">{{ busy() ? 'Checking…' : 'View status' }}</button>
         } @else {
           <h1 class="h1">{{ result()!.org || 'Your lab' }}</h1>
           <p class="sub">Status for {{ result()!.patient }}</p>

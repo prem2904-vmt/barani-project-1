@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -22,7 +22,15 @@ import { UserAccountActionsService } from './user-account-actions.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { rolePickerRows } from './role-assignability';
 import { DEPARTMENTS_HINT, UserDepartmentsRow, sameIds, viaRoleLabels } from './consultant-departments';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
+
+/** Did the admin change the registration number (trim-insensitive)? */
+export function regIdChanged(next: string | null | undefined, loaded: string | null | undefined): boolean {
+  return (next ?? '').trim() !== (loaded ?? '').trim();
+}
 
 interface EditForm {
   /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
@@ -30,6 +38,9 @@ interface EditForm {
   firstName: string;
   fathersName: string;
   phone: string;
+  /** Medical council / registration number — prints under the user's
+   *  signature on reports (users.RegistrationId, the one home). */
+  registrationId: string;
   roleIds: string[];
   /** Branch scope: 'all' | 'b:<id>' | 'sb:<id>' (see branch-scope.ts). */
   scope: string[];
@@ -46,6 +57,9 @@ interface EditForm {
     HeroBandComponent,
     AlphaDirective,
     NumericDirective,
+    BusyDirective,
+    SkeletonFormComponent,
+    SkeletonCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -59,13 +73,13 @@ interface EditForm {
                  confirms, as band secondaries. Icons on phones. -->
             @if (loaded()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-reset press"
-                      [disabled]="accountBusy()" (click)="resetPassword()"
+                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'" pfBusyLabel="Resetting…" (click)="resetPassword()"
                       aria-label="Reset password" title="Reset password">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
                 Reset password
               </button>
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-active press"
-                      [disabled]="accountBusy()" (click)="toggleActive()"
+                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'" pfBusyLabel="Updating…" (click)="toggleActive()"
                       [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
                 @if (isActive()) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
@@ -77,7 +91,7 @@ interface EditForm {
               </button>
             }
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canSave() || saving()" (click)="save()"
+                    [disabled]="!canSave() || saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
                     [attr.aria-label]="saving() ? 'Saving' : 'Save changes'" title="Save changes">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : 'Save changes' }}
@@ -100,12 +114,22 @@ interface EditForm {
         [title]="'Edit ' + (loadedName() || 'user')"
         parentRoute="/admin/users?tab=users"
         subtitle="Update the user's details, roles and branch scope.">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving()" (pressed)="save()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
         </pf-touch-btn>
       </pf-screen-header>
 
       <div class="pf-band-body">
+        @if (recordSkeleton()) {
+          <!-- Opening a user: the editor's own shape until the record lands
+               (ND-PATTERN "Loading feedback") — never a blank form. -->
+          <div class="pf-uf-body pf-ue-loading">
+            <div class="pf-uf-grid2">
+              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-form [fields]="6" [cols]="2" label="Loading user…"></pf-skeleton-form></div></section>
+              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-card [lines]="4" [boxed]="false" label="Loading roles…"></pf-skeleton-card></div></section>
+            </div>
+          </div>
+        } @else {
         <div class="pf-uf-body">
           <div class="pf-uf-grid2">
             <!-- PROFILE -->
@@ -154,6 +178,15 @@ interface EditForm {
                     </div>
                     @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
                   </div>
+                  <label class="nd-field" [class.pf-uf-span]="!username()">
+                    <span class="nd-field__lbl">Registration number</span>
+                    <input type="text" class="nd-input nd-num pf-ue-regno" maxlength="64" autocomplete="off"
+                           [class.nd-input--error]="!!fieldError()['registrationId']"
+                           placeholder="e.g. TN-12345" aria-label="Registration number"
+                           [ngModel]="form().registrationId" (ngModelChange)="patch({ registrationId: $event })" />
+                    @if (fieldError()['registrationId']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    <p class="nd-field__hint">Medical council registration for doctors and consultants — prints under their signature on reports. They can also add it themselves in My signature.</p>
+                  </label>
                 </div>
               </div>
             </section>
@@ -227,6 +260,7 @@ interface EditForm {
             </div>
           </section>
         </div>
+        }
       </div>
     </section>
   `,
@@ -250,7 +284,7 @@ export class UserEditComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', roleIds: [], scope: [] });
+  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', registrationId: '', roleIds: [], scope: [] });
   private readonly _saving = signal(false);
   /** The user's role rows have landed (so a sole-branch default won't be
    *  overwritten by — or overwrite — the loaded scope). */
@@ -259,25 +293,33 @@ export class UserEditComponent implements OnInit {
   private readonly _loadedName = signal('');
   /** The loaded user's account state (band: Reset password / (De|Re)activate). */
   private readonly accountActions = inject(UserAccountActionsService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly _loadedUser = signal<User | null>(null);
   readonly loaded = computed(() => !!this._loadedUser());
   readonly isActive = computed(() => this._loadedUser()?.isActive !== false);
   readonly accountBusy = signal(false);
+  /** Which account action is running (its band button shows the dots). */
+  readonly accountAction = signal<'reset' | 'active' | null>(null);
+  /** Opening the editor: skeleton until the user record lands (held, no flash). */
+  private readonly recordHold = createLoadHold(true);
+  readonly recordSkeleton = this.recordHold.active;
   async resetPassword(): Promise<void> {
     const u = this._loadedUser();
     if (!u || this.accountBusy()) return;
     this.accountBusy.set(true);
-    try { await this.accountActions.resetPassword(u); } finally { this.accountBusy.set(false); }
+    this.accountAction.set('reset');
+    try { await this.accountActions.resetPassword(u); } finally { this.accountBusy.set(false); this.accountAction.set(null); }
   }
   async toggleActive(): Promise<void> {
     const u = this._loadedUser();
     if (!u || this.accountBusy()) return;
     this.accountBusy.set(true);
+    this.accountAction.set('active');
     try {
       const active = u.isActive !== false;
       const done = active ? await this.accountActions.deactivate(u) : await this.accountActions.reactivate(u);
       if (done) this._loadedUser.set({ ...u, isActive: !active });
-    } finally { this.accountBusy.set(false); }
+    } finally { this.accountBusy.set(false); this.accountAction.set(null); }
   }
   private readonly _fieldError = signal<Record<string, string>>({});
 
@@ -337,6 +379,7 @@ export class UserEditComponent implements OnInit {
   readonly canSave = computed(() => this._form().roleIds.length > 0 && this._form().scope.length > 0);
 
   ngOnInit() {
+    this.destroyRef.onDestroy(() => this.recordHold.cancel());
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
     this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => {
@@ -363,7 +406,7 @@ export class UserEditComponent implements OnInit {
           this._loadedUser.set(u);
           this._loadedName.set(u.displayName || u.firstName || u.username || '');
           this._username.set(u.username || '');
-          this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
+          this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '', registrationId: u.registrationId ?? '' }));
 
           if (u.phone) {
             const parsed = parsePhoneNumber(u.phone);
@@ -379,7 +422,9 @@ export class UserEditComponent implements OnInit {
         const held = [...new Set(rs.map(r => r.roleId))];
         this._heldIds.set(held);
         this._form.update(v => ({ ...v, roleIds: held, scope }));
+        this.recordHold.done();
       },
+      error: () => this.recordHold.done(),
     });
   }
 
@@ -432,6 +477,8 @@ export class UserEditComponent implements OnInit {
     // Details first, then roles (full-replace). Both must land for a clean save.
     this.api.patch<User>(`/api/users/${this.id}`, {
       title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
+      // Only when changed (blank clears); the server audit-logs the change.
+      ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
     }).subscribe({
       next: () => {
         // Roles apply at every selected branch (one assignment per role × branch).
@@ -460,7 +507,7 @@ export class UserEditComponent implements OnInit {
   /** Route field-named backend failures to the offending input; toast the rest. */
   private showError(e: unknown) {
     const err = ApiError.from(e);
-    const inputs = ['firstName', 'fathersName', 'phone'];
+    const inputs = ['firstName', 'fathersName', 'phone', 'registrationId'];
     if (err.field && inputs.includes(err.field)) {
       this._fieldError.update(fe => ({ ...fe, [err.field!]: err.message }));
     } else {

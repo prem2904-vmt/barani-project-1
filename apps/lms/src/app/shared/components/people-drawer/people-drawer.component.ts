@@ -14,6 +14,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { User, userDisplayName } from '../../models/user.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
+import { SkeletonRowsComponent } from '../../primitives/skeleton-kit.component';
 
 /**
  * Global People drawer — slide-out from the right edge. Shows every active
@@ -29,7 +30,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
 @Component({
   selector: 'pf-people-drawer',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent],
+  imports: [SkeletonRowsComponent, FormsModule, DatePipe, AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open()) {
@@ -111,7 +112,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
         } @else if (mode() === 'chat') {
           <div #scrollPane class="pf-pd__chat">
             @if (chat.loadingHistory()) {
-              <p class="pf-pd__empty">Loading…</p>
+              <pf-skeleton-rows [rows]="4" [dense]="true" [trailing]="false" label="Loading messages…"></pf-skeleton-rows>
             } @else if (chat.activeMessages().length === 0) {
               <p class="pf-pd__empty">No messages yet. Say hi 👋</p>
             }

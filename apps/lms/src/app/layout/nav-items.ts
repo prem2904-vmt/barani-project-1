@@ -1,6 +1,7 @@
 import { ProcessWorkflowConfig, catalogFor, normalizeWorkflow, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
 import { ADMIN_PERMS, ROUTE_ACCESS, RouteAccessCtx, canOpenRoute, routeAccess, routePerms } from '../core/auth/route-access';
+import { actionAvailable, workflowActionOn } from '../core/modules/lab-features';
 
 export { FRONTDESK_PERMS } from '../core/auth/route-access';
 
@@ -55,16 +56,75 @@ export interface NavItem {
 // button in the top-strip's right cluster (next to the bell) so it
 // reads as "configure the app" rather than "one of the modules".
 // Non-admin users (no manage_* permission) no longer see it at all.
-/** OPD Consult Room — shown only to users flagged isDoctor (DoctorProfile).
+/** OPD "Consults" — shown only to users flagged isDoctor (DoctorProfile) AND
+ *  only while the OPD gate is open (OPD dark build: OpdGateService.visible()).
  *  Appended by the nav shells rather than permission-gated: "is a doctor" is
  *  profile state, not a permission code. */
 export const DOCTOR_NAV: NavItem = {
   id: 'doctor',
   label: 'Consults',
-  href: '/doctor',
+  href: '/opd/consult',
   iconPath: ['M11 2v2', 'M5 2v2', 'M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1',
              'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
 };
+
+/** OPD home hub — the general "OPD" tab, shown alongside Consults (never
+ *  replacing it) whenever the OPD gate is open AND the user can open at
+ *  least one OPD area (OPD_AREAS' own permission rule — see
+ *  `features/opd/shared/opd-nav.ts` `opdAreasFor`, reused by the shells so the
+ *  hub's tiles and this tab never drift apart). Same icon as the legacy
+ *  MORE_NAV 'm-opd' entry. Appended by the nav shells rather than
+ *  permission-gated here, exactly like DOCTOR_NAV. */
+export const OPD_NAV: NavItem = {
+  id: 'opd',
+  label: 'OPD',
+  href: '/opd',
+  iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],
+};
+
+/**
+ * Active-state rule shared by every nav surface for the two OPD tabs:
+ * Consults ('/opd/consult') owns /opd/consult/**; OPD ('/opd') owns every
+ * other /opd/** route PLUS /admin/opd/** (OPD's own settings hub) — never
+ * both lit at once. Pure (no Angular DI) so the top strip, the bottom nav
+ * and specs all share it instead of re-deriving prefix matching.
+ */
+export function opdNavActive(item: Pick<NavItem, 'id' | 'href'>, url: string): boolean {
+  const u = (url ?? '').split('?')[0];
+  if (item.id === 'doctor') return u === item.href || u.startsWith(item.href + '/');
+  if (item.id === 'opd') {
+    if (u === '/opd/consult' || u.startsWith('/opd/consult/')) return false;
+    return u === '/opd' || u.startsWith('/opd/') || u === '/admin/opd' || u.startsWith('/admin/opd/');
+  }
+  return u === item.href || u.startsWith(item.href + '/');
+}
+
+/** Expenses — a PRIMARY everyday screen (owner 2026-09-30: "not buried under
+ *  More, not an admin / finance-hub thing"): My expenses for every staff member
+ *  who enters them, All expenses (read-only oversight) and the cashier's Day
+ *  closing. Visible purely by permission — its route's own gate
+ *  (ROUTE_ACCESS['/expenses'] = expense_viewer | _modifier | _admin), so
+ *  "I see it" == "I can open it". Wallet icon (stroked SVG paths). */
+export const EXPENSES_NAV: NavItem = withRoutePerms([{
+  id: 'expenses',
+  label: 'Expenses',
+  href: '/expenses',
+  iconPath: ['M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4', 'M21 11h-5a2 2 0 0 0 0 4h5a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1Z', 'M7 8h5'],
+}])[0];
+
+/** Analytics / Lab Insights (Phase 1, owner 2026-10-01): charts (Overview /
+ *  Patients & Volume / Revenue) + Operations Insights lists, one filter band
+ *  shared by both. PRIMARY nav (owner decision, 2026-10-01) — top-level like
+ *  Expenses, visible purely by permission via its route's own gate
+ *  (ROUTE_ACCESS['/insights'] = view_analytics), same 'reports' module gate
+ *  as the TAT board. A role without view_analytics never sees it. */
+export const INSIGHTS_NAV: NavItem = withRoutePerms([{
+  id: 'insights',
+  label: 'Insights',
+  href: '/insights',
+  iconPath: ['M3 3v18h18', 'M7 15l4-5 3 3 5-7'],
+  module: 'reports',
+}])[0];
 
 export const ADMIN_NAV: NavItem = {
   id: 'admin',
@@ -136,6 +196,12 @@ export const PRIMARY_NAV: NavItem[] = withRoutePerms([
     // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
     // reports module, which covers only the TAT/analytics dashboard.
   },
+  // Expenses — after the lab work, before Settings (the admin icon). Shown
+  // only to holders of an expense_* permission (the route's own gate).
+  EXPENSES_NAV,
+  // Insights — same tier as Expenses: PRIMARY nav, shown only to holders of
+  // view_analytics (the route's own gate).
+  INSIGHTS_NAV,
   // ── Secondary / role-specific tabs (scroll right to reach) ───────────
   {
     // Live collection queue (token / walk-up / home-collection).
@@ -191,14 +257,15 @@ export interface WorkflowNavCtx {
    *  hasAnyPermission. */
   hasAnyRawPermission?: (perms: string[]) => boolean;
   isSuper: boolean;
+  /** Tenant module entitlement — an action whose module is off (Home Visits ⇒
+   *  homeCollection) doesn't make its area accessible. Omit = not evaluated. */
+  moduleEnabled?: (m: ModuleKey) => boolean;
 }
 
-/** The workflow's own "is this action on" (fail-open when the workflow doesn't
- *  mention it) — identical to ProcessWorkflowService.isEnabled. */
+/** The workflow's own "is this action on" — THE rule (core/modules/lab-features
+ *  workflowActionOn), identical to ProcessWorkflowService.isEnabled. */
 export function workflowActionEnabled(cfg: ProcessWorkflowConfig | null | undefined, type: string): boolean {
-  if (!cfg) return true;
-  const copies = (cfg.actions ?? []).filter(a => a.type === type);
-  return copies.length ? copies.some(a => a.enabled) : true;
+  return workflowActionOn(cfg, type);
 }
 
 /**
@@ -249,6 +316,7 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     // permissions — the exact "works by role name" bug we want gone.
     const accessible = (cfg.actions ?? [])
       .filter(a => a.categoryId === area.id && a.enabled)
+      .filter(a => !ctx.moduleEnabled || actionAvailable({ workflow: wf, moduleEnabled: ctx.moduleEnabled }, a.type))
       .sort((a, b) => a.order - b.order)
       .filter(a => {
         const e = catalogFor(a.type);
@@ -326,10 +394,51 @@ export function withCollectionFallback(items: NavItem[], ctx: {
   return collect ? [...items, collect] : items;
 }
 
+/**
+ * EXPENSES in the live nav. The workflow-driven nav (menusFromWorkflow) is
+ * built from process work areas and never contains Expenses, so it is placed
+ * here: right after the last lab work item (Results, else Validate / Lab …),
+ * i.e. before Stores / Messages and before Settings; appended when none of
+ * those is present. Idempotent (the PRIMARY_NAV fallback already has it) and
+ * shown ONLY when `canShow(EXPENSES_NAV)` — the shells pass their navItemVisible
+ * check, which is the route guard's own permission rule.
+ */
+export function withExpenses(items: NavItem[], canShow: (i: NavItem) => boolean): NavItem[] {
+  if (items.some(i => i.id === EXPENSES_NAV.id || i.href === EXPENSES_NAV.href)) return items;
+  if (!canShow(EXPENSES_NAV)) return items;
+  const labOrder = ['/reports', '/pathologist', '/lab/my-work', '/sample-collection', '/frontdesk'];
+  for (const href of labOrder) {
+    const at = items.findIndex(i => i.href === href);
+    if (at >= 0) return [...items.slice(0, at + 1), EXPENSES_NAV, ...items.slice(at + 1)];
+  }
+  return [...items, EXPENSES_NAV];
+}
+
+/**
+ * INSIGHTS in the live nav — same treatment as {@link withExpenses}, right
+ * after it (so the PRIMARY-nav order Expenses → Insights holds even on the
+ * workflow-driven nav, which never contains either on its own). Shown ONLY
+ * when `canShow(INSIGHTS_NAV)` — the route guard's own view_analytics check.
+ */
+export function withInsights(items: NavItem[], canShow: (i: NavItem) => boolean): NavItem[] {
+  if (items.some(i => i.id === INSIGHTS_NAV.id || i.href === INSIGHTS_NAV.href)) return items;
+  if (!canShow(INSIGHTS_NAV)) return items;
+  const afterExpenses = items.findIndex(i => i.id === EXPENSES_NAV.id || i.href === EXPENSES_NAV.href);
+  if (afterExpenses >= 0) return [...items.slice(0, afterExpenses + 1), INSIGHTS_NAV, ...items.slice(afterExpenses + 1)];
+  const labOrder = ['/reports', '/pathologist', '/lab/my-work', '/sample-collection', '/frontdesk'];
+  for (const href of labOrder) {
+    const at = items.findIndex(i => i.href === href);
+    if (at >= 0) return [...items.slice(0, at + 1), INSIGHTS_NAV, ...items.slice(at + 1)];
+  }
+  return [...items, INSIGHTS_NAV];
+}
+
 export const MORE_NAV: NavItem[] = withRoutePerms([
   // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
   // the module toggle IS the gate (no per-module roles yet). Shown here in More
   // until each ships as a first-class workflow work-area. Icons mirror the catalog.
+  // OPD (dark build): module 'opd' resolves through the OPD gate
+  // (TenantEntitlementsService.moduleOn('opd') → OpdGateService.visible()).
   {
     id: 'm-opd', label: 'OPD', href: '/opd',
     iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],
@@ -358,6 +467,18 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     // Lab module's own settings hub — lab-specific config lives in the Lab world.
     id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
     iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
+    module: 'lab'
+  },
+  {
+    // NABL critical-result acknowledgement register (Lab world).
+    id: 'critical-results', label: 'Critical results', href: '/lab/critical-results',
+    iconPath: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z', 'M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27'],
+    module: 'lab'
+  },
+  {
+    // Analyzer runs that matched no tube (attach to a sample) + QC runs.
+    id: 'analyzer-results', label: 'Analyzer results', href: '/lab/analyzer-results',
+    iconPath: ['M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z', 'M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2'],
     module: 'lab'
   },
   {

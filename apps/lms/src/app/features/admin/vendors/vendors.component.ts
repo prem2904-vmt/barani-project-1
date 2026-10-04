@@ -17,6 +17,8 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -73,10 +75,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
 @Component({
   selector: 'pf-vendors',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonTableComponent,
+  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent
+    HeroBandComponent, NdDateComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -167,7 +169,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleNewVendor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()">
+            <button type="button" class="nd-btn nd-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…">
               {{ saving() ? 'Creating…' : 'Create vendor' }}
             </button>
           </div>
@@ -250,7 +252,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                   </div>
                   <div class="mt-3 flex gap-2 justify-end">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="closeTopUp()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()">
+                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
                       Add ₹{{ topUpAmount() || '0' }}
                     </pf-touch-btn>
                   </div>
@@ -267,9 +269,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
                       <input type="number" min="1" step="1" class="nd-input"
                              [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
                              placeholder="50000"/></div>
-                    <div><label class="nd-field__lbl pf-vn-lbl">Payment date</label>
-                      <input type="date" class="nd-input"
-                             [ngModel]="paymentDate()" (ngModelChange)="paymentDate.set($event)"/></div>
+                    <div><label class="nd-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
+                      <pf-nd-date label="Payment date" inputId="pf-vn-payment-date"
+                                  [value]="paymentDate() || null"
+                                  (valueChange)="paymentDate.set($event ?? '')"></pf-nd-date></div>
                     <div><label class="nd-field__lbl pf-vn-lbl">Note / reference</label>
                       <input type="text" class="nd-input"
                              [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
@@ -287,7 +290,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                   </div>
                   <div class="mt-3 flex gap-2 justify-end">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="closePayment()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()">
+                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
                       {{ saving() ? 'Saving…' : 'Record ₹' + (paymentAmount() || '0') }}
                     </pf-touch-btn>
                   </div>
@@ -413,6 +416,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vn-card { padding: 16px 18px; overflow: visible; }
     .pf-vn-lbl { display: block; margin-bottom: 6px; }
     .pf-vn-hint { margin-top: 4px; }
+    /* pf-nd-date defaults to inline-block (shrink to content) so it sits
+     * next to other inline controls elsewhere; here it's the sole control
+     * in its grid cell and must fill it exactly like the Amount / Note
+     * inputs beside it. */
+    .pf-topup pf-nd-date { display: block; width: 100%; }
 
     /* Inline top-up panel */
     .pf-topup {

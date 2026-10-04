@@ -1,3 +1,4 @@
+import { ageParts } from './patient-age';
 /**
  * Calculated-result engine for profile result entry.
  *
@@ -408,13 +409,8 @@ export function lintExpr(src: string): { ok: boolean; refs: string[] } {
   return { ok, refs };
 }
 
-/** Age in whole-ish years from an ISO date of birth, for the demographic
- *  formulas. Null when the dob is absent/invalid. */
+/** Fractional years from a date of birth (days / 365.25, calendar dates) —
+ *  delegates to the ONE patient-age helper. Null when absent/invalid. */
 export function ageYearsFromDob(dob: string | null | undefined, now: Date = new Date()): number | null {
-  if (!dob) return null;
-  const d = new Date(dob);
-  if (isNaN(d.getTime())) return null;
-  const ms = now.getTime() - d.getTime();
-  if (ms < 0) return null;
-  return ms / (365.25 * 24 * 3600 * 1000);
+  return ageParts(dob, now)?.fractionalYears ?? null;
 }

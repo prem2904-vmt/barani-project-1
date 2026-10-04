@@ -16,7 +16,7 @@ import { MARGIN_X, MM, PAGE, addBackground, readHeaderLayout, setItem, writeHead
 const BASE: ReportTemplate = {
   id: 't', tenantId: 'x', labName: 'Micro World Diagnostics', tagline: 'Accurate | Caring | Instant',
   address: '14 Gandhi Road, Chennai 600017', phone: '+91 98400 12345', email: 'lab@microworld.in',
-  website: 'www.microworld.in', logoUrl: '', nablAccredited: false, headerPreset: 'drlogy', logoPosition: 'left',
+  website: 'www.microworld.in', logoUrl: '', nablAccredited: false, headerPreset: 'classic', logoPosition: 'left',
   logoSize: 'md', topAccentBar: true, primaryColor: '#1B3A6B', accentColor: '#0066CC',
   showPatientName: true, showAge: true, showRefDoctor: true, showOrderId: true, showAbhaId: false, showQrCode: true,
   showCollectionDate: true, showReportDate: true, showMethod: false, showInstrument: false, groupByDepartment: false,
@@ -175,6 +175,32 @@ describe('Report designer — letterhead editor', () => {
     expect(p.item('address')).toBeTruthy();
     expect(p.item('contact').fields).toEqual(['phone', 'email']);
     expect(p.c.selected()).toBe('address');
+  });
+
+  it('Banner: the band has the same print switch — off hides it, the name turns dark, on brings it back', () => {
+    const p = make({ headerPreset: 'banner' });
+    const sw = () => Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-rhe-li__sw'))
+      .find(b => b.getAttribute('aria-label') === 'Print Banner')!;
+    expect(sw()).toBeTruthy();
+    expect(sw().getAttribute('aria-checked')).toBe('true');
+    expect(p.el.querySelector('.pf-rhe-thumb--nobanner')).toBeNull();
+    sw().click();
+    p.f.detectChanges();
+    expect(p.cfg()!.items['banner']?.hidden).toBe(true);
+    expect(p.item('banner').hidden).toBe(true);
+    expect(sw().getAttribute('aria-checked')).toBe('false');
+    expect(p.c.entries().find(e => e.id === 'banner')!.value).toContain('dark ink');
+    expect(p.item('name').color).not.toBe('#ffffff');
+    // The style picker's Banner thumbnail shows the band off too.
+    expect(p.el.querySelector('.pf-rhe-thumb--banner.pf-rhe-thumb--nobanner')).not.toBeNull();
+    // Its own card has the switch as well (it was suppressed for the band).
+    p.c.select('banner');
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]')).not.toBeNull();
+    (p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]') as HTMLButtonElement).click();
+    p.f.detectChanges();
+    expect(p.item('banner').hidden).toBeFalsy();
+    expect(p.item('name').color).toBe('#ffffff');
   });
 
   it('switching style with moved elements asks whether to keep the positions', async () => {

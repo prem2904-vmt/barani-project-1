@@ -22,10 +22,30 @@ export interface LayoutSnapshotTest {
   /** Nearest enclosing profile (package members) — its layout carries the
    *  notes the report prints for that group. */
   profileTestId?: string | null;
+  /** 'profile' | 'package' | null (legacy, pre-packageType snapshot). */
+  packageType?: string | null;
+  /** The profile's own TEST CODE ("BIO004"), exactly as mw's
+   *  `ReportService.ProfileCodeFor` computes and stamps onto the snapshot
+   *  (`ReportService.cs` ~L450: `profileCode = ProfileCodeFor(t)`) — NOT a
+   *  GUID. Selects a profile-scoped reference band (see {@link profileCodeFor}). */
+  profileCode?: string | null;
   result?: { values?: Record<string, unknown> } | null;
   /** show=true image urls from the snapshot — resolve the layout with them
    *  so `has_images` predicates + image sections light up. */
   images?: string[] | null;
+}
+
+/** The nearest enclosing PROFILE's test CODE ("BIO004"), exactly as mw
+ *  already computes and sends it (`ReportService.ProfileCodeFor` →
+ *  snapshot `profileCode`) — read it straight off the snapshot rather than
+ *  re-deriving from `profileTestId`/`packageTestId`, which are GUIDs, not
+ *  codes, and would never match a band's `profileCode` (a test CODE) at
+ *  all (M-A, logic re-review, 2026-10-03). H2 (2026-10-02): this is what
+ *  lets a profile-tagged band (BIO010's Gestational OGTT <92) apply ONLY
+ *  when the test was actually ordered under its own profile (BIO004), on
+ *  this client-resolved path too. */
+export function profileCodeFor(t: LayoutSnapshotTest): string | null {
+  return t.profileCode ?? null;
 }
 
 /** The subset of ReportLayoutService this needs — passed in so the helper stays
@@ -34,7 +54,8 @@ export type PreviewFn = (
   testId: string,
   values: Record<string, unknown>,
   conditions: unknown[],
-  patient?: { sex?: string | null; age?: number | null },
+  patient?: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null },
+  profileCode?: string | null,
 ) => Promise<unknown>;
 
 /** Snapshot values are the flagged wrapper { value, unit, range, flag };
@@ -67,7 +88,7 @@ export function isAccessFailure(e: unknown): boolean {
 export async function resolveReportLayouts<T>(
   preview: PreviewFn,
   tests: readonly LayoutSnapshotTest[],
-  patient?: { sex?: string | null; age?: number | null },
+  patient?: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null },
 ): Promise<Record<string, T>> {
   const layouts: Record<string, T> = {};
 
@@ -81,7 +102,7 @@ export async function resolveReportLayouts<T>(
         // layout came back without a results table gets the default one, so
         // its RESULT can never drop off the report (results-table.ts).
         layouts[t.testId] = withResultsTable(await preview(
-          t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient,
+          t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient, profileCodeFor(t),
         ) as T, t);
       } catch (e) {
         // Permission / network → abort the whole render (see isAccessFailure).

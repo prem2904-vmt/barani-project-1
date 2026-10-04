@@ -7,8 +7,10 @@ import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
-import { ADMIN_PERMS } from './core/auth/route-access';
-import { ShellComponent } from './layout/shell/shell.component';
+import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
+import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
+import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -55,7 +57,10 @@ export const appRoutes: Route[] = [
   },
   {
     path: '',
-    component: ShellComponent,
+    // Lazy: the authed shell (sidebar, navbar, chat, calls…) stays OUT of the
+    // initial bundle, so the public patient pages above (/reports/public,
+    // /track) and /login boot without it. Signed-in users load it once.
+    loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
     canActivate: [authGuard],
     children: [
       // Landing guard routes to /admin, /frontdesk, /lab/my-work, or /pathologist
@@ -110,6 +115,19 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
       },
       {
+        // Lab analyzers (instrument connector): list + setup wizard / status.
+        // `new` opens the wizard for a new instrument.
+        path: 'admin/instruments',
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instruments-list.component').then(m => m.InstrumentsListComponent)
+      },
+      {
+        path: 'admin/instruments/:id',
+        data: { recreateOn: ['id'] },
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instrument-editor.component').then(m => m.InstrumentEditorComponent)
+      },
+      {
         // Microbiology / Culture bench settings (lock timeout, TAT).
         path: 'admin/microbiology',
         canActivate: [...routeGuards('/admin/microbiology')],
@@ -119,20 +137,9 @@ export const appRoutes: Route[] = [
       // "coming soon" hub listing that module's planned config, so the module-
       // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
       // placeholder is visible regardless of entitlement.
-      {
-        path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/opd/admin/opd-admin.component').then(m => m.OpdAdminComponent)
-      },
-      {
-        // OPD → Doctors: per-doctor consultation-fee grid.
-        path: 'admin/opd/doctors', canActivate: [adminGuard],
-        loadComponent: () => import('./features/opd/admin/doctors-admin.component').then(m => m.DoctorsAdminComponent)
-      },
-      {
-        // OPD → Settings: the follow-up policy.
-        path: 'admin/opd/settings', canActivate: [adminGuard],
-        loadComponent: () => import('./features/opd/admin/opd-settings.component').then(m => m.OpdSettingsComponent)
-      },
+      // OPD admin (OPD dark build) — every route adminGuard + opdGuard; defined
+      // ONCE in features/opd/opd.routes.ts (feature agents never edit here).
+      ...OPD_ADMIN_ROUTES,
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
@@ -169,22 +176,22 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/users/invite',
         canActivate: [...routeGuards('/admin/users/invite')],
-        loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
+        loadComponent: loadUserInvite
       },
       {
         path: 'admin/users/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/user-edit.component').then(m => m.UserEditComponent)
+        loadComponent: loadUserEdit
       },
       {
         path: 'admin/roles/new',
         canActivate: [...routeGuards('/admin/roles/new')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/roles/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/tests',
@@ -194,12 +201,12 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/tests/new',
         canActivate: [...routeGuards('/admin/tests/new')],
-        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/tests/:id/edit',
-        canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
+        canActivate: [permissionGuard(TEST_MASTER_PERMS)],
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/branches',
@@ -215,6 +222,14 @@ export const appRoutes: Route[] = [
         path: 'admin/referral-labs',
         canActivate: [...routeGuards('/admin/referral-labs')],
         loadComponent: () => import('./features/admin/referral-labs/referral-labs.component').then(m => m.ReferralLabsComponent)
+      },
+      {
+        // Outsourcing partner prices — what each referral lab charges per
+        // test, effective-dated; the single cost source Analytics' Phase 3
+        // Outsourcing/Profitability tabs read from.
+        path: 'admin/partner-prices',
+        canActivate: [...routeGuards('/admin/partner-prices')],
+        loadComponent: () => import('./features/admin/partner-test-prices/partner-test-prices.component').then(m => m.PartnerTestPricesComponent)
       },
       {
         path: 'admin/lab-settings',
@@ -361,12 +376,8 @@ export const appRoutes: Route[] = [
             canActivate: [...routeGuards('/frontdesk/order')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
-          {
-            // OPD consult screen (separate from lab order-create). Reached only
-            // via the module-scope fork; dormant until OPD is enabled + scoped.
-            path: 'consult',
-            loadComponent: () => import('./features/opd/consult-page/consult-page.component').then(m => m.ConsultPageComponent)
-          },
+          // Legacy OPD desk consult page — OPD-gated (OPD dark build).
+          ...OPD_FRONTDESK_CHILD_ROUTES,
           {
             path: 'billing',
             redirectTo: 'order'
@@ -493,16 +504,22 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
       },
 
-      // OPD Consult Room — the doctor's day (token queue + room). Access is
-      // profile-based (auth.me.isDoctor) — the backend Forbids non-doctors,
-      // so the route carries no permission guard.
+      // OPD (OPD dark build): every OPD work-area route incl. the legacy doctor
+      // Consult Room, each behind opdGuard — see features/opd/opd.routes.ts.
+      ...OPD_SHELL_ROUTES,
+
+      // Critical results — the NABL acknowledgement register (lab + pathologist
+      // + quality). Reads: enter_result / validate_result / view_audit_log.
       {
-        path: 'doctor',
-        loadComponent: () => import('./features/opd/doctor/doctor-queue.component').then(m => m.DoctorQueueComponent)
+        // Analyzer runs that matched no tube (attach to a sample) + QC runs.
+        path: 'lab/analyzer-results',
+        canActivate: [...routeGuards('/lab/analyzer-results')],
+        loadComponent: () => import('./features/lab/analyzer-results/analyzer-results.component').then(m => m.AnalyzerResultsComponent)
       },
       {
-        path: 'doctor/consult/:id',
-        loadComponent: () => import('./features/opd/doctor/consult-room.component').then(m => m.ConsultRoomComponent)
+        path: 'lab/critical-results',
+        canActivate: [...routeGuards('/lab/critical-results')],
+        loadComponent: () => import('./features/lab/critical-results/critical-results.component').then(m => m.CriticalResultsComponent)
       },
 
       // Pathologist — only doctors with validate_result.
@@ -529,12 +546,7 @@ export const appRoutes: Route[] = [
       // gated purely on tenant entitlement. When a module is off the guard
       // bounces to landing; when on, its "coming soon" shell renders until the
       // real screens ship. Each supplies its catalog id via route data.
-      {
-        path: 'opd',
-        canActivate: [moduleGuard('opd')],
-        data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
+      // (OPD's /opd lives in OPD_SHELL_ROUTES above — gated by the OPD gate.)
       {
         path: 'ipd',
         canActivate: [moduleGuard('ipd')],
@@ -593,6 +605,11 @@ export const appRoutes: Route[] = [
         canActivate: [...routeGuards('/dashboard')],
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
       },
+      {
+        path: 'insights',
+        canActivate: [...routeGuards('/insights')],
+        loadComponent: () => import('./features/insights/insights.component').then(m => m.InsightsComponent)
+      },
 
       // Finance — hub (end-to-end money in/out by product line) + daily statement.
       {
@@ -605,6 +622,15 @@ export const appRoutes: Route[] = [
         canActivate: [...routeGuards('/finance/daily')],
         loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
       },
+      {
+        // Expenses — a PRIMARY everyday screen (main nav): My expenses,
+        // All expenses, the cashier's Day closing (expense_viewer / _modifier / _admin).
+        path: 'expenses',
+        canActivate: [...routeGuards('/expenses')],
+        loadComponent: () => import('./features/finance/expenses/expense-tracker.component').then(m => m.ExpenseTrackerComponent)
+      },
+      // Old deep link (Finance → Expense tracker) keeps working.
+      { path: 'finance/expenses', redirectTo: 'expenses', pathMatch: 'full' },
 
       // 403
       {

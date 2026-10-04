@@ -1,3 +1,5 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
+import { DesktopWindowService } from '../../core/services/desktop-window.service';
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
   Injector, computed, effect, inject, signal, viewChild, viewChildren
@@ -7,7 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { ModuleScopeService } from '../../core/services/module-scope.service';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { LockService } from '../../core/auth/lock.service';
@@ -22,8 +24,9 @@ import { DesignModeService } from '../../core/services/design-mode.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
-import { PushService } from '../../core/services/push.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
+import { SessionService } from '../../core/auth/session.service';
+import { DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses, withInsights } from '../nav-items';
+import { opdAreasFor } from '../../features/opd/shared/opd-nav';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { BranchSwitchService } from '../../core/services/branch-switch.service';
@@ -40,7 +43,8 @@ const DRAG_THRESHOLD_PX = 4;
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
-  private readonly moduleScope = inject(ModuleScopeService);
+  /** OPD dark build: the ONE OPD visibility rule. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
@@ -52,6 +56,17 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  hidden below 1280px, so when the bar sits at the TOP this popover is
    *  the ONLY place these live on phone and iPad (owner). */
   protected readonly designMode = inject(DesignModeService);
+  /** Desktop app: notification switches in the more menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
+  /** Desktop app, windowed: "Full screen" item (same as the top bar's). */
+  protected readonly desktopWindow = inject(DesktopWindowService);
+  protected readonly fullScreenKey =
+    typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent) ? '⌃⌘F' : 'F11';
+  protected enterFullScreen(): void {
+    this.closeMore();
+    void this.desktopWindow.setFullScreen(true);
+  }
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   /** Teams-style presence — my status dot on the account button + the
    *  status picker row in the account popover. */
@@ -60,7 +75,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly kbd = inject(KeyboardService);
   /** Push token must be unregistered on sign-out (mirrors the top-strip's
    *  logout) — otherwise the device keeps receiving this user's pushes. */
-  private readonly push = inject(PushService);
+  private readonly session = inject(SessionService);
   /** Scroll listener is registered runOutsideAngular (it fires very often),
    *  so signal writes that must trigger OnPush re-render re-enter the zone. */
   private readonly zone = inject(NgZone);
@@ -83,7 +98,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Rail mode — on the iPad band (641–1279px) the nav docks as a
    *  vertical rail on the left edge instead of a floating bottom pill.
    *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
-   *  whole component (xl:hidden) and uses the top-strip nav. */
+   *  whole component (xl:hidden) and uses the top-strip nav; touch-first
+   *  devices (html.device-touch) keep the rail at every width. */
   protected readonly railMode = signal<boolean>(this.computeRailMode());
   /** Show all primary items — the pill is now a horizontally-scrollable
    *  slider so every tab is always reachable without a "More" overflow. */
@@ -99,7 +115,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     // 1366pt, which is ≥1280) uses the left rail, not the desktop layout.
     const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
       .Capacitor?.isNativePlatform?.();
-    if (isNative) return w >= 641;
+    // Same for any touch-first device on the web (Android tablet, iPad Pro
+    // in landscape): html.device-touch, set in index.html before first paint.
+    const isTouch = document.documentElement.classList.contains('device-touch');
+    if (isNative || isTouch) return w >= 641;
     return w >= 641 && w < 1280;
   }
 
@@ -225,11 +244,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected async onMoreLogout(): Promise<void> {
     this.closeMore();
-    // Unregister push BEFORE the auth session is cleared (the call needs
-    // a valid token) — same order as the top-strip's logout.
-    await this.push.unregister().catch(() => undefined);
-    await this.auth.signOut();
-    void this.router.navigateByUrl('/login');
+    // The ONE ordered sign-out (revoke → push → sockets → timers → clear →
+    // /login, history replaced) — same as the avatar menu.
+    await this.session.logout();
   }
 
   // ─── Multi-account switching + PIN (mobile/iPad — mirrors the top strip) ──
@@ -513,16 +530,24 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
   readonly primary = computed(() => {
-    const items = this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)));
-    // OPD: doctors get their Consult Room — but only once the OPD module is
-    // actually usable (tenant entitlement, or the dev preview flag). Keeps the
-    // in-progress consult build invisible on shared environments.
-    return this.auth.isDoctor() && this.moduleScope.opdUsable() ? [...items, DOCTOR_NAV] : items;
+    // Expenses: a primary tab for anyone holding expense_* (the route guard's
+    // rule), after the lab work items; the scrollable pill keeps every tab
+    // reachable (no overflow menu).
+    const base = this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV);
+    const items = this.withCollection(this.withInventory(withInsights(withExpenses(base, i => this.visible([i]).length > 0), i => this.visible([i]).length > 0)));
+    // OPD: doctors get "Consults"; anyone who can open at least one OPD area
+    // gets the general "OPD" tab — both only while the OPD gate is open
+    // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
+    // build. Mirrors the top strip (nav-items.ts opdAreasFor).
+    if (!this.opdGate.visible()) return items;
+    const out = this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    return opdAreasFor(p => this.auth.hasAnyPermission(p)).length ? [...out, OPD_NAV] : out;
   });
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
@@ -745,6 +770,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   private matches(url: string, n: NavItem): boolean {
+    // The OPD tabs need cross-prefix + exclusion rules a plain href-prefix
+    // check can't express (OPD owns /admin/opd/** too, minus the Consults
+    // subtree) — see nav-items.ts opdNavActive.
+    if (n.id === 'opd' || n.id === 'doctor') return opdNavActive(n, url);
     if (n.exact) return url === n.href;
     return url === n.href || url.startsWith(n.href + '/');
   }

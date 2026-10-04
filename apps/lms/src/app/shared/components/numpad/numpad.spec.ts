@@ -466,10 +466,69 @@ describe('lifting the field never clips the results (iPad, 2026-09-28)', () => {
     expect(scrollParentOf(input)).toBe(page);
   });
 
-  it('with no page-sized scroller, the document scrolls (never a small inner box)', () => {
+  it('with no page-sized scroller: nothing is padded — NEVER <html>/<body> (that shrank the whole fixed-height app and cut it off)', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
     const { page, input } = build();
     Object.defineProperty(page, 'clientHeight', { configurable: true, value: 200 });
-    expect(scrollParentOf(input)).toBe(document.scrollingElement ?? document.documentElement);
+    expect(scrollParentOf(input)).toBeNull();
+  });
+
+  it('a page scroller that does not overflow yet (short list) is still the one padded', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
+    const { page, input } = build();
+    Object.defineProperty(page, 'scrollHeight', { configurable: true, value: 700 });
+    expect(scrollParentOf(input)).toBe(page);
+  });
+
+  it('opening the pad never touches the document root padding', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1366 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    const { q, svc, tapField } = await setup();
+    tapField(q('.a'));
+    svc.layoutNow();
+    expect(document.documentElement.style.paddingBottom).toBe('');
+    expect(document.body.style.paddingBottom).toBe('');
+  });
+});
+
+describe('numpad — fast typing (shared KeyTap)', () => {
+  const down = (el: Element, id: number) =>
+    el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true }));
+  const up = (el: Element, id: number) =>
+    el.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true }));
+  const ghostClick = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+  it('rolled-over digits all land in order, once, through the field validator', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const a = q('.a');
+    tapField(a);
+    down(key('1'), 1); down(key('2'), 2); up(key('1'), 1); down(key('.'), 3); up(key('2'), 2); up(key('.'), 3);
+    down(key('5'), 4); down(key('.'), 5); up(key('5'), 4); up(key('.'), 5);   // a second '.' is refused
+    for (const k of ['1', '2', '.', '5', '.']) ghostClick(key(k));
+    tick();
+    expect(a.value).toBe('12.5');
+  });
+
+  it('Enter acts on release, once; a click with no press (screen reader) still acts', async () => {
+    const { q, key, tapField, svc } = await setup();
+    tapField(q('.a'));
+    const next = vi.spyOn(svc, 'next').mockImplementation(() => {});
+    down(key('next'), 1);
+    expect(next).not.toHaveBeenCalled();
+    up(key('next'), 1); ghostClick(key('next'));
+    expect(next).toHaveBeenCalledTimes(1);
+    key('next').click();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it('never shows for a PF Keys search field (that has its own keypad)', async () => {
+    const { svc, pad, tick } = await setup();
+    const el = document.createElement('input');
+    svc.ensurePanel(NumpadPanelComponent);
+    svc.show({ el, scope: null, kind: 'keys', keys: () => new Set(), label: () => 'Search', unit: () => null, flag: () => null,
+      flushChange() {}, markDirty() {}, keysKind: () => 'test', defaultLayout: () => null, enterLabel: () => 'Add',
+      enterAria: () => 'Add', enterTone: () => 'primary', arrows: () => false, prefixes: () => [], useSystemKeyboard() {} } as never);
+    tick();
+    expect(pad()).toBeNull();
   });
 });

@@ -12,13 +12,14 @@ import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
@@ -26,6 +27,20 @@ import { parseParametersBlob, readParameters } from '../../../shared/utils/test-
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { pickReassignee } from '../reassign-picker';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { ReportChartComponent } from '../../../shared/components/report-chart/report-chart.component';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { buildChartData, type ChartData } from '../../../shared/utils/report-chart/report-chart.data';
+import { chartOwnerOf, chartTestsFromOrder, savedValues } from '../../../shared/utils/report-chart/report-chart.order';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
+import { bandAgeYears } from '../../../shared/utils/patient-age';
+import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
+import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -33,6 +48,8 @@ interface ResultSnapshot {
   flagged?: Record<string, SavedFlag>;
   note?: string;
   flags?: { critical: boolean; notifications: string[] };
+  /** Value names the tech marked "print in bold" at result entry. */
+  bold?: string[];
 }
 
 type Flag = 'normal' | 'abnormal' | 'critical';
@@ -63,6 +80,8 @@ interface ValueRow {
   flag: Flag;
   /** The critical badge mw saved: CL / CH (legacy rows: C); '' otherwise. */
   crit?: CriticalCode | '';
+  /** The tech asked for this value to print bold (the B toggle). */
+  printBold?: boolean;
   /** True when the parameter has a reference (range or critical bounds) —
    *  only then does a "Normal" verdict mean anything. Referenceless
    *  categorical values are shown as recorded, not judged. */
@@ -72,7 +91,10 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent, ZoomTargetDirective],
+  imports: [DailyNoComponent, FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
+  // Technician report notes: the reviewer sees what will print (and, while
+  // a line awaits validation, may adjust it — the server decides).
+  providers: [ReportNotesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -102,9 +124,10 @@ interface ValueRow {
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
         @if ((loading() && !selected()) || zoom.holding()) {
-          <div class="pf-empty-block flex justify-center py-12" [pfZoomTarget]="zoomKeys()">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading validation…"></pf-loading-logo>
+          <!-- The cockpit's own shape (identity, values, a card) — the kit
+               skeleton, never the PF logo (ND-PATTERN "Loading feedback"). -->
+          <div class="pf-vr-skel" [pfZoomTarget]="zoomKeys()">
+            <pf-skeleton-detail [fields]="6" [sections]="1" label="Loading validation…"></pf-skeleton-detail>
           </div>
         }
 
@@ -152,7 +175,7 @@ interface ValueRow {
                       @case ('validating') { <span class="pf-vt__badge" data-outcome="validating">Working…</span> }
                       @default {
                         @if (sampleTests().length > 1) {
-                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving()" (click)="rejectTest(st)">Reject</button>
+                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving() || rejectingId() === st.id" [pfBusy]="rejectingId() === st.id" pfBusyLabel="Rejecting…" (click)="rejectTest(st)">Reject</button>
                           <button type="button" class="pf-vt__act pf-vt__act--approve press" [disabled]="saving()" (click)="approveTest(st)">Approve</button>
                         }
                       }
@@ -191,7 +214,7 @@ interface ValueRow {
                                (click)="!isEditingTest(st) && openDetail(r)"
                                (keydown.enter)="!isEditingTest(st) && openDetail(r)">
                             <span class="pf-prow__name">{{ r.title }}</span>
-                            <span class="pf-prow__val">
+                            <span class="pf-prow__val" [class.pf-prow__val--bold]="r.printBold">
                               @if (isEditingTest(st)) {
                                 <input class="pf-prow__editin" [value]="editVal(r.name)"
                                        (input)="setEditVal(r.name, $any($event.target).value)"
@@ -200,6 +223,11 @@ interface ValueRow {
                                 @if (r.unit) { <em>{{ r.unit }}</em> }
                               } @else {
                                 {{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }
+                              }
+                              @if (r.printBold) {
+                                <span class="pf-prow__boldmark" title="Prints in bold on the report" aria-label="Prints in bold on the report" role="img">
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z"/><path d="M7 12h7.5a3.5 3.5 0 0 1 0 7H7z"/></svg>
+                                </span>
                               }
                             </span>
                             <span class="pf-prow__bar">
@@ -266,13 +294,18 @@ interface ValueRow {
                 <div class="pf-railpat">
                   <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
                   <div class="pf-railpat__id">
-                    <p class="pf-railpat__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
+                    <p class="pf-railpat__name"><pf-daily-no [of]="t.subOrder" />{{ formatPatient(t.subOrder?.order?.patient) }}</p>
                     <p class="pf-railpat__meta">{{ t.test?.department?.name ?? '—' }} · {{ sampleLabel() }}</p>
                   </div>
                   @if (hasSampleCritical()) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                 </div>
                 <p class="pf-railpat__entered">Entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}</p>
               </div>
+
+              @if (critical().length) {
+                <!-- NABL: the tube's critical values still to acknowledge / communicate. -->
+                <pf-critical-ack-strip [events]="critical()" via="validate" (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
+              }
 
               @if (sampleTests().length > 1) {
                 <div class="pf-rail-card">
@@ -304,6 +337,16 @@ interface ValueRow {
                       </li>
                     }
                   </ul>
+                </div>
+              }
+
+              <!-- Technician notes that print on the report (Lab settings). -->
+              <pf-report-notes-card class="pf-rail-notes" [lineIds]="noteLineIds()" [showLines]="true" [showProfiles]="true"></pf-report-notes-card>
+
+              @if (printChart(); as pc) {
+                <div class="pf-rail-card pf-printchart">
+                  <p class="pf-rail-lbl">Chart · printed on the report</p>
+                  <pf-report-chart [data]="pc"></pf-report-chart>
                 </div>
               }
 
@@ -355,7 +398,7 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="cancelEdit()">Cancel</button>
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" (click)="saveEdits()">
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEdits()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
             } @else {
@@ -378,37 +421,18 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
 
-              @if (hasMoreActions()) {
-                <div class="pf-more">
-                  <button type="button" class="pf-btn pf-btn--ghost press" (click)="moreOpen.set(!moreOpen())"
-                          aria-haspopup="menu" [attr.aria-expanded]="moreOpen()">
-                    More
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+              <!-- ⋮ — the secondary steps (reassign, edit, send back) and
+                   go-to (patient, lab results) in one place. Validate stays
+                   THE primary; Reject stays visible. -->
+              @if (menuActions().length) {
+                <pf-actions-menu [actions]="menuActions()" label="More actions" [heading]="headTitle()"
+                                 (action)="runAction($event)">
+                  <button pfActionsTrigger type="button" class="pf-btn pf-btn--ghost pf-vr-kebab press" aria-label="More actions" title="More actions"
+                          [pfBusy]="reassigning()" pfBusyLabel="Reassigning…">
+                    <svg class="pf-vr-kebab__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+                    <span class="pf-vr-kebab__t">More</span>
                   </button>
-                  @if (moreOpen()) {
-                    <div class="pf-more__bd" (click)="moreOpen.set(false)"></div>
-                    <div class="pf-more__menu" role="menu">
-                      @if (sampleTests().length <= 1) {
-                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); reassign()">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
-                          Reassign to another validator
-                        </button>
-                        @if (!isCulture()) {
-                          <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startEdit()">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            Edit values myself
-                          </button>
-                        }
-                      }
-                      @if (canEditResult() && editOrderId()) {
-                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); editDialogOpen.set(true)">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                          Send back for correction
-                        </button>
-                      }
-                    </div>
-                  }
-                </div>
+                </pf-actions-menu>
               }
 
               @if (sampleTests().length > 1) {
@@ -417,12 +441,14 @@ interface ValueRow {
                         [class.pf-btn--primary]="!hasSampleCritical()"
                         [class.pf-btn--danger]="hasSampleCritical()"
                         [disabled]="saving() || pendingSampleTests().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
                         (click)="validateAllRemaining()">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                   <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
                 </button>
               } @else {
-                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
+                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject"
+                        [disabled]="rejecting()" [pfBusy]="rejecting()" pfBusyLabel="Rejecting…">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
                   <span class="pf-btn-label">Reject</span>
                 </button>
@@ -431,6 +457,7 @@ interface ValueRow {
                         [class.pf-btn--primary]="!hasCritical()"
                         [class.pf-btn--danger]="hasCritical()"
                         [disabled]="saving() || isCulture() || valueRows().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
                         (click)="validate()"
                         [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -519,6 +546,7 @@ interface ValueRow {
     </section>
     `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ── WORK page: non-scroll app layout ─────────────────────
        The PAGE itself never scrolls. :host fills the shell's main
        area; the screen header is fixed (flex:0 0 auto); the SCROLL
@@ -541,6 +569,7 @@ interface ValueRow {
     @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
 
     .pf-empty-block { padding: 40px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    .pf-vr-skel { padding: 16px 0; }
 
     /* ── Cockpit: results + always-visible context rail ──────── */
     .pf-cockpit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -611,6 +640,9 @@ interface ValueRow {
     .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
     .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
     .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
+    .pf-prow__val--bold { font-weight: 800; }
+    .pf-prow__boldmark { display: inline-flex; align-items: center; justify-content: center; align-self: center; width: 18px; height: 18px; border-radius: 5px;
+      color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent); }
     .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
     .pf-prow__dash { color: var(--text-muted); }
     .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -695,7 +727,7 @@ interface ValueRow {
 
     /* ── Sticky verdict bar ──────────────────────────────────── */
     .pf-stickybar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 0 16px; pointer-events: none; }
-    @media (min-width: 1280px) { .pf-stickybar { bottom: 1rem; } }
+    @include dt.desktop-only { .pf-stickybar { bottom: 1rem; } }
     .pf-stickybar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
       background: var(--bg-card-solid); border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
       backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
@@ -720,43 +752,10 @@ interface ValueRow {
     .pf-btn--danger:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55); }
     .pf-btn--icony .pf-btn__ic { display: none; }
 
-    /* ── More menu (secondary actions) ───────────────────────── */
-    .pf-more { position: relative; }
-    .pf-more__bd { position: fixed; inset: 0; z-index: 1; }
-    .pf-more__menu { position: absolute; bottom: calc(100% + 10px); right: 0; z-index: 2; min-width: 250px; padding: 6px;
-      border-radius: 14px; background: var(--bg-card-solid); border: 1px solid var(--glass-border);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45); animation: pf-menu-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-    .pf-more__item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; border: none;
-      background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
-      transition: background .15s, color .15s; }
-    .pf-more__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-    .pf-more__item svg { flex-shrink: 0; color: var(--text-tertiary); }
-    @keyframes pf-menu-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* ── ⋮ More actions (pf-actions-menu) ────────────────────── */
+    .pf-vr-kebab { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-vr-kebab__i { flex: none; }
 
-    /* ── Detail drawer ───────────────────────────────────────── */
-    .pf-drawer-bd { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(6px); z-index: 44; animation: pf-fade 0.2s ease both; }
-    .pf-drawer { position: fixed; right: 0; top: var(--navbar-height, 4rem); bottom: 0; width: min(100%, 520px); background: var(--bg-card-solid);
-      border-left: 1px solid var(--glass-border); box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5); z-index: 45; display: flex; flex-direction: column;
-      animation: pf-drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-    .pf-drawer__hdr { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border-muted); }
-    .pf-drawer__title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); }
-    .pf-drawer__close { width: 36px; height: 36px; border-radius: 9999px; background: var(--glass-bg); border: 1px solid var(--glass-border);
-      color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .pf-drawer__body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
-    .pf-drawer__value { display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; border-radius: 18px; background: var(--glass-bg);
-      border: 1px solid var(--glass-border); margin-bottom: 8px; }
-    .pf-drawer__num { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; }
-    .pf-drawer__unit { font-size: 16px; color: var(--text-secondary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .pf-drawer__sec { margin-top: 20px; }
-    .pf-drawer__meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-    .pf-drawer__meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .pf-drawer__meta dt { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
-    .pf-drawer__meta dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .pf-drawer__meta dd.pf-drawer__range { white-space: pre-line; }
-    .pf-drawer__sec--alert { padding: 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-drawer__sec--alert[data-flag='abnormal'] { border-color: rgba(245, 158, 11, 0.4); }
-    .pf-drawer__sec--alert[data-flag='critical'] { border-color: rgba(239, 68, 68, 0.45); }
-    .pf-drawer__why { margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.5; }
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
@@ -767,6 +766,8 @@ interface ValueRow {
       :host .pf-btn--icony .pf-btn-label { display: none; }
       :host .pf-btn--icony .pf-btn__ic { display: inline-block; }
       :host .pf-btn--icony { width: 44px; min-width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+      :host .pf-vr-kebab { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+      :host .pf-vr-kebab__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height) + 150px); }
       :host .pf-railpat { flex-wrap: wrap; }
       :host .pf-drawer { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 88dvh; border-left: none;
@@ -803,13 +804,11 @@ interface ValueRow {
       :host .pf-vt__act { min-height: 40px; }
       :host .pf-prow__cbtn { width: 38px; height: 38px; }
       :host .pf-drawer__close { width: 44px; height: 44px; }
-      :host .pf-more__item { min-height: 44px; }
     }
 
     /* Touch devices: neutralize sticky :hover states after a tap. */
     @media (hover: none) {
       :host .pf-btn--ghost:hover:not(:disabled) { background: transparent; color: var(--text-secondary); }
-      :host .pf-more__item:hover { background: transparent; color: var(--text-secondary); }
     }
 
     /* ── Capacitor native: fixed chrome clears the notch ─────── */
@@ -840,6 +839,37 @@ export class ValidateResultComponent implements OnInit {
     this.ngOnInit();
   }
 
+  // ── Report chart (Test Master chart block): the chart that will print ──
+  private readonly layoutSvc = inject(ReportLayoutService);
+  readonly printChart = signal<ChartData | null>(null);
+  private printChartKey = '';
+  private async loadPrintChart(t: OrderTest | null): Promise<void> {
+    const owner = t ? chartOwnerOf(t) : '';
+    const key = t ? `${owner}|${t.id}|${t.currentResult ?? ''}` : '';
+    if (key === this.printChartKey) return;
+    this.printChartKey = key;
+    if (!t || !owner) { this.printChart.set(null); return; }
+    try {
+      const lay = await this.layoutSvc.getTestLayout(owner);
+      const sec = (lay?.sections ?? []).find(x => x.type === 'chart' && !!(x as { trend?: unknown }).trend
+        && (x as { hidden?: boolean }).hidden !== true) as { label?: string | null; trend?: unknown } | undefined;
+      if (!sec) { if (this.printChartKey === key) this.printChart.set(null); return; }
+      let tests;
+      if (owner === t.testId) {
+        tests = [{ testId: t.testId, name: t.name, result: { values: savedValues(t.currentResult) } }];
+      } else {
+        const orderId = t.subOrder?.orderId ?? t.subOrder?.order?.id;
+        const order = orderId ? await firstValueFrom(this.api.get<{ samples?: [] }>(`/api/orders/${orderId}`)) : null;
+        tests = chartTestsFromOrder(order as never);
+      }
+      const data = buildChartData(sec.trend, sec.label, owner, tests);
+      if (this.printChartKey === key) this.printChart.set(data && !data.empty ? data : null);
+    } catch {
+      // No access to the layout / order → the card simply doesn't show.
+      if (this.printChartKey === key) this.printChart.set(null);
+    }
+  }
+
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);
   readonly trendogramOn = signal(false);
@@ -847,6 +877,7 @@ export class ValidateResultComponent implements OnInit {
   private trendPatientId: string | null = null;
 
   constructor() {
+    effect(() => { void this.loadPrintChart(this.selected()); });
     effect(() => {
       const pid = this.selected()?.subOrder?.order?.patient?.id ?? null;
       if (pid && pid !== this.trendPatientId) {
@@ -963,6 +994,12 @@ export class ValidateResultComponent implements OnInit {
   readonly comment = this._comment.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly saving = this._saving.asReadonly();
+  /** Single-test Reject (header) request in flight, after the reason prompt. */
+  readonly rejecting = signal(false);
+  /** Reassign (⋮ menu) request in flight, after the validator picker. */
+  readonly reassigning = signal(false);
+  /** Per-test Reject (multi-test tube) request in flight: that test's id. */
+  readonly rejectingId = signal<string | null>(null);
   readonly editing = this._editing.asReadonly();
   readonly detailRow = this._detailRow.asReadonly();
 
@@ -970,6 +1007,16 @@ export class ValidateResultComponent implements OnInit {
   /** The full validation queue, kept so we can show every sibling test of the
    *  focused sample without re-fetching. */
   private readonly _queue = signal<OrderTest[]>([]);
+  private readonly criticalSvc = inject(CriticalResultsService);
+  /** NABL critical-result records (open / acknowledged) of this tube's tests. */
+  readonly critical = signal<CriticalResultEvent[]>([]);
+  loadCritical(ids: string[]) {
+    if (!ids.length) { this.critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({ next: l => this.critical.set(l ?? []), error: () => { /* advisory */ } });
+  }
+  onCriticalChanged(u: CriticalResultEvent) {
+    this.critical.update(list => u.status === 'communicated' ? list.filter(e => e.id !== u.id) : list.map(e => (e.id === u.id ? u : e)));
+  }
   /** Per-test outcome as the pathologist works through the sample. */
   private readonly _outcome = signal<Record<string, 'pending' | 'validating' | 'validated' | 'rejected'>>({});
   /** Tests whose normal rows are shown (attention-first collapse). */
@@ -981,6 +1028,20 @@ export class ValidateResultComponent implements OnInit {
     return t.subOrder?.id
       ?? `${t.subOrder?.orderId ?? t.subOrder?.order?.id ?? ''}|${t.test?.department?.id ?? ''}`;
   }
+
+  /** Technician report notes of this tube's order — re-read when a line's
+   *  status moves (validate / reject lock or unlock them). */
+  protected readonly notes = inject(ReportNotesStore);
+  readonly noteLineIds = computed(() => this.sampleTests().map(t => t.id));
+  private notesKey = '';
+  private readonly _notesSync = effect(() => {
+    const tests = this.sampleTests();
+    const oid = this.orderIdOf(tests[0] ?? this.selected());
+    const key = oid ? `${oid}|${tests.map(t => `${t.id}:${t.status}`).join(',')}` : '';
+    if (key === this.notesKey) return;
+    this.notesKey = key;
+    void this.notes.load(oid);
+  });
 
   /** Every queued test on the same tube as the focused test (self as fallback). */
   readonly sampleTests = computed<OrderTest[]>(() => {
@@ -1017,9 +1078,41 @@ export class ValidateResultComponent implements OnInit {
   readonly hasSampleCritical = computed(() => this.sampleTests().some(t => this.countsFor(t).critical > 0));
 
   // ── Cockpit helpers ────────────────────────────────────────
-  readonly moreOpen = signal(false);
-  readonly hasMoreActions = computed(() =>
-    this.sampleTests().length <= 1 || !!(this.canEditResult() && this.editOrderId()));
+  /** ⋮ More actions — the same rules the old More dropdown had, plus go-to
+   *  rows (each gated by its destination's route guard). */
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+  readonly menuActions = computed<PfAction[]>(() => {
+    const t = this._selected();
+    if (!t) return [];
+    const a: PfAction[] = [];
+    if (this.sampleTests().length <= 1) {
+      a.push({ id: 'reassign', label: 'Reassign to another validator', icon: 'reassign', group: 'Workflow' });
+      if (!this.isCulture()) a.push({ id: 'edit-self', label: 'Edit values myself', icon: 'edit', group: 'Workflow' });
+    }
+    if (this.canEditResult() && this.editOrderId()) {
+      a.push({ id: 'send-back', label: 'Send back for correction', icon: 'sendback', group: 'Workflow', hint: 'Re-opens the results for re-entry' });
+    }
+    if (this.patientId() && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    if (t.subOrder?.id && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  });
+  readonly patientId = computed(() => {
+    const o = this._selected()?.subOrder?.order as { patientId?: string; patient?: { id?: string } } | undefined;
+    return o?.patient?.id ?? o?.patientId ?? null;
+  });
+  runAction(id: string): void {
+    switch (id) {
+      case 'reassign': void this.reassign(); break;
+      case 'edit-self': this.startEdit(); break;
+      case 'send-back': this.editDialogOpen.set(true); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', this.patientId()]); break;
+      case 'lab': {
+        const sid = this._selected()?.subOrder?.id;
+        if (sid) void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
+        break;
+      }
+    }
+  }
 
   /** Attention-first: flagged rows always visible; normals collapse behind
    *  the expander. Editing shows everything — any value may need fixing. */
@@ -1067,12 +1160,20 @@ export class ValidateResultComponent implements OnInit {
     { value: 'all', label: 'All history' },
   ];
 
+  /** Validation can complete the order's final report — store its PDF now
+   *  (background) so the patient's WhatsApp carries it. */
+  private readonly prestore = inject(ReportPrestoreService);
+  private orderIdOf(t: OrderTest | null | undefined): string | null {
+    return t?.subOrder?.orderId ?? t?.subOrder?.order?.id ?? null;
+  }
+
   approveTest(t: OrderTest) {
     if (this.outcomeOf(t) !== 'pending') return;
     this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
     this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }).subscribe({
       next: () => {
         this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        this.prestore.afterValidation(this.orderIdOf(t));
         this.toasts.success(`${t.test?.name ?? 'Test'} validated`);
         this.finishIfSampleDone();
       },
@@ -1092,7 +1193,10 @@ export class ValidateResultComponent implements OnInit {
       multiline: true, required: true, tone: 'danger', confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).subscribe({
+    this.rejectingId.set(t.id);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).pipe(finalize(() => {
+      if (this.rejectingId() === t.id) this.rejectingId.set(null);
+    })).subscribe({
       next: () => {
         this._outcome.update(m => ({ ...m, [t.id]: 'rejected' }));
         this.toasts.success('Rejected — lab tech notified');
@@ -1120,6 +1224,7 @@ export class ValidateResultComponent implements OnInit {
       }
     }
     this._saving.set(false);
+    if (ok > 0) this.prestore.afterValidation(this.orderIdOf(pending[0]));
     if (failed.length === 0) this.toasts.success(`Validated ${ok} test${ok === 1 ? '' : 's'}`);
     else this.toasts.warning(`Validated ${ok}; ${failed.length} failed: ${failed.join(', ')}`);
     this.finishIfSampleDone();
@@ -1166,7 +1271,8 @@ export class ValidateResultComponent implements OnInit {
 
     const patient = t.subOrder?.order?.patient;
     const sex = normalizeSex(patient?.sex);
-    const ageYears = typeof patient?.age === 'number' ? patient.age : null;
+    // DOB-derived fractional age — the server's band-pick metric.
+    const ageYears = bandAgeYears(patient);
 
     return params.map(p => {
       const v = snap.values![p.name];
@@ -1192,6 +1298,7 @@ export class ValidateResultComponent implements OnInit {
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
         flag: flagTone(saved?.flag),
         crit: criticalBadge(saved?.flag),
+        printBold: Array.isArray(snap.bold) && snap.bold.includes(p.name),
         hasRef: !!rangeText || critLow != null || critHigh != null
       };
     });
@@ -1301,13 +1408,18 @@ export class ValidateResultComponent implements OnInit {
     this._id.set(id);
     if (!id) return;
     this._loading.set(true);
-    this.api.get<OrderTest[]>('/api/validation/queue?mine=false').subscribe({
+    // Only this test's tube (the focused test + its queued siblings — all the
+    // screen shows), not the whole queue (DB optimisation phase 3). An older
+    // server ignores tubeOf and answers the whole queue; the lookup below
+    // works on either.
+    this.api.get<OrderTest[]>(`/api/validation/queue?mine=false&tubeOf=${encodeURIComponent(id)}`).subscribe({
       next: rows => {
         this._loading.set(false);
         this._queue.set(rows ?? []);
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
         if (match) void this.loadComments();
+        this.loadCritical([id, ...(rows ?? []).map(r => r.id)]);
       },
       error: () => this._loading.set(false)
     });
@@ -1378,6 +1490,7 @@ export class ValidateResultComponent implements OnInit {
     this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: this._comment() || null }).subscribe({
       next: () => {
         this._saving.set(false);
+        this.prestore.afterValidation(this.orderIdOf(t));
         this.toasts.success('Validated');
         this.back();
       },
@@ -1401,7 +1514,8 @@ export class ValidateResultComponent implements OnInit {
       confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).subscribe({
+    this.rejecting.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).pipe(finalize(() => this.rejecting.set(false))).subscribe({
       next: () => {
         this.toasts.success('Rejected — lab tech notified');
         this.back();
@@ -1416,7 +1530,8 @@ export class ValidateResultComponent implements OnInit {
     // A picker of the validators who cover this department (never a pasted id).
     const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
+    this.reassigning.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).pipe(finalize(() => this.reassigning.set(false))).subscribe({
       next: () => {
         this.toasts.success('Reassigned');
         this.back();

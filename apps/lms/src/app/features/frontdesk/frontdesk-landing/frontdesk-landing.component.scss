@@ -426,6 +426,16 @@
   font-size: 13px;
   color: var(--text-muted);
 }
+/* The merged list's "more than loadAll() capped" note — a quiet, honest
+   heads-up, not a warning (no amber/red — it's an expected cap, not an error). */
+.pf-wsec-note {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: var(--nd-radius-sm, 8px);
+  background: var(--nd-chip-bg);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
 /* Narrow card: the tabs may scroll inside their own box instead. */
 @container (max-width: 600px) {
   .pf-work-hdr .pf-work-hdr__filter { flex: 0 1 auto; }

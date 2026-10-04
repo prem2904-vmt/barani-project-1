@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   OnDestroy,
   OnInit,
   computed,
@@ -36,6 +37,11 @@ import { ImageUploadComponent } from "../report-template/image-upload.component"
 import { environment } from "../../../../environments/environment";
 import { ThemeService } from "../../../core/services/theme.service";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type Tab = "gst" | "discounts" | "invoice";
 type GstScope = "branch" | "region" | "tenant";
@@ -70,7 +76,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [
+  imports: [SkeletonFormComponent, BusyDirective, 
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -100,6 +106,9 @@ interface GstRow {
             <button
               type="button"
               class="pf-hb-btn pf-hb-btn--primary press"
+              [disabled]="savingConfig() || configSkeleton()"
+              [pfBusy]="savingConfig()"
+              pfBusyLabel="Saving…"
               (click)="saveConfig()"
               aria-label="Save billing config"
               title="Save billing config"
@@ -136,6 +145,9 @@ interface GstRow {
           actions
           size="sm"
           variant="primary"
+          [busy]="savingConfig()"
+          [disabled]="configSkeleton()"
+          busyLabel="Saving…"
           (pressed)="saveConfig()"
         >
           <span icon-left aria-hidden="true">
@@ -161,6 +173,13 @@ interface GstRow {
       </pf-screen-header>
 
       <div class="pf-band-body">
+        @if (configSkeleton()) {
+          <!-- First load: the form's shape until the saved config lands
+               (never the defaults flashing before the lab's own values). -->
+          <section class="nd-card"><div class="nd-card__body">
+            <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
+          </div></section>
+        } @else {
         <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
@@ -293,7 +312,9 @@ interface GstRow {
                         <pf-touch-btn
                           size="sm"
                           variant="ghost"
-                          [disabled]="!hasGstinFor(b.id)"
+                          [disabled]="!hasGstinFor(b.id) || gstinSaving() === b.id"
+                          [busy]="gstinSaving() === b.id"
+                          busyLabel="Saving…"
                           (pressed)="saveGstin(b.id)"
                           >Save</pf-touch-btn
                         >
@@ -405,7 +426,7 @@ interface GstRow {
                     />
                   </div>
                   <div>
-                    <label class="pf-label">Starting number</label>
+                    <label class="pf-label">Next invoice number</label>
                     <pf-number-input
                       [value]="config().invoiceStartNumber"
                       [min]="1"
@@ -413,6 +434,7 @@ interface GstRow {
                       (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"
                     >
                     </pf-number-input>
+                    <p class="pf-bc-hint">Can only move forward — issued numbers are never reused.</p>
                   </div>
                 </div>
 
@@ -633,13 +655,22 @@ interface GstRow {
                     />
                   </div>
                   <div>
-                    <label class="pf-label">GSTIN</label
-                    ><input
-                      class="nd-input"
-                      [ngModel]="tpl().gstin"
-                      (ngModelChange)="patchTpl({ gstin: $event })"
-                      placeholder="Optional"
-                    />
+                    <!-- GSTIN is not a template field: every invoice prints its
+                         branch's GSTIN (GST Setup), snapshotted on the bill. -->
+                    <span class="pf-label">GSTIN</span>
+                    @if (branchGstins().length === 0) {
+                      <p class="pf-bc-gstin-ro">No branch GSTIN set</p>
+                    } @else {
+                      @for (g of branchGstins(); track g.branchId) {
+                        <p class="pf-bc-gstin-ro">
+                          <span class="nd-num">{{ g.gstin }}</span>
+                          @if (branchGstins().length > 1) { <span class="pf-bc-gstin-br">· {{ g.branchName }}</span> }
+                        </p>
+                      }
+                    }
+                    <button type="button" class="pf-bc-gstin-link" (click)="setTab('gst')">
+                      Set per branch in GST Setup
+                    </button>
                   </div>
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Address</label
@@ -787,6 +818,8 @@ interface GstRow {
                   type="button"
                   class="nd-btn nd-btn--secondary pf-save-letterhead mt-4 press"
                   [disabled]="savingTpl()"
+                  [pfBusy]="savingTpl()"
+                  pfBusyLabel="Saving…"
                   (click)="saveTpl()"
                 >
                   {{ savingTpl() ? "Saving…" : "Save letterhead" }}
@@ -848,6 +881,7 @@ interface GstRow {
               }
             </div>
           </div>
+        }
         }
       </div>
     </section>
@@ -923,6 +957,14 @@ interface GstRow {
         background: var(--nd-card-bg);
         border: 1px solid var(--nd-line);
         box-shadow: var(--nd-shadow-sm);
+      }
+      .pf-bc-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+      .pf-bc-gstin-ro { margin: 6px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
+      .pf-bc-gstin-br { color: var(--text-muted); font-size: 12px; }
+      .pf-bc-gstin-link {
+        margin-top: 4px; padding: 6px 0; min-height: 32px; background: none; border: 0;
+        font-size: 12px; font-weight: 500; color: var(--color-primary); cursor: pointer;
+        text-decoration: underline; text-underline-offset: 2px;
       }
       .pf-bc-sub {
         margin: 0 0 8px;
@@ -1112,6 +1154,19 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   readonly branches = this._branches.asReadonly();
 
   private readonly _gstinByBranch = signal<Map<string, GstRow>>(new Map());
+  /** SAVED branch GSTINs (GET /api/config/gst) — what invoices print. The
+   *  editable map above also holds unsaved typing. */
+  private readonly _savedGst = signal<GstRow[]>([]);
+  readonly branchGstins = computed(() => {
+    const names = new Map(this._branches().map((b) => [b.id, b.name]));
+    return this._savedGst()
+      .filter((g) => (g.gstin ?? "").trim())
+      .map((g) => ({ ...g, branchName: names.get(g.branchId) ?? "Branch" }));
+  });
+  /** The preview prints a real branch GSTIN (the first), as invoices do. */
+  previewGstin(): string | undefined {
+    return this.branchGstins()[0]?.gstin || undefined;
+  }
 
   readonly invoicePreview = computed(() => {
     const c = this._config();
@@ -1243,7 +1298,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
           address: t.address,
           phone: t.phone,
           email: t.email,
-          gstin: t.gstin,
+          gstin: this.previewGstin(),
         },
         template: (t.template ?? "classic") as InvoiceTemplateStyle,
         paperSize: (t.paperSize ?? "a4") as
@@ -1324,7 +1379,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       branchId: "br",
       type: withTax ? "tax_invoice" : "bill_of_supply",
       invoiceNumber: "PREVIEW",
-      supplierGstin: this._tpl().gstin,
+      supplierGstin: this.previewGstin(),
       placeOfSupply: "Tamil Nadu (33)",
       isInterstate: false,
       subTotal,
@@ -1384,11 +1439,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
-      next: (c) => {
-        if (c) this._config.set({ ...this._config(), ...c });
-      },
-    });
+    this.destroyRef.onDestroy(() => this.configHold.cancel());
+    this.loadConfig(() => this.configHold.done());
     this.api.get<any>("/api/config/invoice-template").subscribe({
       next: (t) => {
         this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) });
@@ -1396,6 +1448,19 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     });
     this.api.get<Branch[]>("/api/tenants/branches").subscribe({
       next: (l) => this._branches.set(l ?? []),
+    });
+    this.loadGst();
+  }
+
+  /** Saved branch GST configs — GST Setup showed blank inputs for GSTINs
+   *  that were already saved (there was no GET). */
+  private loadGst() {
+    this.api.get<GstRow[]>("/api/config/gst").subscribe({
+      next: (rows) => {
+        const list = rows ?? [];
+        this._savedGst.set(list);
+        this._gstinByBranch.set(new Map(list.map((r) => [r.branchId, { ...r }])));
+      },
     });
   }
 
@@ -1421,22 +1486,47 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     map.set(bid, { ...cur, stateCode: v });
     this._gstinByBranch.set(map);
   }
+  /** Loading feedback: the branch row whose GSTIN is saving / the config save. */
+  readonly gstinSaving = signal<string | null>(null);
+  readonly savingConfig = signal(false);
   saveGstin(bid: string) {
     const row = this._gstinByBranch().get(bid);
-    if (!row) return;
+    if (!row || this.gstinSaving() === bid) return;
+    this.gstinSaving.set(bid);
     this.api
       .post("/api/config/gst", {
         branchId: bid,
         gstin: row.gstin,
         stateCode: row.stateCode,
       })
+      .pipe(finalize(() => { if (this.gstinSaving() === bid) this.gstinSaving.set(null); }))
       .subscribe({
-        next: () => this.toasts.success("GSTIN saved"),
+        next: () => {
+          this.toasts.success("GSTIN saved");
+          this.loadGst();
+        },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }
 
+  /** The server's config — incl. the LIVE invoice counter, which moves on
+   *  every bill; re-read after a save so the form never holds a stale one. */
+  private loadConfig(landed?: () => void) {
+    this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
+      next: (c) => {
+        if (c) this._config.set({ ...this._config(), ...c });
+        landed?.();
+      },
+      ...(landed ? { error: () => landed() } : {}),
+    });
+  }
+  /** First load: skeleton form until the saved config lands (held, no flash). */
+  private readonly configHold = createLoadHold(true);
+  readonly configSkeleton = this.configHold.active;
+  private readonly destroyRef = inject(DestroyRef);
+
   saveConfig() {
+    if (this.savingConfig()) return;
     const c = this._config();
     this.api
       .post("/api/config/billing", {
@@ -1457,8 +1547,9 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         bankName: c.bankName?.trim() || null,
         invoiceOnFullPaymentOnly: c.invoiceOnFullPaymentOnly ?? false,
       })
+      .pipe(busyWhile(this.savingConfig))
       .subscribe({
-        next: () => this.toasts.success("Billing config saved"),
+        next: () => { this.toasts.success("Billing config saved"); this.loadConfig(); },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }

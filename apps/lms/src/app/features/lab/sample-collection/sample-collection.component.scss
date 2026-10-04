@@ -1,3 +1,4 @@
+@use '../../../shared/styles/device-tier' as dt;
     /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
      * The page fills the shell's main area exactly: header / KPI strip /
      * scan strip / section heading are fixed (flex:0 0 auto) and the
@@ -88,6 +89,12 @@
       padding: 28px; text-align: center;
       background: var(--glass-bg); border: 1px dashed var(--glass-border);
       border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
+    }
+    /* First-load queue skeleton (kit rows) — same box as the list/empty. */
+    .pf-sc__skel {
+      display: block; overflow: hidden;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 16px;
     }
     /* Deep-link loading stub — centred loading-logo while the
        drawer's order fetch resolves. */
@@ -701,7 +708,7 @@
     /* Below the xl breakpoint the floating bottom-nav pill is visible and
        sits over the drawer footer. Push the footer up so the buttons clear
        the pill. At ≥1280px the nav is hidden and no extra room is needed. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-drawer__foot {
         padding-bottom: calc(28px + var(--tab-nav-total-height, 0px));
       }

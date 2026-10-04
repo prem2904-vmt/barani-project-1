@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -28,7 +31,7 @@ const STAGE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -41,7 +44,8 @@ const STAGE_LABELS: Record<string, string> = {
                           (valueChange)="tab.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton()"
+                    [pfBusy]="saving()" pfBusyLabel="Saving…"
                     (click)="save()" aria-label="Save changes" title="Save changes">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -58,7 +62,7 @@ const STAGE_LABELS: Record<string, string> = {
         subtitle="Stage lock + turnaround for the culture bench"
         parentRoute="/lab/settings">
         <div actions>
-          <button type="button" class="pf-cs__save press" [disabled]="saving()" (click)="save()">
+          <button type="button" class="pf-cs__save press" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
@@ -66,7 +70,14 @@ const STAGE_LABELS: Record<string, string> = {
 
       <div class="pf-band-body">
       <div class="pf-band-narrow">
-      @if (showSec('lock')) {
+      @if (formSkeleton()) {
+        <!-- Settings on their way: the card's fields as a skeleton (held
+             600ms) — never the defaults dressed up as the saved values. -->
+        <section class="nd-card pf-cs__card">
+          <div class="pf-cs__body"><pf-skeleton-form [fields]="3" [cols]="1" label="Loading culture settings…"></pf-skeleton-form></div>
+        </section>
+      }
+      @if (showSec('lock') && !formSkeleton()) {
       <section class="nd-card pf-cs__card">
         <div class="nd-card__head">
           <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
@@ -89,7 +100,7 @@ const STAGE_LABELS: Record<string, string> = {
       </section>
       }
 
-      @if (showSec('tat')) {
+      @if (showSec('tat') && !formSkeleton()) {
       <section class="nd-card pf-cs__card">
         <div class="nd-card__head">
           <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
@@ -146,16 +157,21 @@ export class CultureSettingsComponent {
   allowSupervisorTakeover = true;
   readonly stageTats = signal<StageTat[]>([]);
   readonly saving = signal(false);
+  /** First-load skeleton (ND-PATTERN "Loading feedback"). */
+  private readonly loadHold = createLoadHold(true);
+  readonly formSkeleton = this.loadHold.active;
 
   constructor() {
     this.api.get<MicroSettings>('/api/microbiology/settings').subscribe({
       next: s => {
+        this.loadHold.done();
         if (!s) return;
         this.lockTimeoutMinutes = s.lockTimeoutMinutes ?? 60;
         this.allowSupervisorTakeover = s.allowSupervisorTakeover ?? true;
         this.stageTats.set(s.stageTats ?? []);
       },
-      error: () => { /* defaults */ },
+      error: () => { this.loadHold.done(); /* defaults */ },
+      complete: () => this.loadHold.done(),
     });
   }
 

@@ -30,6 +30,7 @@ import {
   matchesAppointment, placeLanes
 } from './appointments-calendar.nd';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 type CalView = 'day' | 'week' | 'month';
 
@@ -57,7 +58,7 @@ const STATUS_CLASS: Record<string, string> = {
 @Component({
   selector: 'pf-appointments-calendar',
   standalone: true,
-  imports: [BusyComponent,
+  imports: [BusyComponent, BusyDirective,
     CommonModule, FormsModule, HeroBandComponent, NdDateComponent, SelectComponent,
     ZoomSourceDirective, ZoomTargetDirective
   ],
@@ -314,23 +315,23 @@ const STATUS_CLASS: Record<string, string> = {
         @if (!rescheduleOpen()) {
           <button type="button" class="nd-btn nd-btn--secondary nd-span pf-apc-act" (click)="openProfile(a)">Open profile</button>
           @if (a.status === 'booked') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.checkIn(a.id))">Check in</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
             <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="openReschedule()">Reschedule</button>
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.noShow(a.id))">No-show</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status === 'checked_in') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.complete(a.id))">Complete</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
             @if (a.type !== 'urgent') {
-              <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
+              <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
             }
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.noShow(a.id))">No-show</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status !== 'cancelled' && a.status !== 'completed') {
-            <button type="button" class="nd-btn nd-btn--danger pf-apc-act" (click)="run(queue.cancel(a.id))">Cancel appointment</button>
+            <button type="button" class="nd-btn nd-btn--danger pf-apc-act" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel appointment</button>
           }
         } @else {
           <button type="button" class="nd-btn nd-btn--tertiary pf-apc-act" (click)="closeReschedule()">Back</button>
-          <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="doReschedule(a)">Save new time</button>
+          <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save new time</button>
         }
       </footer>
     </ng-template>
@@ -469,17 +470,17 @@ const STATUS_CLASS: Record<string, string> = {
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(-1)" aria-label="Previous">‹</button>
           <button type="button" class="pf-cal-nav__btn pf-cal-nav__today" (click)="goToday()">Today</button>
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(1)" aria-label="Next">›</button>
-          <label class="pf-cal-nav__jump" title="Jump to date">
+          <button type="button" class="pf-cal-nav__jump" title="Jump to date" (click)="openJump(jumpClassic)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
               <path d="M16 2v4M8 2v4M3 10h18"/>
             </svg>
             <span>Jump</span>
-            <input type="date" class="pf-cal-nav__jump-input"
-                   [value]="cursorIso()"
-                   (change)="jumpToDate($any($event.target).value)" />
-          </label>
+          </button>
+          <input #jumpClassic type="date" class="pf-cal-nav__jump-input" tabindex="-1" aria-hidden="true"
+                 [value]="cursorIso()"
+                 (change)="jumpToDate($any($event.target).value)" />
           <span class="pf-cal-nav__title">{{ rangeLabel() }}</span>
         </div>
       </div>
@@ -656,30 +657,31 @@ const STATUS_CLASS: Record<string, string> = {
             <div class="mt-3 flex flex-wrap gap-1.5">
               <button class="pf-appt-btn pf-appt-btn--primary" (click)="openProfile(a)">Open profile</button>
               @if (a.status === 'booked') {
-                <button class="pf-appt-btn" (click)="run(queue.checkIn(a.id))">Check in</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
                 <button class="pf-appt-btn" (click)="rescheduleOpen.set(true)">Reschedule</button>
-                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
               }
               @if (a.status === 'checked_in') {
-                <button class="pf-appt-btn" (click)="run(queue.complete(a.id))">Complete</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
                 @if (a.type !== 'urgent') {
-                  <button class="pf-appt-btn" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
+                  <button class="pf-appt-btn" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
                 }
-                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
               }
               @if (a.status !== 'cancelled' && a.status !== 'completed') {
-                <button class="pf-appt-btn pf-appt-btn--danger" (click)="run(queue.cancel(a.id))">Cancel</button>
+                <button class="pf-appt-btn pf-appt-btn--danger" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel</button>
               }
             </div>
           } @else {
             <div class="mt-3 flex flex-col gap-2">
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New date
-                <input type="date" class="pf-input" [(ngModel)]="rDate" /></label>
+                <pf-nd-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-nd-date></label>
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New time
-                <input type="time" class="pf-input" [(ngModel)]="rTime" /></label>
+                <pf-select [options]="timeOptions()" [value]="rTime" [searchable]="true" placeholder="Pick a time"
+                           (valueChange)="rTime = $any($event)"></pf-select></label>
               <div class="flex gap-2 justify-end mt-1">
                 <button class="pf-appt-btn" (click)="rescheduleOpen.set(false)">Back</button>
-                <button class="pf-appt-btn pf-appt-btn--primary" (click)="doReschedule(a)">Save</button>
+                <button class="pf-appt-btn pf-appt-btn--primary" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save</button>
               </div>
             </div>
           }
@@ -689,6 +691,7 @@ const STATUS_CLASS: Record<string, string> = {
     }
   `,
   styles: [APPOINTMENTS_CALENDAR_ND_STYLES, `
+    @use '../../../shared/styles/device-tier' as dt;
     :host {
       display: block;
       /* WORK page: fill the shell's main area exactly so the PAGE itself
@@ -808,9 +811,9 @@ const STATUS_CLASS: Record<string, string> = {
       border-color: rgba(168, 85, 247, 0.35);
     }
     .pf-cal-nav__jump-input {
-      position: absolute; inset: 0;
-      opacity: 0; cursor: pointer;
-      width: 100%; height: 100%; border: 0; padding: 0;
+      /* Hidden native picker trigger (never visible — showPicker() only). */
+      position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+      opacity: 0; pointer-events: none; border: 0; padding: 0;
     }
     .pf-cal-nav__title {
       margin-left: 12px; font-size: 14px; font-weight: 600;
@@ -1192,7 +1195,7 @@ const STATUS_CLASS: Record<string, string> = {
     /* ── iPad band (641–1279): the time grid stays comfortable, but
      * keep week columns from collapsing too far; month cells a touch
      * shorter so the grid fits the viewport height. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-cal-time__head,
       .pf-cal-time__body { min-width: 0; }
       .pf-cal-month__cell { min-height: 76px; }
@@ -1659,8 +1662,9 @@ export class AppointmentsCalendarComponent {
     // An open dropdown (pf-select panel) owns its own Esc.
     const t = e?.target as HTMLElement | null;
     if (t?.closest?.('#pf-overlay-host, .pf-dd')) return;
-    if (this.rescheduleOpen()) this.closeReschedule();
-    else if (this.selectedAppt()) this.closeAppt();
+    // Used → preventDefault (desktop full screen stays — desktop-fullscreen-esc.ts).
+    if (this.rescheduleOpen()) { e?.preventDefault(); this.closeReschedule(); }
+    else if (this.selectedAppt()) { e?.preventDefault(); this.closeAppt(); }
   }
   /** The DAY card's week strip picks the day without changing the view. */
   protected pickDay(iso: string) { this.cursor.set(new Date(`${iso}T12:00:00`)); }
@@ -1722,17 +1726,22 @@ export class AppointmentsCalendarComponent {
   }
 
   /** Run a queue transition, then refresh the calendar and close the sheet. */
-  protected run(obs: Observable<unknown>) {
+  /** The sheet action whose request is in flight (only that button shows busy). */
+  protected readonly sheetBusy = signal<string | null>(null);
+  protected run(obs: Observable<unknown>, key?: string) {
+    if (key && this.sheetBusy() === key) return;
+    if (key) this.sheetBusy.set(key);
+    const release = () => { if (key && this.sheetBusy() === key) this.sheetBusy.set(null); };
     obs.subscribe({
-      next: () => { this.refresh(); this.closeAppt(); },
-      error: (e) => { this.toasts.error(ApiError.from(e).message); this.refresh(); }
+      next: () => { release(); this.refresh(); this.closeAppt(); },
+      error: (e) => { release(); this.toasts.error(ApiError.from(e).message); this.refresh(); }
     });
   }
 
   protected doReschedule(a: Appointment) {
     if (!this.rDate) { this.toasts.warning('Pick a new date.'); return; }
     const iso = new Date(this.rDate).toISOString();
-    this.run(this.queue.reschedule(a.id, iso, this.rTime || undefined));
+    this.run(this.queue.reschedule(a.id, iso, this.rTime || undefined), 'reschedule');
   }
 
   private refresh() {

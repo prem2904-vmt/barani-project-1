@@ -36,6 +36,7 @@ import {
   conversationTitle,
 } from "../../models/conversation-name";
 import { PresenceDotComponent } from "../presence-avatar/presence-avatar.component";
+import { BusyDirective } from '../../directives/busy.directive';
 
 /**
  * Floating chat windows — the Messenger model the owner asked for:
@@ -52,7 +53,7 @@ import { PresenceDotComponent } from "../presence-avatar/presence-avatar.compone
 @Component({
   selector: "pf-chat-windows",
   standalone: true,
-  imports: [DatePipe, PresenceDotComponent],
+  imports: [BusyDirective, DatePipe, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign() && messagesOn()) {
@@ -308,6 +309,8 @@ import { PresenceDotComponent } from "../presence-avatar/presence-avatar.compone
                   (click)="toggleMenu(c.id)"
                   [class.is-open]="menuFor() === c.id"
                   [disabled]="uploading()"
+                  [pfBusy]="uploading()"
+                  pfBusyLabel="Uploading…"
                   [attr.aria-expanded]="menuFor() === c.id"
                   aria-label="More"
                   title="More"

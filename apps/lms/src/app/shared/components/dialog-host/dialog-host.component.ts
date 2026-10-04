@@ -20,7 +20,13 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
 
           <header class="pf-dh-head">
             <span class="pf-dh-icon" aria-hidden="true">
-              @if (d.tone === 'danger') {
+              @if (d.icon === 'printer') {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 9V3h12v6"/>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <path d="M6 14h12v7H6z"/>
+                </svg>
+              } @else if (d.tone === 'danger') {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
                   <path d="M12 9v4"/>
@@ -97,10 +103,39 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
             </div>
           }
 
-          <footer class="pf-dh-actions">
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="onCancel()">
-              {{ d.cancelLabel ?? 'Cancel' }}
-            </pf-touch-btn>
+          @if (d.kind === 'actions' && d.checkbox) {
+            <button type="button" role="checkbox" class="pf-dh-check"
+                    [class.is-on]="checked()" [attr.aria-checked]="checked()"
+                    (click)="checked.set(!checked())">
+              <span class="pf-dh-check-box" aria-hidden="true">
+                @if (checked()) {
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                }
+              </span>
+              <span class="pf-dh-check-label">{{ d.checkbox.label }}</span>
+            </button>
+          }
+
+          @if (d.kind === 'actions') {
+            <footer class="pf-dh-actions pf-dh-actions--many">
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="onCancel()">
+                {{ d.cancelLabel ?? 'Cancel' }}
+              </pf-touch-btn>
+              @for (a of d.actions ?? []; track a.value) {
+                <pf-touch-btn size="sm" [attr.data-action]="a.value"
+                              [variant]="a.variant === 'primary' ? 'primary' : 'secondary'"
+                              (pressed)="onAction(a.value)">
+                  {{ a.label }}
+                </pf-touch-btn>
+              }
+            </footer>
+          } @else {
+          <footer class="pf-dh-actions" [class.pf-dh-actions--single]="d.singleButton">
+            @if (!d.singleButton) {
+              <pf-touch-btn size="sm" variant="ghost" (pressed)="onCancel()">
+                {{ d.cancelLabel ?? 'Cancel' }}
+              </pf-touch-btn>
+            }
             <pf-touch-btn size="sm"
                           [variant]="d.tone === 'danger' ? 'danger' : 'primary'"
                           [disabled]="!canConfirm()"
@@ -108,6 +143,7 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
               {{ d.confirmLabel ?? 'Confirm' }}
             </pf-touch-btn>
           </footer>
+          }
         </div>
       </div>
     }
@@ -357,6 +393,49 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       gap: 8px;
     }
 
+    /* One button only (alert()) — nothing to decide, so nothing to weigh it
+       against; it sits where the primary action normally does. */
+    .pf-dh-actions--single { justify-content: flex-end; }
+
+    /* Many actions (actions()): a full-width stack, the CTA on top, Cancel
+       last — reads cleanly at every width instead of a ragged wrap. */
+    .pf-dh-actions--many { flex-direction: column-reverse; align-items: stretch; margin-top: 18px; }
+    .pf-dh-actions--many pf-touch-btn { display: block; width: 100%; }
+
+    /* ── Checkbox (actions()) — 44px tap row, SVG tick, no native input ── */
+    .pf-dh-check {
+      position: relative;
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      padding: 0 2px;
+      text-align: left;
+      font: inherit;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      background: none;
+      border: 0;
+      cursor: pointer;
+    }
+    .pf-dh-check:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25); border-radius: 10px; }
+    .pf-dh-check-box {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1.5px solid var(--text-tertiary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .pf-dh-check.is-on { color: var(--text-primary); }
+    .pf-dh-check.is-on .pf-dh-check-box { background: var(--violet-text); border-color: var(--violet-text); }
+
     @keyframes pf-dh-fade {
       from { opacity: 0; }
       to   { opacity: 1; }
@@ -395,6 +474,8 @@ export class DialogHostComponent {
   readonly value = signal('');
   /** Selected option of a choice dialog. */
   readonly choice = signal<string | null>(null);
+  /** Checkbox state of an actions() dialog. */
+  readonly checked = signal(false);
 
   constructor() {
     // Reset field and focus the input when a prompt opens.
@@ -403,6 +484,7 @@ export class DialogHostComponent {
       if (!d) { this.value.set(''); return; }
       this.value.set(d.initialValue ?? '');
       this.choice.set(d.kind === 'choice' ? (d.initialChoice ?? d.choices?.[0]?.value ?? null) : null);
+      this.checked.set(!!d.checkbox?.initial);
       if (d.kind === 'prompt') {
         queueMicrotask(() => setTimeout(() => this.inputEl?.nativeElement.focus(), 0));
       }
@@ -425,7 +507,13 @@ export class DialogHostComponent {
   onCancel() {
     const d = this.dialog.active();
     if (!d) return;
-    this.dialog.resolve(d.kind === 'confirm' ? false : null);
+    this.dialog.resolve(d.kind === 'confirm' ? false : null, d.kind === 'actions' ? this.checked() : undefined);
+  }
+
+  /** A footer action of an actions() dialog. */
+  onAction(value: string) {
+    if (!this.dialog.active()) return;
+    this.dialog.resolve(value, this.checked());
   }
 
   onConfirm() {

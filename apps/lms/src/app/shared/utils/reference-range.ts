@@ -16,11 +16,14 @@ export interface RangeLike {
   min?: number | null;
   max?: number | null;
   /**
-   * LEGACY bound comparators (read, never written by new saves). The simple
-   * model (owner, 2026-09-26): `min` = L, `max` = H, a value ON a limit is
-   * not flagged — so an absent op is inclusive on both sides, one-sided too.
-   * Only an explicit legacy strict op ('gt' / 'lt') still flags the limit
-   * itself, until the data is migrated. Mirrors mw `RangeDef.MinOp/MaxOp`.
+   * Bound comparators. The simple model (owner, 2026-09-26): `min` = L,
+   * `max` = H, a value ON a limit is Normal — so an ABSENT op is inclusive on
+   * both sides, two-sided or one-sided alike (2026-10-02: reverted the
+   * strict-by-default read of a one-sided bound). The one exception: a
+   * comparator glyph sitting immediately before the bound's OWN number in
+   * `reportText`/`label` ("Normal: <140", "≥ 90") is read off and used
+   * instead — see {@link effectiveOneSidedOp}. An explicit op always wins
+   * over both. Mirrors mw `RangeDef.MinOp/MaxOp`.
    */
   minOp?: 'gt' | 'gte' | null;
   maxOp?: 'lt' | 'lte' | null;
@@ -226,15 +229,71 @@ const prettify = (s: string): string =>
     .map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 /**
- * Band values as display text: "13–17", "≤ 200", "≥ 40". A value on a limit
- * is normal, so a one-sided band prints ≤ / ≥; only an explicit LEGACY strict
- * op ('lt' / 'gt') prints < / >. Mirrors `Format` (mw).
+ * The comparator glyph + number immediately preceding, anywhere in a free
+ * text ("Normal: <140", "≥ 90", "≤5" — space optional). Mirrors mw
+ * `ReferenceRangeResolver.GlyphNumRx`.
+ */
+const GLYPH_NUM_RX = /(<=|>=|≤|≥|<|>)\s*([\d.]+)/g;
+
+/**
+ * The EFFECTIVE comparator for a one-sided bound — "gt"/"gte" for the Min
+ * side, "lt"/"lte" for the Max side. THE one place both {@link formatRange}
+ * (the printed glyph) and {@link flagAgainst} (the flag it triggers) resolve
+ * it, so they never disagree. Mirrors mw
+ * `ReferenceRangeResolver.EffectiveOneSidedOp`.
+ *
+ * Precedence: an EXPLICIT op on the band always wins. Absent one, a glyph
+ * ("<", ">", "≤", "≥", "<=", ">=") found immediately before the bound's OWN
+ * number in the band's `reportText` or `label` is read off and used — "<
+ * 140" / "Normal: <140" derives strict, "≤ 5" / "≥40" derives inclusive.
+ * Absent that too, the bound stays INCLUSIVE (the owner's long-standing
+ * default) — one-sidedness alone is never a reason to assume strict.
+ */
+export function effectiveOneSidedOp(r: RangeLike, isMin: boolean): 'gt' | 'gte' | 'lt' | 'lte' {
+  const explicitOp = isMin ? r.minOp : r.maxOp;
+  if (explicitOp) return explicitOp;
+  const derived = deriveGlyphOp(r, isMin);
+  if (derived) return derived;
+  return isMin ? 'gte' : 'lte';
+}
+
+/** Scan the band's reportText/label for a comparator glyph that sits
+ *  immediately before (optional spaces only) the bound's OWN number. Only a
+ *  glyph of the correct DIRECTION for this bound counts. Null when none is
+ *  found. Mirrors mw `ReferenceRangeResolver.DeriveGlyphOp`. */
+function deriveGlyphOp(r: RangeLike, isMin: boolean): 'gt' | 'gte' | 'lt' | 'lte' | null {
+  const boundValue = isMin ? r.min : r.max;
+  if (boundValue == null) return null;
+  const text = [r.reportText, r.label].filter(t => t && t.trim()).join('\n');
+  if (!text) return null;
+  GLYPH_NUM_RX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = GLYPH_NUM_RX.exec(text))) {
+    const n = parseFloat(m[2]);
+    if (!Number.isFinite(n) || Math.abs(n - boundValue) > 1e-9) continue;
+    const g = m[1];
+    if (isMin) {
+      if (g === '>') return 'gt';
+      if (g === '≥' || g === '>=') return 'gte';
+    } else {
+      if (g === '<') return 'lt';
+      if (g === '≤' || g === '<=') return 'lte';
+    }
+  }
+  return null;
+}
+
+/**
+ * Band values as display text: "13–17", "< 200", "> 40", "≤ 5", "≥ 90".
+ * Two-sided display is unchanged by ops; a one-sided bound's glyph follows
+ * {@link effectiveOneSidedOp} — explicit op, else a glyph read off the
+ * band's own text, else the inclusive default (≤ / ≥). Mirrors `Format` (mw).
  */
 export function formatRange(r: RangeLike | undefined | null): string | null {
   if (!r) return null;
   if (r.min != null && r.max != null) return `${num(r.min)}–${num(r.max)}`;
-  if (r.max != null) return `${r.maxOp === 'lt' ? '<' : '≤'} ${num(r.max)}`;
-  if (r.min != null) return `${r.minOp === 'gt' ? '>' : '≥'} ${num(r.min)}`;
+  if (r.max != null) return `${effectiveOneSidedOp(r, false) === 'lt' ? '<' : '≤'} ${num(r.max)}`;
+  if (r.min != null) return `${effectiveOneSidedOp(r, true) === 'gt' ? '>' : '≥'} ${num(r.min)}`;
   return null;
 }
 
@@ -294,21 +353,27 @@ export function reportRangeText(
 
 /**
  * Flag a numeric value against ONE group — the client mirror of the flagging
- * rule inside mw `ResultFlaggingService.FlagOne`, shared by result entry and
- * validate-result so there is exactly one implementation.
+ * rule inside mw `ResultFlaggingService.NumericLevel`, shared by result entry
+ * and validate-result so there is exactly one implementation.
  *
  * The simple model (owner, 2026-09-26): value < L → 'L'; value > H → 'H'; ON
- * a limit = normal; a blank limit = no flag on that side. Only an explicit
- * LEGACY strict op ('gt' / 'lt', un-migrated data) also flags the limit
- * itself. Returns null when the group has no L and no H.
+ * a limit = Normal; a blank limit = no flag on that side — TWO-SIDED bands
+ * only ever honour an EXPLICIT op. A ONE-SIDED bound's op is resolved
+ * through {@link effectiveOneSidedOp} (explicit, else a glyph read off its
+ * own text, else the inclusive default), so the report's printed glyph and
+ * this flag never disagree (2026-10-02). Returns null when the group has no
+ * L and no H.
  */
 export function flagAgainst(
   r: RangeLike | undefined | null,
   value: number
 ): 'L' | 'H' | 'N' | null {
   if (!r || (r.min == null && r.max == null)) return null;
-  if (r.min != null && (r.minOp === 'gt' ? value <= r.min : value < r.min)) return 'L';
-  if (r.max != null && (r.maxOp === 'lt' ? value >= r.max : value > r.max)) return 'H';
+  const twoSided = r.min != null && r.max != null;
+  const minOp = twoSided ? (r.minOp ?? 'gte') : effectiveOneSidedOp(r, true);
+  const maxOp = twoSided ? (r.maxOp ?? 'lte') : effectiveOneSidedOp(r, false);
+  if (r.min != null && (minOp === 'gt' ? value <= r.min : value < r.min)) return 'L';
+  if (r.max != null && (maxOp === 'lt' ? value >= r.max : value > r.max)) return 'H';
   return 'N';
 }
 
@@ -367,15 +432,46 @@ export function summarizeRanges(
   return lines.length ? lines.join(' · ') + (u ? ` ${u}` : '') : '';
 }
 
+/**
+ * "pregnan(t|cy)" is gestational UNLESS it's actually negated right there in
+ * the text ("non-pregnant", "nonpregnant", "not pregnant", "non pregnant") —
+ * a Beta-hCG band's own NEGATIVE tier for a non-pregnant patient must never
+ * be read as the gestational one. Mirrors mw `ReferenceRangeResolver.GestationalRx`.
+ */
+const GESTATIONAL_RX = /\bg-?ogtt\b|\bgestational\b|(?<!non-)(?<!non\s)(?<!not\s)\bpregnan(?:t|cy)\b/i;
+
+/** A band's text (reportText + label) names it gestational ("G-OGTT",
+ *  "gestational", "pregnant"/"pregnancy", never negated). Mirrors mw
+ *  `ReferenceRangeResolver.LooksGestational`. */
+function looksGestational(r: RangeLike): boolean {
+  const text = [r.label, r.reportText].filter(t => t && t.trim()).join(' ');
+  return text.length > 0 && GESTATIONAL_RX.test(text);
+}
+
+/**
+ * A band's sex for EXCLUSION purposes only: the admin-set signal (structured
+ * `sex`, else the segment label) when there is one; otherwise, ONLY for a
+ * band that actually carries numeric bounds, a guess from free text naming
+ * it gestational — a catalogue authoring gap, not a reason to apply it to a
+ * man. This NEVER awards match score (see {@link scoreRange}), only
+ * excludes — an unconstrained band and a text-guessed one must never out-
+ * rank each other by this alone. Mirrors mw `ReferenceRangeResolver.EffectiveSex`.
+ */
+function effectiveSex(r: RangeLike, structuredSex: 'M' | 'F' | null): 'M' | 'F' | null {
+  if (structuredSex) return structuredSex;
+  return (r.min != null || r.max != null) && looksGestational(r) ? 'F' : null;
+}
+
 function scoreRange(r: RangeLike, sex: 'M' | 'F' | 'O' | null, ageYears: number | null): { eligible: boolean; score: number } {
   let score = 0;
 
   // Sex constraint (structured, else parse the segment label).
   const rSex = (r.sex && r.sex !== 'any') ? r.sex : parseSegmentSex(r.segment);
-  if (rSex) {
-    if (sex && rSex !== sex) return { eligible: false, score: 0 };
-    if (sex && rSex === sex) score += 2;
+  const effSex = effectiveSex(r, rSex);
+  if (effSex) {
+    if (sex && effSex !== sex) return { eligible: false, score: 0 }; // contradiction (structured OR text-guessed)
   }
+  if (rSex && sex && rSex === sex) score += 2; // active match — admin-set only, never the text guess
 
   // Age constraint (structured, else parse — only when no structured sex).
   const age = resolveRangeAgeYears(r);

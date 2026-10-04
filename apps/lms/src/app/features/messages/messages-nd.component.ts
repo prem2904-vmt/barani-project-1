@@ -13,6 +13,8 @@ import { PresenceDotComponent } from '../../shared/components/presence-avatar/pr
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 /** The band pill's filter segment. `calls` swaps the list for the call log. */
 export type MsgFilter = 'all' | 'unread' | 'groups' | 'calls';
@@ -55,7 +57,7 @@ function readFlag(key: string): boolean {
 @Component({
   selector: 'pf-messages-nd',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective, PresenceDotComponent],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-nd.component.html',
   styleUrls: ['./messages-nd.component.scss']

@@ -7,6 +7,7 @@ import { ApiError } from '../../models/api-response.model';
 import { TouchButtonComponent } from '../../primitives/touch-button.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 
 /** One department of the order, as the backend's edit-plan describes it. */
 export interface EditPlanDept {
@@ -46,7 +47,7 @@ export interface EditPlan {
 @Component({
   selector: 'pf-edit-result-dialog',
   standalone: true,
-  imports: [SkeletonRowsComponent, TouchButtonComponent],
+  imports: [SkeletonRowsComponent, TouchButtonComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-erd-root" role="dialog" aria-modal="true" [attr.aria-label]="title()">
@@ -127,17 +128,11 @@ export interface EditPlan {
 
                   <label class="pf-erd-tech">
                     <span class="pf-erd-tech-lbl">Send to</span>
-                    <select class="pf-input pf-erd-select"
-                            [disabled]="d.editableCount === 0 || !isChecked(d.departmentId)"
-                            [value]="assigneeFor(d)"
-                            (change)="setAssignee(d.departmentId, $any($event.target).value)">
-                      @if (!d.performerId) {
-                        <option value="">Unassigned — pick a technician</option>
-                      }
-                      @for (t of p.technicians; track t.id) {
-                        <option [value]="t.id">{{ t.name }}</option>
-                      }
-                    </select>
+                    <pf-select class="pf-erd-select"
+                               [options]="technicianOptions(d, p.technicians)"
+                               [disabled]="d.editableCount === 0 || !isChecked(d.departmentId)"
+                               [value]="assigneeFor(d)"
+                               (valueChange)="setAssignee(d.departmentId, $event)"></pf-select>
                   </label>
                 </li>
               }
@@ -155,7 +150,7 @@ export interface EditPlan {
 
         <footer class="pf-erd-actions">
           <pf-touch-btn size="sm" variant="ghost" [disabled]="saving()" (pressed)="close()">Cancel</pf-touch-btn>
-          <pf-touch-btn size="sm" [disabled]="!canConfirm()" (pressed)="confirm()">
+          <pf-touch-btn size="sm" [disabled]="!canConfirm()" [busy]="saving()" busyLabel="Sending…" (pressed)="confirm()">
             {{ saving() ? 'Sending…' : 'Send for correction' }}
           </pf-touch-btn>
         </footer>
@@ -395,6 +390,11 @@ export class EditResultDialogComponent {
 
   assigneeFor(d: EditPlanDept): string {
     return this._assignee()[d.departmentId] ?? d.performerId ?? '';
+  }
+
+  technicianOptions(d: EditPlanDept, technicians: EditPlanTech[]): PfSelectOption<string>[] {
+    const opts: PfSelectOption<string>[] = technicians.map(t => ({ value: t.id, label: t.name }));
+    return d.performerId ? opts : [{ value: '', label: 'Unassigned — pick a technician' }, ...opts];
   }
 
   setAssignee(deptId: string, userId: string) {

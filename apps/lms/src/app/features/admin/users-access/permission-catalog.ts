@@ -38,6 +38,8 @@ export const PERMISSION_GROUPS: PermissionGroupInfo[] = [
     blurb: 'Booking tests and following an order through the lab.' },
   { key: 'billing',    label: 'Billing & payments',
     blurb: 'Money — bills, payments, discounts and refunds.' },
+  { key: 'expenses',   label: 'Expenses',
+    blurb: 'Day-to-day spending and cash in — every staff member enters their own; the cashier closes the day.' },
   { key: 'collection', label: 'Sample collection & movement',
     blurb: 'Drawing samples, labelling tubes, moving them to the lab.' },
   { key: 'bench',      label: 'Lab bench — results',
@@ -50,6 +52,8 @@ export const PERMISSION_GROUPS: PermissionGroupInfo[] = [
     blurb: 'Reagents and consumables — stock in, stock out.' },
   { key: 'oversight',  label: 'Management & oversight',
     blurb: 'Dashboards, audit trail and branch administration.' },
+  { key: 'testmaster', label: 'Test Master & prices',
+    blurb: 'The test catalogue — what the lab offers, how results are reported, and what each test costs.' },
   { key: 'setup',      label: 'Setup & configuration',
     blurb: 'Changing how the lab itself works — admin territory.' },
   { key: 'alerts',     label: 'Alerts this role receives',
@@ -131,6 +135,14 @@ export const PERMISSION_INFO: Record<string, PermissionInfo> = {
   deliver_report: { group: 'reports', title: 'Deliver reports',
     what: 'Get the report to the patient — WhatsApp, print or download.' },
 
+  // ── Expenses (a primary screen, shown to anyone holding one of these) ──
+  expense_modifier: { group: 'expenses', title: 'Enter my own expenses',
+    what: 'Add their own expenses and cash in with the bill photo, and see their own history — until the cashier closes the day.' },
+  expense_viewer: { group: 'expenses', title: 'See everyone’s expenses',
+    what: 'Read every staff member’s expenses for the branch (owner / accountant). Changes nothing.' },
+  expense_admin: { group: 'expenses', title: 'Cashier — day closing', sensitive: true,
+    what: 'Sees and corrects everyone’s expenses, and closes the day: collections by mode, refunds, staff expenses, counted cash and the variance. Can reopen a closed day.' },
+
   // ── Inventory & stores ─────────────────────────────────────
   inventory_receive: { group: 'inventory', title: 'Receive stock',
     what: 'Book incoming reagents and consumables into the store.' },
@@ -158,8 +170,12 @@ export const PERMISSION_INFO: Record<string, PermissionInfo> = {
     what: 'Manage home-collection agents and their pickup runs.' },
 
   // ── Setup & configuration ──────────────────────────────────
-  manage_tests: { group: 'setup', title: 'Test Master', sensitive: true,
-    what: 'Edit tests, prices, reference ranges and report layouts.' },
+  manage_tests: { group: 'testmaster', title: 'Test Master — everything', sensitive: true,
+    what: 'Full Test Master: edit tests and change prices (includes the two grants below), plus the admin settings area.' },
+  manage_test_master: { group: 'testmaster', title: 'Edit Test Master',
+    what: 'Add and edit tests, profiles and packages — parameters, reference ranges, report layouts, specimens and department on/off. No prices.' },
+  manage_test_pricing: { group: 'testmaster', title: 'Change test prices', sensitive: true,
+    what: 'Set test prices, tax slab and which tests each branch offers. Nothing else about billing.' },
   manage_departments: { group: 'setup', title: 'Departments',
     what: 'Manage lab departments and their option tables.' },
   manage_users: { group: 'setup', title: 'Users', sensitive: true,
@@ -227,4 +243,6 @@ export const ROLE_INFO: Record<string, string> = {
     'Owns inventory — everything a store keeper does, plus item setup and transfers between branches.',
   'Lab Admin':
     'The owner’s seat. Everything — front desk, bench, sign-out, billing, and all configuration.',
+  'Lab Admin (Technical)':
+    'Runs the lab’s setup — Test Master (tests, ranges, layouts and prices), lab settings and report design — and works the bench. No billing, payments, discounts, refunds, finance, users or organisation settings.',
 };

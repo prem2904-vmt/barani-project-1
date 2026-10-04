@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ReportTemplate } from '../../../shared/models/report.model';
+import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { computeReportPageLayout } from '../../../shared/utils/report-pdf';
 import {
   Align, BG_MAX_UPLOAD_BYTES, BackgroundImage, BgArea, BgFit, HeaderField, HeaderLayoutConfig, ItemOverride, LayoutIssue,
@@ -29,7 +29,7 @@ const FIELD_LABEL: Record<string, string> = {
 };
 const JOINABLE: HeaderField[] = ['address', 'phone', 'email', 'website'];
 const PRESETS = [
-  { value: 'drlogy', label: 'Classic' }, { value: 'centered', label: 'Centered' },
+  { value: 'classic', label: 'Classic' }, { value: 'centered', label: 'Centered' },
   { value: 'banner', label: 'Banner' }, { value: 'minimal', label: 'Minimal' },
 ];
 /** Nudge steps (mm): the pad's step choice; arrows = step, Shift+arrows = 5 mm. */
@@ -376,19 +376,17 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             </div>
           }
 
-          <!-- Print on / off -->
-          @if (s.id !== 'banner') {
-            <div class="pf-rhe-row">
-              <div>
-                <p class="pf-rhe-row__t">Print this</p>
-                <p class="pf-rhe-row__s">{{ stateText(s) }}</p>
-              </div>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
-                      [attr.aria-label]="'Print ' + s.label" (click)="toggleEntry(s)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-              </button>
+          <!-- Print on / off (the banner too: off → the name turns dark ink). -->
+          <div class="pf-rhe-row">
+            <div>
+              <p class="pf-rhe-row__t">Print this</p>
+              <p class="pf-rhe-row__s">{{ stateText(s) }}</p>
             </div>
-          }
+            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
+                    [attr.aria-label]="'Print ' + s.label" (click)="toggleEntry(s)">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            </button>
+          </div>
 
           @if (s.item && !s.item.hidden) {
             @let it = s.item;
@@ -533,12 +531,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   </span>
                   <span class="pf-rhe-li__val">{{ e.value || stateText(e) }}</span>
                 </button>
-                @if (e.id !== 'banner') {
-                  <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
-                          [attr.aria-label]="'Print ' + e.label" (click)="toggleEntry(e)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                  </button>
-                }
+                <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
+                        [attr.aria-label]="'Print ' + e.label" (click)="toggleEntry(e)">
+                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                </button>
               </li>
             }
           </ul>
@@ -584,9 +580,9 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               <h4 class="pf-rhe-sec__h">Header style</h4>
               <div class="pf-rhe-presets" role="radiogroup" aria-label="Header style">
                 @for (p of presets; track p.value) {
-                  <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="(template().headerPreset ?? 'drlogy') === p.value"
+                  <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="presetOf(template()) === p.value"
                           (click)="setPreset(p.value)">
-                    <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
+                    <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value + (p.value === 'banner' && bannerHidden() ? ' pf-rhe-thumb--nobanner' : '')" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
                     {{ p.label }}
                   </button>
                 }
@@ -832,6 +828,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-thumb--centered i { left: 42%; top: 8%; } .pf-rhe-thumb--centered b { left: 27%; top: 38%; } .pf-rhe-thumb--centered b + b { left: 35%; top: 52%; } .pf-rhe-thumb--centered em { top: 70%; }
     .pf-rhe-thumb--banner em { top: 0; left: 0; right: 0; height: 36%; } .pf-rhe-thumb--banner i { top: 6%; background: #fff; width: 13%; } .pf-rhe-thumb--banner b { top: 9%; background: #fff; } .pf-rhe-thumb--banner b + b { top: 50%; background: #cbd5e1; }
     .pf-rhe-thumb--minimal i, .pf-rhe-thumb--minimal em { display: none; } .pf-rhe-thumb--minimal b { left: 8%; }
+    /* Banner style with the band switched off: dark name on paper. */
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner em { display: none; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner i { background: #94a3b8; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b { background: #64748b; }
+    .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b + b { background: #cbd5e1; }
     .pf-rhe-color { display: flex; align-items: center; gap: 8px; height: 40px; padding-right: 10px; border-radius: var(--nd-radius-sm);
       border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); overflow: hidden; font-size: 12px; color: var(--text-secondary); }
     .pf-rhe-color input { width: 44px; height: 48px; margin: -4px 0 -4px -4px; border: 0; padding: 0; background: transparent; cursor: pointer; }
@@ -904,6 +905,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   private readonly sideBody = viewChild<ElementRef<HTMLDivElement>>('sideBody');
 
   readonly cfg = computed(() => readHeaderLayout(this.template()));
+  /** The Banner style's band is switched off (a hidden override). */
+  readonly bannerHidden = computed(() => this.cfg()?.items['banner']?.hidden === true);
   /** Same resolved layout the PDF was drawn with. */
   readonly layout = computed(() => computeReportPageLayout({
     report: { id: 'layout', type: 'final', data: '{}' }, template: this.template(), imageCache: this.imageCache(),
@@ -1079,8 +1082,12 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       }
       return out;
     }
-    const preset = t.headerPreset ?? 'drlogy';
-    if (preset === 'banner') push('banner', 'The coloured band behind the name', 'shown', byId.get('banner'));
+    const preset = normalizeHeaderPreset(t.headerPreset);
+    if (preset === 'banner') {
+      const band = byId.get('banner');
+      push('banner', band?.hidden ? 'Off — the name prints in dark ink' : 'The coloured band behind the name',
+        band?.hidden ? 'hidden' : 'shown', band);
+    }
     const logo = byId.get('logo');
     if (logo) push('logo', t.logoUrl ? 'Uploaded image' : 'No image — placeholder prints', logo.hidden ? 'hidden' : 'shown', logo);
     else push('logo', 'This header style prints no logo', 'off');
@@ -1097,7 +1104,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     const nabl = byId.get('nabl');
     push('nabl', t.nablAccredited ? (t.nablNumber || 'No number set') : 'Not accredited', nabl ? (nabl.hidden ? 'hidden' : 'shown') : 'off', nabl);
     const bar = byId.get('accentBar');
-    if (preset === 'drlogy' || preset === 'centered') push('accentBar', 'Thin coloured strip under the letterhead', bar ? (bar.hidden ? 'hidden' : 'shown') : 'off', bar);
+    if (preset === 'classic' || preset === 'centered') push('accentBar', 'Thin coloured strip under the letterhead', bar ? (bar.hidden ? 'hidden' : 'shown') : 'off', bar);
     for (const l of this.cfg()?.lines ?? []) {
       const id = 'line:' + l.id; const it = byId.get(id);
       out.push({ id, label: 'Text line', value: l.text, state: it ? (it.hidden ? 'hidden' : 'shown') : 'empty', item: it, warn: warn.has(id) });
@@ -1318,7 +1325,12 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   }
 
   onKey(ev: KeyboardEvent) {
-    if (ev.key === 'Escape') { this.select(null); return; }
+    if (ev.key === 'Escape') {
+      // A deselect uses the Esc (desktop full screen stays — desktop-fullscreen-esc.ts).
+      if (this.selected()) ev.preventDefault();
+      this.select(null);
+      return;
+    }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const d = dirs[ev.key];
     if (!d || !this.selected()) return;
@@ -1435,8 +1447,10 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     this.select(null);
     this.emitCfg(null);
   }
+  /** The template's preset, with the pre-rename spelling read as 'classic'. */
+  presetOf(t: ReportTemplate): string { return normalizeHeaderPreset(t.headerPreset); }
   async setPreset(value: string) {
-    if ((this.template().headerPreset ?? 'drlogy') === value) return;
+    if (normalizeHeaderPreset(this.template().headerPreset) === value) return;
     const cfg = this.cfg();
     const moved = cfg && Object.values(cfg.items).some(o => o.x !== undefined || o.y !== undefined || o.align !== undefined);
     if (!moved) { this.emitPatch({ headerPreset: value }); return; }

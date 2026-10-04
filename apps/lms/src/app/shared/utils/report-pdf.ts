@@ -1,15 +1,17 @@
 import { jsPDF } from 'jspdf';
 import { drawTextWithSuperscripts, hasSuperscript, installPdfTextSanitizer, pdfSafeText } from './pdf-text';
-import autoTable from 'jspdf-autotable';
+import autoTable, { __createTable, __drawTable } from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
+  type PageLayoutBox,
   DEFAULT_RESULT_COLUMNS,
   ReportColumn,
   ResolvedReportLayout,
   ResolvedRow,
   ResolvedSection,
 } from '../models/report-layout.model';
-import { ReportSignature, ReportTemplate } from '../models/report.model';
+import { normalizeHeaderPreset, ReportSignature, ReportTemplate, type HeaderPreset } from '../models/report.model';
+import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW } from './report-signatures';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
@@ -18,13 +20,27 @@ import { fetchAssetBlob } from './upload-fetch';
 import { collectAbnormalResults, renderAbnormalSummary, summaryTestValidated } from './report-abnormal-summary';
 import { withResultsTables } from './results-table';
 import { applyDefaultResultUnitLink } from './result-unit-link';
+import { ORDER_QR_KEY, PATIENT_STRIP_QR_CAPTIONS, PROFILE_QR_KEY, isPatientStripQrKey, orderReportQrUrl, paintQr, patientProfileQrUrl } from './patient-strip-qr';
+import { environment } from '../../../environments/environment';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
+import { AgeStyle, formatAge } from './patient-age';
+import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
+import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
+import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
+import { applyReportSequencing, readReportSequencing } from './report-sequencing';
+import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
+import {
+  bodyArea, collapseMissingAnalyzerBoxes, manualRowsByBox, printableBoxes, readPageLayout, tableChain, type BodyArea as ProfileBodyArea,
+} from './report-profile-layout';
+import {
+  drawAnalyzerImageBox, drawNotesBox,
+} from './report-profile-layout.pdf';
 
 /**
- * Render an A4 lab report PDF in the Drlogy template style — blue
+ * Render an A4 lab report PDF in the Classic template style — blue
  * accent (#0066CC), bold-uppercase "LAB NAME" wordmark, three-column
  * patient block with vertical separators (no background fills), centered
  * uppercase test name between hairlines, plain-text column headers with
@@ -36,12 +52,26 @@ import {
  * chart) are honored. Empty columns are dropped automatically so an
  * unused "Specimen" cell never leaves an empty column behind. Tests
  * without a configured layout fall through to a four-column legacy
- * table that mirrors the Drlogy shape (Investigation · Result ·
+ * table that mirrors the classic shape (Investigation · Result ·
  * Reference Value · Unit).
  */
 export interface ReportPdfInput {
   /** Admin live-preview: keep every configured column visible even when empty. */
   previewKeepEmptyColumns?: boolean;
+  /** Designer hook (profile one-page layout): told the EXACT body rect (pt)
+   *  and page each one-page profile's boxes were placed in, so the designer
+   *  lays its draggable outlines over the very pixels the PDF drew. Never
+   *  set by a real report path. */
+  /** Designer only: print every Custom-layout page even when it has nothing
+   *  on it yet (a page just added), so the lab sees its letterhead. */
+  keepEmptyLayoutPages?: boolean;
+  onOnePageBody?: (info: { pkg: string; page: number; layoutPage?: number; boxId?: string; rowsPrinted?: number;
+    body: { top: number; bottom: number; left: number; right: number; w: number; h: number };
+    /** Where the results table really ended (pt), when it ended on this page;
+     *  null = it ran onto the next page. */
+    tableBottom?: number | null;
+    /** The table's natural height (pt, head + rows at the box's row spacing, before any Fill). */
+    tableNaturalH?: number | null }) => void;
   /** ReportEntity-like row. We only need a few fields. */
   report: {
     id: string;
@@ -67,7 +97,7 @@ export interface ReportPdfInput {
   };
   /** Per-tenant template config (colors, fonts, header layout, date
    *  format, signatures, watermark, end-of-report text). When supplied
-   *  the renderer reads it instead of the hardcoded Drlogy defaults —
+   *  the renderer reads it instead of the hardcoded Classic defaults —
    *  every visual element in the PDF can be tuned from the admin UI. */
   template?: ReportTemplate | null;
   /** Optional: per-test resolved layouts. When provided, the PDF renders
@@ -96,6 +126,13 @@ export interface ReportPdfInput {
    *  public link — leaves it unset, so a digital report ALWAYS carries the
    *  lab's letterhead regardless of the letterpad setting. */
   blankLetterhead?: boolean;
+  /** Public web origin the patient-strip QRs point at. Defaults to
+   *  `environment.reportPublicBaseUrl` (never window.location.origin — that is
+   *  capacitor://localhost in the native app). */
+  publicBaseUrl?: string;
+  /** Order tracking token for the patient-strip Order QR, for reports whose
+   *  snapshot predates `order.trackToken`. The snapshot's own token wins. */
+  orderTrackToken?: string | null;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -112,10 +149,10 @@ interface ResolvedTheme {
   tableHeaderText: string;
   // Typography
   font: 'helvetica' | 'times' | 'courier';
-  // Body font scale — 1.0 = current Drlogy size
+  // Body font scale — 1.0 = current Classic size
   fontScale: number;
   // Layout
-  headerPreset: 'drlogy' | 'centered' | 'banner' | 'minimal';
+  headerPreset: HeaderPreset;
   logoPosition: 'left' | 'center' | 'right';
   logoSize: 'sm' | 'md' | 'lg';
   topAccentBar: boolean;
@@ -172,10 +209,27 @@ interface ResolvedTheme {
   showQrCode: boolean;
 }
 
+/** The snapshot's age at collection in `style` — the shared patient-age
+ *  helper: adults print as before ("34 Years" / "34 yrs"), an infant as
+ *  months / days ("8 Months", "12 days") — never "0 Years". */
+function snapAge(snap: ReportSnapshot, style: AgeStyle): string {
+  const p = snap.patient;
+  if (!p) return '';
+  const age = typeof p.age === 'string' ? (p.age.trim() === '' ? null : Number(p.age)) : p.age;
+  return formatAge({ age: age ?? null, ageDisplay: p.ageDisplay ?? null, ageYears: p.ageYears ?? null }, style);
+}
+
 interface ReportSnapshot {
   patient?: {
+    /** Patient id — the patient-strip Profile QR opens /p/{id}. */
+    id?: string;
     displayName?: string;
+    /** Whole years at collection (server: DOB-derived). */
     age?: number | string;
+    /** "34 Y" / "8 M" / "12 D" at collection (server; newer snapshots). */
+    ageDisplay?: string | null;
+    /** Fractional band age at collection (server; newer snapshots). */
+    ageYears?: number | null;
     sex?: string;
     phone?: string;
     /** Lifetime MRN, e.g. `DEL-2605-004217-3`. Server-assigned;
@@ -198,6 +252,9 @@ interface ReportSnapshot {
     collectedAt?: string | null;
     /** Comma-joined distinct department names across the order's samples. */
     departments?: string | null;
+    /** Order tracking token (same as the invoice QR) — the patient-strip
+     *  Order QR opens /track/{token} (status + soft-copy download). */
+    trackToken?: string | null;
   };
   type?: string;
   isPartial?: boolean;
@@ -211,6 +268,11 @@ interface ReportSnapshot {
   tests?: Array<{
     /** Tech attachments marked show — printed as an images block. */
     images?: string[] | null;
+    /** Analyzer images (M51 histograms/scattergrams…), keyed by instrument
+     *  image code — the profile ONE-PAGE layout's analyzer boxes read this
+     *  (report-profile-layout.ts). Absent/empty for every test that carries
+     *  none; doesn't affect `images` or the normal Images-block rendering. */
+    analyzerImages?: Record<string, string> | null;
     /** Per-REPORT value picker: parameter names the tech unticked for this
      *  order — their rows never print (bench record keeps them). */
     hidden?: string[] | null;
@@ -218,8 +280,13 @@ interface ReportSnapshot {
     name?: string;
     department?: string;
     departmentCode?: string;
+    /** The line's department id (mw snapshots from 2026-09-30) — the
+     *  Sequencing match key; older snapshots match by code / name. */
+    departmentId?: string | null;
     /** The tube's sample ID — shown on the department band. */
     sampleId?: string | null;
+    /** The report profile's own test number (Sequencing → test number). */
+    profileCode?: string | null;
     /** Profile linkage: tests ordered through a profile carry the profile's
      *  test id + name and are compiled into ONE panel under that name. */
     packageTestId?: string | null;
@@ -245,6 +312,10 @@ interface ReportSnapshot {
     /** Tech's overall observation(s) written at result entry (OPS-56) —
      *  clinical notes rendered as italic lines under the test's rows. */
     observations?: string[] | null;
+    /** The technician's report note on THIS ordered line (markup — see
+     *  report-note-markup.ts). Printed under its rows, before its
+     *  interpretation. */
+    techNote?: string | null;
     /** NABL accreditation scope for this test. When `false`, the test is
      *  segregated into a separate "Tests not under NABL scope" section
      *  (NABL 133 — non-accredited tests must be separated, not asterisked).
@@ -275,6 +346,14 @@ interface ReportSnapshot {
    *  drawn at the end of each department's block. When present, the global
    *  per-page signature row is suppressed. */
   deptSignatures?: Array<{ department?: string; signatures?: ReportSignature[] }>;
+  /** Technician notes above the line level (Lab settings → "Technician notes
+   *  on report"): the whole order's (end of the report), each department
+   *  section's (end of that section) and each profile block's. */
+  techNotes?: {
+    order?: string | null;
+    departments?: Array<{ department?: string | null; departmentId?: string; note?: string | null }> | null;
+    profiles?: Array<{ profileTestId?: string; name?: string | null; note?: string | null }> | null;
+  } | null;
 }
 
 // ── Page geometry ─────────────────────────────────────────────────
@@ -303,12 +382,18 @@ const BARCODE_H = 26;
  *  following line's ascent — 6pt alone let the timestamps print over the bars. */
 const BARCODE_GAP = 14;
 let MARGIN_TOP = 28;
-let MARGIN_BOTTOM = 150; // table floor — the band signatures are pulled DOWN into (see FOOTER_RESERVE)
+// Content floor: nothing in the body prints below A4.h - MARGIN_BOTTOM. It is
+// the real footer band (date strip + the last page's disclaimer / footer
+// text — see footerFloor) and NOTHING more: sign-off space is reserved only
+// where a department actually signs (see renderColumnarTable), never on every
+// page. It used to be a fixed 150pt, sized for a per-page signature row that
+// no longer prints — ~86pt of every page was lost to it.
+let MARGIN_BOTTOM = 150;
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
 
-// ── Drlogy palette ────────────────────────────────────────────────
+// ── Classic palette ───────────────────────────────────────────────
 // Mutable module-level theme. `applyTheme()` (called at the start of
 // every buildReportPdf) overrides these from the tenant's
 // ReportTemplate so admins can re-skin the PDF without us threading
@@ -335,6 +420,8 @@ let PDF_FONT: 'helvetica' | 'times' | 'courier' = 'helvetica';
  *  regardless of which typed columns an individual test's layout happens to
  *  carry. Set once per render in buildReportPdf, before the test loop. */
 let PREVIEW_KEEP_EMPTY_COLS = false; // admin preview: show configured columns even when empty
+let ON_ONE_PAGE_BODY: ReportPdfInput['onOnePageBody'] | null = null; // designer hook only
+let KEEP_EMPTY_LAYOUT_PAGES = false; // designer only
 let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 /** Lookup of pre-fetched image data URLs for the current render. Set
  *  inside buildReportPdf from input.imageCache. */
@@ -346,17 +433,69 @@ let LAYOUT: ReportLayoutResult | null = null;
 /** The next added page opens with the letterhead (the department pages after
  *  the abnormal-results sheet) — it gets the first-page backgrounds too. */
 let NEXT_PAGE_IS_FIRST = false;
+/** Patient-strip QR targets for the current render (see patient-strip-qr.ts). */
+let STRIP_QR: { base: string; trackToken: string | null } = { base: '', trackToken: null };
+
+/** Technician department notes of the current render, keyed by the
+ *  department name as printed (trimmed, upper-cased) — drawn at the end of
+ *  that department's section; any not drawn there print after the results. */
+let TECH_DEPT_NOTES = new Map<string, { name: string; note: string }>();
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
 let theme: ResolvedTheme = defaultTheme();
+
+// ── Typography — the report theme's token table (report-theme.ts) ──────
+// EVERY text draw below names its element and takes font / size / weight
+// from TYPE; no draw site carries a literal font size. Classic's table holds
+// the sizes this renderer always used (byte-identical paper); the Modern
+// theme embeds Source Sans 3 (report-fonts.ts) when it is loaded.
+let TYPE: ReportTypeTheme = CLASSIC_THEME;
+/** The theme's embedded family is registered on the current document. */
+let EMBEDDED = false;
+
+/** [font name, jsPDF style] for a weight in the current theme. The built-in
+ *  PDF fonts have no semibold (it draws bold); Source Sans has no bold
+ *  italic (it draws bold). */
+function faceOf(weight: TypeWeight): [string, string] {
+  if (EMBEDDED) return [SOURCE_SANS_FAMILY, weight === 'bolditalic' ? 'bold' : weight];
+  return [PDF_FONT, weight === 'semibold' ? 'bold' : weight];
+}
+function setFace(doc: jsPDF, weight: TypeWeight): void {
+  const [f, st] = faceOf(weight);
+  doc.setFont(f, st);
+}
+/** An element's size (pt) under the template's font scale. */
+function tsz(el: TypeEl): number {
+  return tokenSize(TYPE.tokens[el], theme.fontScale);
+}
+/** An element's weight. */
+function twt(el: TypeEl): TypeWeight {
+  return TYPE.tokens[el].weight;
+}
+/** Set the font + size an element prints in; returns the size. */
+function typeset(doc: jsPDF, el: TypeEl): number {
+  setFace(doc, twt(el));
+  const size = tsz(el);
+  doc.setFontSize(size);
+  return size;
+}
+/** An element's jsPDF style name (autotable `fontStyle`). */
+function styleOf(el: TypeEl): string {
+  return faceOf(twt(el))[1];
+}
+/** autotable cell styles for an element: font, style and size. */
+function cellType(el: TypeEl): { font: string; fontStyle: string; fontSize: number } {
+  const [font, fontStyle] = faceOf(twt(el));
+  return { font, fontStyle, fontSize: tsz(el) };
+}
 
 function defaultTheme(): ResolvedTheme {
   return {
     accent: '#0066CC', primary: '#1B3A6B', body: '#1a1a1a', divider: '#cccccc',
     tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
     font: PDF_FONT, fontScale: 1,
-    headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+    headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     tableStyle: 'plain', zebraRows: false,
     flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb', groupByDepartment: false, departmentPageBreak: false,
     dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
@@ -378,7 +517,7 @@ function defaultTheme(): ResolvedTheme {
 }
 
 /** Resolve the template + practice into the effective theme used by the
- *  renderer. Template values win; practice + Drlogy defaults fill gaps. */
+ *  renderer. Template values win; practice + Classic defaults fill gaps. */
 function resolveTheme(
   tpl: ReportTemplate | null | undefined,
   practice: NonNullable<ReportPdfInput['practice']>
@@ -395,7 +534,7 @@ function resolveTheme(
   }
   // Colors: treat empty strings like missing so blank fields in the DB
   // (older rows or partial edits where the admin cleared an input) fall
-  // back to the sane Drlogy defaults instead of breaking jsPDF's
+  // back to the sane Classic defaults instead of breaking jsPDF's
   // setTextColor() with an empty value (which renders as no-text / white).
   t.accent          = pickColor(tpl.accentColor,     pickColor(tpl.primaryColor, t.accent));
   t.primary         = pickColor(tpl.primaryColor,    t.primary);
@@ -406,7 +545,7 @@ function resolveTheme(
   t.font            = (['helvetica','times','courier'].includes(tpl.fontFamily ?? '')
                        ? (tpl.fontFamily as 'helvetica'|'times'|'courier') : 'helvetica');
   t.fontScale       = tpl.fontSize === 'sm' ? 0.9 : tpl.fontSize === 'lg' ? 1.1 : 1.0;
-  t.headerPreset    = (tpl.headerPreset as ResolvedTheme['headerPreset']) ?? 'drlogy';
+  t.headerPreset    = normalizeHeaderPreset(tpl.headerPreset);
   t.logoPosition    = (tpl.logoPosition as 'left'|'center'|'right') ?? 'left';
   t.logoSize        = (tpl.logoSize as 'sm'|'md'|'lg') ?? 'md';
   t.topAccentBar    = tpl.topAccentBar ?? true;
@@ -533,15 +672,14 @@ function drawCustomPatientFields(doc: jsPDF, snap: ReportSnapshot, startY: numbe
 
   let y = startY + 12;
   const colW = (A4.w - 2 * MARGIN_X) / 2;
-  doc.setFontSize(8.5 * theme.fontScale);
   rows.forEach((r, i) => {
     if (i % 2 === 0 && i > 0) y += 13;
     const x = MARGIN_X + (i % 2) * colW;
     const label = `${r.title}: `;
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'customFieldLabel');
     doc.setTextColor(BLACK);
     doc.text(label, x, y);
-    doc.setFont(PDF_FONT, 'normal');
+    typeset(doc, 'customFieldValue');
     doc.setTextColor(TEXT_DIM);
     doc.text(String(r.value), x + doc.getTextWidth(label), y);
   });
@@ -567,10 +705,21 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
  *  would place it — the report designer outlines these boxes over the
  *  rendered page. Same theme resolution, same seeds, same overrides. */
 export function computeReportPageLayout(input: ReportPdfInput): ReportLayoutResult {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
   const { practice, template } = prepareRender({ ...input, blankLetterhead: false });
+  const doc = newReportDoc();
+  installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
+  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
   return computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
+}
+
+/** A fresh A4 document. An embedded-font theme writes only the fonts it
+ *  used and deflates its streams (the embedded font subsets are ~80 KB a
+ *  face uncompressed — compressed, the Modern report stays close to a
+ *  Classic one); Classic keeps jsPDF's defaults (byte-identical output). */
+function newReportDoc(): jsPDF {
+  return TYPE.embedded
+    ? new jsPDF({ unit: 'pt', format: 'a4', putOnlyUsedFonts: true, compress: true })
+    : new jsPDF({ unit: 'pt', format: 'a4' });
 }
 
 /** Theme + images + practice merge + margins for one render (module state). */
@@ -578,14 +727,17 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   const { report, practice: rawPractice = {}, template = null, imageCache = {} } = input;
   // Calculated values print like any other value — no "(Calculated)"
   // marker on a test / profile name (see report-name.ts).
-  const snap = cleanSnapshotNames(parseSnapshot(report.data));
+  // Report Sequencing (designer → Sequencing): the lab's department / test
+  // order, applied to the snapshot BEFORE anything reads it — a no-op (same
+  // array) for labs that never set it (report-sequencing.ts).
+  const snap = sequenceSnapshot(cleanSnapshotNames(parseSnapshot(report.data)), template);
   IMG_CACHE = imageCache;
 
   // Merge template identity fields into the practice shape. The drawing
   // functions read from `practice.{name,address,phone,email,website,nablNumber}`
   // for legacy reasons; without this merge, edits to those fields in
   // the admin editor (which only passes `template`) wouldn't appear in
-  // the live preview because every read fell back to the Drlogy defaults.
+  // the live preview because every read fell back to the Classic defaults.
   const practice: NonNullable<ReportPdfInput['practice']> = template ? {
     ...rawPractice,
     name:        rawPractice.name        ?? template.labName,
@@ -597,6 +749,8 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   } : rawPractice;
 
   applyTheme(resolveTheme(template, practice));
+  TYPE = reportTypeTheme(template);
+  EMBEDDED = false;
   // Per-report signatories (who validated / entered results) take precedence
   // over the admin template signature slots. Their signatureUrls are embedded
   // data URLs, so no prefetch is required.
@@ -609,14 +763,20 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   // digital output loses its letterhead. Reset to the normal defaults
   // otherwise (module-level margins persist across renders).
   LETTERPAD = !!input.blankLetterhead;
+  STRIP_QR = {
+    base: input.publicBaseUrl ?? environment.reportPublicBaseUrl ?? '',
+    trackToken: snap.order?.trackToken || input.orderTrackToken || null,
+  };
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
+  ON_ONE_PAGE_BODY = input.onOnePageBody ?? null;
+  KEEP_EMPTY_LAYOUT_PAGES = !!input.keepEmptyLayoutPages;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
     MARGIN_BOTTOM = Math.max(20, template?.letterpadFooterMm ?? 30) * MM_TO_PT;
     HEADER_RESERVE = 0;
   } else {
     MARGIN_TOP = 28;
-    MARGIN_BOTTOM = 150;
+    MARGIN_BOTTOM = 150; // placeholder — replaced by footerFloor() once the footer layout is resolved
     HEADER_RESERVE = 70;
   }
   return { practice, template, snap };
@@ -625,12 +785,16 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
 /** Build the PDF and hand back the letterhead/footer layout it drew with. */
 export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
   const report = input.report;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const { practice, template, snap } = prepareRender(input);
+  const doc = newReportDoc();
   // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
   // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
-  // doc.text covers every draw here AND inside jspdf-autotable.
+  // doc.text covers every draw here AND inside jspdf-autotable. (An embedded
+  // theme font prints them natively — the wrapper then passes text through.)
   installPdfTextSanitizer(doc);
-  const { practice, template, snap } = prepareRender(input);
+  // The Modern theme's Source Sans 3 — when not loaded (preloadReportImages
+  // loads it), the theme's sizes print in Helvetica rather than failing.
+  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
   // Safety net (RCA 2026-09-27): a standalone test with values whose layout
   // has no results table gets the default one — every caller (report viewer,
   // queue, public link, test-editor live preview) prints the RESULT, never a
@@ -642,6 +806,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   const layout = computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
   LAYOUT = layout;
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
+  if (!LETTERPAD) MARGIN_BOTTOM = footerFloor(layout);
   // Background images go down FIRST on every page they print on, so text,
   // the logo and the results always draw over them. Page 1 now; later pages
   // (ours or autotable's) as each is added.
@@ -670,6 +835,18 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   }
 
   WM_LOGO_URL = template?.logoUrl ?? null;
+  TECH_DEPT_NOTES = new Map();
+  // In the order the report prints its departments (the tests' order — the
+  // lab's Sequencing when set), so the notes of sections without a table,
+  // drawn after the results, follow the same sequence; then any others.
+  const deptNotes = (snap.techNotes?.departments ?? [])
+    .map(d => ({ name: (d.department ?? '').trim(), note: (d.note ?? '').trim() ? d.note! : '' }))
+    .filter(d => d.name && d.note);
+  const printOrder = [...new Set((snap.tests ?? []).map(t => (t.department ?? '').trim().toUpperCase()).filter(Boolean))];
+  const rank = (n: string) => { const i = printOrder.indexOf(n.toUpperCase()); return i < 0 ? printOrder.length : i; };
+  for (const d of [...deptNotes].sort((x, y) => rank(x.name) - rank(y.name))) {
+    TECH_DEPT_NOTES.set(d.name.toUpperCase(), d);
+  }
   drawLetterhead(doc);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
@@ -689,6 +866,8 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // after the table. No department strips — panel headers only (NABL /
   // reference-report style); department banding is opt-in via the template.
   const tests = snap.tests ?? [];
+  // Report charts plot from the snapshot's own values (report-chart.report.ts).
+  setReportChartContext(tests, resolvedLayouts);
   const tabular: typeof tests = [];
   const special: typeof tests = [];
   for (const t of tests) {
@@ -702,8 +881,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // numeric test out of the columnar table.
     // Sentences alone don't either: next to a results table they print as
     // full-width rows INSIDE it (owner 2026-09-28, like the Method line).
+    // A report chart doesn't either: the test's values stay in the table
+    // (with their saved H / L flags) and the chart prints after it (below).
     const narrative = !t.packageTestId
-      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image')
+      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image' && !isReportChart(s))
       && !sentencesFitTable(layout);
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       special.push(t);
@@ -787,7 +968,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       ?? (legacy ? t.packageTestId : null)
       ?? null;
     const pkgName = t.profileTestId ? (t.profileName || t.packageName) : t.packageName;
-    if (!pkg) { g.rows.push(...obsRowsFor(t)); groups.push(g); continue; }
+    if (!pkg) { insertTechNote(g.rows, techNoteRow(t.techNote, 'Note:')); g.rows.push(...obsRowsFor(t)); groups.push(g); continue; }
     // Stash this member's observations for the profile block (appended below).
     const memberObs = obsRowsFor(t);
     if (memberObs.length) {
@@ -796,13 +977,14 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       profileObs.set(pkg, arr);
     }
     let merged = byPkg.get(pkg);
+    if (merged && g.fromResults) merged.fromResults = true;
     if (merged && g.sampleId && !merged.sampleIds?.includes(g.sampleId)) {
       (merged.sampleIds ??= []).push(g.sampleId);
     }
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [],
+      merged = { ...g, fromResults: g.fromResults, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [],
         sampleIds: g.sampleId ? [g.sampleId] : [] };
       // Column cascade for the BLOCK: the PROFILE's own override wins for
       // the whole block; a member's override never leaks into it — the
@@ -852,6 +1034,23 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     } else {
       merged.rows.push(...memberRows);
     }
+    // The member's own technician note sits right under ITS rows, named —
+    // inside the profile block several members share one band.
+    const memberNote = techNoteRow(t.techNote, `Note (${(g.testName || t.name || 'Test').trim()}):`);
+    if (memberNote) merged.rows.push(memberNote);
+  }
+  // The profile block's methods come from its members' rows (each row carries
+  // its value's effective method): one method for every member → "Method: X";
+  // members measured differently → each method named with its values. The
+  // band used to claim none, so a member's methodology never reached the
+  // report (RCA 2026-09-28).
+  for (const panel of byPkg.values()) applyValueMethods(panel);
+  // The profile's technician note closes its member rows — before the
+  // profile's own notes (interpretation), like a line note.
+  for (const pn of snap.techNotes?.profiles ?? []) {
+    const panel = pn.profileTestId ? byPkg.get(pn.profileTestId) : undefined;
+    const row = techNoteRow(pn.note, 'Note:');
+    if (panel && row) panel.rows.push(row);
   }
   // Append each profile's own notes AFTER its member rows.
   for (const [pkg, notes] of profileNotes) {
@@ -862,6 +1061,37 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   for (const [pkg, obs] of profileObs) {
     const panel = byPkg.get(pkg);
     if (panel && obs.length) panel.rows.push(...obs);
+  }
+  // A test / profile block whose every value was empty prints nothing at all
+  // (no band, no notes) — and a department left with no block disappears
+  // with it, since sections are built from these groups (owner 2026-10-03).
+  dropValuelessGroups(groups);
+
+  // ── Profile ONE-PAGE report layouts (owner, 2026-10-02) ─────────────────
+  // A profile whose Printed-report tab has an ENABLED `page_layout` section
+  // is pulled OUT of the normal continuous table entirely and rendered on
+  // its own forced page by renderOnePageProfile() (below), side-by-side
+  // table + charts + analyzer images + that department's signatures. A
+  // profile without one (every profile before this feature, and any that
+  // hasn't opted in) never enters this branch — `onePageBundles` stays
+  // empty and `groups` is untouched, so the rest of this function runs
+  // EXACTLY as it always has (byte-identical output; see
+  // report-pdf.one-page-layout.spec.ts).
+  // `before` = how many ordinary blocks precede the profile in REPORT
+  // SEQUENCE order — the custom layout prints at that point (Custom layout,
+  // owner 2026-10-02), not after everything.
+  const onePageBundles: Array<{ pkg: string; group: PanelGroup; layout: ResolvedReportLayout; before: number }> = [];
+  for (const [pkg, group] of byPkg) {
+    const lay = resolvedLayouts[pkg];
+    const pl = lay && readPageLayout(lay.sections);
+    if (pl?.enabled && (pl.pages ?? []).some(pg => pg.boxes.length > 0)) onePageBundles.push({ pkg, group, layout: lay, before: 0 });
+  }
+  if (onePageBundles.length > 0) {
+    const bundleOf = new Map<PanelGroup, (typeof onePageBundles)[number]>(onePageBundles.map(b => [b.group, b]));
+    let ordinary = 0;
+    for (const g of groups) { const b = bundleOf.get(g); if (b) b.before = ordinary; else ordinary++; }
+    onePageBundles.sort((x, y) => groups.indexOf(x.group) - groups.indexOf(y.group));
+    for (let i = groups.length - 1; i >= 0; i--) if (bundleOf.has(groups[i])) groups.splice(i, 1);
   }
 
   // The profile's own NARRATIVE blocks (images, charts) render once under
@@ -880,7 +1110,12 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       ?? (legacy ? t.packageTestId : null);
     if (b && !benchBundles.has(b)) benchBundles.set(b, t);
   }
+  const onePagePkgs = new Set(onePageBundles.map(b => b.pkg));
   for (const [pkg, member] of benchBundles) {
+    // A one-page-layout profile draws its OWN chart/image boxes inside its
+    // dedicated page (renderOnePageProfile, below) — never also here, or its
+    // chart would print twice.
+    if (onePagePkgs.has(pkg)) continue;
     const pl = resolvedLayouts[pkg];
     const inTable = byPkg.has(pkg);
     // Only when there is something to PRINT. A visible-but-empty paragraph
@@ -890,13 +1125,26 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       s.isVisible && s.type !== 'grid' && (
         (s.type === 'paragraph' && !inTable && !!s.content?.trim()) ||
         (s.type === 'image' && (s.imageUrls?.length ?? 0) > 0) ||
-        (s.type === 'chart' && !!s.chart)
+        (s.type === 'chart' && (!!s.chart || !!s.trend))
       ));
     if (!hasNarrative) continue;
     const entry = { ...member, testId: pkg, packageTestId: null, profileTestId: null,
                    name: (member.profileTestId === pkg ? member.profileName : member.packageName)
                          || pl.testName || '' };
     if (inTable) specialLayout.set(entry, { ...pl, sections: pl.sections.filter(s => s.type !== 'paragraph') });
+    special.push(entry);
+  }
+
+  // A standalone tabular test's report CHARTS print after the table, under
+  // its name — its values stay in the table with their saved flags, so the
+  // table and the chart show the same verdicts (docs/REPORT-CHARTS.md).
+  for (const t of tabular) {
+    if (t.packageTestId || !t.testId) continue;
+    const lay = resolvedLayouts[t.testId];
+    const charts = lay?.sections.filter(s => s.isVisible && isReportChart(s)) ?? [];
+    if (!lay || charts.length === 0) continue;
+    const entry = { ...t, images: null };            // a copy: not re-listed / re-imaged
+    specialLayout.set(entry, { ...lay, sections: charts });
     special.push(entry);
   }
 
@@ -950,11 +1198,11 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     ]);
     if (sheet.length > 0) {
       renderAbnormalSummary(doc, sheet, cursorY, {
-        font: PDF_FONT, fontScale: theme.fontScale, primary: theme.primary, black: BLACK, text: TEXT,
+        typeset, cellType, primary: theme.primary, black: BLACK, text: TEXT,
         dim: TEXT_DIM, hair: HAIR, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
         abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
         pageW: A4.w, marginX: MARGIN_X, marginBottom: MARGIN_BOTTOM,
-        continueTop: LETTERPAD ? MARGIN_TOP + 24 : 56,
+        continueTop: tablePageMargins().top,
         bodyStyles: tableBodyStyles(), headStyles: tableHeadStyles(), zebra: theme.zebraRows,
         ...summaryCellHooks(doc),
       });
@@ -965,21 +1213,81 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     }
   }
 
-  if (inScope.length > 0) {
-    cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs,
-      outScope.length === 0 ? finalSigs : undefined);
+  // ── Composition: ordinary blocks and Custom-layout profiles in REPORT
+  // SEQUENCE order (owner 2026-10-02). A custom-layout profile starts on its
+  // own page and prints its designed pages; the blocks after it start on a
+  // fresh page. Each department signs ONCE, after its LAST item in the
+  // report (an ordinary block's inline sign-off, or the profile's
+  // signatures box) — never in an earlier segment.
+  type Segment = { kind: 'groups'; groups: PanelGroup[]; scopeHeading?: boolean } | { kind: 'custom'; b: (typeof onePageBundles)[number] };
+  const segments: Segment[] = [];
+  {
+    let taken = 0;
+    for (const b of onePageBundles) {
+      // Bundle positions are counted over ALL ordinary blocks; the in-scope
+      // list is that order minus the out-of-scope ones.
+      const upTo = groups.slice(0, b.before).filter(g => inScope.includes(g)).length;
+      if (upTo > taken) segments.push({ kind: 'groups', groups: inScope.slice(taken, upTo) });
+      segments.push({ kind: 'custom', b });
+      taken = Math.max(taken, upTo);
+    }
+    if (inScope.length > taken) segments.push({ kind: 'groups', groups: inScope.slice(taken) });
+    if (outScope.length > 0) segments.push({ kind: 'groups', groups: outScope, scopeHeading: true });
   }
-  if (outScope.length > 0) {
-    cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
-    cursorY = renderContinuousTable(doc, outScope, cursorY, practice, null, deptSigs, finalSigs);
-  }
+  const deptOf = (g: PanelGroup) => (g.department ?? '').trim();
+  const lastSegOfDept = new Map<string, number>();
+  segments.forEach((sg, i) => {
+    const ds = sg.kind === 'groups' ? sg.groups.map(deptOf) : [deptOf(sg.b.group)];
+    for (const d of ds) lastSegOfDept.set(d, i);
+  });
+  const sigsOnlyFor = (i: number) => new Map([...deptSigs].filter(([d]) => lastSegOfDept.get(d) === i));
+  let pageHasContent = false;
+  segments.forEach((sg, i) => {
+    const isFinal = i === segments.length - 1;
+    if (sg.kind === 'groups') {
+      if (i > 0 && segments[i - 1].kind === 'custom') {
+        // Blocks after a custom layout open a fresh page that reads like the
+        // layout's own pages: letterhead + patient block, then the results.
+        NEXT_PAGE_IS_FIRST = false;
+        doc.addPage();
+        drawLetterhead(doc);
+        cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+        pageHasContent = false;
+      }
+      if (sg.scopeHeading) cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
+      cursorY = renderContinuousTable(doc, sg.groups, cursorY, practice, null, sigsOnlyFor(i), isFinal ? finalSigs : undefined);
+      pageHasContent = true;
+      return;
+    }
+    const dept = deptOf(sg.b.group);
+    const sigs = deptSigs.get(dept) ?? [];
+    const signHere = lastSegOfDept.get(dept) === i;
+    const res = renderCustomLayout(doc, sg.b.pkg, sg.b.group, sg.b.layout, practice, snap, report, sigs,
+      { topY: pageHasContent ? undefined : cursorY, signHere });
+    cursorY = res.bottom;
+    pageHasContent = true;
+    // Last item of its department but no signatures box in the layout: the
+    // sign-off still prints — below the End of Report when this is the
+    // report's final item, else right under the layout.
+    if (signHere && !res.signed && sigs.length) {
+      if (isFinal) finalSigs.sigs = sigs;
+      else cursorY = drawInlineSignatures(doc, sigs, cursorY + 8, practice);
+    }
+  });
 
   // Tech attachments for TABULAR tests — the columnar table has no
   // per-test section hook, so their shown images print here, labelled.
   // The Test Master's Images block is the print switch: hidden (all image
   // sections invisible) = lab-only traceability, nothing on the PDF.
   for (const t of tabular) {
-    const imgs = (t as { images?: string[] | null }).images ?? [];
+    let imgs = (t as { images?: string[] | null }).images ?? [];
+    // A one-page-layout profile's analyzer graphs print in their own boxes —
+    // never a second time in this images block.
+    const bundle = t.profileTestId ?? (t.packageType === 'profile' ? t.packageTestId : null) ?? (t.packageType == null ? t.packageTestId : null);
+    if (bundle && onePagePkgs.has(bundle) && t.analyzerImages) {
+      const graphs = new Set(Object.values(t.analyzerImages));
+      imgs = imgs.filter(u => !graphs.has(u));
+    }
     if (!imgs.length) continue;
     const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
     const imgSecs = layout?.sections.filter(s => s.type === 'image') ?? [];
@@ -1012,6 +1320,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
         cursorY = drawImagesBlock(doc, imgs, cursorY + 2, practice, `${t.name ?? 'Test'} — images`);
       }
     }
+    // Its technician note (a narrative / culture test has no table row for it).
+    if (tests.includes(t) && (t.techNote ?? '').trim()) {
+      cursorY = drawTechNoteBlock(doc, t.techNote!, 'Note:', cursorY + 4, practice);
+    }
     cursorY += 10;
   }
 
@@ -1041,8 +1353,36 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     cursorY = renderTrendogramSection(doc, input.trendograms, cursorY, practice);
   }
 
-  // ── "****End of Report****" line ────
-  if (cursorY > A4.h - MARGIN_BOTTOM - 26) { cursorY = newPage(doc, practice); }
+  // Department notes whose section never printed as a table (a culture /
+  // narrative-only department), then the whole order's note — the last
+  // words before the End-of-Report marker and the sign-off.
+  for (const d of TECH_DEPT_NOTES.values()) {
+    cursorY = drawTechNoteBlock(doc, d.note, `${titleCaseHeader(d.name)} note:`, cursorY + 6, practice);
+  }
+  TECH_DEPT_NOTES.clear();
+  if ((snap.techNotes?.order ?? '').trim()) {
+    cursorY = drawTechNoteBlock(doc, snap.techNotes!.order!, 'Overall note:', cursorY + 8, practice);
+  }
+
+  // ── "****End of Report****" line, plus — when the final department
+  // defers its sign-off to below it — that signature block, decided as ONE
+  // unit (owner's report 2026-10-01: a chart-and-table page with room to
+  // spare still sent the sign-off alone to an almost-empty page 2, because
+  // the marker's own 26pt reserve said yes while the signatures' separate,
+  // later check said no — "****End of Report****" was left stranded on
+  // page 1 instead of moving WITH its signatures). Reserving both up front
+  // means a page break (when genuinely needed) carries the marker along,
+  // and when the block fits — as it does whenever real free space remains —
+  // nothing moves at all (no over-reservation on the common case). ────
+  // drawEndOfReport always advances cursorY by exactly 12 (startY + 12, the
+  // marker's own baseline step) — so the EXACT follow-on space it needs is
+  // 12 + the signature block's measured height, plus the same SIGN_OFF_SLACK
+  // every other sign-off reserve already carries (never a second, bigger
+  // "just in case" buffer stacked on top — that would send reports to a
+  // needless extra page on the common, fits-fine case).
+  const deferredSigH = finalSigs.sigs?.length ? signatureBlockHeight(finalSigs.sigs) : 0;
+  const eorReserve = deferredSigH > 0 ? 12 + deferredSigH + SIGN_OFF_SLACK : 26;
+  if (cursorY > A4.h - MARGIN_BOTTOM - eorReserve) { cursorY = newPage(doc, practice); }
   cursorY = drawEndOfReport(doc, snap, cursorY);
 
   // The final department's signatories sign BELOW the End-of-Report marker —
@@ -1054,10 +1394,12 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // beneath it. Anchor to the bottom, but never pull the block UP into
     // content: a long report that already reaches this far keeps flowing.
     // Ends flush on the footer band — directly above the disclaimer line.
-    // Height comes from the block itself: 1-3 signatories are one row,
-    // 4-7 wrap 3-up into more rows, and the anchor rises to fit them so the
-    // LAST row still lands on the footer band.
-    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - signatureBlockHeight(finalSigs.sigs));
+    // Height comes from the block itself (only the signatories present:
+    // 1-4 are one row, 5-7 wrap into balanced rows) and the anchor rises to
+    // fit them so the LAST row still lands on the footer band. The reserve
+    // above already guarantees this fits on the CURRENT page — the guard
+    // inside drawInlineSignatures is a last-resort only.
+    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - deferredSigH);
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
@@ -1154,7 +1496,10 @@ export async function preloadReportImages(
   // image sections (positioned by the test's layout).
   try {
     const snap = JSON.parse(input.report.data ?? '{}') as ReportSnapshot;
-    for (const t of snap.tests ?? []) for (const u of t.images ?? []) urls.add(u);
+    for (const t of snap.tests ?? []) {
+      for (const u of t.images ?? []) urls.add(u);
+      for (const u of Object.values(t.analyzerImages ?? {})) if (u) urls.add(u);
+    }
   } catch { /* malformed snapshot — images just won't preload */ }
   for (const l of Object.values(input.resolvedLayouts ?? {})) {
     for (const sec of l.sections ?? []) for (const u of sec.imageUrls ?? []) urls.add(u);
@@ -1164,12 +1509,25 @@ export async function preloadReportImages(
   const bgUrls = new Set((readHeaderLayout(tpl)?.backgrounds ?? []).map(b => b.url).filter(Boolean));
 
   const cache: Record<string, string> = {};
-  await Promise.all(Array.from(new Set([...urls, ...bgUrls])).map(async u => {
-    if (!u) return;
-    const data = await fetchAsDataUrl(u, baseUrl, signed, bgUrls.has(u) ? { maxEdge: BG_MAX_EDGE, keepJpeg: true } : undefined);
-    if (data) cache[u] = data; // key by original (relative) URL — what the template stores
-  }));
+  await Promise.all([
+    // The report theme's embedded fonts ride the same async step: every
+    // entry point (viewer, download, print, public link, designer preview)
+    // already awaits this before its sync render.
+    prepareReportTheme(tpl),
+    ...Array.from(new Set([...urls, ...bgUrls])).map(async u => {
+      if (!u) return;
+      const data = await fetchAsDataUrl(u, baseUrl, signed, bgUrls.has(u) ? { maxEdge: BG_MAX_EDGE, keepJpeg: true } : undefined);
+      if (data) cache[u] = data; // key by original (relative) URL — what the template stores
+    }),
+  ]);
   return cache;
+}
+
+/** Load what the template's report theme needs before a (sync) render — the
+ *  Modern theme's Source Sans 3 files, fetched once per session. Classic
+ *  needs nothing and fetches nothing. Never throws. */
+export async function prepareReportTheme(tpl: ReportTemplate | null | undefined): Promise<void> {
+  if (reportTypeTheme(tpl).embedded) await loadReportFonts();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1177,10 +1535,10 @@ export async function preloadReportImages(
 // ──────────────────────────────────────────────────────────────
 
 /** Renders the tagline by splitting on '|' and colouring each separator
- *  pipe with the accent colour (Drlogy style). For taglines without
+ *  pipe with the accent colour (classic style). For taglines without
  *  pipes ("Accurate. On time.") it just renders as a single black line. */
-function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size = 9, style: 'normal' | 'bold' | 'italic' = 'bold') {
-  doc.setFont(PDF_FONT, style);
+function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size: number, style: TypeWeight) {
+  setFace(doc, style);
   doc.setFontSize(size);
   const parts = tagline.split('|');
   let cx = x;
@@ -1237,7 +1595,7 @@ interface Seed {
   defY?: (h: number) => number;
   text?: string;
   fields?: HeaderField[];
-  style?: 'normal' | 'bold' | 'italic';
+  style?: 'normal' | 'bold' | 'italic' | 'semibold';
   size?: number;
   color?: string;
   tone?: LayoutItem['tone'];
@@ -1248,7 +1606,7 @@ interface Seed {
   /** y is the LAST line's baseline (footer lines stack upward). */
   anchorBottom?: boolean;
   /** Legacy measuring quirks (centred tagline / website pill measured at another size). */
-  measure?: { style: 'normal' | 'bold' | 'italic'; size: number };
+  measure?: { style: 'normal' | 'bold' | 'italic' | 'semibold'; size: number };
   /** Wrapping is the design (disclaimer) — not worth a note. */
   expectWrap?: boolean;
   w?: number;
@@ -1307,6 +1665,9 @@ function finalizeBox(doc: jsPDF, s: Seed, o: ItemOverride, customized: boolean):
 }
 
 function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, customized: boolean): Resolved {
+  // A flowing theme (Modern) lays text out like an edited layout: wrapped
+  // lines, the looser line height. Classic keeps the old per-style layout.
+  active = active || TYPE.flowHeader;
   const align = o.align ?? s.align;
   const size = o.size ?? s.size ?? 9;
   const baseStyle = s.style ?? 'normal';
@@ -1315,7 +1676,7 @@ function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, cus
   const x = o.x != null ? o.x * MM : (o.align && o.align !== s.align) ? anchorX(align) : s.x;
   const raw = s.text ?? '';
   const gw = (t: string) => doc.getTextWidth(t);
-  doc.setFont(PDF_FONT, style);
+  setFace(doc, style);
   doc.setFontSize(size);
 
   let lines: string[];
@@ -1374,14 +1735,14 @@ function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, cus
   } else if (s.tone === 'pipes') {
     w = gw(raw.replace(/\|/g, ' | '));
     if (quirk && align === 'center') {
-      doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size);
+      setFace(doc, quirk.style); doc.setFontSize(quirk.size);
       startX = x - gw(raw.replace(/\|/g, ' | ')) / 2;
-      doc.setFont(PDF_FONT, style); doc.setFontSize(size);
+      setFace(doc, style); doc.setFontSize(size);
     } else startX = align === 'left' ? x : boxLeft(x, align, w);
   } else if (s.tone === 'pill') {
     w = gw(raw);
     let tw = w;
-    if (quirk) { doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size); tw = gw(raw); }
+    if (quirk) { setFace(doc, quirk.style); doc.setFontSize(quirk.size); tw = gw(raw); }
     pillW = tw + 12;
     const k = size / 8;
     // Untouched: the old expression, so the rectangle lands on the same point.
@@ -1413,6 +1774,9 @@ function computeReportLayout(
 ): ReportLayoutResult {
   const cfg = readHeaderLayout(tpl);
   const active = !!cfg;
+  // A flowing theme (Modern): the accent bar and the patient block clear the
+  // tallest letterhead text, as in an edited layout (see ReportTypeTheme).
+  const flow = active || TYPE.flowHeader;
   const ov = (id: string): ItemOverride => cfg?.items[id] ?? {};
   const items: Resolved[] = [];
   const add = (s: Seed): Resolved => {
@@ -1425,6 +1789,34 @@ function computeReportLayout(
   };
   const fs = theme.fontScale;
   const preset = theme.headerPreset;
+  /** A letterhead element's weight, as a seed style. */
+  const tstyle = (el: TypeEl) => twt(el) as NonNullable<Seed['style']>;
+  /** The lab name in a flowing theme: the theme's size, shrunk (0.5pt steps,
+   *  never below 16pt) to fit `maxW`; a name still too wide WRAPS onto more
+   *  lines at 16pt (`wrapW`), pushing the rows under it down by `extra`.
+   *  Where it cannot wrap (inside the Banner's band) it shrinks to 11pt.
+   *  Classic never changes — its paper is pinned. A size the lab set in the
+   *  designer always wins. */
+  const fitName = (el: 'labName' | 'labNameMinimal', text: string, maxW: number, canWrap = true):
+      { size: number; wrapW?: number; extra: number } => {
+    let size = tsz(el);
+    if (!TYPE.flowHeader || ov('name').size !== undefined) return { size, extra: 0 };
+    setFace(doc, twt(el));
+    doc.setFontSize(size);
+    const floor = canWrap ? 16 : 11;
+    while (size > floor && doc.getTextWidth(text) > maxW) { size -= 0.5; doc.setFontSize(size); }
+    if (!canWrap || doc.getTextWidth(text) <= maxW) return { size, extra: 0 };
+    const n = (doc.splitTextToSize(text, maxW) as string[]).length;
+    return { size, wrapW: maxW, extra: (n - 1) * size * 1.2 };
+  };
+  const nablW = theme.nablAccredited && !ov('nabl').hidden ? 40 : 0;
+  /** How much further down a taller lab name pushes the rows under it (the
+   *  cap-height difference against the style's Classic size); 0 in Classic. */
+  const nameGrow = (size: number, classicSize: number): number =>
+    TYPE.flowHeader ? Math.max(0, Math.round((size - classicSize) * 0.7 * 2) / 2) : 0;
+  /** Extra baseline drop for a line whose theme size exceeds Classic's. */
+  const lead = (el: TypeEl, classicSize: number): number =>
+    TYPE.flowHeader ? Math.max(0, tsz(el) - classicSize) : 0;
   const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
   const rightX = A4.w - MARGIN_X;
   const val = (f: HeaderField) => practice[f] ?? '';
@@ -1432,12 +1824,14 @@ function computeReportLayout(
     id: 'nabl', kind: 'nabl', label: 'NABL badge', x: rightX - 30, y: LH_TOP - 2, align: 'right',
     defX: w => rightX - w, w: 30, h: 30, url: theme.nablLogoUrl || null, sub: theme.nablNumber || undefined,
   } : null;
-  const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = 8 * fs): void => {
+  const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = tsz('labContactLine'),
+                  wrapDefault?: number): void => {
     const fields = ov(id).fields ?? def;
     const text = fields.map(val).filter(Boolean).join('  ·  ');
     if (!text) return;
     const label = fields.filter(f => val(f)).map(f => FIELD_LABEL[f]).join(' · ');
-    add({ id, kind: 'text', label, text, fields, x, y, align, style: 'normal', size, color: TEXT_DIM, tone: 'plain' });
+    add({ id, kind: 'text', label, text, fields, x, y, align, style: twt('labContactLine') as Seed['style'], size, color: TEXT_DIM, tone: 'plain',
+          wrapDefault, expectWrap: wrapDefault != null });
   };
   const bar = (): Resolved | null => {
     if (!theme.topAccentBar) return null;
@@ -1446,7 +1840,7 @@ function computeReportLayout(
     // Text the lab placed BELOW the bar's spot stays below it (dragging a
     // line under the bar is allowed); text above it pushes the bar down.
     let y = LH_TOP + 54;
-    if (active) {
+    if (flow) {
       const texts = items
         .filter(i => i.kind === 'text' && !i.hidden)
         .map(i => (ov(i.id).x !== undefined || ov(i.id).y !== undefined ? { b: i.box, moved: true } : { b: i.defBox, moved: false }))
@@ -1459,7 +1853,8 @@ function computeReportLayout(
   const pill = (b: Resolved | null) => {
     if (!b || !practice.website) return;
     add({ id: 'website', kind: 'text', label: 'Website', text: practice.website, x: A4.w - MARGIN_X - 6, y: b.y + 5.5,
-          align: 'right', style: 'bold', size: 8, color: BLUE, tone: 'pill', measure: { style: 'normal', size: 8 * fs } });
+          align: 'right', style: tstyle('website'), size: tsz('website'), color: BLUE, tone: 'pill',
+          measure: { style: 'normal', size: TYPE.tokens.website.size * fs } });
   };
 
   if (preset === 'centered') {
@@ -1468,66 +1863,103 @@ function computeReportLayout(
     const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: (A4.w - size) / 2, y: LH_TOP, align: 'center',
                        defX: w => (A4.w - w) / 2, w: size, h: size, url: logoUrl });
     const lh = logo.defBox.h;
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14, align: 'center',
-          style: 'bold', size: 18 * fs, color: BLACK, tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28, align: 'center',
-          style: 'bold', size: 9, color: BLACK, tone: 'pipes', measure: { style: 'bold', size: 9 * fs } });
-    joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40, 'center');
+    const nm = fitName('labName', fullName, A4.w - 2 * MARGIN_X - 2 * nablW);
+    // (+4: air between the logo and a taller name's cap line.)
+    const g = nameGrow(nm.size, 18 * fs) + nm.extra + (TYPE.flowHeader ? 4 : 0);
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14 + g - nm.extra, align: 'center',
+          style: tstyle('labName'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28 + g, align: 'center',
+          style: tstyle('taglinePipes'), size: tsz('taglinePipes'), color: BLACK, tone: 'pipes',
+          measure: { style: tstyle('taglinePipes'), size: TYPE.tokens.taglinePipes.size * fs } });
+    joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40 + g, 'center');
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: A4.w / 2,
-          y: LH_TOP + lh + 50, align: 'center', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+          y: LH_TOP + lh + 50 + g + lead('labAddress', 8 * fs), align: 'center', style: tstyle('labAddress'), size: tsz('labAddress'),
+          color: TEXT_DIM, tone: 'plain' });
     pill(bar());
   } else if (preset === 'banner') {
     const n = nablSeed();
     // The old banner painted the NABL badge BEFORE the blue band, so the band
     // hid it. Untouched templates keep that; an edited layout draws it on top.
-    if (n && !active) add(n);
+    if (n && !flow) add(n);
     const band = add({ id: 'banner', kind: 'banner', label: 'Banner', x: 0, y: 0, w: A4.w, h: 54, align: 'left' });
+    // The lab can switch the band OFF (a hidden override, like any element):
+    // the header then reads like a normal letterhead — logo and name from
+    // the top margin, the name in dark ink (white text would vanish on the
+    // paper), the contact line right under them. Shown → byte-identical.
+    const bandOn = !band.hidden;
     const bh = band.h ?? 54;
     const size = theme.logoSize === 'sm' ? 22 : theme.logoSize === 'lg' ? 36 : 28;
     const lp = theme.logoPosition;
     const lx = (w: number) => lp === 'right' ? A4.w - MARGIN_X - w : lp === 'center' ? (A4.w - w) / 2 : MARGIN_X;
-    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: lx(size), y: (bh - size) / 2, align: lp,
-                       defX: lx, defY: h => (bh - h) / 2, w: size, h: size, url: logoUrl });
+    const logoY = (h: number) => bandOn ? (bh - h) / 2 : LH_TOP;
+    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: lx(size), y: logoY(size), align: lp,
+                       defX: lx, defY: logoY, w: size, h: size, url: logoUrl });
     const wmX = lp === 'center' ? (A4.w / 2) : (logo.defBox.x + logo.defBox.w + 10);
     const wmAlign: Align = lp === 'center' ? 'center' : 'left';
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: 24, align: wmAlign,
-          style: 'bold', size: 18 * fs, color: '#ffffff', tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: 40, align: wmAlign,
-          style: 'normal', size: 9 * fs, color: '#ffffff', tone: 'plain' });
-    joined('contact', ['address', 'phone', 'email'], MARGIN_X, bh + 10, 'left');
-    if (n && active) add(n);
+    // Band off: centred → the name sits UNDER the logo (Centered's rhythm);
+    // left / right → beside it, on the Classic baselines.
+    const nm = fitName('labName', fullName,
+      (lp === 'center' ? A4.w - 2 * MARGIN_X - 2 * nablW : A4.w - MARGIN_X - wmX - nablW), !bandOn);
+    const g = nameGrow(nm.size, 18 * fs);
+    const nameY = bandOn ? 24 + g / 2 : lp === 'center' ? LH_TOP + logo.defBox.h + 14 + g : LH_TOP + 18 + g;
+    const tagY = bandOn ? 40 + g / 2 : nameY + 14 + nm.extra;
+    const contactY = bandOn ? bh + 10 + lead('labContactLine', 8 * fs)
+      : Math.max(LH_TOP + 48, tagY + 12 + lead('labContactLine', 8 * fs), logo.defBox.y + logo.defBox.h + 10);
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: nameY, align: wmAlign,
+          style: tstyle('labName'), size: nm.size, color: bandOn ? '#ffffff' : BLACK, tone: 'plain',
+          wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: tagY, align: wmAlign,
+          style: tstyle('taglinePlain'), size: tsz('taglinePlain'), color: bandOn ? '#ffffff' : TEXT_DIM, tone: 'plain' });
+    // A flowing theme wraps the contact line clear of the NABL badge.
+    joined('contact', ['address', 'phone', 'email'], MARGIN_X, contactY, 'left', undefined,
+           TYPE.flowHeader && nablW ? A4.w - 2 * MARGIN_X - nablW : undefined);
+    if (n && flow) add(n);
   } else if (preset === 'minimal') {
     const n = nablSeed(); if (n) add(n);
     const align: Align = theme.logoPosition === 'center' ? 'center' : theme.logoPosition === 'right' ? 'right' : 'left';
     const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14, align,
-          style: 'bold', size: 16 * fs, color: BLACK, tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26, align,
-          style: 'normal', size: 9 * fs, color: TEXT_DIM, tone: 'plain' });
+    const nm = fitName('labNameMinimal', fullName, A4.w - 2 * MARGIN_X - (align === 'center' ? 2 * nablW : nablW));
+    const g = nameGrow(nm.size, 16 * fs) + nm.extra;
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14 + g - nm.extra, align,
+          style: tstyle('labNameMinimal'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26 + g, align,
+          style: tstyle('taglinePlain'), size: tsz('taglinePlain'), color: TEXT_DIM, tone: 'plain' });
     // (Minimal's contact line inherits the tagline's 9pt — as it always did.)
-    joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38, align, 9 * fs);
+    joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38 + g, align, tsz('labContactMinimal'));
   } else {
-    // Classic ("drlogy"): logo + two-tone wordmark left, phone/email right,
+    // Classic: logo + two-tone wordmark left, phone/email right,
     // the address on its own line under the logo row, the accent bar.
     const size = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
     const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: logoXFor(size), y: LH_TOP, align: theme.logoPosition,
                        defX: w => logoXFor(w), w: size, h: size, url: logoUrl });
     const wx = logo.hidden ? logo.defBox.x : logo.defBox.x + logo.defBox.w + 6;
-    const wy = LH_TOP + 18;
+    // The contact column (phone / email, right) is measured first so a long
+    // lab name in a flowing theme shrinks before it runs into it.
+    const nablOn = theme.nablAccredited && !ov('nabl').hidden && ov('nabl').x === undefined && ov('nabl').align === undefined;
+    const contactRight = nablOn ? rightX - (30 + 8) : rightX;
+    typeset(doc, 'labContact');
+    const contactW = Math.max(0, ...[practice.phone, practice.email].filter(Boolean).map(v => doc.getTextWidth(v!)));
+    const nm = fitName('labName', fullName, contactRight - (contactW ? contactW + 14 : 0) - wx);
+    const g0 = nameGrow(nm.size, 18 * fs);
+    const g = g0 + nm.extra;
+    const wy = LH_TOP + 18 + g0;
+    // A wrapped name prints in one ink (the two-tone split is a one-line look).
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wx, y: wy, align: 'left',
-          style: 'bold', size: 18 * fs, color: BLACK, tone: 'twoTone' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wx, y: wy + 14, align: 'left',
-          style: 'bold', size: 9, color: BLACK, tone: 'pipes' });
+          style: tstyle('labName'), size: nm.size, color: BLACK, tone: nm.wrapW ? 'plain' : 'twoTone',
+          wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wx, y: wy + 14 + nm.extra, align: 'left',
+          style: tstyle('taglinePipes'), size: tsz('taglinePipes'), color: BLACK, tone: 'pipes' });
     const n = nablSeed();
     const nabl = n ? add(n) : null;
     const nablHolds = !!nabl && !nabl.hidden && ov('nabl').x === undefined && ov('nabl').align === undefined;
     const contactX = nablHolds ? rightX - (nabl!.defBox.w + 8) : rightX;
     if (practice.phone) add({ id: 'phone', kind: 'text', label: 'Phone', text: practice.phone, x: contactX, y: LH_TOP + 14,
-          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+          align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.email) add({ id: 'email', kind: 'text', label: 'Email', text: practice.email, x: contactX, y: LH_TOP + 28,
-          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+          align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
-          y: LH_TOP + 46, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+          y: LH_TOP + 46 + g + lead('labAddress', 8 * fs), align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
+          color: TEXT_DIM, tone: 'plain' });
     pill(bar());
   }
 
@@ -1540,8 +1972,9 @@ function computeReportLayout(
     let bottom = Math.max(LH_TOP, ...items.filter(i => i.kind !== 'banner').map(i => i.defBox.y + i.defBox.h));
     const stack = (id: string, label: string, text: string) => {
       const base = bottom + 10;
-      add({ id, kind: 'text', label, text, x: MARGIN_X, y: base, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
-      bottom = base + Math.max(3, (text.split('\n').length - 1) * 8 * fs * 1.2 + 3);
+      add({ id, kind: 'text', label, text, x: MARGIN_X, y: base, align: 'left', style: tstyle('headerExtraLine'),
+            size: tsz('headerExtraLine'), color: TEXT_DIM, tone: 'plain' });
+      bottom = base + Math.max(3, (text.split('\n').length - 1) * tsz('headerExtraLine') * 1.2 + 3);
     };
     for (const f of Object.keys(FIELD_LABEL) as HeaderField[]) {
       if (ov(f).added && !placed.has(f) && val(f)) stack(f, FIELD_LABEL[f], val(f));
@@ -1552,25 +1985,26 @@ function computeReportLayout(
   // ── Footer lines (last page), stacked up from just above the date strip.
   let extraY = A4.h - 40;
   if (theme.disclaimer) {
+    const dlh = TYPE.tokens.disclaimer.lineHeight ?? tsz('disclaimer') * 1.2;
     const d = add({ id: 'disclaimer', region: 'footer', kind: 'text', label: 'Disclaimer', text: theme.disclaimer, x: MARGIN_X,
-                    y: extraY, align: 'left', style: 'italic', size: 7, color: TEXT_DIM, tone: 'plain', lineH: 8.5,
+                    y: extraY, align: 'left', style: tstyle('disclaimer'), size: tsz('disclaimer'), color: TEXT_DIM, tone: 'plain', lineH: dlh,
                     reverse: true, wrapDefault: A4.w - 2 * MARGIN_X, anchorBottom: true, expectWrap: true });
     if (!d.hidden) {
-      for (let i = 0; i < (d.lines?.length ?? 1); i++) extraY -= 8.5;
+      for (let i = 0; i < (d.lines?.length ?? 1); i++) extraY -= dlh;
       extraY -= 2;
     }
   }
   if (theme.footerText) {
     add({ id: 'footerText', region: 'footer', kind: 'text', label: 'Footer text', text: theme.footerText, x: MARGIN_X,
-          y: extraY, align: 'left', style: 'normal', size: 7.5, color: TEXT_DIM, tone: 'plain', anchorBottom: true });
+          y: extraY, align: 'left', style: tstyle('footerText'), size: tsz('footerText'), color: TEXT_DIM, tone: 'plain', anchorBottom: true });
   }
 
   const header = items.filter(i => i.region === 'header' && !i.hidden);
   const headerBottom = Math.max(LH_TOP, ...header.map(i => i.box.y + i.box.h));
   const legacyTop = LH_TOP + 70;
-  const bodyTopAuto = !active || cfg!.bodyTop == null;
-  const bodyTop = !active ? legacyTop
-    : cfg!.bodyTop != null ? cfg!.bodyTop * MM
+  const bodyTopAuto = !cfg || cfg.bodyTop == null;
+  const bodyTop = !flow ? legacyTop
+    : cfg?.bodyTop != null ? cfg.bodyTop * MM
     : Math.max(legacyTop, headerBottom + BODY_GAP);
   const lp = tpl?.letterpadMode
     ? { top: Math.max(0, tpl.letterpadHeaderMm ?? 45) * MM, bottom: A4.h - Math.max(20, Math.max(0, tpl.letterpadFooterMm ?? 30) * MM) }
@@ -1660,7 +2094,7 @@ function drawTextItem(doc: jsPDF, it: LayoutItem) {
     doc.setFillColor('#ffffff');
     doc.rect(it.box.x, it.box.y, it.pillW ?? it.box.w, it.box.h, 'F');
   }
-  doc.setFont(PDF_FONT, style);
+  setFace(doc, style);
   doc.setFontSize(size);
   doc.setTextColor(it.color ?? BLACK);
   if (it.tone === 'twoTone') {
@@ -1738,14 +2172,13 @@ function drawNablBadge(doc: jsPDF, x: number, topY: number, size: number, url: s
     doc.setDrawColor('#10b981');
     doc.setFillColor('#ecfdf5');
     doc.roundedRect(x, topY + 5 * k, size, 15 * k, 3 * k, 3 * k, 'FD');
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8 * k);
+    setFace(doc, twt('nablChip'));
+    doc.setFontSize(tsz('nablChip') * k);
     doc.setTextColor('#059669');
     doc.text('NABL', x + size / 2, topY + 15.5 * k, { align: 'center' });
   }
   if (number) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(6.5);
+    typeset(doc, 'nablNumber');
     doc.setTextColor(TEXT_DIM);
     doc.text(number, x + size / 2, topY + size + 6, { align: 'center' });
   }
@@ -1822,34 +2255,29 @@ function drawPatientBlockThreeCol(
   // separator into the Specimen(s) column (was overlapping at 13pt).
   const patientName = snap.patient?.displayName ?? '—';
   const nameMaxW = col1W - 16;
-  doc.setFont(PDF_FONT, 'bold');
-  let nameSize = 13;
-  doc.setFontSize(nameSize);
+  let nameSize = typeset(doc, 'patientName');
   while (nameSize > 8 && doc.getTextWidth(patientName) > nameMaxW) { nameSize -= 0.5; doc.setFontSize(nameSize); }
   doc.setTextColor(BLACK);
   doc.text(patientName, x1, y);
   y += 16;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
   doc.setTextColor(BLACK);
-  if (snap.patient?.age != null) {
-    doc.text(`Age : ${snap.patient.age} Years`, x1, y);
+  if (snapAge(snap, 'Years')) {
+    drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x1, y, 'demoLabel', 'demoValue');
     y += 12;
   }
   if (snap.patient?.sex) {
-    doc.text(`Sex : ${snap.patient.sex}`, x1, y);
+    drawPair(doc, 'Sex : ', snap.patient.sex, x1, y, 'demoLabel', 'demoValue');
     y += 12;
   }
   const mrn = (snap.patient?.mrn ?? '').trim();
   if (mrn) {
-    doc.text(`MRN : ${mrn}`, x1, y);
+    drawPair(doc, 'MRN : ', mrn, x1, y, 'mrnLabel', 'mrnValue');
   }
 
   // ── Col 2 — Specimens collected + Ref doctor ──
   const x2 = MARGIN_X + col1W + 10;
   y = top + 18;
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(9.5);
+  typeset(doc, 'patientCaption');
   doc.setTextColor(BLUE);
   doc.text('Specimen(s) :', x2, y);
   y += 13;
@@ -1863,8 +2291,7 @@ function drawPatientBlockThreeCol(
       .map(t => (t.sampleType ?? '').trim())
       .filter(isConcreteSpecimen)
   ));
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'patientList');
   doc.setTextColor(BLACK);
   if (specimens.length > 0) {
     const text = specimens.join(', ');
@@ -1872,17 +2299,16 @@ function drawPatientBlockThreeCol(
     doc.text(lines, x2, y);
     y += lines.length * 11 + 6;
   } else if (snap.patient?.phone) {
-    doc.text(`Phone: ${snap.patient.phone}`, x2, y);
+    drawPair(doc, 'Phone: ', snap.patient.phone, x2, y, 'demoLabel', 'demoValue');
     y += 14;
   }
 
   if (snap.order?.refDoctorName) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(9);
+    typeset(doc, 'demoLabel');
     doc.setTextColor(BLACK);
     doc.text('Ref. By: ', x2, y);
     const refW = doc.getTextWidth('Ref. By: ');
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'demoValue');
     doc.text(snap.order.refDoctorName, x2 + refW, y);
   }
 
@@ -1900,15 +2326,13 @@ function drawPatientBlockThreeCol(
     y += 6;
   }
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8.5);
   doc.setTextColor(BLACK);
   const drawTimeLine = (label: string, value: string) => {
     if (!value) return;
-    doc.setFont(PDF_FONT, 'normal');
+    typeset(doc, 'regLabel');
     doc.text(label, x3, y);
     const labelW = doc.getTextWidth(label);
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'regValue');
     doc.text(value, x3 + labelW + 2, y);
     y += 11;
   };
@@ -1942,7 +2366,18 @@ function drawPatientBlockColumns(
   cols.forEach((keys, ci) => {
     const x = MARGIN_X + ci * colW + 10;
     let y = top + 16;
-    for (const key of keys) y = drawPatientItem(doc, key, x, colW - 16, y, snap, report);
+    for (let k = 0; k < keys.length; k++) {
+      const key = keys[k];
+      // Two QRs placed one after the other sit side by side when they fit —
+      // stacked they would double the strip's height.
+      const next = keys[k + 1];
+      if (isPatientStripQrKey(key) && next && isPatientStripQrKey(next) && next !== key) {
+        y = drawPatientQrPair(doc, [key, next], x, colW - 16, y, snap);
+        k++;
+        continue;
+      }
+      y = drawPatientItem(doc, key, x, colW - 16, y, snap, report);
+    }
     if (y > maxBottom) maxBottom = y;
   });
   const blockBottom = maxBottom + 4;
@@ -1966,12 +2401,24 @@ function drawPatientLabelled(
 ): number {
   const v = (value ?? '').trim();
   if (!v) return y;
-  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+  typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
   doc.text(label, x, y);
   const lw = doc.getTextWidth(label);
-  doc.setFont(PDF_FONT, 'bold');
+  typeset(doc, 'demoValue');
   doc.text(v, x + lw, y);
   return y + 12;
+}
+
+/** A patient "Label : value" line. Classic prints it as ONE plain string in
+ *  the label's style (as it always did); a theme with `splitLabels` prints
+ *  the label regular and the value in the value's (semibold) style. */
+function drawPair(doc: jsPDF, label: string, value: string, x: number, y: number, labelEl: TypeEl, valueEl: TypeEl): void {
+  typeset(doc, labelEl);
+  if (!TYPE.splitLabels) { doc.text(`${label}${value}`, x, y); return; }
+  doc.text(label, x, y);
+  const lw = doc.getTextWidth(label);
+  typeset(doc, valueEl);
+  doc.text(value, x + lw, y);
 }
 
 function drawPatientItem(
@@ -1980,40 +2427,40 @@ function drawPatientItem(
 ): number {
   switch (key) {
     case 'name':
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(12); doc.setTextColor(BLACK);
+      typeset(doc, 'patientNameColumn'); doc.setTextColor(BLACK);
       doc.text(snap.patient?.displayName ?? '—', x, y);
       return y + 16;
     case 'age':
-      if (snap.patient?.age == null) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Age : ${snap.patient.age} Years`, x, y); return y + 12;
+      if (!snapAge(snap, 'Years')) return y;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'sex':
       if (!snap.patient?.sex) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Sex : ${snap.patient.sex}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Sex : ', snap.patient.sex, x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'mrn': {
       const mrn = (snap.patient?.mrn ?? '').trim(); if (!mrn) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`MRN : ${mrn}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'MRN : ', mrn, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
     }
     case 'phone':
       if (!snap.patient?.phone) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Phone : ${snap.patient.phone}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Phone : ', snap.patient.phone, x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'orderid': {
       // The human order number (LAB-2608-000049) — not a slice of the GUID,
       // which is what staff were being asked to read out loud.
       const oid = snap.order?.orderNumber?.trim() || (snap.order?.id ?? '').slice(0, 8);
       if (!oid) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Order : ${oid}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Order : ', oid, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
     }
     case 'refdoctor': {
       if (!snap.order?.refDoctorName) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
       doc.text('Ref. By: ', x, y);
       const rw = doc.getTextWidth('Ref. By: ');
-      doc.setFont(PDF_FONT, 'bold'); doc.text(snap.order.refDoctorName, x + rw, y);
+      typeset(doc, 'demoValue'); doc.text(snap.order.refDoctorName, x + rw, y);
       return y + 12;
     }
     case 'refhospital':
@@ -2026,10 +2473,10 @@ function drawPatientItem(
       return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y);
     case 'specimen': {
       const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)));
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLUE);
+      typeset(doc, 'patientCaptionColumn'); doc.setTextColor(BLUE);
       doc.text('Specimen(s) :', x, y); y += 12;
       if (specimens.length) {
-        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        typeset(doc, 'patientList'); doc.setTextColor(BLACK);
         const lines = doc.splitTextToSize(specimens.join(', '), colW);
         doc.text(lines, x, y); y += lines.length * 11 + 2;
       }
@@ -2042,6 +2489,9 @@ function drawPatientItem(
       // underneath: the "random barcode with a random id below it". Now it is a
       // real Code-128 of the order number, with no digits beneath.
       return drawReportBarcode(doc, snap, x, y, Math.min(colW, 150));
+    case PROFILE_QR_KEY:
+    case ORDER_QR_KEY:
+      return drawPatientQrPair(doc, [key], x, colW, y, snap);
     case 'registered': return drawPatientTimeItem(doc, 'Registered on: ', formatShort(snap.order?.createdAt), x, y);
     case 'collected':  return drawPatientTimeItem(doc, 'Collected on: ',  formatShort(snap.order?.createdAt), x, y);
     case 'reported':   return drawPatientTimeItem(doc, 'Reported on: ',   formatShort(report.createdAt), x, y);
@@ -2050,28 +2500,64 @@ function drawPatientItem(
       const val = parsePatientAttributes(snap)[key];
       if (val == null || String(val).trim() === '') return y;
       const label = `${fld?.title ?? key}: `;
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      typeset(doc, 'fieldLabel'); doc.setTextColor(BLACK);
       doc.text(label, x, y);
-      doc.setFont(PDF_FONT, 'normal'); doc.setTextColor(TEXT_DIM);
+      typeset(doc, 'fieldValue'); doc.setTextColor(TEXT_DIM);
       doc.text(String(val), x + doc.getTextWidth(label), y);
       return y + 12;
     }
   }
 }
 
+/** Patient-strip QR size (pt). ~20 mm — comfortably scannable from paper. */
+const STRIP_QR_SIZE = 58;
+const STRIP_QR_GAP = 10;
+
+/** The URL a patient-strip QR key encodes for this report, or null when the
+ *  data it needs is missing (no patient id / no tracking token). */
+export function patientStripQrValue(key: string, snap: ReportSnapshot, base: string, trackToken: string | null): string | null {
+  if (key === PROFILE_QR_KEY) return patientProfileQrUrl(base, snap.patient?.id);
+  if (key === ORDER_QR_KEY) return orderReportQrUrl(base, trackToken);
+  return null;
+}
+
+/** Draw one or two patient-strip QRs in a row, each with its caption beneath.
+ *  A QR whose value is missing costs no space. Returns the new y. */
+function drawPatientQrPair(doc: jsPDF, keys: string[], x: number, colW: number, y: number, snap: ReportSnapshot): number {
+  const items = keys
+    .map(k => ({ k, v: patientStripQrValue(k, snap, STRIP_QR.base, STRIP_QR.trackToken) }))
+    .filter((i): i is { k: string; v: string } => !!i.v);
+  if (!items.length) return y;
+  // Side by side when both fit the column; otherwise one per row.
+  const size = Math.max(40, Math.min(STRIP_QR_SIZE, colW));
+  const perRow = items.length > 1 && size * 2 + STRIP_QR_GAP <= colW ? 2 : 1;
+  const top = y - 8;   // y is a text baseline; the QR's top edge sits at the cap line
+  let rowTop = top;
+  for (let i = 0; i < items.length; i += perRow) {
+    items.slice(i, i + perRow).forEach((it, j) => {
+      const qx = x + j * (size + STRIP_QR_GAP);
+      paintQr(doc, it.v, qx, rowTop, size);
+      typeset(doc, 'qrCaption'); doc.setTextColor(BLACK);
+      doc.text(PATIENT_STRIP_QR_CAPTIONS[it.k] ?? '', qx + size / 2, rowTop + size + 7, { align: 'center' });
+    });
+    rowTop += size + 12;
+  }
+  return rowTop + 8;
+}
+
 function drawPatientTimeItem(doc: jsPDF, label: string, value: string, x: number, y: number): number {
   if (!value) return y;
-  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+  typeset(doc, 'regLabel'); doc.setTextColor(BLACK);
   doc.text(label, x, y);
   const lw = doc.getTextWidth(label);
-  doc.setFont(PDF_FONT, 'bold'); doc.text(value, x + lw, y);
+  typeset(doc, 'regValue'); doc.text(value, x + lw, y);
   return y + 11;
 }
 
 /** Patient-block: 4-column labelled grid (compact, label-above-value).
  *  Two rows of four cells each. No vertical separators — the labels
  *  themselves act as visual anchors. Best when the lab wants a more
- *  "form" feel than the Drlogy 3-column block. */
+ *  "form" feel than the classic 3-column block. */
 function drawPatientBlockFourCol(
   doc: jsPDF,
   snap: ReportSnapshot,
@@ -2083,7 +2569,7 @@ function drawPatientBlockFourCol(
   const colW = w / 4;
   const mrn = (snap.patient?.mrn ?? '').trim();
   const ageSex = [
-    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snapAge(snap, 'yrs'),
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(
@@ -2114,12 +2600,10 @@ function drawPatientBlockFourCol(
     for (let c = 0; c < 4; c++) {
       const x = MARGIN_X + c * colW + 10;
       const y = top + r * (blockH / 2) + 13;
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(6.5);
+      typeset(doc, 'gridLabel');
       doc.setTextColor(TEXT_DIM);
       doc.text(cells[r][c].label, x, y);
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(9.5);
+      typeset(doc, 'gridValue');
       doc.setTextColor(TEXT);
       const fit = doc.splitTextToSize(cells[r][c].value, colW - 20)[0] ?? cells[r][c].value;
       doc.text(fit, x, y + 12);
@@ -2146,7 +2630,7 @@ function drawPatientBlockStacked(
   const mrn = (snap.patient?.mrn ?? '').trim();
   const orderShort = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
   const ageSex = [
-    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snapAge(snap, 'yrs'),
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(
@@ -2173,12 +2657,10 @@ function drawPatientBlockStacked(
   let y = top + 16;
   const labelW = 110;
   rows.forEach(row => {
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(9);
+    typeset(doc, 'stackLabel');
     doc.setTextColor(TEXT_DIM);
     doc.text(`${row.label} :`, MARGIN_X, y);
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(9.5);
+    typeset(doc, 'stackValue');
     doc.setTextColor(TEXT);
     doc.text(row.value, MARGIN_X + labelW, y);
     y += 14;
@@ -2236,11 +2718,19 @@ type CellHookArg = {
   cell: { x: number; y: number; width: number; height: number; text?: string[]; styles?: Record<string, unknown> };
 };
 
+/** The one key a blank-then-repaint stash is filed under. It MUST carry the
+ *  section: autotable numbers the head row 0 and body row 0 alike, and the
+ *  repeated column header of every continuation page is drawn AFTER body row
+ *  0 has been stashed. Keyed by row:col alone, the first result's reference
+ *  bands were repainted into the "Reference Range" header cell of page 2+
+ *  (owner's report 2026-09-29, "our major bug"). */
+const cellKey = (d: CellHookArg): string => `${d.section}:${d.row.index}:${d.column.index}`;
+
 function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void {
   const raw = Array.isArray(d.cell.text) ? d.cell.text.join(' ') : String(d.cell.text ?? '');
-  const safe = pdfSafeText(raw, { keepSymbols: true });
+  const safe = pdfSafeText(raw, { keepSymbols: true, native: EMBEDDED });
   if (!hasSuperscript(safe)) return;
-  store.set(`${d.section}:${d.row.index}:${d.column.index}`, { text: safe, styles: d.cell.styles ?? {} });
+  store.set(cellKey(d), { text: safe, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
 }
 
@@ -2262,17 +2752,21 @@ function stashQualifiedRangeCell(
 ): void {
   if (d.section !== 'body' || d.column.index !== rangeColIdx) return;
   const lines = (Array.isArray(d.cell.text) ? d.cell.text : [String(d.cell.text ?? '')])
-    .map(l => pdfSafeText(l, { keepSymbols: true }));
+    .map(l => pdfSafeText(l, { keepSymbols: true, native: EMBEDDED }));
   if (lines.length < 2) return;                       // plain single-band cell
-  store.set(`${d.row.index}:${d.column.index}`, { lines, styles: d.cell.styles ?? {} });
+  store.set(cellKey(d), { lines, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
 }
 
 function drawQualifiedRangeCell(
   doc: jsPDF, store: Map<string, QualCell>, d: CellHookArg
 ): void {
-  const q = store.get(`${d.row.index}:${d.column.index}`);
+  if (d.section !== 'body') return;
+  const q = store.get(cellKey(d));
   if (!q) return;
+  // Painted once, for THIS cell: the stash never outlives the cell it was
+  // blanked for, so nothing can leak onto a later page.
+  store.delete(cellKey(d));
   const st = q.styles as { fontSize?: number; cellPadding?: number };
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
   const padL = typeof st.cellPadding === 'number' ? st.cellPadding : 4;
@@ -2285,7 +2779,7 @@ function drawQualifiedRangeCell(
   // same left edge, uniformly dim. The old first-line-bigger treatment was
   // for "matched value + qualifier" pairs, which no longer print.
   q.lines.forEach(line => {
-    doc.setFont(PDF_FONT, 'normal');
+    setFace(doc, twt('range'));
     doc.setFontSize(fs);
     doc.setTextColor(TEXT_DIM);
     if (hasSuperscript(line)) {
@@ -2300,11 +2794,15 @@ function drawQualifiedRangeCell(
 }
 
 function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHookArg): void {
-  const sup = store.get(`${d.section}:${d.row.index}:${d.column.index}`);
+  const sup = store.get(cellKey(d));
   if (!sup) return;
+  store.delete(cellKey(d));
   const st = sup.styles as { fontSize?: number; fontStyle?: string; textColor?: unknown; cellPadding?: number };
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
-  doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
+  // Classic redraws in its regular / bold face; an embedded theme in the
+  // cell's own style (semibold, italic …).
+  if (EMBEDDED) doc.setFont(SOURCE_SANS_FAMILY, String(st.fontStyle ?? 'normal'));
+  else doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
   doc.setFontSize(fs);
   const tc = st.textColor;
   doc.setTextColor(typeof tc === 'string' ? tc
@@ -2340,6 +2838,14 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
 
 interface PanelRowData {
   kind: 'param' | 'note';
+  /** The value's parameter name (param rows) — a Custom layout's manual row
+   *  assignment keys on it. */
+  rowKey?: string;
+  /** A technician report note (markup) — a full-width row painted with real
+   *  bold / italic / underline and lists (report-note-pdf.ts). */
+  techNote?: string;
+  /** Its bold opening label ("Note:", "Note (SGOT):"). */
+  techLabel?: string;
   /** The row's test is not validated yet — kept off the abnormal-results sheet. */
   unvalidated?: boolean;
   name?: string;
@@ -2362,6 +2868,10 @@ interface PanelRowData {
   color?: string | null;
   /** Admin-configured conditional bold (condition `then.bold`). */
   bold?: boolean;
+  /** The tech's "print in bold" pick for this value (snapshot `result.bold`)
+   *  — bolds the RESULT cell exactly like an abnormal value; it only adds
+   *  bold, never removes the abnormal styling. */
+  printBold?: boolean;
   /** Text-typed cell values keyed by column name (e.g. description) so the
    *  columnar renderer can fill admin text columns instead of leaving them
    *  permanently blank. */
@@ -2388,6 +2898,13 @@ function methodForValue(
     if ((hit ?? '').trim()) return hit!.trim();
   }
   return (t.method ?? '').trim() || undefined;
+}
+
+/** The tech's "print in bold" value names on a test's snapshot
+ *  (`result.bold`, written at result entry by the B toggle). */
+export function printBoldNames(t: { result?: Record<string, unknown> | null }): Set<string> {
+  const raw = t.result?.['bold'];
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : []);
 }
 
 /** Sub-line text for a group's methods: one method → "Hexokinase"; values
@@ -2419,6 +2936,10 @@ function colorSeverity(hex: string | null | undefined): 'high' | 'warn' | 'norma
 
 interface PanelGroup {
   testName: string;
+  /** Built from a REAL saved result (a report, not an editor preview): a
+   *  value-less row is omitted, and a block left with no value is dropped
+   *  (owner 2026-10-03: "if no value, don't show it in the report"). */
+  fromResults?: boolean;
   /** Department name — drives per-department section grouping + its columns. */
   department?: string;
   /** The resolved per-department column layout for this test (incl. linkedNext
@@ -2507,12 +3028,35 @@ function sentencesFitTable(layout: ResolvedReportLayout | undefined): boolean {
  *  rows, in print order — a Sentence above the results table lands before
  *  the rows, one below it after them. Off for a member ordered through a
  *  profile/package (notes follow what was ORDERED). */
+/** A report cell with NO value: null / undefined / an empty (or whitespace)
+ *  string / a multi-pick with nothing in it. A dash is a RESULT the user
+ *  typed and always prints (review 2026-10-03). */
+export function isBlankReportValue(v: unknown): boolean {
+  if (v === undefined || v === null) return true;
+  if (Array.isArray(v)) return v.every(x => isBlankReportValue(x));
+  return String(v).trim() === '';
+}
+
+/** Drop (in place) every block built from real results that has no value
+ *  row left. Preview blocks and blocks with any value are untouched. */
+export function dropValuelessGroups<T extends { fromResults?: boolean; rows: { kind?: string }[] }>(groups: T[]): T[] {
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const g = groups[i];
+    if (g.fromResults && !g.rows.some(r => r.kind === 'param')) groups.splice(i, 1);
+  }
+  return groups;
+}
+
 function buildPanelGroup(
   t: NonNullable<ReportSnapshot['tests']>[number],
   layout: ResolvedReportLayout | undefined,
   opts: { sentences?: boolean } = {}
 ): PanelGroup {
+  // A real report (a saved result exists) never prints a value-less row; an
+  // editor preview (no saved result) keeps every row as a placeholder.
+  const fromResults = !!t.result;
   const group: PanelGroup = {
+    fromResults,
     testName: t.name ?? reportDisplayName(layout?.testName) ?? 'Test',
     department: (t.department ?? '').trim() || undefined,
     columns: layout?.columns ?? [],
@@ -2555,6 +3099,7 @@ function buildPanelGroup(
     const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
     const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+    const boldNames = printBoldNames(t);
     const savedValues = (t.result?.['values'] ?? undefined) as Record<string, SavedFlag> | undefined;
     for (const sec of visibleSecs.slice(firstGrid)) {
       if (sec.type !== 'grid') {
@@ -2584,7 +3129,19 @@ function buildPanelGroup(
         const savedRaw = sv && typeof sv === 'object' && 'flag' in sv ? sv.flag
           : rc.saved ? rc.flag : (rowFlag ?? rc.flag);
         const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
-        const rangeText = rangeCellText(coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''), r.unit);
+        // No value → no row (owner 2026-10-03).
+        if (fromResults && isBlankReportValue(resultText)) continue;
+        // Range / unit print what was SAVED with the result (the snapshot's
+        // per-value `range` / `unit`, frozen at sign-off) — the layout's cell
+        // is the live Test Master and only stands in for a value saved
+        // without them (legacy reports; frozen for good once the report's
+        // PDF is stored). Audit H1: a released report must not change when
+        // the Test Master is edited later.
+        const savedObj = sv && typeof sv === 'object' ? sv as SavedFlag : undefined;
+        const savedRange = (savedObj?.range ?? '').toString().trim();
+        const savedUnit = (savedObj?.unit ?? '').toString().trim();
+        const rangeText = rangeCellText(
+          rangeSrc ? (savedRange || coerceCellText(r.cells[rangeSrc.name])) : '', savedUnit || r.unit);
         // Reports never print C / Critical (owner 2026-09-26: critical is
         // internal) — a critical maps to H / L by its direction.
         const saved = reportFlag(savedRaw, resultText, rangeText || (sv as SavedFlag | undefined)?.range);
@@ -2605,19 +3162,21 @@ function buildPanelGroup(
         }
         group.rows.push({
           kind: 'param',
+          rowKey: r.parameterName || undefined,
           name: reportDisplayName(r.title) || humanize(r.parameterName ?? ''),
           result: resultText,
           range: rangeText,
           // Prefer the Unit column when present; otherwise fall back to the
           // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL")
           // — but never grow a unit onto a qualitative result ("Normal mg/dL").
-          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '')
-            || (looksNumeric(resultText) ? (r.unit ?? '') : ''),
+          unit: (unitSrc ? (savedUnit || coerceCellText(r.cells[unitSrc.name])) : '')
+            || (looksNumeric(resultText) ? (savedUnit || r.unit || '') : ''),
           flag: letter,
           isLow,
           abnormal: hasSaved ? saved.abnormal : (sev === 'high' || sev === 'warn' || !!letter || saved.abnormal),
           color: r.color ?? null,
           bold: !!r.isBold,
+          printBold: !!r.parameterName && boldNames.has(r.parameterName),
           texts: Object.keys(texts).length ? texts : undefined,
           description: descriptionText(r.cells) || undefined,
           method: methodForValue(t, r.parameterName),
@@ -2639,8 +3198,11 @@ function buildPanelGroup(
   // Per-report picker applies here too (as in renderLegacyTest): an unticked
   // value never prints — nor lands on the abnormal-results sheet.
   const hiddenLegacy = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+  const boldLegacy = printBoldNames(t);
   for (const [paramName, v] of Object.entries(values ?? {})) {
     if (hiddenLegacy.has(paramName)) continue;
+    // No value → no row (owner 2026-10-03).
+    if (isBlankReportValue(v?.value)) continue;
     // Criticals print as H / L — never C (report rule; see report-flag.ts).
     const rf = reportFlag(v?.flag, v?.value, v?.range);
     group.rows.push({
@@ -2648,6 +3210,7 @@ function buildPanelGroup(
       texts: v?.description ? { description: v.description } : undefined,
       description: descriptionText({ description: v?.description }) || undefined,
       kind: 'param',
+      rowKey: paramName,
       name: humanize(paramName),
       result: String(v?.value ?? '—'),
       range: rangeCellText(v?.range, v?.unit),
@@ -2655,6 +3218,7 @@ function buildPanelGroup(
       flag: rf.flag,
       isLow: rf.isLow,
       abnormal: rf.abnormal,
+      printBold: boldLegacy.has(paramName),
       method: methodForValue(t, paramName),
     });
   }
@@ -2690,23 +3254,40 @@ function renderScopeHeading(
 ): number {
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
-  // Department band — the strongest heading inside the body (Drlogy pattern:
+  // Department band — the strongest heading inside the body (classic pattern:
   // clear department separation carries the whole multi-department report).
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(10.5);
+  // A taller department name (Modern) sits lower on the same rule rhythm.
+  const grow = TYPE.flowHeader ? Math.max(0, Math.round((tsz('deptName') - 10.5) * 0.7)) : 0;
+  typeset(doc, 'deptName');
   doc.setTextColor(theme.primary);
-  doc.text(text, MARGIN_X, y + 12);
+  doc.text(text, MARGIN_X, y + 12 + grow);
   if (rightText) {
     // e.g. "Sample ID: 26001" — ties the department block to its tube(s).
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(8.5);
+    typeset(doc, 'deptMeta');
     doc.setTextColor(TEXT_DIM);
-    doc.text(rightText, A4.w - MARGIN_X, y + 12, { align: 'right' });
+    doc.text(rightText, A4.w - MARGIN_X, y + 12 + grow, { align: 'right' });
   }
   doc.setDrawColor(theme.primary);
-  doc.setLineWidth(1);
-  doc.line(MARGIN_X, y + 17, A4.w - MARGIN_X, y + 17);
-  return y + 23;
+  doc.setLineWidth(TYPE.deptRule);
+  doc.line(MARGIN_X, y + 17 + grow, A4.w - MARGIN_X, y + 17 + grow);
+  return y + 23 + grow;
+}
+
+/** The panel/profile title band — "COMPLETE BLOOD COUNT" etc. — SAME fill,
+ *  text colour and type token (`panelName`) as the band renderColumnarTable
+ *  draws as the first row of a multi-parameter panel's block (owner,
+ *  2026-10-02: the one-page profile's own section context must read like
+ *  the continuous report's, not a bare box arrangement with no heading). */
+function drawPanelNameBand(doc: jsPDF, text: string, x: number, y: number, w: number): number {
+  const label = (text ?? '').trim();
+  if (!label) return y;
+  const size = typeset(doc, 'panelName');
+  const h = Math.max(16, Math.round(size * 1.6 + 7));
+  doc.setFillColor('#eef2f7');
+  doc.rect(x, y, w, h, 'F');
+  doc.setTextColor(theme.primary);
+  doc.text(label.toUpperCase(), x + 6, y + h / 2 + size * 0.33, { baseline: 'alphabetic' });
+  return y + h;
 }
 
 /** Distinct sample IDs a department block prints on its band, in first-seen
@@ -2760,7 +3341,16 @@ function renderContinuousTable(
     // Hold back the room this department's signatures need (plus the
     // End-of-Report line when they are the deferred final block) so the table
     // breaks EARLY and the signatures land under the last rows they belong to.
-    const reserve = signatureBlockHeight(sigs) + (isLast && deferLastSigs && sigs?.length ? 26 : 0);
+    // Only the signatories actually present count (7 configured, 2 resolved →
+    // one row of 2), and a department with none reserves nothing.
+    const sigH = signatureBlockHeight(sigs);
+    // This department's technician note prints after its last table run,
+    // before its sign-off — the sign-off reserve makes room for it too.
+    const deptNote = TECH_DEPT_NOTES.get(dept.toUpperCase());
+    if (deptNote) TECH_DEPT_NOTES.delete(dept.toUpperCase());
+    const deptNoteLabel = deptNote ? `${titleCaseHeader(deptNote.name)} note:` : '';
+    const deptNoteH = deptNote ? techNoteBlockHeight(doc, deptNote.note, deptNoteLabel) : 0;
+    const reserve = sigH > 0 ? sigH + SIGN_OFF_SLACK + deptNoteH + (isLast && deferLastSigs ? 26 : 0) : 0;
     // Partition the department's groups into consecutive RUNS sharing an
     // effective column set — a group with its own column override renders
     // in its own table run. With zero overrides there is exactly ONE run
@@ -2796,16 +3386,17 @@ function renderContinuousTable(
       y = renderColumnarTable(doc, runs[ri].groups, runs[ri].cols, y, practice, dept || null, runReserve,
         runs[ri].overridden);
     }
+    if (deptNote) y = drawTechNoteBlock(doc, deptNote.note, deptNoteLabel, y + 2, practice);
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
     // department defers its signatures to after the End-of-Report marker.
-    if (sigs?.length) {
+    if (sigH > 0 && sigs) {
       if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
       else {
         // Sign-off sits at the FOOT of the department's last page, directly
         // above the footer strip — not floating under the last row with a
         // blank half-page beneath (the page-2 bug in REPORT-49289714).
-        const anchored = Math.max(y, A4.h - FOOTER_RESERVE - signatureBlockHeight(sigs));
+        const anchored = Math.max(y, A4.h - MARGIN_BOTTOM - sigH);
         y = drawInlineSignatures(doc, sigs, anchored, practice);
         // The signatures close this department's page; the next department
         // opens clean rather than squeezing under a sign-off. When the theme
@@ -2820,82 +3411,344 @@ function renderContinuousTable(
   return y;
 }
 
-/** Vertical space one signature block needs: 12pt lead + 74pt of
- *  image/name/title/reg per row, wrapped 3-up and capped at 7 signatories.
- *  Callers RESERVE this in the table's bottom margin so the signatures can
- *  never be orphaned onto a page of their own. */
-/** One signature row: 12pt lead + 74pt of image/name/title/reg. */
-const SIG_BLOCK_H = 86;
-/** The page's REAL footer band: hairline at h-30, generated-on at h-18, the
- *  disclaimer stacking up to ≈h-58. Signatures anchor to THIS — anchoring to
- *  MARGIN_BOTTOM (the 150pt table floor) parked them ~100pt above the
- *  disclaimer with a dead band beneath, which is not how a lab report ends. */
-const FOOTER_RESERVE = 64;
+// ── Profile ONE-PAGE report layout (owner, 2026-10-02) ──────────────────
 
-function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
-  const n = Math.min(sigs?.length ?? 0, 7);
-  if (n === 0) return 0;
-  return Math.ceil(n / 3) * 86;
+/** Every analyzer image code attached to ANY member line of this profile
+ *  bundle, merged into one map — the connector routes an M51 image onto
+ *  whichever member line matches its analyte (RouteTarget), so the box
+ *  doesn't care which specific line carried it. */
+function profileAnalyzerImages(snap: ReportSnapshot, pkg: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const t of snap.tests ?? []) {
+    const legacy = t.packageType == null;
+    const b = t.profileTestId ?? (t.packageType === 'profile' ? t.packageTestId : null) ?? (legacy ? t.packageTestId : null);
+    if (b !== pkg) continue;
+    for (const [code, url] of Object.entries(t.analyzerImages ?? {})) if (url) out[code] = url;
+  }
+  return out;
 }
 
-/** Signature columns drawn INLINE at the end of a department block (image +
- *  name + title, spread evenly). Callers reserve the space up-front, so the
- *  page-break here is only a last-resort guard. */
+/** The one-page table box's columns: the SAME effective set the continuous
+ *  report would print for this profile (its own override, else its
+ *  department's — `effectiveColumns` / `deptColumns`), minus the ones the lab
+ *  switched off in the designer (by column name or type). The name and
+ *  result columns always print. */
+function onePageTableColumns(group: PanelGroup, box: PageLayoutBox): ReportColumn[] {
+  const base = group.columnsOverridden && group.columns?.length ? effectiveColumns(group.columns) : deptColumns([group]);
+  const off = new Set((box.columns ?? []).filter(c => !c.visible).map(c => c.name));
+  return base.filter(c => c.type === 'name' || c.type === 'result' || !(off.has(c.name) || off.has(c.type)));
+}
+
+/** Render one profile's CUSTOM LAYOUT (owner 2026-10-02): the designer's
+ *  pages, each opening with the Report template's letterhead + patient block
+ *  (and footer, drawn for every page at the end), the profile's boxes in the
+ *  body between them:
+ *   · the results table is the report's OWN renderColumnarTable aimed at a
+ *     box. AUTO mode: rows flow through the table boxes in page order — each
+ *     box takes the whole rows that fit, the rest continue in the next
+ *     ("continued") box; the last box lets any remainder run on (never a cut
+ *     row). MANUAL mode: each box prints the rows chosen for it; a row in no
+ *     box prints in the last one (a result is never dropped);
+ *   · a missing analyzer graph hides its box; a page left with nothing to
+ *     print is dropped;
+ *   · the department signs here only when `signHere` (this profile is the
+ *     department's LAST item in the report) and the layout has a signatures
+ *     box — otherwise that box is left out.
+ *  `topY`: the open page is still blank below the patient block — reuse it
+ *  for the first page instead of forcing an empty one.
+ *  Returns the y under the printed content (End of Report goes there) and
+ *  whether the department signed. */
+function renderCustomLayout(
+  doc: jsPDF, pkg: string, group: PanelGroup, layout: ResolvedReportLayout,
+  practice: NonNullable<ReportPdfInput['practice']>, snap: ReportSnapshot, report: ReportPdfInput['report'],
+  deptSigs: ReportSignature[], opts: { topY?: number; signHere: boolean },
+): { bottom: number; signed: boolean } {
+  const pl = readPageLayout(layout.sections);
+  const pages = pl?.pages ?? [];
+  const images = profileAnalyzerImages(snap, pkg);
+  const availCodes = new Set(Object.keys(images));
+  const labelFont = EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT;
+  const floor = A4.h - footerFloor(LAYOUT);
+  const chain = tableChain(pages);
+  const lastTableId = chain[chain.length - 1]?.box.id;
+  const manual = pl?.tableMode === 'manual';
+  const rowKeys = group.rows.filter(r => r.kind === 'param' && r.rowKey).map(r => r.rowKey!);
+
+  // MANUAL: each table box's rows (a note row rides with the value above it).
+  const manualRows = new Map<string, PanelRowData[]>();
+  if (manual && chain.length) {
+    const byBox = manualRowsByBox(chain, rowKeys);
+    let owner = chain[0].box.id;
+    for (const r of group.rows) {
+      if (r.kind === 'param') {
+        owner = [...byBox.entries()].find(([, set]) => r.rowKey && set.has(r.rowKey))?.[0]
+          ?? (r.rowKey ? lastTableId! : owner);
+      }
+      const list = manualRows.get(owner) ?? [];
+      list.push(r);
+      manualRows.set(owner, list);
+    }
+  }
+  let remaining = group.rows;                       // AUTO: rows not printed yet
+  const tableRowsFor = (box: PageLayoutBox): PanelRowData[] => (manual ? (manualRows.get(box.id) ?? []) : remaining);
+
+  let opened = 0, signed = false, bottom = opts.topY ?? MARGIN_TOP, lastPdfPage = doc.getNumberOfPages();
+  // The signatures box signs only if NO results print after it (a table
+  // that continues on a later page): decided after all pages, then drawn on
+  // its own page (jsPDF setPage) — else the sign-off follows the profile.
+  let pendingSig: { pdfPage: number; layoutPage: number; x: number; y: number; w: number } | null = null;
+  let lastTableLayoutPage = -1;
+  for (let i = 0; i < pages.length; i++) {
+    const live = printableBoxes(pages[i].boxes);
+    const hasContent = live.some(b =>
+      (b.kind === 'table' && tableRowsFor(b).length > 0) ||
+      (b.kind === 'analyzer' && !!b.ref && availCodes.has(b.ref)) ||
+      (b.kind === 'chart' && layout.sections.some(sx => sx.id === b.ref && sx.type === 'chart' && !!sx.trend)) ||
+      (b.kind === 'notes' && !!(b.text ?? b.label ?? '').trim()) ||
+      (b.kind === 'signatures' && opts.signHere && !signed && deptSigs.length > 0));
+    if (!hasContent && !KEEP_EMPTY_LAYOUT_PAGES) continue; // a page with nothing to print is dropped
+
+    let y: number;
+    if (opened === 0 && opts.topY != null) {
+      y = opts.topY;                                 // the open page is still blank — use it
+    } else {
+      NEXT_PAGE_IS_FIRST = false;
+      doc.addPage();
+      drawLetterhead(doc);
+      y = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 10;
+    }
+    const dept = (group.department ?? '').trim();
+    if (opened === 0 && dept) {
+      const ids = departmentSampleIds([group]);
+      y = renderScopeHeading(doc, dept.toUpperCase(), y, practice, ids.length ? `Sample ID: ${ids.join(', ')}` : null);
+    }
+    const name = group.testName || layout.testName || '';
+    y = drawPanelNameBand(doc, opened === 0 ? name : `${name.toUpperCase()} — CONTINUED`, MARGIN_X, y + 2, A4.w - 2 * MARGIN_X) + 6;
+    opened++;
+    const body: ProfileBodyArea = bodyArea(y, floor);
+    const bodyPage = doc.getNumberOfPages();
+    try { ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body } }); } catch { /* designer hook only */ }
+
+    const { boxes } = collapseMissingAnalyzerBoxes(live, availCodes, body);
+    let pageBottom = body.top, tableEnd = 0;
+    // Tables last: a table that runs on must not push the other boxes off this page.
+    const ordered = [...boxes.filter(b => b.kind !== 'table'), ...boxes.filter(b => b.kind === 'table').sort((a, b2) => a.y - b2.y)];
+    for (const box of ordered) {
+      const r = { x: body.left + box.x * MM, y: body.top + box.y * MM, w: box.w * MM, h: box.h * MM };
+      switch (box.kind) {
+        case 'table': {
+          const rows = tableRowsFor(box);
+          if (!rows.length) break;
+          const fit = !manual && box.id !== lastTableId;
+          const out = { consumed: rows.length };
+          const sized = { natural: 0 };
+          const end = renderColumnarTable(doc, [{ ...group, rows }], onePageTableColumns(group, box), r.y, practice, null, 0, false,
+            { x: r.x, w: r.w, bottom: body.bottom, hideBand: true, dropEmpty: true, ...(fit ? { fitH: r.h, out } : {}),
+              boxH: r.h, vAlign: box.vAlign ?? 'top', rowGap: ROW_SPACING_PT[box.rowSpacing ?? 'normal'] ?? 0, sized });
+          if (!manual) remaining = remaining.slice(out.consumed);
+          lastTableLayoutPage = i;
+          tableEnd = Math.max(tableEnd, end - 6);
+          try {
+            ON_ONE_PAGE_BODY?.({ pkg, page: bodyPage, layoutPage: i, body: { ...body }, boxId: box.id, rowsPrinted: out.consumed,
+              tableBottom: doc.getNumberOfPages() === bodyPage ? end - 6 : null, tableNaturalH: sized.natural || null });
+          } catch { /* designer hook only */ }
+          break;
+        }
+        case 'analyzer': {
+          const url = box.ref ? images[box.ref] : undefined;
+          drawAnalyzerImageBox(doc, box, body, url ? IMG_CACHE[url] : undefined, TEXT, labelFont);
+          pageBottom = Math.max(pageBottom, r.y + r.h);
+          break;
+        }
+        case 'chart': {
+          const sec = layout.sections.find(sx => sx.id === box.ref && sx.type === 'chart' && sx.trend);
+          if (sec) {
+            renderReportChart(doc, sec, group.testName ?? '', r.y, chartTheme(),
+              { x: r.x, contentWidth: r.w, floor: r.y + r.h, newPage: () => r.y });
+            pageBottom = Math.max(pageBottom, r.y + r.h);
+          }
+          break;
+        }
+        case 'signatures':
+          if (opts.signHere && !pendingSig && deptSigs.length) pendingSig = { pdfPage: bodyPage, layoutPage: i, x: r.x, y: r.y, w: r.w };
+          break;
+        case 'notes': {
+          const text = (box.text ?? box.label ?? '').trim();
+          if (text) { drawNotesBox(doc, box, body, text, TEXT, labelFont); pageBottom = Math.max(pageBottom, r.y + r.h); }
+          break;
+        }
+      }
+    }
+    // The End of Report goes under what actually printed — never the
+    // signatures box, which the layout pins where the lab placed it.
+    lastPdfPage = doc.getNumberOfPages();
+    bottom = lastPdfPage === bodyPage ? Math.max(pageBottom, tableEnd) : tableEnd;
+  }
+  if (pendingSig && pendingSig.layoutPage >= lastTableLayoutPage) {
+    const cur = doc.getNumberOfPages();
+    doc.setPage(pendingSig.pdfPage);
+    drawInlineSignatures(doc, deptSigs, pendingSig.y, practice, { x: pendingSig.x, w: pendingSig.w });
+    doc.setPage(cur);
+    signed = true;
+  }
+  // Safety net: rows no table box printed (no table box at all) still print.
+  if (!manual && remaining.length && (!chain.length || opened === 0)) {
+    let y = opened === 0 && opts.topY != null ? opts.topY : bottom + 8;
+    if (opened > 0 && y > floor - 60) y = newPage(doc, practice);
+    bottom = renderColumnarTable(doc, [{ ...group, rows: remaining }], onePageTableColumns(group, {} as PageLayoutBox), y, practice, null, 0, false);
+  }
+  return { bottom, signed };
+}
+
+// ── Technician report notes (owner 2026-09-30) ───────────────────
+// A note row inside the results table (line / profile) or a free block that
+// breaks across pages line by line (department / whole order). Type from
+// the theme's `techNote` token; bold / italic runs in the theme's faces.
+
+function noteTypeset(): NoteTypeset {
+  const size = tsz('techNote');
+  return {
+    size,
+    lineHeight: size * 1.32,
+    face: (doc, st) => setFace(doc, st.b && st.i ? 'bolditalic' : st.b ? 'bold' : st.i ? 'italic' : twt('techNote')),
+  };
+}
+
+/** The table row for a technician note, or null when there is none. */
+function techNoteRow(note: string | null | undefined, label: string): PanelRowData | null {
+  return (note ?? '').trim() ? { kind: 'note', techNote: note!, techLabel: label } : null;
+}
+
+/** Put a line's note right after its results (last value / description),
+ *  ahead of its Sentences and other notes — "before its interpretation". */
+function insertTechNote(rows: PanelRowData[], row: PanelRowData | null): void {
+  if (!row) return;
+  let at = -1;
+  rows.forEach((r, i) => { if (r.kind === 'param') at = i; });
+  if (at < 0) {
+    // No values yet: after any lead Sentence rows, before the closing ones.
+    rows.push(row);
+    return;
+  }
+  rows.splice(at + 1, 0, row);
+}
+
+function techNoteBlockHeight(doc: jsPDF, note: string, label: string): number {
+  return layoutReportNote(doc, note, A4.w - 2 * MARGIN_X - 12, noteTypeset(), label).height + 4;
+}
+
+/** A free-standing note block from `startY`, wrapping across pages line by
+ *  line (never clipped at the footer). Returns the y below it. */
+function drawTechNoteBlock(
+  doc: jsPDF, note: string, label: string, startY: number, practice: NonNullable<ReportPdfInput['practice']>,
+): number {
+  const t = noteTypeset();
+  // Aligned with the results tables' text (their 6 pt cell padding).
+  const lay = layoutReportNote(doc, note, A4.w - 2 * MARGIN_X - 12, t, label);
+  if (!lay.lines.length) return startY;
+  const floor = A4.h - MARGIN_BOTTOM;
+  // Keep at least the first two lines together with the block's start.
+  let top = startY;
+  if (top + Math.min(lay.height, t.lineHeight * 2) > floor) top = newPage(doc, practice);
+  let base = top + t.size * 0.8;
+  let prevDy = 0;
+  for (const line of lay.lines) {
+    base += line.dy - prevDy;
+    prevDy = line.dy;
+    if (base + t.size * 0.3 > floor) { base = newPage(doc, practice) + t.size * 0.8; }
+    drawReportNoteLine(doc, line, MARGIN_X + 6, base, t, TEXT);
+  }
+  return base + t.size * 0.4 + 4;
+}
+
+/** Room kept between a table's last row and its sign-off: renderColumnarTable
+ *  returns finalY + 6, so a reserve of exactly the block height would miss by
+ *  those points and push the block onto a page of its own. */
+const SIGN_OFF_SLACK = 8;
+
+/** The body's floor on every page = the real footer band. The date strip
+ *  (hairline at h-30, "Generated on" at h-18) needs 40pt; the LAST page also
+ *  stacks the disclaimer / footer text up from there (movable in the
+ *  designer), so the floor clears the highest of those + 6pt air. One floor
+ *  for every page — autoTable's bottom margin cannot vary per page and the
+ *  last page is only known once the body is laid out. Footer items dragged up
+ *  into the body are the designer's choice and do not raise the floor. */
+export function footerFloor(layout: Pick<ReportLayoutResult, 'items'> | null | undefined): number {
+  let top = A4.h - 40;
+  for (const it of layout?.items ?? []) {
+    if (it.region !== 'footer' || it.hidden || it.box.y < A4.h * 0.7) continue;
+    top = Math.min(top, it.box.y);
+  }
+  return Math.ceil(A4.h - top + 6);
+}
+
+/** Height (pt) of the sign-off block the PRESENT signatories need — 0 when
+ *  there are none, so nothing is reserved. See report-signatures.ts. */
+function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
+  return layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X).height;
+}
+
+/** Draw `text` centred on `cx`, shrinking the font (down to 6.5pt) until it
+ *  fits the slot — never truncated, never spilling into the next signatory. */
+function drawFittedCentre(doc: jsPDF, text: string, cx: number, y: number, el: TypeEl, maxW: number): void {
+  let fs = typeset(doc, el);
+  while (fs > 6.5 && doc.getTextWidth(text) > maxW) { fs -= 0.5; doc.setFontSize(fs); }
+  doc.text(text, cx, y, { align: 'center' });
+}
+
+/** The sign-off block drawn INLINE at the end of a department (or below the
+ *  End-of-Report marker): only the signatories present, laid out by count
+ *  (1 → right, 2 → left/right, 3 → L/C/R, 4 → even; 5-7 wrap into balanced
+ *  rows). Callers reserve the exact height up-front, so the page break here
+ *  is only a last-resort guard — and it moves the WHOLE block, never splits
+ *  it across pages. */
 function drawInlineSignatures(
   doc: jsPDF,
   sigs: ReportSignature[],
   startY: number,
-  practice: NonNullable<ReportPdfInput['practice']>
+  practice: NonNullable<ReportPdfInput['practice']>,
+  /** Profile one-page layout: the same sign-off, inside the signatures box
+   *  (left `x`, width `w`) — never moved to another page. */
+  region: { x: number; w: number } | null = null,
 ): number {
-  const all = sigs.slice(0, 7).filter(s => s.name || s.signatureUrl);
-  if (all.length > 3) {
-    // Wrap: rows of 3, drawn top-down.
-    let yy = startY;
-    for (let i = 0; i < all.length; i += 3) {
-      yy = drawInlineSignatures(doc, all.slice(i, i + 3), yy, practice);
+  const left = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
+  const probe = layoutSignatureBlock(sigs, left, usable, 0);
+  if (probe.rows.length === 0) return startY;
+  let top = startY;
+  if (!region && top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
+  const block = layoutSignatureBlock(sigs, left, usable, top);
+  const textW = block.slotW - 6;
+  for (const row of block.rows) {
+    const baseY = row.top + SIG_ROW.base;
+    const hasTitle = row.slots.some(s => !!(s.sig.title ?? '').trim());
+    const titleY = baseY + SIG_ROW.name + SIG_ROW.title;
+    const regY = baseY + SIG_ROW.name + (hasTitle ? SIG_ROW.title : 0) + SIG_ROW.reg;
+    for (const { sig: s, cx: px } of row.slots) {
+      const sigSrc = s.signatureUrl
+        ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
+        : null;
+      if (sigSrc) {
+        try { doc.addImage(sigSrc, 'PNG', px - SIG_IMG_W / 2, baseY - 20, SIG_IMG_W, SIG_IMG_H, undefined, 'FAST'); }
+        catch { drawSigScribble(doc, px, baseY + 4); }
+      } else {
+        drawSigScribble(doc, px, baseY + 4);
+      }
+      if ((s.name ?? '').trim()) {
+        doc.setTextColor(BLACK);
+        drawFittedCentre(doc, s.name!.trim(), px, baseY + SIG_ROW.name, 'signatureName', textW);
+      }
+      if ((s.title ?? '').trim()) {
+        doc.setTextColor(TEXT_DIM);
+        drawFittedCentre(doc, `(${s.title!.trim()})`, px, titleY, 'signatureTitle', textW);
+      }
+      if ((s.regNo ?? '').trim()) {
+        doc.setTextColor(TEXT_DIM);
+        drawFittedCentre(doc, `Reg. ${s.regNo!.trim()}`, px, regY, 'signatureReg', textW);
+      }
     }
-    return yy;
   }
-  const list = all;
-  if (list.length === 0) return startY;
-  let y = startY + 12;
-  // The block spans 74pt below y; signatures live INSIDE the table's bottom
-  // reserve by design, so only break when the block would collide with the
-  // actual footer strip (disclaimer + generated-on).
-  if (y + 74 > A4.h - FOOTER_RESERVE) { y = newPage(doc, practice) + 6; }
-  const colW = (A4.w - 2 * MARGIN_X) / list.length;
-  const baseY = y + 30;
-  list.forEach((s, i) => {
-    const px = MARGIN_X + i * colW + colW / 2;
-    const sigSrc = s.signatureUrl
-      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
-      : null;
-    if (sigSrc) {
-      try { doc.addImage(sigSrc, 'PNG', px - 35, baseY - 20, 70, 24, undefined, 'FAST'); }
-      catch { drawSigScribble(doc, px, baseY + 4); }
-    } else {
-      drawSigScribble(doc, px, baseY + 4);
-    }
-    if (s.name) {
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(BLACK);
-      doc.text(s.name, px, baseY + 16, { align: 'center' });
-    }
-    if (s.title) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`(${s.title})`, px, baseY + 27, { align: 'center' });
-    }
-    if (s.regNo) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`Reg. ${s.regNo}`, px, baseY + 37, { align: 'center' });
-    }
-  });
-  return baseY + 44;
+  return top + block.height;
 }
 
 /** The single pipeline every column source passes through before rendering:
@@ -2960,34 +3813,49 @@ function drawSentenceCell(doc: jsPDF, store: Map<number, SentenceCell>, d: Sente
   c.lines.forEach((line, i) => {
     const y = c.y + i * c.lh;
     if (i === 0 && line.startsWith(c.label)) {
-      doc.setFont(PDF_FONT, 'bold');
+      setFace(doc, twt('interpretationLabel'));
       doc.setTextColor(BLACK);
       doc.text(c.label, c.x, y);
       const lw = doc.getTextWidth(c.label);
-      doc.setFont(PDF_FONT, 'normal');
+      setFace(doc, twt('interpretation'));
       doc.setTextColor(color);
       const rest = line.slice(c.label.length).replace(/^\s+/, '');
       if (rest) doc.text(rest, c.x + lw + doc.getTextWidth(' '), y);
       return;
     }
-    doc.setFont(PDF_FONT, 'normal');
+    setFace(doc, twt('interpretation'));
     doc.setTextColor(color);
     doc.text(line, c.x, y);
   });
 }
 
 /** Autotable has no keep-with-next. Just before drawing row i, look ahead: if
- *  row i+1 is glued to row i+2 and would be the LAST thing on this page (i+2
- *  can't start here), push i+1 to the next page too — temporarily taller than
- *  what is left and unsplittable — and restore it once it draws there. */
-type KeepRow = { index: number; height: number; cells: Record<string, { height: number; styles: { fontSize: number }; padding(side: string): number }> };
+ *  row i+1 is glued to what follows and would be the LAST thing on this page
+ *  (its chain can't start here), push i+1 to the next page too — temporarily
+ *  taller than what is left and unsplittable — and restore it once it draws
+ *  there. A chain is i+1 plus every row glued to the one before it: a panel
+ *  band, its Method/Specimen line and its first result; a value and its
+ *  description; a test's last row and its Sentence. Rows never split
+ *  (rowPageBreak 'avoid'), so every row of the chain must fit whole. */
+type KeepRow = { index: number; height: number; cells: Record<string, { height: number }> };
 type KeepHookArg = {
   row: KeepRow; cursor: { y: number } | null;
   table: { body: KeepRow[]; settings: { rowPageBreak: string; margin: { bottom: number } } };
 };
 const KEEP_HELD = new WeakMap<object, { height: number; cells: number[]; rowPageBreak: string }>();
 
-function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>, kinds: string[]): void {
+/** Height of the rows glued to row `j` (j+1 … the first row not itself glued
+ *  to its successor), 0 when nothing follows. */
+function chainAfter(body: KeepRow[], j: number, keepWithNext: Set<number>): number {
+  let need = 0;
+  for (let k = j + 1; k < body.length; k++) {
+    need += body[k].height;
+    if (!keepWithNext.has(k)) break;
+  }
+  return need;
+}
+
+function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>): void {
   const held = KEEP_HELD.get(d.row);
   if (held) {
     KEEP_HELD.delete(d.row);
@@ -2998,18 +3866,13 @@ function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>,
   const i = d.row.index;
   const j = i + 1;
   if (i < 0 || !d.cursor || !keepWithNext.has(j)) return;
-  const next = d.table.body[j], after = d.table.body[j + 1];
-  if (!next || !after) return;
+  const next = d.table.body[j];
+  if (!next || !d.table.body[j + 1]) return;
   const bottom = doc.internal.pageSize.getHeight() - d.table.settings.margin.bottom;
   const top = d.cursor.y + d.row.height;           // where row j would start
-  const lhf = doc.getLineHeightFactor?.() ?? 1.15;
-  // A Sentence can split across pages, so one line of it is enough to keep
-  // it company; any other row has to fit whole.
-  const need = kinds[j + 1] === 'sentence' || kinds[j + 1] === 'desc'
-    ? Math.max(...Object.values(after.cells).map(c => c.padding('vertical') + c.styles.fontSize * lhf))
-    : after.height;
+  const need = chainAfter(d.table.body, j, keepWithNext);
   if (top + next.height > bottom || top + next.height + need <= bottom) return;
-  // Never on a page that could not hold the pair anyway.
+  // Never on a page that could not hold the chain anyway.
   if (next.height + need > bottom - 80) return;
   const cells = Object.values(next.cells);
   KEEP_HELD.set(next, { height: next.height, cells: cells.map(c => c.height), rowPageBreak: d.table.settings.rowPageBreak });
@@ -3017,6 +3880,21 @@ function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>,
   next.height = h;
   cells.forEach(c => { c.height = h; });
   d.table.settings.rowPageBreak = 'avoid';
+}
+
+/** The theme element a results-table column prints in (by its first member's
+ *  type). Classic: the Method / Specimen columns print as body text. */
+function columnElement(m: ReportColumn): TypeEl {
+  switch (m.type) {
+    case 'name': return 'testName';
+    case 'result': return 'result';
+    case 'unit': return 'unit';
+    case 'range': return 'range';
+    case 'method': return 'methodColumn';
+    case 'specimen': return 'specimenColumn';
+    case 'text': return m.name === 'specimen' ? 'specimenColumn' : 'tableBody';
+    default: return 'tableBody';
+  }
 }
 
 /** Render panel groups as ONE columnar autoTable against the column config
@@ -3029,20 +3907,40 @@ function renderColumnarTable(
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>,
   deptLabel: string | null = null,
-  /** Extra bottom margin held back for whatever follows this table on the same
-   *  page — the department's signature block. Without it autoTable fills to
-   *  MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
+  /** Room the department's sign-off block needs under this table's LAST row.
+   *  Held back only on the page where the table ends (see fitSignOff) — the
+   *  table's earlier pages fill to the normal floor. Without it autoTable
+   *  fills to MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
   reserveBottom = 0,
   /** True when `cfg` is a test's/profile's OWN column override (a break-out
    *  run): configured columns print exactly as arranged — even empty ones —
    *  and every group gets its heading band so the odd-width table reads as
    *  its own titled block. */
-  overriddenRun = false
+  overriddenRun = false,
+  /** Profile one-page layout: draw this SAME table (theme, fonts, rules,
+   *  flags, superscripts — nothing restyled) inside a box instead of across
+   *  the page: left edge `x`, width `w`, rows stop at `bottom` (overflow
+   *  still continues on the next page — never cut). `hideBand` leaves out
+   *  the panel band (the one-page block prints it full width above);
+   *  `dropEmpty` drops columns with no content even in the admin preview. */
+  region: { x: number; w: number; bottom: number; hideBand?: boolean; dropEmpty?: boolean;
+            /** Custom layout, auto-continue: print only the rows that FIT the
+             *  box's height (`boxH`, pt) — whole rows, never a cut row — and
+             *  report how many of the group's rows were used in `out`. */
+            fitH?: number; out?: { consumed: number };
+            /** The box's height (pt) and where the rows sit in it when they
+             *  need less: 'fill' spreads them evenly, 'center' centres them. */
+            boxH?: number; vAlign?: 'top' | 'fill' | 'center' | null;
+            /** Extra space per row (pt; negative = tighter) — the box's row spacing. */
+            rowGap?: number;
+            /** Out: the natural height (head + rows, before Fill), pt. */
+            sized?: { natural: number } } | null = null,
 ): number {
   if (groups.length === 0) return startY;
-  if (startY > A4.h - MARGIN_BOTTOM - reserveBottom - 70) { startY = newPage(doc, practice); }
+  if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
-  const usable = A4.w - 2 * MARGIN_X;
+  const LEFT = region ? region.x : MARGIN_X;
+  const usable = region ? region.w : A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
   let vcols: VCol[] = [];
   for (let i = 0; i < cfg.length; i++) {
@@ -3082,8 +3980,9 @@ function renderColumnarTable(
   // visible (structure fidelity beats economy — an override's just-added
   // column must show even before it has data); the department's shared
   // table still drops empties.
-  if (!PREVIEW_KEEP_EMPTY_COLS && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
+  if ((!PREVIEW_KEEP_EMPTY_COLS || region?.dropEmpty) && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
+  const hasMethodCol = vcols.some(c => c.members.some(m => m.type === 'method'));
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
   const COLSPAN = vcols.length;
@@ -3105,14 +4004,25 @@ function renderColumnarTable(
   const qualCells = new Map<string, QualCell>();
   /** Body row index → the bold label its Sentence row opens with. */
   const sentenceLabels = new Map<number, string>();
+  /** Body row index → a technician note's layout (painted in didDrawCell). */
+  const techCells = new Map<number, NoteLayout>();
   /** Body rows that must share a page with the NEXT row: a test's last row
    *  and the Sentence under it, or a Sentence and the row it introduces. */
   const keepWithNext = new Set<number>();
   /** Body row kinds, parallel to `body` (glue decisions). */
   const bodyKind: Array<'param' | 'sentence' | 'desc' | 'other'> = [];
+  /** Body row → index into `groups` (continuation heading). */
+  const groupOfRow: number[] = [];
+  /** Group index → its panel band's body row (compact tests have none). */
+  const bandRowOf = new Map<number, number>();
   /** No Description column in this table → each value's description prints
    *  as a full-width row right under that value's row (P1, D1, P2, P3, D3). */
   const descAsRow = !hasDescriptionColumn(cfg);
+  /** Body row → the index of its source row in the group (-1 = a band /
+   *  sub-line) — so a box-fitted table can report whole rows used. */
+  const srcOfBody: number[] = [];
+  let curSrc = -1;
+  const markSrc = (next: number) => { while (srcOfBody.length < body.length) srcOfBody.push(curSrc); curSrc = next; };
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -3123,40 +4033,55 @@ function renderColumnarTable(
     // the name the Investigation cell already prints.
     // A test's Sentences don't count: they are merged rows under (or above)
     // the one analyte row, not parameters.
-    const coreRows = g.rows.filter(r => !r.sentence);
+    // Nor does a technician note (a row under the value, never a band).
+    const coreRows = g.rows.filter(r => !r.sentence && !r.techNote);
     const compact = coreRows.length === 1 && coreRows[0].kind === 'param' && !g.referralLab;
     const groupStart = body.length;
 
-    if (!compact) {
+    if (!compact && !region?.hideBand) {
       // Panel / profile header band — bold, full width.
+      bandRowOf.set(groups.indexOf(g), body.length);
       body.push([{
         content: g.testName.toUpperCase(),
         colSpan: COLSPAN,
-        styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
+        styles: { fillColor: '#eef2f7', textColor: theme.primary, ...cellType('panelName'), halign: 'left' },
       }]);
       bodyMeta.push(null);
       bodyKind.push('other');
 
-      // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
-      const sub: string[] = [];
+      // Method / Specimen / referral-lab sub-lines (ISO 15189 7.4.1.6 for
+      // referrals) — one per line, in that order (owner, 2026-09-28: with both
+      // switches on, Method then Specimen, never run together on one line).
+      const sub: Array<{ text: string; el: TypeEl }> = [];
       const methodText = g.hideMethodLine ? undefined : (g.methodLine ?? g.method);
-      if (methodText) sub.push(`Method: ${methodText}`);
+      if (methodText) sub.push({ text: `Method: ${methodText}`, el: 'methodology' });
       const specimenText = g.showSpecimenLine ? (g.specimen ?? '').trim() : '';
-      if (specimenText) sub.push(`Specimen: ${specimenText}`);
-      if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
-      if (sub.length > 0) {
+      if (specimenText) sub.push({ text: `Specimen: ${specimenText}`, el: 'specimen' });
+      if (g.referralLab) sub.push({ text: `Tested at: ${g.referralLab}`, el: 'referral' });
+      // Classic: one italic cell, a line each. A theme that styles them
+      // apart (Modern: method regular, specimen italic) gives each its row.
+      const subRows = !sub.length ? [] : TYPE.splitSubLines ? sub : [{ text: sub.map(l => l.text).join('\n'), el: 'methodology' as TypeEl }];
+      for (const line of subRows) {
         body.push([{
-          content: sub.join('       '),
+          content: line.text,
           colSpan: COLSPAN,
-          styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+          styles: { ...cellType(line.el), textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left',
+                    ...(TYPE.splitSubLines ? { cellPadding: { top: 2, right: 6, bottom: 2, left: 6 } } : {}) },
         }]);
         bodyMeta.push(null);
         bodyKind.push('other');
       }
+      // The band and its sub-line(s) open the panel WITH its first row —
+      // never stranded at the foot of a page while every result sits on
+      // the next (owner's report 2026-09-29: "VITAMIN PROFILE 1 / Specimen:
+      // Serum" closed page 2 alone).
+      for (let i = groupStart; i < body.length; i++) keepWithNext.add(i);
     }
 
     let firstParam = true;
+    let srcIdx = -1;
     for (const r of g.rows) {
+      markSrc(++srcIdx);
       if (r.sentence) {
         // The test's Sentence → ONE full-width row (every column merged),
         // readable body text in the template's font and body colour; the
@@ -3167,18 +4092,33 @@ function renderColumnarTable(
         body.push([{
           content: label ? `${label}: ${r.note ?? ''}` : (r.note ?? ''),
           colSpan: COLSPAN,
-          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
-                    fontSize: 8.5 * theme.fontScale },
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('interpretation'), halign: 'left', valign: 'top' },
         }]);
         bodyMeta.push(null);
         bodyKind.push('sentence');
+        continue;
+      }
+      if (r.techNote) {
+        // Technician note: sized from its own layout, painted in didDrawCell
+        // (a cell has one font; the note mixes bold / italic / underline).
+        const lay = layoutReportNote(doc, r.techNote, usable - 12, noteTypeset(), r.techLabel);
+        techCells.set(body.length, lay);
+        body.push([{
+          content: '',
+          colSpan: COLSPAN,
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('techNote'), halign: 'left', valign: 'top',
+                    minCellHeight: lay.height + 8 },
+        }]);
+        bodyMeta.push(null);
+        // Glued to the row above (the test's last result) like a description.
+        bodyKind.push('desc');
         continue;
       }
       if (r.kind === 'note') {
         body.push([{
           content: r.note ?? '',
           colSpan: COLSPAN,
-          styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
+          styles: { fillColor: '#f8fafc', textColor: TEXT, ...cellType('note'), halign: 'left' },
         }]);
         bodyMeta.push(null);
         bodyKind.push('other');
@@ -3239,24 +4179,32 @@ function renderColumnarTable(
 
       const cells: Cell[] = vcols.map(vc => {
         let txt = vc.members.map(valueOf).filter(Boolean).join(' ');
-        const styles: Record<string, unknown> = { halign: 'left', textColor: TEXT_DIM };
-        if (vc.nameOnly) { styles['fontStyle'] = 'bold'; styles['textColor'] = BLACK; }
-        else if (vc.textOnly) { styles['fontSize'] = 8; }
+        const styles: Record<string, unknown> = { halign: 'left', textColor: TEXT_DIM, ...cellType(columnElement(vc.members[0])) };
+        if (vc.nameOnly) { Object.assign(styles, cellType('testName')); styles['textColor'] = BLACK; }
+        else if (vc.textOnly) { Object.assign(styles, cellType('cellText')); }
         if (vc.hasResult) {
           if (glyph) txt = txt ? `${txt}  ${glyph}` : glyph;
           styles['textColor'] = BLACK;
+          // The value's emphasis: regular (Modern: semibold) → the SAME
+          // bold for an abnormal value, a non-Normal option, an admin row
+          // colour and the tech's "print in bold" pick.
+          let emphasised = false;
           if (!isNormal && theme.flagIndicator !== 'none') {
-            styles['fontStyle'] = 'bold';
+            emphasised = true;
             if (theme.flagStyle === 'bold_color') styles['textColor'] = abnColor;
           }
           // A chosen option that is NOT ticked Normal (mw saves 'A' — only
           // when its option list has at least one Normal) always prints bold,
           // whatever the indicator setting (owner 2026-09-26).
-          if (r.flag === 'A') styles['fontStyle'] = 'bold';
-          if (adminColor) { styles['textColor'] = adminColor; styles['fontStyle'] = 'bold'; }
+          if (r.flag === 'A') emphasised = true;
+          if (adminColor) { styles['textColor'] = adminColor; emphasised = true; }
+          // The tech's "print in bold" pick: the SAME value-cell bold as an
+          // abnormal value (colour untouched — it adds emphasis, not a flag).
+          if (r.printBold) emphasised = true;
+          Object.assign(styles, cellType(emphasised || r.bold ? 'resultAbnormal' : 'result'));
         }
         // Conditional bold (condition `then.bold`) — bolds name + result.
-        if (r.bold && (vc.nameOnly || vc.hasResult)) styles['fontStyle'] = 'bold';
+        if (r.bold && vc.nameOnly) styles['fontStyle'] = faceOf('bold')[1];
         return { content: txt, styles };
       });
       body.push(cells);
@@ -3271,7 +4219,7 @@ function renderColumnarTable(
         ? { arrow: r.isLow ? 'down' : 'up',
             color: theme.flagStyle === 'bold_color' ? abnColor : BLACK,
             text: String(resultCellText),
-            bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' }
+            bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' || !!r.printBold }
         : null);
       // Its description, when the table has no column for it: ONE merged
       // row directly under the value, styled like the Sentence row.
@@ -3280,10 +4228,26 @@ function renderColumnarTable(
         body.push([{
           content: desc,
           colSpan: COLSPAN,
-          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
-                    fontSize: 8.5 * theme.fontScale },
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('description'), halign: 'left', valign: 'top' },
         }]);
         bodyMeta.push(null);
+        bodyKind.push('desc');
+      }
+      // A COMPACT single-value test has no panel band, so it has nowhere for
+      // the "Method: …" sub-line — with "Show method line" on it prints as a
+      // small line right under its row instead (RCA 2026-09-28: Calcium's
+      // methodology never reached the report). A Method column already
+      // carries it, so no second copy then.
+      const compactMethod = compact && r.kind === 'param' && !g.hideMethodLine && !hasMethodCol
+        ? (g.methodLine ?? g.method ?? r.method ?? '').trim() : '';
+      if (compactMethod) {
+        body.push([{
+          content: `Method: ${compactMethod}`,
+          colSpan: COLSPAN,
+          styles: { ...cellType('methodology'), textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+        }]);
+        bodyMeta.push(null);
+        // 'desc' = a row that belongs to the value above: kept on its page.
         bodyKind.push('desc');
       }
     }
@@ -3296,6 +4260,7 @@ function renderColumnarTable(
       if (i > groupStart && (bodyKind[i - 1] === 'param' || bodyKind[i - 1] === 'desc')) keepWithNext.add(i - 1);
       else if (bodyKind[i + 1] === 'param') keepWithNext.add(i);
     }
+    while (groupOfRow.length < body.length) groupOfRow.push(groups.indexOf(g));
   }
 
   const sentenceCells = new Map<number, SentenceCell>();
@@ -3303,13 +4268,68 @@ function renderColumnarTable(
   // When the table spills onto further pages, stamp "<DEPT> — continued" above
   // the repeated column header — otherwise a reader on page 2 can't tell which
   // department the rows belong to.
+  markSrc(-1);
   let tablePagesSeen = 0;
+  const margin = region
+    ? { ...tablePageMargins(), left: region.x, right: A4.w - region.x - region.w, bottom: Math.max(MARGIN_BOTTOM, A4.h - region.bottom) }
+    : tablePageMargins();
 
-  autoTable(doc, {
+  // ── Panel heading on continuation pages ──────────────────────────
+  // A page that opens MID-panel repeats the band as "<PANEL> — CONTINUED"
+  // between the column header and its first row (owner's report 2026-09-29:
+  // page 3 had three vitamins under no heading). autotable repeats only the
+  // head, and which row opens a page is known only when that row draws — so
+  // the head carries one band-height row that autotable never paints
+  // (willDrawCell returns false), and the first body row of every page
+  // either paints the continued band into that space or gives it back by
+  // moving the cursor up. The band's own row opening a page needs no repeat.
+  const CONT_ROW = head.length;
+  head.push([{
+    content: '',
+    colSpan: COLSPAN,
+    styles: { fillColor: false, lineWidth: 0, ...cellType('panelContinued'), halign: 'left',
+              cellPadding: { top: 4, right: 6, bottom: 4, left: 6 } },
+  }]);
+  let contH = 0;
+  let pageOpened = -1;
+  let lastRealRow = 0;
+  const openPage = (d: CellHookArg & { cursor: { y: number } | null; pageNumber: number }) => {
+    if (d.pageNumber === pageOpened || !d.cursor) return;
+    pageOpened = d.pageNumber;
+    // A row taller than a page continues as a remainder row with index -1.
+    const idx = d.row.index >= 0 ? d.row.index : lastRealRow;
+    const gi = groupOfRow[idx];
+    const bandRow = bandRowOf.get(gi);
+    const top = d.cursor.y - contH;
+    if (d.pageNumber > 1 && bandRow !== undefined && bandRow !== idx) {
+      // autotable has ALREADY applied this cell's styles and paints its
+      // rect/text with whatever fill, font and colour are current once the
+      // hook returns — so the band's paint state is put back afterwards.
+      const fill = doc.getFillColor(), font = doc.getFont(), size = doc.getFontSize(), color = doc.getTextColor();
+      doc.setFillColor('#eef2f7');
+      doc.rect(LEFT, top, usable, contH, 'F');
+      const bandSize = typeset(doc, 'panelContinued');
+      doc.setTextColor(theme.primary);
+      // autotable's own top-aligned first baseline for the band's font.
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, LEFT + 6, top + 4 + bandSize * 0.85);
+      doc.setFillColor(fill);
+      doc.setFont(font.fontName, font.fontStyle);
+      doc.setFontSize(size);
+      doc.setTextColor(color);
+    } else {
+      d.cursor.y = top;
+      d.cell.y = top;
+    }
+  };
+
+  const table = __createTable(doc, {
     startY,
     head: head as unknown as Array<Array<string | Cell>>,
     body: body as unknown as Array<Array<string | Cell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM + reserveBottom, top: 56 },
+    margin,
+    // A row never splits mid-cell across pages: one that does not fit moves
+    // WHOLE to the next page (only a row taller than a page still splits).
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3318,13 +4338,12 @@ function renderColumnarTable(
     didDrawPage: () => {
       tablePagesSeen++;
       if (tablePagesSeen > 1 && deptLabel) {
-        doc.setFont(PDF_FONT, 'bold');
-        doc.setFontSize(9);
+        typeset(doc, 'deptContinued');
         doc.setTextColor(theme.primary);
-        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, 42);
+        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, LEFT, margin.top - 14);
         doc.setDrawColor(HAIR);
         doc.setLineWidth(0.5);
-        doc.line(MARGIN_X, 46, A4.w - MARGIN_X, 46);
+        doc.line(LEFT, margin.top - 10, LEFT + usable, margin.top - 10);
       }
     },
     columnStyles: Object.fromEntries(
@@ -3335,19 +4354,31 @@ function renderColumnarTable(
     // Units like ×10⁹/L survive as "×10^9/L" (cp1252 has no ⁹). Blank those
     // cells here — AFTER layout, so column widths are unaffected — and redraw
     // them with real raised digits in didDrawCell below.
-    willDrawCell: (d: CellHookArg) => {
-      if (d.section === 'body' && d.column.index === 0) keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext, bodyKind);
+    // Returning false skips autotable's own painting of that cell.
+    willDrawCell: (d: CellHookArg): false | undefined => {
+      if (d.section === 'head' && d.row.index === CONT_ROW) return false;
+      if (d.section === 'body' && d.column.index === 0) {
+        openPage(d as Parameters<typeof openPage>[0]);
+        if (d.row.index >= 0) lastRealRow = d.row.index;
+        fitSignOff(d as unknown as Parameters<typeof fitSignOff>[0], reserveBottom);
+        keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext);
+      }
       if (d.section === 'body' && sentenceLabels.has(d.row.index)) {
         stashSentenceCell(sentenceCells, d as unknown as SentenceHookArg, sentenceLabels.get(d.row.index)!);
-        return;
+        return undefined;
       }
       // Order matters: a qualified range cell is claimed here first, so the
       // superscript hook doesn't also blank it and fight over the redraw.
       stashQualifiedRangeCell(qualCells, d, rangeColIdx);
       stashSuperscriptCell(supCells, d);
+      return undefined;
     },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
       drawSentenceCell(doc, sentenceCells, d as unknown as SentenceHookArg);
+      if (d.section === 'body' && techCells.has(d.row.index)) {
+        const t = noteTypeset();
+        drawReportNote(doc, techCells.get(d.row.index)!, d.cell.x + 6, d.cell.y + 4 + t.size * 0.8, t, TEXT);
+      }
       drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;
@@ -3356,25 +4387,109 @@ function renderColumnarTable(
       const s = 3.2;
       // Place the glyph just after the printed value (measured in the same
       // font the cell used), clamped inside the cell.
-      doc.setFont(PDF_FONT, m.bold ? 'bold' : 'normal');
-      doc.setFontSize(9 * theme.fontScale);
+      const fs = typeset(doc, m.bold ? 'resultAbnormal' : 'result');
       const tw = doc.getTextWidth(m.text);
       const cx = Math.min(d.cell.x + 6 + tw + 8, d.cell.x + d.cell.width - 9);
       // Align to the FIRST text line, not the cell middle — a multi-band
       // reference stack makes the row tall, and a centred glyph floated
       // below "500 mg/dL" instead of sitting beside it.
-      const fs = 9 * theme.fontScale;
       const cy = d.cell.y + 4 + fs * 0.42;
       doc.setFillColor(m.color);
       if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
       else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
     },
   } as unknown as Parameters<typeof autoTable>[1]);
-  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  contH = table.head[CONT_ROW]?.height ?? 0;
+  const floor = A4.h - MARGIN_BOTTOM;
+  // The column header on its own; the continuation reserve is given back.
+  const headH = table.getHeadHeight(table.columns) - contH;
+  // The header and the first glued chain (a panel band, its sub-line and
+  // its first result) open the table together — keepRowsTogether only
+  // looks ahead from a row already drawn, so row 0 is decided here.
+  // Row spacing (Custom layout table box) — before the fit, so the rows a
+  // box holds are counted at the spacing it prints.
+  if (region?.rowGap) for (const row of table.body) setRowHeight(row, Math.max(4, row.height + region.rowGap));
+  if (region?.fitH != null && region.out) {
+    // Whole rows that fit the box (head included); never split one source
+    // row's body rows (a value + its description) across two boxes.
+    const rows = table.body as Array<{ height: number }>;
+    let used = headH, cut = 0;
+    while (cut < rows.length && used + rows[cut].height <= region.fitH + 0.5) { used += rows[cut].height; cut++; }
+    while (cut > 0 && cut < rows.length && srcOfBody[cut] >= 0 && srcOfBody[cut] === srcOfBody[cut - 1]) cut--;
+    const firstSrc = srcOfBody.findIndex(x => x >= 0);
+    if (cut <= firstSrc && firstSrc >= 0) {
+      // Not even one row fits: print the first row anyway (a box never swallows a result).
+      cut = firstSrc + 1;
+      while (cut < rows.length && srcOfBody[cut] === srcOfBody[firstSrc]) cut++;
+    }
+    if (cut < rows.length) {
+      (table as unknown as { body: unknown[] }).body = table.body.slice(0, cut);
+      region.out.consumed = Math.max(0, ...srcOfBody.slice(0, cut).filter(x => x >= 0).map(x => x + 1));
+    } else {
+      region.out.consumed = groups[0]?.rows.length ?? 0;
+    }
+  }
+  if (region) {
+    const natural = headH + table.body.reduce((a, r) => a + r.height, 0);
+    if (region.sized) region.sized.natural = natural;
+    // Top / Fill / Center inside the box — only when every row fits it here.
+    const extra = (region.boxH ?? 0) - natural;
+    if (extra > 1 && table.body.length > 0 && startY + region.boxH! <= region.bottom + 0.5) {
+      if (region.vAlign === 'center') table.settings.startY = startY + extra / 2;
+      else if (region.vAlign === 'fill') {
+        const add = extra / table.body.length;
+        for (const row of table.body) setRowHeight(row, row.height + add);
+      }
+    }
+  }
+  if (!region && table.body.length > 0) {
+    const lead = headH + table.body[0].height + chainAfter(table.body, 0, keepWithNext);
+    if (startY + lead > floor && lead <= floor - margin.top) {
+      startY = table.settings.startY = newPage(doc, practice);
+    }
+  }
+  // A small table that fits here but whose sign-off does not, and that cannot
+  // hand even its header + first rows to the next page without leaving them
+  // stranded, moves to the next page WHOLE — table and signatures together.
+  if (reserveBottom > 0 && table.body.length > 0) {
+    const end = startY + headH + table.body.reduce((a, r) => a + r.height, 0);
+    const lead = headH + table.body.slice(0, 2).reduce((a, r) => a + r.height, 0);
+    if (end <= floor && end + reserveBottom > floor && startY + lead > floor - reserveBottom) {
+      table.settings.startY = newPage(doc, practice);
+    }
+  }
+  __drawTable(doc, table);
+  return table.finalY! + 6;
+}
+
+/** Custom layout table box row spacing → extra pt per row ('normal' = the theme's own). */
+export const ROW_SPACING_PT: Record<'compact' | 'normal' | 'relaxed', number> = { compact: -2, normal: 0, relaxed: 5 };
+
+/** Set an autotable body row's height (and its cells', which autotable paints from). */
+function setRowHeight(row: { height: number; cells: Record<string, unknown> }, h: number): void {
+  row.height = h;
+  for (const cell of Object.values(row.cells)) (cell as { height: number }).height = h;
+}
+
+/** Keep a department's sign-off on the page its results END on — without
+ *  reserving it on every page the table spans (which cost multi-page reports
+ *  the full block height on each page). Just before drawing body row i, look
+ *  at where the table would end if the rest ran on here: if the rest fits but
+ *  the sign-off under it would not, raise the floor by the sign-off's height
+ *  so autoTable carries the last rows to the next page with the signatures;
+ *  otherwise keep the normal floor. Runs before keepRowsTogether (which reads
+ *  the floor) and ignores a row it temporarily inflated. */
+function fitSignOff(d: KeepHookArg & { cell: { y: number } }, reserve: number): void {
+  if (reserve <= 0) return;
+  const h = (r: KeepRow) => KEEP_HELD.get(r)?.height ?? r.height;
+  let end = d.cell.y + h(d.row);
+  for (let j = d.row.index + 1; j < d.table.body.length; j++) end += h(d.table.body[j]);
+  const floor = A4.h - MARGIN_BOTTOM;
+  d.table.settings.margin.bottom = end <= floor && end + reserve > floor ? MARGIN_BOTTOM + reserve : MARGIN_BOTTOM;
 }
 
 // ──────────────────────────────────────────────────────────────
-// Per-test renderers — Drlogy table style (plain header + hairline)
+// Per-test renderers — classic table style (plain header + hairline)
 // ──────────────────────────────────────────────────────────────
 
 function renderResolvedTest(
@@ -3385,7 +4500,9 @@ function renderResolvedTest(
   practice: NonNullable<ReportPdfInput['practice']>
 ): number {
   let y = startY;
-  if (y > A4.h - MARGIN_BOTTOM - 70) { y = newPage(doc, practice); }
+  // A block that OPENS with a chart keeps its heading on the chart's page.
+  const lead = reportChartLead(doc, layout, chartTheme());
+  if (y > A4.h - MARGIN_BOTTOM - Math.max(70, lead + 30)) { y = newPage(doc, practice); }
 
   drawTestHeading(doc, t.name ?? reportDisplayName(layout.testName) ?? 'Test', y);
   y += 26;
@@ -3405,7 +4522,10 @@ function renderResolvedTest(
         y = renderImageSection(doc, sec, y, practice);
         break;
       case 'chart':
-        y = renderChartSection(doc, sec, y);
+        y = sec.trend
+          ? renderReportChart(doc, sec, t.testId ?? '', y, chartTheme(),
+              { x: MARGIN_X, contentWidth: A4.w - 2 * MARGIN_X, floor: A4.h - MARGIN_BOTTOM, newPage: () => newPage(doc, practice) })
+          : renderChartSection(doc, sec, y);
         break;
     }
     y += 4;
@@ -3413,10 +4533,9 @@ function renderResolvedTest(
   return y;
 }
 
-/** Drlogy-style centered uppercase test name. */
+/** Classic-style centered uppercase test name. */
 function drawTestHeading(doc: jsPDF, name: string, y: number) {
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(13);
+  typeset(doc, 'testHeading');
   doc.setTextColor(BLACK);
   doc.text(name.toUpperCase(), A4.w / 2, y + 14, { align: 'center' });
   doc.setDrawColor(HAIR);
@@ -3424,7 +4543,7 @@ function drawTestHeading(doc: jsPDF, name: string, y: number) {
   doc.line(MARGIN_X, y + 22, A4.w - MARGIN_X, y + 22);
 }
 
-/** Resolved grid section → Drlogy 4-column shape.
+/** Resolved grid section → classic 4-column shape.
  *
  *  Empty columns are dropped automatically; a synthesized "Investigation"
  *  column is prepended whenever the layout doesn't already include a
@@ -3433,7 +4552,7 @@ function drawTestHeading(doc: jsPDF, name: string, y: number) {
  *
  *  Specimen / sample type (per-test) is rendered as a small dim
  *  italic line BENEATH the test name in the parameter cell, not as a
- *  separate column — matching Drlogy ("CREATININE, SERUM" with
+ *  separate column — matching the classic layout ("CREATININE, SERUM" with
  *  "Compensated Jaffe's reaction, IDMS traceable" italic below). */
 function renderGridSection(
   doc: jsPDF,
@@ -3453,8 +4572,7 @@ function renderGridSection(
   // "Differential count"…); the preview shows it, so the PDF must too.
   const secLabel = (sec.label ?? '').trim();
   if (secLabel) {
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8.5);
+    typeset(doc, 'sectionLabel');
     doc.setTextColor(TEXT_DIM);
     doc.text(secLabel.toUpperCase(), MARGIN_X, y + 8);
     y += 12;
@@ -3514,7 +4632,7 @@ function renderGridSection(
       return [{
         content: r.mergeContent ?? '',
         colSpan: totalCols,
-        styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'center', fontSize: 8.5 },
+        styles: { fillColor: '#f8fafc', textColor: TEXT, ...cellType('narrativeMerged'), halign: 'center' },
       }];
     }
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
@@ -3549,9 +4667,9 @@ function renderGridSection(
     return vcols.map(vc => {
       const txt = vc.members.map(cellValue).filter(Boolean).join(' ');
       const styles: Record<string, unknown> = { halign: alignFor(vc.members[0].type) };
-      if (vc.isName) { styles['fontStyle'] = 'bold'; styles['textColor'] = rowColor ?? BLACK; styles['fontSize'] = 9; }
+      if (vc.isName) { Object.assign(styles, cellType('narrativeName')); styles['textColor'] = rowColor ?? BLACK; }
       else if (vc.hasResult) {
-        styles['fontStyle'] = 'bold';
+        Object.assign(styles, cellType(rowColor || r.isBold ? 'resultAbnormal' : 'narrativeResult'));
         styles['textColor'] = rowColor ?? BLACK;
         if (rowColor) {
           const tag = flagLabel(r);
@@ -3562,7 +4680,7 @@ function renderGridSection(
         // abnormal row's colour carries across the whole row.
         styles['textColor'] = rowColor ?? TEXT_DIM;
       }
-      if (r.isBold) styles['fontStyle'] = 'bold';
+      if (r.isBold) styles['fontStyle'] = faceOf('bold')[1];
       return { content: txt, styles };
     });
   });
@@ -3574,7 +4692,8 @@ function renderGridSection(
     startY: y,
     head: head as unknown as Array<Array<string | RowCell>>,
     body: body as unknown as Array<Array<string | RowCell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X },
+    margin: tablePageMargins(),
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3602,14 +4721,23 @@ function summaryCellHooks(doc: jsPDF) {
   };
 }
 
+/** Page margins for every results table: the body floor (footer band) and,
+ *  on continuation pages, a top that clears the letterhead — in letterpad
+ *  mode the lab's PRE-PRINTED header (45 mm by default), where a fixed 56pt
+ *  put the repeated column header over the stationery. The "— CONTINUED"
+ *  stamp sits 14pt above this top. */
+function tablePageMargins(): { left: number; right: number; top: number; bottom: number } {
+  return { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: LETTERPAD ? MARGIN_TOP + 24 : 56 };
+}
+
 /** Shared body styles for both grid + legacy tables. Honours the
  *  template's font family, font scale, and divider colour, and switches
  *  to bordered lines when tableStyle === 'bordered'. */
 function tableBodyStyles() {
   const bordered = theme.tableStyle === 'bordered';
   return {
-    font: PDF_FONT,
-    fontSize: 9 * theme.fontScale,
+    font: faceOf(twt('tableBody'))[0],
+    fontSize: tsz('tableBody'),
     // Tighter rows than the old 6/6 padding — a 20-row department block
     // should read as one dense professional table, not a spaced-out list.
     cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
@@ -3626,10 +4754,10 @@ function tableHeadStyles() {
   return {
     fillColor: theme.tableHeaderBg,
     textColor: theme.tableHeaderText,
-    fontStyle: 'bold' as const,
+    fontStyle: styleOf('columnHead') as 'bold',
     // Column headers sit BELOW the data in the visual hierarchy — smaller
-    // than the body values, with a firm rule underneath (Drlogy pattern).
-    fontSize: 8.5 * theme.fontScale,
+    // than the body values, with a firm rule underneath (classic pattern).
+    fontSize: tsz('columnHead'),
     halign: 'left' as const,
     cellPadding: { top: 3, right: 6, bottom: 6, left: 6 },
     lineColor: HAIR,
@@ -3649,8 +4777,7 @@ function showsFlagColumn(cols: ReportColumn[]): boolean {
 function renderParagraphSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const text = sec.content ?? '';
   if (!text.trim()) return startY;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'narrative');
   doc.setTextColor(TEXT);
   const usable = A4.w - 2 * MARGIN_X;
   const lines = doc.splitTextToSize(text, usable);
@@ -3682,15 +4809,13 @@ function drawImagesBlock(
   const usable = urls.filter(u => IMG_CACHE[u]);
   let y = startY;
   if (heading) {
-    doc.setFont(PDF_FONT, 'bolditalic');
-    doc.setFontSize(8.5);
+    typeset(doc, 'imagesHeading');
     doc.setTextColor(TEXT_DIM);
     doc.text(heading.toUpperCase(), MARGIN_X, y + 10);
     y += 16;
   }
   if (usable.length === 0) {
-    doc.setFont(PDF_FONT, 'italic');
-    doc.setFontSize(8.5);
+    typeset(doc, 'imagesPlaceholder');
     doc.setTextColor(TEXT_DIM);
     doc.text(`[ ${urls.length} attached image${urls.length === 1 ? '' : 's'} ]`, MARGIN_X, y + 11);
     return y + 18;
@@ -3723,9 +4848,27 @@ function drawImagesBlock(
   return y + rowH + 8;
 }
 
+/** A Test Master report-chart block (not the legacy single-value gauge). */
+function isReportChart(s: ResolvedSection): boolean {
+  return s.type === 'chart' && !!s.trend;
+}
+
+/** The report theme values a chart block needs (report-chart.pdf.ts). The
+ *  chart prints in the theme's family: Source Sans 3 when the Modern theme
+ *  embedded it. `face` is the ONE weight → face resolver the tables use
+ *  (faceOf), so a bold italic chart label maps to a registered face too. */
+function chartTheme() {
+  return { font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, face: (w: TypeWeight) => faceOf(w) as [string, string],
+    fontScale: theme.fontScale, accent: BLUE, text: TEXT, ink: BLACK, dim: TEXT_DIM,
+    hair: HAIR, abnormalColored: theme.flagStyle === 'bold_color',
+    abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor };
+}
+
 function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const chart = sec.chart;
-  if (!chart || chart.max <= chart.min) return startY;
+  // A chart with no parameter (a report-chart block read by an older server)
+  // has nothing to gauge.
+  if (!chart || chart.max <= chart.min || !chart.parameter) return startY;
 
   const barX = MARGIN_X;
   const barY = startY + 6;
@@ -3750,8 +4893,7 @@ function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): n
     doc.rect(mx - 1.5, barY - 3, 3, barH + 6, 'F');
   }
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8);
+  typeset(doc, 'chartAxis');
   doc.setTextColor(TEXT_DIM);
   doc.text(String(chart.min), barX, barY + barH + 12);
   if (chart.value !== null && chart.value !== undefined) {
@@ -3763,7 +4905,7 @@ function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): n
 }
 
 /** Legacy renderer — used when a test has no admin-configured layout.
- *  Drlogy 4-column shape: Investigation · Result · Reference Value · Unit.
+ *  Classic 4-column shape: Investigation · Result · Reference Value · Unit.
  *  Inline RED "High"/blue "Low" tag in the Result cell. */
 function renderLegacyTest(
   doc: jsPDF,
@@ -3784,7 +4926,9 @@ function renderLegacyTest(
   const sampleTypeLine = isConcreteSpecimen(rawSampleType) ? rawSampleType : '';
   const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
   const entries = (values ? Object.entries(values) : [])
-    .filter(([paramName]) => !hiddenNames.has(paramName));
+    .filter(([paramName]) => !hiddenNames.has(paramName))
+    // No value → no row (owner 2026-10-03).
+    .filter(([, v]) => !isBlankReportValue(v?.value));
 
   if (entries.length > 0) {
     entries.forEach(([paramName, v], i) => {
@@ -3796,18 +4940,18 @@ function renderLegacyTest(
         ? `${humanize(paramName)}\n${sampleTypeLine}`
         : humanize(paramName);
       const resultStyles: Record<string, unknown> = {
-        fontStyle: 'bold',
+        ...cellType('narrativeResult'),
         textColor: flagText === 'Low' ? FLAG_BLUE : (flagText || rf.abnormal) ? FLAG_RED : BLACK,
       };
       tableRows.push([
-        { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK } },
+        { content: investContent, styles: { ...cellType('testName'), textColor: BLACK } },
         { content: flagText ? `${valueText}    ${flagText}` : valueText, styles: resultStyles },
         { content: rangeCellText(v?.range, v?.unit) || '—' },
         { content: v?.unit ?? '—' },
       ]);
     });
   } else {
-    tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: 'italic', textColor: TEXT_DIM } }]);
+    tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: styleOf('note'), textColor: TEXT_DIM } }]);
   }
 
   const legacySup = new Map<string, SupCell>();
@@ -3815,7 +4959,8 @@ function renderLegacyTest(
     startY: y,
     head: [['Investigation', 'Result', 'Reference Value', 'Unit']],
     body: tableRows as unknown as Array<Array<string | LCell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X },
+    margin: tablePageMargins(),
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3823,7 +4968,7 @@ function renderLegacyTest(
     alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
     columnStyles: {
       0: { cellWidth: 180 },
-      1: { cellWidth: 130, fontStyle: 'bold' },
+      1: { cellWidth: 130, fontStyle: styleOf('narrativeResult') },
       2: { cellWidth: 130 },
       3: { cellWidth: 'auto' as unknown as number },
     },
@@ -3866,8 +5011,7 @@ function renderCultureSection(
   // Sample ID rides the heading line right-aligned — the same tie-back every
   // other department block prints, which the culture section was missing.
   if ((t.sampleId ?? '').trim()) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(8.5);
+    typeset(doc, 'deptMeta');
     doc.setTextColor(TEXT_DIM);
     doc.text(`Sample ID: ${t.sampleId}`, A4.w - MARGIN_X, y + 14, { align: 'right' });
   }
@@ -3883,9 +5027,9 @@ function renderCultureSection(
 
   const line = (label: string, value?: string): void => {
     if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-    doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+    typeset(doc, 'cultureLabel'); doc.setTextColor(BLACK);
     doc.text(`${label.toUpperCase()}:`, MARGIN_X, y);
-    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9);
+    typeset(doc, 'cultureValue');
     const lines = doc.splitTextToSize(value && value.trim() ? value : '—', A4.w - 2 * MARGIN_X - 4);
     doc.text(lines, MARGIN_X, y + 11);
     y += 11 + lines.length * 11 + 4;
@@ -3974,8 +5118,8 @@ function renderCultureSection(
         .map(a => {
           const w = interpWord(a.interpretation);
           return [
-            { content: a.name ?? '', styles: {} },
-            { content: w.txt, styles: { fontStyle: 'bold', textColor: w.color, halign: 'center' } },
+            { content: a.name ?? '', styles: { ...cellType('astDrug') } },
+            { content: w.txt, styles: { ...cellType('astResult'), textColor: w.color, halign: 'center' } },
           ];
         });
       if (rows.length === 0) continue;
@@ -3983,7 +5127,8 @@ function renderCultureSection(
         startY: y,
         head: [[`Antimicrobial for ${orgLabel(org, idx)}`, 'Interpretation']],
         body: rows as unknown as Array<Array<string>>,
-        margin: { left: MARGIN_X, right: MARGIN_X },
+        margin: tablePageMargins(),
+        rowPageBreak: 'avoid',
         theme: 'plain',
         styles: tableBodyStyles(),
         headStyles: tableHeadStyles(),
@@ -3995,7 +5140,7 @@ function renderCultureSection(
 
     // Legend.
     if (y > A4.h - MARGIN_BOTTOM - 40) { y = newPage(doc, practice); }
-    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEXT_DIM);
+    typeset(doc, 'astLegend'); doc.setTextColor(TEXT_DIM);
     const legend = [
       'S - Sensitive (clinically effective at standard therapeutic dose)',
       'R - Resistant (clinically ineffective at standard or increased dose)',
@@ -4029,7 +5174,7 @@ function renderCultureSection(
         astBlock();
       } else if (sec.type === 'paragraph' && (sec.content ?? '').trim()) {
         if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        typeset(doc, 'narrative'); doc.setTextColor(BLACK);
         const lines = doc.splitTextToSize((sec.content ?? '').trim(), A4.w - 2 * MARGIN_X) as string[];
         doc.text(lines, MARGIN_X, y);
         y += lines.length * 11 + 6;
@@ -4092,8 +5237,7 @@ function renderTrendogramSection(
 
   // Section heading (centered uppercase + hairline, matching the report style).
   let y = startY + 12;
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(10);
+  typeset(doc, 'trendHeading');
   doc.setTextColor('#334155');
   doc.text('TRENDOGRAM — SERIAL RESULT TRENDS', A4.w / 2, y, { align: 'center' });
   y += 8;
@@ -4121,8 +5265,7 @@ function renderTrendogramSection(
 
 function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): number {
   const y = startY + 12;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'endMarker');
   doc.setTextColor(BLACK);
   // No "Thanks for Reference" line (owner, 2026-09-28) — only the marker.
   // Admin-configurable marker — defaults to "****End of Report****".
@@ -4135,7 +5278,10 @@ function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): numb
 }
 
 // ──────────────────────────────────────────────────────────────
-// Three-column signature footer — runs on every page
+// Page footer — runs on every page. Signatures NEVER print here: they sign
+// at the end of each department's block / below the End-of-Report marker
+// (drawInlineSignatures). The old per-page three-column signature row (at
+// h-118) is gone, and with it the 150pt floor it forced on every page.
 // ──────────────────────────────────────────────────────────────
 
 function drawSignatureFooter(
@@ -4157,66 +5303,9 @@ function drawSigFooterPage(
   pageNo: number,
   pageTotal: number
 ) {
-  const sigY = A4.h - 118;
-  const sigsW = A4.w - 2 * MARGIN_X;
-  const colW = sigsW / 3;
-
-  // Prefer template-supplied signatures (admin-editable JSON array); the
-  // legacy flat practice shape is the fallback when no template is set.
-  // When the snapshot carries PER-DEPARTMENT signatories, each department
-  // block already signs itself inline — skip the repeated page-bottom row
-  // entirely (the disclaimer/date strip below still draws).
-  // Signatures NEVER print in the page footer — they sign at the end of each
-  // department's section (per-department signatories / tester+validator).
-  const sigs: ReportSignature[] = [];
-
-  sigs.forEach((s, i) => {
-    if (!s.name && !s.signatureUrl) return;
-    const cx = MARGIN_X + i * colW;
-    const px = cx + colW / 2;
-    const baseY = sigY;
-    // Signature image wins; without one we draw the faint scribble placeholder
-    // so the column still reads as a sign-off zone. A per-validator signature
-    // (data URL) is already embedded and used directly; template-configured
-    // upload URLs come pre-fetched from IMG_CACHE.
-    const sigSrc = s.signatureUrl
-      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
-      : null;
-    if (sigSrc) {
-      try {
-        const sigW = 70, sigH = 24;
-        doc.addImage(sigSrc, 'PNG', px - sigW / 2, baseY - sigH + 4, sigW, sigH, undefined, 'FAST');
-      } catch {
-        drawSigScribble(doc, px, baseY);
-      }
-    } else {
-      drawSigScribble(doc, px, baseY);
-    }
-
-    if (s.name) {
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(BLACK);
-      doc.text(s.name, px, baseY + 18, { align: 'center' });
-    }
-
-    if (s.title) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`(${s.title})`, px, baseY + 30, { align: 'center' });
-    }
-    if (s.regNo) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`Reg. ${s.regNo}`, px, baseY + 40, { align: 'center' });
-    }
-  });
-
-  // Disclaimer + footer text — full-width in the band between the signatures
-  // and the date strip. Only on the last page so it doesn't repeat ad nauseam
-  // on multi-page reports.
+  // Disclaimer + footer text — full-width in the band above the date strip.
+  // Only on the last page so it doesn't repeat ad nauseam on multi-page
+  // reports.
   if (pageNo === pageTotal) {
     // Disclaimer + footer text: resolved by the layout model (stacked up
     // from just above the date strip; movable in the report designer).
@@ -4228,22 +5317,21 @@ function drawSigFooterPage(
   doc.setLineWidth(0.4);
   doc.line(MARGIN_X, A4.h - 30, A4.w - MARGIN_X, A4.h - 30);
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8);
+  typeset(doc, 'generated');
   doc.setTextColor(BLACK);
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
   // Plain page number ("1", "2", "3" …).
+  typeset(doc, 'pageNumber');
   doc.text(String(pageNo), A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
-  // Blue band at the bottom (Drlogy "Sample Collection" strip) — the LAB's
+  // Blue band at the bottom (classic "Sample Collection" strip) — the LAB's
   // contact number (home-collection line), never the patient's phone.
   // Admin toggles via template.showSampleCollectionBand.
   const collectPhone = (practice.phone ?? '').trim();
   if (theme.showSampleBand && collectPhone) {
     doc.setFillColor(BLUE);
     doc.rect(0, A4.h - 12, A4.w, 12, 'F');
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8.5);
+    typeset(doc, 'sampleBand');
     doc.setTextColor('#ffffff');
     doc.text(`Sample Collection  ${collectPhone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
   }
@@ -4252,11 +5340,10 @@ function drawSigFooterPage(
   // Collection band on, it sits centred on the date/page-number strip
   // instead of the very edge (which the band occupies).
   if (theme.showPoweredBy && pageNo === pageTotal) {
-    doc.setFont(PDF_FONT, 'italic');
-    doc.setFontSize(7);
+    typeset(doc, 'poweredBy');
     doc.setTextColor(TEXT_DIM);
     const bandOn = theme.showSampleBand && (practice.phone ?? '').trim();
-    doc.text('Powered by Prefrontal LMS', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
+    doc.text('Powered by Prefrontal', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
   }
 
   // Optional watermark — a COMBINATION of the lab's logo (faint, centred)
@@ -4294,15 +5381,14 @@ function drawSigFooterPage(
     const lighten = (1 - op) * 255;
     const grey = Math.round(lighten).toString(16).padStart(2, '0');
     const wmColor = `#${grey}${grey}${grey}`;
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(48);
+    typeset(doc, 'watermark');
     doc.setTextColor(wmColor);
     doc.text(wm, cx, cy, { align: 'center', angle: 30 });
   }
 }
 
 /** Add a new page and redraw the per-page furniture (letterhead etc.
- *  are not repeated — Drlogy reports keep the body pages clean and
+ *  are not repeated — classic reports keep the body pages clean and
  *  rely on the bottom strip alone). */
 function newPage(doc: jsPDF, _practice: NonNullable<ReportPdfInput['practice']>): number {
   doc.addPage();
@@ -4339,11 +5425,11 @@ function buildCanonicalColumns(
   return out;
 }
 
-/** Reorder a column list into the conventional Drlogy lab-report
+/** Reorder a column list into the conventional classic lab-report
  *  arrangement: result first, then reference range (right next to the
  *  value so the eye can compare them), then unit. Text/flag columns
  *  preserve their original relative position around the typed core. */
-function drlogyOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
+function classicOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
   // Build a position map so non-typed columns retain their relative order
   // (e.g. an admin-added "Method" text column stays after the unit, where
   // they placed it).
@@ -4363,17 +5449,17 @@ function drlogyOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
   return ordered;
 }
 
-/** Drlogy-style column header label. Renames the server's "Reference
- *  range" to "Reference Value" (the term Drlogy uses on its PDFs);
+/** Classic-style column header label. Renames the server's "Reference
+ *  range" to "Reference Value" (the conventional lab-report term);
  *  falls back to title-casing the layout's original label for anything
  *  custom. */
-function drlogyLabelFor(c: ReportColumn): string {
+function classicLabelFor(c: ReportColumn): string {
   if (c.type === 'range') return 'Reference Value';
   return titleCaseHeader(c.label);
 }
 
 function titleCaseHeader(label: string): string {
-  // Drlogy uses title case ("Investigation", "Result", "Reference Value", "Unit").
+  // Classic reports use title case ("Investigation", "Result", "Reference Value", "Unit").
   // The admin layout sometimes ships caps ("REFERENCE RANGE") — gently normalise.
   if (!label) return '';
   return label
@@ -4467,6 +5553,14 @@ function cleanSnapshotNames(snap: ReportSnapshot): ReportSnapshot {
       profileName: reportDisplayName(t.profileName),
     } : t),
   };
+}
+
+/** The snapshot with its tests in the lab's print sequence. Untouched (the
+ *  same object) when the template sets no sequencing. */
+function sequenceSnapshot(snap: ReportSnapshot, template: ReportTemplate | null): ReportSnapshot {
+  if (!Array.isArray(snap.tests)) return snap;
+  const tests = applyReportSequencing(snap.tests, readReportSequencing(template));
+  return tests === snap.tests ? snap : { ...snap, tests };
 }
 
 function parseSnapshot(raw: string | null | undefined): ReportSnapshot {

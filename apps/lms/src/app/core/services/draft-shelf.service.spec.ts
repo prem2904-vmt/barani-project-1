@@ -74,6 +74,18 @@ describe('DraftShelfService — which draft is on stage', () => {
     expect(shelf.items().map(d => d.id)).toEqual(['fd:pA', 'fd:pB']);
   });
 
+  it('Lab settings (/lab/settings…) is configuration, not lab work: no drafts on the bar there', async () => {
+    const { router, shelf } = setup();
+    await router.navigateByUrl('/lab/my-work');
+    expect(shelf.items().map(d => d.id)).toEqual(['lab:A', 'lab:B']);
+    await router.navigateByUrl('/lab/settings');
+    expect(shelf.items()).toEqual([]);
+    await router.navigateByUrl('/lab/settings?tab=report');
+    expect(shelf.items()).toEqual([]);
+    await router.navigateByUrl('/lab/sample/A');           // back in lab work: drafts return
+    expect(shelf.items().map(d => d.id)).toEqual(['lab:A', 'lab:B']);
+  });
+
   it('swapState: a draft → draft hop slides by shelf order; none from a non-draft screen or onto itself', async () => {
     const { router, shelf } = setup();
     await router.navigateByUrl('/lab/my-work');
@@ -92,29 +104,21 @@ describe('DraftShelfService — which draft is on stage', () => {
 describe('Draft shelf markup — selected chip', () => {
   const html = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/layout/top-strip/top-strip.component.html'), 'utf8');
   const shelf = html.slice(html.indexOf('class="pf-draftshelf"'), html.indexOf('pf-ts-spacer'));
-  it('chips and popover items: selected class, aria-current, link dropped while on stage', () => {
-    for (const cls of ['pf-draftshelf__chip press', 'pf-draftshelf__pop-item press']) {
-      const tag = shelf.slice(shelf.indexOf(cls), shelf.indexOf('>', shelf.indexOf(cls)));
-      expect(tag).toMatch(/\[class\.pf-draftshelf__(chip|pop-item)--on\]="on"/);
-      expect(tag).toContain(`[routerLink]="on ? null : d.link"`);
-      expect(tag).toContain(`[attr.aria-current]="on ? 'page' : null"`);
-      expect(tag).toContain('[state]="draftShelf.swapState(d)"');
-    }
+  it('chips: aria-current, link dropped while on stage; the +N chip carries the overflow selection', () => {
+    const cls = 'pf-draftshelf__chip press';
+    const tag = shelf.slice(shelf.indexOf(cls), shelf.indexOf('>', shelf.indexOf(cls)));
+    expect(tag).toContain(`[routerLink]="on ? null : d.link"`);
+    expect(tag).toContain(`[attr.aria-current]="on ? 'page' : null"`);
+    expect(tag).toContain('[state]="draftShelf.swapState(d)"');
     expect(shelf).toContain('@let on = draftShelf.activeId() === d.id;');
-    expect(shelf).toContain('[class.pf-draftshelf__more--on]="activeDraftInOverflow()"');
+    expect(shelf).toContain(`[attr.data-current]="activeDraftInOverflow() ? 'true' : null"`);
   });
-  it('selected style = the app\u2019s ONE selected look (global --on rule, both themes) + solid ring, dark inks, 44px touch hit', () => {
-    const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
-    const scss = read('apps/lms/src/app/layout/top-strip/top-strip.component.scss');
-    const global = read('apps/lms/src/styles.scss');
-    // The chips are <a …--on> / the +N a <button …--on>: the global quiet-violet
-    // selected rule (tint + violet ink + hairline) covers them in light AND dark.
-    expect(global).toMatch(/:root\.light\.design-new \{[^}]*a\[class\*="--on"\][^{]*\{[^}]*background:\s*rgba\(124, 58, 237, 0\.10\)/);
-    expect(global).toMatch(/:root\.dark\.design-new \{[^}]*a\[class\*="--on"\][^{]*\{[^}]*background:\s*rgba\(139, 92, 246, 0\.16\)/);
-    expect(scss).toMatch(/\.pf-draftshelf__chip--on \{ border-style: solid; \}/);
-    // Dark inks go through :host-context (a `:root.dark` selector is mangled by
+  it('selected style = the quiet violet look (tint + ink + hairline), both themes, ARIA-driven; 44px touch hit', () => {
+    const scss = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/layout/top-strip/top-strip.component.scss'), 'utf8');
+    expect(scss).toMatch(/\.pf-draftshelf__chip\[aria-current\],\s*\.pf-draftshelf__more\[data-current\] \{[^}]*background:\s*rgba\(124, 58, 237, 0\.10\)/);
+    // Dark goes through :host-context (a `:root.dark` selector is mangled by
     // emulated encapsulation and never matches).
-    expect(scss).toMatch(/:host-context\(\.dark\) \.pf-draftshelf__chip--on \.pf-draftshelf__lbl/);
+    expect(scss).toMatch(/:host-context\(\.dark\) \.pf-draftshelf__chip\[aria-current\]/);
     expect(scss).not.toMatch(/:root\.dark \.pf-draftshelf/);
     expect(scss).toMatch(/@media \(pointer: coarse\)[\s\S]*\.pf-draftshelf__chip::after[\s\S]*height:\s*44px/);
   });

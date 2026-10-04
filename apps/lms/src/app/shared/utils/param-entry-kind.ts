@@ -65,6 +65,14 @@ export function resolveParamEntryKind(p: ParamKindInput): ParamEntryKind {
   return qualitativeOptionsFor({ type: p.type ?? undefined, options: cleanOptions(p) }) ? 'select' : 'text';
 }
 
+/** True for a choice list where the tech may pick SEVERAL answers
+ *  ('multiselect' in any spelling). Result entry stores the picks as a
+ *  string[]; mw flags it abnormal when ANY pick is outside the Normal rows
+ *  and the report prints the picks joined with "; ". */
+export function isMultiChoice(p: ParamKindInput): boolean {
+  return compactType(p.type) === 'multiselect';
+}
+
 /** The dropdown's answers: the test's OWN option table (active rows, in
  *  order) wins; else the qualitative list / default pair; else options[]. */
 export function choiceOptionsFor(p: ParamKindInput): string[] {

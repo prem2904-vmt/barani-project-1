@@ -38,6 +38,9 @@ export interface BranchLabConfig {
   /** Server-resolved payment gate: where an unpaid (e.g. pay-later) order is
    *  held — 'dispatch' | 'report' | 'none'. Enforced server-side. */
   paymentGateStage?: 'none' | 'dispatch' | 'report';
+  /** Technician notes on the report (Lab settings): when true the bench can
+   *  write rich-text notes that print on the report. Per branch; default off. */
+  techReportNotes?: boolean;
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

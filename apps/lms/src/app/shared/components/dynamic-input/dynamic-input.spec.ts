@@ -46,6 +46,20 @@ describe('DynamicInputComponent hybrid DOB age units', () => {
     expect(cmp.monthsFromValue()).toBe(3);
   });
 
+  it('flags an age-box DOB as ESTIMATED and a picked date as real (DOB = single source)', () => {
+    const fixture = create();
+    const cmp = fixture.componentInstance;
+    const flags: boolean[] = [];
+    cmp.dobEstimatedChange.subscribe(v => flags.push(v));
+
+    cmp.setAgeUnit('years');
+    cmp.onHybridAge(40);
+    cmp.onDobPicked('1990-05-01');
+    cmp.onHybridAge(null);                 // cleared → no flag emitted
+
+    expect(flags).toEqual([true, false]);
+  });
+
   it('auto-selects Months for an infant DOB and Years otherwise', () => {
     const fixture = create();
     const cmp = fixture.componentInstance;
@@ -195,15 +209,15 @@ describe('DynamicInputComponent phone digits', () => {
     expect(emitted).toBe('+919876543210');
   });
 
-  it('the rendered input carries maxlength = the country\'s digit count', () => {
+  it('the rendered input carries maxlength = 10 (the +91 mobile; no other code exists)', () => {
     const fixture = TestBed.createComponent(DynamicInputComponent);
     fixture.componentRef.setInput('field', { name: 'additional_contact', title: 'Additional contact', type: 'number' });
     fixture.componentRef.setInput('nd', true);
     fixture.detectChanges();
     const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[type="tel"]')!;
     expect(input.getAttribute('maxlength')).toBe('10');
-    fixture.componentInstance.onCountryCodeChange('+65');
+    fixture.componentInstance.onCountryCodeChange('+65');   // not offered → the +91 rule
     fixture.detectChanges();
-    expect(input.getAttribute('maxlength')).toBe('8');
+    expect(input.getAttribute('maxlength')).toBe('10');
   });
 });

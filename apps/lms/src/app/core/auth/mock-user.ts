@@ -26,6 +26,12 @@ export interface CurrentUser {
   registrationId?: string;
   /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
   isDoctor?: boolean;
+  /** OPD dark build (server /me): OPD calls are admitted for this user —
+   *  tenant explicitly entitled OR the request carried X-PF-OPD: 1 (pf.opd()).
+   *  Informational — the UI gate (OpdGateService) reads opdEntitled + the flag. */
+  opdAccess?: boolean;
+  /** The tenant EXPLICITLY has OPD on (visible without the console flag). */
+  opdEntitled?: boolean;
 }
 
 export interface BranchRef {

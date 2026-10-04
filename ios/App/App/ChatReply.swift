@@ -137,6 +137,10 @@ final class ChatNotificationCenter: NSObject, UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        if notification.request.content.categoryIdentifier == CallAnswerNative.connectCategory {
+            completionHandler([])   // the app is open — it is connecting already
+            return
+        }
         if let next = next, next.responds(to: #selector(UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:withCompletionHandler:))) {
             next.userNotificationCenter?(center, willPresent: notification, withCompletionHandler: completionHandler)
         } else {
@@ -154,6 +158,12 @@ final class ChatNotificationCenter: NSObject, UNUserNotificationCenterDelegate {
         }
         if content.categoryIdentifier == Self.failedCategory {
             openConversation(content.userInfo["conversationId"] as? String)
+            completionHandler()
+            return
+        }
+        if content.categoryIdentifier == CallAnswerNative.connectCategory {
+            // "Open Prefrontal to connect the audio" — the tap itself opened
+            // the app; the web app joins from the CallKit pending answer.
             completionHandler()
             return
         }
@@ -298,7 +308,42 @@ public class PfChatReplyPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "status", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "dismissConversation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "apnsEnvironment", returnType: CAPPluginReturnPromise),
     ]
+
+    /// Which APNs gateway this build's push tokens are valid on — sent with the
+    /// device registration so the server pushes to the right one. A token only
+    /// works on ONE gateway: an Xcode Debug build (aps-environment=development)
+    /// mints sandbox tokens, a TestFlight / App Store build production tokens;
+    /// sending to the other one is a BadDeviceToken. Read from the build's own
+    /// provisioning profile: App Store / TestFlight installs carry none (Apple
+    /// strips it) → production. Never fails — unknown → null and the server
+    /// learns it from the first push instead.
+    @objc func apnsEnvironment(_ call: CAPPluginCall) {
+        call.resolve(["environment": Self.buildApnsEnvironment() ?? NSNull()])
+    }
+
+    static func buildApnsEnvironment() -> String? {
+        #if targetEnvironment(simulator)
+        return "development"
+        #else
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision") else {
+            return "production"
+        }
+        // The profile is a CMS-signed envelope around an XML plist; slice the
+        // plist out by its markers and read Entitlements.aps-environment.
+        guard let data = try? Data(contentsOf: url),
+              let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex),
+              let plist = try? PropertyListSerialization.propertyList(
+                  from: data.subdata(in: start.lowerBound..<end.upperBound), options: [], format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any],
+              let env = entitlements["aps-environment"] as? String else {
+            return nil
+        }
+        return env == "production" ? "production" : env == "development" ? "development" : nil
+        #endif
+    }
 
     /// The user opened this conversation in the app — clear its banners.
     @objc func dismissConversation(_ call: CAPPluginCall) {

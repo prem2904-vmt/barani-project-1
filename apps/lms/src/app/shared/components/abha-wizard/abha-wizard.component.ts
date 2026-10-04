@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, sign
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
 import { Patient } from '../../models/patient.model';
+import { BusyDirective } from '../../directives/busy.directive';
 
 /**
  * ABHA wizard — real ABDM (India health ID) create + verify via OTP. Two flows:
@@ -15,6 +16,7 @@ import { Patient } from '../../models/patient.model';
 @Component({
   selector: 'pf-abha-wizard',
   standalone: true,
+  imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-abw__backdrop" (click)="close.emit()">
@@ -57,7 +59,7 @@ import { Patient } from '../../models/patient.model';
               <p class="pf-abw__hint">An OTP will be sent to the ABHA-linked mobile / Aadhaar.</p>
             }
             @if (error()) { <p class="pf-abw__err">{{ error() }}</p> }
-            <button type="button" class="pf-abw__go" [disabled]="busy() || !inputValid()" (click)="requestOtp()">
+            <button type="button" class="pf-abw__go" [disabled]="busy() || !inputValid()" [pfBusy]="busy()" pfBusyLabel="Sending OTP…" (click)="requestOtp()">
               {{ busy() ? 'Sending OTP…' : 'Send OTP' }}
             </button>
           } @else {
@@ -74,7 +76,7 @@ import { Patient } from '../../models/patient.model';
             @if (error()) { <p class="pf-abw__err">{{ error() }}</p> }
             <button type="button" class="pf-abw__go"
                     [disabled]="busy() || otp().length < 4 || (mode() === 'create' && mobile().length !== 10)"
-                    (click)="verify()">
+                    [pfBusy]="busy()" pfBusyLabel="Verifying…" (click)="verify()">
               {{ busy() ? 'Verifying…' : (mode() === 'create' ? 'Create ABHA' : 'Verify & link') }}
             </button>
           }

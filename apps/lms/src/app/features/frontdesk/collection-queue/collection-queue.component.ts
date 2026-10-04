@@ -41,7 +41,7 @@ const TYPE_COLOR: Record<string, string> = {
           <span class="text-[12px] font-mono" style="color: var(--text-tertiary);">
             {{ waitingCount() }} waiting · ~{{ avgWait() }}m avg
           </span>
-          <pf-touch-btn size="sm" variant="ghost" (pressed)="load()">Refresh</pf-touch-btn>
+          <pf-touch-btn size="sm" variant="ghost" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">Refresh</pf-touch-btn>
           <pf-touch-btn size="sm" variant="primary" (pressed)="toggleWalkIn()">
             {{ walkInOpen() ? 'Close' : '+ Walk-in' }}
           </pf-touch-btn>
@@ -150,19 +150,19 @@ const TYPE_COLOR: Record<string, string> = {
           <div class="pf-row-actions flex items-center gap-1.5 flex-wrap justify-end">
             @switch (q.status) {
               @case ('booked') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.checkIn(q.id))">Check in</pf-touch-btn>
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.noShow(q.id))">No-show</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':in'" busyLabel="Checking in…" (pressed)="act(svc.checkIn(q.id), q.id + ':in')">Check in</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':noshow'" busyLabel="Marking no-show…" (pressed)="act(svc.noShow(q.id), q.id + ':noshow')">No-show</pf-touch-btn>
               }
               @case ('checked_in') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.start(q.id))">Call</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':call'" busyLabel="Calling…" (pressed)="act(svc.start(q.id), q.id + ':call')">Call</pf-touch-btn>
                 @if (q.type !== 'urgent' && q.type !== 'emergency') {
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.markUrgent(q.id))">Urgent</pf-touch-btn>
+                  <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':urgent'" busyLabel="Marking urgent…" (pressed)="act(svc.markUrgent(q.id), q.id + ':urgent')">Urgent</pf-touch-btn>
                 }
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.skip(q.id))">Skip</pf-touch-btn>
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.noShow(q.id))">No-show</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':skip'" busyLabel="Skipping…" (pressed)="act(svc.skip(q.id), q.id + ':skip')">Skip</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':noshow'" busyLabel="Marking no-show…" (pressed)="act(svc.noShow(q.id), q.id + ':noshow')">No-show</pf-touch-btn>
               }
               @case ('in_progress') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.complete(q.id))">Complete</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':done'" busyLabel="Completing…" (pressed)="act(svc.complete(q.id), q.id + ':done')">Complete</pf-touch-btn>
               }
               @default {
                 <span class="text-[12px] font-medium" style="color: var(--text-tertiary);">{{ statusLabel(q.status) }}</span>
@@ -304,10 +304,15 @@ export class CollectionQueueComponent implements OnInit {
   }
 
   /** Run a transition observable, then refresh; surface failures as a toast. */
-  act(obs: { subscribe: (o: { next: () => void; error: (e: unknown) => void }) => void }) {
+  /** `<row id>:<action>` whose request is in flight — only that button shows busy. */
+  readonly busyKey = signal<string | null>(null);
+  act(obs: { subscribe: (o: { next: () => void; error: (e: unknown) => void }) => void }, key?: string) {
+    if (key && this.busyKey() === key) return;
+    if (key) this.busyKey.set(key);
+    const release = () => { if (key && this.busyKey() === key) this.busyKey.set(null); };
     obs.subscribe({
-      next: () => this.load(),
-      error: (e) => { this.toast.error(ApiError.from(e).message); this.load(); }
+      next: () => { release(); this.load(); },
+      error: (e) => { release(); this.toast.error(ApiError.from(e).message); this.load(); }
     });
   }
 

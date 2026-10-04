@@ -408,6 +408,13 @@ describe('Appointments calendar (nd) — helpers', () => {
     expect(matchesAppointment(A1 as any, 'zz')).toBe(false);
     expect(matchesAppointment({ ...A1, patient: { ...P1, mrn: 'X' } } as any, '00')).toBe(false);
   });
+  it('a full number matches its last 10 digits whatever the format (stored +91…)', () => {
+    const stored = { ...A1, patient: { ...P1, phone: '+919000000001' } } as any;
+    for (const q of ['9000000001', '09000000001', '+91 90000-00001', '919000000001']) {
+      expect(matchesAppointment(stored, q)).toBe(true);
+    }
+    expect(matchesAppointment(stored, '9000000002')).toBe(false);
+  });
   it('placeLanes: same start → equal lanes; top follows the hour', () => {
     const start = (a: any) => { const d = new Date(`${a.appointmentDate.slice(0, 10)}T${a.slotTime}:00`); return d; };
     const out = placeLanes([A1, A2] as any, start);

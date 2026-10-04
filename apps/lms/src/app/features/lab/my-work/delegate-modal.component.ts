@@ -5,6 +5,7 @@ import { User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 // Lightweight supervisor delegation picker. Lists active users in the
 // tenant; on pick, fires (chose) with the target user id. The caller
@@ -14,7 +15,7 @@ import { heldFlag } from '../../../shared/utils/min-duration';
 @Component({
   selector: 'pf-delegate-modal',
   standalone: true,
-  imports: [SkeletonRowsComponent, AvatarComponent],
+  imports: [SkeletonRowsComponent, AvatarComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-dl" role="dialog" aria-modal="true" aria-label="Delegate test">
@@ -42,7 +43,8 @@ import { heldFlag } from '../../../shared/utils/min-duration';
         <ul class="pf-dl__list" role="listbox">
           @for (u of filtered(); track u.id) {
             <li>
-              <button type="button" class="pf-dl__item press" (click)="chose.emit(u.id)">
+              <button type="button" class="pf-dl__item press" (click)="chose.emit(u.id)"
+                      [disabled]="!!busyId" [pfBusy]="busyId === u.id" pfBusyLabel="Delegating…">
                 <pf-avatar [name]="u.displayName" [size]="36"></pf-avatar>
                 <div class="min-w-0 flex-1 text-left">
                   <p class="pf-dl__name">{{ u.displayName }}</p>
@@ -155,6 +157,9 @@ import { heldFlag } from '../../../shared/utils/min-duration';
 })
 export class DelegateModalComponent implements OnInit {
   @Input() testName = 'Test';
+  /** The user the caller is delegating to while its request runs: that row
+   *  shows the busy state and the list can't be picked again meanwhile. */
+  @Input() busyId: string | null = null;
   @Output() chose = new EventEmitter<string>();
   @Output() cancelled = new EventEmitter<void>();
 

@@ -10,6 +10,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 /** Band pill tabs — one per independently-saved identity setting. */
 export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
@@ -18,7 +19,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -32,7 +33,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ls__bandsave press"
-                    [disabled]="bandSaveDisabled()" (click)="saveTab()"
+                    [disabled]="bandSaveDisabled()" [pfBusy]="bandSaving()" pfBusyLabel="Saving…" (click)="saveTab()"
                     [attr.aria-label]="bandSaveLabel()" [title]="bandSaveLabel()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ bandSaving() ? 'Saving…' : bandSaveLabel() }}
@@ -69,7 +70,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
                      placeholder="e.g. Arun Labs" />
             </label>
             <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press"
-                    [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()"
+                    [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()" [pfBusy]="orgNameSaving()"
                     (click)="saveOrgName()">
               {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
             </button>
@@ -97,7 +98,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
                      placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
             </label>
             <button type="button" class="nd-btn nd-btn--primary pf-save-slug pf-ls__save pf-classic-only press"
-                    [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" (click)="saveSlug()">
+                    [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" [pfBusy]="slugSaving()" (click)="saveSlug()">
               {{ slugSaving() ? 'Saving…' : 'Save handle' }}
             </button>
           </div>
@@ -165,7 +166,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
         } @else {
           <p class="pf-ls__hint">Using the built-in format (e.g. <span class="nd-num">DEL-2606-000042-7</span>).</p>
         }
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="pidSaving()" (click)="savePatientId()">
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="pidSaving()" [pfBusy]="pidSaving()" (click)="savePatientId()">
             {{ pidSaving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>
@@ -210,7 +211,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
             </div>
           }
           <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ sampleFmt.preview() }}</strong></p>
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" [pfBusy]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
             {{ sampleFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>
@@ -255,7 +256,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
             </div>
           }
           <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ orderFmt.preview() }}</strong></p>
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="orderFmt.saving()" [pfBusy]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
             {{ orderFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>

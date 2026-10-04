@@ -21,7 +21,7 @@
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--print pf-rv-in" style="--i: 4"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'print'"
                 [attr.aria-label]="done() === 'print' ? 'Printing' : 'Print'" title="Print"
-                [disabled]="busy() === 'print'" (click)="print()">
+                [disabled]="busy() === 'print'" [pfBusy]="busy() === 'print'" pfBusyLabel="Preparing the report…" (click)="print()">
           @if (done() === 'print') {
             <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Printing</span>
@@ -39,23 +39,38 @@
             <span class="pf-rv-act__t">Share with…</span>
           </button>
         }
-        <!-- Phones: everything but the primary lives in the More sheet. -->
-        @if (hasMoreActions()) {
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in" style="--i: 5"
-                aria-label="More actions" title="More actions" aria-haspopup="dialog"
-                [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(true)">
-          <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-          <span class="pf-rv-act__t">More</span>
-        </button>
+        <!-- ⋮ — EVERY action for this report in one place (share, download,
+             print, workflow steps, go-to), filtered by permission + state.
+             Popover on web / iPad, a bottom sheet on phones. -->
+        @if (menuActions().length) {
+        <pf-actions-menu class="pf-rv-more" style="--i: 5" [actions]="menuActions()" label="Report actions"
+                         [heading]="patientName()" (opened)="onMenuOpened()" (action)="runAction($event)">
+          <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in"
+                  aria-label="Report actions" title="Report actions"
+                  [pfBusy]="menuBusy() !== null" [pfBusyLabel]="menuBusy() === 'regenerate' ? 'Regenerating…' : 'Preparing the PDF…'">
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            <span class="pf-rv-act__t">More</span>
+          </button>
+        </pf-actions-menu>
         }
         <!-- THE primary: deliver to the patient (deliver_report only; a
              view_report-only viewer gets a view-only page). -->
         @if (canDeliver()) {
+        <!-- Lab has WhatsApp Cloud: the server sends to the patient's number
+             (Sending… → Sent → Delivered / Read); else wa.me on this device. -->
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-rv-act pf-rv-act--send pf-rv-in" style="--i: 6"
-                [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'whatsapp'"
-                [attr.aria-label]="done() === 'whatsapp' ? 'Sent on WhatsApp' : 'Send WhatsApp'" title="Send WhatsApp"
+                [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'whatsapp' || waDone()"
+                [attr.aria-label]="waCloud() ? (waDone() ? waLabel() + ' on WhatsApp' : waLabel()) : (done() === 'whatsapp' ? 'Sent on WhatsApp' : 'Send WhatsApp')"
+                [title]="waCloud() ? 'Send to the patient on WhatsApp' : 'Send WhatsApp'"
+                [disabled]="waState()?.phase === 'sending'" [attr.aria-busy]="waState()?.phase === 'sending'"
                 (click)="deliverWhatsApp()">
-          @if (done() === 'whatsapp') {
+          @if (waCloud() && waState()?.phase === 'sending') {
+            <svg class="pf-rv-act__i pf-rv-act__spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
+            <span class="pf-rv-act__t">Sending…</span>
+          } @else if (waCloud() && waDone()) {
+            <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ waLabel() }}</span>
+          } @else if (done() === 'whatsapp') {
             <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Sent</span>
           } @else {
@@ -227,44 +242,6 @@
     </aside>
   }
 
-  <!-- Phones: the More sheet (everything but the primary). -->
-  @if (moreOpen() && report()) {
-    <div class="pf-rv-scrim" (click)="moreOpen.set(false)" aria-hidden="true"></div>
-    <div class="nd-card pf-rv-sheet pf-rv-sheet--more" role="dialog" aria-modal="true" aria-label="More actions"
-         (keydown.escape)="moreOpen.set(false)">
-      <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
-      <ul class="pf-rv-menu" role="list">
-        @if (canPrint()) {
-        <li>
-          <button type="button" class="pf-rv-menu__row pf-rv-menu__row--print" (click)="moreOpen.set(false); print()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            Print
-          </button>
-        </li>
-        }
-        @if (canDeliver() && entitlements.moduleEnabled('messages')) {
-          <li>
-            <button type="button" class="pf-rv-menu__row pf-rv-menu__row--share" (click)="moreOpen.set(false); openSharePicker()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Share with a colleague
-            </button>
-          </li>
-        }
-        @if (canEditResult()) {
-          <li>
-            <button type="button" class="pf-rv-menu__row pf-rv-menu__row--edit" (click)="moreOpen.set(false); openEditDialog()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              Edit results
-            </button>
-          </li>
-        }
-      </ul>
-      <div class="pf-rv-sheet__foot">
-        <button type="button" class="nd-btn nd-btn--secondary pf-rv-sheet__cancel" (click)="moreOpen.set(false)">Cancel</button>
-      </div>
-    </div>
-  }
-
   <!-- Share with a colleague: nd-card modal on web, a sheet on phones. -->
   @if (chatPickerOpen()) {
     <div class="pf-rv-scrim" (click)="closeSharePicker()" aria-hidden="true"></div>
@@ -288,9 +265,13 @@
                [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
       </div>
       <ul class="pf-rv-share__list">
+        @if (chatPickerLoading()) {
+          <li><pf-skeleton-rows [rows]="4" [trailing]="false" [dense]="true" label="Loading colleagues…"></pf-skeleton-rows></li>
+        } @else {
         @for (u of chatPickerFiltered(); track u.id) {
           <li>
-            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()" (click)="shareWith(u)">
+            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()"
+                    [pfBusy]="chatPickerSendingTo() === u.id" pfBusyLabel="Sending…" (click)="shareWith(u)">
               <span class="pf-rv-share__avatar" aria-hidden="true">{{ initials(u.displayName) }}</span>
               <span class="pf-rv-share__meta">
                 <span class="pf-rv-share__name">{{ u.displayName }}</span>
@@ -302,6 +283,7 @@
           <li class="nd-empty nd-empty--compact">
             <p class="nd-empty__title">No colleagues match</p>
           </li>
+        }
         }
       </ul>
     </div>
@@ -357,20 +339,34 @@
         </dl>
 
         @if (partnerReports().length) {
-          <!-- Outsourced tests: the partner lab's own report is delivered
-               alongside ours (never parsed into it — our PDF says "Tested at"). -->
+          <!-- Outsourced tests: the partner lab's own report — joined to the
+               END of our PDF when the desk attached it ("In this PDF"), else
+               delivered alongside ours. Staff can always open the file alone. -->
           <section class="pf-rv-partner" aria-labelledby="pf-rv-partner-t">
             <h3 class="pf-rv-sec" id="pf-rv-partner-t">Partner lab reports</h3>
             @for (p of partnerReports(); track p.orderTestId) {
+              @let w = partnerWhere(p, pdfParts());
               <div class="pf-rv-partner__row">
                 <span class="pf-rv-partner__name">{{ p.testName }}
                   @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
+                  <span class="pf-rv-partner__lab" [class.pf-rv-partner__lab--warn]="w.warn" data-testid="rv-partner-where">{{ w.text }}</span>
+                  @if (uploads.isMissing(p.url)) {
+                    <span class="pf-rv-partner__lab pf-rv-partner__lab--warn" data-testid="rv-partner-missing" role="status">File no longer available — upload it again from the Outsourced tab</span>
+                  }
                 </span>
                 <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openPartnerReport(p)"
                         [attr.aria-label]="'Open partner report for ' + p.testName">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
                   <span class="nd-rowact__t">Open · print</span>
                 </button>
+                @if (w.canAttach && canAttachPartner()) {
+                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" data-testid="rv-partner-attach"
+                          [disabled]="!!attachingUrl()" [pfBusy]="attachingUrl() === p.url" pfBusyLabel="Attaching…"
+                          (click)="attachPartner(p)" [attr.aria-label]="'Attach the partner report for ' + p.testName + ' to our report'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
+                    <span class="nd-rowact__t">Attach to report</span>
+                  </button>
+                }
               </div>
             }
           </section>

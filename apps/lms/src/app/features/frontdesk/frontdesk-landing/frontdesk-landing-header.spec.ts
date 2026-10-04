@@ -62,7 +62,7 @@ describe('Frontdesk landing — work card header', () => {
   const hdr = parse(between(html, '<header class="pf-appt-split__hdr pf-appt-split__hdr--tabs pf-work-hdr"', '</header>'));
   const row = hdr.querySelector('header.pf-work-hdr') as HTMLElement;
 
-  it('is one row: the search first, then the tab filter', () => {
+  it('is one row: the search first, then the status filter chips', () => {
     const kids = [...row.children];
     expect(kids[0].matches('label.pf-work-find')).toBe(true);
     expect(kids[1].matches('.pf-work-hdr__filter')).toBe(true);
@@ -70,7 +70,8 @@ describe('Frontdesk landing — work card header', () => {
     expect(input.getAttribute('type')).toBe('search');
     expect(input.classList).toContain('nd-input');
     expect(kids[0].querySelector('svg')).not.toBeNull(); // icon, no emoji
-    const tabs = [...kids[1].querySelectorAll('[role="tab"]')].map(b => b.textContent?.replace(/\s+/g, ' ').trim());
+    // Status chips are toggle buttons (aria-pressed) since 2026-09-30, not tabs.
+    const tabs = [...kids[1].querySelectorAll('button')].map(b => b.textContent?.replace(/\s+/g, ' ').trim());
     expect(tabs.map(t => t?.replace(/[{}].*$/, '').trim())).toEqual(['In progress', 'Completed', 'Payments due', 'Outsourced']);
   });
 

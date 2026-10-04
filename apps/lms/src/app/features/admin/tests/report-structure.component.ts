@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import type { LiveLayout } from '../../../shared/utils/report-profile-layout';
 import { FormsModule } from '@angular/forms';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -9,6 +10,12 @@ import {
 import type { InsightParam } from '../../../shared/utils/range-insight';
 import { mergeStructureOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
 import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared/utils/results-table';
+import { defaultChartSpec, type ReportChartSpec } from '../../../shared/utils/report-chart/report-chart.model';
+import type { ChartEditorContext } from '../../../shared/utils/report-chart/report-chart.sample';
+import { ReportChartEditorComponent } from './report-chart-editor.component';
+import { ProfileLayoutDesignerComponent } from './profile-layout-designer.component';
+import type { PageLayoutBox, ReportColumn, ReportSection } from '../../../shared/models/report-layout.model';
+import type { PreviewProfileMember } from '../../../shared/utils/report-sample-preview';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -17,6 +24,8 @@ import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared
 type RawSection = Record<string, unknown> & {
   id?: string; type?: string; order?: number; label?: string | null;
   hidden?: boolean; source?: string; template?: string;
+  /** Chart block spec (docs/REPORT-CHARTS.md). */
+  trend?: unknown;
   conditions?: RawRule[];
 };
 type RawRule = {
@@ -46,7 +55,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
 @Component({
   selector: 'pf-report-structure',
   standalone: true,
-  imports: [FormsModule, SelectComponent],
+  imports: [FormsModule, SelectComponent, ReportChartEditorComponent, ProfileLayoutDesignerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rsd">
@@ -153,6 +162,14 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                     <p>Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.</p>
                   </div>
                 }
+                @case ('chart') {
+                  @if (row.trend && chartContext()) {
+                    <pf-report-chart-editor [value]="row.trend" [title]="row.name" [context]="chartContext()!"
+                      (specChange)="setChart(row, $event)" (titleChange)="setChartTitle(row, $event)"></pf-report-chart-editor>
+                  } @else {
+                    <p class="rsd__note">A single-value gauge — fine-tuning lives in the advanced editor below.</p>
+                  }
+                }
                 @case ('image') {
                   <p class="rsd__note">Photos the tech marks “show” at result entry print here.
                     Hidden = they stay in the lab record only — nothing on the PDF.</p>
@@ -209,6 +226,11 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                 <button type="button" role="menuitem" (click)="addSection('image')">
                   <strong>Images</strong><span>Attachments captured with the result</span>
                 </button>
+                @if (!culture() && chartContext()) {
+                  <button type="button" role="menuitem" (click)="addSection('chart')">
+                    <strong>Chart</strong><span>Line, bar or dots — time points or chosen values</span>
+                  </button>
+                }
                 @if (culture()) {
                   <button type="button" role="menuitem" (click)="addSection('culture_line')">
                     <strong>Report line</strong><span>Gram stain, growth, notes — any bench finding</span>
@@ -227,6 +249,25 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
             }
           </span>
         </div>
+
+        @if (isProfile()) {
+          <section class="rsd__onepage">
+            <pf-profile-layout-designer
+              [sections]="$any(rawSections() ?? [])"
+              [resolvedColumns]="resolvedColumns()"
+              [profileTestId]="testId()"
+              [profileName]="profileName()"
+              [profileCatalogKey]="profileCatalogKey()"
+              [department]="profileDepartment()"
+              [sampleType]="profileSampleType()"
+              [members]="profileMembers()"
+              [columnsOverride]="columnsOverride()"
+              [chartContext]="chartContext()"
+              [departmentId]="profileDepartmentId()"
+              (sectionsChange)="onPageLayoutChange($event)"
+              (liveChange)="pageLayoutLive.emit($event)" />
+          </section>
+        }
       }
     </div>
   `,
@@ -246,7 +287,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
       border-radius: 7px; background: rgba(124,58,237,.14); color: var(--violet-text, #a78bfa);
       font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .rsd__title { font-size: 13.5px; font-weight: 700; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      min-width: 0; overflow-wrap: anywhere; }
     .rsd__grow { flex: 1; }
     .rsd__rename { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       background: var(--bg-secondary, rgba(0,0,0,.25)); border: 1px solid rgba(168,85,247,.5); border-radius: 8px;
@@ -363,8 +404,33 @@ export class ReportStructureComponent {
   /** Bumped by the host after the advanced editor closes → reload. */
   readonly reloadToken = input<number>(0);
 
+  /** What the chart editor knows about this test (time points, values,
+   *  ranges) — null hides the Chart option (culture tests). */
+  readonly chartContext = input<ChartEditorContext | null>(null);
+
   readonly changed = output<void>();
   readonly customizeColumns = output<void>();
+
+  // ── Profile one-page layout (owner, 2026-10-02) ───────────────────────
+  /** Only a profile/package gets the one-page layout designer — a single
+   *  test's report is one block already. */
+  readonly isProfile = input<boolean>(false);
+  readonly resolvedColumns = input<ReportColumn[]>([]);
+  /** What the designer's sample page prints — the SAME profile facts the
+   *  test editor feeds its Live preview (report-sample-preview.ts). */
+  readonly profileName = input<string>('');
+  readonly profileCatalogKey = input<string | null>(null);
+  readonly profileDepartment = input<string>('');
+  readonly profileDepartmentId = input<string | null>(null);
+  readonly profileSampleType = input<string>('');
+  readonly profileMembers = input<PreviewProfileMember[]>([]);
+  readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** The designer's live box set (unsaved) — the host's Live preview shows it. */
+  readonly pageLayoutLive = output<LiveLayout>();
+
+  onPageLayoutChange(next: ReportSection[]): void {
+    this.commit(next as unknown as RawSection[], { debounce: true });
+  }
 
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -374,7 +440,9 @@ export class ReportStructureComponent {
   readonly renameDraft = signal('');
 
   /** Raw stored sections (null = no saved layout → implicit structure). */
-  private readonly rawSections = signal<RawSection[] | null>(null);
+  /** protected, not private: the template passes it straight to
+   *  pf-profile-layout-designer's [sections] input. */
+  protected readonly rawSections = signal<RawSection[] | null>(null);
 
   /** The test records values of its OWN (an individual test — not a
    *  profile/package, whose members print their values). Its results table
@@ -571,7 +639,10 @@ export class ReportStructureComponent {
       canHide: true, implicit: true,
     };
     if (raw) {
-      const out = raw.map((s, i) => this.rowFor(s, i));
+      // The profile one-page layout rides in this SAME sections array (no
+      // second storage) but is edited only by pf-profile-layout-designer —
+      // it must never show as a generic, deletable/hideable block here.
+      const out = raw.filter(s => s.type !== 'page_layout').map((s, i) => this.rowFor(s, i));
       // Mirrors materialised(): a missing results table leads the list.
       if (this.missingTable()) out.unshift(this.implicitGridRow());
       if (this.attachments() && !raw.some(s => s.type === 'image')) out.push(implicitImage);
@@ -612,10 +683,10 @@ export class ReportStructureComponent {
       name: s.label || named[t] || t || 'Block',
       hint: 'edit in the advanced editor',
       hidden: s.hidden === true,
-      canRename: t === 'culture_line' || t === 'paragraph',
+      canRename: t === 'culture_line' || t === 'paragraph' || t === 'chart',
       canDelete: t !== 'grid',
       canHide: t !== 'grid',
-      source: s.source, template: s.template,
+      source: s.source, template: s.template, trend: s.trend,
       conditions: s.conditions, implicit: false,
     };
   }
@@ -664,6 +735,13 @@ export class ReportStructureComponent {
   setTemplate(row: StructureRow, v: string) {
     this.mutate(row.key, s => { s.template = v; }, { debounce: true });
   }
+  setChart(row: StructureRow, spec: ReportChartSpec) {
+    this.mutate(row.key, s => { s.trend = spec; }, { debounce: true });
+  }
+  setChartTitle(row: StructureRow, title: string) {
+    const v = title.trim();
+    this.mutate(row.key, s => { s.label = v || 'Chart'; });
+  }
   moveRow(row: StructureRow, dir: -1 | 1) {
     const rows = this.rows();
     const idx = rows.findIndex(r => r.key === row.key);
@@ -680,6 +758,11 @@ export class ReportStructureComponent {
     const s: RawSection = { id: newSecId(), type, order: secs.length + 1, conditions: [] };
     if (type === 'culture_line') { s.source = 'clinicalNotes'; s.label = 'Clinical notes'; }
     if (type === 'paragraph') s.template = '';
+    if (type === 'chart') {
+      const ctx = this.chartContext();
+      s.label = 'Chart';
+      s.trend = defaultChartSpec({ series: !!ctx?.series, parameters: ctx?.params.map(p => p.name) ?? [] });
+    }
     secs.push(s);
     this.commit(secs);
   }
@@ -692,10 +775,16 @@ export class ReportStructureComponent {
     const imageSec = (): RawSection => ({ id: newSecId(), type: 'image', order: 0, conditions: [] });
     const raw = this.rawSections();
     if (raw) {
-      let secs = raw.map(s => ({ ...s }));
+      // The profile one-page layout section (if any) is NOT one of rows()'s
+      // displayed blocks (filtered out there — it's edited only by
+      // pf-profile-layout-designer) — pulled out here and re-appended LAST
+      // so this array stays index-aligned with rows() for mutate()/moveRow()
+      // (both position-based), then rides along untouched on save.
+      const pageLayoutSec = raw.find(s => s.type === 'page_layout') ?? null;
+      let secs = raw.filter(s => s.type !== 'page_layout').map(s => ({ ...s }));
       if (this.missingTable()) secs = withResultsTableFirst(secs, newSecId());
       if (this.attachments() && !secs.some(s => s.type === 'image')) secs.push(imageSec());
-      return secs;
+      return pageLayoutSec ? [...secs, pageLayoutSec] : secs;
     }
     if (this.culture()) {
       const secs = CLASSIC_CULTURE.map((c, i) => {
@@ -776,6 +865,8 @@ interface StructureRow {
   canHide: boolean;
   source?: string;
   template?: string;
+  /** A chart block's Test Master spec (docs/REPORT-CHARTS.md). */
+  trend?: unknown;
   conditions?: RawRule[];
   implicit: boolean;
 }

@@ -9,12 +9,15 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Patient, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
+import { PATIENT_TITLES, Patient, isBabyOfTitle, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { ageInYears, ageParts } from '../../../shared/utils/patient-age';
+import { NdDateComponent } from '../nd-date/nd-date.component';
 
 interface HistoryRow {
   id: string;
@@ -61,7 +64,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [SkeletonDetailComponent, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent],
+  imports: [SkeletonDetailComponent, BusyDirective, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent, NdDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
@@ -117,19 +120,19 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                                  (valueChange)="setDraftField('title', $event)"></pf-select>
                     </label>
                     <label>
-                      <span>First name</span>
+                      <span>{{ draftIsBabyOf() ? "Mother's first name" : 'First name' }}</span>
                       <input class="pf-pp-input" [value]="draft().firstName"
                              (input)="setDraftField('firstName', $any($event.target).value)" />
                     </label>
                     <label>
-                      <span>Last name</span>
+                      <span>{{ draftIsBabyOf() ? "Mother's last name" : 'Last name' }}</span>
                       <input class="pf-pp-input" [value]="draft().fathersName"
                              (input)="setDraftField('fathersName', $any($event.target).value)" />
                     </label>
                     <label>
                       <span>Date of birth</span>
-                      <input type="date" class="pf-pp-input" [value]="draft().dateOfBirth"
-                             (input)="setDob($any($event.target).value)" />
+                      <pf-nd-date label="Date of birth" [value]="draft().dateOfBirth || null"
+                                  (valueChange)="setDob($event)"></pf-nd-date>
                     </label>
                     <label>
                       <span>Age</span>
@@ -143,7 +146,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                                  (valueChange)="setDraftField('sex', $event)"></pf-select>
                     </label>
                   </div>
-                  <p class="pf-pp-hint">DOB → age auto-calculates. Setting age leaves DOB untouched.</p>
+                  <p class="pf-pp-hint">DOB → age auto-calculates. Entering only an age stores an estimated DOB.</p>
                 }
               </div>
 
@@ -180,7 +183,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                   <button type="button" class="pf-pp-btn pf-pp-btn--ghost press"
                           [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
                   <button type="button" class="pf-pp-btn pf-pp-btn--primary press"
-                          [disabled]="saving() || !editValid()"
+                          [disabled]="saving() || !editValid()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                           (click)="saveEdit()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
                 }
                 <button type="button" class="pf-pp-icon-btn press" aria-label="Close" (click)="close()">
@@ -235,7 +238,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                               (click)="openAbhaWizard()">Verify</button>
                     }
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--rose"
-                            (click)="unlinkAbha()" [disabled]="abhaBusy()">Unlink</button>
+                            (click)="unlinkAbha()" [disabled]="abhaBusy()" [pfBusy]="abhaBusy()" pfBusyLabel="Unlinking…">Unlink</button>
                   } @else {
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--accent"
                             (click)="openAbhaWizard()">Link / Create ABHA</button>
@@ -347,7 +350,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelMobileChange()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--primary"
-                    [disabled]="!mobileValid() || mobileBusy()"
+                    [disabled]="!mobileValid() || mobileBusy()" [pfBusy]="mobileBusy()" pfBusyLabel="Saving…"
                     (click)="saveMobile()">{{ mobileBusy() ? 'Saving…' : 'Save' }}</button>
           </div>
         </div>
@@ -370,7 +373,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelAbhaLink()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--primary"
-                    [disabled]="!abhaValid() || abhaBusy()"
+                    [disabled]="!abhaValid() || abhaBusy()" [pfBusy]="abhaBusy()" pfBusyLabel="Linking…"
                     (click)="saveAbhaLink()">{{ abhaBusy() ? 'Linking…' : 'Link' }}</button>
           </div>
         </div>
@@ -407,7 +410,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelDelete()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--danger"
-                    [disabled]="deleteBusy()"
+                    [disabled]="deleteBusy()" [pfBusy]="deleteBusy()" pfBusyLabel="Deleting…"
                     (click)="doDelete()">{{ deleteBusy() ? 'Deleting…' : 'Delete' }}</button>
           </div>
         </div>
@@ -964,15 +967,11 @@ export class PatientProfileModalComponent {
   private readonly toasts = inject(ToastService);
 
   protected readonly sexOptions = SEX_OPTIONS;
-  /** Honorifics — matches the registration form + server normalizer. */
+  /** Honorifics — matches the registration form + server normalizer.
+   *  "Baby" = own name; "Baby of" = unnamed newborn (names = the mother's). */
   protected readonly titleOptions = [
     { value: '', label: '—' },
-    { value: 'Mr.', label: 'Mr.' },
-    { value: 'Mrs.', label: 'Mrs.' },
-    { value: 'Ms.', label: 'Ms.' },
-    { value: 'Dr.', label: 'Dr.' },
-    { value: 'Master', label: 'Master' },
-    { value: 'Baby', label: 'Baby' },
+    ...PATIENT_TITLES.map(t => ({ value: t as string, label: t as string })),
   ];
 
   // Lifecycle: when activeId flips, fetch the profile.
@@ -1009,6 +1008,8 @@ export class PatientProfileModalComponent {
   readonly saving = this._saving.asReadonly();
   readonly editMode = this._editMode.asReadonly();
   readonly draft = this._draft.asReadonly();
+  /** "Baby of" in the edit draft → the name boxes hold the mother's name. */
+  protected readonly draftIsBabyOf = computed(() => isBabyOfTitle(this._draft().title));
   readonly pageLimit = this._pageLimit.asReadonly();
 
   readonly mobilePromptOpen = this._mobilePromptOpen.asReadonly();
@@ -1140,8 +1141,11 @@ export class PatientProfileModalComponent {
       firstName: p.firstName ?? '',
       fathersName: p.fathersName ?? '',
       dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
-      age: p.age != null ? String(p.age) : '',
-      sex: p.sex ?? ''
+      // The DOB-derived whole years (shared helper), never a stale stored age —
+      // echoing it back on save must not re-estimate a real DOB.
+      age: ageInYears(p) != null ? String(ageInYears(p)) : '',
+      sex: p.sex ?? '',
+      dobTouched: false
     });
   }
 
@@ -1153,23 +1157,21 @@ export class PatientProfileModalComponent {
   }
 
   /**
-   * Setting DOB auto-calculates age (per spec). Setting age does NOT
-   * auto-calculate DOB — DOB is left untouched in that direction.
+   * DOB is the single source of age (owner, 2026-09-29). Setting the DOB
+   * auto-calculates the age (shared patient-age helper). Setting only an age
+   * sends the age alone — the server stores an estimated DOB when it differs
+   * from the current DOB's age.
    */
-  setDob(value: string) {
+  setDob(value: string | null) {
     if (!value) {
-      this._draft.update(d => ({ ...d, dateOfBirth: '' }));
+      this._draft.update(d => ({ ...d, dateOfBirth: '', dobTouched: false }));
       return;
     }
-    const dob = new Date(value);
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    this._draft.update(d => ({ ...d, dateOfBirth: value, age: String(Math.max(0, age)) }));
+    const years = ageParts(value)?.years;
+    this._draft.update(d => ({ ...d, dateOfBirth: value, dobTouched: true, age: years != null ? String(years) : d.age }));
   }
   setAge(value: string) {
-    this._draft.update(d => ({ ...d, age: value }));
+    this._draft.update(d => ({ ...d, age: value, dobTouched: false }));
   }
 
   saveEdit() {
@@ -1184,8 +1186,9 @@ export class PatientProfileModalComponent {
       fathersName: d.fathersName.trim(),
       sex: d.sex || null
     };
-    if (d.dateOfBirth) body['dateOfBirth'] = new Date(d.dateOfBirth).toISOString();
-    if (d.age) body['age'] = parseInt(d.age, 10);
+    // A calendar date string (yyyy-MM-dd) — the server reads it as that date.
+    if (d.dateOfBirth && d.dobTouched) body['dateOfBirth'] = d.dateOfBirth;
+    else if (d.age) body['age'] = parseInt(d.age, 10);
     this.api.patch<Patient>(`/api/patients/${p.id}`, body).subscribe({
       next: updated => {
         this._patient.set(updated);
@@ -1375,5 +1378,7 @@ interface DraftPatient {
   fathersName: string;
   dateOfBirth: string; // yyyy-MM-dd
   age: string;
+  /** The DOB box was edited in this session (else only the age is sent). */
+  dobTouched?: boolean;
   sex: string;
 }

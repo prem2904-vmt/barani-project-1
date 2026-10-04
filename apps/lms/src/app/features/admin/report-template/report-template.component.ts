@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { ReportTemplate } from '../../../shared/models/report.model';
+import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
@@ -12,6 +12,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
+import { ReportSequencingEditorComponent } from './report-sequencing-editor.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -20,8 +21,14 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
+import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
+import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 
-type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -31,13 +38,14 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [
+  imports: [SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
     SelectComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
+    ReportSequencingEditorComponent,
     HeroBandComponent,
     ReportHeaderEditorComponent,
   ],
@@ -61,7 +69,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
               }
             </span>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                    [disabled]="saving()" (click)="save()" aria-label="Save template" title="Save template">
+                    [disabled]="saving() || tplSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" aria-label="Save template" title="Save template">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -80,12 +88,20 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
           @if (dirty()) { <span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
-        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
+        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </header>
 
       <div class="pf-band-body pf-band-body--fill">
+      @if (tplSkeleton()) {
+        <!-- First load: the designer's shape until the lab's template lands
+             (never the defaults flashing before the saved template). -->
+        <div class="pf-rt-loading">
+          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
+          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
+        </div>
+      } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
            [class.pf-rt-grid--designer]="designerTab()">
         <!-- ── Section rail (CLASSIC only): the new design puts the
@@ -155,7 +171,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                               (click)="resetDeptPatient()">Reset to default</button>
                       <!-- Secondary: the band's Save owns the ONE primary. -->
                       <button type="button" class="nd-btn nd-btn--secondary pf-pt-btn press"
-                              [disabled]="!deptPatientDirty() || deptPatientSaving()"
+                              [disabled]="!deptPatientDirty() || deptPatientSaving()" [pfBusy]="deptPatientSaving()" pfBusyLabel="Saving…"
                               (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
                     }
                   </div>
@@ -176,6 +192,28 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   </div>
 
                 </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">QR codes</h4>
+                  <p class="pf-rtb-s">Print QR codes in the patient strip. Each switch adds its code to the arrangement below — drag it to move it.</p>
+                  <div class="pf-sqr">
+                    @for (q of stripQrOptions; track q.key) {
+                      <div class="pf-sqr__row">
+                        <span class="pf-sqr__ic" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-4M14 18v3"/></svg>
+                        </span>
+                        <span class="pf-sqr__txt">
+                          <span class="pf-sqr__label">{{ q.label }}</span>
+                          <span class="pf-sqr__desc">{{ q.desc }}</span>
+                        </span>
+                        <button type="button" class="nd-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="stripQrOn(q.key)"
+                                [attr.aria-label]="q.label" (click)="toggleStripQr(q.key)">
+                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                        </button>
+                      </div>
+                    }
+                  </div>
                 </div>
 
                 <div class="pf-rtb">
@@ -246,6 +284,35 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
             @case ('table') {
               <div class="pf-rt-flat">
                 <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Report theme</h4>
+                  <p class="pf-rtb-s">The typeface and size scale of the whole report — letterhead, patient strip, results, sign-off and footer. Colours stay yours.</p>
+                  <div class="pf-rtheme" role="radiogroup" aria-label="Report theme">
+                    @for (o of reportThemeOptions; track o.value) {
+                      <button type="button" class="pf-rtheme__card press" role="radio"
+                              [attr.aria-checked]="reportTheme() === o.value" (click)="setReportTheme(o.value)">
+                        <span class="pf-rtheme__spec" aria-hidden="true"
+                              [style.fontFamily]="o.value === 'source-sans' ? sourceSansCss : fontCss(tpl().fontFamily ?? 'helvetica')">
+                          <span class="pf-rtheme__lab" [style.fontWeight]="700">LAB NAME</span>
+                          <span class="pf-rtheme__dept" [style.fontWeight]="700">HAEMATOLOGY</span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">Haemoglobin</span>
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 400">13.8</span>
+                            <span class="pf-rtheme__dim">13.0 – 17.0</span>
+                          </span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">MCV</span>
+                            <span [style.fontWeight]="700">101.7 H</span>
+                            <span class="pf-rtheme__dim">83 – 101</span>
+                          </span>
+                        </span>
+                        <span class="pf-rtheme__name">{{ o.label }}</span>
+                        <span class="pf-rtheme__desc">{{ o.desc }}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Table colours</h4>
                   <p class="pf-rtb-s">Header row, body text and hairlines of the results table.</p>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -266,8 +333,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Typography &amp; table</h4>
                   <p class="pf-rtb-s">Font, table lines and department behaviour.</p>
+                @if (reportTheme() !== 'classic') {
+                  <p class="pf-rtb-s pf-rtheme__note">Font family and size are set by the {{ reportThemeLabel() }} theme — switch to Classic to choose them.</p>
+                }
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
                     <label class="pf-label">Font family</label>
                     <div class="pf-wys-fonts">
                       @for (o of fontOptions; track o.value) {
@@ -281,7 +351,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       }
                     </div>
                   </div>
-                  <div>
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
                     <label class="pf-label">Font size</label>
                     <pf-segmented
                       [options]="sizeOptions"
@@ -437,6 +507,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
               </pf-report-columns-editor>
             }
 
+            <!-- ══ SEQUENCING — department + test print order ══ -->
+            @case ('sequence') {
+              <pf-report-sequencing-editor [template]="tpl()"
+                (metadataChange)="patch({ metadata: $event })"
+                (previewTests)="seqPreviewTests.set($event)"></pf-report-sequencing-editor>
+            }
+
           }
         </div>
 
@@ -465,6 +542,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </aside>
         }
       </div>
+      }
       </div>
     </section>
   `,
@@ -505,6 +583,25 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-wys-font[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-wys-font__sample { font-size: 15px; }
     .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
+
+    /* Report theme cards — a paper specimen set in the theme's own face. */
+    .pf-rtheme { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 520px) { .pf-rtheme { grid-template-columns: 1fr; } }
+    .pf-rtheme__card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left;
+      min-height: 44px; padding: 10px; border-radius: 12px; cursor: pointer; font: inherit; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-rtheme__card[aria-checked='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-rtheme__card:focus-visible { outline: 2px solid var(--nd-sel-border); outline-offset: 2px; }
+    .pf-rtheme__spec { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px;
+      background: #fff; color: #1B3A6B; border: 1px solid rgba(0,0,0,0.08); }
+    .pf-rtheme__lab { font-size: 17px; line-height: 1.1; }
+    .pf-rtheme__dept { font-size: 11.5px; border-bottom: 1.5px solid #1B3A6B; padding-bottom: 2px; margin-bottom: 2px; }
+    .pf-rtheme__row { display: grid; grid-template-columns: 1.3fr 0.9fr 1fr; gap: 6px; font-size: 10.5px; color: #1a1a1a; }
+    .pf-rtheme__dim { color: #666; font-weight: 400; }
+    .pf-rtheme__name { font-size: 13px; font-weight: 600; }
+    .pf-rtheme__desc { font-size: 12px; line-height: 1.4; color: var(--text-secondary, #94a3b8); }
+    .pf-rtheme__note { margin: 0 0 8px; }
+    .pf-rtheme__off { opacity: 0.4; pointer-events: none; }
 
     .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 7px;
       background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
@@ -560,6 +657,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-rt-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-tertiary, #94a3b8); }
 
     .pf-rt-grid { display: grid; grid-template-columns: 188px minmax(0, 1fr) minmax(400px, 40%); gap: 18px; align-items: start; }
+    .pf-rt-loading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); gap: 18px; align-items: start; }
+    @media (max-width: 1180px) { .pf-rt-loading { grid-template-columns: 1fr; } }
     @media (max-width: 1180px) { .pf-rt-grid { grid-template-columns: 1fr; } }
 
     /* ── Section list (left panel). ── */
@@ -652,6 +751,18 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
     .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--nd-toggle-on, #aeb8c2); }
     .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Patient-strip QR switches */
+    .pf-sqr { display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0;
+      border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
+    .pf-sqr__row:first-child { border-top: 0; }
+    .pf-sqr__ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+      color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--border-muted); }
+    .pf-sqr__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sqr__desc { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
+    .pf-sqr__sw { flex: none; min-width: 44px; min-height: 44px; }
 
     /* Department scope row for the patient strip */
     .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -767,7 +878,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
     { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
     { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
-    { value: 'table',      label: 'Results table', desc: 'Font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
   /** The same sections as the band pill's tabs (new design). The
@@ -786,13 +898,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   setTab(t: Tab) {
     this._tab.set(t);
+    if (t === 'table') this.loadSourceSansFace();
     // Re-pull the form-flow fields when entering the Patient tab so the list
     // reflects the latest saved Patient Registration flow (not a stale copy).
     if (t === 'patient') this.loadCustomPatientFields();
   }
 
   readonly headerPresetOptions: SegmentedOption<string>[] = [
-    { value: 'drlogy',   label: 'Classic'  },
+    { value: 'classic',  label: 'Classic'  },
     { value: 'centered', label: 'Centered' },
     { value: 'banner',   label: 'Banner'   },
     { value: 'minimal',  label: 'Minimal'  },
@@ -986,6 +1099,30 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Report theme (report-theme.ts) — stored in the template metadata ──
+  readonly reportThemeOptions = REPORT_THEME_OPTIONS;
+  readonly reportTheme = computed<ReportThemeId>(() => readReportTheme(this.tpl()));
+  readonly reportThemeLabel = computed(() => REPORT_THEME_OPTIONS.find(o => o.value === this.reportTheme())?.label ?? '');
+  setReportTheme(id: ReportThemeId) {
+    if (this.reportTheme() === id) return;
+    this.patch({ metadata: writeReportTheme(this.tpl(), id) });
+  }
+  /** The theme card's specimen font: the report's own Source Sans 3 files,
+   *  registered once as a web font when the card is shown. */
+  readonly sourceSansCss = "'PF Source Sans 3', 'Source Sans 3', system-ui, sans-serif";
+  private sourceSansFaceLoaded = false;
+  private loadSourceSansFace() {
+    if (this.sourceSansFaceLoaded || typeof FontFace === 'undefined' || typeof document === 'undefined') return;
+    this.sourceSansFaceLoaded = true;
+    const faces: Array<[keyof typeof SOURCE_SANS_FACES, string, string]> =
+      [['normal', '400', 'normal'], ['semibold', '600', 'normal'], ['bold', '700', 'normal']];
+    for (const [f, weight, style] of faces) {
+      const url = new URL(SOURCE_SANS_DIR + SOURCE_SANS_FACES[f].file, document.baseURI).toString();
+      const face = new FontFace('PF Source Sans 3', `url(${url})`, { weight, style });
+      face.load().then(ff => document.fonts.add(ff)).catch(() => { /* card falls back to system sans */ });
+    }
+  }
+
   /** Browser stand-ins for the PDF font families, so the picker cards render
    *  IN the face they select. */
   fontCss(v: string): string {
@@ -997,6 +1134,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // Live columns being edited in the Columns tab + their department, so the
   // preview can apply them to that department's sample tests before save.
   private readonly editedCols = signal<ReportColumn[]>([]);
+  /** Sequencing tab: a sample order from the lab's own departments + tests. */
+  readonly seqPreviewTests = signal<Array<Record<string, unknown>>>([]);
+  /** Entering / leaving Sequencing swaps the preview's sample order. */
+  private readonly onSequenceTab = computed(() => this._tab() === 'sequence');
   private readonly editedDeptName = signal<string>('');
   private readonly editedDeptCode = signal<string>('');
   onColumnsState(s: { departmentName: string; departmentCode: string; columns: ReportColumn[] }) {
@@ -1025,7 +1166,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       tagline: 'Accurate | Caring | Instant',
       address: '', phone: '', email: '', website: '', logoUrl: '',
       nablAccredited: false, nablNumber: '', nablLogoUrl: '',
-      headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+      headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
       primaryColor: '#1B3A6B', accentColor: '#0066CC',
       tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
       bodyTextColor: '#1a1a1a', dividerColor: '#cccccc',
@@ -1080,6 +1221,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       // draft so a department arrangement previews as you drag.
       this.editedCols(); this.editedDeptName(); this.editedDeptCode();
       this.patientScope(); this.patientCols(); this.deptPatientLayout();
+      // Sequencing tab: the preview runs on the lab's own departments/tests.
+      this.seqPreviewTests(); this.onSequenceTab();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
@@ -1129,7 +1272,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       // Columns tab: relabel the whole sample report to the department being
       // edited so ONE section — titled with that department — previews the
       // strip exactly; empty configured columns stay visible.
-      let data = this.sampleSnapshot();
+      let data = this.tab() === 'sequence' ? sequencePreviewSnapshot(this.sampleSnapshot(), this.seqPreviewTests()) : this.sampleSnapshot();
       const onColumns = this.tab() === 'columns';
       if (onColumns && (this.editedDeptName() || this.editedDeptCode())) {
         try {
@@ -1178,11 +1321,13 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
    *  block, multi-test grouping, sample type, multi-parameter test. */
   private sampleSnapshot(): string {
     return JSON.stringify({
-      patient: { displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
+      patient: { id: 'preview-patient', displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
       order:   { id: 'preview-order-12345',
                  // A realistic order number so the preview's barcode is a true
                  // Code-128 of a scannable value, not a placeholder.
                  orderNumber: 'LAB-2608-000042',
+                 // Sample token so a placed patient-strip Order QR previews.
+                 trackToken: 'SAMPLE',
                  createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
                  refDoctorName: 'Dr. A. Sharma',
                  refHospitalName: 'Apollo Speciality Hospital',
@@ -1216,18 +1361,27 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** First load: skeleton until the lab's template lands (held, no flash). */
+  private readonly tplHold = createLoadHold(true);
+  readonly tplSkeleton = this.tplHold.active;
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
     const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
+    if (this._tab() === 'table') this.loadSourceSansFace();
+    this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {
-        if (t) this._tpl.set({ ...this._tpl(), ...t });
+        if (t) this._tpl.set({ ...this._tpl(), ...t, headerPreset: normalizeHeaderPreset(t.headerPreset ?? this._tpl().headerPreset) });
         this.savedJson.set(JSON.stringify(this._tpl()));
         this.past.set([]); this.future.set([]);
         this.initPatientCols();
-      }
+        this.tplHold.done();
+      },
+      error: () => this.tplHold.done(),
     });
     this.loadCustomPatientFields();
     this.initPatientCols();
@@ -1295,6 +1449,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     // record), so they arrive via the report snapshot's `order` block.
     'refhospital', 'collectedby', 'department', 'branch',
     'specimen', 'barcode', 'registered', 'collected', 'reported',
+    // Patient-strip QR codes (owner, 2026-09-28) — opt-in, start in Unused.
+    PROFILE_QR_KEY, ORDER_QR_KEY,
   ];
   private readonly DEFAULT_PATIENT_COLS: string[][] = [
     ['name', 'age', 'sex', 'mrn'],
@@ -1308,7 +1464,21 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     reported: 'Reported date',
     refhospital: 'Referring hospital', collectedby: 'Collected by',
     department: 'Department', branch: 'Branch / collection centre',
+    [PROFILE_QR_KEY]: 'Patient profile QR', [ORDER_QR_KEY]: 'Order QR (report download)',
   };
+
+  /** The two patient-strip QR options, surfaced as switches above the
+   *  drag board (the chips stay draggable like any other field). */
+  readonly stripQrOptions = [
+    { key: PROFILE_QR_KEY, label: 'Patient profile QR',
+      desc: 'Scanning opens this patient\u2019s profile in the app. Staff sign in first; anyone else only reaches the login.' },
+    { key: ORDER_QR_KEY, label: 'Order QR \u2014 report soft copy',
+      desc: 'Scanning opens the patient\u2019s report page: they confirm date of birth, phone or invoice no. and download the report. Until it is ready, the page shows the order status.' },
+  ];
+  stripQrOn(key: string): boolean { return this.patientCols().some(c => c.includes(key)); }
+  toggleStripQr(key: string) {
+    this.commitPatientCols(toggleStripQrKey(this.patientCols(), key));
+  }
 
   readonly patientCols = signal<string[][]>([[], [], []]);
 
@@ -1523,6 +1693,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     } else {
       transferArrayItem(from, to, ev.previousIndex, ev.currentIndex);
     }
+    this.commitPatientCols(cols);
+  }
+
+  /** Apply a new column arrangement: a department scope marks its draft dirty;
+   *  the default scope patches the template. */
+  private commitPatientCols(cols: string[][]) {
     this.patientCols.set(cols);                    // pool is derived → recomputes
     if (this.patientScope() !== 'default') { this.deptPatientDirty.set(true); return; }
     // Persist the arrangement + the titles of any custom fields now placed in a
@@ -1556,6 +1732,19 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 }
 
+/** Sequencing tab: the sample report with the lab's own departments and
+ *  tests (a desk order), so every move shows on the page. Falls back to the
+ *  standard sample until those load. */
+export function sequencePreviewSnapshot(sample: string, tests: Array<Record<string, unknown>>): string {
+  if (!tests.length) return sample;
+  try {
+    const snap = JSON.parse(sample) as Record<string, unknown>;
+    const depts = [...new Set(tests.map(t => String(t['department'] ?? '')).filter(Boolean))];
+    const order = { ...(snap['order'] as Record<string, unknown>), departments: depts.join(', ') };
+    return JSON.stringify({ ...snap, order, tests });
+  } catch { return sample; }
+}
+
 /** Table columns tab: the preview must open on the department table being
  *  edited — the consolidated abnormal-results sheet (a fixed 3-column page 1)
  *  would hide it. Preview only; the saved template and real reports keep the
@@ -1563,4 +1752,23 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 export function previewTemplateForTab<T extends Pick<ReportTemplate, 'metadata'>>(tab: string, tpl: T): T {
   if (tab !== 'columns' || !readReportOption(tpl, 'abnormalSummary')) return tpl;
   return { ...tpl, metadata: writeReportOption(tpl, 'abnormalSummary', false) };
+}
+
+/** Switch a patient-strip QR on/off in a column arrangement. Off: removed from
+ *  every column. On: placed beside the other QR when that one is already
+ *  printing (they then print side by side), else at the end of the last column. */
+export function toggleStripQrKey(cols: string[][], key: string): string[][] {
+  const out = cols.map(c => [...c]);
+  if (out.some(c => c.includes(key))) return out.map(c => c.filter(k => k !== key));
+  if (out.length === 0) return [[key]];
+  const other = key === PROFILE_QR_KEY ? ORDER_QR_KEY : PROFILE_QR_KEY;
+  const withOther = out.find(c => c.includes(other));
+  if (withOther) {
+    const i = withOther.indexOf(other);
+    // Profile first, then Order — a stable reading order on the page.
+    withOther.splice(key === PROFILE_QR_KEY ? i : i + 1, 0, key);
+    return out;
+  }
+  out[out.length - 1].push(key);
+  return out;
 }

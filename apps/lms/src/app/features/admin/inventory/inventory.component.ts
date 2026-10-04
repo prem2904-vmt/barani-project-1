@@ -1,76 +1,105 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AllCommunityModule, ModuleRegistry, type ColDef, type GridApi, type GridReadyEvent, type RowClassParams, type RowClickedEvent } from 'ag-grid-community';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService, DialogChoice } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { mediaSignal } from '../../../shared/utils/media-query';
+import { plural } from '../../../shared/utils/plural';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
+import {
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, testsCovered,
+} from '../../stores/inventory-view';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 type InvTab = 'items' | 'bom';
+/** What the ITEM side card shows for the picked item. */
+type ItemSection = 'batches' | 'receive' | 'label' | 'ledger';
 
 type LabelMode = 'both' | 'barcode' | 'qr';
 
 interface InvItem {
-  id: string; sku: string; name: string; category: string; uom: string;
+  id: string; sku: string; barcode?: string | null; name: string; category: string; uom: string;
   reorderLevel: number; nearExpiryDays: number; isActive: boolean; onHand: number; lowStock: boolean;
 }
 interface InvBatch {
   id: string; lotNumber?: string | null; expiryDate?: string | null; unitCost: number;
   qtyReceived: number; qtyOnHand: number; receivedAt: string; expired: boolean;
 }
+/** One `GET /api/inventory/items/{id}/ledger` row (InventoryTxnEntity). */
+interface InvTxn { id: string; type: string; delta: number; reason?: string | null; at: string; batchId?: string | null }
+/** A `?view=summary` test row (TestSummaryDto) — only what the list shows / searches. */
+interface TestRow { id: string; name: string; testCode?: string | null; shortName?: string | null; department?: { name?: string | null } | null }
 const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
+/** Rows the test list renders at once; the band search narrows the rest. */
+const TEST_LIST_CAP = 300;
 
-/** Lab inventory admin: items + on-hand, goods-receipt, batches, adjustments, alerts. */
+/**
+ * Admin → Inventory (ND-PATTERN: band → main card + side card).
+ *
+ *  • Items — the item grid (AG-Grid, like Test Master) is the MAIN card; the
+ *    picked item opens the ITEM side card: Batches · Receive · Label ·
+ *    Ledger, with ONE primary in its footer. New / Edit item open in the
+ *    same side card. Nothing picked: the side card shows what needs
+ *    attention (low stock, expiring lots). ≤900px: the side card is a sheet.
+ *  • Test consumables — the test list (band search) is the LEFT navigation
+ *    card; the picked test's CONSUMABLES are the main card, with how many
+ *    tests this branch's stock still covers.
+ *
+ * Usage is auto-deducted per test (FEFO) at sample collection.
+ */
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
+    HeroBandComponent, NdDateComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['../../stores/inv-layout.scss'],
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): Items / Test consumables switch. Items: item
-             search + category filter in the pill, "New item" in the band.
-             Test consumables: the test picker rides the pill (no free-text
-             search), "Save consumables" in the band. -->
-        <pf-hero-band [back]="true" [tabsOnly]="tab() === 'bom'"
-                      placeholder="Search items — name, SKU, unit…"
-                      [value]="q()" (valueChange)="q.set($event)">
+        <!-- Band pill (owner): the search + Items / Test consumables switch
+             (+ the category filter on Items). Items: "New item" in the band. -->
+        <pf-hero-band [back]="true" [placeholder]="tab() === 'items' ? 'Search items — name, SKU, unit…' : 'Search tests — name or code…'"
+                      [value]="tab() === 'items' ? q() : testQ()" (valueChange)="onBandSearch($event)">
           <ng-container band-tools>
+            @if (narrow() && tab() === 'items') {
+              <button type="button" class="nd-chip pf-inv-attnchip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
+                      [attr.aria-expanded]="attnOpen()" [attr.aria-label]="'Attention, ' + attentionCount()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <span class="nd-num">{{ attentionCount() }}</span>
+              </button>
+            }
             <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
             @if (tab() === 'items') {
               <pf-select class="pf-inv-bandsel" size="sm" [options]="categoryFilterOptions" [value]="category()"
                          (valueChange)="category.set($event)" aria-label="Category"></pf-select>
-            } @else {
-              <pf-select class="pf-inv-bandsel pf-inv-bandsel--test" size="sm" [options]="testOptions()" [value]="bomTestId()"
-                         [searchable]="true" placeholder="Pick a test…"
-                         (valueChange)="selectTest($event)" aria-label="Test"></pf-select>
             }
           </ng-container>
           <ng-container band-actions>
             @if (tab() === 'items') {
-              <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!editing()" [class.pf-hb-btn--ghost]="editing()"
+              <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="bandNewPrimary()" [class.pf-hb-btn--ghost]="!bandNewPrimary()"
                       (click)="startNew()" aria-label="New item">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 New item
-              </button>
-            } @else if (bomTestId()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="bomSaving()" (click)="saveBom()"
-                      aria-label="Save consumables">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                {{ bomSaving() ? 'Saving…' : 'Save consumables' }}
               </button>
             }
           </ng-container>
@@ -78,7 +107,6 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       }
       <div class="pf-classic-only flex items-center justify-between gap-3 mb-5">
         <div>
-          <div class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--violet-400)">Admin · Lab</div>
           <div class="flex items-center gap-2">
             @if (navBack.showBack()) {
               <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
@@ -89,325 +117,446 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           </div>
           <p class="text-sm" style="color:var(--text-tertiary)">Stock for the active branch. Usage is auto-deducted per test at sample collection.</p>
         </div>
-        <button class="px-4 py-2 rounded-xl text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" (click)="startNew()">New item</button>
+        <div class="flex items-center gap-2">
+          <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          <button type="button" class="nd-btn nd-btn--secondary" (click)="startNew()">New item</button>
+        </div>
       </div>
 
-      <div class="pf-band-body">
+      <div class="pf-band-body pf-band-body--fill">
       @if (showItems()) {
-      <!-- Alerts -->
-      @if (lowStock().length || expiring().length) {
-        <div class="grid md:grid-cols-2 gap-3 mb-5">
-          <div class="nd-card pf-inv-alert">
-            <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><span class="nd-card__label">Low stock</span><span class="nd-card__spacer"></span><span class="pf-inv-count nd-num">{{ lowStock().length }}</span></div>
-            @for (l of lowStock(); track l.id) {
-              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ l.name }}</span><span class="nd-num" style="color:var(--text-tertiary)">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
-            } @empty { <p class="pf-inv-muted">All good.</p> }
-          </div>
-          <div class="nd-card pf-inv-alert">
-            <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="nd-card__label">Expiring soon</span><span class="nd-card__spacer"></span><span class="pf-inv-count nd-num">{{ expiring().length }}</span></div>
-            @for (e of expiring(); track e.id) {
-              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ e.item }} <span style="color:var(--text-muted)">{{ e.lotNumber }}</span></span><span class="nd-num" [style.color]="e.daysLeft < 0 ? 'var(--red-text, #b91c1c)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
-            } @empty { <p class="pf-inv-muted">Nothing expiring.</p> }
-          </div>
-        </div>
-      }
-
-      <!-- Edit / new item -->
-      @if (editing()) {
-        <section class="nd-card nd-anim-in pf-inv-editor" [attr.aria-label]="form().id ? 'Edit item' : 'New item'">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="nd-card__label">{{ form().id ? 'Edit item' : 'New item' }}</h3>
-            @if (form().id && form().name) { <span class="nd-card__note">{{ form().name }}</span> }</div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pf-inv-editor__body">
-            <label class="block"><span class="nd-field__lbl lbl">SKU *</span><input class="nd-input" [class.nd-input--error]="itemError()?.field==='sku'||itemError()?.field==='code'" [ngModel]="form().sku" (ngModelChange)="setF('sku',$event)"/>
-              @if (itemError()?.field==='sku'||itemError()?.field==='code') { <span class="fld-err">{{ itemError()!.message }}</span> }
-            </label>
-            <label class="block md:col-span-2"><span class="nd-field__lbl lbl">Name *</span><input class="nd-input" [class.nd-input--error]="itemError()?.field==='name'" [ngModel]="form().name" (ngModelChange)="setF('name',$event)"/>
-              @if (itemError()?.field==='name') { <span class="fld-err">{{ itemError()!.message }}</span> }
-            </label>
-            <label class="block"><span class="nd-field__lbl lbl">Category</span>
-              <pf-select [options]="categoryOptions" [value]="form().category ?? 'consumable'"
-                         (valueChange)="setF('category',$event)" aria-label="Category"></pf-select>
-            </label>
-            <label class="block"><span class="nd-field__lbl lbl">Unit (UoM)</span><input class="nd-input" [ngModel]="form().uom" (ngModelChange)="setF('uom',$event)" placeholder="piece"/></label>
-            <label class="block"><span class="nd-field__lbl lbl">Reorder level</span><input class="nd-input nd-num" type="number" [ngModel]="form().reorderLevel" (ngModelChange)="setF('reorderLevel',+$event)"/></label>
-            <label class="block"><span class="nd-field__lbl lbl">Near-expiry (days)</span><input class="nd-input nd-num" type="number" [ngModel]="form().nearExpiryDays" (ngModelChange)="setF('nearExpiryDays',+$event)"/></label>
-            <div class="flex items-end pb-2">
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!form().isActive" (click)="setF('isActive', !form().isActive)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span><span>Active</span>
-              </button>
-            </div>
-          </div>
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="editing.set(false)">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave()" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
-          </div>
-        </section>
-      }
-
-      <!-- Items -->
-      @if (loading()) { <div class="nd-card inv-table-wrap"><pf-skeleton-table [rows]="8" [cols]="5" label="Loading inventory…"></pf-skeleton-table></div> }
-      @else {
-        <div class="nd-card inv-table-wrap">
-          <table class="w-full text-sm">
-            <thead><tr>
-              <th class="text-left p-3">Item</th><th class="text-left p-3">Category</th>
-              <th class="text-right p-3">On hand</th><th class="text-right p-3">Reorder</th><th class="p-3"></th>
-            </tr></thead>
-            <tbody>
-              @for (it of visibleItems(); track it.id) {
-                <tr class="pf-inv-row">
-                  <td class="p-3"><span class="pf-inv-name">{{ it.name }}</span> <span class="nd-num pf-inv-sku">{{ it.sku }}</span>
-                    @if (it.lowStock) { <span class="nd-chip nd-chip--static pf-inv-low">Low stock</span> }
-                  </td>
-                  <td class="p-3" style="color:var(--text-tertiary)">{{ it.category }}</td>
-                  <td class="p-3 text-right nd-num">{{ it.onHand | number:'1.0-2' }} <span style="color:var(--text-muted)">{{ it.uom }}</span></td>
-                  <td class="p-3 text-right nd-num" style="color:var(--text-muted)">{{ it.reorderLevel | number:'1.0-2' }}</td>
-                  <td class="p-3 text-right whitespace-nowrap">
-                    <!-- Row actions: text on web, icon on touch. -->
-                    <span class="pf-inv-acts">
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openReceive(it)" aria-label="Receive stock" title="Receive"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="nd-rowact__t">Receive</span></button>
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="showLabel(it)" aria-label="Label" title="Label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg><span class="nd-rowact__t">Label</span></button>
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="toggleBatches(it)" [attr.aria-expanded]="expandedId() === it.id" aria-label="Batches" title="Batches"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span class="nd-rowact__t">Batches</span></button>
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="startEdit(it)" aria-label="Edit item" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
-                    </span>
-                  </td>
-                </tr>
-                @if (expandedId() === it.id) {
-                  <tr class="pf-inv-expand"><td colspan="5" class="p-3">
-                    @if (receiveFor() === it.id) {
-                      <div class="flex flex-wrap items-end gap-2 mb-3 p-3 rcv-form">
-                        <label class="block"><span class="nd-field__lbl lbl">Lot #</span><input class="nd-input" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
-                        <label class="block"><span class="nd-field__lbl lbl">Expiry</span><input class="nd-input nd-num" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
-                        <label class="block"><span class="nd-field__lbl lbl">Unit cost</span><input class="nd-input nd-num" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
-                        <label class="block"><span class="nd-field__lbl lbl">Qty *</span><input class="nd-input" [class.nd-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/>
-                          @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="fld-err">{{ rcvError()!.message }}</span> }
-                        </label>
-                        <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
-                      </div>
-                    }
-
-                    <!-- Barcode / QR label generator -->
-                    @if (labelCode() && expandedId() === it.id) {
-                      <div class="label-wrap">
-                        <div class="label-wrap__head">
-                          <span class="pf-inv-sec">Label</span>
-                          <span class="nd-seg" role="radiogroup" aria-label="Label type">
-                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
-                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
-                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
-                          </span>
-                        </div>
-                        <div class="label-print pf-print-label">
-                          <pf-barcode-display [code]="labelCode()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
-                        </div>
-                        <div class="flex gap-3 mt-2">
-                          <button type="button" class="nd-btn nd-btn--secondary press" (click)="printLabel()">Print label</button>
-                          <button type="button" class="nd-btn nd-btn--tertiary press" (click)="labelCode.set(null)">Hide</button>
-                        </div>
-                      </div>
-                    }
-
-                    <div class="pf-inv-sec mb-1">Batches (FEFO)</div>
-                    @for (b of batches(); track b.id) {
-                      <div class="flex items-center justify-between text-sm py-1 border-b" style="border-color:var(--nd-line)">
-                        <span><span class="nd-num">{{ b.lotNumber || '—' }}</span> <span style="color:var(--text-muted)">exp <span class="nd-num">{{ b.expiryDate ? (b.expiryDate | date) : '—' }}</span></span>
-                          @if (b.expired) { <span class="ml-1 text-[11px]" style="color:var(--red-text, #b91c1c)">expired</span> }</span>
-                        <span class="flex items-center gap-3 nd-num">
-                          <span>{{ b.qtyOnHand | number:'1.0-2' }}</span>
-                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, -1)" aria-label="Decrease">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
-                          </button>
-                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, 1)" aria-label="Increase">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                          </button>
-                        </span>
-                      </div>
-                    } @empty { <p class="text-sm" style="color:var(--text-muted)">No batches yet — receive stock.</p> }
-                  </td></tr>
+        <div class="inv-body">
+          <!-- MAIN: the item grid -->
+          <section class="nd-card" aria-labelledby="pf-inv-items-t">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+              <span class="nd-card__label" id="pf-inv-items-t">Items</span>
+              <span class="nd-card__note">{{ web() ? 'Click' : 'Tap' }} an item for its batches, stock, label and ledger</span>
+              <span class="inv-count nd-num">{{ itemsLabel() }}</span>
+            </header>
+            <div class="nd-card__body inv-main__body">
+              @if (loading()) {
+                <pf-skeleton-table [rows]="8" [cols]="4" label="Loading inventory…"></pf-skeleton-table>
+              } @else if (!items().length) {
+                <div class="nd-empty">
+                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+                  <p class="nd-empty__title">No items yet</p>
+                  <p class="nd-empty__body">Add the tubes, reagents and kits this lab stocks. Each gets a scannable barcode; the Stores desk receives, issues and counts them.</p>
+                  <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="startNew()">Add the first item</button>
+                </div>
+              } @else {
+                @if (!visibleItems().length) {
+                  <p class="pf-band-empty">No items match{{ q() ? ' "' + q() + '"' : ' this category' }}.</p>
                 }
-              } @empty {
-                <tr><td colspan="5" class="p-6 text-center" style="color:var(--text-muted)">
-                  @if (items().length) { <span class="pf-band-empty-inline">No items match{{ q() ? ' "' + q() + '"' : ' this category' }}.</span> }
-                  @else { No items yet. Add your first SKU. }
-                </td></tr>
+                <ag-grid-angular class="inv-grid pf-inv-grid" [class.pf-inv-grid--hidden]="!visibleItems().length"
+                                 [theme]="gridTheme()" [rowData]="visibleItems()" [columnDefs]="itemCols()"
+                                 [getRowId]="rowId" [rowClassRules]="rowClassRules" [animateRows]="true" [suppressCellFocus]="true"
+                                 (gridReady)="onGridReady($event)" (rowClicked)="onRowClicked($event)"></ag-grid-angular>
               }
-            </tbody>
-          </table>
+            </div>
+          </section>
+
+          <!-- SIDE: the picked item / the item editor / attention -->
+          @if (!narrow()) {
+            <aside class="nd-card pf-inv-side" aria-labelledby="pf-inv-side-t">
+              <ng-container [ngTemplateOutlet]="sideCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
+            </aside>
+          } @else if (editing() || sel() || attnOpen()) {
+            <div class="inv-sheet-backdrop" (click)="closeSide()"></div>
+            <aside class="nd-card inv-side--sheet pf-inv-side" role="dialog" aria-modal="true" aria-labelledby="pf-inv-side-t" (keydown.escape)="closeSide()">
+              <span class="inv-sheet-handle" aria-hidden="true"></span>
+              <ng-container [ngTemplateOutlet]="sideCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
+            </aside>
+          }
         </div>
-      }
       }
 
       <!-- Per-test consumables (BOM) — drives auto-deduction at collection -->
       @if (showBom()) {
-      <div class="pf-inv-bom nd-card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6"/></svg></span><span class="nd-card__label">Per-test consumables</span></div>
-        <div class="pf-inv-bom__body">
-        <p class="pf-inv-muted mb-3">Map which items a test consumes. These are auto-deducted (FEFO) from this branch's stock when a sample is collected.</p>
-        <!-- New design: the test picker rides the band pill. -->
-        <pf-select class="pf-classic-only block" style="max-width:340px" [options]="testOptions()" [value]="bomTestId()"
-                   [searchable]="true" placeholder="Select a test…" (valueChange)="selectTest($event)"
-                   aria-label="Test"></pf-select>
-        @if (theme.isNewDesign() && !bomTestId()) {
-          <p class="pf-inv-muted">Pick a test in the bar above to edit what it consumes.</p>
-        }
-
-        @if (bomTestId()) {
-          <div class="mt-3 space-y-2" style="max-width:560px">
-            @for (line of bomLines(); track $index) {
-              <div class="flex items-center gap-2 bom-line">
-                <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
-                           placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
-                <input class="nd-input nd-num bom-line__qty" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
-                <button type="button" class="text-sm px-2 iconbtn pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                </button>
-              </div>
-            }
-            <div class="flex gap-2 pt-1">
-              <button type="button" class="nd-btn nd-btn--tertiary touch-link" (click)="addLine()">+ Add item</button>
+        <div class="inv-body inv-body--left">
+          <!-- LEFT: the tests (navigation companion) -->
+          <section class="nd-card" aria-labelledby="pf-inv-tests-t">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+              <span class="nd-card__label" id="pf-inv-tests-t">Tests</span>
+              <span class="nd-card__spacer"></span>
+              <span class="inv-count nd-num">{{ plural(testRows().length, 'test') }}</span>
+            </header>
+            <div class="nd-card__body pf-inv-tests">
+              <ul class="inv-rows" role="list">
+                @for (t of testRows().slice(0, testCap); track t.id) {
+                  <li>
+                    <button type="button" class="inv-row" [attr.aria-pressed]="bomTestId() === t.id" (click)="selectTest(t.id)">
+                      <span class="inv-row__main">
+                        <span class="inv-row__name">{{ t.name }}</span>
+                        @if (testMeta(t); as m) { <span class="inv-row__meta nd-num">{{ m }}</span> }
+                      </span>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="nd-empty nd-empty--compact">
+                    <p class="nd-empty__title">{{ tests().length ? 'No tests match' : 'No tests yet' }}</p>
+                    <p class="nd-empty__body">{{ tests().length ? 'Try another name or code.' : 'Tests come from the Test Master.' }}</p>
+                  </li>
+                }
+              </ul>
+              @if (testRows().length > testCap) {
+                <p class="inv-sub pf-inv-tests__more">Showing {{ testCap }} of {{ testRows().length }} — search to find the rest.</p>
+              }
             </div>
-            <button class="pf-classic-only mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
-          </div>
-        }
+          </section>
+
+          <!-- MAIN: what the picked test consumes (a sheet on narrow widths) -->
+          @if (!narrow()) {
+            <section class="nd-card pf-inv-bom" aria-labelledby="pf-inv-bom-t">
+              <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
+            </section>
+          } @else if (bomTestId()) {
+            <div class="inv-sheet-backdrop" (click)="selectTest('')"></div>
+            <section class="nd-card inv-side--sheet pf-inv-bom" role="dialog" aria-modal="true" aria-labelledby="pf-inv-bom-t" (keydown.escape)="selectTest('')">
+              <span class="inv-sheet-handle" aria-hidden="true"></span>
+              <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
+            </section>
+          }
         </div>
-      </div>
       }
       </div>
     </section>
+
+    <!-- ══ Side card: editor / picked item / attention ══ -->
+    <ng-template #sideCard let-sheet="sheet">
+      @if (editing()) {
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+          <h3 class="nd-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
+          <span class="nd-card__spacer"></span>
+          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+        <div class="nd-card__body pf-inv-editor">
+          <div class="inv-fields">
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-sku">SKU <span class="nd-dot-unpriced" aria-label="required"></span></label>
+              <input id="pf-inv-sku" class="nd-input nd-num" [class.nd-input--error]="itemError()?.field==='sku'||itemError()?.field==='code'" [value]="form().sku ?? ''" (input)="setF('sku', $any($event.target).value)"/>
+              @if (itemError()?.field==='sku'||itemError()?.field==='code') { <span class="inv-err">{{ itemError()!.message }}</span> }
+            </div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-uom">Unit</label>
+              <input id="pf-inv-uom" class="nd-input" [value]="form().uom ?? ''" (input)="setF('uom', $any($event.target).value)" placeholder="piece"/></div>
+            <div class="nd-field inv-span"><label class="nd-field__lbl" for="pf-inv-name">Name <span class="nd-dot-unpriced" aria-label="required"></span></label>
+              <input id="pf-inv-name" class="nd-input" [class.nd-input--error]="itemError()?.field==='name'" [value]="form().name ?? ''" (input)="setF('name', $any($event.target).value)"/>
+              @if (itemError()?.field==='name') { <span class="inv-err">{{ itemError()!.message }}</span> }
+            </div>
+            <div class="nd-field"><span class="nd-field__lbl">Category</span>
+              <pf-select [options]="categoryOptions" [value]="form().category ?? 'consumable'" (valueChange)="setF('category', $event)" aria-label="Category"></pf-select></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-reorder">Reorder level</label>
+              <input id="pf-inv-reorder" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="form().reorderLevel ?? 0" (input)="setF('reorderLevel', +$any($event.target).value)"/></div>
+            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-near">Near-expiry (days)</label>
+              <input id="pf-inv-near" class="nd-input nd-num" type="number" min="1" inputmode="numeric" [value]="form().nearExpiryDays ?? 30" (input)="setF('nearExpiryDays', +$any($event.target).value)"/></div>
+            <div class="nd-field pf-inv-active">
+              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!form().isActive" (click)="setF('isActive', !form().isActive)">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span><span>Active</span>
+              </button>
+            </div>
+            <div class="nd-field inv-span"><label class="nd-field__lbl" for="pf-inv-barcode">Barcode</label>
+              <input id="pf-inv-barcode" class="nd-input nd-num" autocomplete="off" [class.nd-input--error]="itemError()?.field==='barcode'" [value]="form().barcode ?? ''" (input)="setF('barcode', $any($event.target).value)" placeholder="Supplier barcode (GTIN)"/>
+              @if (itemError()?.field==='barcode') { <span class="inv-err">{{ itemError()!.message }}</span> }
+              <span class="nd-field__hint">Scan or type the supplier's barcode so the Stores desk finds this item by scan. Left blank, a new item gets its own.</span>
+            </div>
+          </div>
+        </div>
+        <div class="nd-card__foot">
+          <button type="button" class="nd-btn nd-btn--secondary press" (click)="editing.set(false)">Cancel</button>
+          <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+        </div>
+      } @else if (sel(); as it) {
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+          <span class="nd-card__label" id="pf-inv-side-t">Item</span>
+          <span class="nd-card__spacer"></span>
+          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="closeSide()" [attr.aria-label]="sheet ? 'Close' : 'Close the item'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+        <div class="nd-card__body">
+          <div class="inv-subject">
+            <div>
+              <p class="inv-subject__name">{{ it.name }}</p>
+              <p class="inv-subject__meta nd-num">{{ it.sku }} · {{ it.category }}{{ it.isActive ? '' : ' · Off' }}</p>
+              @if (it.barcode) { <p class="inv-subject__meta nd-num">Barcode {{ it.barcode }}</p> }
+            </div>
+            <div class="inv-onhand">
+              <span class="inv-onhand__v">{{ it.onHand | number:'1.0-2' }}</span>
+              <span class="inv-onhand__u">{{ it.uom }} · reorder at {{ it.reorderLevel | number:'1.0-2' }}</span>
+              @if (level(it) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
+            </div>
+          </div>
+          <div class="nd-seg pf-inv-sections" role="radiogroup" aria-label="Item section">
+            @for (s of sections; track s.v) {
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="section() === s.v" (click)="setSection(it, s.v)">{{ s.l }}</button>
+            }
+          </div>
+
+          @switch (section()) {
+            @case ('receive') {
+              <div class="inv-fields rcv-form">
+                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-lot">Lot no.</label>
+                  <input id="pf-inv-lot" class="nd-input nd-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)"/></div>
+                <div class="nd-field"><span class="nd-field__lbl">Expiry</span>
+                  <pf-nd-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-nd-date></div>
+                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-cost">Unit cost (₹)</label>
+                  <input id="pf-inv-cost" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)"/></div>
+                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-qty">Quantity ({{ it.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
+                  <input id="pf-inv-qty" class="nd-input nd-num" [class.nd-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)"/>
+                  @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="inv-err">{{ rcvError()!.message }}</span> }
+                </div>
+              </div>
+              <p class="inv-sub">Adds a new lot at this branch with its own printable lot barcode.</p>
+            }
+            @case ('label') {
+              <div class="inv-label label-wrap">
+                <div class="nd-seg" role="radiogroup" aria-label="Label type">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
+                </div>
+                <div class="inv-label__paper pf-print-label">
+                  <pf-barcode-display [code]="labelCode() || it.barcode || it.sku" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
+                </div>
+                <p class="inv-sub">{{ labelCode() && labelCode() !== (it.barcode || it.sku) ? 'The lot just received — stick it on the box.' : 'The item barcode — scanning it at the Stores desk finds this item.' }}</p>
+              </div>
+            }
+            @case ('ledger') {
+              <div>
+                @for (t of ledger(); track t.id) {
+                  <div class="inv-line">
+                    <span class="inv-line__main">
+                      <span class="inv-line__name">{{ ledgerWord(t.type) }}</span>
+                      <span class="inv-line__meta nd-num">{{ t.at | date:'d MMM y, h:mm a' }}{{ t.reason ? ' · ' + t.reason : '' }}</span>
+                    </span>
+                    <span class="inv-line__end nd-num" [class.inv-strong]="t.delta > 0">{{ signedQty(t.delta) }}</span>
+                  </div>
+                } @empty { <p class="inv-sub">{{ ledgerLoading() ? 'Loading…' : 'No stock movements yet.' }}</p> }
+              </div>
+            }
+            @default {
+              <div>
+                @for (b of batches(); track b.id) {
+                  <div class="inv-line pf-inv-batch">
+                    <span class="inv-line__main">
+                      <span class="inv-line__name nd-num">{{ b.lotNumber || 'No lot no.' }}</span>
+                      <span class="inv-line__meta nd-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }}
+                        @if (b.expired) { · <span class="nd-sdot" data-tone="bad">Expired</span> }</span>
+                    </span>
+                    <span class="inv-line__end">
+                      <button type="button" class="nd-btn nd-btn--icon pf-inv-adj" (click)="adjust(b, -1)" aria-label="Decrease">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+                      </button>
+                      <span class="inv-strong pf-inv-batch__q">{{ b.qtyOnHand | number:'1.0-2' }}</span>
+                      <button type="button" class="nd-btn nd-btn--icon pf-inv-adj" (click)="adjust(b, 1)" aria-label="Increase">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                      </button>
+                    </span>
+                  </div>
+                } @empty { <p class="inv-sub">No lots at this branch yet — receive stock.</p> }
+              </div>
+              @if (batches().length) { <p class="inv-sub">Earliest expiry is used first (FEFO). Every change is kept in the ledger.</p> }
+            }
+          }
+        </div>
+        <div class="nd-card__foot">
+          @switch (section()) {
+            @case ('receive') {
+              <button type="button" class="nd-btn nd-btn--secondary press" (click)="setSection(it, 'batches')">Cancel</button>
+              <button type="button" class="nd-btn press" [class.nd-btn--primary]="rcv().qty > 0" [class.nd-btn--secondary]="rcv().qty <= 0"
+                      [disabled]="rcv().qty<=0 || receiving()" [pfBusy]="receiving()" pfBusyLabel="Adding stock…" (click)="doReceive(it)">Add stock</button>
+            }
+            @case ('label') {
+              <button type="button" class="nd-btn nd-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="nd-btn nd-btn--primary press" (click)="printLabel()">Print label</button>
+            }
+            @default {
+              <button type="button" class="nd-btn nd-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="nd-btn nd-btn--primary press" (click)="openReceive(it)">Receive stock</button>
+            }
+          }
+        </div>
+      } @else {
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+          <span class="nd-card__label" id="pf-inv-side-t">Attention</span>
+          <span class="nd-card__spacer"></span>
+          @if (sheet) {
+            <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="closeSide()" aria-label="Close attention">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          }
+        </header>
+        <div class="nd-card__body">
+          <div class="inv-kpis" role="list" aria-label="Stock summary">
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ items().length | number }}</span><span class="nd-sdot">Items</span></div>
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ lowStock().length | number }}</span><span class="nd-sdot" data-tone="warn">Low</span></div>
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="nd-sdot" data-tone="warn">Expiring</span></div>
+          </div>
+          <p class="inv-title">At or below reorder level</p>
+          <div class="pf-inv-alert">
+            @for (l of lowStock(); track l.id) {
+              <div class="inv-line alert-row">
+                <span class="inv-line__main"><span class="inv-line__name alert-row__name">{{ l.name }}</span></span>
+                <span class="inv-line__end nd-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
+              </div>
+            } @empty { <p class="inv-sub">Every item is above its reorder level.</p> }
+          </div>
+          <p class="inv-title">Expiring soon</p>
+          <div class="pf-inv-alert">
+            @for (e of expiring(); track e.id) {
+              <div class="inv-line alert-row">
+                <span class="inv-line__main">
+                  <span class="inv-line__name alert-row__name">{{ e.item }}</span>
+                  <span class="inv-line__meta nd-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}</span>
+                </span>
+                <span class="inv-line__end"><span class="nd-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
+              </div>
+            } @empty { <p class="inv-sub">Nothing expiring within its item's near-expiry window.</p> }
+          </div>
+          <p class="inv-sub">{{ web() ? 'Click' : 'Tap' }} an item in the list for its batches, to receive stock, print its label or read its ledger.</p>
+        </div>
+      }
+    </ng-template>
+
+    <!-- ══ Consumables card for the picked test ══ -->
+    <ng-template #bomCard let-sheet="sheet">
+      <header class="nd-card__head">
+        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+        <span class="nd-card__label" id="pf-inv-bom-t">Per-test consumables</span>
+        @if (bomTest(); as t) { <span class="nd-card__note">{{ t.name }}</span> } @else { <span class="nd-card__spacer"></span> }
+        @if (sheet) {
+          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="selectTest('')" aria-label="Close consumables">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+      @if (bomTestId()) {
+        <div class="nd-card__body pf-inv-bom__body">
+          <p class="inv-sub">What one {{ bomTest()?.name || 'test' }} uses. It's deducted from this branch's stock (earliest expiry first) when the sample is collected.</p>
+          @if (!items().length) {
+            <div class="inv-note">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+              <div class="inv-note__body">There are no inventory items to map yet.
+                <div class="inv-note__actions"><button type="button" class="nd-btn nd-btn--quiet" (click)="setTab('items'); startNew()">Create an item</button></div>
+              </div>
+            </div>
+          }
+          @if (bomLines().length) {
+            <div class="pf-inv-bomhead" aria-hidden="true"><span>Item</span><span>Per test</span><span>Covers</span><span></span></div>
+          }
+          @for (line of bomLines(); track $index) {
+            <div class="bom-line">
+              <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
+                         placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
+              <input class="nd-input nd-num bom-line__qty" type="number" min="0" step="0.001" inputmode="decimal" [value]="line.qtyPerTest" (input)="setLine($index,'qtyPerTest', +$any($event.target).value)" aria-label="Quantity per test"/>
+              <span class="bom-line__cover nd-num">{{ coverLabel(line) }}</span>
+              <button type="button" class="nd-btn nd-btn--icon pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          } @empty {
+            <div class="nd-empty nd-empty--compact">
+              <p class="nd-empty__title">Nothing mapped</p>
+              <p class="nd-empty__body">This test doesn't use any stock yet. Add the items it consumes.</p>
+            </div>
+          }
+          <div><button type="button" class="nd-btn nd-btn--tertiary" (click)="addLine()">+ Add item</button></div>
+        </div>
+        <div class="nd-card__foot">
+          <button type="button" class="nd-btn nd-btn--secondary press" (click)="selectTest(bomTestId())">Revert</button>
+          <button type="button" class="nd-btn nd-btn--primary press" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()">Save consumables</button>
+        </div>
+      } @else {
+        <div class="nd-card__body">
+          <div class="nd-empty">
+            <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+            <p class="nd-empty__title">Pick a test</p>
+            <p class="nd-empty__body">Map the tubes, reagents and kits one test uses. Collection then deducts them from stock automatically, and you see how many tests the stock still covers.</p>
+          </div>
+        </div>
+      }
+    </ng-template>
   `,
   styles: [`
-    .lbl { display:block; margin-bottom:6px; }
-    /* ── ND audit: kit cards / rows ── */
-    .pf-inv-alert { padding-bottom: 10px; }
-    .pf-inv-alert > :not(.nd-card__head) { margin: 0 14px; }
-    .pf-inv-alert > .alert-row:first-of-type { margin-top: 8px; }
-    .pf-inv-count { font-size: 12px; color: var(--text-tertiary); }
-    .pf-inv-muted { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
-    .pf-inv-alert .pf-inv-muted { margin-top: 10px; }
-    .pf-inv-editor { margin-bottom: 20px; }
-    .pf-inv-editor__body { padding: 16px 18px; }
-    .pf-inv-name { font-weight: 600; color: var(--text-primary); }
-    .pf-inv-sku { font-size: 12px; color: var(--text-tertiary); }
-    .pf-inv-low { height: 22px; margin-left: 8px; font-size: 11px; }
-    .pf-inv-row { border-top: 1px solid var(--nd-line); }
-    .pf-inv-expand { background: var(--nd-chip-bg); }
-    .pf-inv-acts { display: inline-flex; gap: 6px; }
-    .pf-inv-sec { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+    /* Band pill (new design). */
+    .pf-inv-bandsel { flex-shrink: 0; width: 160px; }
+    .pf-inv-attnchip { flex-shrink: 0; height: 32px; }
+    @media (max-width: 640px) { .pf-inv-bandsel { width: 150px; } }
+
+    /* Classic: the cards need a height of their own (no band page). */
+    :host-context(.design-classic) .inv-body { min-height: 620px; }
+
+    .pf-inv-grid--hidden { display: none; }
+    .pf-inv-side .pf-inv-sections { align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .pf-inv-active { justify-content: flex-end; padding-bottom: 10px; }
+    .pf-inv-batch__q { min-width: 44px; text-align: center; }
+    .pf-inv-adj { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
+    .pf-inv-tests { padding: 8px 4px; }
+    .pf-inv-tests__more { padding: 4px 12px 8px; }
+
+    /* Consumables lines: item · per test · covers · remove. */
+    .pf-inv-bomhead, .bom-line {
+      display: grid; grid-template-columns: minmax(0, 1fr) 110px 120px 44px; gap: 10px; align-items: center;
+    }
+    .pf-inv-bomhead { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .bom-line__cover { font-size: 12.5px; color: var(--text-tertiary); }
+    .bom-line__item { min-width: 0; }
     .pf-inv-x { color: var(--text-tertiary); }
     .pf-inv-x:hover { color: var(--red-text, #b91c1c); }
-    .pf-inv-bom__body { padding: 14px 18px 18px; }
-    .rcv-form { border-radius: var(--nd-radius); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
-    .rcv-form .nd-btn { height: 40px; min-height: 40px; }
-    .inp { width:100%; padding:9px 11px; border-radius:10px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13.5px; }
-    .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); box-shadow:0 0 0 3px rgba(124,58,237,.16); }
-    .inp--err { border-color:var(--red,#ef4444); }
-    .fld-err { display:block; font-size:11px; color:var(--red,#ef4444); margin-top:4px; }
-    table tbody tr.pf-inv-row:hover td { background:var(--nd-chip-bg); }
-    thead th { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-tertiary);
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
-    .rowbtn { font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; margin-left:6px; border:1px solid var(--glass-border); background:var(--glass-bg); color:var(--text-secondary); transition:color .14s, border-color .14s; }
-    .rowbtn:hover { color:var(--text-primary); border-color:var(--glass-border-hover); }
-    .rowbtn--accent { color:var(--violet-300); border-color:rgba(124,58,237,.4); background:rgba(124,58,237,.12); }
-    .seg { display:inline-flex; gap:2px; padding:2px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg); }
-    .seg__i { font-size:11px; font-weight:700; padding:4px 10px; border-radius:6px; border:0; background:transparent; color:var(--text-tertiary); }
-    .seg__i--on { color:#fff; background:var(--gradient-primary); }
-    .label-wrap { margin:4px 0 14px; padding:14px; border-radius:var(--nd-radius); border:1px solid var(--nd-line); background:var(--nd-card-bg); }
-    .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
-    .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
-
-    /* Classic stacks the two sections; new design shows one per pill tab. */
-    .pf-inv-bom { margin-top: 2rem; }
-    :host-context(.design-new) .pf-inv-bom { margin-top: 0; }
-    .pf-inv-bandsel { flex-shrink: 0; width: 160px; }
-    .pf-inv-bandsel--test { width: 260px; }
-    @media (max-width: 640px) {
-      .pf-inv-bandsel { width: 150px; }
-      .pf-inv-bandsel--test { width: 220px; }
-    }
 
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
 
-    /* ---------- Cross-platform additive overrides (do not touch desktop >=1280) ---------- */
-
-    /* The items table is dense (4 row actions + numeric columns). Below desktop, let it
-       scroll horizontally inside its own card instead of forcing page-wide overflow. */
-    @media (max-width: 1279px) {
-      :host .inv-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      :host .inv-table-wrap table { min-width: 640px; }
-    }
-
-    /* Phone: keep inputs at >=16px so iOS doesn't zoom on focus. Slightly larger
-       row-action tap targets. Reduce wasted horizontal padding so the table fits.
-       Let the header "New item" button keep its size and wrap the BOM line. */
     @media (max-width: 640px) {
-      :host .inp { font-size: 16px; padding: 11px 12px; }
-      :host .rowbtn { padding: 9px 12px; }
-      :host .label-wrap__head { flex-wrap: wrap; }
-      /* BOM editor row: stop the two selects + qty input from crushing each other.
-         Let the item select take the row, with qty + remove sitting beside it. */
-      :host .bom-line { flex-wrap: wrap; }
-      :host .bom-line__item { flex: 1 1 100%; min-width: 0; }
-      :host .bom-line__qty { width: 120px !important; }
-      /* Goods-receipt inline form: stack Lot/Expiry/Cost/Qty single-column so the
-         content-sized inputs don't crowd; the "Add stock" button drops below. */
-      :host .rcv-form > label { flex: 1 1 100%; min-width: 0; }
+      .pf-inv-bomhead { display: none; }
+      .bom-line { grid-template-columns: minmax(0, 1fr) 96px 44px; padding-bottom: 10px; border-bottom: 1px solid var(--nd-line); }
+      .bom-line__item { grid-column: 1 / -1; }
+      .bom-line__cover { grid-column: 1 / 2; grid-row: 2; }
+      .bom-line__qty { grid-row: 2; grid-column: 2; }
+      .pf-inv-x { grid-row: 2; grid-column: 3; }
     }
-
-    /* The item select is a flex child whose option text can be long; allow it to
-       shrink instead of overflowing the BOM row at any width below desktop.
-       Same for alert rows: gap + min-width:0 so a long item/lot name truncates
-       instead of colliding with the right-aligned mono value. */
-    @media (max-width: 1279px) {
-      :host .bom-line__item { min-width: 0; }
-      :host .alert-row { gap: 12px; }
-      :host .alert-row__name { min-width: 0; overflow-wrap: anywhere; }
-    }
-
-    /* Touch devices (any width): give every interactive element a comfortable
-       >=44px hit area without changing the visual padding on hover/pointer devices. */
     @media (pointer: coarse) {
-      :host .rowbtn { min-height: 44px; display: inline-flex; align-items: center; }
-      :host .seg__i { min-height: 44px; display: inline-flex; align-items: center; }
-      /* Icon-only batch +/- and remove-line ✕ buttons need a real hit area. */
-      :host .iconbtn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
-      /* Primary/secondary padded action buttons (New item, Save, Cancel, Add stock,
-         Save consumables) — guarantee a 44px tall hit target on touch. */
-      :host button.rounded-xl, :host button.rounded-lg {
-        min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
-      }
-      /* Inline text actions ("+ Add item") get a tappable height without changing look. */
-      :host .touch-link { min-height: 44px; display: inline-flex; align-items: center; }
-    }
-
-    /* Hover affordances only where a real pointer exists (prevents sticky :hover on touch). */
-    @media (hover: none) {
-      :host table tbody tr:hover td { background: transparent; }
-
+      .pf-inv-adj { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
     }
   `]
 })
 export class InventoryComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
   protected readonly theme = inject(ThemeService);
   /** Row actions: text on web, icon on touch (ND-PATTERN). */
   protected readonly web = webPointerSignal();
+  /** ≤900px: no side column — the side card is a sheet. */
+  protected readonly narrow = mediaSignal('(max-width: 900px)');
+  private readonly phone = mediaSignal('(max-width: 640px)');
+  protected readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  protected readonly plural = plural;
+  protected readonly ledgerWord = ledgerWord;
+  protected readonly signedQty = signedQty;
+  protected readonly testCap = TEST_LIST_CAP;
+  protected readonly isText = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
   readonly categories = CATEGORIES;
   readonly categoryOptions: PfSelectOption[] = CATEGORIES.map(c => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }));
 
   // ── Band pill ────────────────────────────────────────────────
-  /** Items vs Test consumables (new design shows one at a time). */
+  /** Items vs Test consumables (one at a time). */
   readonly tab = signal<InvTab>('items');
   readonly tabOptions: SegmentedOption<InvTab>[] = [
     { value: 'items', label: 'Items' },
     { value: 'bom', label: 'Test consumables' },
   ];
-  setTab(t: InvTab) { this.tab.set(t); }
-  readonly showItems = computed(() => !this.theme.isNewDesign() || this.tab() === 'items');
-  readonly showBom = computed(() => !this.theme.isNewDesign() || this.tab() === 'bom');
+  setTab(t: InvTab) { this.tab.set(t); this.attnOpen.set(false); }
+  readonly showItems = computed(() => this.tab() === 'items');
+  readonly showBom = computed(() => this.tab() === 'bom');
+  onBandSearch(v: string) { if (this.tab() === 'items') this.q.set(v); else this.testQ.set(v); }
   /** Item search + category filter ('' = all categories). */
   readonly q = signal('');
   readonly category = signal('');
@@ -415,21 +564,40 @@ export class InventoryComponent implements OnInit {
   readonly visibleItems = computed(() => {
     const cat = this.category();
     const rows = cat ? this.items().filter(i => i.category === cat) : this.items();
-    return bandFilter(rows, this.q(), i => [i.name, i.sku, i.category, i.uom]);
+    return bandFilter(rows, this.q(), i => [i.name, i.sku, i.category, i.uom, i.barcode ?? '']);
   });
+  readonly itemsLabel = computed(() => plural(this.visibleItems().length, 'item'));
   readonly testOptions = computed<PfSelectOption[]>(() => this.tests().map(t => ({ value: t.id, label: t.name })));
   readonly itemOptions = computed<PfSelectOption[]>(() =>
     this.items().map(it => ({ value: it.id, label: `${it.name} (${it.uom})` })));
+  /** Tests for the consumables list, narrowed by the band search. */
+  readonly testQ = signal('');
+  readonly testRows = computed(() => bandFilter(this.tests(), this.testQ(), t => [t.name, t.testCode ?? '', t.shortName ?? '', t.department?.name ?? '']));
+  testMeta(t: TestRow): string { return [t.testCode, t.department?.name].filter(this.isText).join(' · '); }
+  readonly bomTest = computed(() => this.tests().find(t => t.id === this.bomTestId()) ?? null);
 
   readonly items = signal<InvItem[]>([]);
   readonly batches = signal<InvBatch[]>([]);
   readonly loading = signal(true);
   readonly editing = signal(false);
+  /** The picked item (its ITEM side card is open). */
   readonly expandedId = signal<string | null>(null);
   readonly receiveFor = signal<string | null>(null);
+  readonly section = signal<ItemSection>('batches');
+  readonly sections: { v: ItemSection; l: string }[] = [
+    { v: 'batches', l: 'Batches' }, { v: 'receive', l: 'Receive' }, { v: 'label', l: 'Label' }, { v: 'ledger', l: 'Ledger' },
+  ];
+  readonly sel = computed(() => this.items().find(i => i.id === this.expandedId()) ?? null);
+  readonly ledger = signal<InvTxn[]>([]);
+  readonly ledgerLoading = signal(false);
+  /** Narrow widths: the ATTENTION sheet (nothing picked). */
+  readonly attnOpen = signal(false);
+  /** "New item" is the band's primary only while the side card has none. */
+  readonly bandNewPrimary = computed(() => !this.editing() && !this.sel());
 
   readonly lowStock = signal<any[]>([]);
   readonly expiring = signal<any[]>([]);
+  readonly attentionCount = computed(() => this.lowStock().length + this.expiring().length);
 
   readonly form = signal<Partial<InvItem>>({});
   readonly rcv = signal<{ lot: string; expiry: string; cost: number; qty: number }>({ lot: '', expiry: '', cost: 0, qty: 0 });
@@ -440,22 +608,59 @@ export class InventoryComponent implements OnInit {
   readonly rcvError = signal<{ field?: string; message: string } | null>(null);
 
   // Printable barcode/QR label — set after a receive (the lot barcode) or via
-  // the per-item "Label" action. `labelMode` lets the operator pick the symbology.
+  // the item's "Label" section. `labelMode` lets the operator pick the symbology.
   readonly labelCode = signal<string | null>(null);
   readonly labelMode = signal<LabelMode>('both');
 
   readonly canSave = computed(() => !!this.form().sku?.trim() && !!this.form().name?.trim());
 
   // Per-test consumable BOM
-  readonly tests = signal<{ id: string; name: string }[]>([]);
+  readonly tests = signal<TestRow[]>([]);
   readonly bomTestId = signal('');
   readonly bomLines = signal<{ itemId: string; qtyPerTest: number }[]>([]);
   readonly bomSaving = signal(false);
+  /** Loading feedback: Save item / Add stock running. */
+  readonly itemSaving = signal(false);
+  readonly receiving = signal(false);
+
+  // ── Item grid ─────────────────────────────────────────────────
+  private gridApi: GridApi<InvItem> | null = null;
+  readonly rowId = (p: { data: InvItem }) => p.data.id;
+  readonly rowClassRules = { 'inv-row--sel': (p: RowClassParams<InvItem>) => !!p.data && p.data.id === this.expandedId() };
+  readonly itemCols = computed<ColDef<InvItem>[]>(() => {
+    const phone = this.phone();
+    return [
+      { colId: 'item', headerName: 'Item', flex: 2, minWidth: 150, autoHeight: true, wrapText: true, sortable: true,
+        valueGetter: p => p.data?.name ?? '',
+        cellRenderer: (p: { data?: InvItem }) => itemCell(p.data?.name ?? '', [p.data?.sku, p.data?.isActive === false ? 'Off' : ''].filter(Boolean).join(' · ')) },
+      { colId: 'category', headerName: 'Category', width: 130, hide: phone, sortable: true,
+        valueGetter: p => p.data?.category ?? '', valueFormatter: p => (p.value ? String(p.value)[0].toUpperCase() + String(p.value).slice(1) : '') },
+      { colId: 'onHand', headerName: 'On hand', width: phone ? 104 : 130, type: 'rightAligned', sortable: true, cellClass: 'inv-num',
+        valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
+      { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
+        valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
+      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
+        valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
+        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
+        cellRenderer: (p: { data?: InvItem }) => {
+          const l = p.data ? stockLevel(p.data) : 'ok';
+          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
+        } },
+    ];
+  });
+  onGridReady(e: GridReadyEvent<InvItem>) { this.gridApi = e.api; }
+  onRowClicked(e: RowClickedEvent<InvItem>) { if (e.data) this.selectItem(e.data); }
+  private redrawSel() { try { this.gridApi?.redrawRows(); } catch { /* grid gone */ } }
+
+  level(it: InvItem) { return stockLevel(it); }
+  tone(it: InvItem) { return STOCK_LEVEL_TONE[stockLevel(it)]; }
+  levelLabel(it: InvItem) { return STOCK_LEVEL_LABEL[stockLevel(it)]; }
+  expiry(daysLeft: number) { return expiryView(daysLeft); }
 
   async ngOnInit() { await Promise.all([this.load(), this.loadAlerts(), this.loadTests()]); }
 
   private async loadTests() {
-    try { this.tests.set(await firstValueFrom(this.api.get<{ id: string; name: string }[]>('/api/tests/')) ?? []); }
+    try { this.tests.set(await firstValueFrom(this.api.get<TestRow[]>(testListUrl())) ?? []); }
     catch { /* */ }
   }
 
@@ -472,6 +677,12 @@ export class InventoryComponent implements OnInit {
   removeLine(i: number) { this.bomLines.update(l => l.filter((_, idx) => idx !== i)); }
   setLine(i: number, field: 'itemId' | 'qtyPerTest', value: unknown) {
     this.bomLines.update(l => l.map((ln, idx) => idx === i ? { ...ln, [field]: value } : ln));
+  }
+  /** "≈ 240 tests" — what this branch's stock of the line's item still covers. */
+  coverLabel(line: { itemId: string; qtyPerTest: number }): string {
+    const it = this.items().find(i => i.id === line.itemId);
+    const n = testsCovered(it?.onHand, line.qtyPerTest);
+    return n == null ? '—' : `≈ ${n.toLocaleString('en-IN')} ${n === 1 ? 'test' : 'tests'}`;
   }
   async saveBom() {
     const id = this.bomTestId(); if (!id) return;
@@ -496,43 +707,80 @@ export class InventoryComponent implements OnInit {
       this.lowStock.set(a?.lowStock ?? []); this.expiring.set(a?.expiring ?? []);
     } catch { /* */ }
   }
+  private async loadLedger(itemId: string) {
+    this.ledgerLoading.set(true);
+    try { this.ledger.set(await firstValueFrom(this.api.get<InvTxn[]>(`/api/inventory/items/${itemId}/ledger?take=50`)) ?? []); }
+    catch { this.ledger.set([]); }
+    this.ledgerLoading.set(false);
+  }
 
   setF(k: string, v: unknown) { this.form.update(f => ({ ...f, [k]: v })); }
   setR(k: string, v: unknown) { this.rcv.update(r => ({ ...r, [k]: v })); }
 
-  startNew() { this.itemError.set(null); this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); }
+  startNew() { this.itemError.set(null); this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); this.attnOpen.set(false); }
   startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.editing.set(true); }
 
   async saveItem() {
-    if (!this.canSave()) return;
+    if (!this.canSave() || this.itemSaving()) return;
     this.itemError.set(null);
+    this.itemSaving.set(true);
     try {
       await firstValueFrom(this.api.post('/api/inventory/items', this.form()));
       this.editing.set(false); this.toasts.success('Item saved'); await this.load(); await this.loadAlerts();
     } catch (e) {
       const err = ApiError.from(e);
-      if (err.field === 'sku' || err.field === 'code' || err.field === 'name') this.itemError.set({ field: err.field, message: err.message });
+      if (err.field === 'sku' || err.field === 'code' || err.field === 'name' || err.field === 'barcode') this.itemError.set({ field: err.field, message: err.message });
       else this.toasts.error(err.message);
+    } finally {
+      this.itemSaving.set(false);
     }
   }
 
-  async toggleBatches(it: InvItem) {
-    if (this.expandedId() === it.id) { this.expandedId.set(null); return; }
+  /** Pick an item: its ITEM side card opens on Batches. */
+  selectItem(it: InvItem) {
+    this.editing.set(false); this.attnOpen.set(false);
     this.expandedId.set(it.id); this.receiveFor.set(null);
-    await this.loadBatches(it.id);
+    this.section.set('batches'); this.labelCode.set(null); this.ledger.set([]);
+    this.redrawSel();
+    this.loadBatches(it.id);
+  }
+  /** Close the side card (or its sheet). */
+  closeSide() {
+    if (this.editing()) { this.editing.set(false); return; }
+    this.attnOpen.set(false);
+    this.expandedId.set(null); this.receiveFor.set(null);
+    this.redrawSel();
+  }
+  setSection(it: InvItem, s: ItemSection) {
+    if (s === 'receive') { this.openReceive(it); return; }
+    if (s === 'label') { this.showLabel(it); return; }
+    this.section.set(s);
+    if (s === 'ledger') this.loadLedger(it.id);
+  }
+  async toggleBatches(it: InvItem) {
+    if (this.expandedId() === it.id && this.section() === 'batches') { this.closeSide(); return; }
+    this.selectItem(it);
   }
   openReceive(it: InvItem) {
+    if (this.expandedId() !== it.id) this.selectItem(it);
+    this.section.set('receive');
     this.expandedId.set(it.id); this.receiveFor.set(it.id);
     this.rcv.set({ lot: '', expiry: '', cost: 0, qty: 0 });
     this.rcvError.set(null);
-    this.loadBatches(it.id);
   }
   /** Show a printable barcode/QR label for the item itself (its barcode, or SKU
    *  as a fallback). The lot label is shown automatically after a receive. */
   showLabel(it: InvItem) {
-    this.expandedId.set(it.id);
+    if (this.expandedId() !== it.id) this.selectItem(it);
+    this.section.set('label');
     this.labelCode.set((it as any).barcode || it.sku || it.id);
-    this.loadBatches(it.id);
+  }
+  /** Add stock, then show the new lot's label to print. */
+  async doReceive(it: InvItem) {
+    await this.receive(it);
+    if (this.receiveFor() === null) {   // receive() clears it only on success
+      this.section.set(this.labelCode() ? 'label' : 'batches');
+    }
   }
   printLabel() { printLabelOnly(); }
   private async loadBatches(itemId: string) {
@@ -542,9 +790,19 @@ export class InventoryComponent implements OnInit {
 
   async receive(it: InvItem) {
     const r = this.rcv();
-    if (r.qty <= 0) return;
+    if (r.qty <= 0 || this.receiving()) return;
     this.rcvError.set(null);
+    this.receiving.set(true);
     try {
+      // Contract (fix 7 — expiry = end of day IST): send the <input type=date>
+      // / pf-nd-date value as a literal "<YYYY-MM-DD>T00:00:00Z" string —
+      // never through `new Date(...)` first, which would shift the date by
+      // the browser's local timezone. The server stores the date part
+      // VERBATIM and treats it as an IST calendar date: a lot dated 31 Oct is
+      // usable through 23:59:59 IST 31 Oct (InventoryService.ExpiryCutoffUtc).
+      // "Is this expired / in stock" is always read back from the server
+      // (`expired`, `onHand`, `lowStock` — see inventory-view.ts `stockLevel`'s
+      // doc comment) — never recomputed client-side.
       const res: any = await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
         lotNumber: r.lot || null, expiryDate: r.expiry ? r.expiry + 'T00:00:00Z' : null, unitCost: r.cost, qty: r.qty,
       }));
@@ -556,12 +814,38 @@ export class InventoryComponent implements OnInit {
       const err = ApiError.from(e);
       if (err.field === 'qty' || err.field === 'quantity') this.rcvError.set({ field: err.field, message: err.message });
       else this.toasts.error(err.message);
+    } finally {
+      this.receiving.set(false);
     }
   }
 
+  /** Reason codes for a manual stock adjustment (fix 8) — server-validated;
+   *  the ledger records the code itself rather than always "wastage". No
+   *  native <select>: a DialogService pick (and a follow-up note for "other"). */
+  private static readonly ADJUST_REASONS: DialogChoice[] = [
+    { value: 'wastage', label: 'Wastage' },
+    { value: 'damage', label: 'Damage' },
+    { value: 'qc', label: 'QC' },
+    { value: 'calibration', label: 'Calibration' },
+    { value: 'correction', label: 'Correction' },
+    { value: 'other', label: 'Other' },
+  ];
+
   async adjust(b: InvBatch, delta: number) {
+    const reasonCode = await this.dialog.choose({
+      title: delta < 0 ? 'Reduce stock' : 'Increase stock',
+      message: `${delta < 0 ? 'Remove' : 'Add'} ${Math.abs(delta)} unit from this batch — pick a reason.`,
+      choices: InventoryComponent.ADJUST_REASONS,
+      confirmLabel: delta < 0 ? 'Remove' : 'Add',
+    });
+    if (!reasonCode) return;
+    let note: string | null = null;
+    if (reasonCode === 'other') {
+      note = await this.dialog.prompt({ title: 'What happened?', placeholder: 'Short note…', required: true });
+      if (!note) return;
+    }
     try {
-      await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/adjust`, { delta, reason: delta < 0 ? 'manual decrement' : 'manual increment' }));
+      await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/adjust`, { delta, reasonCode, note }));
       const id = this.expandedId(); if (id) await Promise.all([this.loadBatches(id), this.load(), this.loadAlerts()]);
     } catch (e) { this.toasts.error(ApiError.from(e).message); }
   }

@@ -93,7 +93,7 @@ describe('My Work — round 5 (owner): headers, counts, row actions, dots', () =
   });
 
   it('NORMAL group dot is neutral in the new design (no green)', () => {
-    const rule = css().match(/\.design-new[^{]*\.pf-dot\[data-level=["']?normal["']?\][^{]*\{([^}]*)\}/);
+    const rule = css().match(/\.design-new[^{]*\.pf-dot\[data-priority=["']?normal["']?\][^{]*\{([^}]*)\}/);
     expect(rule).toBeTruthy();
     expect(rule![1]).not.toMatch(/#10b981|#34d399|16,\s*185,\s*129/i);
   });
@@ -116,8 +116,9 @@ describe('My Work — round 6 (owner): sample ID is the primary line', () => {
     expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__id[^{]*\{[^}]*font-size:\s*15px\s*!important;\s*font-weight:\s*600\s*!important;[^}]*color:\s*var\(--text-primary\)/);
     expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__who[^{]*\{[^}]*font-size:\s*13px/);
   });
-  it('normal-priority tiles lose the stripe (urgent / high keep theirs)', () => {
-    expect(css()).toMatch(/\.pf-tq[^{\s]*:not\(\.pf-tq--urgent\):not\(\.pf-tq--high\)[^{]*\.pf-tq__cap[^{]*\{[^}]*transparent/);
+  it('Normal-priority tiles lose the stripe (only Urgent keeps its red one)', () => {
+    expect(css()).toMatch(/\.pf-tq[^{\s]*:not\(\.pf-tq--urgent\)\s[^{]*\.pf-tq__cap[^{]*\{[^}]*transparent/);
+    expect(css()).not.toMatch(/pf-tq--high/);
   });
 });
 
@@ -266,5 +267,47 @@ describe('My Work — Collection companion (rendered)', () => {
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+});
+
+/** Owner (2026-09-29): the queue groups by the ORDER priority (Urgent /
+ *  Normal) — TAT is a chip, never a "High" group. */
+describe('My Work — priority groups + TAT chip', () => {
+  const now = Date.now();
+  const row = (id: string, priority: string, receivedMinAgo: number, tatHours: number) => ({
+    id, status: 'pending', subOrderId: 's-' + id, testId: 't-' + id, name: 'CBC',
+    test: { id: 't-' + id, name: 'CBC', tatHours },
+    subOrder: {
+      id: 's-' + id, barcode: 'B' + id, status: 'received',
+      receivedAtLab: new Date(now - receivedMinAgo * 60000).toISOString(),
+      order: { id: 'o-' + id, priority, patient: { displayName: 'P ' + id } },
+    },
+  });
+
+  it('Urgent (not yet due) under Urgent; overdue Normal under Normal with an overdue clock', () => {
+    const c = make(true);
+    c._rows.set([row('1', 'urgent', 5, 6), row('2', 'routine', 300, 2), row('3', 'STAT', 0, 4)]);
+    const b = c.buckets();
+    expect(b.map((x: any) => x.label)).toEqual(['Urgent', 'Normal']);
+    expect(b[0].items.map((i: any) => i.id).sort()).toEqual(['1', '3']);
+    expect(b[1].items.map((i: any) => i.id)).toEqual(['2']);
+    const normalTube = c.sampleRows(b[1].items)[0];
+    expect(normalTube.remainingMin).toBeLessThan(0);
+    const g = c.patientGroups(b[1].items)[0];
+    expect(g.priority).toBe('normal');
+    expect(g.remainingMin).toBeLessThan(0);
+  });
+
+  it('sample rows sort by TAT due within the group (overdue first)', () => {
+    const c = make(true);
+    c._rows.set([row('a', 'routine', 0, 8), row('b', 'routine', 200, 2), row('c', 'routine', 90, 2)]);
+    const [, normal] = c.buckets();
+    expect(c.sampleRows(normal.items).map((t: any) => t.barcode)).toEqual(['Bb', 'Bc', 'Ba']);
+  });
+
+  it('tile tone follows priority only (Urgent rose, Normal default — no amber)', () => {
+    const c = make(true);
+    expect(c.toneFor('urgent')).toBe('rose');
+    expect(c.toneFor('normal')).toBe('default');
   });
 });

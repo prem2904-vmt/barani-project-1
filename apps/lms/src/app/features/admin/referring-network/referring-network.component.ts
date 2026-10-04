@@ -1,89 +1,129 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
+import {
+  AllCommunityModule, ColDef, ICellRendererParams, ModuleRegistry,
+  colorSchemeDark, colorSchemeLight, themeQuartz,
+} from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import {
+  ALL_HOSPITALS, Doctor, Hospital, NO_HOSPITAL,
+  doctorHospitalIds, doctorHospitals, doctorHospitalsLabel, filterDoctorsByHospital, linkDiff,
+} from './referring-network.model';
 
-interface Hospital {
-  id: string;
-  name: string;
-  code?: string | null;
-  address?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  gstin?: string | null;
-  notes?: string | null;
-  isActive: boolean;
-  doctorCount: number;
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+type View = 'hospitals' | 'doctors';
+
+/** Doctor editor draft: the doctor plus the hospital set being edited. */
+type DoctorDraft = Partial<Doctor> & { hospitalIds: string[] };
+/** Hospital editor draft: the hospital plus the doctors attached to it. */
+type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
+
+const svg = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
+const ICON_POWER = svg('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/>');
+
+/** Kit row action (ND-PATTERN): text button on web, 44px icon on touch. */
+function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = web ? 'nd-rowact' : 'nd-rowact nd-rowact--icon';
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.innerHTML = `${icon}<span class="nd-rowact__t">${label}</span>`;
+  return b;
 }
 
-interface Doctor {
-  id: string;
-  hospitalId?: string | null;
-  hospitalName?: string | null;
-  name: string;
-  designation?: string | null;
-  department?: string | null;
-  qualification?: string | null;
-  specialisation?: string | null;
-  registrationNo?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  isActive: boolean;
-}
+const gridParams = {
+  fontFamily: "'Noto Sans', system-ui, sans-serif",
+  fontSize: 13, rowHeight: 52, headerHeight: 40, borderRadius: 12,
+};
+const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({ ...gridParams, accentColor: '#7c3aed' });
+const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...gridParams, accentColor: '#a855f7' });
 
 /**
- * Admin → Referring Network. Two-pane:
- *  Left  — Hospitals list (search + add). Click to focus.
- *  Right — Doctors for the focused hospital, with full details
- *          (designation, department, qualification, registration, contact).
- *          Add / edit / soft-delete.
+ * Admin → Referring Network. Two views (band toggle):
+ *  Hospitals — hospital list + the focused hospital's doctors (add a new
+ *              doctor there, link existing doctors, remove one from it).
+ *  Doctors   — every doctor in one AG-Grid with a Hospitals column; filter
+ *              by hospital or "Independent". A doctor can be created with
+ *              no hospital and linked to one or more hospitals later.
+ *
+ * Doctor-first (owner 2026-09-30): both entry points exist — "Add doctor"
+ * (optionally pick hospitals) and "Add hospital" (optionally attach existing
+ * doctors). The server keeps the many-to-many links; this screen only sends
+ * the wanted sets.
  *
  * Auto-create flow: anything reception types in order-create that doesn't
- * exist gets a stub Hospital + Doctor row here automatically. Admins fill
- * in the extra fields later. Soft-deletes only — historical orders that
- * reference a deactivated hospital/doctor stay intact.
+ * exist gets a stub Hospital + Doctor row here automatically. Soft-deletes
+ * only — historical orders keep the names they were placed with.
  */
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
+    HeroBandComponent, SegmentedComponent, SelectComponent, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): the hospital search moved here from the list
-             pane; "Add hospital" rides the band's actions. -->
-        <pf-hero-band [back]="true" placeholder="Search hospitals — name, code, phone, address…"
-                      [value]="hospitalSearch()" (valueChange)="setHospitalSearch($event)">
+        <!-- Band pill (owner): search + the Hospitals / Doctors switch ride in
+             the pill; the view's ONE primary ("Add hospital" / "Add doctor")
+             sits top-right. -->
+        <pf-hero-band [back]="true"
+                      [placeholder]="view() === 'hospitals' ? 'Search hospitals — name, code, phone, address…' : 'Search doctors — name, hospital, department, phone…'"
+                      [value]="view() === 'hospitals' ? hospitalSearch() : doctorSearch()"
+                      (valueChange)="onBandSearch($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
+                          (valueChange)="setView($event)"></pf-segmented>
+          </ng-container>
           <ng-container band-actions>
             <!-- While an editor modal is open its footer Save is the ONE
                  primary: this steps down (secondary, disabled) behind it. -->
-            <button type="button" class="pf-hb-btn press pf-rn-add"
-                    [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
-                    [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
-                    aria-label="Add hospital">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              Add hospital
-            </button>
+            @if (view() === 'hospitals') {
+              <button type="button" class="pf-hb-btn press pf-rn-add"
+                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
+                      [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
+                      aria-label="Add hospital">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add hospital
+              </button>
+            } @else {
+              <button type="button" class="pf-hb-btn press pf-rn-add-doc"
+                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
+                      [disabled]="editorOpen()" (click)="openDoctorEditor(null, null)"
+                      aria-label="Add doctor">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add doctor
+              </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Referring network"
         title="Hospitals &amp; doctors"
-        subtitle="Manage the hospitals that refer patients to your lab and the doctors who practise at each.">
+        subtitle="Manage the hospitals and doctors that refer patients to your lab. A doctor can work independently or at several hospitals.">
+        <pf-touch-btn actions size="sm" variant="secondary" (pressed)="openDoctorEditor(null, null)">Add doctor</pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="openHospitalEditor(null)">
           <span icon-left aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -95,6 +135,11 @@ interface Doctor {
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-classic-only pf-rn-classic-seg">
+        <pf-segmented size="sm" [options]="viewOptions()" [value]="view()" (valueChange)="setView($event)"></pf-segmented>
+      </div>
+
+      @if (view() === 'hospitals') {
       <div class="pf-band-body">
       <div class="pf-rn-grid">
         <!-- ── Hospitals (left) ────────────────────────────────── -->
@@ -138,15 +183,21 @@ interface Doctor {
               }
             </ul>
           }
+          @if (independentCount() > 0) {
+            <!-- Doctors with no hospital live in the Doctors view. -->
+            <button type="button" class="nd-btn nd-btn--tertiary pf-rn-indep press" (click)="showIndependent()">
+              <span class="nd-num">{{ independentCount() }}</span> independent doctor{{ independentCount() === 1 ? '' : 's' }}
+            </button>
+          }
         </aside>
 
-        <!-- ── Doctors (right) ─────────────────────────────────── -->
+        <!-- ── Doctors at the selected hospital (right) ────────── -->
         <section class="pf-rn-pane nd-card">
           @if (!selectedHospital(); as _) {
             <div class="pf-rn-placeholder">
               <p class="pf-rn-placeholder__title">Pick a hospital to manage its doctors</p>
               <p class="pf-rn-placeholder__sub">
-                Or add a new hospital from the top-right. Reception's typed-in entries auto-appear here too.
+                Or add a new hospital from the top-right. Doctors without a hospital are in the Doctors view.
               </p>
             </div>
           }
@@ -163,8 +214,9 @@ interface Doctor {
                 </p>
               </div>
               <button type="button" class="nd-btn nd-btn--tertiary pf-rn-hdrbtn press" (click)="openHospitalEditor(h)">Edit hospital</button>
+              <button type="button" class="nd-btn nd-btn--tertiary pf-rn-hdrbtn press" (click)="openLinkEditor(h)">Link doctors</button>
               <!-- Secondary: "Add hospital" in the band is this view's one primary. -->
-              <button type="button" class="nd-btn nd-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null)">
+              <button type="button" class="nd-btn nd-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null, h.id)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add doctor
@@ -176,7 +228,7 @@ interface Doctor {
                 <pf-skeleton-rows [rows]="6" label="Loading doctors…"></pf-skeleton-rows>
               </div>
             } @else if (doctorsForSelected().length === 0) {
-              <p class="pf-rn-empty">No doctors yet at this hospital. Click <b>Add doctor</b>.</p>
+              <p class="pf-rn-empty">No doctors at this hospital yet. <b>Add doctor</b> creates one here; <b>Link doctors</b> adds doctors you already have.</p>
             } @else {
               <ul class="pf-rn-doc-list">
                 @for (d of doctorsForSelected(); track d.id) {
@@ -198,11 +250,13 @@ interface Doctor {
                         @if (d.phone && d.email) { · }
                         @if (d.email) { {{ d.email }} }
                       </p>
+                      @if (otherHospitals(d, h.id); as others) { <p class="pf-rn-doc__also">Also at {{ others }}</p> }
                     </div>
                     <div class="pf-rn-doc__actions">
                       @if (!d.isActive) { <span class="nd-chip nd-chip--static pf-rn-chip">Inactive</span> }
                       <!-- Row actions: text on web, icon on touch. -->
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openDoctorEditor(d)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openDoctorEditor(d, null)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
+                      <button type="button" class="nd-rowact pf-rn-unlink" [class.nd-rowact--icon]="!web()" (click)="unlinkDoctor(d, h)" aria-label="Remove from this hospital" title="Remove from this hospital"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.84 12.25 20.25 10.84a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="m5.16 11.75-1.41 1.41a5 5 0 0 0 7.07 7.07l1.41-1.41"/><path d="M8 2v3M2 8h3M16 22v-3M22 16h-3"/></svg><span class="nd-rowact__t">Remove</span></button>
                       @if (d.isActive) {
                         <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="deactivateDoctor(d)" aria-label="Deactivate doctor" title="Deactivate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">Deactivate</span></button>
                       }
@@ -215,6 +269,35 @@ interface Doctor {
         </section>
       </div>
       </div>
+      } @else {
+      <!-- ── Doctors view: one grid, filterable by hospital ───────── -->
+      <div class="pf-band-body pf-band-body--fill">
+        <div class="pf-rn-docbar">
+          <pf-select class="pf-rn-hfilter" size="sm" [searchable]="true"
+                     [options]="hospitalFilterOptions()" [value]="hospitalFilter()"
+                     (valueChange)="setHospitalFilter($event)" placeholder="All hospitals"></pf-select>
+          <input type="search" class="pf-rn-search pf-rn-search--docs pf-classic-only"
+                 placeholder="Search doctors…" [value]="doctorSearch()"
+                 (input)="doctorSearch.set(asInput($event))" />
+          <span class="pf-rn-docbar__count nd-num">{{ gridDoctors().length }} doctor{{ gridDoctors().length === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="pf-rn-docgrid">
+          @if (loadingDoctorsShown()) {
+            <div class="pf-rn-docgrid__skel"><pf-skeleton-rows [rows]="8" label="Loading doctors…"></pf-skeleton-rows></div>
+          }
+          <ag-grid-angular
+            style="width: 100%; height: 100%;"
+            [theme]="gridTheme()"
+            [rowData]="gridDoctors()"
+            [columnDefs]="doctorColDefs()"
+            [context]="gridContext"
+            [animateRows]="true"
+            [getRowId]="rowId"
+            [overlayNoRowsTemplate]="noRowsText()">
+          </ag-grid-angular>
+        </div>
+      </div>
+      }
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
@@ -259,6 +342,13 @@ interface Doctor {
               <span>GSTIN</span>
               <input class="nd-input" type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
             </label>
+            <div class="pf-rn-fld pf-rn-fld--wide">
+              <span>Doctors <span class="pf-rn-fld__opt">optional</span></span>
+              <pf-select class="pf-rn-docsel" [multiple]="true" [searchable]="true"
+                         [options]="doctorOptions()" [values]="he.doctorIds"
+                         (valuesChange)="setHospitalDoctors($event)"
+                         placeholder="Attach doctors you already have"></pf-select>
+            </div>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Notes</span>
               <textarea class="nd-input" rows="2" [(ngModel)]="he.notes" placeholder="Panel rates, commission deal, billing quirks…"></textarea>
@@ -271,8 +361,45 @@ interface Doctor {
             <span class="flex-1"></span>
             <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
             <button type="button" class="nd-btn nd-btn--primary press"
-                    [disabled]="!he.name?.trim() || savingHospital()" (click)="saveHospital()">
+                    [disabled]="!he.name?.trim() || savingHospital()" [pfBusy]="savingHospital()" pfBusyLabel="Saving…" (click)="saveHospital()">
               @if (savingHospital()) { Saving… } @else { Save hospital }
+            </button>
+          </footer>
+        </div>
+      }
+
+      <!-- ── Link existing doctors to a hospital ───────────────── -->
+      @if (linkEditor(); as le) {
+        <div class="pf-rn-modal-bd" (click)="closeLinkEditor()"></div>
+        <div class="pf-rn-modal pf-rn-modal--sm nd-card" role="dialog" aria-modal="true" aria-label="Link doctors">
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <header class="nd-card__head pf-rn-modal__hdr">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <h3 class="nd-card__label">Link doctors</h3>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeLinkEditor()" aria-label="Close" title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </header>
+          <div class="pf-rn-modal__body pf-rn-modal__body--one">
+            <p class="pf-rn-modal__lead">Doctors you already have who also refer from <b>{{ le.hospitalName }}</b>. Their other hospitals stay as they are.</p>
+            <div class="pf-rn-fld">
+              <span>Doctors</span>
+              <pf-select class="pf-rn-docsel" [multiple]="true" [searchable]="true"
+                         [options]="linkableDoctorOptions()" [values]="le.doctorIds"
+                         (valuesChange)="setLinkDoctors($event)"
+                         placeholder="Search doctors"></pf-select>
+            </div>
+          </div>
+          <footer class="pf-rn-modal__ftr">
+            <span class="flex-1"></span>
+            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeLinkEditor()">Cancel</button>
+            <button type="button" class="nd-btn nd-btn--primary press"
+                    [disabled]="!le.doctorIds.length || savingLink()" [pfBusy]="savingLink()" pfBusyLabel="Linking…" (click)="saveLinks()">
+              @if (savingLink()) { Linking… } @else { Link doctors }
             </button>
           </footer>
         </div>
@@ -300,6 +427,13 @@ interface Doctor {
               <input class="nd-input" type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.nd-input--error]="docErr('name')" placeholder="Dr. Priya Krishnan" />
               @if (docErr('name')) { <p class="pf-rn-fld__err">{{ docErr('name') }}</p> }
             </label>
+            <div class="pf-rn-fld pf-rn-fld--wide">
+              <span>Hospitals <span class="pf-rn-fld__opt">optional — leave empty for an independent doctor</span></span>
+              <pf-select class="pf-rn-hospsel" [multiple]="true" [searchable]="true"
+                         [options]="hospitalOptions()" [values]="de.hospitalIds"
+                         (valuesChange)="setDoctorHospitals($event)"
+                         placeholder="No hospital (independent)"></pf-select>
+            </div>
             <label class="pf-rn-fld">
               <span>Designation</span>
               <input class="nd-input" type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
@@ -318,7 +452,8 @@ interface Doctor {
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input class="nd-input" type="tel" [(ngModel)]="de.phone" placeholder="+91 98765 43210" />
+              <input class="nd-input" type="tel" [(ngModel)]="de.phone" (input)="clearDocErr('phone')" [class.nd-input--error]="docErr('phone')" placeholder="+91 98765 43210" />
+              @if (docErr('phone')) { <p class="pf-rn-fld__err">{{ docErr('phone') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
@@ -329,7 +464,7 @@ interface Doctor {
             <span class="flex-1"></span>
             <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
             <button type="button" class="nd-btn nd-btn--primary press"
-                    [disabled]="!de.name?.trim() || savingDoctor()" (click)="saveDoctor()">
+                    [disabled]="!de.name?.trim() || savingDoctor()" [pfBusy]="savingDoctor()" pfBusyLabel="Saving…" (click)="saveDoctor()">
               @if (savingDoctor()) { Saving… } @else { Save doctor }
             </button>
           </footer>
@@ -338,6 +473,7 @@ interface Doctor {
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-rn-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -481,7 +617,7 @@ interface Doctor {
 
     /* iPad/tablet (641–1279): centered modal sizes to the *visible* viewport
        so browser/keyboard chrome can't clip it (raw vh stays for >=1280). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-rn-modal { max-height: calc(100dvh - 32px); }
     }
 
@@ -513,7 +649,36 @@ interface Doctor {
     /* Capacitor native: bottom-sheet modal must clear the home-indicator /
        gesture bar in addition to the in-app bottom-nav. */
     @media (prefers-reduced-motion: reduce) { .pf-rn-modal { animation: none !important; } }
-  `]
+  
+    /* ── Doctor-first additions (2026-09-30) ─────────────────────── */
+    .pf-rn-classic-seg { margin-top: 12px; }
+    :host-context(.design-new) .pf-rn-classic-seg { display: none; }
+    .pf-rn-indep { align-self: flex-start; height: 36px; min-height: 36px; font-size: 12.5px; }
+    .pf-rn-doc__also { margin: 4px 0 0; font-size: 11.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
+    .pf-rn-fld__opt { font-weight: 400; color: var(--text-tertiary); }
+    .pf-rn-modal--sm { max-width: 460px; }
+    .pf-rn-modal__body--one { grid-template-columns: 1fr; }
+    .pf-rn-modal__lead { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+    /* Doctors view: filter bar + a grid that scrolls itself (no page scroll). */
+    .pf-rn-docbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 16px 0 10px; }
+    :host-context(.design-new) .pf-rn-docbar { margin-top: 0; }
+    .pf-rn-hfilter { width: 260px; max-width: 100%; }
+    .pf-rn-search--docs { width: 240px; }
+    .pf-rn-docbar__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+    .pf-rn-docgrid {
+      position: relative; width: 100%;
+      height: calc(100dvh - 280px); min-height: 360px;
+      border: 1px solid var(--nd-line); border-radius: var(--nd-radius); overflow: hidden;
+    }
+    :host-context(.design-new) .pf-rn-docgrid { flex: 1 1 auto; height: auto; min-height: 320px; }
+    .pf-rn-docgrid__skel { position: absolute; inset: 0; z-index: 2; background: var(--nd-card-bg, var(--bg-primary)); padding: 16px; }
+    @media (max-width: 640px) {
+      .pf-rn-hfilter, .pf-rn-search--docs { width: 100%; }
+      .pf-rn-docbar__count { margin-left: 0; }
+    }
+    @media (pointer: coarse) { .pf-rn-indep { min-height: 44px; } }
+  `],
 })
 export class ReferringNetworkComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -524,6 +689,8 @@ export class ReferringNetworkComponent implements OnInit {
   protected readonly web = webPointerSignal();
 
   // ── State ───────────────────────────────────────────────────────
+  readonly view = signal<View>('hospitals');
+
   readonly hospitals = signal<Hospital[]>([]);
   readonly loadingHospitals = signal(false);
   /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
@@ -532,18 +699,24 @@ export class ReferringNetworkComponent implements OnInit {
   readonly hospitalSearch = signal('');
   readonly selectedHospitalId = signal<string | null>(null);
 
+  /** EVERY doctor of the lab (with or without hospitals) — one load powers
+   *  both views. */
   readonly doctorsAll = signal<Doctor[]>([]);
   readonly loadingDoctors = signal(false);
-  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
-   *  load never flashes it. */
   readonly loadingDoctorsShown = heldFlag(this.loadingDoctors);
+  readonly doctorSearch = signal('');
+  readonly hospitalFilter = signal<string>(ALL_HOSPITALS);
 
-  readonly hospitalEditor = signal<Partial<Hospital> | null>(null);
+  readonly hospitalEditor = signal<HospitalDraft | null>(null);
+  /** The hospital's doctors when its editor opened (to diff on save). */
+  private hospitalEditorDoctorsBefore: string[] = [];
   readonly savingHospital = signal(false);
-  readonly doctorEditor = signal<Partial<Doctor> | null>(null);
+  readonly doctorEditor = signal<DoctorDraft | null>(null);
   readonly savingDoctor = signal(false);
+  readonly linkEditor = signal<{ hospitalId: string; hospitalName: string; doctorIds: string[] } | null>(null);
+  readonly savingLink = signal(false);
   /** An editor modal is open: its footer Save is the view's ONE primary. */
-  readonly editorOpen = computed(() => !!this.hospitalEditor() || !!this.doctorEditor());
+  readonly editorOpen = computed(() => !!this.hospitalEditor() || !!this.doctorEditor() || !!this.linkEditor());
 
   // Inline, per-field backend errors for the editors (e.g. duplicate name/code).
   readonly hospitalFieldErr = signal<Record<string, string>>({});
@@ -558,6 +731,13 @@ export class ReferringNetworkComponent implements OnInit {
   }
 
   // ── Derived ─────────────────────────────────────────────────────
+  readonly viewOptions = computed<SegmentedOption<View>[]>(() => [
+    { value: 'hospitals', label: 'Hospitals', count: this.hospitals().length,
+      iconPath: ['M3 21h18M5 21V7l8-4v18M19 21V11l-6-4'] },
+    { value: 'doctors', label: 'Doctors', count: this.doctorsAll().length,
+      iconPath: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'] },
+  ]);
+
   readonly filteredHospitals = computed(() => {
     // Band pill search (owner): every word must hit name, code or contact.
     return bandFilter(this.hospitals(), this.hospitalSearch(),
@@ -573,14 +753,176 @@ export class ReferringNetworkComponent implements OnInit {
   readonly doctorsForSelected = computed<Doctor[]>(() => {
     const id = this.selectedHospitalId();
     if (!id) return [];
-    return this.doctorsAll().filter(d => d.hospitalId === id);
+    return filterDoctorsByHospital(this.doctorsAll(), id);
   });
 
+  readonly independentCount = computed(() =>
+    filterDoctorsByHospital(this.doctorsAll(), NO_HOSPITAL).filter(d => d.isActive).length);
+
+  /** Doctors view rows: hospital filter, then the band search (name,
+   *  hospitals, department, qualification, registration, phone, email). */
+  readonly gridDoctors = computed<Doctor[]>(() =>
+    bandFilter(filterDoctorsByHospital(this.doctorsAll(), this.hospitalFilter()), this.doctorSearch(),
+      d => [d.name, doctorHospitalsLabel(d), d.designation, d.department, d.qualification, d.specialisation,
+            d.registrationNo, d.phone, d.email]));
+
+  readonly noRowsText = computed(() => {
+    const f = this.hospitalFilter();
+    const msg = this.doctorSearch() ? 'No doctors match.'
+      : f === NO_HOSPITAL ? 'No independent doctors.'
+      : f !== ALL_HOSPITALS ? 'No doctors at this hospital yet.'
+      : 'No doctors yet. Use Add doctor to start.';
+    return `<span class="pf-rn-empty">${msg}</span>`;
+  });
+
+  readonly hospitalFilterOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: ALL_HOSPITALS, label: 'All hospitals' },
+    { value: NO_HOSPITAL, label: 'Independent (no hospital)' },
+    ...this.hospitals().map(h => ({ value: h.id, label: h.name, hint: h.isActive ? undefined : 'Inactive' })),
+  ]);
+
+  /** Hospitals a doctor can be linked to: the active ones, plus any inactive
+   *  one the doctor being edited is already at (so it isn't silently dropped). */
+  readonly hospitalOptions = computed<PfSelectOption<string>[]>(() => {
+    const keep = new Set(this.doctorEditor()?.hospitalIds ?? []);
+    return this.hospitals()
+      .filter(h => h.isActive || keep.has(h.id))
+      .map(h => ({ value: h.id, label: h.name, hint: h.isActive ? (h.code ?? undefined) : 'Inactive' }));
+  });
+
+  /** Existing doctors (active, plus any already chosen) for the hospital editor. */
+  readonly doctorOptions = computed<PfSelectOption<string>[]>(() => {
+    const keep = new Set(this.hospitalEditor()?.doctorIds ?? []);
+    return this.doctorOptionList(d => d.isActive || keep.has(d.id));
+  });
+
+  /** Doctors not yet at the hospital being linked. */
+  readonly linkableDoctorOptions = computed<PfSelectOption<string>[]>(() => {
+    const le = this.linkEditor();
+    if (!le) return [];
+    return this.doctorOptionList(d => d.isActive && !doctorHospitalIds(d).includes(le.hospitalId));
+  });
+
+  private doctorOptionList(keep: (d: Doctor) => boolean): PfSelectOption<string>[] {
+    return this.doctorsAll().filter(keep)
+      .slice().sort((a, b) => a.name.localeCompare(b.name))
+      .map(d => ({ value: d.id, label: d.name, hint: doctorHospitalsLabel(d) }));
+  }
+
+  /** "Kauvery, MIOT" — the doctor's hospitals other than `hospitalId`. */
+  otherHospitals(d: Doctor, hospitalId: string): string {
+    return doctorHospitals(d).filter(h => h.id !== hospitalId).map(h => h.name).filter(Boolean).join(', ');
+  }
+
+  // ── Grid ────────────────────────────────────────────────────────
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly rowId = (p: { data: Doctor }) => p.data.id;
+  readonly gridContext = {
+    web: () => this.web(),
+    edit: (d: Doctor) => this.openDoctorEditor(d, null),
+    deactivate: (d: Doctor) => void this.deactivateDoctor(d),
+  };
+
+  private doctorCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;justify-content:center;height:100%;line-height:1.3;min-width:0;';
+    if (!p.data) return wrap;
+    const name = document.createElement('span');
+    name.style.cssText = 'font-weight:600;color:var(--text-primary);white-space:normal;overflow-wrap:anywhere;';
+    name.textContent = p.data.name;
+    wrap.appendChild(name);
+    const sub = [p.data.designation, p.data.qualification].filter(Boolean).join(' · ');
+    if (sub) {
+      const s = document.createElement('span');
+      s.style.cssText = 'font-size:12px;color:var(--text-tertiary);white-space:normal;';
+      s.textContent = sub;
+      wrap.appendChild(s);
+    }
+    return wrap;
+  };
+
+  private hospitalsCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:100%;padding:6px 0;';
+    if (!p.data) return wrap;
+    const hs = doctorHospitals(p.data);
+    if (!hs.length) {
+      const none = document.createElement('span');
+      none.style.cssText = 'font-size:12px;color:var(--text-tertiary);';
+      none.textContent = 'Independent';
+      wrap.appendChild(none);
+      return wrap;
+    }
+    for (const h of hs) {
+      const chip = document.createElement('span');
+      chip.className = 'nd-chip nd-chip--static';
+      chip.style.cssText = 'height:24px;font-size:11.5px;';
+      chip.textContent = h.name;
+      wrap.appendChild(chip);
+    }
+    return wrap;
+  };
+
+  private statusCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
+    if (!p.data) return wrap;
+    const chip = document.createElement('span');
+    chip.className = 'nd-chip nd-chip--static';
+    chip.style.cssText = 'height:24px;font-size:11.5px;';
+    chip.textContent = p.data.isActive ? 'Active' : 'Inactive';
+    wrap.appendChild(chip);
+    return wrap;
+  };
+
+  private actionsCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
+    if (!p.data) return wrap;
+    const d = p.data;
+    const ctx = p.context as ReferringNetworkComponent['gridContext'];
+    const web = ctx?.web?.() ?? true;
+    const edit = rowAction(web, 'Edit', ICON_EDIT, `Edit ${d.name}`);
+    edit.addEventListener('click', e => { e.stopPropagation(); ctx?.edit(d); });
+    wrap.appendChild(edit);
+    if (d.isActive) {
+      const off = rowAction(web, 'Deactivate', ICON_POWER, `Deactivate ${d.name}`);
+      off.addEventListener('click', e => { e.stopPropagation(); ctx?.deactivate(d); });
+      wrap.appendChild(off);
+    }
+    return wrap;
+  };
+
+  readonly doctorColDefs = computed<ColDef<Doctor>[]>(() => {
+    const web = this.web();
+    return [
+      { headerName: 'Doctor', colId: 'name', field: 'name', cellRenderer: this.doctorCellRenderer,
+        flex: 1.2, minWidth: 200, sortable: true, filter: true, autoHeight: true },
+      { headerName: 'Hospitals', colId: 'hospitals', valueGetter: q => q.data ? doctorHospitalsLabel(q.data) : '',
+        cellRenderer: this.hospitalsCellRenderer, flex: 1.4, minWidth: 220, sortable: true, filter: true, autoHeight: true },
+      { headerName: 'Department', colId: 'department', valueGetter: q => q.data?.department || q.data?.specialisation || '',
+        flex: 0.8, minWidth: 140, sortable: true, filter: true },
+      { headerName: 'Reg #', colId: 'registrationNo', field: 'registrationNo', width: 130, sortable: true, filter: true },
+      { headerName: 'Phone', colId: 'phone', field: 'phone', width: 150, sortable: true, filter: true },
+      { headerName: 'Status', colId: 'status', valueGetter: q => (q.data?.isActive ? 'Active' : 'Inactive'),
+        cellRenderer: this.statusCellRenderer, width: 110, sortable: true, filter: true },
+      { headerName: '', colId: 'actions', cellRenderer: this.actionsCellRenderer, minWidth: web ? 200 : 120,
+        sortable: false, filter: false, resizable: false },
+    ];
+  });
+
+  // ── View / search ───────────────────────────────────────────────
+  setView(v: View): void { this.view.set(v); }
+  onBandSearch(v: string): void {
+    if (this.view() === 'hospitals') this.hospitalSearch.set(v); else this.doctorSearch.set(v);
+  }
   setHospitalSearch(v: string) { this.hospitalSearch.set(v); }
+  setHospitalFilter(v: string): void { this.hospitalFilter.set(v || ALL_HOSPITALS); }
+  showIndependent(): void { this.hospitalFilter.set(NO_HOSPITAL); this.view.set('doctors'); }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   async ngOnInit(): Promise<void> {
-    await this.loadHospitals();
+    await Promise.all([this.loadHospitals(), this.loadDoctors()]);
   }
 
   // ── Loads ───────────────────────────────────────────────────────
@@ -594,41 +936,57 @@ export class ReferringNetworkComponent implements OnInit {
       if (!this.selectedHospitalId() && (list ?? []).length > 0) {
         this.selectHospital(list![0].id);
       }
-    } catch (err) {
+    } catch {
       this.toasts.error('Could not load hospitals');
     } finally {
       this.loadingHospitals.set(false);
     }
   }
 
-  private async loadDoctorsFor(hospitalId: string): Promise<void> {
+  private async loadDoctors(): Promise<void> {
     this.loadingDoctors.set(true);
     try {
-      const list = await firstValueFrom(
-        this.api.get<Doctor[]>(`/api/referring-network/doctors?hospitalId=${hospitalId}&includeInactive=true`));
-      // Merge with existing array — keep doctors from other hospitals around
-      // (so switching hospitals doesn't refetch unnecessarily).
-      const other = this.doctorsAll().filter(d => d.hospitalId !== hospitalId);
-      this.doctorsAll.set([...other, ...(list ?? [])]);
-    } catch (err) {
+      const list = await firstValueFrom(this.api.get<Doctor[]>('/api/referring-network/doctors?includeInactive=true'));
+      this.doctorsAll.set(list ?? []);
+    } catch {
       this.toasts.error('Could not load doctors');
     } finally {
       this.loadingDoctors.set(false);
     }
   }
 
+  /** Re-read the hospital counts after a link change (server-owned). */
+  private async refreshHospitals(): Promise<void> {
+    try {
+      const list = await firstValueFrom(this.api.get<Hospital[]>('/api/referring-network/hospitals'));
+      if (list) this.hospitals.set(list);
+    } catch { /* counts refresh on the next load */ }
+  }
+
   selectHospital(id: string): void {
     this.selectedHospitalId.set(id);
-    void this.loadDoctorsFor(id);
+  }
+
+  private upsertDoctor(saved: Doctor): void {
+    const list = this.doctorsAll().slice();
+    const idx = list.findIndex(d => d.id === saved.id);
+    if (idx >= 0) list[idx] = saved; else list.push(saved);
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    this.doctorsAll.set(list);
   }
 
   // ── Hospital editor ────────────────────────────────────────────
 
   openHospitalEditor(h: Hospital | null): void {
     this.hospitalFieldErr.set({});
-    this.hospitalEditor.set(h ? { ...h } : { name: '', isActive: true });
+    const doctorIds = h ? filterDoctorsByHospital(this.doctorsAll(), h.id).map(d => d.id) : [];
+    this.hospitalEditorDoctorsBefore = doctorIds.slice();
+    this.hospitalEditor.set(h ? { ...h, doctorIds } : { name: '', isActive: true, doctorIds: [] });
   }
   closeHospitalEditor(): void { this.hospitalEditor.set(null); }
+  setHospitalDoctors(ids: string[]): void {
+    this.hospitalEditor.update(e => (e ? { ...e, doctorIds: ids ?? [] } : e));
+  }
 
   async saveHospital(): Promise<void> {
     const draft = this.hospitalEditor();
@@ -642,11 +1000,25 @@ export class ReferringNetworkComponent implements OnInit {
         phone: draft.phone ?? null,
         email: draft.email ?? null,
         gstin: draft.gstin ?? null,
-        notes: draft.notes ?? null
+        notes: draft.notes ?? null,
       };
-      const saved = draft.id
-        ? await firstValueFrom(this.api.patch<Hospital>(`/api/referring-network/hospitals/${draft.id}`, body))
-        : await firstValueFrom(this.api.post<Hospital>('/api/referring-network/hospitals', body));
+      let saved: Hospital;
+      if (draft.id) {
+        saved = await firstValueFrom(this.api.patch<Hospital>(`/api/referring-network/hospitals/${draft.id}`, body));
+        const { add, remove } = linkDiff(this.hospitalEditorDoctorsBefore, draft.doctorIds);
+        if (add.length) {
+          saved = await firstValueFrom(this.api.post<Hospital>(`/api/referring-network/hospitals/${draft.id}/doctors`, { doctorIds: add }));
+        }
+        for (const docId of remove) {
+          saved = await firstValueFrom(this.api.delete<Hospital>(`/api/referring-network/hospitals/${draft.id}/doctors/${docId}`));
+        }
+        if (add.length || remove.length) await this.loadDoctors();
+      } else {
+        // "Add hospital" may attach existing doctors in the same save.
+        saved = await firstValueFrom(this.api.post<Hospital>('/api/referring-network/hospitals',
+          { ...body, doctorIds: draft.doctorIds.length ? draft.doctorIds : null }));
+        if (draft.doctorIds.length) await this.loadDoctors();
+      }
       // Upsert into local list.
       const list = this.hospitals().slice();
       const idx = list.findIndex(h => h.id === saved.id);
@@ -670,7 +1042,7 @@ export class ReferringNetworkComponent implements OnInit {
     if (!draft?.id) return;
     const ok = await this.dialog.confirm({
       title: 'Deactivate hospital?',
-      message: `Deactivating "${draft.name}" hides it from the order-create dropdown. Past orders that reference it stay intact.`,
+      message: `Deactivating "${draft.name}" hides it from the order-create dropdown. Its doctors stay (at their other hospitals, or independent). Past orders that reference it stay intact.`,
       confirmLabel: 'Deactivate',
       tone: 'danger'
     });
@@ -685,22 +1057,78 @@ export class ReferringNetworkComponent implements OnInit {
     }
   }
 
+  // ── Link existing doctors to a hospital ─────────────────────────
+
+  openLinkEditor(h: Hospital): void {
+    this.linkEditor.set({ hospitalId: h.id, hospitalName: h.name, doctorIds: [] });
+  }
+  closeLinkEditor(): void { this.linkEditor.set(null); }
+  setLinkDoctors(ids: string[]): void {
+    this.linkEditor.update(e => (e ? { ...e, doctorIds: ids ?? [] } : e));
+  }
+
+  async saveLinks(): Promise<void> {
+    const le = this.linkEditor();
+    if (!le?.doctorIds.length) return;
+    this.savingLink.set(true);
+    try {
+      const saved = await firstValueFrom(this.api.post<Hospital>(
+        `/api/referring-network/hospitals/${le.hospitalId}/doctors`, { doctorIds: le.doctorIds }));
+      if (saved?.id) this.hospitals.update(list => list.map(h => h.id === saved.id ? saved : h));
+      await this.loadDoctors();
+      this.closeLinkEditor();
+      this.toasts.success(le.doctorIds.length === 1 ? 'Doctor linked' : `${le.doctorIds.length} doctors linked`);
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally {
+      this.savingLink.set(false);
+    }
+  }
+
+  async unlinkDoctor(d: Doctor, h: Hospital): Promise<void> {
+    const ok = await this.dialog.confirm({
+      title: 'Remove from this hospital?',
+      message: `"${d.name}" will no longer be listed under ${h.name}. The doctor stays in your network${this.otherHospitals(d, h.id) ? ` (still at ${this.otherHospitals(d, h.id)})` : ' as an independent doctor'}. Past orders stay intact.`,
+      confirmLabel: 'Remove',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    try {
+      const saved = await firstValueFrom(this.api.delete<Hospital>(`/api/referring-network/hospitals/${h.id}/doctors/${d.id}`));
+      if (saved?.id) this.hospitals.update(list => list.map(x => x.id === saved.id ? saved : x));
+      await this.loadDoctors();
+      this.toasts.success('Removed from hospital');
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    }
+  }
+
   // ── Doctor editor ──────────────────────────────────────────────
 
-  openDoctorEditor(d: Doctor | null): void {
-    const hospitalId = this.selectedHospitalId();
+  /** `d` = edit; else a new doctor, pre-linked to `hospitalId` when added
+   *  from a hospital's pane (none from the Doctors view = independent). */
+  openDoctorEditor(d: Doctor | null, hospitalId: string | null): void {
     this.doctorFieldErr.set({});
-    this.doctorEditor.set(d ? { ...d } : { name: '', hospitalId, isActive: true });
+    this.doctorEditor.set(d
+      ? { ...d, hospitalIds: doctorHospitalIds(d) }
+      : { name: '', isActive: true, hospitalIds: hospitalId ? [hospitalId] : [] });
   }
   closeDoctorEditor(): void { this.doctorEditor.set(null); }
+  setDoctorHospitals(ids: string[]): void {
+    this.doctorEditor.update(e => (e ? { ...e, hospitalIds: ids ?? [] } : e));
+  }
 
   async saveDoctor(): Promise<void> {
     const draft = this.doctorEditor();
     if (!draft?.name?.trim()) return;
     this.savingDoctor.set(true);
     try {
+      const hospitalIds = draft.hospitalIds ?? [];
+      // Keep the current primary when it is still linked; else the first pick.
+      const primary = draft.hospitalId && hospitalIds.includes(draft.hospitalId) ? draft.hospitalId : (hospitalIds[0] ?? null);
       const body = {
-        hospitalId: draft.hospitalId ?? this.selectedHospitalId(),
+        hospitalId: primary,
+        hospitalIds,
         name: draft.name.trim(),
         designation: draft.designation ?? null,
         department: draft.department ?? null,
@@ -710,23 +1138,18 @@ export class ReferringNetworkComponent implements OnInit {
         phone: draft.phone ?? null,
         email: draft.email ?? null
       };
+      const before = draft.id ? doctorHospitalIds(this.doctorsAll().find(x => x.id === draft.id) ?? { hospitalId: null }) : [];
       const saved = draft.id
         ? await firstValueFrom(this.api.patch<Doctor>(`/api/referring-network/doctors/${draft.id}`, body))
         : await firstValueFrom(this.api.post<Doctor>('/api/referring-network/doctors', body));
-      // Upsert into doctorsAll, update count on the hospital.
-      const list = this.doctorsAll().slice();
-      const idx = list.findIndex(d => d.id === saved.id);
-      if (idx >= 0) list[idx] = saved; else list.push(saved);
-      this.doctorsAll.set(list);
-      if (!draft.id) {
-        // Bump doctor count on the linked hospital.
-        this.hospitals.update(h => h.map(x => x.id === saved.hospitalId ? { ...x, doctorCount: x.doctorCount + 1 } : x));
-      }
+      this.upsertDoctor(saved);
+      const { add, remove } = linkDiff(before, doctorHospitalIds(saved));
+      if (add.length || remove.length) void this.refreshHospitals();
       this.closeDoctorEditor();
       this.toasts.success(draft.id ? 'Doctor updated' : 'Doctor added');
     } catch (err) {
       const e = ApiError.from(err);
-      if (e.field === 'name') this.doctorFieldErr.set({ name: e.message });
+      if (e.field === 'name' || e.field === 'phone') this.doctorFieldErr.set({ [e.field]: e.message });
       else this.toasts.error(e.message);
     } finally {
       this.savingDoctor.set(false);
@@ -744,7 +1167,8 @@ export class ReferringNetworkComponent implements OnInit {
     try {
       await firstValueFrom(this.api.delete(`/api/referring-network/doctors/${d.id}`));
       this.doctorsAll.update(list => list.map(x => x.id === d.id ? { ...x, isActive: false } : x));
-      this.hospitals.update(h => h.map(x => x.id === d.hospitalId ? { ...x, doctorCount: Math.max(0, x.doctorCount - 1) } : x));
+      const ids = new Set(doctorHospitalIds(d));
+      this.hospitals.update(h => h.map(x => ids.has(x.id) ? { ...x, doctorCount: Math.max(0, x.doctorCount - 1) } : x));
       this.toasts.success('Doctor deactivated');
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);

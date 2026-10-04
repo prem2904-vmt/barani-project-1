@@ -13,21 +13,25 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
-/** Owner 2026-09-27, "there is no default": a test that asks for its
- *  specimen starts EMPTY unless its Test–Specimen Mapping marks exactly one
- *  default, and the order cannot be saved or paid until one is chosen. */
-const ASK = JSON.stringify({ askSpecimen: true });
+/** Owner 2026-09-27, "there is no default": a test that chooses its
+ *  specimen starts EMPTY unless its allowed list marks exactly one default,
+ *  and the order cannot be saved or paid until one is chosen. The pick is
+ *  the specimen master CODE (owner 2026-09-29). */
+const CHOOSE = JSON.stringify({ specimenMode: 'choose' });
 const CATALOGUE = [
   { id: 'cs', name: 'Culture & Sensitivity', type: 'individual', price: 500, priceIsDefault: false, isActive: true,
-    department: { name: 'Microbiology' }, parameters: JSON.stringify({ microFormat: 'culture_sensitivity' }) },
+    department: { name: 'Microbiology' }, parameters: JSON.stringify({ microFormat: 'culture_sensitivity' }) },   // legacy row → choose
   { id: 'gram', name: 'Gram Stain', type: 'individual', price: 100, priceIsDefault: false, isActive: true,
-    department: { name: 'Microbiology' }, parameters: ASK },
+    department: { name: 'Microbiology' }, parameters: CHOOSE },
   { id: 'hb', name: 'Haemoglobin', type: 'individual', price: 10, priceIsDefault: false, isActive: true,
     department: { name: 'Haematology' } },
 ];
-const SPECIMENS = [{ name: 'Urine' }, { name: 'Pus' }];
-// cs: 14 mapped, all default → none; gram: one default → Urine.
-const DEFAULTS: Record<string, string | null> = { cs: null, gram: 'Urine' };
+const SPECIMENS = [{ code: 'SPEC013', name: 'Urine' }, { code: 'SPEC001', name: 'Pus' }];
+// cs: 2 allowed, both default → none; gram: one default → Urine (SPEC013).
+const MAPS: Record<string, any> = {
+  cs: { specimens: [{ code: 'SPEC013', name: 'Urine', isDefault: true }, { code: 'SPEC001', name: 'Pus', isDefault: true }], defaultSpecimen: null },
+  gram: { specimens: [{ code: 'SPEC013', name: 'Urine', isDefault: true }, { code: 'SPEC001', name: 'Pus', isDefault: false }], defaultSpecimen: 'Urine' },
+};
 
 function render() {
   (window as any).matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
@@ -37,7 +41,7 @@ function render() {
     if (url === '/api/microbiology/specimens') return of(SPECIMENS);
     if (url.startsWith('/api/microbiology/test-specimens')) {
       const ids = decodeURIComponent(url.split('testIds=')[1] ?? '').split(',');
-      return of(ids.map(id => ({ testId: id, specimens: [], defaultSpecimen: DEFAULTS[id] ?? null, inherited: false })));
+      return of(ids.map(id => ({ testId: id, mode: 'choose', inherited: false, ...(MAPS[id] ?? { specimens: [], defaultSpecimen: null }) })));
     }
     return of([]);
   });
@@ -61,20 +65,27 @@ function render() {
   f.detectChanges();
   const c = f.componentInstance as any;
   c._patient.set({ id: 'pA', displayName: 'Mr. Arun' });
-  return { f, c, post };
+  return { f, c, post, get };
 }
 
-describe('Order desk — the specimen has no default unless the mapping names one', () => {
-  it('a test whose mapping has no single default starts empty; one default is preselected', () => {
+describe('Order desk — the specimen has no default unless the allowed list names one', () => {
+  it('reads the orderable catalogue through the summary view (DB optimisation phase 2)', () => {
+    const { get } = render();
+    expect(get).toHaveBeenCalledWith('/api/tests/?activeOnly=true&view=summary');
+    expect(get).not.toHaveBeenCalledWith('/api/tests/?activeOnly=true');
+  });
+
+  it('a test whose list has no single default starts empty; one default is preselected by CODE', () => {
     const { f, c } = render();
     c._selected.set(['cs', 'gram', 'hb']);
     f.detectChanges(); TestBed.flushEffects(); f.detectChanges();
     expect(c.specimenOf('cs')).toBe('');
-    expect(c.specimenOf('gram')).toBe('Urine');
+    expect(c.specimenOf('gram')).toBe('SPEC013');
+    expect(c.specimenLabel('gram')).toBe('Urine');
     expect(c.missingSpecimenIds()).toEqual(['cs']);
   });
 
-  it('saving is blocked with an inline error until the specimen is chosen', () => {
+  it('saving is blocked with an inline error until the specimen is chosen; the pick is sent as the code', () => {
     const { f, c, post } = render();
     c._selected.set(['cs', 'hb']);
     f.detectChanges(); TestBed.flushEffects(); f.detectChanges();
@@ -86,10 +97,10 @@ describe('Order desk — the specimen has no default unless the mapping names on
     expect(f.nativeElement.querySelector('[data-spec-id="cs"] .pf-field-error')?.textContent)
       .toContain('Choose the specimen');
 
-    c.setSpecimen('cs', 'Pus');
+    c.setSpecimen('cs', 'SPEC001');
     expect(c.specimenError('cs')).toBe(false);
     c.onProceedClick();
-    expect(post).toHaveBeenCalledWith('/api/orders/', expect.objectContaining({ specimens: { cs: 'Pus' } }));
+    expect(post).toHaveBeenCalledWith('/api/orders/', expect.objectContaining({ specimens: { cs: 'SPEC001' } }));
   });
 
   it('continue-to-payment is blocked too; a test that does not ask never blocks', () => {
@@ -110,7 +121,7 @@ describe('Order desk — the specimen has no default unless the mapping names on
     const { f, c } = render();
     c._selected.set(['gram']);
     f.detectChanges(); TestBed.flushEffects();
-    expect(c.specimenOf('gram')).toBe('Urine');
+    expect(c.specimenOf('gram')).toBe('SPEC013');
     c.setSpecimen('gram', '');
     f.detectChanges(); TestBed.flushEffects();
     expect(c.specimenOf('gram')).toBe('');

@@ -5,7 +5,9 @@ import {
 import { ApiService } from '../../../core/services/api.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { filterTestList } from '../../../shared/utils/test-search';
+import { filterTestList, enrichForCatalogueSearch } from '../../../shared/utils/test-search';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { Test } from '../../../shared/models/test.model';
 import { oneLine } from '../../../shared/utils/reference-range';
 import {
   TrendPoint, TrendParam, TrendTest, buildTrendOption, buildSparklineOption, filterTrendPoints,
@@ -271,10 +273,34 @@ export class LabTrendsComponent implements OnDestroy {
   readonly loading = signal(true);
   readonly tests = signal<TrendTest[]>([]);
   readonly testQuery = signal('');
+  /** The Test Master catalogue (same source + fetch as order-create /
+   *  book-visit / book-appointment / appointment-booking-modal — no second
+   *  copy of the panel data, just this screen's own read of the one list).
+   *  Used ONLY to resolve panel/profile-membership search aliases (e.g. "LFT"
+   *  → a Liver panel's members) for the patient's own trend tests above; it
+   *  never widens `tests()` itself, which stays scoped to this patient's
+   *  repeat-tested rows. */
+  private readonly catalogue = signal<Test[]>([]);
+  private catalogueLoaded = false;
+  private loadCatalogueIfNeeded(): void {
+    if (this.catalogueLoaded) return;
+    this.catalogueLoaded = true;
+    this.api.get<Test[]>(testListUrl()).subscribe({
+      next: l => this.catalogue.set(l ?? []),
+      error: () => { /* silent — search just falls back to name/testId matching */ },
+    });
+  }
+  /** This patient's trend tests, enriched (read-time JOIN against the single
+   *  fetched catalogue above — see `enrichForCatalogueSearch`) so the shared
+   *  matcher + `profileAliases` (keyed by CatalogKey) can resolve a panel
+   *  abbreviation ("LFT"/"RFT"/"TFT") onto a member test that only carries
+   *  its testId + name here, exactly like order-create / book-visit /
+   *  book-appointment / appointment-booking-modal already do. */
+  private readonly enrichedTests = computed(() => enrichForCatalogueSearch(this.tests(), this.catalogue()));
   /** Left-list tests filtered by the search box using common search logic. */
   readonly effectiveQuery = computed(() => this.query() ?? this.testQuery());
   readonly filteredTests = computed(() => {
-    return filterTestList(this.tests(), this.effectiveQuery());
+    return filterTestList(this.enrichedTests(), this.effectiveQuery(), this.catalogue());
   });
   readonly selectedTestId = signal<string | null>(null);
   readonly selectedParam = signal<string>('');
@@ -352,6 +378,7 @@ export class LabTrendsComponent implements OnDestroy {
       const id = this.patientId();
       if (id) this.load(id);
     });
+    this.loadCatalogueIfNeeded();
     // Detailed chart: re-render on selection / type / range / data / theme change.
     effect(() => {
       this.filteredPoints(); this.chartType(); this.activeParam(); this.chartEl(); this.viewMode(); this.theme?.isDark();

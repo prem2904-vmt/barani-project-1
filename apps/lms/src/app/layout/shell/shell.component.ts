@@ -1,9 +1,15 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
+  effect,
+  ElementRef,
   inject,
   signal,
+  untracked,
+  viewChild,
 } from "@angular/core";
 import {
   NavigationEnd,
@@ -11,6 +17,7 @@ import {
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs/operators";
+import { NAV_SELECTORS, publishNavInsets } from "./nav-insets";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastService } from "../../core/services/toast.service";
 import { AmbientBgComponent } from "../../shared/components/ambient-bg/ambient-bg.component";
@@ -27,6 +34,7 @@ import { SignalingService } from "../../core/services/signaling.service";
 import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
+import { UpdateBannerComponent } from "../../shared/components/update-banner/update-banner.component";
 import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
@@ -46,6 +54,8 @@ import { PatientTimelineService } from "../../features/frontdesk/patient-profile
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-veil.component";
+import { PageFrameComponent } from "../../shared/components/page-frame/page-frame.component";
+import { PageOpenService } from "../../core/navigation/page-open.service";
 
 @Component({
   selector: "pf-shell",
@@ -58,6 +68,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
     AmbientBgComponent,
     PatientProfileModalComponent,
     CallOverlayComponent,
+    UpdateBannerComponent,
     PeopleDrawerComponent,
     ChatWindowsComponent,
     ChatPopupsComponent,
@@ -66,6 +77,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
     SwipeBackDirective,
     DesignModeBadgeComponent,
     BranchVeilComponent,
+    PageFrameComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -91,9 +103,11 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()"
+      <main #main class="shell-main relative" pfSwipeBack data-pf-keys-host [class.shell-main--kbd]="kbd.visible()"
             [attr.data-bs]="branchSwitch.busy() ? branchSwitch.phase() : null"
-            [attr.aria-busy]="branchSwitch.veil() ? 'true' : null">
+            [attr.data-po]="pageOpen.frame() ? 'frame' : null"
+            [attr.data-po-enter]="pageOpen.entering()"
+            [attr.aria-busy]="branchSwitch.veil() || pageOpen.frame() ? 'true' : null">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages
@@ -111,6 +125,10 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
           </a>
         } -->
         <router-outlet></router-outlet>
+        <!-- Page open (PageOpenService): a navigation still on its way draws
+             the DESTINATION's frame — its band + a skeleton of its body —
+             easing in while the screen being left eases out. -->
+        @if (pageOpen.frame(); as frame) { <pf-page-frame [skeleton]="frame"></pf-page-frame> }
         <!-- Branch switch (BranchSwitchService): the destination skeleton
              rises over the receding screen, holds while the new branch's
              data loads, then lifts as the new screen zooms up. -->
@@ -170,6 +188,11 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
       }
 
 
+
+      <!-- Desktop self-update banner (electron/updater.js). Unconditional —
+           it already renders nothing outside the desktop app / a build with
+           no resolved update channel (UpdaterService.available). -->
+      <pf-update-banner></pf-update-banner>
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)
@@ -248,6 +271,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
   `,
   styles: [
     `
+    @use '../../shared/styles/device-tier' as dt;
       .shell-stack {
         position: relative;
         z-index: 1;
@@ -356,7 +380,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
          Desktop (≥1280px) keeps the chrome + its top-strip nav.
          The body already absorbs env(safe-area-inset-top), so pages
          start at the top of the safe area with no double-padding. */
-      @media (max-width: 1279px) {
+      @include dt.tablet-tier {
         .pf-chrome { display: none !important; }
       }
 
@@ -401,6 +425,31 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { transition: opacity 120ms linear; transform: none !important; filter: none !important; }
         .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { animation: pf-bs-fade-in 120ms linear both; }
       }
+      /* ── Page open (PageOpenService, core/navigation) ────────────────
+         frame: the screen being left eases out under the destination's
+         frame (pf-page-frame). enter: the CSS fallback for the view-
+         transition page-open where the API is missing (older WebKit). */
+      /* !important: a screen that entered with a filled animation (nd-anim-in
+         …) would otherwise keep its animated opacity on top of this. */
+      .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        opacity: 0 !important; transform: scale(0.985); pointer-events: none;
+        transform-origin: 50% var(--pf-po-top, 0px);
+        transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1), transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      .shell-main[data-po-enter='rise'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-po-rise 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      .shell-main[data-po-enter='settle'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-bs-fade-in 200ms ease-out both;
+      }
+      @keyframes pf-po-rise {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { transition: none; transform: none; }
+        .shell-main[data-po-enter] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { animation: none; }
+      }
       .sr-only {
         position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
         overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -429,6 +478,11 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
          html.pf-collect-immersive; bottom-nav hides itself in its own stylesheet. */
       :host-context(html.pf-collect-immersive) .pf-chrome { display: none !important; }
       :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
+      /* OPD consult (features/opd/consult) toggles html.pf-opd-immersive while
+         open: it hides only the TOP chrome. The bottom navbar stays visible
+         (owner rule, ND kit) — the consult ends at the measured --pf-nav-h. */
+      :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
 
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
@@ -439,7 +493,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
            frontdesk panes' bottom border sit on the literal screen
            edge and read as "cut off". 16px gives the border a clear
            gap so the panes visibly end within the screen. */
-      @media (min-width: 641px) and (max-width: 1279px) {
+      @include dt.tablet-band {
         .shell-main {
           /* Clear the 64px full-height left rail. Each routed page
              keeps its own Tailwind lg:px-10 gutter on top of this, so
@@ -488,7 +542,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
           margin-left: 24px;
         }
       }
-      @media (min-width: 1280px) {
+      @include dt.desktop-only {
         .shell-main {
           padding-bottom: 0;
         }
@@ -577,6 +631,24 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
+      /* OPD consult: under the bottom-navbar experiment the docked bar (the
+         rule above, more specific than the immersive top-chrome hide) STAYS
+         visible — the consult sits above it (height: 100dvh − --pf-nav-h). */
+
+      /* Phones: the home-indicator space goes UNDER the icons (not split
+         above/below), and the ends keep clear of the rounded screen corners. */
+      :host-context(html.device-phone.design-new.nav-bottom) .pf-chrome {
+        padding-top: 0;
+        padding-bottom: var(--pf-home-inset);
+        padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+      }
+      @media (max-width: 640px) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          padding-top: 0;
+          padding-bottom: var(--pf-home-inset);
+          padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+        }
+      }
       /* Blur is the costliest GPU op on a phone — keep it modest there. */
       @media (max-width: 640px) {
         :host-context(.design-new.nav-bottom) .pf-chrome {
@@ -595,6 +667,21 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         border-top-color: var(--pf-navbar-edge);
         /* Faint violet glow off the top edge, paired with the band's. */
         box-shadow: var(--pf-navbar-glow, none);
+      }
+      /* Touch devices (iPad, phones, the native app): NO live frost on the
+         docked bar. A fixed, full-width backdrop-filter re-blurs whatever
+         scrolls under it on every frame; on iPad WebKit that layer was the
+         one dropped under GPU pressure — the bar vanished, or only the
+         bell's own (animated) layer was painted (owner, 2026-09-28). The
+         bar takes its opaque surface (the same one the no-backdrop-filter
+         fallback uses) and is promoted as ONE stable layer. will-change
+         (not a translateZ transform) keeps the containing block the blur
+         used to give the bar's fixed children (popover backdrops). */
+      :host-context(html.device-touch.design-new.nav-bottom) .pf-chrome {
+        background-color: var(--pf-navbar-bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        will-change: transform;
       }
       /* Soft keyboard up (iPad / phones): the docked bar would ride on top
          of the keyboard and squeeze the page to a sliver (owner: test search
@@ -631,6 +718,9 @@ export class ShellComponent {
   protected readonly kbd = inject(KeyboardService);
   /** In-app branch switch: drives the veil + the content zoom out/in. */
   protected readonly branchSwitch = inject(BranchSwitchService);
+  /** Page open: the destination frame while a navigation is on its way. */
+  protected readonly pageOpen = inject(PageOpenService);
+  private readonly mainEl = viewChild<ElementRef<HTMLElement>>("main");
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
@@ -671,6 +761,49 @@ export class ShellComponent {
   /** Tracks the current URL so the back-chip reacts to navigation. */
   private readonly _url = signal<string>(this.router.url);
   constructor() {
+    // The nav's real footprint → --pf-nav-h / --pf-nav-left on <html>. The
+    // shell renders the nav, so it is the one that measures it: on every
+    // size change of the bar / pill / rail (ResizeObserver), on a viewport
+    // resize, and when <html>'s classes flip (bottom-bar mode, immersive
+    // pages, device class) — which can move the nav without resizing it.
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      const doc = document;
+      let raf = 0;
+      const publish = () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; publishNavInsets(doc, window); });
+      };
+      publishNavInsets(doc, window);
+      const ro = typeof ResizeObserver === "function" ? new ResizeObserver(publish) : null;
+      const observeAll = () => {
+        if (!ro) return;
+        for (const el of Array.from(doc.querySelectorAll<HTMLElement>(NAV_SELECTORS))) ro.observe(el);
+      };
+      observeAll();
+      const mo = new MutationObserver(() => { observeAll(); publish(); });
+      mo.observe(doc.documentElement, { attributes: true, attributeFilter: ["class"] });
+      window.addEventListener("resize", publish);
+      destroyRef.onDestroy(() => {
+        ro?.disconnect();
+        mo.disconnect();
+        window.removeEventListener("resize", publish);
+        if (raf) cancelAnimationFrame(raf);
+      });
+    });
+
+    // The frame covers the VISIBLE part of <main> (it may be scrolled).
+    effect(() => {
+      const on = !!this.pageOpen.frame();
+      untracked(() => {
+        const main = this.mainEl()?.nativeElement;
+        if (!main || !on) return;
+        main.style.setProperty("--pf-po-top", `${main.scrollTop}px`);
+        if (main.clientHeight > 0) main.style.setProperty("--pf-po-h", `${main.clientHeight}px`);
+        else main.style.removeProperty("--pf-po-h");
+      });
+    });
+
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),

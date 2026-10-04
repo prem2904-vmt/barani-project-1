@@ -1,3 +1,4 @@
+@use '../../../shared/styles/device-tier' as dt;
 /* ── Category tabs (Recent / Favourites / Packages / All) ── */
 .pf-tabs {
   display: flex;
@@ -493,6 +494,10 @@
   transition: transform 0.08s ease;
 }
 
+/* PF Keys docked (tablets): the cart bar rides directly above the keys
+   (the navbar steps aside like it does for any keyboard). */
+:host-context(html.pf-keys-open) .pf-cartbar { bottom: calc(var(--pf-keys-h, 0px) + 8px); }
+
 .pf-cartbar--skel .pf-cartbar__inner { border-color: var(--glass-border); box-shadow: none; cursor: default; }
 .pf-cartbar:not(.pf-cartbar--skel) { animation: pf-oc-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 @media (prefers-reduced-motion: reduce) { .pf-cartbar:not(.pf-cartbar--skel) { animation: none; } }
@@ -908,128 +913,6 @@
   color: var(--red-text);
 }
 
-/* ── Package suggestion banner ─────────────────────────── */
-.pf-pkg-suggest {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
-  border: 1px solid rgba(168, 85, 247, 0.40);
-}
-
-.pf-pkg-suggest__hdr {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-primary, #7c3aed);
-}
-
-.pf-pkg-suggest__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white;
-  border-radius: 50%;
-  font-size: 11px;
-}
-
-.pf-pkg-suggest__sub {
-  margin: 4px 0 10px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-
-.pf-pkg-suggest__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pf-pkg-suggest__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-}
-
-.pf-pkg-suggest__name {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pf-pkg-suggest__meta {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.pf-pkg-suggest__sep {
-  opacity: 0.6;
-}
-
-.pf-pkg-suggest__strike {
-  text-decoration: line-through;
-  opacity: 0.7;
-  font-family: inherit; font-variant-numeric: tabular-nums;
-}
-
-.pf-pkg-suggest__price {
-  font-family: inherit; font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.pf-pkg-suggest__save {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  background: rgba(16, 185, 129, 0.18);
-  color: var(--green-text);
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  border-radius: 9999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.pf-pkg-suggest__apply {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white;
-  border: 0;
-  border-radius: 9999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.32);
-}
-
-.pf-pkg-suggest__apply:hover {
-  filter: brightness(1.08);
-}
-
 .pf-cart-totals {
   padding-top: 12px;
   border-top: 1px solid var(--border-muted);
@@ -1398,7 +1281,7 @@
 
 /* --- iOS zoom guard: any focused input <16px makes Safari zoom the page.
        Bump the page's own text inputs to 16px below desktop only. --- */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
 
   :host .pf-search__input,
   :host .pf-refdoc__input,
@@ -1410,7 +1293,7 @@
 
 /* --- Drawer/preview heights: use dvh so the mobile browser URL bar
        collapsing doesn't clip the sheet. Sub-desktop only. --- */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   :host .pf-cart-drawer {
     max-height: 75dvh;
   }
@@ -1477,10 +1360,6 @@
 
   :host .pf-cart-disc__input {
     height: 38px;
-  }
-
-  :host .pf-pkg-suggest__apply {
-    min-height: 40px;
   }
 
   :host .pf-refdoc__clear,
@@ -2288,6 +2167,15 @@
 .pf-oc-errs { width: 100%; max-width: 1123px; margin: 0 auto; padding: 0 20px 4px; box-sizing: border-box; }
 .pf-oc-errs .pf-field-error { margin: 2px 0 0; }
 
+/* Analytics / Lab Insights Phase 2: optional referral-source picker — one
+   quiet row, never competing with the band/pill for attention. */
+.pf-oc-refsrc {
+  width: 100%; max-width: 1123px; margin: 0 auto; padding: 2px 20px 6px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px;
+}
+.pf-oc-refsrc__label { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.pf-oc-refsrc__select { min-width: 140px; }
+
 /* ── Page body: catalogue card + billing card, inner panes scroll ── */
 .pf-oc-body {
   display: flex;
@@ -2767,6 +2655,15 @@
 }
 .pf-us__trow--in { background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent); }
 .pf-us__trow.pf-us__row--hl { background: color-mix(in srgb, var(--color-primary, #7c3aed) 11%, transparent); }
+/* "↵ Add" on the highlighted row — only while PF Keys is docked (tablets):
+   its Add ↵ key acts on exactly this row. Neutral chip, not primary. */
+.pf-us__tenter { display: none; }
+:host-context(html.pf-keys-open) .pf-us__tenter {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--nd-line, #e5e7eb);
+  background: var(--nd-card-bg, #fff); color: var(--text-secondary);
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
 .pf-us__tcheck {
   display: inline-flex;
   align-items: center;
@@ -3580,11 +3477,6 @@
 .pf-crt--included { background: var(--nd-chip-bg); }
 .pf-cart-amount--included,
 .pf-cart-meta--included { color: var(--text-tertiary) !important; }
-.pf-pkg-suggest__save {
-  color: var(--violet-text, #6d28d9) !important;
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent) !important;
-  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent) !important;
-}
 .pf-paid__msg { color: var(--text-primary) !important; }
 .pf-paid__msg svg { color: var(--violet-text, #6d28d9); }
 .pf-paid__sumline--done span:last-child { color: var(--violet-text, #6d28d9) !important; }

@@ -1,4 +1,5 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import type { LiveLayout } from '../../../../shared/utils/report-profile-layout';
 import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
@@ -7,7 +8,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
-import { ReportColumn } from '../../../../shared/models/report-layout.model';
+import { PageLayoutBox, ReportColumn } from '../../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
 import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
@@ -31,26 +32,23 @@ import { SegmentedOption } from '../../../../shared/primitives/segmented.compone
 import { ThemeService } from '../../../../core/services/theme.service';
 import { RangeTableComponent, blankGroup, liftParamCriticals } from './range-table.component';
 import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
+import { numericParamsOf, type ChartEditorContext, type ChartParamInfo } from '../../../../shared/utils/report-chart/report-chart.sample';
 import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, readParameters, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
 import { TUBE_COLORS } from '../../../../shared/utils/tube-colors';
-import { ownAsksSpecimen, withAskSpecimen } from '../../../../shared/utils/micro-specimen';
-
-/** GET/PUT /api/microbiology/test-specimens — one test's mapping. */
-interface TestSpecimenMap {
-  testId: string;
-  specimens: Array<{ code: string; name: string; isDefault: boolean }>;
-  defaultSpecimen: string | null;
-  inherited: boolean;
-}
+import {
+  SPECIMEN_MODE_OPTIONS, specimenModeOf, withSpecimenMode, type SpecimenMode,
+} from '../../../../shared/utils/micro-specimen';
+import { AllowedSpecimensComponent } from './allowed-specimens.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { ReportStructureComponent } from '../report-structure.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { TEST_PRICING_PERMS } from '../../../../core/auth/route-access';
 
 /** A shared option-group vocabulary as served by /api/option-groups. */
 interface OgGroupLite {
@@ -73,6 +71,10 @@ import {
 } from '../../../../shared/utils/test-code';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { shownDepartmentName } from '../../../../shared/utils/package-department';
+import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
+import { printPickerDefaultOf, type PrintPickerDefault } from '../../../../shared/utils/print-picker';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -174,7 +176,10 @@ function makeEmptyDraft(): DraftTest {
     OriginBadgeComponent,
     HeroBandComponent,
     RangeTableComponent,
-    NgTemplateOutlet
+    NgTemplateOutlet,
+    ...SKELETON_KIT,
+    BusyDirective,
+    AllowedSpecimensComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -187,6 +192,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
+  /** Price + tax slab are editable only with a pricing grant (manage_tests /
+   *  manage_test_pricing); the server enforces the same on the bulk price call. */
+  protected canEditPrices() {
+    return typeof this.auth?.hasAnyPermission !== 'function' || this.auth.hasAnyPermission(TEST_PRICING_PERMS);
+  }
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly pricing = inject(TestPricingService);
@@ -211,8 +221,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     `/admin/tests?type=${this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual'}`);
   /** Below 1024px the live preview is a sheet behind the Preview button. */
   readonly previewOpen = signal(false);
-  @HostListener('document:keydown.escape')
-  onEscape(): void { if (this.previewOpen()) this.previewOpen.set(false); }
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(ev?: Event): void {
+    if (!this.previewOpen()) return;
+    ev?.preventDefault(); // used → the desktop app stays full screen
+    this.previewOpen.set(false);
+  }
   /** Origin as a NEUTRAL context chip (label + glyph + hint). */
   readonly originChip = computed(() => {
     const o = this.origin();
@@ -345,24 +359,19 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // ── Methodology: searchable picker (never a bare text box) ──────────
-  /** Sentinel option that switches the picker to a typed method. */
-  readonly METHOD_OTHER = '\u0000other';
-  /** True while the admin types a method not in the list. */
-  readonly methodTyping = signal(false);
   /** Standard methods (incl. "Calculated") + the tenant's own + the current
-   *  value, then "Type another…". Picking "Calculated" is the lab's choice —
-   *  it is never auto-filled for formula tests. */
+   *  value. A method not in the list is TYPED into the picker's search and
+   *  chosen from its "Use “…”" row (pf-select allowCreate) — the typed text
+   *  is stored as-is. Picking "Calculated" is the lab's choice — it is never
+   *  auto-filled for formula tests. */
   readonly methodologyOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '', label: '— no methodology —' },
     ...methodologyChoices(this._draft().methodology,
       this._allIndividualTests().map(t => t.methodology ?? ''))
       .map(m => ({ value: m, label: m })),
-    { value: this.METHOD_OTHER, label: 'Type another method…' },
   ]);
   onMethodologyPicked(v: string | null) {
-    if (v === this.METHOD_OTHER) { this.methodTyping.set(true); return; }
-    this.methodTyping.set(false);
-    this.patch({ methodology: v ?? '' });
+    this.patch({ methodology: String(v ?? '').trim() });
   }
 
   // ── Creating a NAMED shared list from inside the test ───────────────
@@ -441,7 +450,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const d = this._draft();
     if (!d.id && d.type === 'individual' && /micro/i.test(name)) {
       this.patch({
-        parametersJson: withAskSpecimen(d.parametersJson, true),
+        parametersJson: withSpecimenMode(d.parametersJson, 'choose'),
         ...(d.tubeColor ? {} : { tubeColor: 'sterile' }),
       });
     }
@@ -507,62 +516,21 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.persistFieldsToDraft();
   }
-  /** "Ask for specimen at order" (micro): the order desk picks WHICH
-   *  specimen was sent for this test (Specimen master), it rides on the
-   *  ordered test and prints on the report. Stored as `askSpecimen: true`
-   *  in the Parameters wrapper; Culture & Sensitivity always asks, so the
-   *  switch reads on (locked) while the culture bench mark is on. */
-  readonly askSpecimen = computed<boolean>(() => ownAsksSpecimen(this._draft().parametersJson));
-
-  // ── Default specimen (Test–Specimen Mapping) ──
-  // Owner 2026-09-27: "there is no default". ZERO or ONE mapped specimen is
-  // the default: the order desk preselects a single default, otherwise the
-  // specimen must be chosen. Single-select by construction (the server
-  // un-defaults every other specimen in the same write). Saved on pick.
-  readonly specimenMap = signal<TestSpecimenMap | null>(null);
-  readonly savingDefaultSpecimen = signal(false);
-  private specimenMapFor: string | null = null;
-  private readonly loadSpecimenMap = effect(() => {
-    const id = this._draft().id;
-    if (!id || !(this.askSpecimen() || this.cultureBench()) || this.specimenMapFor === id) return;
-    this.specimenMapFor = id;
-    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${id}`).subscribe({
-      next: rows => this.specimenMap.set(rows?.[0] ?? { testId: id, specimens: [], defaultSpecimen: null, inherited: false }),
-      error: () => this.specimenMap.set(null),
-    });
-  });
-  /** "No default" first, then the mapped specimens (or the whole Specimen
-   *  master when this test has no mapping yet). */
-  readonly defaultSpecimenOptions = computed<PfSelectOption<string>[]>(() => {
-    const mapped = this.specimenMap()?.specimens ?? [];
-    const rows = mapped.length ? mapped.map(s => ({ value: s.code, label: s.name }))
-      : this._specimens().map(s => ({ value: s.code, label: s.name }));
-    return [{ value: '', label: 'No default (the desk must choose)' }, ...rows];
-  });
-  /** The ONE default's code; '' when none — or when several are marked
-   *  (legacy data), which counts as no default. */
-  readonly defaultSpecimenCode = computed<string>(() => {
-    const d = (this.specimenMap()?.specimens ?? []).filter(s => s.isDefault);
-    return d.length === 1 ? d[0].code : '';
-  });
-  readonly severalSpecimenDefaults = computed<boolean>(() =>
-    (this.specimenMap()?.specimens ?? []).filter(s => s.isDefault).length > 1);
-  setDefaultSpecimen(code: string) {
-    const id = this._draft().id;
-    if (!id || this.savingDefaultSpecimen() || (code || '') === this.defaultSpecimenCode() && !this.severalSpecimenDefaults()) return;
-    this.savingDefaultSpecimen.set(true);
-    this.api.put<TestSpecimenMap>(`/api/microbiology/test-specimens/${id}/default`, { code: code || null }).subscribe({
-      next: m => {
-        this.savingDefaultSpecimen.set(false);
-        if (m) this.specimenMap.set(m);
-        this.toasts.success(code ? `Default specimen: ${m?.defaultSpecimen ?? code}` : 'No default specimen: the desk must choose');
-      },
-      error: e => { this.savingDefaultSpecimen.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
+  /** The test's SPECIMEN MODE (owner 2026-09-29, the one setting — the
+   *  server's SpecimenRules twin): fixed = the one allowed specimen is
+   *  stamped on every order (no picker); choose = the desk picks from the
+   *  allowed list; none = no specimen. Stored as `specimenMode` in the
+   *  Parameters wrapper and saved with the test; the allowed list itself is
+   *  edited (and saved) by the Allowed specimens grid below it. */
+  readonly specimenMode = computed<SpecimenMode>(() => specimenModeOf(this._draft().parametersJson));
+  readonly specimenModeOptions: PfSelectOption<string>[] = SPECIMEN_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label, hint: o.hint }));
+  setSpecimenMode(mode: string) {
+    const m = mode === 'fixed' || mode === 'choose' || mode === 'none' ? mode : 'none';
+    if (m === this.specimenMode()) return;
+    this.patch({ parametersJson: withSpecimenMode(this._draft().parametersJson, m) });
   }
-  setAskSpecimen(on: boolean) {
-    this.patch({ parametersJson: withAskSpecimen(this._draft().parametersJson, on) });
-  }
+  /** The Specimen master rows for the allowed-specimens grid's "Add" picker. */
+  readonly specimenMasterRows = computed(() => this._specimens());
   readonly cultureBench = computed<boolean>(() => {
     try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
     catch { return false; }
@@ -607,7 +575,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
     })();
     if (on) existing.printPicker = true;
-    else delete existing.printPicker;
+    else { delete existing.printPicker; delete existing.printPickerDefault; }
+    this.patch({ parametersJson: JSON.stringify(existing) });
+  }
+  /** "Start with" for the picker (owner 2026-09-30): 'all' = every value
+   *  starts ticked (absent key — the original behaviour); 'none' = every
+   *  value starts unticked and the tech ticks what prints. Stored as
+   *  `printPickerDefault: 'none'` in the same wrapper. */
+  readonly printPickerStartOptions: ReadonlyArray<{ value: PrintPickerDefault; label: string }> = [
+    { value: 'all', label: 'All ticked' },
+    { value: 'none', label: 'None ticked' },
+  ];
+  readonly printPickerDefault = computed<PrintPickerDefault>(() => printPickerDefaultOf(this._draft().parametersJson));
+  setPrintPickerDefault(v: PrintPickerDefault) {
+    const existing = (() => {
+      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
+    })();
+    if (v === 'none') existing.printPickerDefault = 'none';
+    else delete existing.printPickerDefault;
     this.patch({ parametersJson: JSON.stringify(existing) });
   }
 
@@ -883,6 +868,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected readonly testColumnsOverride = signal<ReportColumn[] | null>(null);
+  /** The profile one-page layout as the designer has it right now (unsaved) —
+   *  the Live preview renders it while the lab arranges the page. Reset when
+   *  another test opens. */
+  protected readonly livePageLayout = signal<LiveLayout | null>(null);
+  private readonly resetLivePageLayout = effect(() => {
+    void this._draft().id; // track: another test opened
+    untracked(() => this.livePageLayout.set(null));
+  });
+  /** This profile's catalogue key (CBC-family detection in the designer). */
+  protected readonly draftCatalogKey = computed(() => {
+    const id = this._draft().id;
+    return id ? (this._memberById().get(id)?.catalogKey ?? null) : null;
+  });
+  /** The effective columns for the profile one-page layout designer: this
+   *  test/profile's own override, else the department set — same cascade
+   *  `liveColumnsOverride`/`columnsSummary` already read for the label. */
+  protected readonly resolvedColumnsForDesigner = computed<ReportColumn[]>(() =>
+    this.testColumnsOverride() ?? this.deptColumnCfg());
   protected readonly customizingColumns = signal(false);
   protected readonly columnsSaving = signal(false);
   protected readonly columnsEditorSeed = signal<ReportColumn[] | null>(null);
@@ -954,10 +957,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this._draft().type === 'individual') return [];
     const byId = this._memberById();
     const out: PreviewProfileMember[] = [];
+    if (this.repetitiveActive()) {
+      // A timed series previews one row per DRAW, with its time point — so a
+      // report chart over the time points shows in the live preview.
+      for (const r of this.normalizeRows(this._memberRows())) {
+        const t = byId.get(r.testId);
+        if (t) out.push({ id: r.testId, name: t.name, parameters: t.parameters ?? null,
+                          department: shownDepartmentName(t) || null, offsetMin: r.offsetMin, catalogKey: t.catalogKey ?? null });
+      }
+      return out;
+    }
     for (const id of this.packageItems()) {
       const t = byId.get(id);
       // Each member previews under ITS OWN department (a package has none).
-      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null });
+      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null, catalogKey: t.catalogKey ?? null });
     }
     return out;
   });
@@ -972,6 +985,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
+
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ─────────────────
+  /** An existing record is being fetched: true from the first frame of an
+   *  `/:id/edit` route until GET /api/tests/:id answers (or fails). The
+   *  editor draws its own shape (skeleton) instead of a blank "Edit test"
+   *  form that later pops in; Save is not offered for a record that isn't
+   *  on screen yet. New tests never load. */
+  private readonly recordHold = createLoadHold(!!this.route.snapshot.paramMap.get('id'));
+  /** The skeleton: from the first frame, held >= 600ms once shown so a fast
+   *  load reads as one motion (skipped when the record was already there). */
+  readonly recordSkeleton = this.recordHold.active;
 
   // ── Editorial redesign: chips, range visual, sentences, publish checklist ──
 
@@ -1099,6 +1123,28 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly packageQuery = signal('');
 
   readonly repetitive = signal(false);
+  /** PROFILE-level "Tech picks what prints" (owner 2026-09-29): when this
+   *  profile is ordered, ITS setting decides for every member — overriding
+   *  each test's own. Stored as `printPicker: true` in the profile blob. */
+  readonly profilePrintPicker = signal(false);
+  setProfilePrintPicker(on: boolean) {
+    this.profilePrintPicker.set(on);
+    this.patch({});
+  }
+  /** The profile's "Start with" — overrides each member's when ordered as
+   *  this profile (same rule as the switch). Saved only while the switch is
+   *  on and only when 'none' (absent = all). */
+  readonly profilePrintPickerDefault = signal<PrintPickerDefault>('all');
+  setProfilePrintPickerDefault(v: PrintPickerDefault) {
+    this.profilePrintPickerDefault.set(v);
+    this.patch({});
+  }
+  private profilePickerKeys(): Record<string, unknown> {
+    if (!this.profilePrintPicker()) return {};
+    return this.profilePrintPickerDefault() === 'none'
+      ? { printPicker: true, printPickerDefault: 'none' }
+      : { printPicker: true };
+  }
   private readonly _memberRows = signal<MemberRow[]>([]);
   readonly repetitiveActive = computed(() => this._draft().type === 'profile' && this.repetitive());
   readonly packageItems = computed<string[]>(() =>
@@ -1455,6 +1501,39 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return out;
   });
+  /** What the report chart editor knows about this test: its time points
+   *  (repetitive profile), and every numeric value with unit + reference
+   *  groups (docs/REPORT-CHARTS.md). Culture tests get none. */
+  readonly chartContext = computed<ChartEditorContext | null>(() => {
+    const d = this._draft();
+    if (!d.id || this.cultureBench()) return null;
+    const numericOf = (t: Test | undefined): ChartParamInfo[] => numericParamsOf(t?.parameters ?? null, t?.unit ?? null);
+    if (d.type === 'individual') {
+      const params: ChartParamInfo[] = this.fields()
+        .filter(f => (f.name ?? '').trim() && this.isNumericType(f.type))
+        .map(f => ({ name: (f.name ?? '').trim(), title: f.label || null, unit: f.unit || d.unit || null,
+                     referenceRanges: (f.referenceRanges ?? []) as ChartParamInfo['referenceRanges'] }));
+      return { ownerId: d.id, series: false, timepoints: [], params };
+    }
+    const byId = this._memberById();
+    const members = this.previewProfileMembers();
+    const seen = new Set<string>();
+    const params: ChartParamInfo[] = [];
+    for (const m of members) for (const p of numericOf(byId.get(m.id))) {
+      if (seen.has(p.name.toLowerCase())) continue;
+      seen.add(p.name.toLowerCase());
+      // A single-value member reads as the member test ("OGTT – 30 Minutes").
+      params.push(numericOf(byId.get(m.id)).length === 1 ? { ...p, title: p.title || m.name } : p);
+    }
+    const timepoints = this.repetitiveActive()
+      ? this.memberGroups().map(g => ({
+          offsetMin: g.offsetMin,
+          members: g.rows.map(r => byId.get(r.testId)).filter((t): t is Test => !!t)
+            .map(t => ({ testId: t.id, name: t.name, code: t.testCode ?? null, params: numericOf(t) })),
+        }))
+      : [];
+    return { ownerId: d.id, series: timepoints.length > 1, timepoints, params };
+  });
   readonly reportParamNames = computed<string[]>(() =>
     this._draft().type === 'individual' ? this.parameterNames() : this.memberReportParams().map(p => p.name));
   readonly reportParamTitles = computed<Record<string, string>>(() =>
@@ -1695,14 +1774,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.api.get<ReferralLab[]>('/api/referral-labs').subscribe({
       next: l => this._referralLabs.set(l ?? [])
     });
-    this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
-      next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
-    });
-    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
-      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
-    });
 
     const id = this.route.snapshot.paramMap.get('id');
+    // The two catalogue-wide lists (every test / profile WITH its parameters —
+    // megabytes on a real catalogue) are only pickers + cross-checks for a
+    // single test, so an individual test's own record goes first and they
+    // follow once it is on screen; a profile / package lists its members from
+    // them, so those still load together with the record.
+    const type = this.route.snapshot.queryParamMap.get('type');
+    if (id && type === 'individual') this._afterRecord = () => this.loadCatalogueLists();
+    else this.loadCatalogueLists();
+
     if (id) {
       this.loadTest(id);
     } else {
@@ -1717,13 +1799,32 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   //  section at a time, so there is nothing to spy on.)
   ngAfterViewInit(): void { /* workspace tabs need no post-render wiring */ }
   ngOnDestroy(): void {
+    this.recordHold.cancel();
     if (this._previewTimer) { clearTimeout(this._previewTimer); this._previewTimer = null; }
+  }
+
+  /** Runs once, right after the first record lands (see ngOnInit). */
+  private _afterRecord: (() => void) | null = null;
+
+  private loadCatalogueLists() {
+    this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
+      next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
+    });
+    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
+      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
+    });
+  }
+
+  private runAfterRecord() {
+    const run = this._afterRecord;
+    this._afterRecord = null;
+    run?.();
   }
 
   private loadTest(id: string) {
     this.api.get<Test>(`/api/tests/${id}`).subscribe({
-      next: t => this.hydrateFrom(t),
-      error: e => this.toasts.error(ApiError.from(e).message)
+      next: t => { this.hydrateFrom(t); this.recordHold.done(); this.runAfterRecord(); },
+      error: e => { this.recordHold.done(); this.runAfterRecord(); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
@@ -1771,8 +1872,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** The save body as loaded (see buildSaveBody) — what an update diffs against. */
   private _baseline: Record<string, unknown> = {};
+  /** The test-level methodology as loaded — per-value copies equal to it are
+   *  followers of the test, stripped on save (see buildSaveBody). */
+  private _loadedMethodology = '';
 
   private hydrateFrom(t: Test) {
+    this._loadedMethodology = t.methodology ?? '';
     this.origin.set(originOf(t));
     this.catalogMode.set(t.catalogMode ?? null);
     this._savedPrice.set({ price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0, isDefault: isPriceDefault(t) });
@@ -1808,6 +1913,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           .filter((id: string) => id.length > 0);
         this._packageItems.set([...new Set(ids)]);
         this._reportOrder.set(readReportOrder(blob) ?? [...new Set(ids)]);
+        this.profilePrintPicker.set(t.type === 'profile' && blob.printPicker === true);
+        this.profilePrintPickerDefault.set(t.type === 'profile' ? printPickerDefaultOf(t.parameters) : 'all');
         if (t.type === 'profile' && blob.repetitive === true) {
           this.repetitive.set(true);
           this._memberRows.set(this.normalizeRows(items
@@ -1827,12 +1934,16 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this._reportOrder.set([]);
         this._memberRows.set([]);
         this.repetitive.set(false);
+        this.profilePrintPicker.set(false);
+        this.profilePrintPickerDefault.set('all');
       }
     } else {
       this._packageItems.set([]);
       this._reportOrder.set([]);
       this._memberRows.set([]);
       this.repetitive.set(false);
+      this.profilePrintPicker.set(false);
+      this.profilePrintPickerDefault.set('all');
     }
     // One-page layout: the Report-layout card is always visible, so its columns
     // must be loaded up-front rather than on a tab switch.
@@ -2035,10 +2146,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
               repetitive: true,
               items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin })),
               ...withReportOrder(this.reportOrderForSave()),
+              ...this.profilePickerKeys(),
             })
           : JSON.stringify({
               items: this._packageItems().map(id => ({ testId: id })),
               ...withReportOrder(this.reportOrderForSave()),
+              // A package never carries it — the profile / test decides.
+              ...(d.type === 'profile' ? this.profilePickerKeys() : {}),
             }))
       // A legacy blob still carrying the old `fields[]` twin is normalised to
       // the single parameters[] list on this save (props folded on load).
@@ -2048,7 +2162,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       : (d.parametersJson
           ? tidyParametersJson(
               hasLegacyFields(d.parametersJson) ? writeParameters(d.parametersJson, this._fields()) : d.parametersJson,
-              d.methodology) ?? undefined
+              // Copies equal to the methodology AS LOADED were following the
+              // test too: changing the test's methodology must carry them
+              // along, never leave them behind as per-value overrides.
+              d.methodology, this._loadedMethodology) ?? undefined
           : undefined);
 
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;

@@ -5,9 +5,14 @@ import { DatePipe } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
+import { reportByOrderSummaryUrl } from '../../../shared/utils/report-summary';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { UploadsService } from '../../../core/services/uploads.service';
+import { isAuthedApiFilePath } from '../../../shared/utils/upload-fetch';
+import { JourneyAxisComponent } from '../../../shared/components/journey-axis/journey-axis.component';
+import type { JourneyAxisEvent } from '../../../shared/components/journey-axis/journey-axis';
 
 interface TimelineDoc {
   id: string; fileName: string; contentType: string; url: string; uploadedAt: string; isImage: boolean;
@@ -28,10 +33,8 @@ interface Visit {
   orders: Order[]; docs: TimelineDoc[]; opd: OpdRec[]; ipd: IpdAdm[]; pharmacy: PharmRec[];
   labCount: number; docCount: number;
 }
-interface AxisEvent extends Visit { x: number; lane: number; }
-interface AxisTick { key: string; x: number; label: string; }
 /** A single viewable artifact (report / image / other document). */
-interface TimelineItem {
+export interface TimelineItem {
   id: string;                        // 'rep:'+orderId | 'doc:'+docId
   kind: 'report' | 'image' | 'doc';
   name: string;
@@ -52,10 +55,10 @@ interface TimelineItem {
 @Component({
   selector: 'pf-patient-timeline',
   standalone: true,
-  imports: [DatePipe, PdfCanvasComponent],
+  imports: [DatePipe, PdfCanvasComponent, JourneyAxisComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-tl" [class.pf-tl--embedded]="embedded()">
+    <div class="pf-tl" [class.pf-tl--embedded]="embedded()" [class.pf-tl--viewer]="viewerOnly()">
       <header class="pf-tl__bar">
         @if (!embedded()) {
           <button type="button" class="pf-tl__back" (click)="close.emit()" aria-label="Exit timeline">
@@ -128,7 +131,7 @@ interface TimelineItem {
                       [class.picked]="isPicked(it)"
                       (click)="onItem(it)">
                 @if (it.kind === 'image') {
-                  <img class="pf-tl__item-thumb" [src]="it.url" [alt]="it.name" loading="lazy" />
+                  <img class="pf-tl__item-thumb" [src]="uploads.src(it.url)" [alt]="it.name" loading="lazy" />
                 } @else {
                   <span class="pf-tl__item-ico" [class.report]="it.kind === 'report'">
                     @if (busyItem() === it.id) { <span class="pf-tl__spin pf-tl__spin--sm"></span> }
@@ -250,47 +253,15 @@ interface TimelineItem {
             @if (typesPresent().pharmacy) { <button type="button" [class.on]="isTypeOn('pharmacy')" (click)="toggleType('pharmacy')">Pharmacy</button> }
           </div>
           <div class="pf-tl__zoom">
-            <button type="button" (click)="zoomBy(1/1.4)" aria-label="Zoom out" title="Zoom out">
+            <button type="button" (click)="axis.zoomBy(1/1.4)" aria-label="Zoom out" title="Zoom out">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
             </button>
-            <button type="button" (click)="zoomBy(1.4)" aria-label="Zoom in" title="Zoom in">
+            <button type="button" (click)="axis.zoomBy(1.4)" aria-label="Zoom in" title="Zoom in">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
           </div>
-          <div class="pf-tl__scroll" #scrollRef>
-          <div class="pf-tl__axis" #axisRef [style.height.px]="railHeight()" [style.width.%]="zoom() * 100">
-            @for (e of axisModel().events; track e.key) {
-              <button type="button" class="pf-tl__ev"
-                      [class.pf-tl__ev--on]="selectedVisit()?.key === e.key"
-                      [style.left.%]="e.x" [style.height.px]="30 + e.lane * 34"
-                      (click)="selectKey(e.key)"
-                      [title]="(e.date | date:'MMM d, y') + ' — ' + labelFor(e)">
-                <span class="pf-tl__ev-card">
-                  <span class="pf-tl__ev-ico" [attr.data-type]="evType(e)">
-                    @switch (evType(e)) {
-                      @case ('opd') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v6a4 4 0 0 0 8 0V3"/><path d="M8 15a5 5 0 0 0 5 5h1a4 4 0 0 0 4-4v-2"/><circle cx="19" cy="10" r="2"/></svg> }
-                      @case ('ipd') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v-2a2 2 0 0 1 2-2h3v4"/></svg> }
-                      @case ('pharmacy') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7z"/><path d="m8.5 8.5 7 7"/></svg> }
-                      @case ('doc') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg> }
-                      @default { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-4.5 8.5A2 2 0 0 0 7.3 21h9.4a2 2 0 0 0 1.8-3.5L14 9V3"/></svg> }
-                    }
-                  </span>
-                  <span class="pf-tl__ev-lbl">{{ e.date | date:'MMM d' }}</span>
-                  @if (abnormalDays().has(e.key)) { <span class="pf-tl__ev-alert" title="Abnormal result"></span> }
-                </span>
-                <span class="pf-tl__ev-stem"></span>
-                <span class="pf-tl__ev-dot" [attr.data-type]="evType(e)" [class.abn]="abnormalDays().has(e.key)"></span>
-              </button>
-            }
-            <div class="pf-tl__axisline"></div>
-            @for (t of axisModel().ticks; track t.key) {
-              <div class="pf-tl__tick" [style.left.%]="t.x">
-                <span class="pf-tl__tick-mark"></span>
-                <span class="pf-tl__tick-lbl">{{ t.label }}</span>
-              </div>
-            }
-          </div>
-          </div>
+          <pf-journey-axis #axis class="pf-tl__scroll" [events]="axisEvents()" [selectedKey]="selectedVisit()?.key" [maxLanes]="maxLanes()"
+                           (select)="selectKey($event)"></pf-journey-axis>
         </footer>
       }
     </div>
@@ -340,6 +311,8 @@ interface TimelineItem {
     .pf-tl__x--bar { margin-left: 0; }
     .pf-tl__bar:not(:has(.pf-tl__cmp-btn)) .pf-tl__x--bar { margin-left: auto; }
 
+    /* Viewer only (OPD consult centre): just the stage. */
+    .pf-tl--viewer .pf-tl__bar, .pf-tl--viewer .pf-tl__left, .pf-tl--viewer .pf-tl__foot { display: none !important; }
     .pf-tl__stage-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px; }
     .pf-tl__empty-title { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
     .pf-tl__empty-sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 6px; max-width: 420px; }
@@ -415,7 +388,7 @@ interface TimelineItem {
     .pf-tl__grip { position: absolute; top: 0; left: 0; right: 0; height: 14px; display: flex; align-items: center; justify-content: center; cursor: row-resize; z-index: 6; touch-action: none; }
     .pf-tl__grip span { width: 44px; height: 3px; border-radius: 2px; background: var(--glass-border); transition: background .12s; }
     .pf-tl__grip:hover span { background: rgba(168,85,247,0.7); }
-    .pf-tl__scroll { flex: 0 0 auto; display: flex; align-items: flex-end; overflow-x: auto; overflow-y: hidden; padding: 0 20px; touch-action: pan-x; }
+    .pf-tl__scroll { flex: 0 0 auto; }
     .pf-tl__zoom { position: absolute; top: 16px; right: 16px; z-index: 5; display: inline-flex; gap: 4px; }
     .pf-tl__typefilter { position: absolute; top: 16px; left: 20px; z-index: 5; display: inline-flex; gap: 4px; }
     .pf-tl__typefilter button { padding: 5px 11px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; background: var(--bg-card-solid); border: 1px solid var(--glass-border); color: var(--text-tertiary); }
@@ -423,35 +396,6 @@ interface TimelineItem {
     .pf-tl__enc { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
     .pf-tl__zoom button { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-card-solid); border: 1px solid var(--glass-border); color: var(--text-secondary); cursor: pointer; }
     .pf-tl__zoom button:hover { color: var(--text-primary); border-color: rgba(168,85,247,0.45); }
-    /* flex: 0 0 auto → the axis keeps its (zoom-scaled) width instead of being
-       shrunk to fit the flex scroll container, so horizontal zoom + scroll work. */
-    .pf-tl__axis { position: relative; margin-top: 10px; min-width: 560px; flex: 0 0 auto; }
-    .pf-tl__axisline { position: absolute; left: 0; right: 0; bottom: 26px; height: 1px; background: var(--glass-border); }
-    .pf-tl__tick { position: absolute; bottom: 0; height: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .pf-tl__tick-mark { width: 1px; height: 6px; background: var(--glass-border); }
-    .pf-tl__tick-lbl { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-tl__ev { position: absolute; bottom: 26px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; cursor: pointer; z-index: 1; }
-    .pf-tl__ev:hover { z-index: 2; }
-    .pf-tl__ev-card { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; background: var(--bg-card-solid); border: 1px solid var(--glass-border); font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.28); transition: transform .1s, border-color .12s; }
-    .pf-tl__ev:hover .pf-tl__ev-card { transform: translateY(-1px); border-color: rgba(168,85,247,0.45); color: var(--text-primary); }
-    .pf-tl__ev-ico { display: inline-flex; color: #a855f7; }
-    .pf-tl__ev-ico[data-type="opd"] { color: var(--green-text); }
-    .pf-tl__ev-ico[data-type="ipd"] { color: var(--amber-text); }
-    .pf-tl__ev-ico[data-type="pharmacy"] { color: var(--pink-text); }
-    .pf-tl__ev-ico[data-type="doc"] { color: var(--sky-text); }
-    .pf-tl__ev-stem { width: 1px; flex: 1 1 auto; min-height: 8px; background: var(--glass-border); }
-    .pf-tl__ev-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; background: var(--bg-card-solid); border: 2.5px solid #a855f7; }
-    .pf-tl__ev-dot[data-type="opd"] { border-color: #34d399; }
-    .pf-tl__ev-dot[data-type="ipd"] { border-color: #fbbf24; }
-    .pf-tl__ev-dot[data-type="pharmacy"] { border-color: #f472b6; }
-    .pf-tl__ev-dot[data-type="doc"] { border-color: #38bdf8; }
-    .pf-tl__ev-dot.abn { border-color: #fb7185; }
-    .pf-tl__ev--on .pf-tl__ev-dot.abn { background: #fb7185; box-shadow: 0 0 0 4px rgba(251,113,133,0.25); }
-    .pf-tl__ev-alert { width: 6px; height: 6px; border-radius: 50%; background: #fb7185; box-shadow: 0 0 0 3px rgba(251,113,133,0.2); }
-    .pf-tl__ev--on .pf-tl__ev-card { background: linear-gradient(135deg, #7c3aed, #a855f7); border-color: transparent; color: #fff; box-shadow: 0 4px 14px rgba(124,58,237,0.4); }
-    .pf-tl__ev--on .pf-tl__ev-ico { color: #fff; }
-    .pf-tl__ev--on .pf-tl__ev-stem { background: rgba(168,85,247,0.7); }
-    .pf-tl__ev--on .pf-tl__ev-dot { background: #a855f7; box-shadow: 0 0 0 4px rgba(168,85,247,0.22); }
 
     .pf-tl__spin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid rgba(168,85,247,0.3); border-top-color: #a855f7; animation: pf-tl-spin .7s linear infinite; }
     .pf-tl__spin--sm { width: 18px; height: 18px; border-width: 2px; }
@@ -489,6 +433,7 @@ export class PatientTimelineComponent implements OnDestroy {
   private readonly injector = inject(Injector);
   private readonly toasts = inject(ToastService);
   private readonly svc = inject(PatientTimelineService);
+  protected readonly uploads = inject(UploadsService);
 
   readonly patientId = input.required<string>();
   /** Embedded mode (Consult Room): the journey lives INSIDE a host layout —
@@ -500,6 +445,10 @@ export class PatientTimelineComponent implements OnDestroy {
   readonly extraNav = input<Array<{ id: string; label: string; kind?: string }>>([]);
   /** Hide the built-in "Patient Journey" bar title (host projects its own). */
   readonly hideTitle = input(false);
+  /** Viewer only (OPD consult centre): just the right-hand stage — the file
+   *  viewer / compare grid / visit journey. No bar, no file list, no axis;
+   *  the host drives it (openSingle / setPicked / selectKey). Default off. */
+  readonly viewerOnly = input(false);
   readonly extraChange = output<string | null>();
   readonly extraSel = signal<string | null>(null);
   readonly close = output<void>();
@@ -519,7 +468,6 @@ export class PatientTimelineComponent implements OnDestroy {
   readonly overlayOpacity = signal(0.5);
   readonly urlCache = signal<Record<string, string>>({}); // itemId -> viewable url
   readonly busyItem = signal<string | null>(null);        // report being built
-  readonly zoom = signal(1);
   /** User-dragged footer height (px); null = auto/compact. */
   readonly footH = signal<number | null>(null);
   /** Right panel: the visit journey (Sankey) or a single file. */
@@ -528,8 +476,6 @@ export class PatientTimelineComponent implements OnDestroy {
   readonly filter = signal<'all' | 'report' | 'image'>('all');
 
   private readonly journeyEl = viewChild<ElementRef<HTMLDivElement>>('journeyEl');
-  private readonly scrollRef = viewChild<ElementRef<HTMLDivElement>>('scrollRef');
-  private readonly axisRef = viewChild<ElementRef<HTMLDivElement>>('axisRef');
   private readonly footRef = viewChild<ElementRef<HTMLElement>>('footRef');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _echarts: any = null;
@@ -747,33 +693,17 @@ export class PatientTimelineComponent implements OnDestroy {
     return rh ? `${d}d ${rh}h` : `${d}d`;
   }
 
-  readonly axisModel = computed<{ events: AxisEvent[]; ticks: AxisTick[]; lanes: number }>(() => {
-    const vs = this.visitsFiltered();
-    if (!vs.length) return { events: [], ticks: [], lanes: 0 };
-    const DAY = 86400000;
-    const times = vs.map(v => new Date(v.date).getTime());
-    let min = Math.min(...times), max = Math.max(...times);
-    if (min === max) { min -= DAY; max += DAY; }
-    const pad = (max - min) * 0.06 || DAY;
-    const lo = min - pad, hi = max + pad, span = hi - lo;
-    const xOf = (t: number) => ((t - lo) / span) * 100;
-    const laneLastX: number[] = [];
-    // Lane spacing tightens as you zoom in (the axis widens), so clustered
-    // dates spread onto FEWER lanes. The lane cap grows with the dragged footer
-    // height — drag the timeline taller and more lanes show (less overlap).
-    const fh = this.footH();
-    const MAX_LANES = fh ? Math.max(2, Math.min(12, Math.floor((fh - 56) / 34))) : 4;
-    const MIN_SEP = 8 / this.zoom();
-    const events: AxisEvent[] = vs.map(v => {
-      const x = xOf(new Date(v.date).getTime());
-      let lane = laneLastX.findIndex(lx => x - lx >= MIN_SEP);
-      if (lane === -1) lane = laneLastX.length;
-      laneLastX[lane] = x;
-      return { ...v, x, lane: Math.min(lane, MAX_LANES - 1) };
-    });
-    return { events, ticks: this.buildTicks(lo, hi, xOf), lanes: Math.min(laneLastX.length, MAX_LANES) };
+  /** The visible visits as dates on the shared journey axis (pf-journey-axis). */
+  readonly axisEvents = computed<JourneyAxisEvent[]>(() => {
+    const abn = this.abnormalDays();
+    return this.visitsFiltered().map(v => ({
+      key: v.key, date: v.date, type: this.evType(v), alert: abn.has(v.key),
+      title: `${this.fmtTitleDate(v.date)} — ${this.labelFor(v)}`,
+    }));
   });
-  readonly railHeight = computed(() => 88 + Math.max(0, this.axisModel().lanes - 1) * 34);
+  /** The lane cap grows with the dragged footer height — drag the timeline
+   *  taller and more lanes show (less overlap). */
+  readonly maxLanes = computed(() => { const fh = this.footH(); return fh ? Math.max(2, Math.min(12, Math.floor((fh - 56) / 34))) : 4; });
 
   constructor() {
     effect(() => { const id = this.patientId(); if (id) { this.loadOrders(id); this.loadDocs(id); this.loadTrends(id); } });
@@ -781,16 +711,7 @@ export class PatientTimelineComponent implements OnDestroy {
     effect(() => {
       const v = this.selectedVisit();
       if (!v) return;
-      untracked(() => {
-        for (const o of v.orders) {
-          if (o.id in this.reportCache()) continue;
-          this.reportCache.update(m => ({ ...m, [o.id]: null }));
-          this.api.get<Report | null>(`/api/reports/by-order/${o.id}`).subscribe({
-            next: r => { if (r) this.reportCache.update(m => ({ ...m, [o.id]: r })); },
-            error: () => { /* leave null */ },
-          });
-        }
-      });
+      untracked(() => this.loadReports(v.orders));
     });
     // On visit change, default the right panel to the visit journey (not a file).
     effect(() => {
@@ -805,17 +726,6 @@ export class PatientTimelineComponent implements OnDestroy {
     effect(() => {
       this.viewMode(); this.compareMode(); this.journeyModel(); this.journeyEl();
       queueMicrotask(() => this.renderJourney());
-    });
-    // Non-passive zoom listeners on the axis scroll (so ctrl+wheel / pinch can
-    // preventDefault and not zoom the whole page).
-    effect(() => {
-      const el = this.scrollRef()?.nativeElement;
-      if (!el || this._bound) return;
-      this._bound = true;
-      el.addEventListener('wheel', this._onWheel, { passive: false });
-      el.addEventListener('touchstart', this._onTouchStart, { passive: false });
-      el.addEventListener('touchmove', this._onTouchMove, { passive: false });
-      el.addEventListener('touchend', this._onTouchEnd, { passive: false });
     });
   }
 
@@ -855,6 +765,19 @@ export class PatientTimelineComponent implements OnDestroy {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
+  /** Fetch the report summary of these orders once each (the list only needs
+   *  "is there a report"; opening one reads the full report). Public so a
+   *  host (the OPD consult's compare presets) can ask for every visit's. */
+  loadReports(orders: readonly Order[]) {
+    for (const o of orders) {
+      if (o.id in this.reportCache()) continue;
+      this.reportCache.update(m => ({ ...m, [o.id]: null }));
+      this.api.get<Report | null>(reportByOrderSummaryUrl(o.id)).subscribe({
+        next: r => { if (r) this.reportCache.update(m => ({ ...m, [o.id]: r })); },
+        error: () => { /* leave null */ },
+      });
+    }
+  }
   tests(o: Order): OrderTest[] { return (o.samples ?? []).flatMap(s => s.tests ?? []); }
   reportFor(orderId: string): Report | null { return this.reportCache()[orderId] ?? null; }
   orderPanelName(o: Order): string {
@@ -869,26 +792,7 @@ export class PatientTimelineComponent implements OnDestroy {
     return parts.join(' · ') || '—';
   }
 
-  private buildTicks(lo: number, hi: number, xOf: (t: number) => number): AxisTick[] {
-    const DAY = 86400000;
-    const days = (hi - lo) / DAY;
-    const ticks: AxisTick[] = [];
-    const push = (t: number, label: string) => { if (t >= lo && t <= hi) ticks.push({ key: String(t), x: xOf(t), label }); };
-    if (days <= 75) {
-      const step = Math.max(1, Math.round(days / 8));
-      const start = new Date(lo); start.setHours(0, 0, 0, 0);
-      for (let t = start.getTime(); t <= hi; t += step * DAY) push(t, this.fmtDay(t));
-    } else if (days <= 365 * 2.2) {
-      let d = new Date(lo); d = new Date(d.getFullYear(), d.getMonth(), 1);
-      while (d.getTime() <= hi) { push(d.getTime(), this.fmtMonth(d.getTime())); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
-    } else {
-      const endY = new Date(hi).getFullYear();
-      for (let y = new Date(lo).getFullYear(); y <= endY; y++) push(new Date(y, 0, 1).getTime(), String(y));
-    }
-    return ticks;
-  }
-  private fmtDay(t: number): string { return new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
-  private fmtMonth(t: number): string { return new Date(t).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }); }
+  private fmtTitleDate(iso: string): string { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 
   // ── Interaction ──────────────────────────────────────────────────────
   selectKey(key: string) { this.selectedKey.set(key); }
@@ -920,6 +824,12 @@ export class PatientTimelineComponent implements OnDestroy {
     this.ensureUrl(it);
   }
   unpick(it: TimelineItem) { this.picked.update(l => l.filter(p => p.id !== it.id)); }
+  /** Host-driven compare (viewer-only mode): exactly these items, in compare. */
+  setPicked(items: TimelineItem[]) {
+    if (!this.compareMode()) { this.compareMode.set(true); this.active.set(null); }
+    this.picked.set(items);
+    for (const it of items) void this.ensureUrl(it);
+  }
 
   /** Native share sheet (with the file) where supported, else a download. */
   async shareFile(it: TimelineItem) {
@@ -949,7 +859,11 @@ export class PatientTimelineComponent implements OnDestroy {
   private async ensureUrl(it: TimelineItem) {
     if (this.urlCache()[it.id]) return;
     if (it.kind !== 'report') {
-      if (it.url) this.urlCache.update(m => ({ ...m, [it.id]: it.url! }));
+      if (!it.url) return;
+      // A patient document is an AUTHENTICATED file path (logic audit) — its
+      // bytes come through the session, never a bare link.
+      const url = isAuthedApiFilePath(it.url) ? await this.uploads.objectUrl(it.url) : it.url;
+      if (url) this.urlCache.update(m => ({ ...m, [it.id]: url }));
       return;
     }
     if (!it.report) return;
@@ -960,82 +874,24 @@ export class PatientTimelineComponent implements OnDestroy {
     } finally { this.busyItem.set(null); }
   }
 
-  /** Build the report PDF client-side (viewer recipe) → object URL, cached. */
+  /** The report's STORED PDF → object URL, cached (rendered + stored once
+   *  from its saved snapshot when it has none yet). */
   private async buildReportUrl(rep: Report, o?: Order): Promise<string> {
     const cached = this.reportBlobs.get(rep.id);
     if (cached) return cached;
     try {
-      const [{ renderReportPdfBlobUrl }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
-        import('../../../core/services/report-layout.service'),
-        import('../../../core/services/platform.service'),
-        import('../../../shared/utils/report-render-input'),
-      ]);
-      const svc = this.injector.get(ReportLayoutService);
-      // The ONE recipe (template + layouts incl. PROFILE layouts + images +
-      // trendograms) — the same report every other screen renders.
-      const input = await prepareReportPdfInput(rep, {
-        api: this.api,
-        preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-        apiUrl: this.injector.get(PlatformService).getApiUrl(),
-      });
-      const url = renderReportPdfBlobUrl(input);
+      const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+      const url = URL.createObjectURL(await storedReportBlob(rep, this.api, this.injector));
       this.reportBlobs.set(rep.id, url); this.blobUrls.add(url);
       return url;
     } catch (err) {
       // Never fall back to a template-less render: it looks like a different
       // lab's report. Say so instead.
-      console.error('[timeline] report render failed', err);
+      console.error('[timeline] report load failed', err);
       const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
       this.toasts.error(reportRenderErrorMessage(err, 'Could not open the report'));
       return '';
     }
-  }
-
-  // ── Zoom (buttons + pinch/wheel), focused on a point ─────────────────
-  /** Zoom keeping the axis point under `clientX` stationary. Width is applied
-   *  imperatively so the following scrollLeft write reflows against the new
-   *  width — deterministic, no rAF timing race. */
-  private zoomAt(nz: number, clientX: number) {
-    nz = Math.min(8, Math.max(1, nz));
-    const scroll = this.scrollRef()?.nativeElement;
-    const axis = this.axisRef()?.nativeElement;
-    const old = this.zoom();
-    if (!scroll || !axis) { this.zoom.set(nz); return; }
-    if (nz === old) return;
-    const rect = scroll.getBoundingClientRect();
-    const pointerX = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const contentX = scroll.scrollLeft + pointerX;   // px of the focal point in the axis
-    this.zoom.set(nz);
-    axis.style.width = `${nz * 100}%`;               // widen now (sync layout)
-    scroll.scrollLeft = contentX * (nz / old) - pointerX;
-  }
-  zoomBy(f: number) {
-    const el = this.scrollRef()?.nativeElement;
-    const rect = el?.getBoundingClientRect();
-    this.zoomAt(this.zoom() * f, rect ? rect.left + rect.width / 2 : 0);
-  }
-  private _bound = false;
-  private _pinchDist = 0; private _pinchZoom = 1;
-  private readonly _onWheel = (e: WheelEvent) => {
-    if (!e.ctrlKey) return;               // trackpad-pinch / ctrl+wheel only
-    e.preventDefault();
-    this.zoomAt(this.zoom() * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX);
-  };
-  private readonly _onTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 2) { this._pinchDist = this._dist(e); this._pinchZoom = this.zoom(); }
-  };
-  private readonly _onTouchMove = (e: TouchEvent) => {
-    if (e.touches.length === 2 && this._pinchDist) {
-      e.preventDefault();
-      const mid = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      this.zoomAt(this._pinchZoom * (this._dist(e) / this._pinchDist), mid);
-    }
-  };
-  private readonly _onTouchEnd = () => { this._pinchDist = 0; };
-  private _dist(e: TouchEvent): number {
-    const a = e.touches[0], b = e.touches[1];
-    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   }
 
   // ── Resize the timeline footer by dragging its top edge ──────────────
@@ -1096,13 +952,6 @@ export class PatientTimelineComponent implements OnDestroy {
     for (const u of this.blobUrls) { try { URL.revokeObjectURL(u); } catch { /* */ } }
     if (this._boundResize) window.removeEventListener('resize', this._resize);
     this._journeyChart?.dispose();
-    const el = this.scrollRef()?.nativeElement;
-    if (el && this._bound) {
-      el.removeEventListener('wheel', this._onWheel);
-      el.removeEventListener('touchstart', this._onTouchStart);
-      el.removeEventListener('touchmove', this._onTouchMove);
-      el.removeEventListener('touchend', this._onTouchEnd);
-    }
     window.removeEventListener('pointermove', this._onResize);
     window.removeEventListener('pointerup', this._endResize);
   }

@@ -19,27 +19,12 @@
             <span class="pf-tm-deptchip__t">Departments</span>
           </button>
         }
-        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions" [value]="view()"
+        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()"
                       (valueChange)="setView($event)"></pf-segmented>
-        @if (gridView() && (inactiveCount() > 0 || showInactive())) {
-          <button type="button" class="nd-chip pf-tm-inactive-chip press"
-                  [attr.aria-pressed]="showInactive()" (click)="showInactive.set(!showInactive())"
-                  title="Show inactive tests">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              @if (showInactive()) {
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
-              } @else {
-                <path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 5.1-5.9M9.9 5.2A9.1 9.1 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M14.1 14.2a3 3 0 1 1-4.2-4.2M2 2l20 20"/>
-              }
-            </svg>
-            Inactive ({{ inactiveCount() }})
-          </button>
-        }
       </ng-container>
       <ng-container band-actions>
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
-                (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
+                [pfBusy]="restoring()" pfBusyLabel="Restoring…" (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
@@ -56,7 +41,7 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
-                  (click)="saveAll()" title="Save changes" aria-label="Save changes">
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" title="Save changes" aria-label="Save changes">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -77,7 +62,7 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
-                  (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
+                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -116,12 +101,12 @@
     title="Test Master"
     subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
     <div actions class="flex flex-wrap items-center gap-2 justify-end">
-      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" (pressed)="restoreDefaults()">
+      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" [busy]="restoring()" busyLabel="Restoring…" (pressed)="restoreDefaults()">
         {{ restoring() ? 'Restoring…' : 'Restore to default' }}
       </pf-touch-btn>
       @if (dirtyCount() > 0) {
         <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
+        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
       }
       <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
         <span icon-left aria-hidden="true">
@@ -162,13 +147,6 @@
             (click)="openPricingView()">
       Pricing
     </button>
-    @if (inactiveCount() > 0 || showInactive()) {
-      <label class="pf-tm-inactive-toggle">
-        <input type="checkbox" [checked]="showInactive()"
-               (change)="showInactive.set(!showInactive())" />
-        Show inactive ({{ inactiveCount() }})
-      </label>
-    }
   </div>
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
@@ -243,6 +221,11 @@
         <span class="nd-card__label">{{ type() === 'package' ? 'Packages' : type() === 'profile' ? 'Profiles' : 'Tests' }}</span>
         <span class="nd-card__note pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
         <span class="pf-tm-count nd-num">{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
+        <!-- Status filter: the Active/Inactive switch. All (default) keeps
+             switched-off tests listed, greyed, so nothing ever disappears. -->
+        <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()"
+                      [value]="statusFilter()" (valueChange)="statusFilter.set($event)"
+                      aria-label="Filter by status"></pf-segmented>
         @if (narrow() && !theme.isNewDesign()) {
           <button type="button" class="nd-btn nd-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
                   aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()">Departments</button>
@@ -262,6 +245,10 @@
         </div>
       </header>
       <div class="pf-tm-main__body">
+        @if (listSkeleton()) {
+          <!-- First load: the grid's shape, not an empty grid. -->
+          <pf-skeleton-table class="pf-tm-grid-skel" [rows]="12" [cols]="6" label="Loading tests…"></pf-skeleton-table>
+        }
         <ag-grid-angular
           [singleClickEdit]="isCoarse"
           class="pf-tm-grid"
@@ -270,7 +257,7 @@
           [columnDefs]="phoneTrim(colDefs())"
           [defaultColDef]="defaultColDef"
           [getRowId]="getRowId"
-          [getRowStyle]="getRowStyle"
+          [getRowClass]="getRowClass"
           [context]="gridContext"
           [animateRows]="true"
           [stopEditingWhenCellsLoseFocus]="true"
@@ -302,6 +289,12 @@
   </ng-template>
 
   <ng-template #deptBody>
+    @if (listSkeleton()) {
+    <!-- First open: the departments are on their way with the grid. -->
+    <div class="nd-card__body">
+      <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
+    </div>
+    } @else {
     <ul class="nd-card__body pf-tm-dept-list">
       <li class="pf-tm-dept-row">
         <button type="button" class="pf-tm-dept" [attr.aria-pressed]="!selectedDept()" (click)="pickDept(null)">
@@ -337,6 +330,7 @@
         <li class="pf-tm-dept-empty">No departments yet.</li>
       }
     </ul>
+    }
   </ng-template>
   }
   </div>

@@ -1,3 +1,4 @@
+@use '../../../shared/styles/device-tier' as dt;
 /* ── Ref hospital + ref doctor row ──────────────────────── */
 .pf-refrow__field {
   position: relative;
@@ -2260,7 +2261,7 @@
 
 /* --- iOS zoom guard: any focused input <16px makes Safari zoom the page.
        Bump the page's own text inputs to 16px below desktop only. --- */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
 
   :host .pf-search__input,
   :host .pf-refdoc__input,
@@ -2272,7 +2273,7 @@
 
 /* --- Drawer/preview heights: use dvh so the mobile browser URL bar
        collapsing doesn't clip the sheet. Sub-desktop only. --- */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   :host .pf-cart-drawer {
     max-height: 75dvh;
   }

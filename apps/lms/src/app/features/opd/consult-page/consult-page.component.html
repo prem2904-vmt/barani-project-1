@@ -58,12 +58,9 @@
 
         <label class="pf-cw__field">
           <span class="pf-cw__label">Consulting doctor</span>
-          <select class="pf-cw__input" [value]="doctorId() ?? ''" (change)="onDoctor($any($event.target).value)">
-            <option value="" disabled>Select a doctor…</option>
-            @for (d of doctors(); track d.id) {
-              <option [value]="d.id">{{ d.name }}{{ d.department ? ' · ' + d.department : '' }}</option>
-            }
-          </select>
+          <pf-select class="pf-cw__input" [options]="doctorOptions()" [value]="doctorId() ?? ''"
+                     [searchable]="true" placeholder="Select a doctor…"
+                     (valueChange)="onDoctor($event)"></pf-select>
           @if (doctors().length === 0) {
             <span class="pf-cw__hint">No doctors onboarded for this branch yet.</span>
           }
@@ -111,8 +108,9 @@
           <span>₹{{ total() }}</span>
         </div>
 
-        <button type="button" class="pf-csum__submit press" [disabled]="!canSubmit()" (click)="submit()">
-          Create consultation
+        <button type="button" class="pf-csum__submit press" [disabled]="!canSubmit() || submitting()" (click)="submit()"
+                [pfBusy]="submitting()" pfBusyLabel="Creating…">
+          {{ submitting() ? 'Creating…' : 'Create consultation' }}
         </button>
       </div>
     </aside>

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -9,6 +9,11 @@ import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { Test } from '../../../../shared/models/test.model';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { prefetch } from '../../../../shared/utils/prefetch';
+import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
 
 interface OgRow { code: string | null; value: string; normal: boolean; active: boolean; }
 interface OgLink { testId: string; testCode: string | null; testName: string; paramName: string; paramTitle: string; }
@@ -41,7 +46,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
 @Component({
   selector: 'pf-option-groups-panel',
   standalone: true,
-  imports: [AgGridAngular, FormsModule],
+  imports: [AgGridAngular, FormsModule, BusyDirective, SkeletonTableComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-og">
@@ -61,6 +66,10 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
       <div class="pf-og__cols">
         <!-- ── LEFT: the groups grid ── -->
         <div class="pf-og__grid">
+          @if (listSkeleton()) {
+            <!-- First load: the grid's shape over the mounted grid (ND-PATTERN "Loading feedback"). -->
+            <pf-skeleton-table class="pf-og__gridskel" [rows]="8" [cols]="5" label="Loading option groups…"></pf-skeleton-table>
+          }
           <ag-grid-angular
             style="width: 100%; height: 100%; min-height: 320px;"
             [theme]="gridTheme()"
@@ -79,7 +88,10 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
         <aside class="nd-card pf-og__side" [class.nd-sheet]="sheetOpen()"
                [attr.aria-label]="mode() === 'create' ? 'New option group' : 'Option group'">
           <span class="nd-sheet__handle" aria-hidden="true"></span>
-          @if (mode() === 'create') {
+          @if (listSkeleton() && mode() !== 'create') {
+            <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading option group…"></pf-skeleton-card>
+          }
+          @else if (mode() === 'create') {
             <div class="nd-card__head">
               <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
               <span class="nd-card__label">New option group</span>
@@ -137,7 +149,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                   {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
               } @else { <span class="pf-og__warn"></span> }
               <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
-                      (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
+                      [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
             </div>
           }
 
@@ -182,6 +194,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               <div class="pf-og__tests">
                 @for (t of testsOf(g); track t.testId) {
                   <button type="button" class="nd-row pf-og__test press" (click)="openTest(t.testId)"
+                          (pointerenter)="warmEditor()" (focus)="warmEditor()"
                           [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
                     <span class="nd-num pf-og__tcode">{{ t.testCode || '—' }}</span>
                     <span class="nd-row__name pf-og__tname">{{ t.testName }}</span>
@@ -195,7 +208,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
             @if (editing()) {
               <div class="pf-og__editact">
                 <span class="pf-og__warn">Updates <span class="nd-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="nd-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
-                <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" (click)="save(g)">
+                <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
                   {{ saving() ? 'Saving…' : 'Save everywhere' }}
                 </button>
               </div>
@@ -223,7 +236,8 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
        the side card body scroll themselves; the page never does. */
     .pf-og__cols { flex: 1 1 auto; min-height: 0; display: grid;
       grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
-    .pf-og__grid { min-height: 0; border-radius: var(--nd-radius, 12px); overflow: hidden; }
+    .pf-og__grid { position: relative; min-height: 0; border-radius: var(--nd-radius, 12px); overflow: hidden; }
+    .pf-og__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
     .pf-og__side { min-height: 0; max-height: 100%; }
     .pf-og__side:not(.nd-sheet) .nd-sheet__handle { display: none; }
     .pf-og__side .nd-card__body { gap: 8px; }
@@ -292,6 +306,11 @@ export class OptionGroupsPanelComponent implements OnInit {
   readonly bandQuery = input<string | null>(null);
   private readonly effectiveQuery = computed(() => this.bandQuery() ?? this.query());
   readonly groups = signal<OgGroup[]>([]);
+  /** First load of the groups: skeleton grid + side card (held, no flash). */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  /** Hover / focus of a linked test: warm the test editor's code. */
+  warmEditor(): void { void prefetch(TEST_EDITOR_PREFETCH_KEY, loadTestEditor); }
   readonly selected = signal<OgGroup | null>(null);
   readonly editing = signal(false);
   readonly mode = signal<'idle' | 'create'>('idle');
@@ -304,7 +323,10 @@ export class OptionGroupsPanelComponent implements OnInit {
   /** Tells the host (Test Master's band) an editor is open, so the band's
    *  "New option group" steps down and this card's save is the ONE primary. */
   readonly editingChange = output<boolean>();
-  constructor() { effect(() => this.editingChange.emit(this.sheetOpen())); }
+  constructor() {
+    effect(() => this.editingChange.emit(this.sheetOpen()));
+    inject(DestroyRef).onDestroy(() => this.listHold.cancel());
+  }
   closeEditor() { this.mode.set('idle'); this.editing.set(false); }
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
@@ -460,6 +482,7 @@ export class OptionGroupsPanelComponent implements OnInit {
     this.api.get<OgGroup[]>('/api/option-groups').subscribe({
       next: gs => {
         this.groups.set(gs ?? []);
+        this.listHold.done();
         // Deep link (?og=<code>) wins; otherwise default-select the top
         // group so the side panel is never an empty "select one" placeholder.
         if (this.mode() === 'idle' && !this.selected() && gs?.length) {
@@ -467,7 +490,7 @@ export class OptionGroupsPanelComponent implements OnInit {
           this.selected.set(gs.find(g => g.code === wanted) ?? gs[0]);
         }
       },
-      error: () => this.toasts.error('Could not load option groups'),
+      error: () => { this.listHold.done(); this.toasts.error('Could not load option groups'); },
     });
   }
 

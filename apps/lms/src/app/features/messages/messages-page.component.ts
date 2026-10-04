@@ -24,6 +24,8 @@ import { presenceText as presenceDisplayText } from '../../shared/models/presenc
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
@@ -51,7 +53,7 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
@@ -66,6 +68,12 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  renders the locked "upgrade" screen instead of the chat UI, and never
    *  connects the chat/signaling hubs. */
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
+  /** This page's own first conversation-list request is still running. */
+  private readonly convLoading = signal(true);
+  /** First open: the conversation list is on its way → its skeleton, never
+   *  "No conversations yet" (the list has not answered once for this user
+   *  AND this page's own load has not finished). */
+  protected readonly convSkeleton = computed(() => this.convLoading() && !this.chat.conversationsLoaded());
   private readonly presenceSvc = inject(PresenceService);
   protected readonly api = inject(ApiService);
   protected readonly uploads = inject(UploadsService);
@@ -111,6 +119,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly addMemberOpen = signal(false);
   protected readonly addMemberSearch = signal('');
   protected readonly addMemberBusy = signal(false);
+  /** The picker row whose add is running (its busy dots). */
+  protected readonly addingMemberId = signal<string | null>(null);
 
   /** Reply / edit / hover-menu state on the composer. */
   protected readonly replyingTo = signal<{ id: string; preview: string; fromName: string } | null>(null);
@@ -589,7 +599,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     // Module not in the plan → show the locked screen only; never open the
     // chat/signaling hubs (no presence, no incoming calls for this tenant).
-    if (this.moduleOff()) return;
+    if (this.moduleOff()) { this.convLoading.set(false); return; }
     // Both hubs must be live before the page is usable.
     await Promise.all([
       this.chat.connect().catch(() => undefined),
@@ -598,7 +608,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     // `?c=` (in-app links) and `?open=` (older native push payloads).
     const wanted = this.route.snapshot.queryParamMap.get('c') ?? this.route.snapshot.queryParamMap.get('open');
     await Promise.all([
-      this.chat.loadConversations().catch(() => undefined),
+      this.chat.loadConversations().catch(() => undefined).finally(() => this.convLoading.set(false)),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
       this.loadCallLog().catch(() => undefined)
     ]);
@@ -698,13 +708,14 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const conv = this.chat.activeConversation();
     if (!conv) return;
     this.addMemberBusy.set(true);
+    this.addingMemberId.set(userId);
     try {
       await this.chat.addMember(conv.id, userId);
       this.toasts.info('Member added.');
       this.closeAddMember();
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
-    } finally { this.addMemberBusy.set(false); }
+    } finally { this.addMemberBusy.set(false); this.addingMemberId.set(null); }
   }
 
   protected async removeMember(userId: string): Promise<void> {

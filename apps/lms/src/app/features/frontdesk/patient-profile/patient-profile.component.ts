@@ -9,6 +9,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import type { RouteAccessCtx } from '../../../core/auth/route-access';
@@ -19,9 +20,11 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { PatientIdCardComponent } from './patient-id-card.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import {
   ageSexLong, orderStatusLabel, orderTone, patientFlags, patientMetaLine, testStatusLabel, testTone,
 } from './patient-profile.nd';
@@ -30,6 +33,7 @@ import {
   TimelineEvent, activeOrders, buildCumulative, buildTimeline, lastVisit, needsAttention, quickActions, shortDate,
 } from './patient-profile.clinical';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { LabTrendsComponent } from './lab-trends.component';
 import { PatientTimelineService } from './patient-timeline.service';
@@ -37,6 +41,7 @@ import { LabOrdersComponent } from './lab-orders.component';
 import { CumulativeResultsComponent } from './cumulative-results.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { LabelCardComponent } from '../post-payment/label-card.component';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 /** matchMedia as a live boolean (same helper shape as the report view). */
 function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
@@ -82,7 +87,7 @@ export type PpDetail =
   standalone: true,
   imports: [DatePipe, FormsModule, CurrencyInrPipe, CommonModule, NgTemplateOutlet, PatientIdCardComponent, BarcodeDisplayComponent,
     LabTrendsComponent, LabOrdersComponent, CumulativeResultsComponent, AbhaWizardComponent, HeroBandComponent,
-    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent],
+    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss', './patient-profile.clinical.scss']
@@ -90,13 +95,17 @@ export type PpDetail =
 export class PatientProfileComponent implements OnInit {
   private readonly api = inject(ApiService);
   protected readonly entitlements = inject(TenantEntitlementsService);
+  /** Appointments on? (the ONE lab-feature rule) — hides Book appointment. */
+  protected readonly features = inject(LabFeaturesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly locationSvc = inject(Location);
   private readonly chat = inject(ChatService);
   private readonly dialog = inject(DialogService);
   protected readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly auth = inject(AuthService);
   private readonly workflow = inject(ProcessWorkflowService, { optional: true });
   protected readonly navBack = inject(NavBackService);
@@ -257,14 +266,17 @@ export class PatientProfileComponent implements OnInit {
   };
 
   /** Esc closes the top-most layer. */
-  onEsc(): void {
-    if (this.moreOpen()) { this.closeMore(); return; }
-    if (this.abhaCardOpen()) { this.abhaCardOpen.set(false); return; }
-    if (this.qrOpen()) { this.qrOpen.set(false); return; }
-    if (this.showIdCard()) { this.showIdCard.set(false); return; }
-    if (this.chatPickerOpen()) { this.closeChatPicker(); return; }
-    if (this.mergeOpen()) { this.closeMerge(); return; }
-    if (this.detail()) this.closeDetail();
+  onEsc(ev?: Event): void {
+    // Whatever it closes / zooms out of uses the Esc → preventDefault, so the
+    // desktop app stays full screen (desktop-fullscreen-esc.ts).
+    const used = () => ev?.preventDefault();
+    if (this.moreOpen()) { used(); this.closeMore(); return; }
+    if (this.abhaCardOpen()) { used(); this.abhaCardOpen.set(false); return; }
+    if (this.qrOpen()) { used(); this.qrOpen.set(false); return; }
+    if (this.showIdCard()) { used(); this.showIdCard.set(false); return; }
+    if (this.chatPickerOpen()) { used(); this.closeChatPicker(); return; }
+    if (this.mergeOpen()) { used(); this.closeMerge(); return; }
+    if (this.detail()) { used(); this.closeDetail(); }
   }
 
   readonly showIdCard = signal(false);
@@ -352,19 +364,10 @@ export class PatientProfileComponent implements OnInit {
     }).catch(() => this.toasts.error('Failed to copy to clipboard'));
   }
 
-  /** "37y" — a DOB always wins so the age stays live; else the stored age. */
+  /** "37y" (infants "8m" / "12d") — the shared patient-age helper: a DOB
+   *  always wins so the age stays live; else the stored age. */
   ageLabel(p: Patient): string {
-    const yrs = p.dateOfBirth ? this.ageFromDob(p.dateOfBirth) : (p.age ?? null);
-    return yrs == null ? '—' : `${yrs}y`;
-  }
-  private ageFromDob(dob: string | undefined): number | null {
-    if (!dob) return null;
-    const d = new Date(dob);
-    if (isNaN(d.getTime())) return null;
-    const now = new Date();
-    let a = now.getFullYear() - d.getFullYear();
-    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
-    return Math.max(0, a);
+    return formatAge(p, 'y', '—');
   }
 
   // ── Edit patient ────────────────────────────────────────────────────────
@@ -387,6 +390,8 @@ export class PatientProfileComponent implements OnInit {
   protected readonly chatPickerSearch = signal('');
   protected readonly chatPickerUsers = signal<DirectoryUser[]>([]);
   protected readonly chatPickerSending = signal(false);
+  /** The colleague row the patient is being sent to (its row shows busy). */
+  protected readonly sendingToId = signal<string | null>(null);
   protected readonly chatPickerFiltered = computed(() => {
     const term = this.chatPickerSearch().toLowerCase().trim();
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
@@ -410,8 +415,13 @@ export class PatientProfileComponent implements OnInit {
   back() { this.navBack.backTo('/frontdesk'); }
 
   startOrder(p: Patient) {
-    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
     void this.orderEntry.startNewOrder(p.id);
+  }
+
+  /** OPD dark build: the "New consultation" button next to New order —
+   *  only rendered when {@link OpdGateService.visible} is true. */
+  startConsult(p: Patient) {
+    void this.orderEntry.startConsult(p.id);
   }
 
   /** Re-order the same tests from a prior order (order-create preselects them). */
@@ -447,11 +457,22 @@ export class PatientProfileComponent implements OnInit {
       next: full => {
         this.reprintLoading.set(false);
         if (!full?.samples?.length) { this.toasts.warning('No samples on this order to print'); return; }
-        this.reprintOrder.set(full);
-        setTimeout(() => {
-          printLabelOnly();
-          setTimeout(() => this.reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this.reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this.reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => { this.reprintLoading.set(false); this.toasts.error('Could not load the order for label reprint'); },
     });
@@ -477,6 +498,7 @@ export class PatientProfileComponent implements OnInit {
   async sendPatientToColleague(u: DirectoryUser): Promise<void> {
     const p = this.patient();
     if (!p) return;
+    this.sendingToId.set(u.id);
     this.chatPickerSending.set(true);
     try {
       const label = `${this.displayName()}${p.mrn ? ' · ' + p.mrn : ''}`;
@@ -496,6 +518,8 @@ export class PatientProfileComponent implements OnInit {
   protected readonly mergeSearch = signal('');
   protected readonly mergeResults = signal<Patient[]>([]);
   protected readonly merging = signal(false);
+  /** The duplicate row being merged (its row shows busy). */
+  protected readonly mergingId = signal<string | null>(null);
 
   displayOf(p: Patient): string { return patientDisplayName(p); }
   openMerge(): void {
@@ -530,6 +554,7 @@ export class PatientProfileComponent implements OnInit {
       confirmLabel: 'Merge records',
     });
     if (!ok) return;
+    this.mergingId.set(source.id);
     this.merging.set(true);
     try {
       const res = await firstValueFrom(this.api.post<MergeResult>(`/api/patients/${source.id}/merge-into/${target.id}`, {}));

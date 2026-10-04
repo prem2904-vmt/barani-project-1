@@ -1,14 +1,18 @@
 import { DatePipe } from '@angular/common';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { SkeletonCardComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { busyIdWhile } from '../busy-id';
 import { skip } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
@@ -18,6 +22,10 @@ import { BillingEventsService } from '../../../core/services/billing-events.serv
 import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { MergedWorkRow, WORK_STATUS_LABEL, sortByDailySerial } from './work-merge';
+import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -34,9 +42,11 @@ import { Order, OrderSample } from '../../../shared/models/order.model';
 import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -110,12 +120,17 @@ import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.co
 import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
+import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
+import { OutsourcedTube, buildFrontdeskMergedWork, filterOutsourced } from '../outsourced/outsourced-view';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
 import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -154,7 +169,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -165,8 +180,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly dialog = inject(DialogService);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
@@ -177,6 +194,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       id: 'fd:' + d.patientId,
       label: d.patient?.displayName || 'Patient',
       sub: d.testIds.length + (d.testIds.length === 1 ? ' test' : ' tests'),
+      verb: 'Resume order for',
+      at: d.savedAt,
       link: '/frontdesk/order',
       queryParams: { patientId: d.patientId },
     })));
@@ -303,11 +322,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Placement-aware: the appointment UI lives on Frontdesk only while the action
   // is placed in the frontdesk work-area. Drag it to Lab in /admin/process and it
   // leaves here and renders on the Lab screen instead (no active workflow ⇒ native).
+  // THE lab-feature rule (core/modules/lab-features): Home collection needs the
+  // tenant entitlement AND the workflow's Home Visits action; Appointments the
+  // workflow's Appointment action. Never check either switch on its own here.
+  private readonly features = inject(LabFeaturesService);
   readonly showAppt = computed(() => {
+    if (!this.features.appointmentsEnabled()) return false;
     const cfg = this.process.active();
     return !cfg ? true : this.process.placedIn('appointment') === 'frontdesk';
   });
-  readonly showHome = computed(() => this.process.isEnabled('home_visits'));
+  readonly showHome = computed(() => this.features.homeCollectionEnabled());
   /** The left pane only exists if at least one of its tabs (Appointments /
    *  Home collection) is enabled — otherwise it's hidden and the work pane
    *  fills the row. */
@@ -319,6 +343,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const appt = this.showAppt(), home = this.showHome();
     if (!appt && home && this._leftTab() === 'appt') this._leftTab.set('home');
     else if (!home && appt && this._leftTab() === 'home') this._leftTab.set('appt');
+    // Neither left tab exists: the phone list must not sit on a hidden pane.
+    else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
   setLeftTab(t: 'appt' | 'home') {
     this._leftTab.set(t);
@@ -332,8 +358,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing' | 'out'>(this.loadRightTab());
+  // STATUS chip of the work card — null = no chip on (every status). Status and
+  // the date range are independent, combined filters (work-status-filter.ts).
+  private readonly _rightTab = signal<WorkStatusFilter>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
+  /** Does the list for this status render (its chip on, or no chip on)? */
+  statusShown(s: WorkStatus): boolean { return workStatusShown(this._rightTab(), s); }
 
   // ── Outsourced tab ─────────────────────────────────────────
   // Outsourced tests never enter the lab's queues; the front desk tracks
@@ -354,18 +384,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The Outsourced tab shares the same field (its service holds the query). */
   private readonly _workQueryToOutsourced = effect(() => this.outsourcing.query.set(this.workQuery()));
 
-  setRightTab(t: 'ip' | 'done' | 'billing' | 'out') {
-    if (t !== this._rightTab()) this.workSel.clear();
-    this._rightTab.set(t);
-    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
-    // when that tab is opened to catch any saved from a prior order-create visit.
-    if (t === 'ip') this.refreshDrafts();
-    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
+  /** Tap a status chip: filter to it; tap the SAME chip again: clear the status
+   *  filter (all statuses). The date range is untouched either way. */
+  setRightTab(t: WorkStatus) {
+    this.applyRightTab(toggleWorkStatus(this._rightTab(), t));
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' | 'out' {
+  private applyRightTab(next: WorkStatusFilter) {
+    if (next !== this._rightTab()) this.workSel.clear();
+    this._rightTab.set(next);
+    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
+    // when that list is shown to catch any saved from a prior order-create visit.
+    if (next === 'ip' || next === null) this.refreshDrafts();
+    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, workStatusStoreValue(next)); } catch { /* ignore */ }
+  }
+  private loadRightTab(): WorkStatusFilter {
     try {
-      const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : raw === 'out' ? 'out' : 'ip';
+      return parseWorkStatus(localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY));
     } catch { return 'ip'; }
   }
 
@@ -449,7 +483,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  back to In progress so the pane never renders an empty/absent tab. */
   private readonly _rightTabGuard = effect(() => {
     if (!this.showPaymentsDue() && this._rightTab() === 'billing') {
-      this._rightTab.set('ip');
+      this._rightTab.set(null);
     }
   });
 
@@ -459,8 +493,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out'>(() =>
-    this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out' | 'all'>(() =>
+    this.expandedPane() === 'appt' ? this.leftTab() : (this.rightTab() ?? 'all'));
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
@@ -468,6 +502,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
       case 'out': return 'Outsourced';
+      case 'all': return 'All statuses';
       default: return 'Completed';
     }
   });
@@ -475,9 +510,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);
-    } else {
+    } else if (this._expandedPane() !== 'work') {
+      // Coming from the appointments list: show this status (never toggle it off).
       this._expandedPane.set('work');
-      this.setRightTab(v);
+      this.applyRightTab(v);
+    } else {
+      this.setRightTab(v);   // same chip again ⇒ all statuses
     }
     this.mobileListOpen.set(false);
   }
@@ -573,6 +611,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
+  /** FIRST-load skeletons for the lists (ND-PATTERN "Loading feedback"):
+   *  their shape instead of an "All caught up" flash before the data lands.
+   *  Later polls / range changes keep the rows on screen. */
+  private readonly apptHold = createLoadHold(true);
+  private readonly homeHold = createLoadHold(true);
+  private readonly ordersHold = createLoadHold(true);
+  /** Payments due (outstanding bills) — first answer. */
+  private readonly billsHold = createLoadHold(true);
+  readonly billsSkel = this.billsHold.active;
+  readonly apptSkel = this.apptHold.active;
+  readonly homeSkel = this.homeHold.active;
+  readonly ordersSkel = this.ordersHold.active;
   
   readonly homeCollections = computed(() => {
     return this._homeCollections().filter(a => this.inApptRange(a.appointmentDate));
@@ -767,11 +817,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** "Completed" — orders that are BOTH report-generated (validated /
    *  delivered / completed) AND payment-completed (no outstanding balance).
    *  Drives the third FD pane next to In Progress so reception can see at a
-   *  glance which patients are ready to hand over. Sorted ascending by
-   *  creation time so the oldest ready-for-handover sits on top. */
+   *  glance which patients are ready to hand over. Sorted by the same
+   *  business-day → #N ledger order as every other tab of this list (owner,
+   *  2026-10-02 — `sortByDailySerial`, work-merge.ts), not a bare creation-
+   *  time compare. */
   readonly completedOrders = computed(() => {
     const unpaid = this._unpaidOrderIds();
-    return this._orders().filter(o => {
+    const filtered = this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
@@ -783,7 +835,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       // ListTodayAsync), so don't gate completed work by creation date in the
       // today view; only constrain by creation date for historical ranges.
       return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
-    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+    return sortByDailySerial(filtered);
   });
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
@@ -801,27 +854,143 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const map = this._billingOrdersMap();
     const ordersToday = this._orders();
     const pendingBills = this._bills().filter(b => b.balance > 0);
+    const bounds = this.workBounds(); const feed = this._feedIds();
     const list: Order[] = [];
     for (const b of pendingBills) {
       let o = ordersToday.find(ord => ord.id === b.orderId);
       if (!o) {
         o = map[b.orderId];
       }
-      if (o) {
+      // The date range applies to every status (work-status-filter.ts).
+      if (o && inWorkWindow(o.createdAt, bounds, feed.has(o.id))) {
         list.push(o);
       }
     }
-    return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    // Same business-day → #N ledger order as every other tab (owner,
+    // 2026-10-02 — sortByDailySerial, work-merge.ts).
+    return sortByDailySerial(list);
   });
+  /** Ids of the orders in the current work feed (today's feed / the range). */
+  private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
+  /** The Outsourced list follows the same date range (its own tube rows);
+   *  while the merged ("no chip") view is showing, also keeps the WHOLE
+   *  window fully loaded (merged-outsourced-loader.ts — see there for why
+   *  and exactly when it re-fires: init, date-range change, refresh, chip
+   *  toggle). */
+  private readonly _outsourcedWindow = wireMergedOutsourcedLoader(
+    this._rightTab, this.workBounds, this._feedIds, this.outsourcing,
+  );
+  private readonly _clearOutsourcedWindow = inject(DestroyRef).onDestroy(() => this.outsourcing.dateWindow.set(null));
+  /** "All statuses" (no chip on): the same combined list, deduped — an
+   *  in-progress order with a balance is listed once, under In progress. */
+  readonly shownPaymentsDueOnly = computed(() => {
+    if (this._rightTab() !== null) return this.shownPaymentsDue();
+    const ip = new Set(this.shownInProgress().map(o => o.id));
+    return this.shownPaymentsDue().filter(o => !ip.has(o.id));
+  });
+  /** Nothing at all for the chosen dates (the all-statuses empty state). */
+  readonly allStatusesEmpty = computed(() =>
+    this.visibleOrders().length === 0 && this.draftOrders().length === 0
+    && this.completedOrders().length === 0
+    && (!this.showPaymentsDue() || this.paymentsDueOrders().length === 0)
+    && this.outsourcing.visible().length === 0);
 
   /** The active list, narrowed by the work card's header search. */
   readonly shownDrafts = computed(() => {
     const q = this.workQuery();
     return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q));
   });
-  readonly shownInProgress = computed(() => filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()));
+  /** Same business-day → #N ledger order as every other tab of this list
+   *  (owner, 2026-10-02 — `sortByDailySerial`, work-merge.ts): `visibleOrders`
+   *  itself carries no particular order (whatever the feed returned). */
+  readonly shownInProgress = computed(() =>
+    sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery())));
   readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
   readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+
+  // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
+  // With every status chip off, the four feeds used to render as four
+  // separate sections (an order could repeat across them). Now: ONE list,
+  // each order once, by the day's arrival order (#1, #2 … — work-merge.ts).
+  // A chip still filters to a single status exactly as before — this signal
+  // is only consulted when `rightTab()` is null.
+  readonly WORK_STATUS_LABEL = WORK_STATUS_LABEL;
+  /** The merge itself (grouping outsourced tubes by order, annotating or
+   *  synthesizing a row) is pulled out to `buildFrontdeskMergedWork`
+   *  (outsourced-view.ts) — pure and unit-tested on its own, without this
+   *  (huge, heavily-injected) component. `windowed()` — not `visible()` —
+   *  because the merged list needs BOTH outsourced statuses (an order that
+   *  is only outsourced must still get a row once its tube is completed),
+   *  never just whichever status the dedicated Outsourced tab's own filter
+   *  happens to be showing. The work card's free-text search is applied to
+   *  the tubes HERE (P1-6) — same as shownInProgress / shownCompleted /
+   *  shownPaymentsDue already do for orders — so a search never synthesizes
+   *  a row for an unrelated outsourced-only order, and "No matches" still
+   *  shows when the query clears every feed.
+   *
+   *  `shownPaymentsDue()` — NOT `shownPaymentsDueOnly()` — feeds the
+   *  'billing' bucket: `shownPaymentsDueOnly()` drops an order that's ALSO
+   *  in-progress (it existed for the OLD sectioned no-chip view, where that
+   *  dedup had to happen by hand). Feeding it here silently dropped the
+   *  'billing' status off an in-progress-with-a-balance order — it fell
+   *  back to its real order.status (e.g. "Billed", green) with no
+   *  payment-due cue at all. mergeWorkRows already does the union/dedup
+   *  properly (precedence puts 'billing' ahead of 'ip', with 'In progress'
+   *  as the secondary badge) — exactly what the merged list is FOR. */
+  readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
+    if (this._rightTab() !== null) return [];
+    const tubes = filterOutsourced(this.outsourcing.windowed(), { query: this.workQuery() });
+    return buildFrontdeskMergedWork(this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDue(), tubes);
+  });
+  /** The merged row's status text for everything but Payments due (the
+   *  template renders the balance itself via the `inr` pipe, as the
+   *  single-status Payments due rows already do) — the order's own
+   *  detailed status for In progress / Completed, a fixed label for
+   *  Outsourced (a tube status, not an order one), and a fixed label for a
+   *  SYNTHETIC Completed row (its fake order.status is a stand-in, never
+   *  read through effectiveStatusLabel — see syntheticOrderFromOutsourcedTubes). */
+  mergedStatusText(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'out') return 'Outsourced';
+    if (row.primary === 'done' && row.source === 'synthetic') return 'Completed';
+    return this.effectiveStatusLabel(row.order);
+  }
+  /** Dot colour for the merged row: Payments due / Outsourced read amber
+   *  (the same "needs the desk" amber Payments due already uses); a
+   *  SYNTHETIC row (no real order state to read a tone from) is green once
+   *  its only status is 'done' (every outsourced tube completed), amber for
+   *  'out' (pending) — covered by the first check since synthetic never
+   *  carries 'billing'/'ip'. Everything else (a real order) uses its own
+   *  tone (rowTone). */
+  mergedTone(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'billing' || row.primary === 'out') return 'amber';
+    if (row.source === 'synthetic') return 'green'; // only reachable for primary 'done' here
+    return this.rowTone(row.order);
+  }
+  /** The order's outsourced tubes within the window, for inline actions
+   *  (pf-outsourced-actions, one per tube) — 'out' carries every tube
+   *  (pending + completed) for an order with at least one pending tube;
+   *  'done' carries the (all-completed) tubes for an outsourced-only order
+   *  whose tubes are all done (buildFrontdeskMergedWork). Empty for a row
+   *  with neither. */
+  outsourcedTubesFor(row: MergedWorkRow<Order>): OutsourcedTube[] {
+    return (row.annotateData.out as OutsourcedTube[] | undefined)
+      ?? (row.annotateData.done as OutsourcedTube[] | undefined)
+      ?? [];
+  }
+  /** Opens the drawer for a merged row. A SYNTHETIC row's `order` is a
+   *  display-only stand-in (no real status/samples) — opening it directly
+   *  would show nonsense like "not collected" (P2-10), so fetch the REAL
+   *  order by id first and open that instead. */
+  openMergedRow(row: MergedWorkRow<Order>) {
+    if (this.swallowClick) { this.swallowClick = false; return; }
+    if (row.source === 'synthetic') {
+      this.api.get<Order>(`/api/orders/${row.order.id}`).subscribe({
+        next: full => { if (full) this.openOrder(full); },
+      });
+      return;
+    }
+    this.openOrder(row.order);
+  }
 
   getBillBalance(orderId: string): number {
     return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;
@@ -879,7 +1048,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (b) {
       this.selectedBill.set(b);
     } else {
-      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).subscribe({
+      // The drawer is already open with its skeleton; if the bill never
+      // arrives it closes again (it used to simply never appear).
+      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).pipe(finalize(() => {
+        if (!this.selectedBill() && this.selectedBillingOrder()?.id === o.id) this.selectedBillingOrder.set(null);
+      })).subscribe({
         next: bill => this.selectedBill.set(bill)
       });
     }
@@ -1210,7 +1383,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Fetch Appointments based on apptBounds
     const apptB = this.apptBounds();
     if (apptB.isToday) {
-      this.api.get<Appointment[]>('/api/appointments/today').subscribe({
+      this.api.get<Appointment[]>('/api/appointments/today').pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
       });
     } else {
@@ -1218,7 +1391,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(apptB.start).toISOString(),
         to:   new Date(apptB.end).toISOString()
       });
-      this.api.get<Appointment[]>(`/api/appointments?${params}`).subscribe({
+      this.api.get<Appointment[]>(`/api/appointments?${params}`).pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
         error: () => this._appointments.set([])
       });
@@ -1239,7 +1412,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(workB.start).toISOString(),
         to:   new Date(workB.end).toISOString()
       });
-      this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
+      // Summary view: the list never shows line results (the drawer reads them by id).
+      params.set('view', 'summary');
+      this.api.get<Order[]>(`/api/orders/range?${params}`).pipe(finalize(() => this.ordersHold.done())).subscribe({
         next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
         error: () => this._orders.set([])
       });
@@ -1259,22 +1434,29 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         const bills = [...(r?.due ?? []), ...(r?.refundsOwed ?? [])];
         this._bills.set(bills);
         this.fetchOrdersForBills(bills);
+        this.billsHold.done();
       },
-      error: () => { /* endpoint may not exist; silently ignore */ }
+      error: () => { this.billsHold.done(); /* endpoint may not exist; silently ignore */ }
     });
 
-    // Fetch open home-collection requests for the Home Collection tab.
-    this.api.get<Appointment[]>('/api/home-collection/all').subscribe({
-      next: l => this._homeCollections.set(l ?? []),
-      error: () => this._homeCollections.set([])
-    });
+    // Fetch open home-collection requests for the Home Collection tab — only
+    // while home collection is on (the API answers 403 module_disabled else).
+    if (this.showHome()) {
+      this.api.get<Appointment[]>('/api/home-collection/all').pipe(finalize(() => this.homeHold.done())).subscribe({
+        next: l => this._homeCollections.set(l ?? []),
+        error: () => this._homeCollections.set([])
+      });
+    } else {
+      this._homeCollections.set([]);
+      this.homeHold.done();
+    }
 
     // Test catalogue (once) — used to show requested-test names in the
     // home-collection detail. Only for users the /api/tests read admits
     // (view_test | manage_tests | create_order): a Billing Counter lacks all
     // three, got a 403, and — the list staying empty — re-sent it every poll.
     if (this._tests().length === 0 && ['view_test', 'manage_tests', 'create_order'].some(c => this.auth.hasPermission(c))) {
-      this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
+      this.api.get<Test[]>(testListUrl()).subscribe({ next: l => this._tests.set(l ?? []) });
     }
   }
 
@@ -1284,7 +1466,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (this._ordersEtag) headers['If-None-Match'] = `"${this._ordersEtag}"`;
       const token = await this.auth.getAccessToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today`, {
+      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today?view=summary`, {
         headers,
         observe: 'response',
         // Tell HttpClient that 304 is a successful (non-error) response — by
@@ -1313,6 +1495,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.lastUpdated.set(Date.now());
     } catch {
       /* network blip — leave the existing list intact */
+    } finally {
+      this.ordersHold.done();
     }
   }
 
@@ -1673,12 +1857,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/patients', o.patientId]);
   }
   newOrderFor(p: Patient) {
-    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
     void this.orderEntry.startNewOrder(p.id);
   }
-  /** The "Create order" (+) button — no patient preselected. */
+  /** The "Create order" (+) button — no patient preselected. Always LAB. */
   newOrder() {
     void this.orderEntry.startNewOrder();
+  }
+  /** OPD dark build: the stethoscope icon next to the cart — only rendered
+   *  when {@link OpdGateService.visible} is true. */
+  newConsultFor(p: Patient) {
+    void this.orderEntry.startConsult(p.id);
+  }
+  newConsult() {
+    void this.orderEntry.startConsult();
   }
   bookAppointmentFor(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
@@ -1708,7 +1899,28 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   openOrder(o: Order) {
     this.sampleIdsOpen.set(false);
     this._selectedOrder.set(o);
+    this.loadDrawerDetail(o);
   }
+
+  /** The day feed is the summary view (no line results / test parameters —
+   *  DB optimisation phase 3), so the drawer's Preliminary report reads the
+   *  order by id when it opens — only when a tube is fully validated, the one
+   *  case the panel shows anything. */
+  private readonly _drawerDetail = signal<Order | null>(null);
+  private loadDrawerDetail(o: Order) {
+    this._drawerDetail.set(null);
+    if (!(o.samples ?? []).some(s => this.isSampleValidated(s))) return;
+    this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
+      next: full => { if (full && this._selectedOrder()?.id === o.id) this._drawerDetail.set(full); },
+      error: () => { /* the panel simply stays hidden */ },
+    });
+  }
+  /** Preliminary panel rows for the open drawer (from the by-id read). */
+  readonly drawerPrelim = computed(() => {
+    const so = this._selectedOrder();
+    const d = this._drawerDetail();
+    return so && d && d.id === so.id ? this.validatedSamples(d) : [];
+  });
   toggleSampleIds() { this.sampleIdsOpen.update(open => !open); }
   /** Build a fresh order pre-populated with the tests from a prior order.
    *  Routes through order-create with `?fromOrderId=…` which triggers
@@ -1757,6 +1969,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _reprintOrder = signal<Order | null>(null);
   readonly reprintOrder = this._reprintOrder.asReadonly();
   private readonly _reprintLoading = signal(false);
+  /** The order whose labels are being reprinted (only that row's button shows busy). */
+  readonly reprintOrderId = signal<string | null>(null);
   readonly reprintLoading = this._reprintLoading.asReadonly();
 
   /** Reprint the tube labels straight from the landing. Fetches the full
@@ -1766,6 +1980,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  label-only print path — no bill required, no route change. */
   reprintLabels(o: Order) {
     if (this._reprintLoading()) return;
+    this.reprintOrderId.set(o.id);
     this._reprintLoading.set(true);
     this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
       next: full => {
@@ -1774,15 +1989,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this.toasts.warning('No samples on this order to print');
           return;
         }
-        this._reprintOrder.set(full);
-        // Give the off-screen label cards a beat to paint their barcodes
-        // (JsBarcode is sync but QRCode.toCanvas is async) before printing.
-        setTimeout(() => {
-          printLabelOnly();
-          // Keep the sheet mounted until the print dialog has definitely
-          // consumed it (print() isn't blocking on every platform).
-          setTimeout(() => this._reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this._reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this._reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => {
         this._reprintLoading.set(false);
@@ -1935,7 +2157,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined,
           email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
         },
         action: 'blob',
       });
@@ -2379,7 +2601,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       and to count how many depts are ready in a partial state. */
   isSampleValidated(s: { tests?: Array<{ status: string }> | null }): boolean {
     const tests = s.tests ?? [];
-    return tests.length > 0 && tests.every(t => t.status === 'validated');
+    // Not reported lines are closed (never print); at least one value signed.
+    return tests.length > 0 && tests.every(t => isSignedOrSkipped(t.status)) && tests.some(t => t.status === 'validated');
   }
   /** Glyph for a tube — uses isSampleValidated to upgrade ✓ when the
       whole tube is dept-validated, otherwise falls back to status-glyph. */
@@ -2446,8 +2669,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       s.status === 'dispatched' || s.status === 'in_transit'
       || s.status === 'received' || s.status === 'processing');
   }
+  /** Row whose Dispatch request is in flight. */
+  readonly dispatchingId = signal<string | null>(null);
   markDispatched(o: Order) {
-    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+    if (this.dispatchingId() === o.id) return;
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).pipe(busyIdWhile(this.dispatchingId, o.id)).subscribe({
       next: r => {
         this.toasts.success(`${r.dispatched} tube${r.dispatched === 1 ? '' : 's'} dispatched to lab`);
         // Optimistic local update so the badge flips immediately.
@@ -2483,13 +2709,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const o = this.paymentsDueOrders().find(x => x.id === b.orderId);
     this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
+  /** Appointment whose Check-in request is in flight. */
+  readonly checkingInId = signal<string | null>(null);
   checkIn(a: Appointment) {
+    if (this.checkingInId() === a.id) return;
     // Check-in flips the appointment to checked-in but does NOT auto-create an
     // order. Reception always lands on a FRESH order at the desk with the
     // pre-booked tests PRE-FILLED (?patientId=&appointmentId= preloads the
     // appointment's TestIds) — they review/change the tests, then Create + bill
     // + collect payment exactly like a manual walk-in.
-    this.api.patch(`/api/appointments/${a.id}/checkin`).subscribe({
+    this.api.patch(`/api/appointments/${a.id}/checkin`).pipe(busyIdWhile(this.checkingInId, a.id)).subscribe({
       next: () => {
         const name = a.patient?.displayName ?? 'Patient';
         this.toasts.success(`${name} checked in — review & create the order`);
@@ -2707,10 +2936,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly _downloadingReport = signal<string | null>(null);
   readonly downloadingReport = this._downloadingReport.asReadonly();
 
-  /** Pull the latest final report for the order and render it as a
-   *  client-side PDF. Mirrors the invoice download — no server PDF
-   *  endpoint required, jsPDF builds the document from the snapshot
-   *  the backend already stores on Report.Data. */
+  /** Download the order's live report — its STORED PDF (owner rule
+   *  2026-09-29: the report is the file in blob storage). A report with
+   *  nothing stored yet is rendered ONCE from its saved snapshot and stored. */
   async downloadReport(o: Order) {
     if (this._downloadingReport()) return;
     this._downloadingReport.set(o.id);
@@ -2722,8 +2950,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-      generateReportPdf(await this.reportInput(report));
+      const blob = await this.storedReport(report);
+      const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+      const shortId = report.id.replace(/-/g, '').slice(-8).toUpperCase();
+      downloadPdfBlob(blob, `${report.type === 'partial' ? 'PRELIM' : 'REPORT'}-${shortId}.pdf`);
     } catch (err) {
       console.error('[fd] download report failed', err);
       const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
@@ -2732,21 +2962,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._downloadingReport.set(null);
     }
   }
-  /** The full PDF input for a stored report — the ONE recipe shared by every
-   *  report entry point (template + layouts incl. PROFILE layouts + images +
-   *  trendograms). Throws rather than rendering the product-default design. */
-  private async reportInput(report: Report) {
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import('../../../core/services/report-layout.service'),
-      import('../../../core/services/platform.service'),
-      import('../../../shared/utils/report-render-input'),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    return prepareReportPdfInput(report, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: this.injector.get(PlatformService).getApiUrl(),
-    });
+  /** THE report PDF (stored; rendered + stored once from the snapshot). */
+  private async storedReport(report: Report): Promise<Blob> {
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(report, this.api, this.injector);
   }
 
   /** Count of staff with status === 'on_duty' for the button badge. */
@@ -2810,10 +3029,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   /** Esc clears the selection (when no drawer / modal is on top). */
-  @HostListener('document:keydown.escape')
-  onEscClearSelection() {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscClearSelection(ev?: Event) {
     if (this.workSel.count() === 0) return;
     if (this.selectedOrder() || this.activePackage() || this.selectedHc() || this.selectedBill()) return;
+    // Used → preventDefault, so the desktop app's Esc-leaves-full-screen
+    // rule (desktop-fullscreen-esc.ts) knows this Esc was taken.
+    ev?.preventDefault();
     this.workSel.clear();
   }
 
@@ -2830,12 +3052,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** Plain bulk dispatch — flip every selected order's tubes to
    *  dispatched, no package wrapper. */
+  /** Which selection-bar action is in flight. */
+  readonly bulkBusy = signal<'dispatch' | 'package' | null>(null);
   bulkDispatch() {
+    if (this.bulkBusy()) return;
     const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Select orders that have collected tubes ready to dispatch.'); return; }
     this.api.post<{ ordersTouched: number; samplesDispatched: number }>(
       '/api/orders/bulk-dispatch', { orderIds: ids }
-    ).subscribe({
+    ).pipe(busyIdWhile(this.bulkBusy, 'dispatch')).subscribe({
       next: res => {
         this.toasts.success(`Dispatched ${res.samplesDispatched} sample${res.samplesDispatched === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}`);
         this.workSel.clear();
@@ -2863,9 +3088,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  show the modal with QR + code so reception can hand the lab
    *  one scannable token. */
   createDispatchPackage() {
+    if (this.bulkBusy()) return;
     const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Pick at least one in-progress order with collected tubes.'); return; }
-    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).subscribe({
+    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).pipe(busyIdWhile(this.bulkBusy, 'package')).subscribe({
       next: pkg => {
         this._activePackage.set(pkg);
         this.toasts.success(`Package ${pkg.code} created with ${pkg.orderCount} order${pkg.orderCount === 1 ? '' : 's'}`);

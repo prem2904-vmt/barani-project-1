@@ -13,6 +13,11 @@ import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-cata
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { USER_FORM_STYLES } from './user-form.styles';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { OPD_PERMISSION_CODES } from '../../opd/shared/opd-permissions';
 
 /** A permission joined with its plain-language catalog entry. */
 interface PermRow {
@@ -50,6 +55,9 @@ interface PermGroupView {
     ScreenHeaderComponent,
     TouchButtonComponent,
     HeroBandComponent,
+    BusyDirective,
+    SkeletonFormComponent,
+    SkeletonCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -60,7 +68,7 @@ interface PermGroupView {
         <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=roles'" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="saving()" (click)="save()"
+                    [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
                     [attr.aria-label]="saving() ? 'Saving' : (editing()?.id ? 'Save' : 'Create role')"
                     [title]="editing()?.id ? 'Save' : 'Create role'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
@@ -86,12 +94,23 @@ interface PermGroupView {
         [title]="heading()"
         parentRoute="/admin/users?tab=roles"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </pf-screen-header>
 
       <div class="pf-band-body">
+        @if (recordSkeleton()) {
+          <!-- Opening the role editor: its own shape until the role + the
+               permission catalogue land (ND-PATTERN "Loading feedback") —
+               never the create form flashing before an existing role. -->
+          <div class="pf-uf-body pf-re-loading">
+            <div class="pf-uf-grid2">
+              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-form [fields]="2" [cols]="1" label="Loading role…"></pf-skeleton-form></div></section>
+              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-card [lines]="6" [boxed]="false" label="Loading permissions…"></pf-skeleton-card></div></section>
+            </div>
+          </div>
+        } @else {
         <div class="pf-uf-body">
           <div class="pf-uf-grid2">
             @if (!editing()?.id) {
@@ -111,17 +130,20 @@ interface PermGroupView {
                     @if (nameError()) { <p class="pf-uf-err">{{ nameError() }}</p> }
                   </label>
                   <!-- Role type (OPD build): 'Doctor' reveals the doctor-details
-                       section in Create User for anyone given this role. -->
-                  <div class="nd-field">
-                    <span class="nd-field__lbl">Role type</span>
-                    <span class="nd-seg re-type" role="radiogroup" aria-label="Role type">
-                      @for (o of roleTypeOptions; track o.value) {
-                        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
-                                (click)="roleType.set($any(o.value))">{{ o.label }}</button>
-                      }
-                    </span>
-                    <p class="nd-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
-                  </div>
+                       section in Create User. OPD dark build: shown only while the
+                       OPD gate is open (a new role is 'general' otherwise, as today). -->
+                  @if (opdGate.visible()) {
+                    <div class="nd-field">
+                      <span class="nd-field__lbl">Role type</span>
+                      <span class="nd-seg re-type" role="radiogroup" aria-label="Role type">
+                        @for (o of roleTypeOptions; track o.value) {
+                          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
+                                  (click)="roleType.set($any(o.value))">{{ o.label }}</button>
+                        }
+                      </span>
+                      <p class="nd-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
+                    </div>
+                  }
                 </div>
               </section>
             } @else {
@@ -234,6 +256,7 @@ interface PermGroupView {
             </div>
           </section>
         </div>
+        }
       </div>
     </section>
   `,
@@ -297,11 +320,16 @@ export class RoleEditorComponent implements OnInit {
   private readonly navBack = inject(NavBackService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly theme = inject(ThemeService);
+  /** OPD dark build: Doctor role type + OPD permission codes only when OPD is visible. */
+  protected readonly opdGate = inject(OpdGateService);
 
   private readonly _editing = signal<Role | null>(null);
   private readonly _permissions = signal<Permission[]>([]);
   private readonly _grantedIds = signal<Set<string>>(new Set());
   private readonly _saving = signal(false);
+  /** Opening the editor: skeleton until its data lands (held, no flash). */
+  private readonly recordHold = createLoadHold(true);
+  readonly recordSkeleton = this.recordHold.active;
   private readonly _allRoles = signal<Role[]>([]);
   private readonly _nameError = signal<string | null>(null);
 
@@ -391,7 +419,12 @@ export class RoleEditorComponent implements OnInit {
       .map(g => RoleEditorComponent.CHIP_LABELS[g.key] ?? g.label);
   });
 
-  readonly grantedCount = computed(() => this._grantedIds().size);
+  /** Granted among the LISTED permissions (hidden OPD codes stay granted —
+   *  saves send every granted id — but are not counted while OPD is dark). */
+  readonly grantedCount = computed(() => {
+    const g = this._grantedIds();
+    return this._permissions().filter(p => g.has(p.id)).length;
+  });
 
   ngOnInit() {
     const backHandler = () => {
@@ -403,22 +436,31 @@ export class RoleEditorComponent implements OnInit {
       this.navBack.clearBackInterceptor(backHandler);
     });
 
+    const id = this.route.snapshot.paramMap.get('id');
+    // First load: permissions + roles (+ this role's grants) — then the form.
+    let left = id ? 3 : 2;
+    const landed = () => { if (--left === 0) this.recordHold.done(); };
+    this.destroyRef.onDestroy(() => this.recordHold.cancel());
+
     this.api.get<Permission[]>('/api/permissions').subscribe({
-      next: l => this._permissions.set(l ?? [])
+      next: l => { this._permissions.set((l ?? []).filter(p => this.opdGate.visible() || !OPD_PERMISSION_CODES.has(p.code))); landed(); },
+      error: () => landed(),
     });
 
-    const id = this.route.snapshot.paramMap.get('id');
     // Load the full roles list always — for edit it identifies the role, and for
     // create it lets us reject a duplicate name before hitting the server.
     this.api.get<Role[]>('/api/roles/').subscribe({
       next: roles => {
         this._allRoles.set(roles ?? []);
         if (id) this._editing.set((roles ?? []).find(x => x.id === id) ?? null);
-      }
+        landed();
+      },
+      error: () => landed(),
     });
     if (id) {
       this.api.get<string[]>(`/api/roles/${id}/permissions`).subscribe({
-        next: ids => this._grantedIds.set(new Set(ids ?? []))
+        next: ids => { this._grantedIds.set(new Set(ids ?? [])); landed(); },
+        error: () => landed(),
       });
     }
   }

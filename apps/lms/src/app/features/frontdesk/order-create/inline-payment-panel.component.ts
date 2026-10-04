@@ -10,6 +10,7 @@ import {
 } from "@angular/core";
 import { ApiService } from "../../../core/services/api.service";
 import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
+import { BusyDirective } from "../../../shared/directives/busy.directive";
 import { UpiPayee, upiLink, upiQrDataUrl } from "../../../shared/utils/upi";
 
 export type PayMode = "upi" | "card" | "cash" | "wallet" | "split" | "later";
@@ -58,7 +59,7 @@ interface MethodDef {
 @Component({
   selector: "pf-inline-payment-panel",
   standalone: true,
-  imports: [CurrencyInrPipe],
+  imports: [CurrencyInrPipe, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-ipp">
@@ -250,7 +251,8 @@ interface MethodDef {
       }
 
       @if (!externalFooter()) {
-        <button type="button" class="pf-ipp__confirm" [disabled]="confirmDisabled()" (click)="emit()">
+        <button type="button" class="pf-ipp__confirm" [disabled]="confirmDisabled()"
+          [pfBusy]="busy()" pfBusyLabel="Confirming payment…" (click)="emit()">
           {{ confirmLabel() }}
         </button>
       }

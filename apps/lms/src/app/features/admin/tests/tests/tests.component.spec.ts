@@ -58,6 +58,24 @@ const hb = (over: any = {}) => ({
 });
 const col = (c: any, id: string) => c.colDefs().find((d: any) => (d.colId ?? d.field) === id);
 
+describe('Test Master grid — reads the summary view (DB optimisation phase 2)', () => {
+  it('loads GET /api/tests/?status=all&view=summary (no full parameter blobs)', () => {
+    const { api } = make([hb()]);
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
+  });
+
+  it('a summary row (trimmed parameters: first value only) still fills the unit / range cells', () => {
+    const multi = hb({
+      derivedUnit: null, derivedReferenceRange: null,
+      // What the server's summary sends for a 2-value test: the FIRST value's unit / bands only.
+      parameters: JSON.stringify({ parameters: [{ unit: 'g/dL', referenceRanges: [{ min: 12, max: 17 }] }] }),
+    });
+    const { c } = make([multi]);
+    expect(col(c, 'unit').valueGetter({ data: multi })).toBe('g/dL');
+    expect(String(col(c, 'referenceRange').valueGetter({ data: multi }))).toContain('12');
+  });
+});
+
 describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
   it('individual view exposes an EDITABLE price (pricing-table value); unit is derived, read-only', () => {
     const { c } = make([hb()]);
@@ -154,13 +172,109 @@ describe('Test Master grid — departments (CURRENT)', () => {
     api.get.mockClear();
     await c.toggleDept(c.departments()[0]);
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/departments/d1', { isActive: false });
-    expect(api.get).toHaveBeenCalledWith('/api/tests/');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
   });
 
   it('toggleTestActive PATCHes the test row isActive', () => {
     const { c, api } = make([hb()]);
     c.toggleTestActive({ id: 't1', name: 'Hb', isActive: true });
     expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { isActive: false });
+  });
+});
+
+/**
+ * Owner bug 2026-09-28 — BIO054 Urea switched off, then "vanished". Reference
+ * mode stores the switch as "not offered" (the master row stays isActive), so a
+ * grid that read only isActive dropped the row on the toggle and, after a
+ * reload, showed it as ON with an Inactive count of 0. The switch now reads ONE
+ * state (isEnabled = isActive AND offered) and an inactive test never leaves the list.
+ */
+describe('Test Master grid — Active/Inactive switch + status filter', () => {
+  // What the real reference-mode server answers for a switched-off master test.
+  const urea = (over: any = {}) => hb({ id: 'urea', name: 'Urea', testCode: 'BIO054', catalogMode: 'reference',
+    department: { id: 'd2', name: 'Biochemistry' }, ...over });
+  const offRef = () => urea({ isActive: true, isOffered: false, isEnabled: false });
+  const ids = (c: any) => c.rowData().map((r: any) => r.id);
+
+  it('loads EVERY test (status=all), switched-off ones included', () => {
+    const { api } = make([hb()]);
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
+  });
+
+  it('default filter is All: a reference-mode "not offered" test stays listed, switch OFF, greyed, Inactive chip', () => {
+    const { c } = make([hb(), offRef()]);
+    expect(c.statusFilter()).toBe('all');
+    expect(ids(c)).toEqual(['t1', 'urea']);
+    expect(c.inactiveCount()).toBe(1);
+    const row = c.rowData().find((r: any) => r.id === 'urea');
+    const sw = col(c, 'status').cellRenderer({ data: row, context: {} }).querySelector('button[role=switch]');
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(col(c, 'status').valueGetter({ data: row })).toBe('Inactive');
+    expect(c.getRowClass({ data: row })).toBe('pf-tm-row--off');
+    expect(c.getRowClass({ data: c.rowData()[0] })).toBeUndefined();
+    const name = col(c, 'name').cellRenderer({ data: row, value: row.name });
+    expect(name.textContent).toContain('Inactive');
+  });
+
+  it('older payloads without isEnabled read the same rule (isActive AND offered)', () => {
+    const { c } = make([hb(), urea({ isActive: true, isOffered: false }), hb({ id: 'old', isActive: false })]);
+    expect(c.inactiveCount()).toBe(2);
+  });
+
+  it('status filter: Active / Inactive / All, with counts', () => {
+    const { c } = make([hb(), offRef()]);
+    expect(c.statusOptions().map((o: any) => [o.value, o.count])).toEqual([['all', 2], ['active', 1], ['inactive', 1]]);
+    c.statusFilter.set('inactive');
+    expect(ids(c)).toEqual(['urea']);
+    c.statusFilter.set('active');
+    expect(ids(c)).toEqual(['t1']);
+    c.statusFilter.set('all');
+    expect(ids(c)).toEqual(['t1', 'urea']);
+  });
+
+  it('switching OFF keeps the row in the list (greyed), never drops it', () => {
+    const { c, api } = make([hb(), urea({ isOffered: true, isEnabled: true })]);
+    api.patch.mockReturnValue(of(offRef()));
+    c.toggleTestActive(c.rowData().find((r: any) => r.id === 'urea'));
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/urea', { isActive: false });
+    expect(ids(c)).toEqual(['t1', 'urea']);
+    expect(c.getRowClass({ data: c.rowData()[1] })).toBe('pf-tm-row--off');
+    expect(c.inactiveCount()).toBe(1);
+  });
+
+  it('re-enable from the Inactive filter: PATCH isActive=true, the row is active again', () => {
+    const { c, api } = make([hb(), offRef()]);
+    c.statusFilter.set('inactive');
+    api.patch.mockReturnValue(of(urea({ isActive: true, isOffered: true, isEnabled: true })));
+    c.toggleTestActive(c.rowData()[0]);
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/urea', { isActive: true });
+    expect(c.inactiveCount()).toBe(0);
+    c.statusFilter.set('all');
+    expect(c.getRowClass({ data: c.rowData()[1] })).toBeUndefined();
+  });
+
+  it('a reload keeps the switched-off row (server list carries it flagged)', () => {
+    const { c, api } = make([hb(), urea({ isOffered: true, isEnabled: true })]);
+    api.patch.mockReturnValue(of(offRef()));
+    c.toggleTestActive(c.rowData()[1]);
+    api.get.mockImplementation((url: string) => of(url.startsWith('/api/tests') ? [hb(), offRef()] : []));
+    c.loadTests();
+    expect(ids(c)).toEqual(['t1', 'urea']);
+    expect(c.inactiveCount()).toBe(1);
+  });
+
+  it('a failed switch restores the row exactly', () => {
+    const { c, api, toasts } = make([hb(), urea({ isOffered: true, isEnabled: true })]);
+    api.patch.mockReturnValue(throwError(() => new Error('boom')));
+    c.toggleTestActive(c.rowData()[1]);
+    expect(c.inactiveCount()).toBe(0);
+    expect(toasts.error).toHaveBeenCalled();
+  });
+
+  it('clone mode: the switch reads the row isActive', () => {
+    const { c } = make([hb({ catalogMode: 'clone', isActive: false, isOffered: true })]);
+    expect(c.inactiveCount()).toBe(1);
+    expect(ids(c)).toEqual(['t1']);
   });
 });
 
@@ -225,14 +339,14 @@ describe('Test Master grid — pricing table (phase 2)', () => {
     expect(pricing.save).not.toHaveBeenCalled();
   });
 
-  it('a test not offered here stays listed, greyed, with a "Not offered here" tag', () => {
+  it('a test not offered here IS switched off: stays listed, greyed, with an "Inactive" tag', () => {
     const { c } = make([hb({ isOffered: false }), hb({ id: 't2', testCode: 'X2' })]);
     expect(c.rowData().map((r: any) => r.id)).toEqual(['t1', 't2']);
     const off = c.rowData()[0];
-    expect(c.getRowStyle({ data: off })).toEqual({ opacity: '0.55' });
-    expect(c.getRowStyle({ data: c.rowData()[1] })).toBeUndefined();
+    expect(c.getRowClass({ data: off })).toBe('pf-tm-row--off');
+    expect(c.getRowClass({ data: c.rowData()[1] })).toBeUndefined();
     const nameCell = col(c, 'name').cellRenderer({ data: off, value: off.name });
-    expect(nameCell.textContent).toContain('Not offered here');
+    expect(nameCell.textContent).toContain('Inactive');
   });
 
   it('the Pricing tab swaps the grid for the pricing table', () => {
@@ -283,7 +397,7 @@ describe('Test Master grid — copy-on-write (phases 3 + 5)', () => {
     await c.revertToMaster(hb({ origin: 'customised' }));
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: 'Revert to master' }));
     expect(api.post).toHaveBeenCalledWith('/api/tests/t1/revert-to-master', {});
-    expect(api.get).toHaveBeenCalledWith('/api/tests/');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
   });
 
   it('clone mode: no revert button (the lab holds its own copy; nothing to revert to)', () => {
@@ -376,5 +490,38 @@ describe('Test Master grid — column sizing: slim actions, wrap instead of crop
     expect(d.tooltipValueGetter).toBeTruthy();
     const name = d.cellRenderer({ value: 'Liver Function Test with a long name', data: hb({ id: 'p', type: 'profile' }) });
     expect(name.querySelector('.pf-tm-tree-name')!.classList.contains('pf-tm-clamp2')).toBe(false);
+  });
+});
+
+describe('Test Master grid — Standard code (LOINC) column', () => {
+  const fields = (cols: any[]) => cols.map((d: any) => d.colId ?? d.field);
+
+  it('flat view: a plain editable standardCode text column, right before Status (Status + Actions stay last)', () => {
+    const { c } = make([hb()]);
+    const cols = c.colDefs();
+    const sc = col(c, 'standardCode');
+    expect(sc.headerName).toBe('Standard code (LOINC)');
+    expect(sc.editable).toBe(true);
+    expect(sc.cellRenderer).toBeUndefined();
+    expect(sc.cellEditor).toBeUndefined();
+    const f = fields(cols);
+    expect(f.indexOf('standardCode')).toBe(f.indexOf('status') - 1);
+    expect(f.slice(-2)).toEqual(['status', 'actions']);
+  });
+
+  it('tree view: the same column, right before Status', () => {
+    const { c } = make([hb({ type: 'profile' })]);
+    c.setType('profile');
+    const f = fields(c.colDefs());
+    expect(col(c, 'standardCode').editable).toBe(true);
+    expect(f.indexOf('standardCode')).toBe(f.indexOf('status') - 1);
+    expect(f.slice(-2)).toEqual(['status', 'actions']);
+  });
+
+  it('an edit batches and PATCHes like any text field', () => {
+    const { c, api } = make([hb()]);
+    c.onCellValueChanged({ colDef: { field: 'standardCode' }, newValue: '718-7', oldValue: null, data: { id: 't1' } });
+    c.saveAll();
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { standardCode: '718-7' });
   });
 });

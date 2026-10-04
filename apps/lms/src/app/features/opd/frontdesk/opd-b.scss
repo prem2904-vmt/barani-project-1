@@ -1,0 +1,196 @@
+// OPD desk / vitals / queue (Agent B) — the layout pieces these screens
+// share. Everything visual comes from the nd-kit (cards, rows, fields,
+// buttons, seg, toggles) and theme tokens; this file only lays them out.
+@use '../../../shared/styles/nd-mixins' as nd;
+
+:host { display: contents; }
+
+// Band pill: the patient search fills it; tools sit after a hairline.
+.pf-ob-pill { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.pf-ob-pill pf-patient-search { flex: 1 1 auto; min-width: 0; }
+.pf-ob-ctx { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.pf-ob-count { margin-left: auto; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.pf-ob-count b { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-right: 4px; }
+
+// Main + side (400px) at ≥1024px; one column (page scrolls in the body) below.
+.pf-ob-split {
+  flex: 1 1 auto; min-height: 0; display: grid; gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 400px;
+}
+.pf-ob-split--left { grid-template-columns: 340px minmax(0, 1fr); }
+.pf-ob-split > .nd-card { min-height: 0; }
+@media (max-width: 1023px) {
+  .pf-ob-split, .pf-ob-split--left { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; }
+  .pf-ob-split > .nd-card { overflow: visible; min-height: auto; }
+  .pf-ob-split > .nd-card > .nd-card__body { overflow: visible; }
+}
+
+// Numbered steps (New visit).
+.pf-ob-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 14px; padding: 16px 6px 18px; }
+.pf-ob-step + .pf-ob-step { border-top: 1px solid var(--nd-line); }
+.pf-ob-step__n {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent);
+}
+.pf-ob-step__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 28px; }
+.pf-ob-step__t { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.pf-ob-step__hint { margin-left: auto; font-size: 13px; color: var(--text-tertiary); }
+.pf-ob-step__body { grid-column: 2; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; min-width: 0; }
+.pf-ob-tag { font-size: 11.5px; padding: 2px 8px; border-radius: 6px; background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
+@media (max-width: 640px) {
+  .pf-ob-step { grid-template-columns: 24px minmax(0, 1fr); gap: 4px 10px; }
+  .pf-ob-step__n { width: 24px; height: 24px; font-size: 12px; }
+  .pf-ob-step__hint { margin-left: 0; flex-basis: 100%; }
+}
+
+// Tiles (doctors / departments) — symmetric, whole-tile target, neutral selected.
+.pf-ob-tiles { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .pf-ob-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pf-ob-tiles { grid-template-columns: minmax(0, 1fr); } }
+.pf-ob-tile {
+  display: flex; flex-direction: column; gap: 10px; min-height: 104px; padding: 14px; text-align: left;
+  border: 1px solid var(--nd-line); border-radius: var(--nd-radius, 12px); background: var(--nd-card-bg, var(--bg-card-solid));
+  color: var(--text-primary); font: inherit; cursor: pointer;
+  transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease;
+}
+.pf-ob-tile:hover { border-color: var(--nd-sel-border); }
+.pf-ob-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-ob-tile__top { display: flex; align-items: flex-start; gap: 12px; }
+.pf-ob-tile__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-ob-tile__name { font-size: 14.5px; font-weight: 600; @include nd.no-truncate; }
+.pf-ob-tile__meta { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-ob-tile__foot {
+  margin-top: auto; display: flex; align-items: center; gap: 8px; padding-top: 10px;
+  border-top: 1px dashed var(--nd-line); font-size: 12.5px; color: var(--text-secondary);
+}
+.pf-ob-tile__price { margin-left: auto; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.pf-ob-radio {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--text-muted);
+  display: grid; place-items: center;
+}
+[aria-checked='true'] > .pf-ob-radio, [aria-checked='true'] .pf-ob-radio { border-color: var(--color-primary, #7c3aed); }
+[aria-checked='true'] > .pf-ob-radio::after, [aria-checked='true'] .pf-ob-radio::after {
+  content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--color-primary, #7c3aed);
+}
+.pf-ob-initials {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); border: 1px solid var(--nd-line);
+}
+.pf-ob-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--text-muted); }
+.pf-ob-dot--ok { background: #d97706; }
+.pf-ob-dot--long { background: var(--red-text, #dc2626); }
+.pf-ob-dot--free { background: var(--color-primary, #7c3aed); }
+
+// Choice rows (services).
+.pf-ob-choice {
+  display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 10px 14px; width: 100%; text-align: left;
+  border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); background: transparent;
+  color: var(--text-primary); font: inherit; cursor: pointer;
+}
+.pf-ob-choice:hover { border-color: var(--nd-sel-border); }
+.pf-ob-choice[aria-checked='true'], .pf-ob-tile[aria-checked='true'] { @include nd.neutral-selected; }
+.pf-ob-choice__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-ob-choice__name { font-size: 14px; font-weight: 500; @include nd.no-truncate; }
+.pf-ob-choice__meta { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-ob-choice__price { font-size: 14.5px; font-weight: 600; white-space: nowrap; }
+.pf-ob-strike { text-decoration: line-through; color: var(--text-tertiary); font-weight: 400; margin-right: 6px; }
+
+// Side card blocks.
+.pf-ob-lines { display: flex; flex-direction: column; }
+.pf-ob-lines__head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-tertiary); padding-bottom: 10px; border-bottom: 1px solid var(--nd-line); }
+.pf-ob-line { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--nd-line); }
+.pf-ob-line__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-ob-line__name { font-size: 14px; font-weight: 600; color: var(--text-primary); @include nd.no-truncate; }
+.pf-ob-line__meta { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-ob-line__amt { font-size: 14px; white-space: nowrap; color: var(--text-primary); }
+.pf-ob-group { margin-top: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+.pf-ob-note {
+  display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--nd-radius-sm, 10px);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent); font-size: 13px; line-height: 1.5; color: var(--text-secondary);
+}
+.pf-ob-note svg { flex: none; margin-top: 2px; color: var(--violet-text, #6d28d9); }
+.pf-ob-box { padding: 12px 14px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); display: flex; flex-direction: column; gap: 8px; }
+.pf-ob-box__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pf-ob-box__t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.pf-ob-box__p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); }
+.pf-ob-sum { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 4px; border-top: 1px solid var(--nd-line); }
+.pf-ob-sum__row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+.pf-ob-total { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 14px 10px; }
+.pf-ob-total__k { font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.pf-ob-total__v { font-size: 22px; font-weight: 600; color: var(--text-primary); }
+.pf-ob-saved { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--text-tertiary); padding: 6px 0 2px; }
+.pf-ob-saved svg { color: var(--violet-text, #6d28d9); }
+.pf-ob-foot .pf-ob-saved .nd-btn { width: auto; height: auto; min-height: 0; padding: 0 2px; }
+.pf-ob-foot { padding: 12px 14px 14px; border-top: 1px solid var(--nd-line); display: flex; flex-direction: column; gap: 6px; flex: none; }
+.pf-ob-foot .nd-btn { width: 100%; height: 44px; }
+.pf-ob-foot__two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+// Lists (desk rows, queue rows): one row per item, status = dot + word.
+.pf-ob-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pf-ob-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 14px; text-align: left;
+  border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); background: transparent; color: var(--text-primary); font: inherit; cursor: pointer;
+}
+.pf-ob-row:hover { border-color: var(--nd-sel-border); }
+.pf-ob-row[aria-pressed='true'] { @include nd.neutral-selected; }
+.pf-ob-token {
+  flex: none; min-width: 44px; height: 38px; padding: 0 8px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 15px; font-weight: 600; background: var(--nd-chip-bg); border: 1px solid var(--nd-line); color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.pf-ob-row__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-ob-row__name { font-size: 14.5px; font-weight: 600; @include nd.no-truncate; }
+.pf-ob-row__meta { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-ob-row__side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.pf-ob-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
+.pf-ob-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pf-ob-status--booked, .pf-ob-status--vitals { color: #b45309; }
+.pf-ob-status--waiting { color: #b45309; }
+.pf-ob-status--in_consult { color: #2563eb; }
+.pf-ob-status--completed { color: #15803d; }
+.pf-ob-status--cancelled, .pf-ob-status--no_show { color: var(--red-text, #dc2626); }
+:host-context(.dark) .pf-ob-status--booked, :host-context(.dark) .pf-ob-status--vitals, :host-context(.dark) .pf-ob-status--waiting { color: #fbbf24; }
+:host-context(.dark) .pf-ob-status--in_consult { color: #60a5fa; }
+:host-context(.dark) .pf-ob-status--completed { color: #4ade80; }
+
+.pf-ob-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; }
+.pf-ob-kv dt { color: var(--text-tertiary); }
+.pf-ob-kv dd { margin: 0; color: var(--text-primary); }
+
+.pf-ob-hide-phone { }
+@media (max-width: 640px) {
+  .pf-ob-hide-phone { display: none !important; }
+  .pf-ob-row { min-height: 64px; }
+}
+
+// Band pill with a plain filter input (desk, queue, vitals).
+.pf-dk-search { gap: 10px; padding: 0 6px; color: var(--text-tertiary); }
+.pf-dk-search__in {
+  flex: 1 1 auto; min-width: 0; height: 40px; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: 15px; color: var(--text-primary);
+}
+.pf-dk-search__in::placeholder { color: var(--text-muted); }
+.pf-dk-seg { margin-left: auto; overflow-x: auto; max-width: 100%; }
+.pf-dk-n { color: var(--text-tertiary); margin-left: 4px; }
+/* Five filters (incl. Payments due): never wrap a label — the strip scrolls on a phone. */
+.pf-dk-seg { flex-wrap: nowrap; scrollbar-width: none; }
+.pf-dk-seg .nd-seg__item { flex: none; white-space: nowrap; }
+@media (max-width: 640px) {
+  .pf-dk-search__in { font-size: 16px; height: 44px; }
+  .pf-dk-seg { margin-left: 0; width: 100%; }
+}
+
+/* Desk "Payments due" (consult procedures). */
+.pf-ob-status--due { color: #b45309; }
+:host-context(.dark) .pf-ob-status--due { color: #fbbf24; }
+.pf-dk-duesum { margin: 10px 2px 0; font-size: 13px; color: var(--text-secondary); text-align: right; }
+
+/* Procedures to book (consult v6): patient · procedure · price · date + Book. */
+.pf-dk-book { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.3fr) auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+.pf-dk-book__act { display: flex; align-items: center; gap: 8px; }
+.pf-dk-book__act pf-nd-date { width: 150px; }
+@media (max-width: 1100px) { .pf-dk-book { grid-template-columns: 1fr 1fr; } .pf-dk-book__act { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .pf-dk-book { grid-template-columns: 1fr; } .pf-dk-book__act pf-nd-date { flex: 1; width: auto; } }

@@ -7,6 +7,10 @@ export interface Order {
   /** Human-readable, module-prefixed order number, e.g. `LAB-2607-000042`.
    *  Generated at creation; null on legacy orders. */
   orderNumber?: string | null;
+  /** Daily patient number for this visit (per branch per IST day) and its
+   *  day, yyyy-MM-dd — on-screen only (utils/daily-no.ts). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   /** Module that owns the order (lab/opd/ipd/…) — drives the OrderNumber prefix. */
   module?: string | null;
   patientId: string;
@@ -48,6 +52,9 @@ export interface OrderSample {
   id: string;
   orderId: string;
   departmentId: string;
+  /** Lines on this tube not yet validated — set by My Work → Completed
+   *  (`GET /api/results/completed`), which lists only the tech's own lines. */
+  openLines?: number | null;
   /** When set, this vial is destined for an outsourced/referral lab (null = in-house). */
   outsourcedVendorId?: string | null;
   /** The lab space this vial belongs to (grouping key with tubeColor). */
@@ -111,6 +118,11 @@ export interface OrderTest {
    *  terms (a SHARED tube spans several departments). Annotated by the queue
    *  / My Work / sample endpoints; absent on older payloads. */
   routingDepartment?: TubeDepartment | null;
+  /** May the current user close this line as Not reported? Stamped by the
+   *  server's ONE rule (sample-tests read): open, in-house, no saved value,
+   *  unclaimed or own, inside a scoped validator's departments, not printed
+   *  on the live final. Absent on older servers → the client's own check. */
+  closable?: boolean | null;
   testId: string;
   name: string;
   packageTestId?: string;
@@ -124,6 +136,13 @@ export interface OrderTest {
   /** Test CODE of the nearest profile (annotated by the samples endpoint) —
    *  picks profile-scoped reference bands at entry. */
   profileCode?: string | null;
+  /** RESOLVED "tech picks what prints" (annotated by the result-entry
+   *  endpoints): the profile's setting when ordered as part of a profile,
+   *  else the test's own. Read via `resolvePrintPicker`. */
+  printPicker?: boolean | null;
+  /** RESOLVED "Start with" for the picker ('all' ticked | 'none' ticked),
+   *  by the same ordered rule — read via `resolvePrintPickerDefault`. */
+  printPickerDefault?: string | null;
   /** Resolved profile/package name (annotated by the samples endpoint). */
   packageName?: string;
   /** Display sequence within the tube (profile-authored order, never alphabetical). */
@@ -143,10 +162,12 @@ export interface OrderTest {
   rejectedAt?: string;
   rejectedBy?: string;
   rejectionReason?: string;
-  /** The specimen CHOSEN at the order desk for this line (tests that ask
-   *  for one — every micro test, Culture & Sensitivity); null = none chosen,
-   *  the Test Master's own specimen applies. */
+  /** The line's specimen NAME (fixed: stamped by the server; choose: picked
+   *  at the desk; editable at the culture bench); null = none, the Test
+   *  Master's own specimen applies. */
   specimen?: string | null;
+  /** Specimen master CODE of `specimen` (new orders; null on older lines). */
+  specimenCode?: string | null;
   test?: Test;
   subOrder?: OrderSample;
 }

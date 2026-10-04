@@ -1,23 +1,27 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, input, signal } from '@angular/core';
-import { DialogService } from '../../../core/services/dialog.service';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input } from '@angular/core';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { UploadsService } from '../../../core/services/uploads.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { ApiError } from '../../../shared/models/api-response.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
-  OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
-  filterOutsourced, partnerFileProblem, rowReport,
+  ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, STATUS_LABEL, attachState, filterOutsourced, rowReport,
 } from './outsourced-view';
+import { sortByDailySerial } from '../frontdesk-landing/work-merge';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { OutsourcedActionsComponent } from './outsourced-actions.component';
 
 /**
  * Frontdesk "Outsourced" tab body. One row per outsourced tube: sample ID,
  * patient (full name), order ID, tests, partner lab, dispatched date and a
  * neutral status chip (Completed carries a violet check — never green).
- * Row actions (text on web, icon on touch): Upload report · View · Undo.
+ * Row actions (text on web, icon on touch): Upload report · View · Undo ·
+ * Attach to / Detach from report. At upload the desk chooses "Attach to our
+ * report" (default ON): the patient then gets ONE PDF — our report followed
+ * by the partner pages. A file that can't be joined (password-protected /
+ * unreadable) is flagged with a warning dialog and stays a separate file.
  * The search lives in the work card's header (it sets `svc.query`). Classic
  * design (`showFilters`) keeps the status / partner filters above the list;
  * the new design has NO filter bar (owner) — every tube is listed, still
@@ -26,7 +30,7 @@ import {
 @Component({
   selector: 'pf-outsourced-list',
   standalone: true,
-  imports: [DatePipe, SegmentedComponent, SelectComponent],
+  imports: [DatePipe, SegmentedComponent, SelectComponent, SkeletonRowsComponent, DailyNoComponent, OutsourcedActionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showFilters()) {
@@ -38,10 +42,8 @@ import {
       </div>
     }
 
-    <input #file type="file" class="pf-out__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
-
     @if (svc.loading() && svc.rows().length === 0) {
-      <p class="pf-out__empty">Loading outsourced tests…</p>
+      <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading outsourced tests…"></pf-skeleton-rows>
     } @else if (shown().length === 0) {
       <div class="nd-empty pf-out__none" data-empty="out">
         <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
@@ -53,7 +55,7 @@ import {
           <li class="nd-row pf-out__row" [attr.data-status]="r.status">
             <div class="pf-out__main">
               <p class="pf-out__sample nd-num">{{ r.barcode ?? '—' }}</p>
-              <p class="pf-out__who">{{ r.patientName }} · <span class="nd-num">{{ r.orderNumber ?? '' }}</span></p>
+              <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="nd-num">{{ r.orderNumber ?? '' }}</span></p>
               <p class="pf-out__tests">{{ testNames(r) }}</p>
             </div>
             <div class="pf-out__meta">
@@ -69,48 +71,35 @@ import {
                 }
                 {{ statusLabel[r.status] }}
               </span>
+              @if (attachLabel[attachState(r)]; as al) {
+                <span class="nd-chip nd-chip--static pf-out__attach" [attr.data-attach]="attachState(r)"
+                      [attr.title]="attachState(r) === 'problem' ? rowReport(r)?.attachProblem : null">{{ al }}</span>
+              }
+              @if (rowReport(r); as rep) {
+                @if (uploads.isMissing(rep.url)) {
+                  <!-- The server no longer has this file (it sat on a disk a
+                       deploy wiped): say so, and point at Replace. -->
+                  <span class="nd-chip nd-chip--static pf-out__attach" data-attach="problem" data-testid="out-file-missing"
+                        role="status">File no longer available — upload it again</span>
+                }
+              }
             </div>
             <div class="pf-out__acts">
-              @if (rowReport(r); as rep) {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()"
-                        [attr.aria-label]="'View partner report for ' + (r.barcode ?? 'this tube')" (click)="view(rep.url)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <span class="nd-rowact__t">View</span>
-                </button>
-              }
-              @if (r.status === 'completed') {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                        [attr.aria-label]="'Undo completed for ' + (r.barcode ?? 'this tube')" (click)="undo(r)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
-                  </svg>
-                  <span class="nd-rowact__t">Undo</span>
-                </button>
-              } @else if (r.hasReport) {
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                        [attr.aria-label]="'Mark completed for ' + (r.barcode ?? 'this tube')" (click)="markCompleted(r)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
-                  <span class="nd-rowact__t">Mark completed</span>
-                </button>
-              }
-              <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
-                      [attr.aria-label]="(r.hasReport ? 'Replace partner report for ' : 'Upload partner report for ') + (r.barcode ?? 'this tube')"
-                      (click)="pick(r)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>
-                </svg>
-                <span class="nd-rowact__t">{{ busy() === r.sampleId ? 'Uploading…' : (r.hasReport ? 'Replace report' : 'Upload report') }}</span>
-              </button>
+              <pf-outsourced-actions [tube]="r" />
             </div>
           </li>
         }
       </ul>
+      @if (svc.hasMore()) {
+      <!-- Server paging (release 2026-10-01): the next page, appended — same
+           pattern as the report queue (report-queue.component.html). -->
+      <div class="pf-out__more">
+        <button type="button" class="nd-btn nd-btn--secondary pf-out__more-btn press"
+                [disabled]="svc.loadingMore()" [attr.aria-busy]="svc.loadingMore()" (click)="loadMore()">
+          @if (svc.loadingMore()) { Loading… } @else { Load {{ svc.nextCount() }} more }
+        </button>
+      </div>
+      }
     }
   `,
   styles: [`
@@ -118,7 +107,6 @@ import {
     :host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .pf-out__none { min-height: 200px; }
     .pf-out__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
-    .pf-out__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-out__empty { margin: 0; padding: 24px 12px; text-align: center; font-size: 13px; color: var(--text-muted); }
     .pf-out__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .pf-out__row { flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 12px; }
@@ -128,7 +116,8 @@ import {
     .pf-out__who { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
     .pf-out__tests { font-size: 12px; color: var(--text-muted); }
     .pf-out__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-    .pf-out__partner, .pf-out__status { height: 26px; }
+    .pf-out__partner, .pf-out__status, .pf-out__attach { height: 26px; }
+    .pf-out__attach[data-attach='problem'] { color: var(--warning-text, #b45309); }
     .pf-out__date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
     .pf-out__check { color: var(--violet-text, #6d28d9); }
     .pf-out__row[data-status='completed'] { background: var(--nd-done-tint); border-color: var(--nd-sel-border); }
@@ -136,108 +125,62 @@ import {
     @media (max-width: 640px) {
       .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }
     }
+    .pf-out__more { display: flex; justify-content: center; padding: 12px 0 2px; }
   `],
 })
 export class OutsourcedListComponent implements OnInit {
   readonly svc = inject(OutsourcingService);
-  private readonly toasts = inject(ToastService);
-  private readonly dialog = inject(DialogService);
 
   /** Classic design renders the status / partner filters here; the new design has none. */
   readonly showFilters = input(false);
 
   /** Rows on screen: classic = the service's filtered set; new design = every
-   *  status (search only), open tubes before completed ones. */
+   *  status (search only), open tubes before completed ones, and WITHIN each
+   *  of those two groups the same business-day → #N ledger order as every
+   *  other tab of the frontdesk list (owner, 2026-10-02 —
+   *  `sortByDailySerial`, work-merge.ts). */
   readonly shown = computed(() => {
     if (this.showFilters()) return this.svc.visible();
     const rows = filterOutsourced(this.svc.rows(), { query: this.svc.query(), status: 'all', partnerId: null });
-    return [...rows.filter(r => r.status !== 'completed'), ...rows.filter(r => r.status === 'completed')];
+    const open = sortByDailySerial(rows.filter(r => r.status !== 'completed'));
+    const completed = sortByDailySerial(rows.filter(r => r.status === 'completed'));
+    return [...open, ...completed];
   });
 
   readonly web = webPointerSignal();
-  readonly busy = signal<string | null>(null);
   readonly statusLabel = STATUS_LABEL;
-  readonly accept = PARTNER_REPORT_ACCEPT;
+  readonly attachLabel = ATTACH_LABEL;
+  readonly attachState = attachState;
   readonly rowReport = rowReport;
-
-  @ViewChild('file') private fileInput?: ElementRef<HTMLInputElement>;
-  private target: OutsourcedTube | null = null;
 
   readonly statusOptions = () => outsourcedStatusOptions(this.svc.counts());
   readonly partnerSelectOptions = () => outsourcedPartnerOptions(this.svc.partners());
 
-  ngOnInit(): void { void this.svc.load(); }
+  ngOnInit(): void {
+    // Server paging (release 2026-10-01) now fetches by STATUS (cheaper —
+    // the lean scan narrows before the rich fetch). The new design has no
+    // status control and must still show every status (open tubes first,
+    // then completed — see `shown` above): pin the fetch to "all" so
+    // Completed tubes aren't silently left unloaded. Classic design keeps
+    // whatever `svc.status` already is (its segmented control's own value).
+    if (!this.showFilters()) this.svc.status.set('all');
+    // ensureLoaded (not load): the frontdesk merged list already fully loads
+    // status='all' for the window on its own (FrontdeskLandingComponent) —
+    // visiting this tab right after must not re-fetch page 1 of data we
+    // already have. A genuinely different filter (classic design narrowed
+    // to 'completed', say) still fetches, same as before.
+    void this.svc.ensureLoaded();
+  }
+
+  /** The next page, appended (the service itself no-ops mid-fetch / once
+   *  every row for the current filter is loaded). */
+  loadMore(): void { void this.svc.loadMore(); }
 
   setStatus(v: string) { this.svc.status.set(v as OutsourcedStatusFilter); }
 
   testNames(r: OutsourcedTube): string { return r.tests.map(t => t.testName).join(', '); }
 
-  private readonly uploads = inject(UploadsService);
-  /** Partner files are private uploads — opened through a signed URL. */
-  view(url: string) { void this.uploads.open(url); }
-
-  pick(r: OutsourcedTube) {
-    this.target = r;
-    const el = this.fileInput?.nativeElement;
-    if (el) { el.value = ''; el.click(); }
-  }
-
-  async onFile(ev: Event) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    const r = this.target;
-    this.target = null;
-    if (!file || !r) return;
-    await this.uploadAndComplete(r, file);
-  }
-
-  /** Upload the partner report and mark the tube's outsourced tests Completed. */
-  async uploadAndComplete(r: OutsourcedTube, file: File) {
-    const problem = partnerFileProblem(file);
-    if (problem) { this.toasts.error(problem); return; }
-    this.busy.set(r.sampleId);
-    try {
-      const url = await this.svc.upload(file);
-      await this.svc.complete(actionLines(r), { url, name: file.name, type: file.type });
-      this.toasts.success(`${r.hasReport ? 'Report replaced' : 'Report uploaded'} — ${this.testNames(r)} completed`);
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  async markCompleted(r: OutsourcedTube) {
-    this.busy.set(r.sampleId);
-    try {
-      await this.svc.complete(actionLines(r), null);
-      this.toasts.success(`${this.testNames(r)} completed`);
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  async undo(r: OutsourcedTube) {
-    const ok = await this.dialog.confirm({
-      title: 'Undo Completed?',
-      message: `${this.testNames(r)} goes back to Outsourced. The uploaded report stays attached; a report already released is not changed.`,
-      confirmLabel: 'Undo completed',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    this.busy.set(r.sampleId);
-    try {
-      await this.svc.reopen(r.tests.map(t => t.orderTestId));
-      this.toasts.success('Moved back to Outsourced');
-    } catch (e) {
-      this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.busy.set(null);
-    }
-  }
+  protected readonly uploads = inject(UploadsService);
 }
 
 /** Status segmented options with counts (shared by the band pill). */

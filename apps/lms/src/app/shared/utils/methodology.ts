@@ -20,18 +20,24 @@ export function effectiveMethodology(value: WithMethodology, test: WithMethodolo
 /**
  * Drop per-value methodology entries equal (case-insensitive, trimmed) to the
  * test-level one — they add nothing and would silently stop following the test
- * when its methodology changes. Returns the same array when nothing changed.
+ * when its methodology changes. `previousTestMethodology` (the test-level value
+ * before this edit) marks copies that were FOLLOWING the test: when the test's
+ * methodology changes, they go too — left behind they would become per-value
+ * overrides and the report would keep printing the old method (RCA
+ * 2026-09-28, Calcium "Colorimetric" → "Modified Arsenazo III").
+ * Returns the same array when nothing changed.
  */
 export function stripRedundantMethodology<T extends { methodology?: string | null }>(
   params: T[],
   testMethodology: string | null | undefined,
+  previousTestMethodology?: string | null,
 ): T[] {
-  const tm = clean(testMethodology).toLowerCase();
+  const followed = new Set([clean(testMethodology).toLowerCase(), clean(previousTestMethodology).toLowerCase()]);
   let changed = false;
   const out = params.map(p => {
     if (!p || typeof p !== 'object' || !('methodology' in p)) return p;
     const own = clean(p.methodology);
-    if (own && own.toLowerCase() !== tm) return p;
+    if (own && !followed.has(own.toLowerCase())) return p;
     changed = true;
     const { methodology: _drop, ...rest } = p;
     void _drop;

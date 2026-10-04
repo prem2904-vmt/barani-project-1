@@ -110,3 +110,36 @@ export function heldFlag(source: Signal<boolean>, ms: number = MIN_LOAD_MS): Sig
   if (untracked(source)) flag.start();
   return flag.active;
 }
+
+/**
+ * A FIRST-LOAD skeleton flag (ND-PATTERN "Loading feedback"): on from the
+ * very first frame (created in a field initializer, so the template's first
+ * pass already draws the skeleton — never a blank form), held
+ * {@link MIN_LOAD_MS} once the data arrives asynchronously, and skipped
+ * entirely when the data was already there in the same turn (a cache, a
+ * synchronous test double) — nothing to wait for, nothing to show.
+ *
+ *   private readonly hold = createLoadHold(!!id);
+ *   readonly skeleton = this.hold.active;
+ *   …subscribe({ next: v => { use(v); this.hold.done(); }, error: () => this.hold.done() })
+ */
+export interface LoadHold {
+  /** True while the skeleton should show. */
+  readonly active: Signal<boolean>;
+  /** The load answered (success or error): release after the minimum. */
+  done(): void;
+  /** Off at once (the view is going away). */
+  cancel(): void;
+}
+
+export function createLoadHold(on = true, ms: number = MIN_LOAD_MS): LoadHold {
+  const flag = createMinDurationFlag(ms);
+  let sameTurn = true;
+  if (on) flag.start();
+  queueMicrotask(() => { sameTurn = false; });
+  return {
+    active: flag.active,
+    done() { if (sameTurn) flag.cancel(); else flag.stop(); },
+    cancel() { flag.cancel(); },
+  };
+}

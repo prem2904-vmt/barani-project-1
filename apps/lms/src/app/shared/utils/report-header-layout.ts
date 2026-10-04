@@ -261,7 +261,7 @@ export interface LayoutItem {
   text?: string;
   lines?: string[];
   fields?: HeaderField[];
-  style?: 'normal' | 'bold' | 'italic';
+  style?: 'normal' | 'bold' | 'italic' | 'semibold';
   size?: number;
   color?: string;
   tone?: 'plain' | 'twoTone' | 'pipes' | 'pill';
@@ -323,7 +323,7 @@ export interface LayoutIssue {
 
 // ── storage ─────────────────────────────────────────────────────────────
 
-function parseMeta(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined): Record<string, unknown> {
+export function parseTemplateMeta(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined): Record<string, unknown> {
   const raw = tpl?.metadata;
   if (!raw) return {};
   if (typeof raw === 'object') return { ...(raw as Record<string, unknown>) };
@@ -357,7 +357,7 @@ function cleanOverride(o: unknown): ItemOverride | null {
 /** The lab's letterhead layout, or null for a template never edited in the
  *  designer (prints exactly as before). Tolerates junk. */
 export function readHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined): HeaderLayoutConfig | null {
-  const hl = parseMeta(tpl)['headerLayout'];
+  const hl = parseTemplateMeta(tpl)['headerLayout'];
   if (!hl || typeof hl !== 'object') return null;
   const src = hl as Record<string, unknown>;
   const items: Record<string, ItemOverride> = {};
@@ -384,7 +384,7 @@ export function readHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null | 
 /** New `metadata` string with the layout written (or removed when null),
  *  keeping every other key the template's metadata carries. */
 export function writeHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, cfg: HeaderLayoutConfig | null): string {
-  const meta = parseMeta(tpl);
+  const meta = parseTemplateMeta(tpl);
   if (cfg) meta['headerLayout'] = cfg; else delete meta['headerLayout'];
   return JSON.stringify(meta);
 }
@@ -396,13 +396,13 @@ export function writeHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null |
 export type ReportOption = 'specimenLine' | 'abnormalSummary';
 
 export function readReportOption(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, key: ReportOption): boolean {
-  const o = parseMeta(tpl)['options'];
+  const o = parseTemplateMeta(tpl)['options'];
   return !!o && typeof o === 'object' && (o as Record<string, unknown>)[key] === true;
 }
 
 /** Immutable: the template metadata with one option set (other keys kept). */
 export function writeReportOption(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, key: ReportOption, on: boolean): string {
-  const meta = parseMeta(tpl);
+  const meta = parseTemplateMeta(tpl);
   const cur = meta['options'];
   const opts: Record<string, unknown> = cur && typeof cur === 'object' && !Array.isArray(cur) ? { ...(cur as Record<string, unknown>) } : {};
   if (on) opts[key] = true; else delete opts[key];

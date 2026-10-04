@@ -16,7 +16,7 @@
  * ring ends on any path (renderer calls dismiss) or the main window is
  * focused (its in-app ring card takes over).
  */
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification } = require('electron');
 const path = require('path');
 
 let quitting = false;
@@ -24,7 +24,7 @@ let callWin = null;
 let callInfo = null;          // { callId, callerName, isGroup, groupName }
 let bounceId = null;
 let mainRef = null;
-let tray = null;
+let callNote = null;          // native "Incoming call" notification (Answer / Decline)
 
 const CALL_ID = /^[A-Za-z0-9_-]{6,64}$/;
 
@@ -52,9 +52,55 @@ function stopAttention() {
   bounceId = null;
 }
 
+function closeNativeCall() {
+  const n = callNote;
+  callNote = null;
+  if (n) { try { n.close(); } catch { /* gone */ } }
+}
+
+/** Native OS notification next to the call window: it reaches Notification
+ *  Center / Action Center and the lock screen, where no window can. Silent —
+ *  the renderer's ringtone is the sound. Answer / Decline buttons on macOS and
+ *  Windows; a plain click brings the app forward (its ring card takes over). */
+function showNativeCall(info) {
+  closeNativeCall();
+  if (!Notification.isSupported()) return null;
+  const who = info.isGroup && info.groupName ? `${info.callerName} · ${info.groupName}` : info.callerName;
+  const n = new Notification({
+    title: 'Incoming call',
+    body: who,
+    silent: true,
+    urgency: 'critical',
+    timeoutType: 'never',
+    actions: [{ type: 'button', text: 'Answer' }, { type: 'button', text: 'Decline' }],
+  });
+  const callId = info.callId;
+  const act = (action) => {
+    if (!callInfo || callInfo.callId !== callId) return;
+    closeCallWindow();
+    if (!mainRef || mainRef.isDestroyed()) return;
+    if (action === 'answer') restore(mainRef);
+    mainRef.webContents.send('call:action', { action, callId });
+  };
+  n.on('action', (details, legacyIndex) => {
+    const idx = details && typeof details.actionIndex === 'number' ? details.actionIndex : legacyIndex;
+    act(idx === 1 ? 'decline' : 'answer');
+  });
+  n.on('click', () => { if (mainRef) restore(mainRef); });
+  n.on('close', () => { if (callNote === n) callNote = null; });
+  callNote = n;
+  n.show();
+  return n;
+}
+
+function callsEnabled() {
+  try { return require('./notify').getSettings().calls !== false; } catch { return true; }
+}
+
 function closeCallWindow() {
   callInfo = null;
   stopAttention();
+  closeNativeCall();
   if (callWin && !callWin.isDestroyed()) callWin.close();
   callWin = null;
 }
@@ -124,7 +170,17 @@ ipcMain.on('call:incoming', (e, info) => {
     groupName: info.groupName ? String(info.groupName).slice(0, 80) : '',
   };
   if (inFront(mainRef)) return; // the in-app ring card is on screen
+  if (!callsEnabled()) {
+    // Call pop-ups switched off: no window / notification over other apps,
+    // but the ring (renderer) + taskbar flash / dock bounce still say a call
+    // is waiting — a call is never silently lost.
+    callInfo = clean;
+    if (!mainRef.isDestroyed()) mainRef.flashFrame(true);
+    if (process.platform === 'darwin' && app.dock) bounceId = app.dock.bounce('critical');
+    return;
+  }
   showCallWindow(clean);
+  showNativeCall(clean);
 });
 
 ipcMain.on('call:dismiss', (e, callId) => {
@@ -143,23 +199,16 @@ ipcMain.on('call-window:action', (e, action) => {
   mainRef.webContents.send('call:action', { action, callId });
 });
 
-/** Tray icon (Windows / Linux) so a closed window is one click away and the
- *  app can be quit; macOS keeps using the dock. */
-function createTray(getMain) {
-  if (process.platform === 'darwin' || tray) return;
-  try {
-    const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
-    tray = new Tray(icon);
-    tray.setToolTip('Prefrontal');
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open Prefrontal', click: () => restore(getMain()) },
-      { type: 'separator' },
-      { label: 'Quit', click: () => { quitting = true; app.quit(); } },
-    ]));
-    tray.on('click', () => restore(getMain()));
-  } catch (err) {
-    console.warn('[tray] unavailable', err);
-  }
+/** Dev-build check of the native call notification (notify.js debugFire). */
+function debugNativeCall() {
+  callInfo = { callId: 'debug-call', callerName: 'Dr. Debug', isGroup: false, groupName: '' };
+  return !!showNativeCall(callInfo);
 }
 
-module.exports = { attach, restore, createTray, isQuitting, setQuitting };
+// The menu-bar / system-tray icon itself (Windows + macOS: instruments,
+// updates, quit, …) lives in electron/tray.js, not here — this module only
+// ever needed a Tray for its Windows "open / quit" fallback, which the full
+// tray now covers. isQuitting()/setQuitting() stay here (calls.js owns the
+// close-vs-quit flag everything else reads) and tray.js's Quit action calls
+// setQuitting() the same way main.js's app-menu/Cmd+Q path already does.
+module.exports = { attach, restore, isQuitting, setQuitting, debugNativeCall };

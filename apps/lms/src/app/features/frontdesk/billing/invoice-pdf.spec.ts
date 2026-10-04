@@ -1,4 +1,4 @@
-import { STAFF_ORDER_QR_ENABLED, buildCashBillModel, invoiceTemplateFieldsFrom } from './invoice-pdf';
+import { STAFF_ORDER_QR_ENABLED, buildCashBillModel, invoiceGstinFrom, invoiceTemplateFieldsFrom } from './invoice-pdf';
 import type { Bill } from '../../../shared/models/bill.model';
 import { readFileSync } from 'node:fs';
 
@@ -221,5 +221,19 @@ describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', 
     expect(m.hasTax).toBe(false);
     expect(m.hasRoundOff).toBe(false);
     expect(m.netPayable).toBe('705');
+  });
+});
+
+describe('invoiceGstinFrom — the bill\'s branch-GST snapshot, never the template', () => {
+  it('prints the bill snapshot', () => {
+    expect(invoiceGstinFrom({ supplierGstin: '33ABCDE1234F1Z5' }, { gstin: '99TEMPLATE' })).toBe('33ABCDE1234F1Z5');
+  });
+  it('ignores a template GSTIN when the bill has none', () => {
+    expect(invoiceGstinFrom({ supplierGstin: null }, { gstin: '33ABCDE1234F1Z5' })).toBeUndefined();
+    expect(invoiceGstinFrom({}, {})).toBeUndefined();
+  });
+  it('honours the template\'s Show GSTIN toggle', () => {
+    expect(invoiceGstinFrom({ supplierGstin: '33ABCDE1234F1Z5' }, { showGstin: false })).toBeUndefined();
+    expect(invoiceGstinFrom({ supplierGstin: ' 33ABCDE1234F1Z5 ' }, null)).toBe('33ABCDE1234F1Z5');
   });
 });

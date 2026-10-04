@@ -7,6 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface InvItem { id: string; name: string; uom: string; }
 
@@ -19,7 +20,7 @@ interface InvItem { id: string; name: string; uom: string; }
 @Component({
   selector: 'pf-test-consumables',
   standalone: true,
-  imports: [SkeletonRowsComponent, FormsModule, SelectComponent],
+  imports: [SkeletonRowsComponent, BusyDirective, FormsModule, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-tc">
@@ -51,7 +52,7 @@ interface InvItem { id: string; name: string; uom: string; }
           <div class="pf-tc__acts">
             <button type="button" class="nd-btn nd-btn--tertiary press" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
             <!-- Secondary: the editor's band owns the ONE primary (Save). -->
-            <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="saving()" (click)="save()">
+            <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save consumables' }}
             </button>
           </div>

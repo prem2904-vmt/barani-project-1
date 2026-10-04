@@ -12,6 +12,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
 const BRANDING_NAME_MAX = 30;
@@ -30,7 +31,7 @@ interface BrandingDraft {
 @Component({
   selector: 'pf-setup-wizard',
   standalone: true,
-  imports: [
+  imports: [BusyDirective, 
     FormsModule,
     ScreenHeaderComponent,
     SegmentedComponent,
@@ -52,7 +53,7 @@ interface BrandingDraft {
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                    [disabled]="saving() || !dirty()" (click)="save()"
+                    [disabled]="saving() || !dirty()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
                     aria-label="Save branding" title="Save branding">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -182,7 +183,7 @@ interface BrandingDraft {
       <!-- Save (classic; the new design's Save rides the band) -->
       <div class="mt-6 flex items-center justify-end pf-classic-only">
         <pf-touch-btn size="md" variant="primary"
-                       [disabled]="saving() || !dirty()"
+                       [disabled]="saving() || !dirty()" [busy]="saving()" busyLabel="Saving…"
                        (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save branding' }}
         </pf-touch-btn>

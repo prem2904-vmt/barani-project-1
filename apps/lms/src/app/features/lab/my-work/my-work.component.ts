@@ -1,11 +1,16 @@
 import { DatePipe } from '@angular/common';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { firstValueFrom } from 'rxjs';
 import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
+import { completedTubeStatus, planReadiness, ReportReadiness, reportReadinessUrl } from '../../../shared/utils/report-readiness';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -44,6 +49,11 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
+import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
+import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -59,9 +69,10 @@ const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
 const COLLECT_COLLAPSED_KEY = 'pf-lms.my-work.collect-collapsed';
 
 type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
-type Level = 'urgent' | 'high' | 'normal';
-type Bucket = { level: Level; items: Enriched[] };
-type Enriched = OrderTest & { _level: Level; _remainingMin: number };
+/** Queue groups are the ORDER's priority (Urgent / Normal — the only two
+ *  the lab has). TAT is a separate clock chip, never a group or "priority". */
+type Bucket = { priority: OrderPriority; label: 'Urgent' | 'Normal'; items: Enriched[] };
+type Enriched = WorkLine;
 
 interface CounterSpec {
   id: 'pending' | 'critical' | 'in_progress' | 'done' | 'all';
@@ -80,7 +91,9 @@ const COUNTERS: CounterSpec[] = [
 @Component({
   selector: 'pf-my-work',
   standalone: true,
-  imports: [
+  imports: [DailyNoComponent, BusyDirective, 
+    PfKeysDirective,
+    SamplePresetDirective,
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
@@ -100,6 +113,7 @@ const COUNTERS: CounterSpec[] = [
       <pf-hero-band
         [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
         [value]="scan()"
+        keys="sample" keysEnter="Open" keysEnterAria="Open this sample"
         (valueChange)="setScan($event)"
         (submitted)="scanSubmit()">
         <!-- The camera FEEDS this field, so it sits inside it, before the
@@ -160,7 +174,8 @@ const COUNTERS: CounterSpec[] = [
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
@@ -227,7 +242,8 @@ const COUNTERS: CounterSpec[] = [
           }
         </div>
         }
-        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
+        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                      [busy]="loading()" busyLabel="Refreshing…">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
             <path d="M21 3v5h-5"/>
@@ -270,7 +286,7 @@ const COUNTERS: CounterSpec[] = [
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
             <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
           </svg>
-          <input type="text"
+          <input type="text" pfKeys="sample" pfSamplePreset pfKeysEnter="Open" pfKeysEnterAria="Open this sample"
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
@@ -285,7 +301,8 @@ const COUNTERS: CounterSpec[] = [
           </button>
           }
         </div>
-        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()"
+                      [busy]="scanning()" busyLabel="Opening…">
           Open
           <span icon-right>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -500,6 +517,7 @@ const COUNTERS: CounterSpec[] = [
               </button>
               <pf-scan-icon class="pf-mw-scan__icon" [size]="14" />
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
+                     pfKeys="sample" pfSamplePreset pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
                      [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
@@ -648,13 +666,14 @@ const COUNTERS: CounterSpec[] = [
                      (keydown.enter)="viewCompletedTube(tube)">
                   <div class="pf-tq__line">
                     <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
-                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered' && !theme.isNewDesign()"
-                          [class.pf-tq__tag--validated]="tube.status === 'validated'">
-                      {{ tube.status === 'validated' ? 'Validated' : 'Submitted' }}
+                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status !== 'validated' && !theme.isNewDesign()"
+                          [class.pf-tq__tag--validated]="tube.status === 'validated'"
+                          [attr.title]="tube.status === 'partial' ? tube.openLines + ' test(s) on this sample are not validated yet' : null">
+                      {{ tube.status === 'validated' ? 'Validated' : tube.status === 'partial' ? 'Partly validated · ' + tube.openLines + ' open' : 'Submitted' }}
                     </span>
                   </div>
                   <p class="pf-tq__sub">
-                    <span class="pf-tq__who">{{ tube.patientName }}</span>
+                    <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
                     <span class="pf-tq__extra">
                       @if (tube.patientMeta) {
                         <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
@@ -672,11 +691,12 @@ const COUNTERS: CounterSpec[] = [
                     }
                   </span>
                   <div class="pf-tq__acts">
-                  @if (tube.status === 'validated') {
+                  @if (tube.status === 'validated' || tube.status === 'partial') {
                     <button type="button" class="pf-tq__act--print" title="Print report"
                             [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                             [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="printingTubeId() === tube.sampleId"
+                            [pfBusy]="printingTubeId() === tube.sampleId" pfBusyLabel="Opening the report…"
                             [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
                             (click)="printCompletedTube(tube)">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -693,6 +713,7 @@ const COUNTERS: CounterSpec[] = [
                             [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                             [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="reopeningTubeId() === tube.sampleId"
+                            [pfBusy]="reopeningTubeId() === tube.sampleId" pfBusyLabel="Opening…"
                             [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
                             (click)="editCompletedTube(tube)">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -730,14 +751,14 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
 
-      @for (bucket of buckets(); track bucket.level) {
+      @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-6">
             <div class="flex items-center gap-3 mb-3 px-1">
-              <span class="pf-dot" [attr.data-level]="bucket.level"></span>
+              <span class="pf-dot" [attr.data-priority]="bucket.priority"></span>
               <h3 class="text-[11px] font-mono uppercase tracking-[0.18em]"
                   style="color: var(--text-secondary);">
-                {{ bucket.level }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
+                {{ bucket.label }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
               </h3>
             </div>
 
@@ -747,17 +768,17 @@ const COUNTERS: CounterSpec[] = [
             <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md" class="block">
                     <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                             (click)="toggleExpand(g.orderId)">
                       <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <!-- Line 1: standard patient format — Name(≤15 chars)+.. | age/sex | P-ID -->
-                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientInfo }}</p>
+                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientInfo }}</p>
                         <!-- Line 2: TAT urgency + how many tests ride on this card.
                              Expand the card (or open the tube) for test names + barcodes. -->
                         <div class="flex items-center gap-2 flex-wrap mt-1">
-                          <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
+                          <pf-tat-indicator [remainingMinutes]="g.remainingMin" [dueAt]="g.dueAt"/>
                           @if (!theme.isNewDesign()) { <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span> }
                         </div>
                       </div>
@@ -780,6 +801,8 @@ const COUNTERS: CounterSpec[] = [
                           <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [pfZoomSource]="tube.sampleId"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                              [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                              [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
                               role="button" tabindex="0"
                               [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
                               (click)="onCardActivate(tube, g.patientName, $event)"
@@ -894,10 +917,11 @@ const COUNTERS: CounterSpec[] = [
                        content — so the card is identical on a bench tablet and
                        a desktop. -->
                   <div class="pf-tq" [pfZoomSource]="tube.sampleId"
-                       [class.pf-tq--urgent]="bucket.level === 'urgent'"
-                       [class.pf-tq--high]="bucket.level === 'high'"
+                       [class.pf-tq--urgent]="bucket.priority === 'urgent'"
                        [class.pf-tq--rejected]="tube.rejections.length > 0"
                        [class.pf-tq--picking]="pickingTubeId() === tube.sampleId"
+                       [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                       [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
                        [class.pf-tq--holding]="holdingPeekId() === tube.sampleId"
                        [class.pf-tq--done]="tube.allDone">
                     <span class="pf-tq__cap" aria-hidden="true"></span>
@@ -920,12 +944,15 @@ const COUNTERS: CounterSpec[] = [
                         @if (tube.rejections.length > 0) {
                           <span class="pf-tq__tag pf-tq__tag--warn">Re-entry</span>
                         }
+                        @if (!tube.allDone) {
+                          <pf-tat-indicator class="pf-tq__tat" [remainingMinutes]="tube.remainingMin" [dueAt]="tube.dueAt"/>
+                        }
                         @if (tab() === 'service_queue' && tube.assignedTo) {
                           <span class="pf-tq__tag">{{ assigneeName(tube.assignedTo) }}</span>
                         }
                       </div>
                       <p class="pf-tq__sub">
-                        <span class="pf-tq__who">{{ tube.patientName }}</span>
+                        <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
                         @if (tube.patientMeta) {
                           <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
                         }
@@ -989,18 +1016,18 @@ const COUNTERS: CounterSpec[] = [
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md">
                     <div class="flex items-start gap-3">
                       <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
                           <p class="text-[15px] font-semibold truncate"
                              style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</p>
-                          <pf-tat-indicator [tatLevel]="t._level" [remainingMinutes]="t._remainingMin"/>
+                          <pf-tat-indicator [remainingMinutes]="t._remainingMin" [dueAt]="t._dueAt"/>
                         </div>
                         <p class="text-[12px] font-mono mt-0.5"
                            style="color: var(--text-tertiary);">
-                          {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
+                          <pf-daily-no [of]="t.subOrder" />{{ t.subOrder?.order?.patient?.displayName ?? '—' }}
                           · {{ t.test?.department?.name ?? '—' }}
                           · rec'd {{ t.subOrder?.receivedAtLab ? (t.subOrder?.receivedAtLab | date:'shortTime') : '—' }}
                         </p>
@@ -1113,6 +1140,7 @@ const COUNTERS: CounterSpec[] = [
     @if (delegateTarget(); as t) {
       <pf-delegate-modal
         [testName]="delegateLabel()"
+        [busyId]="delegatingTo()"
         (chose)="onDelegate($event)"
         (cancelled)="cancelDelegate()">
       </pf-delegate-modal>
@@ -1745,9 +1773,9 @@ const COUNTERS: CounterSpec[] = [
       border-radius: 9999px;
       flex-shrink: 0;
     }
-    .pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
-    .pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
-    .pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+    /* Group dot = ORDER priority: Urgent red, Normal quiet. */
+    .pf-dot[data-priority='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
+    .pf-dot[data-priority='normal'] { background: #94a3b8; box-shadow: none; }
 
     /* Tube tile gets a soft red wash when any of its tests are in
        re_entry — pulls the eye to it without screaming. */
@@ -1798,7 +1826,7 @@ const COUNTERS: CounterSpec[] = [
        its own 44px target; hover and press add feedback only.
 
        Depth comes from a hairline + 1px inset highlight rather than a heavy
-       panel, and priority is a 3px cap stripe down the left edge — a nod to
+       panel, and URGENT (order priority) is a red 3px cap stripe down the left edge — a nod to
        the tube's own cap — so colour never floods the surface. */
     .pf-tq {
       --tq-accent: rgba(148, 163, 184, 0.5);
@@ -1823,10 +1851,9 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq--done .pf-tq__tag { color: #0f9d6f; }
     .pf-tq--rejected { border-color: rgba(242, 85, 90, 0.34); }
 
-    /* Cap stripe = priority. */
+    /* Cap stripe = order priority (Urgent only). TAT lives in its own chip. */
     .pf-tq__cap { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tq-accent); }
     .pf-tq--urgent { --tq-accent: #f2555a; }
-    .pf-tq--high   { --tq-accent: #f0a03c; }
     .pf-tq--done   { --tq-accent: #34d399; }
 
     /* Primary zone — the tap target for open / pick. */
@@ -2494,7 +2521,7 @@ const COUNTERS: CounterSpec[] = [
        Queue / My Work / Done tiles become calm nd cards: neutral surface,
        hairline border, 12px radius, small soft shadow; Noto Sans with
        tabular numbers for sample IDs. The left cap stripe keeps ONLY the
-       functional priority colours (urgent red, high amber); done is a
+       functional priority colour (Urgent red); done is a
        violet mark, not green. Counter chips lose their colour dots. */
     :host-context(.design-new) .pf-tq {
       background: var(--nd-card-bg, var(--bg-card-solid));
@@ -2505,7 +2532,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq:hover { border-color: var(--nd-sel-border); box-shadow: var(--nd-shadow-sm); }
     :host-context(.design-new) .pf-tq__main:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
     :host-context(.design-new) .pf-tq--done { --tq-accent: var(--color-violet-500, #8b5cf6); }
-    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
     :host-context(.design-new) .pf-tq--done .pf-tq__tag,
     :host-context(.design-new) .pf-tq__stat--done { color: var(--violet-text, #6d28d9) !important; }
     :host-context(.design-new) .pf-tq__id,
@@ -2700,10 +2727,9 @@ const COUNTERS: CounterSpec[] = [
     /* Queue "done" stat: palette only — violet check, never green. */
     :host-context(.design-new) .pf-tq__stat--done,
     :host-context(.design-new) .pf-tq__stat--done .pf-tq__stat-u { color: var(--violet-text, #6d28d9); }
-    /* Group dots: NORMAL is neutral; red / amber stay for urgent / high. */
-    :host-context(.design-new) .pf-dot[data-level='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
-    :host-context(.design-new) .pf-dot[data-level='urgent'],
-    :host-context(.design-new) .pf-dot[data-level='high'] { box-shadow: none; }
+    /* Group dots: NORMAL is neutral; red only for Urgent (order priority). */
+    :host-context(.design-new) .pf-dot[data-priority='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
+    :host-context(.design-new) .pf-dot[data-priority='urgent'] { box-shadow: none; }
 
     /* ════ Adaptive tile grid (owner): 3 / 2 / 1 by the LIST's width ════
        In a grid cell the tile stacks: content on top (name wraps, never
@@ -2728,8 +2754,9 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq__who { font-size: 13px !important; font-weight: 500 !important; color: var(--text-secondary) !important; }
     :host-context(.design-new) .pf-tq__sub,
     :host-context(.design-new) .pf-tq__note { font-size: 12px; color: var(--text-muted); }
-    /* Stripe only where it means something: urgent (red) / high (amber). */
-    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high) .pf-tq__cap { background: transparent; }
+    /* Stripe only where it means something: an Urgent order (red). */
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent) .pf-tq__cap { background: transparent; }
+    .pf-tq__tat { margin-left: auto; }
     /* Intake scan field: kit input + a real secondary Receive. */
     :host-context(.design-new) .pf-mw-scan:focus-within {
       border-color: var(--color-violet-600, #7c3aed);
@@ -2765,6 +2792,7 @@ export class MyWorkComponent implements OnInit {
         id: 'lab:' + sid,
         label: e.barcode,
         sub: e.patient,
+        verb: 'Resume result for',
         link: ['/lab/sample', sid] as const,
       })));
   });
@@ -3194,16 +3222,71 @@ export class MyWorkComponent implements OnInit {
     this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`).subscribe({
       next: async rep => {
         try {
-          if (!rep) { this.toasts.info('Report is not generated yet for this order.'); return; }
-          // Letterpad setting on → asks letterhead vs plain paper for this job.
-          const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
-          if (url === null) return;   // dismissed
-          if (url) printPdfBlobUrl(url, { revokeOnDone: true });
-          else this.toasts.error('Could not build the report to print.');
+          if (!rep) { await this.explainNoReport(orderId); return; }
+          await this.printReport(rep);
         } finally { this._printingTubeId.set(null); }
       },
-      error: e => { this._printingTubeId.set(null); this.toasts.error(ApiError.from(e).message); },
+      error: async e => {
+        // No report yet is NOT an error to toast blankly: say why (lines
+        // still open on which tube), offer a preliminary report when some
+        // tubes are fully validated, or "Generate now" when all are.
+        try {
+          if (ApiError.from(e).code === 'not_found') await this.explainNoReport(orderId);
+          else this.toasts.error(ApiError.from(e).message);
+        } finally { this._printingTubeId.set(null); }
+      },
     });
+  }
+
+  private async printReport(rep: Record<string, unknown>) {
+    // Letterpad setting on → asks letterhead vs plain paper for this job.
+    const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
+    if (url === null) return;   // dismissed
+    if (url) printPdfBlobUrl(url, { revokeOnDone: true });
+    else this.toasts.error('Could not build the report to print.');
+  }
+
+  /** generate / generate/partial guard (ReportsController). */
+  private readonly canReleaseReport = computed(() =>
+    this.auth.hasPermission('deliver_report') || this.auth.hasPermission('validate_result'));
+
+  /** Print found no report: ask the server why (GET /api/reports/readiness)
+   *  and act on it — never just "No report for this order". */
+  private async explainNoReport(orderId: string) {
+    let r: ReportReadiness | null = null;
+    try { r = await firstValueFrom(this.api.get<ReportReadiness>(reportReadinessUrl(orderId))); }
+    catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    if (!r) { this.toasts.error('Order not found.'); return; }
+    const plan = planReadiness(r, this.canReleaseReport());
+    if (plan.kind === 'ready') {
+      const rep = await firstValueFrom(this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`));
+      if (rep) await this.printReport(rep);
+      return;
+    }
+    if (plan.kind === 'generate') {
+      const ok = await this.dialog.confirm({ title: plan.title, message: plan.message, confirmLabel: 'Generate now', icon: 'printer' });
+      if (!ok) return;
+      await this.releaseAndPrint('/api/reports/generate', { orderId, type: 'final' });
+      return;
+    }
+    const actions: { value: string; label: string; variant?: 'primary' | 'secondary' }[] = [];
+    if (plan.kind === 'partial') actions.push({ value: 'partial', label: 'Print preliminary report', variant: 'primary' });
+    if (plan.openSampleId) actions.push({ value: 'open', label: 'Open pending sample', variant: plan.kind === 'partial' ? 'secondary' : 'primary' });
+    const res = await this.dialog.actions({ title: plan.title, message: plan.message, items: plan.items, actions, cancelLabel: 'Close' });
+    if (res.action === 'partial') {
+      await this.releaseAndPrint('/api/reports/generate/partial', { orderId, sampleIds: plan.partialSampleIds });
+    } else if (res.action === 'open' && plan.openSampleId) {
+      void this.router.navigate(['/lab/sample', plan.openSampleId], { queryParams: { view: 1 } });
+    }
+  }
+
+  private async releaseAndPrint(url: string, body: unknown) {
+    try {
+      const rep = await firstValueFrom(this.api.post<Record<string, unknown>>(url, body));
+      if (rep) await this.printReport(rep);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    }
   }
 
   /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
@@ -3240,8 +3323,12 @@ export class MyWorkComponent implements OnInit {
         patientName: patient?.displayName ?? 'Patient',
         patientMeta: patient ? formatPatientMeta(patient) : '',
         testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
-        // A tube reads as validated only once every test on it is signed.
-        status: tests.every(t => t.status === 'validated') ? 'validated' : 'entered',
+        // A tube reads as validated only once every test on it is signed —
+        // including lines that are not this tech's (subOrder.openLines):
+        // 8 of 13 urine lines validated is "partly validated", not done.
+        status: completedTubeStatus(tests.map(t => t.status),
+          Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0))),
+        openLines: Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0)),
         completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
       };
     }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
@@ -3306,22 +3393,11 @@ export class MyWorkComponent implements OnInit {
   readonly buckets = computed<Bucket[]>(() => {
     const enriched: Enriched[] = this.enrich(this._rows());
     const filtered = this.filterByCounter(enriched);
-    return [
-      { level: 'urgent' as const, items: filtered.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, items: filtered.filter(e => e._level === 'high') },
-      { level: 'normal' as const, items: filtered.filter(e => e._level === 'normal') }
-    ];
+    return groupByPriority(filtered);
   });
 
   private enrich(rows: OrderTest[]): Enriched[] {
-    return rows.map(t => {
-      const ral = t.subOrder?.receivedAtLab;
-      const budget = (t.test?.tatHours ?? 0) * 60;
-      const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
-      const remaining = budget - elapsed;
-      const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-      return { ...t, _level: level, _remainingMin: remaining };
-    });
+    return enrichWorkLines(rows);
   }
 
   /** Counter-tile filter runs on top of the segmented tab filter. */
@@ -3357,16 +3433,17 @@ export class MyWorkComponent implements OnInit {
   /**
    * Group bucket items by orderId so the queue shows one card per patient
    * with all their tests nested inside instead of one floating card per
-   * test. The card's TAT level is the worst (most-urgent) of any test in
-   * the order so a patient with one breached test isn't buried.
+   * test. The card's TAT chip is the soonest-due test in the order so a
+   * patient with one overdue test isn't buried; cards sort by that due time.
    */
   patientGroups(items: Enriched[]): Array<{
     orderId: string;
     patientName: string;
     patientInfo: string;
     items: Enriched[];
-    level: Level;
-    remainingMin: number;
+    priority: OrderPriority;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const byOrder = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -3374,9 +3451,8 @@ export class MyWorkComponent implements OnInit {
       if (!byOrder.has(oid)) byOrder.set(oid, []);
       byOrder.get(oid)!.push(t);
     }
-    const levelRank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
     return Array.from(byOrder.entries()).map(([orderId, group]) => {
-      const worst = [...group].sort((a, b) => levelRank[a._level] - levelRank[b._level])[0];
+      const worst = soonestDue(group);
       const patient = worst.subOrder?.order?.patient;
       return {
         orderId,
@@ -3384,10 +3460,11 @@ export class MyWorkComponent implements OnInit {
         // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
         patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
         items: group,
-        level: worst._level,
-        remainingMin: Math.min(...group.map(t => t._remainingMin))
+        priority: group.some(t => t._priority === 'urgent') ? 'urgent' as const : 'normal' as const,
+        remainingMin: worst._remainingMin,
+        dueAt: worst._dueAt
       };
-    });
+    }).sort(comparePriorityThenDue);
   }
 
   // Expand/collapse state per order id within My Work.
@@ -3399,8 +3476,8 @@ export class MyWorkComponent implements OnInit {
     this._expanded.set(next);
   }
 
-  toneFor(level: Level): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  toneFor(priority: OrderPriority): TileTone {
+    return priority === 'urgent' ? 'rose' : 'default';
   }
 
   ngOnInit() {
@@ -3544,7 +3621,7 @@ export class MyWorkComponent implements OnInit {
       // sample and open result entry directly (so any valid code opens the
       // tests, not only rows already assigned here).
       this.api.get<{ sampleId: string; orderId: string }>(
-        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).subscribe({
+        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).pipe(busyWhile(this.scanning)).subscribe({
         next: r => {
           if (r?.sampleId) {
             this._scan.set('');
@@ -3560,7 +3637,7 @@ export class MyWorkComponent implements OnInit {
       return;
     }
     const scannedBarcode = hit.subOrder?.barcode ?? q;
-    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
+    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).pipe(busyWhile(this.scanning)).subscribe({
       next: () => { this._scan.set(''); this.enterJustScanned(hit); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -3573,6 +3650,8 @@ export class MyWorkComponent implements OnInit {
   // the user is actually the assignee (auto-assigned or delegated) —
   // which prevents cross-tech scanning.
   private readonly _scanTarget = signal<OrderTest | null>(null);
+  /** The scan bar's lookup / claim request is running (Open button busy). */
+  readonly scanning = signal(false);
   readonly scanTarget = this._scanTarget.asReadonly();
   readonly scanExpected = computed(() => this._scanTarget()?.subOrder?.barcode ?? '');
 
@@ -3660,6 +3739,8 @@ export class MyWorkComponent implements OnInit {
     hasDraft: boolean;
     assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const bySample = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -3671,7 +3752,7 @@ export class MyWorkComponent implements OnInit {
       const first = tests[0];
       const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
-      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      const allDone = tests.every(x => x.status === 'entered' || isSignedOrSkipped(x.status));
       // A half-finished tube: partial values saved (draft keeps CurrentResult
       // and status in_progress) but not yet submitted. Badged so the tech can
       // spot what they left off.
@@ -3686,7 +3767,11 @@ export class MyWorkComponent implements OnInit {
       const rejections = tests
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
-      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
+      // TAT chip: the soonest-due OPEN test on the tube (done lines don't count).
+      const open = tests.filter(x => x.status !== 'entered' && x.status !== 'validated');
+      const due = soonestDue(open.length ? open : tests);
+      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections,
+               remainingMin: due._remainingMin, dueAt: due._dueAt };
     // Sequence by sample number — the queue reads 26034, 26035, 26036, not the
     // insertion order the grouping map happened to preserve.
     }).sort((a, b) => (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
@@ -3708,11 +3793,18 @@ export class MyWorkComponent implements OnInit {
     hasDraft: boolean;
     assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
     patientName: string;
     patientInfo: string;
     patientMeta: string;
   }> {
-    return this.tubesIn(items).map(tube => {
+    // Within the priority group: soonest due first (overdue on top), then
+    // sample number for a stable read.
+    const tubes = this.tubesIn(items).sort((a, b) =>
+      ((a.remainingMin ?? Infinity) - (b.remainingMin ?? Infinity))
+      || (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
+    return tubes.map(tube => {
       const patient = tube.tests[0]?.subOrder?.order?.patient;
       return {
         ...tube,
@@ -3857,6 +3949,10 @@ export class MyWorkComponent implements OnInit {
     else this.startClaimScan();
   }
   cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
+  /** This tube's claim request is running (its card shows the held look). */
+  claimingTube(sampleId: string): boolean {
+    return this._claiming() && this._claimTarget()?.sampleId === sampleId;
+  }
 
   /** Open the scan gate for the pending claim. Tubes with no printed barcode
    *  (legacy/seeder samples) can't be scan-verified, so they fall back to a
@@ -3922,12 +4018,17 @@ export class MyWorkComponent implements OnInit {
   }
   cancelDelegate() { this._delegateTests.set(null); }
 
+  /** The user a running delegation is going to (the modal's busy row). */
+  readonly delegatingTo = signal<string | null>(null);
+
   onDelegate(toUserId: string) {
     const list = this._delegateTests();
-    if (!list?.length) return;
+    if (!list?.length || this.delegatingTo()) return;
+    this.delegatingTo.set(toUserId);
     let done = 0, failed = 0, lastError = '';
     const finish = () => {
       if (done + failed < list.length) return;
+      this.delegatingTo.set(null);
       this._delegateTests.set(null);
       if (failed) this.toasts.error(
         failed === list.length ? lastError

@@ -1,3 +1,4 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,9 +7,12 @@ import {
   Injector,
   OnDestroy,
   OnInit,
+  afterNextRender,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from "@angular/core";
 import { PeopleDrawerService } from "../../core/services/people-drawer.service";
 import { ChatWindowsService } from "../../core/services/chat-windows.service";
@@ -31,10 +35,17 @@ import {
 } from "../../core/services/draft-shelf.service";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { ZoomSourceDirective } from "../../core/navigation/zoom.directive";
-import { Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { ZoomTransitionService } from "../../core/navigation/zoom-transition";
+import {
+  ActionsMenuComponent,
+  ActionsMenuTriggerDirective,
+} from "../../shared/components/actions-menu/actions-menu.component";
+import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { filter } from "rxjs/operators";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../core/auth/auth.service";
-import { ModuleScopeService } from "../../core/services/module-scope.service";
+import { OpdGateService } from "../../features/opd/shared/opd-gate.service";
 import { StoredAccount } from "../../core/auth/accounts.service";
 import { LockService } from "../../core/auth/lock.service";
 import { BranchRef } from "../../core/auth/mock-user";
@@ -55,25 +66,29 @@ import {
   PresenceOption,
   presenceLabel,
 } from "../../shared/models/presence.model";
-import { PushService } from "../../core/services/push.service";
-import { WebrtcService } from "../../core/services/webrtc.service";
-import { PatientProfileService } from "../../core/services/patient-profile.service";
-import { AppointmentBookingService } from "../../core/services/appointment-booking.service";
+import { SessionService } from "../../core/auth/session.service";
 import {
   DOCTOR_NAV,
+  OPD_NAV,
+  opdNavActive,
   ADMIN_NAV,
   MORE_NAV,
   NavItem,
   PRIMARY_NAV,
   WorkflowNavCtx,
   menusFromWorkflow,
+  withExpenses,
+  withInsights,
   NavVisibilityCtx,
   navItemVisible,
   withCollectionFallback,
 } from "../nav-items";
+import { opdAreasFor } from "../../features/opd/shared/opd-nav";
 import { RouteAccessCtx } from "../../core/auth/route-access";
 import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
-import { pickLanding } from "../../core/auth/landing.guard";
+import { isOpdOnly, pickLanding } from "../../core/auth/landing.guard";
+import { DesktopWindowService } from "../../core/services/desktop-window.service";
+import { DesktopClockComponent } from "./desktop-clock.component";
 
 @Component({
   selector: "pf-top-strip",
@@ -85,6 +100,9 @@ import { pickLanding } from "../../core/auth/landing.guard";
     NotificationBellComponent,
     PresenceAvatarComponent,
     ZoomSourceDirective,
+    DesktopClockComponent,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -94,7 +112,48 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
-  readonly draftsOpen = signal(false);
+  private readonly zoom = inject(ZoomTransitionService);
+  /** Viewport width — drives how many draft chips sit inline (draftCap). */
+  private readonly viewportW = signal(typeof window !== "undefined" ? window.innerWidth : 1440);
+  @HostListener("window:resize")
+  onViewportResize(): void {
+    this.viewportW.set(window.innerWidth);
+  }
+  /** Measured fit: the width rule is the ceiling, but the work-area tabs
+   *  share the bar, so after each layout the tray drops one chip at a time
+   *  until its chips stop overflowing (null = not measured yet). */
+  private readonly draftFit = signal<number | null>(null);
+  private readonly _draftFitReset = effect(() => {
+    this.draftShelf.items();
+    this.viewportW();
+    untracked(() => {
+      this.draftFit.set(null);
+      this.fitDraftsSoon();
+    });
+  });
+  private fitDraftsSoon(): void {
+    afterNextRender(() => {
+      const box = this.host.nativeElement.querySelector(".pf-draftshelf__scroll") as HTMLElement | null;
+      if (!box) return;
+      const cap = this.draftSplit().shown.length;
+      if (box.scrollWidth > box.clientWidth + 1 && cap > 0) {
+        this.draftFit.set(cap - 1);
+        this.fitDraftsSoon();
+      }
+    }, { injector: this.injector });
+  }
+  /** Inline chips + how many sit behind "+N". */
+  readonly draftSplit = computed(() => {
+    const fit = this.draftFit();
+    const cap = Math.min(draftCap(this.viewportW()), fit ?? Infinity);
+    return draftSplit(this.draftShelf.items(), cap, fit !== null);
+  });
+  /** The "+N" menu: every draft (sample number · patient · time). */
+  readonly draftMenu = computed(() => draftMenuActions(this.draftShelf.items(), this.draftShelf.activeId()));
+  /** Tooltip + accessible name (carries the patient name the chip omits). */
+  draftTitle(d: DraftChip, on: boolean): string {
+    return draftTitle(d, on);
+  }
   /** A draft chip zooms into the screen it resumes: it answers to its own id
    *  ("fd:<patientId>", "lab:<sampleId>") and the bare record id the
    *  destination's zoom target carries. */
@@ -102,16 +161,42 @@ export class TopStripComponent implements OnInit, OnDestroy {
     const bare = d.id.includes(":") ? d.id.slice(d.id.indexOf(":") + 1) : "";
     return bare ? [d.id, bare] : [d.id];
   }
-  /** The on-stage draft sits behind the "+N" button (not one of the 3 chips). */
+  /** The on-stage draft sits behind the "+N" chip (not one of the inline chips). */
   readonly activeDraftInOverflow = computed(() => {
     const id = this.draftShelf.activeId();
-    return !!id && this.draftShelf.items().findIndex((d) => d.id === id) >= 3;
+    return !!id && !this.draftSplit().shown.some((d) => d.id === id);
   });
+  /** A draft picked from the "+N" menu: the same navigation a chip makes
+   *  (link + query + slide state). The "+N" chip is the zoom source, so the
+   *  resume still zooms. Picking the draft already on stage is a no-op. */
+  resumeDraft(id: string): void {
+    const d = this.draftShelf.items().find((x) => x.id === id);
+    if (!d || this.draftShelf.activeId() === id) return;
+    const more = this.host.nativeElement.querySelector(".pf-draftshelf__more") as HTMLElement | null;
+    if (more) this.zoom.tap(more, this.chipZoomKeys(d));
+    const cmds = typeof d.link === "string" ? [d.link] : [...d.link];
+    void this.router.navigate(cmds, { queryParams: d.queryParams ?? {}, state: this.draftShelf.swapState(d) });
+  }
   protected readonly designMode = inject(DesignModeService);
+  /** Desktop app: full-screen clock on the bar + "Full screen" menu item. */
+  protected readonly desktopWindow = inject(DesktopWindowService);
+  /** macOS writes the shortcut its own way. */
+  protected readonly fullScreenKey =
+    typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent)
+      ? "⌃⌘F"
+      : "F11";
+  enterFullScreen(): void {
+    this.closeProfile();
+    void this.desktopWindow.setFullScreen(true);
+  }
+  /** Desktop app: notification switches in the avatar menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);
-  private readonly moduleScope = inject(ModuleScopeService);
+  /** OPD dark build: the ONE OPD visibility rule. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly lock = inject(LockService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
@@ -283,10 +368,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
   protected readonly presence = inject(PresenceService);
-  private readonly push = inject(PushService);
-  private readonly webrtc = inject(WebrtcService);
-  private readonly patientProfile = inject(PatientProfileService);
-  private readonly appointmentBooking = inject(AppointmentBookingService);
+  private readonly session = inject(SessionService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly dialog = inject(DialogService);
 
@@ -324,6 +406,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes("*"),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
   }
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
@@ -334,9 +417,17 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.gateModules(
       this.withCollection(
         this.withInventory(
-          this.visible(
-            menusFromWorkflow(this.process.active(), this.navCtx()) ??
-              PRIMARY_NAV,
+          // Expenses: a primary screen for anyone holding expense_* (same rule
+          // as its route guard), placed after the lab work items.
+          withInsights(
+            withExpenses(
+              this.visible(
+                menusFromWorkflow(this.process.active(), this.navCtx()) ??
+                  PRIMARY_NAV,
+              ),
+              (i) => this.visible([i]).length > 0,
+            ),
+            (i) => this.visible([i]).length > 0,
           ),
         ),
       ),
@@ -349,13 +440,27 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // windows), never a page — drop its work area from the nav.
     if (this.themeService.isNewDesign())
       items = items.filter((i) => !TopStripComponent.isMessagesItem(i));
-    // OPD: doctors get their Consult Room — but only once the OPD module is
-    // actually usable (tenant entitlement, or the dev preview flag). Keeps the
-    // in-progress consult build invisible on shared environments.
-    return this.auth.isDoctor() && this.moduleScope.opdUsable()
-      ? [...items, DOCTOR_NAV]
-      : items;
+    // OPD: doctors get "Consults"; anyone who can open at least one OPD area
+    // gets the general "OPD" tab — both only while the OPD gate is open
+    // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
+    // build. "Can open an OPD area" reuses the hub's own rule (opdAreasFor).
+    if (!this.opdGate.visible()) return items;
+    const out = this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    return opdAreasFor((p) => this.auth.hasAnyPermission(p)).length
+      ? [...out, OPD_NAV]
+      : out;
   });
+
+  /** Router-driven URL signal — the Angular `routerLinkActive` directive
+   *  can't cross from '/opd' into '/admin/opd', and can't EXCLUDE the
+   *  '/opd/consult' subtree from the general OPD tab, so the two OPD tabs'
+   *  active state is computed manually (opdNavActive) from this instead. */
+  private readonly currentUrl = signal("");
+  private routerSub?: { unsubscribe(): void };
+  /** Is `n` (OPD or Consults) the active tab for the current URL? */
+  opdActive(n: NavItem): boolean {
+    return opdNavActive(n, this.currentUrl());
+  }
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
    *  can draw samples when the tenant has no process workflow (PRIMARY_NAV).
@@ -512,9 +617,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.labCfg.ensureLoaded();
     this.entitlements.ensureLoaded();
     this.process.loadActive();
+    this.currentUrl.set(this.router.url);
+    this.routerSub = this.router.events
+      .pipe(filter((e) => e instanceof NavigationEnd))
+      .subscribe(() => this.currentUrl.set(this.router.url));
   }
   ngOnDestroy() {
-    /* no-op */
+    this.routerSub?.unsubscribe();
   }
 
   toggleBranch() {
@@ -598,29 +707,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   async logout() {
     this.profileOpen.set(false);
-
-    // ── (1) Unregister push notifications ──────────────────────────
-    await this.push.unregister().catch(() => undefined);
-
-    // ── (2) Disconnect realtime hubs ───────────────────────────────
-    await this.chat.disconnect().catch(() => undefined);
-    await this.signaling.disconnect().catch(() => undefined);
-
-    // ── (3) Reset WebRTC ───────────────────────────────────────────
-    this.webrtc.reset();
-
-    // ── (4) Close open modals/modeless overlays ─────────────────────
-    this.patientProfile.close();
-    this.appointmentBooking.close();
-
-    // ── (5) Reset cached tenant/config data ────────────────────────
-    this.tenantState.reset();
-    this.labCfg.reset();
-    this.entitlements.reset();
-
-    // ── (6) Final auth sign-out + redirect ─────────────────────────
-    await this.auth.signOut();
-    this.router.navigateByUrl("/login");
+    // The ONE ordered sign-out (SessionService): revoke → push → sockets →
+    // timers / overlays / tenant caches → clear → /login (history replaced).
+    await this.session.logout();
   }
 
   // ── Multi-account switching + PIN (shared lab machines) ───────────
@@ -711,6 +800,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return pickLanding({
       ...this.routeCtx(),
       moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+      opdDoctor: this.auth.isDoctor() && this.opdGate.visible(),
+      opdOnlyDoctor: isOpdOnly(this.auth.user()?.modules),
     });
   }
 

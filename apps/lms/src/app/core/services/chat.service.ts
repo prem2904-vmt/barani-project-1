@@ -16,6 +16,9 @@ import { ChatPopupService } from './chat-popup.service';
 import { ChatWindowsService } from './chat-windows.service';
 import { ChatHistoryService } from './chat-history.service';
 import { applyReaction } from './chat-local-store';
+import { DesktopNotifyService, desktopInFront, pageShown } from './desktop-notify.service';
+import { chatBadgeCount, decideBusinessAlert, decideChatAlert } from './desktop-notify.policy';
+import { PresenceService } from './presence.service';
 
 /** Kinds of surface that can be "showing" a conversation. `reader` = the
  *  messages page / people drawer (drives read state + unread); `window` =
@@ -51,6 +54,8 @@ export class ChatService implements OnDestroy {
   private readonly windows = inject(ChatWindowsService);
   private readonly hubFactory = inject(HUB_FACTORY);
   private readonly injector = inject(Injector);
+  /** Desktop app: window state, per-user notification settings, badge. */
+  private readonly desktop = inject(DesktopNotifyService);
   /** On-device history + relay sync/ack (the server only relays). */
   readonly history = inject(ChatHistoryService);
   private connection: signalR.HubConnection | null = null;
@@ -67,7 +72,11 @@ export class ChatService implements OnDestroy {
   private lifecycleWired = false;
   /** Reports this device's foreground thread(s) to the hub so the server
    *  skips pushing a device that is showing the thread (lazy chunk). */
-  private foreground: { poke(): void; resend(): void; stop(): void } | null = null;
+  private foreground: { poke(): void; resend(): void; stop(): void; hide(): void } | null = null;
+  /** Native shell (Capacitor) is active. A WKWebView kept alive in the
+   *  background (audio / VoIP modes) may still say document "visible", so the
+   *  native app state is authoritative for "this device shows the thread". */
+  private appActive = true;
   /** Bumped when a viewer registers / leaves, so effects re-track its ids(). */
   private readonly viewersVersion = signal(0);
   private foregroundFor: signalR.HubConnection | null = null;
@@ -75,6 +84,10 @@ export class ChatService implements OnDestroy {
 
   readonly isConnected = signal(false);
   readonly conversations = signal<Conversation[]>([]);
+  /** The conversation list has answered at least once for this account
+   *  (success or failure). Until then the Messages list shows its skeleton,
+   *  never "No conversations yet" (ND-PATTERN "Loading feedback"). */
+  readonly conversationsLoaded = signal(false);
   readonly activeConversationId = signal<string | null>(null);
   readonly activeMessages = signal<ChatMessage[]>([]);
   readonly typingByConversation = signal<Map<string, Set<string>>>(new Map());
@@ -122,6 +135,13 @@ export class ChatService implements OnDestroy {
       this.viewedConversationIds();
       untracked(() => this.foreground?.poke());
     });
+    // Desktop app: unread chats (muted ones excluded) → dock / taskbar badge.
+    if (this.desktop.active) {
+      effect(() => {
+        const n = chatBadgeCount(this.conversations());
+        untracked(() => this.desktop.setChatUnread(n));
+      });
+    }
   }
 
   /** Chat identity of the signed-in user (Supabase sub, fallback app id). */
@@ -175,7 +195,7 @@ export class ChatService implements OnDestroy {
       // onBusinessNotification for why this lives here and how each platform
       // surfaces it.
       on('BusinessNotification',
-        (p: { kind: string; title: string; body?: string | null; critical?: boolean }) =>
+        (p: { kind: string; title: string; body?: string | null; critical?: boolean; referenceType?: string | null; referenceId?: string | null }) =>
           this.onBusinessNotification(p));
       on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
         this.onMessageRead(p));
@@ -354,6 +374,22 @@ export class ChatService implements OnDestroy {
     });
     window.addEventListener('online', wake);
     window.addEventListener('pageshow', wake);
+    // Native: the app going inactive (minimised, app switcher, lock) must reach
+    // the hub before iOS / Android freeze the web view — otherwise the server
+    // keeps treating this device as "viewing" and skips its chat push.
+    if (this.platform.isCapacitor()) {
+      void import('@capacitor/app')
+        .then(({ App }) => App.addListener('appStateChange', ({ isActive }) => this.appActiveChanged(isActive)))
+        .catch(() => undefined);
+    }
+  }
+
+  /** Native app became active / inactive (Capacitor appStateChange). Inactive
+   *  → report "not viewing" to the hub at once (synchronously). */
+  appActiveChanged(active: boolean): void {
+    this.appActive = active;
+    if (!active) this.foreground?.hide();
+    else this.foreground?.poke();
   }
 
   /**
@@ -376,6 +412,7 @@ export class ChatService implements OnDestroy {
     this.isConnected.set(false);
 
     this.conversations.set([]);
+    this.conversationsLoaded.set(false);
     this.activeConversationId.set(null);
     this.activeMessages.set([]);
     this.threads.set(new Map());
@@ -410,8 +447,10 @@ export class ChatService implements OnDestroy {
     return () => { this.viewers.delete(key); this.viewersVersion.update(v => v + 1); };
   }
 
+  /** The page is on screen. Desktop: the main window is shown (the page
+   *  itself always claims 'visible' there — see pageShown). */
   private static docVisible(): boolean {
-    return typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    return pageShown();
   }
 
   /** True when a surface of the given kinds shows this conversation on a
@@ -434,7 +473,7 @@ export class ChatService implements OnDestroy {
     const out = new Set<string>();
     for (const v of this.viewers.values()) for (const id of v.ids()) if (id) out.add(id);
     if (!this.windows.isPhone()) for (const id of this.windows.open()) out.add(id);
-    return ChatService.docVisible() ? [...out] : [];
+    return ChatService.docVisible() && this.appActive ? [...out] : [];
   }
 
   private attachForeground(conn: signalR.HubConnection): void {
@@ -447,7 +486,7 @@ export class ChatService implements OnDestroy {
       this.foreground = new m.ForegroundReporter({
         send: (visible, ids, handle) => conn.invoke('ReportForeground', visible, ids, handle),
         viewed: () => this.viewedConversationIds(),
-        visible: () => ChatService.docVisible(),
+        visible: () => ChatService.docVisible() && this.appActive,
         handle: () => this.pushHandle(),
         onViewed: ids => this.onThreadsOnScreen(ids),
       }).start();
@@ -574,14 +613,21 @@ export class ChatService implements OnDestroy {
 
   async loadConversations(): Promise<void> {
     const asOf = this.identity();
-    const res = await firstValueFrom(this.api.get<Conversation[]>(
-      '/api/chat/conversations'
-    ));
+    let res: Conversation[] | null;
+    try {
+      res = await firstValueFrom(this.api.get<Conversation[]>(
+        '/api/chat/conversations'
+      ));
+    } catch (e) {
+      if (this.identity() === asOf) this.conversationsLoaded.set(true);
+      throw e;
+    }
     // The account changed while the request was in flight — this list
     // belongs to the previous person; drop it.
     if (this.identity() !== asOf) return;
     const list = res ?? [];
     this.conversations.set(list);
+    this.conversationsLoaded.set(true);
     this.seedReadReceipts(list);
     this.catchUpReads();
   }
@@ -962,10 +1008,23 @@ export class ChatService implements OnDestroy {
    *    delivers the banner/toast, so anything louder here would double up
    */
   private onBusinessNotification(
-    p: { kind: string; title: string; body?: string | null; critical?: boolean }
+    p: { kind: string; title: string; body?: string | null; critical?: boolean; referenceType?: string | null; referenceId?: string | null }
   ): void {
     window.dispatchEvent(new CustomEvent('pf-notification-received'));
     if (this.platform.isCapacitor()) return;
+    if (this.desktop.active) {
+      // Desktop app: in front → toast; otherwise a native notification (per
+      // the user's Alerts switch / Do-not-disturb; critical always shows).
+      const how = decideBusinessAlert({
+        inFront: desktopInFront() ?? false,
+        settings: this.desktop.settings(),
+        dnd: this.myDnd(),
+        critical: !!p.critical,
+      });
+      if (how === 'toast') this.toasts.info(p.body ? `${p.title} — ${p.body}` : p.title);
+      else if (how === 'native') this.desktop.alert(p);
+      return;
+    }
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
     if (hidden) {
       this.notify.notifyBusiness(p.title, p.body ?? '');
@@ -1055,6 +1114,8 @@ export class ChatService implements OnDestroy {
     const mentioned = !!m.mentions && m.mentions.includes(me);
     if (conv?.isMuted && !mentioned) return;
 
+    if (this.desktop.active) { this.alertDesktop(m, conv, mentioned); return; }
+
     if (this.isViewing(m.conversationId)) { this.ringtone.playSoft(); return; }
     if (this.isNativeIos()) return;
 
@@ -1074,6 +1135,40 @@ export class ChatService implements OnDestroy {
         sentAt: m.sentAt,
       });
     }
+  }
+
+  /** Desktop app: who sees what is decided by decideChatAlert (window in
+   *  front? thread on screen? Messages / Sound switches, Do-not-disturb). */
+  private alertDesktop(m: ChatMessage, conv: Conversation | undefined, mentioned: boolean): void {
+    const d = decideChatAlert({
+      mutedForMe: !!conv?.isMuted && !mentioned,
+      onScreen: this.isViewing(m.conversationId),
+      inFront: desktopInFront() ?? false,
+      settings: this.desktop.settings(),
+      dnd: this.myDnd(),
+    });
+    if (d.sound === 'soft') this.ringtone.playSoft();
+    else if (d.sound === 'ping') this.ringtone.playPing();
+    if (d.show === 'none') return;
+    const sender = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
+    const title = conv?.isGroup && conv.name ? `${sender} · ${conv.name}` : sender;
+    const preview = messagePreview(m);
+    if (d.show === 'native' && this.notify.notifyDesktop(title, preview, m.conversationId)) return;
+    this.popups.push({
+      conversationId: m.conversationId,
+      messageId: m.id,
+      senderId: m.fromUserId,
+      senderName: sender,
+      groupName: conv?.isGroup ? (conv.name ?? null) : null,
+      preview,
+      sentAt: m.sentAt,
+    });
+  }
+
+  /** My presence is Do-not-disturb / In surgery (the server already mutes
+   *  device pushes for these; the desktop mirrors it). Resolved lazily. */
+  private myDnd(): boolean {
+    try { return this.injector.get(PresenceService).myStatusIsDnd(); } catch { return false; }
   }
 
   private isNativeIos(): boolean {

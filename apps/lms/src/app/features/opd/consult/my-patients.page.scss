@@ -1,0 +1,62 @@
+// OPD → My patients. Band, cards, tabs, chips, tiles, the side card and the
+// sheet come from order-create.component.scss + book-visit.page.scss (loaded
+// first); this file only adds the patient tile's token and the glance body.
+// Theme tokens only (light + dark).
+
+// Patient tiles: 2 per row, 1 when the card is narrow (the list is a container).
+.mp__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 4px 0; }
+@container (min-width: 560px) { .mp__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.mp__tile .pf-crow__main { align-items: flex-start; gap: 12px; padding: 12px; }
+.mp__token {
+  flex: none; min-width: 48px; height: 48px; padding: 0 6px; border-radius: 12px;
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 600; color: var(--text-primary);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+  border: 1px solid var(--border-muted);
+}
+.pf-crow--in .mp__token { border-color: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 55%, transparent); }
+.mp__agesex { margin-left: 8px; font-size: 12.5px; font-weight: 400; color: var(--text-tertiary); }
+.mp__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.mp__tag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
+  background: var(--nd-chip-bg, color-mix(in srgb, var(--text-primary) 6%, transparent));
+}
+.mp__tag--done svg { color: var(--color-violet-600, #7c3aed); }
+.mp__tag--warn { color: var(--error-text, #dc2626); background: color-mix(in srgb, var(--error-text, #dc2626) 10%, transparent); }
+
+// Status dot tones beyond the desk's free / ok / long.
+.pf-ov-dot[data-tone='live'] { background: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-violet-600, #7c3aed) 20%, transparent); }
+.pf-ov-dot[data-tone='done'] { background: var(--text-muted); }
+
+// ── AT A GLANCE ──
+.mp__glancetoken { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+.mp__who { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+.mp__whoname { font-size: 16px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+.mp__sec { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--border-muted); }
+.mp__sech { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.mp__p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-primary); overflow-wrap: anywhere; }
+.mp__muted { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+.mp__vitals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.mp__vital {
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border-muted);
+}
+.mp__vk { font-size: 11px; color: var(--text-tertiary); }
+.mp__vv { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.mp__allergy {
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.45; color: var(--error-text, #b91c1c);
+  background: color-mix(in srgb, var(--error-text, #dc2626) 8%, transparent);
+}
+.mp__allergy svg { flex: none; margin-top: 1px; }
+.mp__allergy strong { font-weight: 600; }
+.mp__bartoken { font-size: 13px; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .mp__vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+// The journey dock sits at the bottom of the page, just above the navbar.
+.mp__dock { margin-top: auto; }

@@ -4,18 +4,28 @@ import { ThemeService } from './core/services/theme.service';
 import { CapacitorService } from './core/services/capacitor.service';
 import { PushService } from './core/services/push.service';
 import { PlatformService } from './core/services/platform.service';
+import { DeviceClassService } from './core/services/device-class.service';
 import { VersionService } from './core/services/version.service';
 import { LockService } from './core/auth/lock.service';
 import { CallRingService } from './core/services/call-ring.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
+import { isPublicPatientPath } from './core/navigation/public-paths';
+import { SessionService } from './core/auth/session.service';
+import { BusyComponent } from './shared/primitives/skeleton-kit.component';
+import { OpdGateService } from './features/opd/shared/opd-gate.service';
+import { DesktopWindowService } from './core/services/desktop-window.service';
+import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Navigation feedback is the page OPEN (core/navigation/page-open.service.ts):
+         the destination's frame + skeleton in the shell, then a view
+         transition — no top progress bar. -->
     <router-outlet></router-outlet>
 
     <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
@@ -23,6 +33,15 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
 
     <!-- Full-screen profile switch (Windows-style) — target's PIN gates it. -->
     <pf-switch-screen />
+
+    <!-- Sign-out cover: from the first step of the sign-out sequence until
+         the login screen is in place, so the half-cleared app never paints. -->
+    @if (session.ending()) {
+      <div class="pf-signout-cover">
+        <pf-busy label="Signing out…"></pf-busy>
+        <span aria-hidden="true">Signing out…</span>
+      </div>
+    }
 
     <!-- Version gate: shown only when the API's minClientVersion outruns this
          bundle (see VersionService). Persistent + blocking by design — an
@@ -53,6 +72,19 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
     }
   `,
   styles: [`
+    .pf-signout-cover {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
     /* Mirrors the pf-dialog-host card so the gate reads like the app's
        own dialogs — minus the actions row (nothing to confirm/dismiss). */
     .pf-vg-root {
@@ -142,19 +174,40 @@ export class App implements OnInit {
   private readonly _capacitor = inject(CapacitorService);
   private readonly _push = inject(PushService);
   private readonly _platform = inject(PlatformService);
+  /** html.device-touch / -tablet / -phone / -desktop: index.html sets it
+   *  before the first paint; this keeps it current (mouse attached, etc.). */
+  private readonly _device = inject(DeviceClassService);
   protected readonly version = inject(VersionService);
   private readonly _lock = inject(LockService);
+  /** Owns the ordered sign-out; also registers itself with AuthService so
+   *  an expiry detected there runs the same sequence. */
+  protected readonly session = inject(SessionService);
   /** Root owner of call ringtones — alive on every screen (incl. /login),
    *  so a ring always stops on a terminal call state or account switch. */
   private readonly _ring = inject(CallRingService);
   private readonly _injector = inject(Injector);
+  /** OPD dark build: installs `window.pf.opd()` silently (no banner, no UI hint). */
+  private readonly _opdGate = inject(OpdGateService);
+  /** Desktop kiosk full screen: Esc (when the app didn't use it) leaves it,
+   *  on every screen incl. /login. No-op off Electron. */
+  private readonly _desktopWindow = inject(DesktopWindowService);
+  /** Tray "Open Instruments" / "Unmatched results today" → navigates the
+   *  window (electron/tray.js sends 'menu-action'; no-op off Electron). */
+  private readonly _menuActions = inject(ElectronMenuActionService);
   /** The URL the app was opened with, captured before the router's first
    *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';
 
   async ngOnInit() {
+    this._opdGate.install();
+    // Patient-facing public pages (report link, order tracking) are opened in
+    // a phone browser by someone who is not a user of the app: no idle lock,
+    // no push / calling hand-offs — keep the page light and self-contained.
+    // (Browser only: the installed apps keep their full boot everywhere.)
+    const publicPage = !this._platform.isCapacitor() && !this._platform.isElectron()
+      && isPublicPatientPath(typeof window !== 'undefined' ? window.location.pathname : '');
     // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).
-    this._lock.start();
+    if (!publicPage) this._lock.start();
     // Version handshake — best-effort, fire-and-forget (errors are ignored
     // inside the service so an offline boot never hangs on it).
     void this.version.init();
@@ -170,6 +223,7 @@ export class App implements OnInit {
     // Push + CallKit init lives in its own service so the surface area
     // (token registration, payload routing) stays out of capacitor.service.
     // No-op on web/electron.
+    if (publicPage) return;
     void this._push.init();
     // Offline calling hand-offs, lazy-loaded (off the initial bundle):
     //  • answer / decline / show a call rung by PUSH (Android notification

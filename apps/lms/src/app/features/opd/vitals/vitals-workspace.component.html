@@ -1,0 +1,75 @@
+<section class="pf-band-page pf-vs">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/opd" [customSearch]="true" [contextBar]="true">
+      <div band-search class="nd-ctx pf-ob-ctx">
+        <span class="nd-ctx__primary">Vitals station</span>
+        @if (nurse()) { <span class="nd-ctx__chip pf-ob-hide-phone">{{ nurse() }}</span> }
+        <span class="pf-ob-count nd-num"><b>{{ (queue() ?? []).length }}</b>waiting</span>
+      </div>
+    </pf-hero-band>
+  } @else {
+    <pf-screen-header eyebrow="OPD" title="Vitals station" subtitle="Patients waiting for vitals."></pf-screen-header>
+  }
+
+  <div class="pf-band-body pf-band-body--fill">
+    <div class="pf-ob-split pf-ob-split--left">
+      <aside class="nd-card" aria-label="Vitals queue">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 4a3 3 0 0 1 0 6M21 20v-1a5 5 0 0 0-3-4.6"/></svg></span>
+          <span class="nd-card__label">Vitals queue</span>
+          <span class="nd-card__spacer"></span>
+          <span class="pf-vs-note">oldest first</span>
+        </header>
+        <div class="nd-card__body">
+          @if (queue() === null) {
+            <pf-skeleton-rows [rows]="4" label="Loading the vitals queue…"></pf-skeleton-rows>
+          } @else {
+            <ul class="pf-ob-list" aria-label="Patients waiting for vitals">
+              @for (r of queue()!; track r.id) {
+                <li>
+                  <button type="button" class="pf-ob-row" [attr.aria-pressed]="selectedId() === r.id" (click)="select(r.id)">
+                    <span class="pf-ob-token">{{ r.tokenLabel }}</span>
+                    <span class="pf-ob-row__txt">
+                      <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                      <span class="pf-ob-row__meta nd-num">{{ r.patientMeta }} · {{ r.doctorName }}@if (r.departmentName) { · {{ r.departmentName }} }</span>
+                    </span>
+                    <span class="pf-ob-row__side nd-num">{{ waited(r.createdAt) }}</span>
+                  </button>
+                </li>
+              } @empty {
+                <li><div class="nd-empty nd-empty--compact"><p class="nd-empty__title">No one waiting for vitals</p>
+                  <p class="nd-empty__body">Patients appear here after the desk books them.</p></div></li>
+              }
+            </ul>
+          }
+        </div>
+      </aside>
+
+      <section class="nd-card" aria-label="Vitals">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span>
+          <span class="nd-card__label">Vitals</span>
+          @if (visit(); as v) {
+            <span class="nd-card__note">{{ v.patient.name }} · {{ v.patient.age }}{{ v.patient.sex ? '/' + v.patient.sex.charAt(0) : '' }} · token {{ v.tokenLabel }} · for {{ v.doctor.name }}@if (v.doctor.department) { · {{ v.doctor.department }} }</span>
+          }
+        </header>
+        <div class="nd-card__body pf-vs-body">
+          @if (!selectedId()) {
+            <div class="nd-empty"><p class="nd-empty__title">Pick a patient</p><p class="nd-empty__body">Choose someone from the vitals queue to record their readings.</p></div>
+          } @else if (!visit()) {
+            <pf-skeleton-rows [rows]="3" label="Opening the patient…"></pf-skeleton-rows>
+          } @else {
+            <pf-opd-vitals-form></pf-opd-vitals-form>
+            <p class="pf-vs-hint">The desk opens this step right after the token is issued, the way Collect follows a lab payment. With a separate station, the next patient is picked from the queue. OPD settings → Workflow → Vitals.</p>
+          }
+        </div>
+        @if (visit()) {
+          <div class="nd-card__foot pf-vs-foot">
+            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="saving() || skipping()" [pfBusy]="skipping()" (click)="skip()">Skip vitals</button>
+            <button type="button" class="nd-btn nd-btn--primary" [disabled]="saving() || skipping()" [pfBusy]="saving()" (click)="save()" data-cta>Save &amp; send to doctor</button>
+          </div>
+        }
+      </section>
+    </div>
+  </div>
+</section>

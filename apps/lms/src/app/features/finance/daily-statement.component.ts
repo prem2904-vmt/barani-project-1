@@ -9,9 +9,13 @@ import { NumberInputComponent } from '../../shared/primitives/number-input.compo
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SkeletonCardComponent } from '../../shared/primitives/skeleton-kit.component';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
+import { labToday } from '../../shared/utils/lab-clock';
+import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
 
 interface ModeTotal { mode: string; count: number; total: number; }
 
@@ -80,7 +84,10 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    HeroBandComponent
+    HeroBandComponent,
+    BusyDirective,
+    SkeletonCardComponent,
+    NdDateComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -92,8 +99,8 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
                       [value]="closureQ()" (valueChange)="closureQ.set($event)">
           <ng-container band-tools>
             <div class="pf-ds-band" role="group" aria-label="Business day and shift">
-              <input type="date" class="pf-ds-band__in" aria-label="Business day" [max]="todayStr"
-                     [ngModel]="dateStr()" (ngModelChange)="setDate($event)" />
+              <pf-nd-date label="Business day" class="pf-ds-band__in" [max]="todayStr"
+                          [value]="dateStr()" (valueChange)="setDate($event)"></pf-nd-date>
               <input type="text" class="pf-ds-band__in pf-ds-band__shift" aria-label="Shift (optional)"
                      placeholder="Shift (optional)"
                      [ngModel]="shiftName()" (ngModelChange)="shiftName.set($event)" (change)="load()" />
@@ -103,7 +110,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
             @if (stmt(); as s) {
               @if (!s.closure) {
                 <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                        [disabled]="countedCash() === null || saving()" (click)="closeDay()"
+                        [disabled]="countedCash() === null || saving()" [pfBusy]="saving()" pfBusyLabel="Closing…" (click)="closeDay()"
                         [attr.aria-label]="shiftName().trim() ? 'Close shift' : 'Close day'"
                         [title]="countedCash() === null ? 'Enter the counted cash first' : (shiftName().trim() ? 'Close shift' : 'Close day')">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -126,8 +133,8 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
       <div class="flex flex-wrap items-end gap-3 mb-5 pf-classic-only">
         <div>
           <label class="pf-label">Business day</label>
-          <input type="date" class="pf-input" [max]="todayStr"
-                 [ngModel]="dateStr()" (ngModelChange)="setDate($event)" />
+          <pf-nd-date label="Business day" [max]="todayStr"
+                      [value]="dateStr()" (valueChange)="setDate($event)"></pf-nd-date>
         </div>
         <div>
           <label class="pf-label">Shift (optional)</label>
@@ -261,6 +268,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
             <div class="mt-4 pf-classic-only">
               <pf-touch-btn size="md" variant="primary"
                             [disabled]="countedCash() === null || saving()"
+                            [busy]="saving()" busyLabel="Closing…"
                             (pressed)="closeDay()">
                 <span icon-left aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -275,7 +283,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
         }
       } @else {
         <pf-tile tone="default" padding="lg" class="block mb-5">
-          <p class="text-[13px]" style="color: var(--text-tertiary);">Loading statement…</p>
+          <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading statement…"></pf-skeleton-card>
         </pf-tile>
       }
 
@@ -402,7 +410,8 @@ export class DailyStatementComponent implements OnInit {
     c.shift,
   ]));
 
-  readonly todayStr = new Date().toLocaleDateString('en-CA'); // yyyy-MM-dd, local
+  /** Today's business date — strictly IST (lab-clock), never the device's day. */
+  readonly todayStr = labToday();
 
   readonly dateStr = signal<string>(this.todayStr);
   readonly shiftName = signal<string>('');
@@ -459,7 +468,7 @@ export class DailyStatementComponent implements OnInit {
     this.loadClosures();
   }
 
-  setDate(d: string) {
+  setDate(d: string | null) {
     if (!d) return;
     this.dateStr.set(d);
     this.load();

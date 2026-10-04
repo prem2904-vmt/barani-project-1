@@ -4,8 +4,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../core/services/lab-features.service';
 import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-workflow.model';
 import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
+import { PageOpenService } from '../../core/navigation/page-open.service';
 
 /**
  * Menu hub. Shows the ACTIONS the admin placed inside a menu (resolved from
@@ -29,7 +31,7 @@ import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.com
         } @else {
           <div class="mh-grid">
             @for (t of tiles(); track t.action.id) {
-              <button type="button" class="mh-tile" [style.--accent]="m.color" (click)="open(t.entry.route)">
+              <button type="button" class="mh-tile" [style.--accent]="m.color" (click)="open(t.entry.route, $event)">
                 <span class="mh-ic">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                     @for (p of t.entry.iconPath; track $index) { <path [attr.d]="p" /> }
@@ -64,8 +66,10 @@ import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.com
 export class MenuHubComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
+  private readonly features = inject(LabFeaturesService);
 
   private readonly menuId = toSignal(this.route.paramMap.pipe(map(p => p.get('menuId') ?? '')), { initialValue: '' });
 
@@ -78,12 +82,18 @@ export class MenuHubComponent {
     if (!cfg || !menu) return [];
     const isSuper = this.auth.permissions().includes('*');
     return cfg.actions
-      .filter(a => a.categoryId === menu.id && a.enabled)
+      // Enabled here AND its module entitled (Home Visits ⇒ home collection).
+      .filter(a => a.categoryId === menu.id && a.enabled && this.features.actionAvailable(a.type))
       .sort((a, b) => a.order - b.order)
       .map(a => ({ action: a, entry: catalogFor(a.type) }))
       .filter((t): t is { action: typeof t.action; entry: ActionCatalogEntry } =>
         !!t.entry && (!t.entry.permissions?.length || isSuper || this.auth.hasAnyPermission(t.entry.permissions)));
   });
 
-  open(route: string) { this.router.navigate([route]); }
+  /** A tile opens a lazy screen: it turns "held" the same frame, until the
+   *  navigation settles (ND-PATTERN "Loading feedback"). */
+  open(route: string, ev?: Event) {
+    this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
+    this.router.navigate([route]);
+  }
 }

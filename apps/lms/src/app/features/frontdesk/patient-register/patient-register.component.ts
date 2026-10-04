@@ -5,11 +5,13 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import {
   WorkflowRendererComponent,
+  DOB_ESTIMATED_SUFFIX,
   splitByStorage
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
-import { Patient } from '../../../shared/models/patient.model';
+import { BABY_OF_TITLE, Patient, isBabyOfTitle } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -24,11 +26,15 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { ageParts } from '../../../shared/utils/patient-age';
+import { dobFromAge } from '../../../shared/forms/patient-fields';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 
 @Component({
   selector: 'pf-patient-register',
   standalone: true,
-  imports: [SkeletonFormComponent,
+  imports: [SkeletonFormComponent, BusyDirective,
     WorkflowRendererComponent,
     ScreenHeaderComponent,
     TileComponent,
@@ -65,17 +71,30 @@ import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.c
           </button>
           @if (!patientId()) {
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-order press" [disabled]="saving() || !config()"
+                    [pfBusy]="saving() && savingAs() === 'order'" pfBusyLabel="Saving patient…"
                     (click)="submit('create_order')" aria-label="Save & book test" title="Register, then book a test">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.4A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.4-2.6L14 9.5V3"/><path d="M7.5 15h9"/></svg>
               Save &amp; Book test
             </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-appt press" [disabled]="saving() || !config()"
+@if (features.appointmentsEnabled()) {
+                        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-appt press" [disabled]="saving() || !config()"
+                    [pfBusy]="saving() && savingAs() === 'appointment'" pfBusyLabel="Saving patient…"
                     (click)="submit('create_appointment')" aria-label="Save & book appointment" title="Register, then book an appointment">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
               Save &amp; Book appointment
             </button>
+            }
+            @if (opdGate.visible()) {
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-consult press" [disabled]="saving() || !config()"
+                    [pfBusy]="saving() && savingAs() === 'consult'" pfBusyLabel="Saving patient…"
+                    (click)="submit('create_consult')" aria-label="Save & book consultation" title="Register, then book a consultation">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/></svg>
+              Save &amp; Book consult
+            </button>
+            }
           }
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-reg-primary press" [disabled]="saving() || !config()"
+                  [pfBusy]="saving() && savingAs() === 'profile'" pfBusyLabel="Saving patient…"
                   (click)="submit(null)"
                   [attr.aria-label]="saving() ? 'Saving' : primaryLabel()" [title]="primaryLabel() + ' (Ctrl/⌘+Enter)'"
                   aria-keyshortcuts="Control+Enter Meta+Enter">
@@ -132,7 +151,7 @@ import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.c
             [initialValues]="initialValues()"
             [submitting]="saving()"
             [finishLabel]="primaryLabel()"
-            [extraActions]="patientId() ? [] : registerActions"
+            [extraActions]="patientId() ? [] : registerActions()"
             (enterSubmit)="submit(null)"
             (valuesChange)="onValuesChange($event)"
             (extraActionClicked)="onExtraAction($event)"
@@ -205,7 +224,7 @@ import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.c
             [initialValues]="initialValues()"
             [submitting]="saving()"
             [finishLabel]="patientId() ? 'Save changes' : 'Register patient'"
-            [extraActions]="patientId() ? [] : registerActions"
+            [extraActions]="patientId() ? [] : registerActions()"
             (valuesChange)="onValuesChange($event)"
             (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
@@ -265,6 +284,7 @@ export class PatientRegisterComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly route = inject(ActivatedRoute);
   protected readonly theme = inject(ThemeService);
   /** Web pointer (autofocus only on web — never pop the phone keyboard). */
@@ -282,7 +302,9 @@ export class PatientRegisterComponent implements OnInit {
   protected readonly returnTo = signal<string | null>(null);
 
   /** The pill's subject: the FULL name as typed (never truncated), else
-   *  "New patient" / the loaded name. Baby: "Baby of <mother>". */
+   *  "New patient" / the loaded name. The title leads, so "Baby" reads
+   *  "Baby Arjun Kumar" and "Baby of" (names = the mother's) reads
+   *  "Baby of Priya Kumar" — one rule, never "Baby Baby of". */
   protected readonly subjectName = computed(() => {
     const v = this.values();
     const pick = (n: string) => {
@@ -293,9 +315,7 @@ export class PatientRegisterComponent implements OnInit {
     const title = pick('title');
     const first = pick('first_name');
     const last = pick('fathers_name');
-    const name = title === 'Baby'
-      ? (first ? `Baby of ${first}` : '')
-      : [first, last].filter(Boolean).length ? [title, first, last].filter(Boolean).join(' ') : '';
+    const name = [first, last].filter(Boolean).length ? [title, first, last].filter(Boolean).join(' ') : '';
     return name || this.loadedName() || (this.patientId() ? 'Patient' : 'New patient');
   });
   protected readonly primaryLabel = computed(() => this.patientId() ? 'Save changes' : 'Register patient');
@@ -322,7 +342,7 @@ export class PatientRegisterComponent implements OnInit {
 
   /** Band actions (and Enter on the last field / Ctrl-⌘+Enter) → the
    *  renderer, which validates EVERY field first. */
-  submit(action: 'create_order' | 'create_appointment' | null): void {
+  submit(action: 'create_order' | 'create_appointment' | 'create_consult' | null): void {
     const r = this.renderer();
     if (!r || this._saving()) return;
     if (action) r.triggerExtraAction(action); else r.finish();
@@ -357,20 +377,33 @@ export class PatientRegisterComponent implements OnInit {
   private readonly _config = signal<WorkflowConfig | null>(null);
   private readonly _saving = signal(false);
   protected readonly values = signal<WorkflowFormValues>({});
-  protected readonly registerActions: Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }> = [
-    { id: 'create_order', label: 'Create Order', variant: 'ghost' },
-    { id: 'create_appointment', label: 'Create Appointment', variant: 'ghost' }
-  ];
+  /** OPD dark build: "create_consult" only appears while OPD is visible —
+   *  computed so it reacts to the console flag / entitlement, not a static
+   *  array. */
+  protected readonly registerActions = computed<Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }>>(() => {
+    const actions: Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }> = [
+      { id: 'create_order', label: 'Create Order', variant: 'ghost' },
+      { id: 'create_appointment', label: 'Create Appointment', variant: 'ghost' },
+    ];
+    if (this.opdGate.visible()) actions.push({ id: 'create_consult', label: 'Book Consultation', variant: 'ghost' });
+    return actions;
+  });
 
   readonly record = this._record.asReadonly();
   readonly config = this._config.asReadonly();
   readonly saving = this._saving.asReadonly();
+  /** Which band action started the save in flight (only that button shows busy). */
+  /** Appointments on? (the ONE lab-feature rule) — hides Save & Book appointment. */
+  protected readonly features = inject(LabFeaturesService);
+  private readonly _savingAs = signal<'profile' | 'order' | 'appointment' | 'consult'>('profile');
+  readonly savingAs = this._savingAs.asReadonly();
 
-  /** True while the Baby title is selected. */
-  private readonly isBaby = computed(() => {
+  /** True while the "Baby of" title is selected (an unnamed newborn — the
+   *  name boxes hold the MOTHER's name). Plain "Baby" is an own-name title. */
+  private readonly isBabyOf = computed(() => {
     const v = this.values();
     const k = Object.keys(v).find(key => key.endsWith('::title'));
-    return k ? v[k] === 'Baby' : false;
+    return k ? isBabyOfTitle(String(v[k] ?? '')) : false;
   });
 
   /** Field names that belong in the "Contact & IDs" section. */
@@ -381,19 +414,27 @@ export class PatientRegisterComponent implements OnInit {
    *    sections. The split steps KEEP the original step name, so every
    *    storage key (`basic_info::phone`) — and therefore save/load — is
    *    untouched; only the on-screen grouping changes.
-   *  - while Title = Baby the FIRST-NAME box itself becomes "Baby of" (the
-   *    standard infant convention — the mother's name IS the baby's identity
-   *    anchor) and the separate guardian field is dropped: one input, asked
-   *    once. Save copies the name into the guardian column too. */
+   *  - while Title = "Baby of" the name boxes become "Mother's first name" /
+   *    "Mother's last name" (the standard infant convention — the mother's
+   *    name IS the unnamed baby's identity anchor) and the separate guardian
+   *    fields are dropped: asked once. Save copies the mother's name into the
+   *    guardian column too. Title = "Baby" is an ordinary own-name entry.
+   *  - a title list that offers "Baby" always offers "Baby of" right after it
+   *    (the two meanings split 2026-09-28; legacy "Baby" rows were re-titled
+   *    "Baby of", so the pill must exist even on a customised form). */
   protected readonly displayConfig = computed<WorkflowConfig | null>(() => {
     const cfg = this._config();
     if (!cfg) return null;
-    const baby = this.isBaby();
+    const baby = this.isBabyOf();
 
-    const relabel = (f: WorkflowConfig['steps'][number]['fields'][number]) =>
-      baby && f.name === 'first_name'
-        ? { ...f, title: 'Baby of', placeholder: "Mother's name" }
-        : f;
+    type Field = WorkflowConfig['steps'][number]['fields'][number];
+    const relabel = (f: Field): Field => {
+      if (f.name === 'title') return PatientRegisterComponent.withBabyOf(f);
+      if (!baby) return f;
+      if (f.name === 'first_name') return { ...f, title: "Mother's first name", placeholder: "Mother's first name" };
+      if (f.name === 'fathers_name') return { ...f, title: "Mother's last name", placeholder: "Mother's last name" };
+      return f;
+    };
 
     // Canonical identity order: the name trio fills row one, DOB and the
     // guardian/"Baby of" pair fill row two; tenant-added extras follow.
@@ -557,13 +598,17 @@ export class PatientRegisterComponent implements OnInit {
     const v = this.values();
     const dobKey = Object.keys(v).find(k => k.endsWith('::date_of_birth'));
     const dob = dobKey ? v[dobKey] : undefined;
-    const age = dob ? this.yearsBetween(String(dob), new Date()) : undefined;
+    // The shared patient-age helper: whole years for workflow rules
+    // ("age < 18"), fractional for any reference-band pick.
+    const parts = dob ? ageParts(String(dob)) : null;
+    const age = parts?.years;
     const sexKey = Object.keys(v).find(k => k.endsWith('::sex'));
     return {
       userId: user?.id,
       tenantId: user?.tenantId,
       branchId: user?.branchId,
       patientAge: age,
+      patientBandAge: parts?.fractionalYears,
       patientSex: sexKey ? String(v[sexKey]) : undefined,
       'user.permissions': user?.permissions ?? [],
       // New design: the phone field's default country (the tenant's own).
@@ -625,7 +670,19 @@ export class PatientRegisterComponent implements OnInit {
     }
   }
 
-  /** Sex a title implies. Baby and Dr. imply nothing — never guess those. */
+  /** Title field → the same field with "Baby of" inserted right after "Baby"
+   *  when the list offers Baby but not Baby of. Anything else is untouched. */
+  private static withBabyOf<F extends { options?: Array<{ value: string; label: string }> }>(f: F): F {
+    const opts = f.options ?? [];
+    const i = opts.findIndex(o => o.value === 'Baby');
+    if (i === -1 || opts.some(o => isBabyOfTitle(o.value))) return f;
+    const next = [...opts];
+    next.splice(i + 1, 0, { value: BABY_OF_TITLE, label: BABY_OF_TITLE });
+    return { ...f, options: next };
+  }
+
+  /** Sex a title implies. Baby / Baby of (the BABY's sex is asked, never the
+   *  mother's) and Dr. imply nothing — never guess those. */
   private static readonly TITLE_SEX: Record<string, string> = {
     'Mr.': 'Male', 'Master': 'Male', 'Mrs.': 'Female', 'Ms.': 'Female'
   };
@@ -707,10 +764,12 @@ export class PatientRegisterComponent implements OnInit {
       this.savePatient(event.values, 'order');
     } else if (event.actionId === 'create_appointment') {
       this.savePatient(event.values, 'appointment');
+    } else if (event.actionId === 'create_consult') {
+      this.savePatient(event.values, 'consult');
     }
   }
 
-  private savePatient(values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
+  private savePatient(values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment' | 'consult') {
     const cfg = this._config();
     if (!cfg || this._saving()) return;
     const { standard, metadata } = splitByStorage(cfg, values);
@@ -729,14 +788,18 @@ export class PatientRegisterComponent implements OnInit {
     }
 
     this.applyHybridDob(body);
-    // Baby: the "Baby of" box IS the first-name field holding the mother's
-    // name — mirror it into the guardian column (the display form asks once).
-    if (body['title'] === 'Baby' && !body['guardianName'] && body['firstName']) {
-      body['guardianName'] = body['firstName'];
+    // The DOB came from the age box → tell the server it is an estimate.
+    if (body['dateOfBirth'] && this.dobEstimated(values)) body['dobEstimated'] = true;
+    // "Baby of": the name boxes hold the MOTHER's name — mirror it into the
+    // guardian column (the display form asks once). Plain "Baby" is the
+    // baby's own name: no mirroring.
+    if (isBabyOfTitle(String(body['title'] ?? '')) && !body['guardianName'] && body['firstName']) {
+      body['guardianName'] = [body['firstName'], body['fathersName']].filter(Boolean).join(' ');
     }
     // Duplicate-confirmation retry: carry the force flag to the API even
     // though it is not a form field.
     if ((values as Record<string, unknown>)['force'] === true) body['force'] = true;
+    this._savingAs.set(target);
     this._saving.set(true);
 
     const pid = this.patientId();
@@ -770,6 +833,8 @@ export class PatientRegisterComponent implements OnInit {
             ? this.returnToOrder(patient.id)
             : target === 'order'
             ? this.orderEntry.startNewOrder(patient.id)
+            : target === 'consult'
+            ? this.orderEntry.startConsult(patient.id)
             : target === 'appointment'
               ? this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } })
               : this.router.navigate(['/frontdesk/patients', patient.id]);
@@ -804,7 +869,7 @@ export class PatientRegisterComponent implements OnInit {
 
   /** OPS-49: same name + phone already registered — confirm before creating
    *  a genuine namesake (retries with force=true). */
-  private async confirmDuplicate(message: string, values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
+  private async confirmDuplicate(message: string, values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment' | 'consult') {
     const ok = await this.dialog.confirm({
       title: 'Patient already registered?',
       message,
@@ -840,6 +905,7 @@ export class PatientRegisterComponent implements OnInit {
           if (val !== undefined && val !== null) {
             if (camelKey === 'dateOfBirth' && typeof val === 'string') {
               initial[key] = val.slice(0, 10);
+              if (p.dobEstimated) initial[key + DOB_ESTIMATED_SUFFIX] = true;
             } else {
               initial[key] = val;
             }
@@ -860,22 +926,20 @@ export class PatientRegisterComponent implements OnInit {
     if ((dob === undefined || dob === null || dob === '') && ageRaw != null && `${ageRaw}` !== '') {
       const age = Math.floor(Number(ageRaw));
       if (Number.isFinite(age) && age >= 0 && age < 150) {
-        const d = new Date(); d.setHours(0, 0, 0, 0);
-        d.setFullYear(d.getFullYear() - age);
-        body['dateOfBirth'] = d.toISOString();
+        // A calendar date (yyyy-MM-dd), never toISOString() of local midnight
+        // (that is the PREVIOUS day in UTC for IST). Flagged as an estimate.
+        body['dateOfBirth'] = dobFromAge(age, 'years');
+        body['dobEstimated'] = true;
       }
     }
+    // DOB is the single source: the server derives Age from it.
     if (body['dateOfBirth']) delete body['age'];
   }
 
-  private yearsBetween(dobIso: string, now: Date): number {
-    const dob = new Date(dobIso);
-    if (Number.isNaN(dob.getTime())) return 0;
-    let age = now.getFullYear() - dob.getFullYear();
-    if (now.getMonth() < dob.getMonth() ||
-        (now.getMonth() === dob.getMonth() && now.getDate() < dob.getDate())) {
-      age--;
-    }
-    return Math.max(0, age);
+  /** Did the DOB field's value come from the age box (an estimate)? */
+  private dobEstimated(values: WorkflowFormValues): boolean {
+    const v = values as Record<string, unknown>;
+    const key = Object.keys(v).find(k => k.endsWith(DOB_ESTIMATED_SUFFIX) && /date_of_birth|(^|_|::)dob|birth_?date/i.test(k));
+    return !!key && v[key] === true;
   }
 }

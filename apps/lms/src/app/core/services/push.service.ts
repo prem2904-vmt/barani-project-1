@@ -12,6 +12,7 @@ import { NativeRingState } from './native-ring.state';
 import { SignalingService } from './signaling.service';
 import { SessionScopeService } from '../auth/session-scope.service';
 import { environment } from '../../../environments/environment';
+import { canonicalNotificationType } from '../../shared/utils/notification-type';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -275,6 +276,14 @@ export class PushService {
     try { await (await import('./chat-native-reply')).clearReplyCredentials(); } catch { /* old shell */ }
   }
 
+  /** The build's APNs environment, read once from the native shell. */
+  private _apnsEnv: Promise<'production' | 'development' | null> | null = null;
+  private apnsEnvironment(): Promise<'production' | 'development' | null> {
+    return this._apnsEnv ??= import('./chat-native-reply')
+      .then(m => m.readApnsEnvironment())
+      .catch(() => null);
+  }
+
   /** Guards against overlapping registration runs (the auth effect can fire
    *  several times in quick succession on boot/login). */
   private _registering = false;
@@ -299,11 +308,17 @@ export class PushService {
       for (let i = 0; i < delays.length; i++) {
         if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
         try {
+          const platform = this.detectPlatform();
+          // iOS: tell the server which APNs gateway these tokens belong to
+          // (TestFlight = production, Xcode Debug = sandbox) — sent only when
+          // known, so the field is absent on older native shells.
+          const apnsEnvironment = platform === 'ios' ? await this.apnsEnvironment() : null;
           await firstValueFrom(this.api.post('/api/devices/register', {
-            platform: this.detectPlatform(),
+            platform,
             appToken: this.appToken(),
             voipToken: this.voipToken(),
-            appVersion: this.appVersion()
+            appVersion: this.appVersion(),
+            ...(apnsEnvironment ? { apnsEnvironment } : {}),
           }));
           void this.syncNativeReply();
           return; // landed
@@ -377,7 +392,9 @@ export class PushService {
     title?: string,
     body?: string
   ): void {
-    const kind = (data['kind'] as string) ?? '';
+    // Business kinds are matched on the canonical catalog key (M20): old
+    // servers / queued pushes may still send the legacy "lms." spelling.
+    const kind = canonicalNotificationType((data['kind'] as string) ?? '');
     switch (kind) {
       case 'chat-message': {
         const conv = data['conversationId'] as string;
@@ -420,13 +437,13 @@ export class PushService {
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
       }
-      case 'lms.report_ready': {
+      case 'report_ready': {
         if (opened) this.router.navigate(['/reports']);
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
       }
-      case 'lms.sample_rejection':
-      case 'lms.sample_ready_collection': {
+      case 'sample_rejection':
+      case 'sample_ready_collection': {
         if (opened) this.router.navigate(['/frontdesk']);
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;

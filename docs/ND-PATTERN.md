@@ -127,7 +127,17 @@ Which side it sits on depends on what the companion does:**
   `aria-label` + the visually-hidden `.nd-rowact__t`. Never a gradient.
 - Header / group counts are pluralised properly (`plural()` in
   `shared/utils/plural.ts`): "1 sample", "2 samples". Group dots: NORMAL is
-  neutral; red / amber only for urgent / high.
+  neutral; red only for URGENT.
+- **Priority vs TAT (owner, 2026-09-29).** The lab has exactly two
+  priorities — the ORDER's **Urgent** and **Normal** (`urgent` / `stat` →
+  Urgent; `routine` / `normal` / empty → Normal). There is no "High". Work
+  queues group by that priority (Urgent first) and sort by TAT due time
+  inside each group. TAT is a separate clock chip (`pf-tat-indicator`,
+  `shared/utils/lab-priority.ts`), never called a priority: **Overdue**
+  (rose), **Due in 20m** / **Due in 1h 20m** (amber, within the hour),
+  otherwise the plain due time (**Due 14:30**, neutral). A test with no TAT
+  budget shows no chip. The abnormal-result "High" (H) flag is a result
+  flag and is unaffected.
 - Tiles don't repeat a test count ("1 test") — it is noise on a sample row.
 - Status on rows (Validated, Submitted, Draft) = neutral chips; a violet
   dot/check marks "done". Red only for real warnings (Re-entry).
@@ -270,7 +280,7 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 Queue / My Work / Completed / Culture tiles and Lab Intake rows lead with the
 SAMPLE ID: ~16.5px, weight 600, normal text colour, Noto Sans tabular numbers
 (never small violet, never monospace). Patient name ~13px / 500 secondary,
-meta ~12px muted. Colour stripes only for urgent (red) / high (amber). A
+meta ~12px muted. Colour stripe only for an Urgent order (red). A
 received / done row goes quieter (muted text + a small violet check), never
 a green or amber pill. The next step on a culture case is a neutral chip
 whose small violet dot is the one accent.
@@ -325,7 +335,7 @@ Queue / My Work / Completed / Culture lists use `<ul [ndTileGrid]="…">`
 own width decides — never the window, because side panes can be pinned:
 ≥1100px → 3 columns, ≥640px → 2, below → 1. Tiles in a row share a height,
 names wrap (never truncate), the row action sits at the tile's bottom-right,
-and group headers (URGENT / HIGH / NORMAL) span the full width above each
+and group headers (URGENT / NORMAL — order priority) span the full width above each
 group's grid. **Search results stay one per row** (section 6).
 
 ## 7. Search: one mode per device type
@@ -347,6 +357,16 @@ group's grid. **Search results stay one per row** (section 6).
 
 ## 8. Touch
 
+- **Tablet vs desktop is decided by the DEVICE, not only the width.** The
+  native app, iPads (incl. iPad-as-Mac), Android and touch-only browsers get
+  `html.device-touch` (+ `device-tablet` / `device-phone`) before the first
+  paint (index.html, kept current by `DeviceClassService`); a mouse or
+  trackpad keeps `device-desktop`. Never write a raw `@media (max-width:
+  1279px)` / `(min-width: 1280px)`: use `shared/styles/_device-tier.scss` —
+  `dt.tablet-tier`, `dt.tablet-band`, `dt.desktop-only` — so a 1280px+
+  Android tablet or iPad Pro in landscape keeps the tablet layout and a
+  desktop is unchanged. A Tailwind `xl:` class can't tell them apart: use it
+  for density only, never for a layout switch.
 - Tap targets are at least 44px. Inputs are at least 16px on phones, so iOS
   doesn't zoom.
 - **Phone bottom bar:** `.nd-bottombar` (+ `.nd-bottombar__info`) carries the
@@ -381,6 +401,136 @@ group's grid. **Search results stay one per row** (section 6).
   the last field's Done focuses the CTA. Desktop / hardware keyboards are
   unchanged. Never hand-roll another keypad for result entry.
 
+### PF Keys: the in-app keypad for search fields on tablets
+
+On iPad and Android tablets the system keyboard covers 40–45% of the
+screen and squeezes the results. PF Keys docks at the bottom at about 28%
+(QWERTY) or 32% (code and number pads) of a landscape tablet (about 21–23%
+in portrait). The page above it resizes; nothing overlaps.
+
+- **Where it is used:** search fields only.
+  - Test search in order create (the pill's Tests scope).
+  - Patient search: `pf-patient-search` everywhere, and the pill's Patient
+    scope.
+  - Sample / tube number lookups: My Work, Receive and Collect, both the
+    band search (`<pf-hero-band keys="sample">`) and the classic inputs.
+  - Everything else keeps the system keyboard: remarks, report text,
+    names, addresses, the pill's Doctor / Hospital scopes, and the Receive
+    sequence box. Never put it on a textarea.
+- **Which devices:** the `device-tablet` class only (`DeviceClassService`).
+  Phones and desktops are untouched: no `inputmode`, no keypad.
+- **How to use it:** `<input pfKeys="test|patient|sample">`.
+  - Optional inputs: `pfKeysEnter` / `pfKeysEnterAria` (the primary label),
+    `[pfKeysArrows]="true"` (only where the screen already moves a
+    highlight with ↑/↓), `[pfKeysPrefixes]`, and `pfKeysLayout` (a default
+    override).
+  - `[pfKeys]="null"` switches it off.
+- **Layouts:**
+  - `qwerty`: Q–P, A–L, Z–M (plus ↑ ↓ where supported). The bottom row is
+    `123`, the system-keyboard key, space, ⌫, **Add ↵**, and the hide
+    chevron. There is no mic.
+  - `code`: a DEPARTMENT PREFIX grid, a 3×4 digit grid (1–9, – 0 .), then
+    ⌫, hide, `ABC`, the system-keyboard key, and a tall **Add ↵**.
+  - `number`: 1–9 and 0, ⌫, `ABC`, and **Open ↵**.
+- **Default layouts:**
+  - Tests default to QWERTY; `123` switches to the code pad.
+  - Patient defaults to the number pad; `ABC` switches to QWERTY, whose
+    `123` goes back to the number pad.
+  - Samples default to the code pad.
+  - The last layout is remembered per user per kind in localStorage (the
+    `pf-keys-layout:<user>:<kind>` key). Every access is try/catch.
+- **Department prefixes** are the lab's own codes, never hardcoded.
+  - Order create passes its catalogue's department codes.
+  - Otherwise `/api/tenants/departments` is loaded once, lazily.
+  - For a test search, a key types the code (`HEM`).
+  - For a sample lookup, a key types the short-barcode prefix DD+YY
+    (`0226`) when the department has a 2-digit sample code. Otherwise it
+    types the letter code.
+    (Live sample IDs are `[space/dept/Lab code][date][number]` — see
+    "Sample search preset" below, which pre-types the real head.)
+- **The primary key** sends the field its OWN Enter. Test search adds the
+  highlighted row (the row shows a neutral "↵ Add" chip while the keys
+  are up). Patient search opens or selects the highlighted patient. The
+  band searches submit. Primary colour is used only on this key.
+  - The label follows what Enter will DO. Order create binds
+    `[pfKeysEnter]` / `[pfKeysEnterAria]` / `[pfKeysEnterTone]` to its
+    highlight: **Add ↵** when the highlighted test is not in the order,
+    **Remove ↵** when it is (Enter toggles). Remove is destructive-neutral:
+    the neutral key colour with a muted-red outline and text (ND danger),
+    never the violet gradient and never a filled red. Fields that don't
+    bind them keep their fixed label (Open / Select / Receive / Search).
+- **Fast typing (`key-tap.ts`, shared with the result numpad):**
+  - Typing keys (letters, digits, space, ⌫, ↑/↓) act on `pointerdown`, once
+    per pointerId, so rolled-over multi-finger taps all land in order.
+    Never `(click)` alone: a click waits for the lift, and touch browsers
+    drop the clicks of overlapping taps.
+  - Commit keys (Enter, 123/ABC, hide, system keyboard, department
+    prefixes) act on `pointerup` of the same finger on the same key; a
+    `pointercancel` (scroll) does nothing.
+  - The click that follows a press is swallowed (document capture, matched
+    by position and time), so nothing doubles and nothing clicks through
+    to the page after the keys close. A click with no press before it
+    (Enter / Space on a key, a screen reader) still acts.
+  - Keys are `touch-action: none` and unselectable (no double-tap zoom; a
+    pinch can't cancel two rolled-over fingers). ⌫ deletes on touch-down;
+    held, it clears the field.
+- **The engine is the result numpad's, not a fork.**
+  - It uses the same `NumpadService`, also exported as `PfKeysService`.
+  - `inputmode="none"` is set on pointerdown and `readonly` is never used.
+  - Each key is replayed through the field's keydown listeners, then a
+    real `input` event fires, so ngModel and debounced searches work
+    unchanged.
+  - A real hardware key makes the keypad step aside.
+  - Hide keeps focus; tapping the field brings the keypad back.
+  - No autocorrect or suggestions: `autocomplete` / `autocorrect` /
+    `autocapitalize=off`, `spellcheck=false`.
+- **Escape hatch:** the keyboard key gives THIS field the system keyboard
+  until it blurs, for paste and unusual characters.
+- **Docking:**
+  - While open, `html.pf-keys-open` is set and `--pf-keys-h` holds the
+    keypad height.
+  - The shell's `[data-pf-keys-host]` scroller is padded by that height
+    with `!important`, so fixed-height pages end right above the keys.
+  - `KeyboardService.setInAppKeyboard(true)` treats PF Keys as a keyboard:
+    the docked navbar steps aside, so there is no double gap.
+  - Fixed bars, such as order create's cart bar, sit at
+    `bottom: calc(var(--pf-keys-h) + 8px)`, directly above the keys.
+  - Dropdowns subtract the height (listen for `pf-keys:resize`).
+- **Look and feel:**
+  - Slate keys on a tray, 10px radius, keys at least 44px tall.
+  - Light and dark tokens; the safe-area bottom inset is respected.
+  - Reduced motion is respected.
+  - Each key is a `tabindex=-1` button with an aria-label ("Letter Q",
+    "Backspace (hold to clear)", "Add selected test"), and the panel is a
+    labelled group.
+  - The panel is its own lazy chunk, loaded the first time a tablet field
+    shows it.
+
+### Sample search preset (`pfSamplePreset`)
+
+A lab user's suggestion for labs doing 1000+ samples a day: the sample
+search boxes open with the current sample-ID head already typed, so the
+tech types only the tail number.
+
+- **Where:** the sample lookups only: the band search with `keys="sample"`
+  (on by itself) and the classic inputs of My Work, Receive and Collect
+  (`<input pfKeys="sample" pfSamplePreset>`). Every device, not only tablets.
+- **What it types** comes from the lab's REAL sample-ID format
+  (`GET /api/config/sample-search-preset`), never a guess: `[prefix][sep][date][sep]`
+  exactly as the server prints IDs — `2609` for a yymm lab, `HEM26` / `MIC-2609-`
+  when the user works in ONE department / space (their auto-assign pools),
+  else the branch's Lab code. The date is the LAB's (branch timezone, default
+  Asia/Kolkata) and is computed on focus, so it turns into `2610` on 1 October
+  without a reload.
+- **Behaviour:** typed on focus of an EMPTY field, caret at the end; one
+  Backspace (hardware or the PF Keys ⌫) clears the whole preset; a letter
+  typed first replaces it (a patient name on Collect); Enter with only the
+  preset does nothing; leaving the field with only the preset clears it.
+- **Setting:** Lab settings → Sample identification → "Pre-fill sample
+  search" (tenant-wide). Automatic by default: ON when the format starts
+  with year+month (yymm, yymmdd), OFF otherwise; the switch overrides it and
+  "Reset" returns to automatic.
+
 ## 9. Motion
 
 | Token | Value | Use |
@@ -395,8 +545,8 @@ group's grid. **Search results stay one per row** (section 6).
   (a confirm tap, e.g. a drawn vial), `.nd-anim-rise` (a sheet).
 - Stagger list rows by about 18ms.
 - Everything is off under `prefers-reduced-motion`.
-- **Navigation motion — one rule: list → detail = ZOOM, step → step =
-  SLIDE.**
+- **Navigation motion — list → detail = ZOOM, step → step = SLIDE,
+  everything else OPENS AS A PAGE.**
   - **Zoom** (`core/navigation/zoom-transition.ts` + `zoom.directive.ts`):
     put `[pfZoomSource]="keys"` on the tile/row that opens a detail and
     `[pfZoomTarget]="keys"` on the detail's main card AND its loading
@@ -413,7 +563,17 @@ group's grid. **Search results stay one per row** (section 6).
     a reason prompt) call `zoom.rearm(key)` right before navigating.
   - **Slide** (`core/navigation/slide-transition.ts`): a flow's next step
     (Order & Payments / front desk → Collect) slides forward; back
-    reverses. Everything else swaps instantly.
+    reverses.
+  - **Page open** (`core/navigation/page-open.service.ts`, `pf-vt-page`):
+    every other move to a different screen. Only the shell's `<main>`
+    moves (app bar + nav stay still): the old screen eases out (150ms),
+    the new one eases in with a 10px rise + 0.992 scale (240ms,
+    `--nd-spring`). A slow navigation first draws the destination's frame
+    (`<pf-page-frame>`: band + skeleton in that screen's layout, from
+    `page-skeleton.ts`), and the screen then cross-fades from it
+    (`pf-vt-settle`) — nothing rises twice. Same screen with new query
+    params and the branch hop swap instantly. No View Transitions API →
+    the shell plays the same entrance in CSS (`data-po-enter`).
   - Real-browser proof: `apps/lms-e2e/src/zoom-transition.rbac.spec.ts`
     (every module pair, 5 taps each).
   - Order & Payments is a zoom destination too: a parked draft (In progress
@@ -432,6 +592,43 @@ group's grid. **Search results stay one per row** (section 6).
   holds until the new screen's API calls settle (>= 750ms), then the screen
   zooms up. Reduced motion: opacity only.
 
+### Loading feedback
+
+Owner, 2026-09-29: *"Wherever there is an action that takes time, there needs
+to be an animation so the user feels something is happening."* Every tap that
+waits on the network or on a lazy screen gives feedback — one standard set,
+no new looks:
+
+| Wait | What shows | Primitive |
+| --- | --- | --- |
+| **A button's request** (save, submit, send, print, approve…) | The SAME frame: `aria-busy`, dimmed, repeat presses swallowed. After 150ms: the kit's busy dots inside the button, and its words say what is happening ("Saving…"). | `[pfBusy]="saving()"` on a native button (`shared/directives/busy.directive.ts`), `[busy]` on `pf-touch-btn`; `busyWhile(flag)` (RxJS) sets the flag. Keep the button's own `[disabled]` binding. |
+| **A screen on its way** (lazy chunk, guards) | The screen OPENS at the tap (owner, 2026-09-30: "not a loading bar — a page-open animation and skeletons"). After 90ms: the DESTINATION's frame (its band + a skeleton of its body in that screen's layout) eases in over the screen being left, which eases out. On arrival the view transition opens the screen (fade + small rise, 240ms, nd spring; a pure cross-fade when the frame was up). Zoom / slide pairs keep their own motion (frame only after 400ms). No View Transitions (older WebKit): the same entrance in CSS. Reduced motion: instant. **Never a top progress bar.** | `PageOpenService` + `<pf-page-frame>` (shell, once) + `slideTransition` (`pf-vt-page`). Layout per destination: ONE table, `core/navigation/page-skeleton.ts` — add a row when you add a screen. |
+| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). When the destination is heavy to build, navigate AFTER that frame is painted so the press is never swallowed. | `PageOpenService.markSource(el)` + `afterNextPaint(() => router.navigate(…))` (`shared/utils/busy.ts`) |
+| **Opening an editor / drawer / page** | Its OWN layout as a skeleton on the first frame — band + name chip placeholder, the section card as fields, the side card as a block — never a blank form or a frozen previous screen. Save is not offered for a record that isn't on screen yet. | Skeleton kit (`pf-skeleton-form / -card / -detail`), held with `heldFlag(loading)` (600ms minimum). Canonical: the test editor (`recordSkeleton()`). |
+| **A grid / list's first load** | Skeleton rows in the grid's box (over the mounted grid so it keeps its size); later reloads keep the rows on screen. | `pf-skeleton-table` / `pf-skeleton-rows`, `heldFlag`. Canonical: Test Master (`listSkeleton()`). |
+| **A long save / upload / bulk job** | The button stays busy AND the region says so: a progress count when the work is countable ("Saving 3 of 12…"), otherwise the busy dots with the words. | `[pfBusy]` + text; `pf-busy` inline. |
+| **A lazy screen the user is about to open** | Nothing — it is simply fast: the list warms the editor's code while idle and on hover / focus of its action. | `prefetchWhenIdle(key, loader)` + `prefetch(key, loader)` (`shared/utils/prefetch.ts`), with ONE loader shared with the route (e.g. `test-editor.loader.ts`). |
+
+Timing rules (`shared/utils/busy.ts`):
+
+- **Instant press feedback, always** — the pressed control changes in the
+  same frame (busy state, `.press` scale, held tint). Never a dead click.
+- **Moving indicators only after `BUSY_SHOW_AFTER_MS` (150ms)** — dots
+  never flicker for a fast answer (`spinDelay` / `createSpinDelay`); the
+  destination frame waits `FRAME_AFTER_MS` (90ms).
+- **Once shown, held `BUSY_MIN_SHOW_MS` (300ms)**; load-driven skeletons are
+  held 600ms (`heldFlag`, see "Load-driven states hold a minimum").
+- **Reduced motion:** no shimmer, no page-open motion, static dots, no pulse — the
+  states still appear (opacity / tint only).
+- **Accessibility:** skeleton presets are the loading region (role=status,
+  aria-busy, polite label); busy buttons carry `aria-busy` + an SR label;
+  the destination frame announces "Opening <screen>…" once.
+- **Not a loading look:** the PF logo (`pf-loading-logo`) is sign-in branding
+  only; never spinners that block the whole screen for one button's request.
+- **Tests:** a screen that loads asserts its skeleton on the first render and
+  its busy button (disabled + `aria-busy`) while the request is in flight —
+  see `test-editor.loading.spec.ts`, `busy.directive.spec.ts`.
+
 ## 10. Always
 
 - **No emoji.** Icons are stroked inline SVGs with `aria-hidden="true"`;
@@ -441,6 +638,55 @@ group's grid. **Search results stay one per row** (section 6).
 - **Theme tokens only.** Light and dark must both be right; never force dark.
 - **Tests:** add specs for the pattern hooks. Examples: only one primary; kit
   classes present; no truncation; mode switching.
+- **Esc that the screen uses is taken.** The desktop app opens full screen and
+  a spare Esc leaves it (`core/services/desktop-fullscreen-esc.ts`). An
+  overlay that closes on Esc is `role="dialog"` / `alertdialog` / `menu`, a
+  floating `listbox`, an expanded `aria-haspopup` / combobox trigger, or
+  carries `data-pf-esc`; any OTHER Esc action (clear a selection, zoom out of a
+  detail, deselect) calls `preventDefault()` when it acts.
+
+### Desktop full screen + top-strip clock (Electron only)
+
+- Opens full screen on every launch (nothing remembered). Esc leaves it only
+  when the app did not use the Esc (rule above); back in with F11 (Windows /
+  Linux), ⌃⌘F or the green button (macOS), or **Full screen** in the avatar
+  menu (shown only when windowed).
+- While full screen the top strip ends (right end, after the avatar) with a
+  Windows-taskbar-style clock (`pf-desktop-clock`): two right-aligned lines,
+  time on top ("12:39 PM") and the dd/mm/yyyy date under it ("30/09/2026"),
+  IST, Indian locale (12 h), tabular numbers, minute ticks, `<time datetime>`.
+  Windowed, web and the iPad / phone apps never show it.
+
+### The ⋮ actions menu (`pf-actions-menu`)
+
+- ONE reusable kebab menu: `shared/components/actions-menu/actions-menu.component.ts`.
+  It is the secondary-actions home next to a screen's primary CTA (the primary
+  stays a visible button). Hosts pass `[actions]` already filtered by permission
+  + state and handle `(action)` with their EXISTING handlers (DialogService
+  confirms stay in the host). Project a host-styled button with
+  `pfActionsTrigger` to keep the host's own button classes.
+- Popover beside the ⋮ on web / iPad; a bottom sheet (handle, heading, Cancel,
+  above the navbar) on phones ≤640px. `role=menu` / `menuitem`, ↑ ↓ Home End,
+  Esc / Tab close, focus returns to the ⋮. Rows ≥44px, stroked SVG icons.
+- Reports: every report screen (Report view, Results rows, Patient profile order
+  detail, Validate) uses it; shared share/link/delivery flows live in
+  `core/services/report-actions.service.ts` (patient link = `/track/{token}`,
+  fallback `/reports/public/{qrToken}`; share ladder in `shared/utils/report-share.ts`).
+
+### Draft tray (bottom bar)
+
+- The docked bar's "work you left unfinished" tray (`layout/top-strip`,
+  rules in `draft-tray.ts`): a quiet "Drafts N" caption, then compact SOLID
+  chips (nd chip radius, hairline, small violet dot = unsubmitted) that show
+  ONLY the sample number (front desk: the patient) in tabular figures. The
+  patient name lives in the tooltip / `aria-label` ("Resume result for 26123 ·
+  Mr. Sathish Kumar") and the overflow menu — never on the chip.
+- Chip count = the width ceiling (`draftCap`: 3/4/5/6), then MEASURED: a chip
+  is dropped while the chips overflow; with no room for one the tray collapses
+  to a "Drafts N" chip. The rest sit behind "+N", which opens `pf-actions-menu`
+  (every draft: number, patient · time; the on-stage one `current`).
+- Selection is ARIA (`aria-current` / `data-current`), never a `--on` class.
+  Phones (<768px) don't show the tray (owner).
 
 ## 11. Scanner
 
@@ -527,6 +773,16 @@ unit of work. It follows the band rules above with these specifics
 - **Notes in ONE step:** the pencil (or "+ Note") opens an inline
   textarea under that row with focus in it. Enter or blur saves,
   Shift+Enter is a new line, Esc cancels.
+- **Report notes** (Lab settings → "Technician notes on report", per
+  branch): a quiet document-icon button (`pf-report-note-button`) on each
+  test row / test card header / profile header opens the inline editor
+  (`pf-report-note-editor`: textarea + B / I / U / bullets / numbers,
+  Ctrl/Cmd+B/I/U, live "Prints as" preview, 1000 cap); a saved note shows
+  read-only under its row with Edit. Department + whole-report notes live in
+  the "Report notes" card (`pf-report-notes-card`) after the results. One
+  `ReportNotesStore` per screen; the server decides what is editable. Never
+  a second "Note" button style — the comment "+ Note" stays for the bench
+  conversation.
 - **Type scale:** card label 13px / 600 uppercase (12px on phones — it
   must beat the global phone `h2` cap), parameter 14px / 500, chips and
   tabs 13px, buttons 14px, meta 12px. Watch global phone rules with
@@ -1226,11 +1482,24 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
   **Print**, **Share with…** (only with the Messages module) as ghosts, and
   THE primary **Send WhatsApp** (delivery to the patient). Web: text
   buttons. Touch: 44px icons, words kept via `aria-label`. Phones: the
-  primary + a **More** icon that opens a sheet (Print · Share with a
-  colleague · Edit results · Cancel) above the navbar.
+  primary + the ⋮ report-actions menu (`pf-actions-menu`, every width:
+  share, the PDF, workflow steps, go-to; a bottom sheet on phones).
 - **Action feedback:** Print shows "Preparing…" while the PDF builds, then a
   brief "Printing" with an SVG check; Send shows "Sent" with the check
   (~1.8s, a small pop), then the label returns. Errors stay on the toast.
+- **Send WhatsApp = the lab's WhatsApp Cloud API number** when the lab has a
+  sender (`GET /api/whatsapp/settings` → `canSend`; `WhatsAppSendService`):
+  the server sends the approved template with the report link to THE
+  patient's number (`POST /api/whatsapp/reports/{id}/resend`). The primary
+  reads **Sending…** (spinner, disabled) → **Sent** / **Delivered** / **Read**
+  with the check while the message is watched (~30 s poll of the status
+  endpoint); the toast names the masked number ("+91 ••••• 79229"); a Meta
+  failure / opt-out / no phone / unpaid bill stays on the toast and the REPORT
+  card's WhatsApp section. The ⋮ then offers **Send WhatsApp** + **Share via
+  my WhatsApp** (the wa.me link on this device, secondary). No sender, or a
+  preliminary report: today's wa.me flow and one "Send on WhatsApp" row. The
+  Results list rows and the Patient profile order ⋮ follow the same rule
+  (`ReportActionsService.whatsAppActions` / `sendWhatsApp`).
 - **Context bar (the pill):** the patient chip (FULL name + "29/M · MRN";
   phones: the name only, wrapping), the order number (≥1024px), a status
   chip "Final · Completed" (violet dot; a ring for Preliminary; "Amended"
@@ -1523,10 +1792,10 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
   `All · Assigned to me` with plain tabular counts (filtered locally; the
   queue is always fetched whole). Refresh is a quiet ghost band action.
 - **QUEUE card (main):** one tile per TUBE in `[ndTileGrid]`, grouped
-  URGENT / HIGH / ON TIME (neutral dot for on time). Sample ID leads
+  by ORDER priority, URGENT / NORMAL (neutral dot for Normal). Sample ID leads
   (16.5/600 tabular), FULL patient name, meta `44/F · MRN · Department ·
   entered 9:48 PM`, the tests. ONE status: dot + coloured word — Critical ›
-  Overdue (red) › Due in N min (amber) › On time (green). "Assigned to you"
+  Overdue (red) › Due in 20m (amber) › On time (green). "Assigned to you"
   is quiet text with a violet dot. Row action `.nd-rowact` Review (text on
   web, 44px eye icon on touch); the whole tile is the `pfZoomSource` and
   opens the tube review (`/lab/sample/:id?validate=1`; culture → culture case).
@@ -1535,7 +1804,7 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
 - **SCOPE card (side):** the consultant's departments (static chips, or "All
   departments" + the hint to get assigned in Users & roles), Today (pending,
   overdue, critical, assigned to you, validated today, by you) and the ONE
-  primary **Review next** (mine › critical › most urgent). Tablet (641–1023):
+  primary **Review next** (mine › critical › Urgent order › soonest due). Tablet (641–1023):
   the side column narrows to 300px. Phones: the side card is a sheet; its
   summary + Review next ride `.nd-bottombar`.
 - **Department scope (server):** a consultant listed in a department's
@@ -1544,7 +1813,84 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
 - **Reassign** is a DialogService choice of the validators who cover the
   result's department (`GET /api/validation/{id}/reassign-options`), never a
   pasted id.
-- **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`.
+- **Registration number prompt:** a signing user (validate_result) with no
+  registration number sees `pf-regno-prompt` at the top of the SCOPE card
+  (and in the tube review strip): a neutral notice (slate surface, violet
+  SVG mark) "Add your registration number — it prints under your
+  signature." + an `.nd-rowact` **Add** link to `/signature?tab=registration`.
+  It disappears once saved. The number lives ONLY on the user
+  (`users.RegistrationId`); admins edit it in Users & roles → Edit user or
+  OPD → Doctors.
+- **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`. `regno-prompt.component.spec.ts`.
+
+## 24. Public report link (patients, no login)
+
+`/reports/public/:token` (`features/reports/public-report/`) — the link in the
+WhatsApp template `lab_report_ready` and on the report QR. A patient opens it
+in a phone browser: no app chrome, no login, no shell (the shell route is
+lazy, and the root skips the idle lock / push / calling boot on
+`core/navigation/public-paths.ts` paths).
+
+- **Lab first, patient never before the answer.** `GET /api/public/report/{token}`
+  returns only the lab (name, logo, phone) + the link state. The header shows
+  the lab logo (or its initials) and name on every step.
+- **Identity step:** "Confirm it's you" — last 4 phone digits or DOB as DDMM
+  (`inputmode=numeric`, 56px field, 18–24px text), "Use my invoice number
+  instead" switches to text. Misses read "That doesn't match — N attempts
+  left" (`role=alert`); the server's lockout shows a countdown and a
+  **Call** button (`tel:`). The field scrolls clear of the soft keyboard.
+- **States:** skeleton (link read / PDF prep), identity, locked, expired
+  ("This link has expired" + the lab's phone), invalid, not ready yet, and
+  the report card.
+- **Report card:** Ready (violet dot) / Partial (ring) chip, date, the
+  printed name, age · sex, order number; a superseded link shows the latest
+  with a note. ONE primary **Download PDF** (the API's attachment URL, file
+  `Report-<Name>-<date>.pdf`; a client-rendered PDF saves via `<a download>`),
+  **View** (new tab: iOS shows every page there, never an iframe) and
+  **Share** (the file where Web Share supports files, else the link — it still
+  asks for the answer).
+- `noindex` + `no-referrer` meta while open; API answers are `no-store`.
+- **Specs:** `public-report.component.spec.ts`.
+
+## 25. Critical results (NABL acknowledgement register)
+
+`/lab/critical-results` (`features/lab/critical-results/`) — the record of
+every critical value: who was alerted, who acknowledged it and who was told.
+The record itself is the backend's `critical_result_events` row (one per
+critical result version); the bell is only the alert.
+
+- **Band:** search pill (patient, MRN, order, sample, test, values); quiet
+  ghost **Refresh** + **Export CSV** (the server's CSV, IST stamps, every
+  filtered row). The page has NO primary. Phones: a **Filters** band button
+  opens the companion as a sheet.
+- **FILTERS companion on the LEFT** (filter first): a kit `.nd-seg`
+  radiogroup for the status (Not acknowledged · Acknowledged · Communicated ·
+  All, counts as plain `.nd-num`), the IST detection range as a quick-pick
+  radiogroup (Today · 7 days · 30 days · Custom) + two `pf-nd-date` boxes, and
+  a `pf-select` branch filter ONLY for multi-branch users. Opens on the last
+  30 days of unacknowledged records.
+- **MAIN card:** the Test Master AG-Grid theme; header = icon chip +
+  "CRITICAL RESULTS" + the muted count ("3 records · 1 not acknowledged").
+  Each row: Detected (IST) · Patient (MRN · order under) · Test + the critical
+  values ("Potassium 7.2 mmol/L CH") · ONE status word (dot + colour: red
+  Not acknowledged, amber Acknowledged, green Communicated) · Acknowledged
+  (who, when, from where) · Communicated (method, to whom, by whom, notes) ·
+  Alerted count · row actions as `.nd-rowact` (text on web, 44px icons on
+  touch). Phones keep Detected · Patient · Test · Status · actions.
+- **Acknowledge** is an explicit action everywhere (bell row, tube screen,
+  validate page rail, pathologist queue tile, register row) — viewing never
+  counts. The first acknowledger owns the record; later ones are appended.
+  **Record communication** (`pf-critical-communication-dialog`): `pf-select`
+  method (phone / in person / WhatsApp / other), name + `pf-select` role,
+  notes; saved with the time and the user. No native controls.
+- **On the result screens** the open records of the tube ride in
+  `pf-critical-ack-strip` (red left rule, one line per record with the status
+  word and the two actions); the pathologist tile's status becomes
+  "Critical · not acknowledged" until this user acknowledges.
+- **Specs:** `critical-results.component.spec.ts`,
+  `critical-ack-strip.component.spec.ts`,
+  `critical-communication-dialog.component.spec.ts`,
+  `pending-validation.critical.spec.ts`, the bell spec.
 
 ## API summary
 
@@ -1564,6 +1910,8 @@ Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the sec
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
+Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · afterNextPaint · <pf-page-frame> + PageOpenService (shell, once; page-skeleton.ts)
+         PageOpenService.markSource(el) · prefetch / prefetchWhenIdle · pf-skeleton-* + heldFlag
 AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
@@ -1573,3 +1921,56 @@ Ranges   pf-range-table[param][unit](bandsChange) · range-insight.ts (bandZones
          flag-conditions.ts (FLAG_CONDITIONS · operator 'flag' · evaluateRules · analyzeLines)
 Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected · nd.no-truncate · nd.reduced-motion
 ```
+
+## 26. Report chart block (Test Master)
+
+A **Chart** is a block of the Printed report print-order list
+(`pf-report-structure` → `pf-report-chart-editor`), available on ANY test or
+profile — see `docs/REPORT-CHARTS.md`. The block body is the editor (kit
+fields, a grid of `.nd-tile-sel` type cards (live marks-only thumbnail on a
+paper surface, name, and — when the type does not fit the test's data — a
+dashed, greyed thumbnail with a one-line reason; fitting types first, the
+chosen one with a neutral check), `.nd-seg` for Across / Size, `pf-select` for a line's unit,
+violet `.nd-toggle` switches, kit tick rows for chosen values) with a live
+preview drawn from sample values by the SAME geometry the PDF paints
+(`pf-report-chart`, inline SVG on a white paper surface in light and dark).
+The preview sits beside the form (sticky) at ≥760px of block width and
+ABOVE it below that. Prints / Hidden and ↑ / ↓ are the block's usual header
+controls. The PDF draws the chart as vectors and never splits it.
+
+## 27. Inventory (Stores desk + Admin → Inventory)
+
+Both screens share ONE layout (`features/stores/inv-layout.scss`) and ONE set
+of view rules (`features/stores/inventory-view.ts`: stock level, expiry,
+ledger words, tests covered, barcode-link body).
+
+- **Stores (`/stores`):** band pill = ONE field + the section tabs
+  `Overview · Receive · Issue · Count` (`pf-segmented`; icons on phones, so
+  nothing truncates). Overview: STOCK is an AG-Grid (Item + SKU · category,
+  On hand, Reorder at, Status) with a neutral level filter whose counts are
+  plain numbers; ATTENTION (Low / Out / Expiring as neutral numbers, lots
+  expiring, items at or below reorder) is the side card. Receive / Issue /
+  Count: the field is the scan box (Enter resolves; typing filters the ITEMS
+  list, one item per row); the picked item opens the action side card with
+  its ONE primary (Receive N / Issue N). The band's primary is "Receive
+  stock" on Overview only.
+- **Admin → Inventory:** Items = the item AG-Grid (main) + the ITEM side
+  card (`Batches · Receive · Label · Ledger`, one primary in its footer;
+  New / Edit item open in the same card; nothing picked = ATTENTION). Test
+  consumables = the TESTS list on the LEFT (band search) + the picked
+  test's CONSUMABLES as the main card, each line saying how many tests the
+  branch's stock still covers.
+- **Status = `.nd-sdot`:** a neutral word + a 7px dot; the dot alone carries
+  the colour (amber Low / expiring, red Out / expired, violet done). Never a
+  green "In stock" pill, never coloured KPI numbers.
+- Expiry uses `pf-nd-date`, never a visible native date input.
+- The lab's Scan / Manual setting (`ScanService.manualEntry`) is honoured:
+  manual = no camera, no "Scanner ready", no document-level gun capture.
+- Unknown barcode: the note says exactly what happens. With
+  `manage_inventory` the side card offers **Link barcode** (the item upsert,
+  `POST /api/inventory/items` with the scanned GTIN; replacing an existing
+  item barcode asks first); without it, the copy says an inventory admin
+  links it. No items at all: an empty state that links to Admin → Inventory
+  (with permission) — never "No items match".
+- ≤900px: every side card is a sheet (Test Master pattern); ATTENTION opens
+  from a band chip.

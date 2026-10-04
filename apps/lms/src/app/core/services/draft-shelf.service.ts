@@ -7,10 +7,17 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export interface DraftChip {
   /** Stable identity for track-by. */
   id: string;
-  /** Primary text — patient short name or tube barcode. */
+  /** The ONLY text on the chip — the tube's sample number (lab) or the
+   *  patient (front desk, where nothing shorter identifies the draft). */
   label: string;
-  /** Quiet secondary text ("3 tests", patient name…). */
+  /** Secondary text ("3 tests", the patient name…) — tooltip, accessible
+   *  name and the overflow menu only, never on the chip itself. */
   sub?: string;
+  /** Tooltip / aria verb ("Resume result for"); default "Resume draft". */
+  verb?: string;
+  /** When the draft was last saved (epoch ms or ISO), if the publisher
+   *  knows it — shown as "4 min ago" in the overflow menu. */
+  at?: number | string;
   /** Router commands that resume the draft. */
   link: string | ReadonlyArray<string>;
   queryParams?: Record<string, string>;
@@ -135,6 +142,9 @@ export class DraftShelfService {
 
   private static areaOf(url: string): DraftArea | null {
     if (url.startsWith('/frontdesk')) return 'frontdesk';
+    // Lab settings live at /lab/settings but are configuration, not lab WORK:
+    // the lab's unfinished result drafts must not ride along there.
+    if (url === '/lab/settings' || url.startsWith('/lab/settings/') || url.startsWith('/lab/settings?')) return null;
     if (url.startsWith('/lab')) return 'lab';
     if (url.startsWith('/sample-collection')) return 'collect';
     if (url.startsWith('/pathologist')) return 'validate';

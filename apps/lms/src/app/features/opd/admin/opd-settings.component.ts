@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -21,7 +24,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
 @Component({
   selector: 'pf-opd-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -34,7 +37,8 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
                           (valueChange)="mode.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton()"
+                    [pfBusy]="saving()" pfBusyLabel="Saving…"
                     (click)="save()" aria-label="Save changes" title="Save changes">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -50,7 +54,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
         eyebrow="OPD" title="OPD Settings" subtitle="Follow-up policy for repeat consultations"
         parentRoute="/admin/opd">
         <div actions>
-          <button type="button" class="pf-os__save press" [disabled]="saving()" (click)="save()">
+          <button type="button" class="pf-os__save press" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
@@ -58,7 +62,13 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
 
       <div class="pf-band-body">
       <div class="pf-band-narrow">
-      @if (theme.isNewDesign()) {
+      @if (formSkeleton()) {
+        <!-- Settings on their way: a skeleton of the card (held 600ms), never
+             the "Off" default dressed up as the saved policy. -->
+        <section class="nd-card pf-os__card">
+          <pf-skeleton-form [fields]="3" [cols]="1" label="Loading OPD settings…"></pf-skeleton-form>
+        </section>
+      } @else if (theme.isNewDesign()) {
         <!-- The mode is picked in the pill; its meaning stays readable here. -->
         <p class="pf-os__modehint" role="status">
           <strong>Follow-up: {{ modeLabel() }}.</strong> {{ modeDesc() }}
@@ -84,7 +94,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
       </pf-tile>
       }
 
-      @if (mode() !== 'off') {
+      @if (mode() !== 'off' && !formSkeleton()) {
         <section class="nd-card pf-os__card">
           <div class="nd-card__head pf-os__row-head">
             <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.25"/></svg></span>
@@ -163,7 +173,7 @@ export class OpdSettingsComponent {
   private readonly toasts = inject(ToastService);
 
   readonly MODES: { value: FollowUpMode; label: string; desc: string }[] = [
-    { value: 'off', label: 'Off', desc: 'No follow-up discount — every visit is billed at the full consultation fee.' },
+    { value: 'off', label: 'Off', desc: 'No clinic-wide rule. A service with its own follow-up rule (set on the service) still applies it.' },
     { value: 'auto', label: 'Automatic', desc: 'The matching tier’s discount is applied automatically when the consult is billed.' },
     { value: 'assisted', label: 'Assisted', desc: 'The matching tier’s discount is a ceiling — the front desk applies any amount up to it.' },
   ];
@@ -175,11 +185,15 @@ export class OpdSettingsComponent {
   readonly modeDesc = computed(() => this.MODES.find((m) => m.value === this.mode())?.desc ?? '');
   readonly tiers = signal<FollowUpTier[]>([]);
   readonly saving = signal(false);
+  /** First-load skeleton (ND-PATTERN "Loading feedback"). */
+  private readonly loadHold = createLoadHold(true);
+  readonly formSkeleton = this.loadHold.active;
 
   constructor() {
     this.api.get<OpdSettings>('/api/opd/settings').subscribe({
-      next: s => { if (s) { this.mode.set(s.followUpMode ?? 'off'); this.tiers.set(s.tiers ?? []); } },
-      error: () => { /* defaults: off */ },
+      next: s => { this.loadHold.done(); if (s) { this.mode.set(s.followUpMode ?? 'off'); this.tiers.set(s.tiers ?? []); } },
+      error: () => { this.loadHold.done(); /* defaults: off */ },
+      complete: () => this.loadHold.done(),
     });
   }
 

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -14,11 +15,13 @@ import { CommentThreadComponent } from '../../../shared/components/comment-threa
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { PRICE_DIFFERS_MESSAGE, findAllowed, type AllowedSpecimen, type TestSpecimenMap } from '../../../shared/utils/micro-specimen';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -40,7 +43,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective, LogoMarkComponent],
+  imports: [DailyNoComponent, FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective, LogoMarkComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cse">
@@ -58,12 +61,12 @@ interface StageField { name: string; title: string; type: string; options: strin
             @if (reviewMode()) {
               <!-- Pathologist sign-out (owner): Reject (secondary, needs a
                    reason) + Validate & sign out (THE primary). -->
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-cse-act pf-cse-reject press" [disabled]="busy()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-cse-act pf-cse-reject press" [disabled]="busy()" [pfBusy]="busyOn('reject')" pfBusyLabel="Rejecting…"
                       (click)="rejectCase()" aria-label="Reject" title="Reject — send back to the bench">
                 <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
                 <span class="pf-cse-act__t">Reject</span>
               </button>
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-validate press" [disabled]="busy()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-validate press" [disabled]="busy()" [pfBusy]="busyOn('validate')" pfBusyLabel="Signing out…"
                       (click)="validateCase()" aria-label="Validate and sign out" title="Validate & sign out">
                 <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                 <span class="pf-cse-act__t">Validate &amp; sign out</span>
@@ -74,7 +77,7 @@ interface StageField { name: string; title: string; type: string; options: strin
               <!-- THE page primary: submit (or validate) the whole case —
                    the existing sign-out actions, enabled once every stage is done. -->
               <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-signout press"
-                      [disabled]="busy() || !allDone()"
+                      [disabled]="busy() || !allDone()" [pfBusy]="busyOn('signout')" pfBusyLabel="Submitting…"
                       (click)="canValidate() ? submitAndValidate() : submitForSignout()"
                       aria-label="Submit all results"
                       [title]="allDone() ? (canValidate() ? 'Validate and submit the whole case' : 'Submit the whole case for sign-out') : 'Submit every stage first'">
@@ -91,7 +94,7 @@ interface StageField { name: string; title: string; type: string; options: strin
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--id" title="Case / sample ID">
               <span class="nd-num">{{ cc.barcode || cc.sampleId || 'Culture case' }}</span>
             </span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient">{{ cc.patientName || 'Patient' }}</span>
+            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient"><pf-daily-no [of]="cc" />{{ cc.patientName || 'Patient' }}</span>
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--test" title="Test">{{ cc.testName || 'Culture' }}</span>
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--day"><span class="nd-num">Day {{ dayNo() }}</span></span>
             <span class="pf-cse-ctx__grow"></span>
@@ -129,7 +132,7 @@ interface StageField { name: string; title: string; type: string; options: strin
             <label class="pf-cse-spec">
               <span class="pf-cse-spec__lbl">Specimen</span>
               <pf-select class="pf-cse__specsel" size="sm" [searchable]="true"
-                         [options]="specimenOpts()" [value]="c()?.specimen ?? ''"
+                         [options]="specimenOpts()" [value]="specimenValue()"
                          placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
             </label>
             <span class="nd-seg pf-cse-branches" role="group" aria-label="Culture branch">
@@ -138,9 +141,9 @@ interface StageField { name: string; title: string; type: string; options: strin
                 <button type="button" class="nd-seg__item pf-cse-branch" [attr.aria-pressed]="selCaseId() === b.id" (click)="selectCase(b.id!)">{{ b.label || 'Subculture' }}</button>
               }
             </span>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn press" [disabled]="busy()" (click)="newSubculture()">+ Subculture</button>
+            <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn press" [disabled]="busy()" [pfBusy]="busyOn('subculture')" pfBusyLabel="Creating…" (click)="newSubculture()">+ Subculture</button>
             @if (selCaseId()) {
-              <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn pf-cse-navbtn--muted press" [disabled]="busy()"
+              <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn pf-cse-navbtn--muted press" [disabled]="busy()" [pfBusy]="busyOn('deleteBranch')" pfBusyLabel="Deleting…"
                       (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
             }
             <!-- Incubation lives in the nav row (the band holds the page
@@ -159,7 +162,7 @@ interface StageField { name: string; title: string; type: string; options: strin
               }
               <span class="pf-cse__incubwrap">
                 <button type="button" class="nd-btn nd-btn--secondary pf-cse-incubbtn press"
-                        [disabled]="busy()" (click)="incubOpen.set(!incubOpen())"
+                        [disabled]="busy()" [pfBusy]="busyOn('incub')" pfBusyLabel="Saving…" (click)="incubOpen.set(!incubOpen())"
                         [attr.aria-label]="cc.incubateUntil ? 'Add incubation hours' : 'Inoculate and incubate'"
                         [title]="cc.incubateUntil ? 'Add hours to the incubation timer' : 'Start the incubation reference timer'">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>
@@ -181,7 +184,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                               (click)="applyIncubation(incubCustom()!)">Set</button>
                     </div>
                     @if (cc.incubateUntil) {
-                      <button type="button" class="nd-btn nd-btn--tertiary pf-cse__incubstop press" [disabled]="busy()"
+                      <button type="button" class="nd-btn nd-btn--tertiary pf-cse__incubstop press" [disabled]="busy()" [pfBusy]="busyOn('stopIncub')" pfBusyLabel="Stopping…"
                               (click)="stopIncubation()">Stop incubation</button>
                     }
                   </div>
@@ -231,14 +234,14 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   </button>
                   @if (isMine(s) && s.state !== 'done') {
-                    <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="drop(s)">Drop</button>
+                    <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('drop:' + s.key)" pfBusyLabel="Dropping…" (click)="drop(s)">Drop</button>
                     <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn pf-stg__submit press" [disabled]="busy()" (click)="submit(s)"
+                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn pf-stg__submit press" [disabled]="busy()" [pfBusy]="busyOn('submit:' + s.key)" pfBusyLabel="Submitting…" (click)="submit(s)"
                             [attr.aria-label]="'Submit ' + s.label">Submit</button>
                   }
                   @if (s.state === 'done' && cc.caseState === 'active') {
                     <!-- Submitted ≠ sealed: editable until the case leaves for sign-out. -->
-                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn press" [disabled]="busy()" (click)="reopen(s)">Edit</button>
+                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('reopen:' + s.key)" pfBusyLabel="Opening…" (click)="reopen(s)">Edit</button>
                   }
                 </span>
               </header>
@@ -615,6 +618,10 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly zoomKeys = computed(() => [this.routeId, this.c()?.orderTestId, this.c()?.sampleId]);
   private readonly routeId = inject(ActivatedRoute).snapshot.paramMap.get('orderTestId');
   readonly busy = signal(false);
+  /** WHICH control started the running `busy()` request — only that button
+   *  shows the busy dots; the rest keep their plain disabled look. */
+  readonly busyAct = signal<string | null>(null);
+  protected busyOn(act: string): boolean { return this.busy() && this.busyAct() === act; }
   /** Per-stage draft notes (autosaved to localStorage), keyed by stage key. */
   readonly drafts = signal<Record<string, string>>({});
   /** The AST stage's structured result (organisms + S/I/R). */
@@ -792,10 +799,15 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const body = existing ? `${existing}\n${t.body}` : t.body;
     this.onDraft(stageKey, body);
   }
-  saveTemplate(stageKey: string) {
+  async saveTemplate(stageKey: string) {
     const body = (this.drafts()[stageKey] ?? '').trim();
     if (!body) return;
-    const name = (window.prompt('Save these findings as a template — name it:') ?? '').trim();
+    const name = ((await this.dialog.prompt({
+      title: 'Save as template',
+      message: 'Save these findings as a template — name it:',
+      placeholder: 'Template name',
+      required: true,
+    })) ?? '').trim();
     if (!name) return;
     this.api.post<ResultTemplate>('/api/result-templates', { scope: this.templateScope(stageKey), name, body }).subscribe({
       next: t => {
@@ -1011,27 +1023,69 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.measureReq.set(null);
   }
 
-  // ── Specimen (order-test level; desk-picked, bench-editable) ──
-  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  // ── Specimen (order-test level; desk-picked / server-stamped, bench-editable
+  //    ONLY within the test's allowed list — the Test Master decides) ──
+  /** The Specimen master (what a test with an empty allowed list offers). */
+  private readonly specimenMaster = signal<AllowedSpecimen[]>([]);
+  /** The ordered test's allowed specimens; null = not loaded (yet). */
+  private readonly allowedSpecimens = signal<AllowedSpecimen[] | null>(null);
+  private allowedFor: string | null = null;
+  /** The picker's value: the stored CODE, else the older stored NAME resolved
+   *  against the rows (a name off every list shows as itself). */
+  readonly specimenValue = computed<string>(() => {
+    const cc = this.c();
+    if (cc?.specimenCode) return cc.specimenCode;
+    const rows = [...(this.allowedSpecimens() ?? []), ...this.specimenMaster()];
+    return findAllowed(rows, cc?.specimen)?.code ?? (cc?.specimen ?? '');
+  });
+  /** Picker rows: the allowed list (else the master); value = the master
+   *  CODE. A stored specimen that is OFF the allowed list (an older order, or
+   *  the list changed since) stays visible as its own row — never lost, and
+   *  the bench sees what was recorded — but only the allowed rows are
+   *  accepted by the server. */
+  readonly specimenOpts = computed<PfSelectOption[]>(() => {
+    const allowed = this.allowedSpecimens();
+    const rows = allowed && allowed.length ? allowed : this.specimenMaster();
+    const opts: PfSelectOption[] = rows.map(r => ({ value: r.code, label: r.name }));
+    const cur = this.specimenValue();
+    if (cur && !opts.some(o => o.value === cur)) {
+      const name = findAllowed(this.specimenMaster(), cur)?.name ?? this.c()?.specimen ?? cur;
+      opts.unshift({ value: cur, label: name, hint: 'not in the allowed list' });
+    }
+    return opts;
+  });
+  private readonly loadAllowedForCase = effect(() => {
+    const testId = this.c()?.testId;
+    if (!testId || this.allowedFor === testId) return;
+    this.allowedFor = testId;
+    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${testId}`).subscribe({
+      next: rows => this.allowedSpecimens.set(rows?.[0]?.specimens ?? []),
+      error: () => this.allowedSpecimens.set([]),
+    });
+  });
   private loadSpecimens() {
-    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
-      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+    this.api.get<{ code: string; name: string }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenMaster.set((rows ?? []).map(r => ({ code: r.code, name: r.name, isDefault: false }))),
       error: () => { /* list stays empty — the pill still shows the current value */ }
     });
   }
-  setSpecimen(v: string) {
-    if (!v || v === (this.c()?.specimen ?? '')) return;
+  setSpecimen(code: string) {
+    if (!code || code === this.specimenValue()) return;
+    const name = this.specimenOpts().find(o => o.value === code)?.label ?? code;
     this.busy.set(true);
-    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/specimen`, { specimen: v }).subscribe({
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/specimen`, { specimen: code }).subscribe({
       next: t => {
         this.busy.set(false);
         if (t) this.c.set(t);
-        this.astValue.update(x => ({ ...x, specimen: v }));
-        this.toasts.success(`Specimen set to ${v}`);
+        this.astValue.update(x => ({ ...x, specimen: t?.specimen ?? name }));
+        this.toasts.success(`Specimen set to ${t?.specimen ?? name}`);
       },
-      error: () => {
+      error: e => {
         this.busy.set(false);
-        this.toasts.error('Could not update the specimen');
+        // After billing, a change whose price differs is BLOCKED by the server
+        // (409 price_differs): the front desk re-prices through modify-order.
+        const err = ApiError.from(e);
+        this.toasts.error(err.code === 'price_differs' ? PRICE_DIFFERS_MESSAGE : (err.message || 'Could not update the specimen'));
       },
     });
   }
@@ -1046,6 +1100,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
 
   /** Fork a subculture off the SELECTED case (primary or another branch). */
   async newSubculture() {
+    this.busyAct.set('subculture');
     const label = await this.dialog.prompt({
       title: 'New subculture',
       message: 'Fork this culture onto fresh media — the branch gets its own growth, identification and sensitivity stages.',
@@ -1071,6 +1126,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
 
   /** Delete the selected (abandoned) branch — never the primary. */
   async deleteBranch() {
+    this.busyAct.set('deleteBranch');
     const v = this.view();
     const id = this.selCaseId();
     if (!id || !v) return;
@@ -1134,12 +1190,14 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
   /** Plate taken out — clear the timer. */
   stopIncubation() {
+    this.busyAct.set('stopIncub');
     this.incubOpen.set(false);
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/incubate/stop${this.q()}`, {}),
       'Incubation stopped');
   }
   /** Start or extend the timer by whole hours (preset chip or custom). */
   applyIncubation(hours: number) {
+    this.busyAct.set('incub');
     const h = Math.round(hours);
     if (!h || h < 1 || h > 336) { this.toasts.error('Hours must be between 1 and 336.'); return; }
     this.incubOpen.set(false);
@@ -1185,6 +1243,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     });
   }
   drop(s: CultureStageView) {
+    this.busyAct.set('drop:' + s.key);
     this.run(this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/drop${this.q()}`, {}));
   }
 
@@ -1209,6 +1268,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     });
   }
   submit(s: CultureStageView) {
+    this.busyAct.set('submit:' + s.key);
     let valuesJson: string | null;
     if (s.key === 'ast') {
       valuesJson = JSON.stringify(this.astValue());
@@ -1243,6 +1303,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
 
   /** Reopen a done stage — values prefill so the tech edits, not re-types. */
   reopen(s: CultureStageView) {
+    this.busyAct.set('reopen:' + s.key);
     this.busy.set(true);
     this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/stage/${s.key}/reopen${this.q()}`, {}).subscribe({
       next: t => {
@@ -1281,6 +1342,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
    *  backend still enforces the two-person rule (validate_own_result). */
   canValidate(): boolean { return this.auth.hasPermission('validate_result'); }
   submitAndValidate() {
+    this.busyAct.set('signout');
     this.busy.set(true);
     this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/signout-validate`, {}).subscribe({
       next: () => {
@@ -1303,6 +1365,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   readonly astHasData = computed(() => (this.astValue().organisms?.length ?? 0) > 0 || !!this.astValue().noGrowth);
   /** Same API the pathologist queue / validate-result uses. */
   validateCase() {
+    this.busyAct.set('validate');
     this.busy.set(true);
     this.api.post(`/api/validation/${this.id}/validate`, { note: null }).subscribe({
       next: () => {
@@ -1314,6 +1377,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     });
   }
   async rejectCase() {
+    this.busyAct.set('reject');
     const reason = await this.dialog.prompt({
       title: 'Reject culture result?',
       message: 'The bench is notified to re-work this case.',
@@ -1333,6 +1397,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   }
 
   submitForSignout() {
+    this.busyAct.set('signout');
     this.busy.set(true);
     this.api.post(`/api/microbiology/culture/${this.id}/submit-for-signout`, {}).subscribe({
       next: () => { this.busy.set(false); this.toasts.success('Sent for pathologist sign-out'); this.router.navigate(['/lab/my-work']); },

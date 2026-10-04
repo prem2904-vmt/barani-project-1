@@ -189,14 +189,16 @@ describe('Admin band — Test Master', () => {
     expect(p.el.querySelector('.pf-tm-dept--active, .pf-tm-dept-switch--on, .pf-tm-inactive-chip--on, .font-mono, select')).toBeNull();
   });
 
-  it('"Inactive (n)" chip in the pill toggles showInactive', () => {
+  it('status filter (All · Active · Inactive) in the grid card; inactive tests listed by default', () => {
     const p = renderTm();
-    const chip = p.tools()!.querySelector<HTMLButtonElement>('.pf-tm-inactive-chip')!;
-    expect(chip.textContent).toContain('Inactive (1)');
-    chip.click();
+    expect(p.tools()!.querySelector('.pf-tm-inactive-chip')).toBeNull();
+    expect(p.cmp.rowData().length).toBe(3);   // All: the inactive test is listed, greyed
+    const seg = () => Array.from(p.el.querySelectorAll<HTMLButtonElement>('[data-status-filter] button'));
+    expect(seg().map((b) => b.textContent?.replace(/\s+/g, '').trim())).toEqual(['All3', 'Active2', 'Inactive1']);
+    seg()[2].click();
     p.f.detectChanges();
-    expect(p.cmp.showInactive()).toBe(true);
-    expect(p.cmp.rowData().length).toBe(3);
+    expect(p.cmp.statusFilter()).toBe('inactive');
+    expect(p.cmp.rowData().map((r: any) => r.id)).toEqual(['t3']);
   });
 
   it('Option groups view: the band search drives the panel; its own box and "+ New" hide', async () => {

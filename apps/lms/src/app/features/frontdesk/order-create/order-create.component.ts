@@ -1,4 +1,7 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { PF_KEYS_EVENT, PF_KEYS_HEIGHT_VAR, PfKeysEnterTone } from '../../../shared/components/numpad/numpad.service';
+import { PfKeysKind, PfKeysPrefix, deptPrefixes } from '../../../shared/components/numpad/pf-keys-layouts';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TrendTest } from '../../../shared/utils/trend-chart';
@@ -9,9 +12,11 @@ import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
+import { payBillFromWallet } from '../../../shared/utils/wallet-payment';
 import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
@@ -19,6 +24,9 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { computeBill } from '../../../shared/utils/bill-math';
 import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
+import { suggestBundles, type PackageSuggestion as BundleSuggestion } from './package-suggest';
+import { PackageSuggestCardComponent } from './package-suggest-card.component';
+import { collectedItemIds, orderedItemIds, type OrderLike } from './order-edit-items';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
@@ -28,24 +36,32 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
-import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
+import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES, DoctorOption, doctorOptionLabel, toDoctorOptions } from './unified-search';
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
-import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
+import {
+  allowedSpecimensFor, asksSpecimen, deskDefaultCode, findAllowed, fixedSpecimenOf, hasSpecimen, specimenLinePrice,
+  specimenLookupIds, specimenModeOf, type AllowedSpecimen, type TestSpecimenMap,
+} from '../../../shared/utils/micro-specimen';
 import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
-import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
+import { MIN_LOAD_MS, createLoadHold, heldFlag } from '../../../shared/utils/min-duration';
 import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { formatAge } from '../../../shared/utils/patient-age';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -54,13 +70,13 @@ type Priority = 'Normal' | 'Urgent';
 interface HistoryRow {
   id: string;
   createdAt: string;
-  samples?: Array<{ tests?: Array<{ testId?: string; test?: { id?: string } }> }>;
+  samples?: Array<{ tests?: Array<{ testId?: string; packageTestId?: string; test?: { id?: string } }> }>;
 }
 
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective],
+  imports: [DailyNoComponent, NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective, PackageSuggestCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -68,6 +84,8 @@ interface HistoryRow {
 export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
@@ -118,20 +136,68 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._openingZoom.set(keys.length > 0);
   }
   private readonly _tests = signal<Test[]>([]);
+  /** First open: the orderable catalogue has not answered yet. Held so a
+   *  fast answer never flashes; skipped when it answers in the same turn. */
+  private readonly testsHold = createLoadHold(true);
+  /** Catalogue skeleton: first load only (a background resync keeps the
+   *  rows on screen). */
+  readonly catalogSkeleton = computed(() => this.testsHold.active() && this._tests().length === 0);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
-  // ── Specimen choice at the desk: testId → specimen ──
-  // Every test that asks (Culture & Sensitivity, and any test whose Test
-  // Master "Ask specimen" switch is on — all of Microbiology), or a bundle
-  // carrying one (shared/utils/micro-specimen).
+  // ── Specimen choice at the desk: testId → specimen CODE ──
+  // The Test Master decides (shared/utils/micro-specimen, the server's
+  // SpecimenRules twin): a "choose" test — or a bundle carrying one — picks
+  // ONLY from its allowed specimens; a "fixed" test shows no picker (the
+  // server stamps its one specimen); "none" shows nothing.
   private readonly _specimens = signal<Record<string, string>>({});
-  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  /** The Specimen master (code + name) — what a test with an EMPTY allowed
+   *  list offers; also names a stored code. */
+  readonly specimenMaster = signal<AllowedSpecimen[]>([]);
+  /** Kept for the template's "is there anything to pick" guard. */
+  readonly specimenOpts = computed<PfSelectOption[]>(() => this.specimenMaster().map(s => ({ value: s.code, label: s.name })));
+  /** test id → its allowed list (+ mode, default, prices), as loaded. */
+  private readonly _specimenMaps = signal<Record<string, TestSpecimenMap | undefined>>({});
   private readonly _testById = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
   asksSpecimen(t: { parameters?: string | null; type?: string | null }): boolean {
     const byId = this._testById();
     return asksSpecimen(t, id => byId.get(id));
   }
+  /** The allowed specimens for one cart line (a bundle: what every choosing
+   *  member allows), as picker options — value = the master CODE. */
+  private readonly _allowedById = computed<Record<string, AllowedSpecimen[]>>(() => {
+    const byId = this._testById();
+    const maps = this._specimenMaps();
+    const master = this.specimenMaster();
+    const out: Record<string, AllowedSpecimen[]> = {};
+    for (const id of this._selected()) {
+      const t = byId.get(id);
+      if (t && this.asksSpecimen(t)) out[id] = allowedSpecimensFor(t, maps, master, mid => byId.get(mid));
+    }
+    return out;
+  });
+  allowedFor(id: string): AllowedSpecimen[] { return this._allowedById()[id] ?? []; }
+  specimenOptsFor(id: string): PfSelectOption[] {
+    return this.allowedFor(id).map(s => ({
+      value: s.code, label: s.name,
+      hint: s.price != null ? this.inrFmt.transform(Number(s.price)) : undefined,
+    }));
+  }
+  /** Mode fixed: the specimen the server will stamp (shown, never picked). */
+  fixedSpecimenName(t: { id: string; parameters?: string | null }): string | null {
+    if (specimenModeOf(t.parameters) !== 'fixed') return null;
+    return fixedSpecimenOf(this._specimenMaps()[t.id])?.name ?? null;
+  }
   specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
+  /** The NAME of the line's specimen (a stored code or an older name). */
+  specimenLabel(id: string): string {
+    const v = this.specimenOf(id);
+    if (!v) return '';
+    return (findAllowed(this.allowedFor(id), v) ?? findAllowed(this.specimenMaster(), v))?.name ?? v;
+  }
+  /** The allowed row the line's pick names (null = none / not allowed). */
+  private chosenRow(id: string): AllowedSpecimen | null {
+    return findAllowed(this.allowedFor(id), this.specimenOf(id));
+  }
   setSpecimen(id: string, v: string) {
     this._specimens.update(m => ({ ...m, [id]: v }));
     this._defaultApplied.add(id);
@@ -155,8 +221,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Inline "Choose the specimen" per cart line (set by a blocked save/pay). */
   private readonly _specimenErr = signal<Record<string, true>>({});
   specimenError(id: string): boolean { return !!this._specimenErr()[id]; }
-  /** Cart lines that ask for a specimen and have none — they block save/pay.
-   *  Only when the Specimen master offers something to pick. */
+  /** Cart lines that choose a specimen and have none — they block save/pay.
+   *  Only when there is something to pick (the allowed list, or the master). */
   readonly missingSpecimenIds = computed<string[]>(() => {
     if (this.specimenOpts().length === 0) return [];
     const byId = this._testById();
@@ -182,38 +248,44 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }, 0);
     return true;
   }
-  /** Read the mapping defaults for asking cart lines not yet asked about. */
+  /** Read the allowed lists (+ defaults, prices) of cart lines not yet asked about. */
   private loadSpecimenDefaults(ids: string[]) {
     const fresh = ids.filter(id => !this._defaultsAsked.has(id));
     if (fresh.length === 0) return;
     fresh.forEach(id => this._defaultsAsked.add(id));
-    this.api.get<Array<{ testId: string; defaultSpecimen?: string | null }>>(
-      `/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
-      next: rows => this._specimenDefaults.update(m => {
-        const n = { ...m };
-        for (const id of fresh) n[id] = null;
-        for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
-        return n;
-      }),
-      error: () => { /* no mapping (or micro module absent): nothing preselects */ }
+    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
+      next: rows => {
+        this._specimenMaps.update(m => {
+          const n = { ...m };
+          for (const id of fresh) n[id] = { testId: id, specimens: [] };
+          for (const r of rows ?? []) n[r.testId] = { ...r, specimens: r.specimens ?? [] };
+          return n;
+        });
+        this._specimenDefaults.update(m => {
+          const n = { ...m };
+          for (const id of fresh) n[id] = null;
+          for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
+          return n;
+        });
+      },
+      error: () => { /* no mapping (or micro module absent): the master is offered, nothing preselects */ }
     });
   }
-  /** Preselect the single default on lines that have no choice yet. */
+  /** Preselect the single default (by code) on lines that have no choice yet. */
   private applySpecimenDefaults() {
     if (this.isReadOnly()) return;
     const byId = this._testById();
-    const opts = new Set(this.specimenOpts().map(o => String(o.value)));
-    const defaults = this._specimenDefaults();
+    const maps = this._specimenMaps();
     const picks: Record<string, string> = {};
     for (const id of this._selected()) {
       if (this._defaultApplied.has(id) || this.specimenOf(id)) continue;
       const t = byId.get(id);
       if (!t || !this.asksSpecimen(t)) continue;
       const lookup = specimenLookupIds(t, mid => byId.get(mid));
-      if (lookup.some(l => !(l in defaults))) continue;       // still loading
+      if (lookup.some(l => !maps[l])) continue;              // still loading
       this._defaultApplied.add(id);
-      const d = deskDefaultSpecimen(t, defaults, mid => byId.get(mid));
-      if (d && opts.has(d)) picks[id] = d;
+      const d = deskDefaultCode(t, maps, mid => byId.get(mid));
+      if (d && this.allowedFor(id).some(s => s.code.toUpperCase() === d)) picks[id] = d;
     }
     if (Object.keys(picks).length) this._specimens.update(m => ({ ...m, ...picks }));
   }
@@ -226,8 +298,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Object.keys(out).length ? out : null;
   }
   private loadSpecimens() {
-    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
-      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+    this.api.get<{ code: string; name: string; container?: string | null }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenMaster.set((rows ?? []).map(r => ({ code: r.code, name: r.name, isDefault: false, container: r.container ?? null }))),
       error: () => { /* micro module absent — culture tests simply show no picker */ }
     });
   }
@@ -276,8 +348,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (ids.length) this.loadSpecimenDefaults(ids);
     });
     effect(() => {
-      this._specimenDefaults(); this._selected(); this.specimenOpts(); this._testById();
+      this._specimenMaps(); this._selected(); this.specimenOpts(); this._testById();
       this.applySpecimenDefaults();
+    });
+    // A FIXED test's stamp (and its price) also come from its map, so read it
+    // for every selected line that carries a specimen at all.
+    effect(() => {
+      const byId = this._testById();
+      const ids = this._selected().filter(id => {
+        const t = byId.get(id);
+        return !!t && specimenModeOf(t.parameters) === 'fixed';
+      });
+      if (ids.length) this.loadSpecimenDefaults(ids);
     });
     // Fetch trend eligibility whenever the attached patient changes.
     effect(() => {
@@ -320,13 +402,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
   private loadOrderableTests(): void {
-    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
+    this.api.get<Test[]>(testListUrl({ activeOnly: true })).subscribe({
       // Belt and braces: even if a stale cache or future endpoint slips an
       // inactive row through, it never reaches the picker.
       // A test the tenant/branch doesn't offer (pricing table `is_offered`
       // = false) is not orderable either — ordering it would 409.
-      next: l => this._tests.set((l ?? []).filter(t => t.isActive !== false && isOffered(t))),
-      error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+      next: l => { this._tests.set((l ?? []).filter(t => t.isActive !== false && isOffered(t))); this.testsHold.done(); },
+      error: e => { this.testsHold.done(); this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`); }
     });
   }
 
@@ -462,8 +544,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly refHospitalSuggestions = signal<string[]>([]);
   private refHospitalDebounce: ReturnType<typeof setTimeout> | null = null;
 
+  /** Analytics / Lab Insights Phase 2 (owner 2026-10-01): where this order's
+   *  referral came from — purely optional (blank = "Not set", the same as an
+   *  order placed before this field existed). Unobtrusive by design: its own
+   *  small pf-select, not woven into the doctor/hospital search pill — never
+   *  required, never blocks Confirm. */
+  readonly referralSourceType = signal<string>('');
+  readonly referralSourceTypeOptions: PfSelectOption<string>[] = [
+    { value: '', label: 'Not set' },
+    { value: 'Doctor', label: 'Doctor' },
+    { value: 'Hospital', label: 'Hospital' },
+    { value: 'Walk-in', label: 'Walk-in' },
+    { value: 'Corporate', label: 'Corporate' },
+    { value: 'Camp', label: 'Camp' },
+    { value: 'Online', label: 'Online' },
+  ];
+
   readonly refDoctorName = signal<string>('');
-  readonly refDoctorSuggestions = signal<string[]>([]);
+  /** Doctor matches — one per (doctor, hospital) affiliation, or one
+   *  hospital-less row for an independent doctor. */
+  readonly refDoctorSuggestions = signal<DoctorOption[]>([]);
   private refDoctorDebounce: ReturnType<typeof setTimeout> | null = null;
 
   // ── Inline field-level errors from field-tagged API validation ────
@@ -473,6 +573,82 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // they clear as soon as the user edits that field (see the input handlers).
   readonly refHospitalError = signal<string | null>(null);
   readonly refDoctorError = signal<string | null>(null);
+
+  /** POST /api/orders/, catching a `stock_warning` (Inventory Phase 1 fix 3 —
+   *  the gate is a warning, not a hard block) so the desk sees which tests are
+   *  short via DialogService. L3: the override is only ever OFFERED to a
+   *  manage_inventory holder — the server would refuse anyone else's override
+   *  as `stock_override_forbidden` anyway, so a desk user without the
+   *  permission gets a plain "ask an inventory manager" notice (no action to
+   *  try, nothing to fail). On confirm, resends the SAME body with
+   *  `overrideStockWarning: true`. Backing out of the dialog rethrows, so the
+   *  caller's own catch shows it. */
+  private async postOrderWithStockGate(body: Record<string, unknown>): Promise<Order> {
+    try {
+      return await firstValueFrom(this.api.post<Order>('/api/orders/', body));
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        // Two-OK-buttons review fix: this is a notice, not a choice — there's
+        // nothing to confirm against, so it's dialog.alert() (ONE button),
+        // not confirm() with confirmLabel===cancelLabel faking the same thing.
+        await this.dialog.alert({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          tone: 'danger',
+        });
+        throw e;
+      }
+      const proceed = await this.dialog.confirm({
+        title: 'Stock warning',
+        message: err.message,
+        question: 'Place the order anyway?',
+        confirmLabel: 'Order anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!proceed) throw e;
+      return await firstValueFrom(this.api.post<Order>('/api/orders/', { ...body, overrideStockWarning: true }));
+    }
+  }
+
+  /** PATCH /api/orders/{id}/tests, catching a `stock_warning` the SAME way
+   *  postOrderWithStockGate does for creating an order (R1 review fix — both
+   *  PATCH call sites, confirmPayment's patch branch and submit()'s edit-mode
+   *  branch, were hitting this 400 with no recovery path once the server
+   *  started gating an in-place test-list edit the same as a new order). Same
+   *  dialog, same manage_inventory permission gate, resend with
+   *  `overrideStockWarning: true`. Backing out rethrows, so the caller's own
+   *  catch shows it. */
+  private async patchTestsWithStockGate<T>(orderId: string, body: Record<string, unknown>): Promise<T> {
+    try {
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, body));
+    } catch (e) {
+      const err = ApiError.from(e);
+      if (err.code !== 'stock_warning') throw e;
+      if (!this.auth.hasPermission('manage_inventory')) {
+        await this.dialog.alert({
+          title: 'Stock warning',
+          message: err.message,
+          question: 'Ask an inventory manager to approve.',
+          tone: 'danger',
+        });
+        throw e;
+      }
+      const proceed = await this.dialog.confirm({
+        title: 'Stock warning',
+        message: err.message,
+        question: 'Save anyway?',
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!proceed) throw e;
+      return await firstValueFrom(this.api.patch<T>(`/api/orders/${orderId}/tests`, { ...body, overrideStockWarning: true }));
+    }
+  }
 
   /** Surface a mutation failure with the REAL backend message. Field-tagged
    *  validation for a form input highlights that input inline; everything else
@@ -778,7 +954,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  cart that ARRIVED with one — a restored draft, a repeat, an appointment
    *  prefill — and blocks placing it until one side is removed. */
   readonly cartOverlapList = computed(() => cartOverlaps(this._tests(), this._selected()));
-  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(overlapMessage));
+  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(o => overlapMessage(o)));
 
   /** Refuse an ADD that would put the same test in the order twice (a bundle
    *  beside its own member, either way round). Removing is never refused. */
@@ -786,7 +962,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.isSelected(id)) return false;
     const o = overlapOnAdd(this._tests(), this._selected(), id);
     if (!o) return false;
-    this.toasts.error(overlapMessage(o));
+    this.toasts.error(overlapMessage(o, !!this.editOrderId() && this._onOrderIds().has(o.container.id)));
     return true;
   }
 
@@ -809,8 +985,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /** Price shown and totalled for a test: the DTO's effective price for the
-   *  acting branch (pricing table), ₹1 when nobody has priced it. */
-  priceOf(t: Test | null | undefined): number { return effectivePrice(t); }
+   *  acting branch (pricing table), ₹1 when nobody has priced it — or, for a
+   *  line ordered on a specimen with its OWN price (owner 2026-09-29), that
+   *  price. Bundles keep one price. */
+  priceOf(t: Test | null | undefined): number {
+    if (!t) return 0;
+    const base = effectivePrice(t);
+    if (t.type !== 'individual' || !hasSpecimen(t.parameters)) return base;
+    const row = specimenModeOf(t.parameters) === 'fixed'
+      ? fixedSpecimenOf(this._specimenMaps()[t.id])
+      : this.chosenRow(t.id);
+    return specimenLinePrice(base, row);
+  }
   /** Still at the ₹1 default (data only — the UI shows just the price). */
   notPriced(t: Test | null | undefined): boolean { return isPriceDefault(t); }
   isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(x => x.id === id)); }
@@ -832,7 +1018,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   readonly subtotal = computed(() =>
-    this.billedLines().reduce((a, t) => a + effectivePrice(t), 0));
+    this.billedLines().reduce((a, t) => a + this.priceOf(t), 0));
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
@@ -840,7 +1026,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  (0 when GST is off → Bill of Supply). */
   private readonly billUnits = computed(() => {
     const gstOn = this.gstEnabled();
-    return this.billedLines().map(t => ({ price: effectivePrice(t), slab: gstOn ? taxSlabOf(t) : 0 }));
+    return this.billedLines().map(t => ({ price: this.priceOf(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
   /** PRE-discount gross = subtotal + GST at full price — the total the patient
    *  sees before a discount and the ONE base every discount % / cap is measured
@@ -938,51 +1124,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   /**
-   * Package suggestions — when the cart contains individual tests that
-   * are also bundled inside one or more packages, suggest the package(s)
-   * that COVER ALL the picked individual tests so the patient saves
-   * money. Sorted by package price ascending (cheapest deal first).
-   *
-   * Implementation: each package stores its member test ids inside the
-   * `Parameters` JSON as { items: [{ testId: '...' }] } — same shape the
-   * backend's OrderService.ParsePackageChildIds reads.
+   * Package / profile suggestions (package-suggest.ts): a bundle that holds
+   * something in the cart is shown as a SAVING (costs no more than the lines
+   * it replaces — the only struck-through price) or a quiet UPGRADE (+₹X,
+   * adds N tests, vs its members bought separately), else not at all.
+   * Amounts use the cart's own billed unit per test (priceOf + GST slab)
+   * through the BillMath mirror, so "Save ₹X" / "+₹X" is exactly the change
+   * in the cart's pre-discount total when applied.
    */
   readonly packageSuggestions = computed<PackageSuggestion[]>(() => {
-    const sel = new Set(this._selected());
-    if (sel.size === 0) return [];
-    const all = this._tests();
-    const out: PackageSuggestion[] = [];
-    for (const pkg of all) {
-      if (pkg.type !== 'package' || !pkg.isActive) continue;
-      // Skip if the package is already in the cart.
-      if (sel.has(pkg.id)) continue;
-      const memberIds = parsePackageMembers(pkg.parameters);
-      if (memberIds.length === 0) continue;
-      const memberSet = new Set(memberIds);
-      // Only suggest if EVERY selected individual test is inside this
-      // package. Filter out package-typed selections (rare edge case).
-      const covered = [...sel].filter(id => {
-        const t = all.find(x => x.id === id);
-        return t && t.type !== 'package';
-      });
-      if (covered.length === 0) continue;
-      const allCovered = covered.every(id => memberSet.has(id));
-      if (!allCovered) continue;
-      const individualSum = covered
-        .map(id => effectivePrice(all.find(t => t.id === id)))
-        .reduce((a, b) => a + b, 0);
-      const savings = Math.max(0, individualSum - effectivePrice(pkg));
-      out.push({
-        package: pkg,
-        coveredIds: covered,
-        memberCount: memberIds.length,
-        individualSum,
-        savings
-      });
-    }
-    // Cheapest-first per the user's preference: low value → high value.
-    return out.sort((a, b) => effectivePrice(a.package) - effectivePrice(b.package));
+    const gstOn = this.gstEnabled();
+    return suggestBundles(this._tests(), this._selected(),
+      t => ({ price: this.priceOf(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
+  /** How a suggestion names a test — the cart's own display name. */
+  readonly suggestName = (t: { name: string; shortName?: string | null }) => this.testDisplayName(t);
 
   ngAfterViewInit() {
     const hasPatientId = this.route.snapshot.queryParamMap.has('patientId');
@@ -1002,6 +1158,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof window !== 'undefined') {
       window.visualViewport?.addEventListener('resize', this._onViewport);
       window.addEventListener('resize', this._onViewport);
+      window.addEventListener(PF_KEYS_EVENT, this._onViewport);
     }
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
@@ -1194,6 +1351,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refDoctorName.set('');
     this.refDoctorSuggestions.set([]);
     this.refDoctorError.set(null);
+    this.referralSourceType.set('');
     this.viewOrderId.set(null);
     this.editOrderId.set(null);
     this._order.set(null);
@@ -1369,7 +1527,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       for (const k of [t.testId, t.packageTestId, t.profileTestId]) {
         if (!k) continue;
         onOrder.add(k);
-        const sp = (t.specimen ?? '').trim();
+        const sp = (t.specimenCode ?? t.specimen ?? '').trim();
         if (sp && !picks[k]) picks[k] = sp;
       }
     }
@@ -1379,20 +1537,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._specimens.update(m => ({ ...picks, ...m }));
   }
 
+  /** Ordered items (package / profile / test — never a member leaf) with a
+   *  line already collected: they stay in the edit cart (order-edit-items). */
   private extractCollectedTestIds(o: Order) {
-    const collected = new Set<string>();
-    for (const s of (o.samples ?? []) as unknown as Array<{ status?: string; collectedAt?: string; collectedBy?: string; tests?: Array<{ testId?: string; packageTestId?: string; status?: string; test?: { id?: string } }> }>) {
-      const isSampleCollected = (!!s.status && s.status !== 'pending' && s.status !== 'requested') || !!s.collectedAt || !!s.collectedBy;
-      for (const t of s.tests ?? []) {
-        const isTestCollected = isSampleCollected || (!!t.status && t.status !== 'pending' && t.status !== 'requested');
-        if (isTestCollected) {
-          const testId = t.testId || t.test?.id;
-          if (testId) collected.add(testId);
-          if (t.packageTestId) collected.add(t.packageTestId);
-        }
-      }
-    }
-    this.collectedTestIds.set(collected);
+    this.collectedTestIds.set(collectedItemIds(o as unknown as OrderLike));
   }
 
   /**
@@ -1438,14 +1586,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private preselectFromOrder(prior: HistoryRow, isEdit = false) {
-    const want = new Set<string>();
-    for (const s of prior.samples ?? []) {
-      for (const t of s.tests ?? []) {
-        const testId = (t as { test?: { id?: string }; testId?: string }).testId
-                    ?? (t as { test?: { id?: string }; testId?: string }).test?.id;
-        if (testId) want.add(testId);
-      }
-    }
+    // The ORDERED items (a package stays one package), never its member
+    // lines — seeding the leaves made the save send a package beside its own
+    // members (server: duplicate_item) or split it into loose tests.
+    const want = new Set<string>(orderedItemIds(prior as unknown as OrderLike));
     if (want.size === 0) {
       this.toasts.warning('Repeated order had no tests');
       return;
@@ -1615,17 +1759,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   applyPackage(s: PackageSuggestion) {
     const droppedCollected = s.coveredIds.filter(id => this.isCollected(id));
     if (droppedCollected.length > 0) {
-      this.toasts.warning('Cannot switch to package — some tests already have collected samples');
+      this.toasts.warning(`Cannot switch to ${s.kind === 'upgrade' ? 'the' : 'a'} ${s.bundle.type === 'profile' ? 'profile' : 'package'} — some tests already have collected samples`);
       return;
     }
     this._selected.update(cur => {
       const dropped = new Set(s.coveredIds);
       const next = cur.filter(id => !dropped.has(id));
-      if (!next.includes(s.package.id)) next.push(s.package.id);
+      if (!next.includes(s.bundle.id)) next.push(s.bundle.id);
       return next;
     });
     this.showCart();
-    this.toasts.success(`Switched to ${s.package.name} — saving ₹${s.savings}`);
+    const inr = new CurrencyInrPipe();
+    this.toasts.success(s.kind === 'upgrade'
+      ? `Upgraded to ${s.bundle.name} (+${inr.transform(s.extraCost)})`
+      : s.savings > 0
+        ? `Switched to ${s.bundle.name} — saving ${inr.transform(s.savings)}`
+        : `Switched to ${s.bundle.name} — same price, ${s.extraCount} more test${s.extraCount === 1 ? '' : 's'}`);
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
@@ -1841,11 +1990,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.toasts.warning('No samples on this order to print labels');
           return;
         }
-        this._reprintOrder.set(full);
-        setTimeout(() => {
-          printLabelOnly();
-          setTimeout(() => this._reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this._reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this._reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => {
         this.reprintLoading.set(false);
@@ -1859,19 +2019,17 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   async confirmPayment(d: InlinePaymentResult) {
     if (this.isPaymentDueMode()) {
       const bill = this.currentBill();
-      if (!bill) return;
+      // In-flight guard: a second Confirm tap must not post a second payment.
+      if (!bill || this.confirming()) return;
       this.confirming.set(true);
       try {
         const amount = bill.balance;
         if (d.mode === 'wallet') {
           if (!d.vendorId) throw new Error('No vendor selected');
-          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-            amount, billId: bill.id,
-            reason: `Bill #${bill.id.substring(0, 8)}`
-          }));
-          const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
-          }));
+          // H8: ONE call — the payment and the partner's charge commit together.
+          const updated = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, amount, {
+            referenceNo: d.referenceNo, reason: `Bill #${bill.id.substring(0, 8)}`
+          }))).bill;
           this.currentBill.set(updated);
         } else if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
@@ -1923,10 +2081,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const plan = planConfirmOrder(this.pendingOrder, p.id, key);
       let order: { id: string };
       if (plan.action === 'create') {
-        order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
+        order = await this.postOrderWithStockGate({
           patientId: p.id,
           refDoctorName: this.refDoctorName().trim() || null,
           refHospitalName: this.refHospitalName().trim() || null,
+          referralSourceType: this.referralSourceType() || null,
           priority: this._priority(),
           source: appointmentId ? 'appointment' : 'walkin',
           collectionType: 'walkin',
@@ -1936,14 +2095,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           // choice from the billing card (it was dropped on this path before).
           metadataJson: this.buildOrderMetadata(appointmentId),
           ...(discount > 0 ? { discount } : {})
-        }));
+        });
         this.pendingOrder = { id: order.id, patientId: p.id, key };
         this.noteOrdered(this._selected());
       } else {
         if (plan.action === 'patch') {
-          await firstValueFrom(this.api.patch<unknown>(`/api/orders/${plan.orderId}/tests`, {
+          await this.patchTestsWithStockGate(plan.orderId, {
             testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
-          }));
+          });
           this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
         }
         order = { id: plan.orderId };
@@ -1975,16 +2134,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
         } else if (d.mode === 'wallet') {
-          // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
-          // record the bill payment.
+          // Credit Wallet (H8): ONE call — the bill payment and the charge to
+          // the partner's tab commit together (never one without the other).
           if (!d.vendorId) throw new Error('No vendor selected');
           const payAmt = owed(targetAmount);
-          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-            amount: payAmt, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
-          }));
-          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: payAmt, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
-          }));
+          latest = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, payAmt, {
+            referenceNo: d.referenceNo, reason: `Bill #${bill.id.substring(0, 8)}`
+          }))).bill;
         } else {
           const payAmt = owed(targetAmount);
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
@@ -2128,17 +2284,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refDoctorName.set('');
     this.refDoctorSuggestions.set([]);
     this.refDoctorError.set(null);
+    this.referralSourceType.set('');
     this.setPriority('Normal');
     this.router.navigateByUrl('/frontdesk/order');
     setTimeout(() => this.selectScope('patient'), 0);
   }
 
-  printPaidInvoice() { void this.emitPaidInvoice('print'); }
+  /** Which paid-invoice action is building its PDF (template + QR fetches
+   *  run first) — the pressed button shows its busy state meanwhile. */
+  readonly invoiceBusy = signal<'print' | 'thermal' | 'share' | null>(null);
+  private runInvoiceAction(kind: 'print' | 'thermal' | 'share', work: () => Promise<void>): void {
+    if (this.invoiceBusy() === kind) return;
+    this.invoiceBusy.set(kind);
+    void work().finally(() => { if (this.invoiceBusy() === kind) this.invoiceBusy.set(null); });
+  }
+  printPaidInvoice() { this.runInvoiceAction('print', () => this.emitPaidInvoice('print')); }
   /** Force the receipt-roll layout for this print even when the tenant's saved
    *  default is A4 (a counter can have both printers). Width comes from the
    *  saved setting when that is already a roll; otherwise 3 in / 80 mm, the
    *  common desk receipt printer. */
-  printPaidThermal() { void this.emitPaidInvoice('print', 'thermal_auto'); }
+  printPaidThermal() { this.runInvoiceAction('thermal', () => this.emitPaidInvoice('print', 'thermal_auto')); }
 
   /** Post-payment "Share on WhatsApp". On the native shell we hand the real
    *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
@@ -2149,7 +2314,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   sharePaidInvoice() {
     const bill = this.paidBill();
     if (!bill) return;
-    if (this.isNativePlatform()) { void this.emitPaidInvoice('share'); return; }
+    if (this.isNativePlatform()) { this.runInvoiceAction('share', () => this.emitPaidInvoice('share')); return; }
     const p = this._patient();
     const lab = this.auth.user()?.tenantName || 'our lab';
     const lines = [
@@ -2214,7 +2379,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         address: tpl?.address || undefined,
         phone: tpl?.phone || undefined,
         email: tpl?.email || undefined,
-        gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+        gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
       },
     };
 
@@ -2283,6 +2448,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof window !== 'undefined') {
       window.visualViewport?.removeEventListener('resize', this._onViewport);
       window.removeEventListener('resize', this._onViewport);
+      window.removeEventListener(PF_KEYS_EVENT, this._onViewport);
     }
     clearTimeout(this.nudgeTimer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVisibleResync);
@@ -2320,17 +2486,24 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       this._saving.set(true);
-      this.api.patch<{ order: Order; bill: unknown }>(`/api/orders/${editId}/tests`, {
-        testIds: this._selected(),
-        specimens: this.specimenPayload(), reason: 'reception edit'
-      }).subscribe({
-        next: () => {
+      // Async IIFE (not .subscribe) so a stock_warning can be gated through
+      // the same DialogService confirm + resend-with-override helper as the
+      // create path (R1 review fix — this PATCH used to hit a stock_warning
+      // 400 with no way to override it).
+      void (async () => {
+        try {
+          await this.patchTestsWithStockGate<{ order: Order; bill: unknown }>(editId, {
+            testIds: this._selected(),
+            specimens: this.specimenPayload(), reason: 'reception edit'
+          });
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
           this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(editId) });
-        },
-        error: e => { this._saving.set(false); this.surfaceMutationError(e); }
-      });
+        } catch (e) {
+          this._saving.set(false);
+          this.surfaceMutationError(e);
+        }
+      })();
       return;
     }
 
@@ -2340,10 +2513,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // pure walk-ins.
     const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
     this._saving.set(true);
-    this.api.post<Order>('/api/orders/', {
+    const orderBody = {
       patientId: p.id,
       refDoctorName: this.refDoctorName().trim() || null,
       refHospitalName: this.refHospitalName().trim() || null,
+      referralSourceType: this.referralSourceType() || null,
       priority: this._priority(),
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
@@ -2353,47 +2527,55 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       metadataJson: this.buildOrderMetadata(appointmentId),
       // Validated against the cap BEFORE the order exists (no orphan order).
       ...(this.discountAmount() > 0 ? { discount: this.discountAmount() } : {})
-    }).subscribe({
-      next: order => {
+    };
+    // Async IIFE (not .subscribe) so a stock_warning can be gated through the
+    // same DialogService confirm + resend-with-override helper as confirmPayment().
+    void (async () => {
+      let order: Order;
+      try {
+        order = await this.postOrderWithStockGate(orderBody);
+      } catch (e) {
         this._saving.set(false);
-        this.noteOrdered(this._selected());
-        // Order persisted — drop any saved draft for this patient.
-        const pid = p.id;
-        this.removeDraft(pid);
-        this._hasDraft.set(false);
-        // Workflow-driven fork: when billing is NOT a separate counter
-        // (front_desk), payment is part of THIS walk-in flow — jump straight
-        // into billing with the order preselected (no detour through the
-        // queue). When the workflow puts billing on a separate counter, raise
-        // the request and reset for the next patient.
-        if (this.labCfg.billingMode() === 'front_desk') {
-          // Front-desk collects via the inline pay pane (Confirm payment), so
-          // submit() isn't the path here — fall back to the billing screen if
-          // it's ever reached (e.g. edit-mode proceed).
-          this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(order.id) });
-        } else {
-          // Billing lives on a separate counter. Generate the invoice HERE
-          // (allocates the invoice number + tracking QR) so the patient leaves
-          // with something to present; the standalone counter then scans the
-          // QR / enters the invoice number to collect payment. The order stays
-          // 'created' (awaiting payment) until the counter takes payment.
-          this._selected.set([]);
-          this._patient.set(null);
-          this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }).subscribe({
-            next: bill => {
-              this.toasts.success(`Invoice ${bill.invoiceNumber ?? ''} generated — send the patient to the billing counter`);
-              this.router.navigateByUrl('/frontdesk');
-            },
-            error: () => {
-              // Order still exists — the counter can bill it by patient/order id.
-              this.toasts.success('Order created — billing request raised');
-              this.router.navigateByUrl('/frontdesk');
-            }
-          });
-        }
-      },
-      error: e => { this._saving.set(false); this.surfaceMutationError(e); }
-    });
+        this.surfaceMutationError(e);
+        return;
+      }
+      this._saving.set(false);
+      this.noteOrdered(this._selected());
+      // Order persisted — drop any saved draft for this patient.
+      const pid = p.id;
+      this.removeDraft(pid);
+      this._hasDraft.set(false);
+      // Workflow-driven fork: when billing is NOT a separate counter
+      // (front_desk), payment is part of THIS walk-in flow — jump straight
+      // into billing with the order preselected (no detour through the
+      // queue). When the workflow puts billing on a separate counter, raise
+      // the request and reset for the next patient.
+      if (this.labCfg.billingMode() === 'front_desk') {
+        // Front-desk collects via the inline pay pane (Confirm payment), so
+        // submit() isn't the path here — fall back to the billing screen if
+        // it's ever reached (e.g. edit-mode proceed).
+        this.router.navigate(['/frontdesk/order'], { queryParams: this.billingQueryParams(order.id) });
+      } else {
+        // Billing lives on a separate counter. Generate the invoice HERE
+        // (allocates the invoice number + tracking QR) so the patient leaves
+        // with something to present; the standalone counter then scans the
+        // QR / enters the invoice number to collect payment. The order stays
+        // 'created' (awaiting payment) until the counter takes payment.
+        this._selected.set([]);
+        this._patient.set(null);
+        this.api.post<Bill>('/api/billing/', { orderId: order.id, discount: this.discountAmount() }).subscribe({
+          next: bill => {
+            this.toasts.success(`Invoice ${bill.invoiceNumber ?? ''} generated — send the patient to the billing counter`);
+            this.router.navigateByUrl('/frontdesk');
+          },
+          error: () => {
+            // Order still exists — the counter can bill it by patient/order id.
+            this.toasts.success('Order created — billing request raised');
+            this.router.navigateByUrl('/frontdesk');
+          }
+        });
+      }
+    })();
   }
 
   back() {
@@ -2477,8 +2659,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const h = this.refHospitalName().trim();
     if (h) params.set('hospital', h);
     const qs = params.toString();
-    this.api.get<string[]>(`/api/test-picker/doctors${qs ? `?${qs}` : ''}`).subscribe({
-      next: names => this.refDoctorSuggestions.set(names ?? []),
+    this.api.get<Array<DoctorOption | string>>(`/api/test-picker/doctors/options${qs ? `?${qs}` : ''}`).subscribe({
+      next: list => this.refDoctorSuggestions.set(toDoctorOptions(list)),
       error: () => this.refDoctorSuggestions.set([])
     });
   }
@@ -2551,7 +2733,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const p = pill.getBoundingClientRect();
     if (p.width > 0) this.dropBox.set({ left: p.left - u.left, top: p.bottom - u.top + 8, width: p.width });
     const vv = window.visualViewport;
-    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    // PF Keys (tablets) docks over the bottom like a keyboard, but the
+    // visual viewport doesn't shrink for it: subtract its published height.
+    const keysH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(PF_KEYS_HEIGHT_VAR)) || 0;
+    const viewBottom = (vv ? vv.offsetTop + vv.height : window.innerHeight) - keysH;
     this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - (p.bottom + 8) - 12)));
   }
 
@@ -2559,6 +2744,30 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly scopeHighlight = signal(0);
   /** Phone: the compact scope picker menu (the tiles collapse into it). */
   readonly scopeMenuOpen = signal(false);
+
+  // ── PF Keys (tablets): the pill is a search field for Tests (QWERTY,
+  //    123 → department-prefix code pad) and Patient (number pad). Doctor /
+  //    Hospital are free-text names → the system keyboard.
+  readonly pfKeysKind = computed<PfKeysKind | null>(() =>
+    this.scope() === 'tests' ? 'test' : this.scope() === 'patient' ? 'patient' : null);
+  /** Tests scope: Enter would REMOVE the highlighted match (it is already
+   *  in the order — Enter toggles, the row's chip already says "↵ Remove"). */
+  readonly pfKeysEnterRemoves = computed(() => {
+    if (this.scope() !== 'tests') return false;
+    const id = this.activeTestId();
+    return !!id && this._selected().includes(id);
+  });
+  /** The keypad's primary key says what Enter will do, live with the
+   *  highlight and the cart: "Add ↵" ⇄ "Remove ↵" (patient: "Select ↵"). */
+  readonly pfKeysEnter = computed(() =>
+    this.scope() === 'patient' ? 'Select' : this.pfKeysEnterRemoves() ? 'Remove' : 'Add');
+  readonly pfKeysEnterAria = computed(() =>
+    this.scope() === 'patient' ? 'Select highlighted patient'
+      : this.pfKeysEnterRemoves() ? 'Remove selected test' : 'Add selected test');
+  readonly pfKeysEnterTone = computed<PfKeysEnterTone>(() => this.pfKeysEnterRemoves() ? 'remove' : 'primary');
+  /** The lab's own department codes (from its Test Master) for the code pad. */
+  readonly pfKeysPrefixes = computed<PfKeysPrefix[]>(() =>
+    deptPrefixes(this.deptChips().map(d => ({ name: d.name, code: d.code })), 'test'));
 
   /** What the input shows: the test query in Tests scope, else the scope text. */
   readonly pillValue = computed(() => this.scope() === 'tests' ? this._query() : this.scopeQuery());
@@ -2708,18 +2917,32 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return this.patientResults().map(p => ({
         key: p.id, kind: 'match' as const, title: patientDisplayName(p),
         meta: [
-          [p.age != null ? `${p.age}` : '', (p.sex ?? '').charAt(0).toUpperCase()].filter(Boolean).join('/'),
+          [formatAge(p, 'num'), (p.sex ?? '').charAt(0).toUpperCase()].filter(Boolean).join('/'),
           p.mrn, p.phone,
         ].filter(Boolean).join(' · '),
       }));
     }
-    if (k === 'doctor' || k === 'hospital') {
-      const names = k === 'doctor' ? this.refDoctorSuggestions() : this.refHospitalSuggestions();
+    if (k === 'doctor') {
+      // Doctor-first: a doctor is found with or without a hospital; a linked
+      // doctor reads "Dr X · Hospital Y" (one row per hospital they refer from).
+      const opts = this.refDoctorSuggestions();
       const hosp = this.refHospitalName().trim();
-      const meta = k === 'doctor' ? (hosp ? `Refers from ${hosp}` : 'Referring doctor') : 'Referring hospital';
+      const rows: ScopeRow[] = opts.map(o => ({
+        key: `${o.doctorId ?? o.name}|${o.hospitalName ?? ''}`, kind: 'match' as const,
+        title: doctorOptionLabel(o), value: o.name, hospital: o.hospitalName ?? null,
+        meta: o.hospitalName ? 'Referring doctor' : (hosp ? `Refers from ${hosp}` : 'Referring doctor · no hospital'),
+      }));
+      if (q && !opts.some(o => o.name.trim().toLowerCase() === q.toLowerCase())) {
+        rows.push({ key: '__new__', kind: 'new', title: q, meta: 'Add as a new referring doctor' });
+      }
+      return rows;
+    }
+    if (k === 'hospital') {
+      const names = this.refHospitalSuggestions();
+      const meta = 'Referring hospital';
       const rows: ScopeRow[] = names.map(n => ({ key: n, kind: 'match' as const, title: n, meta }));
       if (q && !names.some(n => n.trim().toLowerCase() === q.toLowerCase())) {
-        rows.push({ key: '__new__', kind: 'new', title: q, meta: `Add as a new ${k === 'doctor' ? 'referring doctor' : 'referring hospital'}` });
+        rows.push({ key: '__new__', kind: 'new', title: q, meta: 'Add as a new referring hospital' });
       }
       return rows;
     }
@@ -2751,7 +2974,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const p = this.patientResults().find(x => x.id === row.key);
       if (p) this.attachPatient(p);
     } else if (k === 'doctor') {
-      this.pickRefDoctor(row.title.trim());
+      this.pickRefDoctor((row.value ?? row.title).trim());
+      // A linked doctor's row also fills an empty Hospital tile (never
+      // overrides one the receptionist already picked).
+      if (row.hospital && !this.refHospitalName().trim()) {
+        this.refHospitalName.set(row.hospital);
+        this.refHospitalError.set(null);
+      }
     } else if (k === 'hospital') {
       this.pickRefHospital(row.title.trim());
     }
@@ -2885,19 +3114,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 }
 
-/** Suggestion shown above the cart when picked individual tests are
- *  available as part of a cheaper package. */
-interface PackageSuggestion {
-  package: Test;
-  /** Selected individual-test ids that this package contains. */
-  coveredIds: string[];
-  /** How many tests the package contains in total (covered + extras). */
-  memberCount: number;
-  /** Sum of the covered individual tests' prices (without GST). */
-  individualSum: number;
-  /** individualSum − package.price, clamped at 0. */
-  savings: number;
-}
+/** A package / profile suggestion for this cart (package-suggest.ts). */
+type PackageSuggestion = BundleSuggestion<Test>;
 
 /** Parse the package's `Parameters` JSON to extract member test ids.
  *  Mirrors the backend's OrderService.ParsePackageChildIds shape:

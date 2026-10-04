@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -35,6 +35,14 @@ import { UserBranchScope, branchScopeChips } from './branch-scope';
 import { UserDepartmentsRow, departmentNames } from './consultant-departments';
 import { Department } from '../../../shared/models/tenant.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { prefetch, prefetchWhenIdle } from '../../../shared/utils/prefetch';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
+import {
+  ROLE_EDITOR_PREFETCH_KEY, USER_EDIT_PREFETCH_KEY, USER_INVITE_PREFETCH_KEY,
+  loadRoleEditor, loadUserEdit, loadUserInvite,
+} from './user-editors.loader';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -94,6 +102,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
     SegmentedComponent,
     TouchButtonComponent,
     HeroBandComponent,
+    SkeletonTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -118,6 +127,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
           <ng-container band-actions>
             @if (tab() === 'users') {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openInvite()"
+                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
                       title="Create user" aria-label="Create user">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -127,6 +137,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
               </button>
             } @else {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openNewRole()"
+                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
                       title="Create role" aria-label="Create role">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -193,6 +204,10 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
       @if (tab() === 'users') {
         <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          @if (listSkeleton()) {
+            <!-- First load: the grid's shape (ND-PATTERN "Loading feedback"). -->
+            <pf-skeleton-table class="pf-ua-gridskel" [rows]="10" [cols]="5" label="Loading users…"></pf-skeleton-table>
+          }
           <ag-grid-angular
             style="width: 100%; height: 100%;"
             [theme]="gridTheme()"
@@ -206,6 +221,9 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
       } @else {
         <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          @if (listSkeleton()) {
+            <pf-skeleton-table class="pf-ua-gridskel" [rows]="8" [cols]="4" label="Loading roles…"></pf-skeleton-table>
+          }
           <ag-grid-angular
             style="width: 100%; height: 100%;"
             [theme]="gridTheme()"
@@ -222,7 +240,8 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
   `,
   styles: [`
     /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
-    .pf-ua-grid { height: calc(100vh - 240px); min-height: 420px; }
+    .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
+    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
     :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
     .pf-ua-count {
       font-size: 12px; font-variant-numeric: tabular-nums;
@@ -394,8 +413,8 @@ export class UsersAccessComponent implements OnInit {
     btn.innerHTML = '<span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>';
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const ctx = params.context as { toggleActive?: (u: User) => void };
-      ctx?.toggleActive?.(u);
+      const ctx = params.context as { toggleActive?: (u: User, el?: HTMLElement) => void };
+      ctx?.toggleActive?.(u, btn);
     });
     wrap.appendChild(btn);
     return wrap;
@@ -411,8 +430,9 @@ export class UsersAccessComponent implements OnInit {
       canCall?: (u: User) => boolean;
       callHint?: (u: User) => string;
       callUser?: (u: User) => void;
-      editUser?: (u: User) => void;
-      resetPassword?: (u: User) => void;
+      editUser?: (u: User, el?: HTMLElement) => void;
+      resetPassword?: (u: User, el?: HTMLElement) => void;
+      warmUserEdit?: () => void;
     };
 
     const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
@@ -424,11 +444,13 @@ export class UsersAccessComponent implements OnInit {
     }
 
     const editBtn = rowAction(web, 'Edit', ICON_EDIT, `Edit ${u.displayName || u.username || 'user'}`);
-    editBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.editUser?.(u); });
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.editUser?.(u, editBtn); });
+    editBtn.addEventListener('pointerenter', () => ctx?.warmUserEdit?.());
+    editBtn.addEventListener('focus', () => ctx?.warmUserEdit?.());
     wrap.appendChild(editBtn);
 
     const pwdBtn = rowAction(web, 'Reset password', ICON_KEY, `Reset password for ${u.displayName || u.username || 'user'}`);
-    pwdBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.resetPassword?.(u); });
+    pwdBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.resetPassword?.(u, pwdBtn); });
     wrap.appendChild(pwdBtn);
 
     return wrap;
@@ -472,11 +494,13 @@ export class UsersAccessComponent implements OnInit {
     const r = params.data;
     const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
     const btn = rowAction(web, 'Manage permissions', ICON_SHIELD, `Manage permissions for ${r.name}`);
+    const roleCtx = params.context as { openRole?: (r: Role, el?: HTMLElement) => void; warmRoleEditor?: () => void };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const ctx = params.context as { openRole?: (r: Role) => void };
-      ctx?.openRole?.(r);
+      roleCtx?.openRole?.(r, btn);
     });
+    btn.addEventListener('pointerenter', () => roleCtx?.warmRoleEditor?.());
+    btn.addEventListener('focus', () => roleCtx?.warmRoleEditor?.());
     wrap.appendChild(btn);
 
     if (isDeletableRole(r)) {
@@ -487,8 +511,8 @@ export class UsersAccessComponent implements OnInit {
       del.style.marginLeft = '8px';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
-        const ctx = params.context as { deleteRole?: (r: Role) => void };
-        ctx?.deleteRole?.(r);
+        const ctx = params.context as { deleteRole?: (r: Role, el?: HTMLElement) => void };
+        ctx?.deleteRole?.(r, del);
       });
       wrap.appendChild(del);
     }
@@ -627,16 +651,51 @@ export class UsersAccessComponent implements OnInit {
     canCall: (u: User) => this.canCall(u),
     callHint: (u: User) => this.callHint(u),
     callUser: (u: User) => this.callUser(u),
-    editUser: (u: User) => this.editUser(u),
-    resetPassword: (u: User) => this.resetPassword(u),
+    editUser: (u: User, el?: HTMLElement) => this.editUser(u, el),
+    resetPassword: (u: User, el?: HTMLElement) => this.holdBusy(el, () => this.resetPassword(u)),
     deactivate: (u: User) => this.deactivate(u),
     reactivate: (u: User) => this.reactivate(u),
-    toggleActive: (u: User) => this.toggleUserActive(u),
-    openRole: (r: Role) => this.openRole(r),
-    deleteRole: (r: Role) => this.deleteRole(r),
+    toggleActive: (u: User, el?: HTMLElement) => this.holdBusy(el, () => this.toggleUserActive(u)),
+    openRole: (r: Role, el?: HTMLElement) => this.openRole(r, el),
+    deleteRole: (r: Role, el?: HTMLElement) => this.holdBusy(el, () => this.deleteRole(r)),
+    warmUserEdit: () => { void prefetch(USER_EDIT_PREFETCH_KEY, loadUserEdit); },
+    warmRoleEditor: () => { void prefetch(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor); },
   };
 
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  private readonly pageOpen = inject(PageOpenService);
+  private readonly destroyRef = inject(DestroyRef);
+  /** First load: skeleton rows over the grid until users + roles land. */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  /** A DOM-built row action whose request is running: aria-busy + disabled
+   *  the same frame (repeat presses ignored), released when it settles. */
+  private async holdBusy(el: HTMLElement | undefined, work: () => Promise<unknown>): Promise<void> {
+    if (el?.getAttribute('aria-busy') === 'true') return;
+    const btn = el instanceof HTMLButtonElement ? el : null;
+    el?.setAttribute('aria-busy', 'true');
+    el?.classList.add('pf-is-busy');
+    if (btn) btn.disabled = true;
+    try { await work(); } finally {
+      el?.removeAttribute('aria-busy');
+      el?.classList.remove('pf-is-busy');
+      if (btn) btn.disabled = false;
+    }
+  }
+
   ngOnInit() {
+    let firstLoads = 2;
+    const landed = () => {
+      if (--firstLoads > 0) return;
+      this.listHold.done();
+      // The grid is on screen: warm the editors' code while the browser is idle.
+      const cancels = [
+        prefetchWhenIdle(USER_EDIT_PREFETCH_KEY, loadUserEdit),
+        prefetchWhenIdle(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor),
+      ];
+      this.destroyRef.onDestroy(() => cancels.forEach(c => c()));
+    };
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.route.queryParams.subscribe(params => {
       if (params['tab'] === 'roles' || params['tab'] === 'users') {
         this._tab.set(params['tab']);
@@ -646,8 +705,9 @@ export class UsersAccessComponent implements OnInit {
     this.api.get<User[]>('/api/users/').subscribe({ next: l => {
       this._users.set(l ?? []);
       this.presence.seedFromUsers(l ?? []);
-    } });
-    this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
+      landed();
+    }, error: () => landed() });
+    this.api.get<Role[]>('/api/roles/').subscribe({ next: l => { this._roles.set(l ?? []); landed(); }, error: () => landed() });
     this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({
       next: l => this._scopes.set(new Map((l ?? []).map(s => [s.userId, s]))),
       error: () => { /* older server: the column stays empty */ },
@@ -675,8 +735,19 @@ export class UsersAccessComponent implements OnInit {
 
   openInvite() { this.router.navigateByUrl('/admin/users/invite'); }
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
-  openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
-  editUser(u: User) { this.router.navigate(['/admin/users', u.id, 'edit']); }
+  /** Hover / focus of Create user / Create role: warm that editor's code. */
+  warmInvite() { void prefetch(USER_INVITE_PREFETCH_KEY, loadUserInvite); }
+  warmRoleEditor() { void prefetch(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor); }
+  /** Row actions are DOM-built: the pressed button turns "held" the same
+   *  frame, until the editor's navigation settles. */
+  openRole(r: Role, el?: HTMLElement) {
+    this.pageOpen.markSource(el);
+    this.router.navigate(['/admin/roles', r.id, 'edit']);
+  }
+  editUser(u: User, el?: HTMLElement) {
+    this.pageOpen.markSource(el);
+    this.router.navigate(['/admin/users', u.id, 'edit']);
+  }
 
   /** Delete a custom role (DialogService confirm, danger tone). The server
    *  refuses a role that is still assigned (409, with the user count) rather
@@ -700,11 +771,11 @@ export class UsersAccessComponent implements OnInit {
     this.toasts.success(`Role "${r.name}" deleted`);
   }
 
-  toggleUserActive(u: User) {
+  toggleUserActive(u: User): Promise<void> {
     if (u.isActive) {
-      this.deactivate(u);
+      return this.deactivate(u);
     } else {
-      this.reactivate(u);
+      return this.reactivate(u);
     }
   }
 

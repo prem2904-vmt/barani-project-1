@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PAYMENT_RULE_PERMS, WA_BILLING_VIEW_PERMS } from '../../../core/auth/route-access';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
@@ -19,6 +21,14 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
+import { WaConnectCardComponent } from './wa-connect-card.component';
+import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { spinDelay } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { WaBillingCardComponent } from './wa-billing-card.component';
+import { WaMessagePickerComponent } from './wa-message-picker.component';
+import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
+import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
 /** Band pill tabs — the 13 section cards grouped by what they govern. */
 export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
@@ -39,7 +49,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, BusyComponent, SkeletonCardComponent, WaBillingCardComponent, WaMessagePickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -54,9 +64,15 @@ interface AutoAssignConfig {
           <!-- Autosave is authoritative here (no Save button): the band says
                so as the neutral save state with a violet check. -->
           <ng-container band-actions>
-            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              <span class="pf-ls__savestate-t">Changes save automatically</span>
+            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
+                  [attr.aria-busy]="savingShown() ? 'true' : null">
+              @if (savingShown()) {
+                <pf-busy label="Saving…"></pf-busy>
+                <span class="pf-ls__savestate-t">Saving…</span>
+              } @else {
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="pf-ls__savestate-t">Changes save automatically</span>
+              }
             </span>
           </ng-container>
         </pf-hero-band>
@@ -71,11 +87,25 @@ interface AutoAssignConfig {
       <!-- This page has no Save button by design: every change persists the
            moment you make it (OPS-15). Make that explicit so it doesn't read as
            unsaved. -->
-      <div class="pf-ls__autosave pf-classic-only" role="status">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-        <span>Changes are saved automatically</span>
+      <div class="pf-ls__autosave pf-classic-only" role="status" [attr.aria-busy]="savingShown() ? 'true' : null">
+        @if (savingShown()) {
+          <pf-busy label="Saving…"></pf-busy>
+          <span>Saving…</span>
+        } @else {
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Changes are saved automatically</span>
+        }
       </div>
+
+      @if (firstLoad()) {
+        <!-- First load: the section cards' shape until the branch config lands. -->
+        <div class="pf-ls__skel">
+          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+          <pf-skeleton-card [lines]="4" label="Loading lab settings…"></pf-skeleton-card>
+          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+        </div>
+      } @else {
 
       @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
@@ -121,6 +151,32 @@ interface AutoAssignConfig {
               </span>
             </button>
           }
+        </div>
+        <!-- Sample-search preset (a lab user's suggestion): the lab search
+             boxes open pre-typed with the current ID head. -->
+        <div class="pf-ls__preset">
+          <div class="pf-ls__preset-text">
+            <span class="pf-ls__preset-t">Pre-fill sample search</span>
+            <span class="pf-ls__hint">
+              @if (presetExample(); as ex) {
+                Collect, Receive and My Work open their sample search with
+                <strong class="pf-ls__mono">{{ ex.now }}</strong> already typed — enter only the number.
+                @if (ex.next !== ex.now) { It becomes <strong class="pf-ls__mono">{{ ex.next }}</strong> next month on its own. }
+                Backspace clears it.
+              } @else {
+                Sample search boxes open with the current sample-ID start already typed — enter only the number.
+              }
+            </span>
+            @if (samplePresetSetting() !== null) {
+              <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="resetSamplePreset()">
+                Reset — {{ samplePresetDefault() ? 'on' : 'off' }} by default for this ID format
+              </button>
+            }
+          </div>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="samplePresetOn()"
+                  aria-label="Pre-fill sample search" (click)="setSamplePreset(!samplePresetOn())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
         </div>
       </div>
       </section>
@@ -305,8 +361,10 @@ interface AutoAssignConfig {
       }
       }
 
-      @if (showSec('rules')) {
-      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow. -->
+      @if (showSec('rules') && canManagePayments()) {
+      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow.
+           Revenue policy — billing / organisation admins only (never the
+           Lab Admin (Technical) role); the server refuses it the same way. -->
       <section class="nd-card pf-ls__card">
         <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="nd-card__label pf-ls__title">Require full payment to progress</h3></div>
         <div class="pf-ls__cardbody">
@@ -377,8 +435,8 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules')) {
-      <!-- Front-desk Payments-due tab visibility -->
+      @if (showSec('rules') && canManagePayments()) {
+      <!-- Front-desk Payments-due tab visibility (billing admins only). -->
       <section class="nd-card pf-ls__card">
         <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Show "Payments due" tab</h3><span class="nd-card__spacer"></span>
           <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
@@ -422,81 +480,83 @@ interface AutoAssignConfig {
       </section>
       }
 
+      @if (showSec('report')) {
+      <!-- Technician notes on the report (per branch, like the other
+           result-entry switches): the bench writes rich-text notes that print
+           under a test, a profile, a department section or the whole report. -->
+      <section class="nd-card pf-ls__card" data-testid="ls-tech-notes">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Technician notes on report</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
+                  aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
+            When ON, technicians entering results can add a note that <strong>prints on the final report</strong> (and an amended final; never on a preliminary / partial release) —
+            under a test (also each test inside a profile), under a profile, at the end of a department section,
+            or for the whole report. Notes can be <strong>bold</strong>, <em>italic</em>, underlined, or bulleted /
+            numbered lists, and stay editable until the test is validated (after that, through Edit result).
+            The validating pathologist sees every note on the validation screen. Turning it OFF hides the notes on result entry; notes already written still print.
+          </p>
+        </div>
+      </section>
+      }
+
       @if (showSec('report') && waSettings()) {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
       <section class="nd-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send reports on WhatsApp automatically</h3><span class="nd-card__spacer"></span>
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="nd-card__spacer"></span>
           <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
-                  aria-label="Send reports on WhatsApp automatically" [disabled]="waSaving() || !canManageWa()"
+                  aria-label="Send WhatsApp automatically when the report is ready" [disabled]="waSaving() || !canManageWa()"
                   (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
             <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
           <p class="pf-ls__hint">
-            When a patient's <strong>final</strong> report is ready <strong>and nothing is owed</strong>, they get a
-            WhatsApp message with the secure report link (they confirm their date of birth or phone to open it).
-            If the bill is settled later, the message goes out then. Reports made before you turn this on aren't sent.
+            When every test on an order is validated and its <strong>final</strong> report is ready, the patient gets
+            one WhatsApp message on their registered mobile — the report PDF plus the secure report link (they confirm
+            their date of birth or phone to open it). It goes only when <strong>the bill is fully paid</strong>: while
+            anything is owed it waits as <strong>On hold</strong> and sends by itself once the balance is cleared.
+            Partial reports are never sent. Reports made before you turn this on aren't sent.
           </p>
-          <!-- Sender: the shared Prefrontal number until the lab connects its own
-               WhatsApp Business number (Embedded Signup — coming soon). -->
+          <!-- Sender: the shared Prefrontal number until the lab's own number is
+               connected AND its template approved (the card below manages it). -->
           <div class="pf-ls__wa-sender">
             <span class="nd-chip nd-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
               Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
             </span>
-            @if (waSettings()!.sender?.source !== 'tenant') {
-              <button type="button" class="nd-btn nd-btn--secondary pf-ls__wfbtn" data-testid="ls-wa-connect"
-                      [disabled]="!waSettings()!.sender?.canConnect || waConnecting() || !canManageWa()"
-                      [attr.aria-describedby]="waSettings()!.sender?.canConnect ? null : 'pf-ls-wa-soon'"
-                      (click)="connectWa()">
-                Connect your WhatsApp number
-              </button>
-              @if (!waSettings()!.sender?.canConnect) {
-                <span class="pf-ls__wa-soon" id="pf-ls-wa-soon">Coming soon — send reports from your lab's own WhatsApp number and name.</span>
-              } @else {
-                <span class="pf-ls__wa-soon">You'll sign in with Meta and pick your WhatsApp Business number. You can keep using the WhatsApp Business app on it.</span>
-              }
-            }
-            @if (waSettings()!.sender?.error) {
-              <p class="pf-ls__warn" style="flex-basis: 100%;">{{ waSettings()!.sender?.error }}</p>
-            }
           </div>
           @if (waSettings()!.sender?.source !== 'tenant' && !waSettings()!.platform?.configured) {
             <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
           }
           <div class="pf-ls__wa-row">
             <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
+                    data-testid="ls-wa-resend-regen"
                     [disabled]="waSaving() || !canManageWa()"
                     (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
               <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-              Also send corrected (amended) reports
+              Send again when a report is regenerated or corrected
             </button>
+            <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
           </div>
-          <div class="mt-4 flex flex-wrap items-end gap-4">
-            <label class="block pf-ls__wa-field">
-              <span class="nd-field__lbl">Message template</span>
-              <input class="nd-input mt-1" type="text" maxlength="128" autocomplete="off"
-                     [placeholder]="waSettings()!.platform?.defaultTemplateName ?? ''"
-                     [disabled]="waSaving() || !canManageWa()"
-                     [ngModel]="waTemplateName()" (ngModelChange)="waTemplateName.set($event)"
-                     (blur)="saveWaTemplate()" />
-            </label>
-            <label class="block pf-ls__wa-lang">
-              <span class="nd-field__lbl">Language</span>
-              <input class="nd-input mt-1" type="text" maxlength="16" autocomplete="off"
-                     [placeholder]="waSettings()!.platform?.defaultTemplateLanguage ?? ''"
-                     [disabled]="waSaving() || !canManageWa()"
-                     [ngModel]="waTemplateLanguage()" (ngModelChange)="waTemplateLanguage.set($event)"
-                     (blur)="saveWaTemplate()" />
-            </label>
-          </div>
+          <!-- The message: a pick from the templates Meta approved on this lab's
+               sender (labels, never codes) + a live WhatsApp-style preview. -->
+          <pf-wa-message-picker [settings]="waSettings()!" [canEdit]="canManageWa() && !waSaving()" (changed)="applyWa($event)"></pf-wa-message-picker>
           <p class="pf-ls__hint" style="margin-top: 8px;">
-            Leave blank to use the platform template. It must be an approved WhatsApp template.
             The manual "Send WhatsApp" button on each report keeps working as a fallback.
           </p>
         </div>
       </section>
+      <!-- The lab's OWN WhatsApp number (Meta Embedded Signup). -->
+      <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
+      <!-- Usage, spend, Meta payment health, the prepaid balance (estimated)
+           and the shared-number credits. -->
+      @if (canSeeWaBilling()) {
+      <pf-wa-billing-card [settings]="waSettings()!"></pf-wa-billing-card>
+      }
       }
 
       @if (showSec('queues')) {
@@ -604,10 +664,12 @@ interface AutoAssignConfig {
       </div>
       </section>
       }
+      }
       </div>
     </section>
   `,
   styles: [`
+    .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; }
     .pf-ls__autosave {
       display: inline-flex; align-items: center; gap: 6px;
       margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
@@ -636,6 +698,10 @@ interface AutoAssignConfig {
     @media (max-width: 640px) {
       .pf-ls__savestate-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     }
+    .pf-ls__preset { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
+    .pf-ls__preset-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pf-ls__preset-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-ls__mono { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-primary); }
     .pf-ls__link  { background: none; border: none; padding: 0; font-size: 12.5px; color: var(--color-violet-400, #a78bfa); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
     .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
@@ -778,6 +844,22 @@ export class LabSettingsComponent implements OnInit {
     { value: 'report', label: 'Report' },
   ];
   readonly tab = signal<LabSettingsTab>('collection');
+
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  /** First load: skeleton cards until the branch config answers (held, no flash). */
+  private readonly loadHold = createLoadHold(true);
+  readonly firstLoad = this.loadHold.active;
+  /** Autosaves in flight — the band's save state reads "Saving…" meanwhile. */
+  private readonly pendingSaves = signal(0);
+  /** "Saving…" after 150ms (no flicker for a fast answer), held 300ms. */
+  readonly savingShown = spinDelay(computed(() => this.pendingSaves() > 0));
+  /** Counts one autosave request while it runs (request itself unchanged). */
+  private tracked<T>(): MonoTypeOperatorFunction<T> {
+    return src => defer(() => {
+      this.pendingSaves.update(n => n + 1);
+      return src.pipe(finalize(() => this.pendingSaves.update(n => Math.max(0, n - 1))));
+    });
+  }
   showSec(key: LabSettingsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
@@ -859,6 +941,8 @@ export class LabSettingsComponent implements OnInit {
     { value: 'report', label: 'Block at report', desc: "Dispatch is allowed, but the report can't be shared until the bill is fully paid." },
   ];
   protected readonly requireValidation = signal(false);
+  /** Technician notes on the report (per branch, off by default). */
+  protected readonly techReportNotes = signal(false);
   protected readonly showPaymentsDue = signal(true);
   /** The SINGLE code that prints on a specimen label. A tube label can't fit
    *  more than one, so this is a mutually-exclusive choice. */
@@ -870,7 +954,7 @@ export class LabSettingsComponent implements OnInit {
   ];
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).pipe(this.tracked()).subscribe({
       next: cfg => {
         // Push the fresh config into the shared service so the Stores nav entry
         // appears / disappears immediately (no reload needed).
@@ -887,7 +971,7 @@ export class LabSettingsComponent implements OnInit {
     const msg = v === 'none' ? 'Payment gate removed'
       : v === 'dispatch' ? 'Full payment now required before dispatch'
       : 'Full payment now required before sharing the report';
-    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(msg),
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
@@ -896,7 +980,7 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.labelCodeMode();
     if (prev === v) return;
     this.labelCodeMode.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label code format updated'); },
       error: e => { this.labelCodeMode.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
@@ -905,7 +989,7 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.queueFocusMode();
     if (prev === v) return;
     this.queueFocusMode.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).pipe(this.tracked()).subscribe({
       next: cfg => {
         if (cfg) { this.labCfg.update(cfg); this.effectiveQueueFocus.set(cfg.effectiveQueueFocus ?? 'patient'); }
         this.toasts.success('Queue focus updated');
@@ -917,21 +1001,31 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.labStructure();
     if (prev === v) return;
     this.labStructure.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labStructure: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labStructure: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Lab structure updated'); },
       error: e => { this.labStructure.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
     this.requireValidation.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'All results now require validation' : 'Direct-flow tests auto-validate again'),
       error: e => { this.requireValidation.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
+  setTechReportNotes(v: boolean) {
+    this.techReportNotes.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { techReportNotes: v }).pipe(this.tracked()).subscribe({
+      next: cfg => {
+        if (cfg) this.labCfg.update(cfg);
+        this.toasts.success(v ? 'Technicians can now add notes that print on the report' : 'Technician report notes turned off — saved notes still print');
+      },
+      error: e => { this.techReportNotes.set(!v); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
   setShowPaymentsDue(v: boolean) {
     this.showPaymentsDue.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success(v ? '"Payments due" tab shown at the front desk' : '"Payments due" tab hidden'); },
       error: e => { this.showPaymentsDue.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -952,7 +1046,7 @@ export class LabSettingsComponent implements OnInit {
     const next: ReportTemplate = { ...prev, metadata: writeReportOption(prev, 'abnormalSummary', v) };
     this.reportTpl.set(next);
     this.savingReportOption.set(true);
-    this.api.post('/api/config/report-template', next).subscribe({
+    this.api.post('/api/config/report-template', next).pipe(this.tracked()).subscribe({
       next: () => {
         this.savingReportOption.set(false);
         this.toasts.success(v ? 'Reports now open with a summary of abnormal results' : 'Summary of abnormal results turned off');
@@ -964,81 +1058,49 @@ export class LabSettingsComponent implements OnInit {
 
   // ── WhatsApp auto-send (Meta Cloud API) ──
   private readonly wa = inject(WhatsAppService);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly waSettings = signal<WaSettings | null>(null);
   protected readonly waSaving = signal(false);
-  protected readonly waTemplateName = signal('');
-  protected readonly waTemplateLanguage = signal('');
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
-  protected readonly waConnecting = signal(false);
-
-  /** Embedded Signup: the server signs a short-lived state and hands back the
-   *  link (API begin hop → Meta's hosted page → back to this page). */
-  connectWa() {
-    if (this.waConnecting() || !this.waSettings()?.sender?.canConnect) return;
-    this.waConnecting.set(true);
-    this.wa.startOnboarding().subscribe({
-      next: r => { if (r?.connectUrl) window.location.assign(r.connectUrl); else this.waConnecting.set(false); },
-      error: e => { this.waConnecting.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
-
-  /** Back from Meta: ?tab=report&whatsapp=connected|failed&reason=… */
-  private readWaReturn() {
-    const q = this.router.parseUrl(this.router.url).queryParams;
-    if (q['tab'] === 'report') this.tab.set('report');
-    if (q['whatsapp'] === 'connected') this.toasts.success('Your WhatsApp number is connected');
-    else if (q['whatsapp'] === 'failed') {
-      const why: Record<string, string> = {
-        cancelled: 'The WhatsApp connection was cancelled.',
-        invalid_state: 'That connection link expired — please try again.',
-        state_used: 'That connection link was already used — please start again.',
-        number_in_use: 'This WhatsApp number is already connected to another lab.',
-      };
-      this.toasts.error(why[q['reason']] ?? 'Could not connect your WhatsApp number. Please try again.');
-    }
-  }
   readonly canManageWa = computed(() =>
     this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
+  /** WhatsApp spend / credits — money: organisation / notification admins only
+   *  (GET api/whatsapp/billing refuses manage_lab_settings alone). */
+  readonly canSeeWaBilling = computed(() => this.auth.hasAnyPermission(WA_BILLING_VIEW_PERMS));
+  /** Payment gate + Payments-due tab — revenue policy (PATCH branch-lab-config
+   *  refuses those fields without manage_tenant / manage_billing_config). */
+  readonly canManagePayments = computed(() => this.auth.hasAnyPermission(PAYMENT_RULE_PERMS));
 
-  private applyWa(s: WaSettings) {
+  protected applyWa(s: WaSettings) {
     this.waSettings.set(s);
-    this.waTemplateName.set(s.templateName ?? '');
-    this.waTemplateLanguage.set(s.templateLanguage ?? '');
   }
 
   saveWa(patch: Partial<{ autoSendEnabled: boolean; sendUpdatedReports: boolean }>) {
     const cur = this.waSettings();
     if (!cur || this.waSaving()) return;
+    // Only the switches: the message pick lives in the picker (the server keeps it).
     const next = {
       autoSendEnabled: patch.autoSendEnabled ?? cur.autoSendEnabled,
       sendUpdatedReports: patch.sendUpdatedReports ?? cur.sendUpdatedReports,
-      templateName: this.waTemplateName().trim() || null,
-      templateLanguage: this.waTemplateLanguage().trim() || null,
     };
     this.waSettings.set({ ...cur, ...next });
     this.waSaving.set(true);
-    this.wa.saveSettings(next).subscribe({
+    this.wa.saveSettings(next).pipe(this.tracked()).subscribe({
       next: s => {
         this.waSaving.set(false);
         if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
         if (patch.autoSendEnabled !== undefined)
-          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically' : 'Automatic WhatsApp sending turned off');
+          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically once paid' : 'Automatic WhatsApp sending turned off');
         else this.toasts.success('WhatsApp settings saved');
       },
       error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
-  saveWaTemplate() {
-    const cur = this.waSettings();
-    if (!cur) return;
-    const same = (this.waTemplateName().trim() || null) === (cur.templateName ?? null)
-      && (this.waTemplateLanguage().trim() || null) === (cur.templateLanguage ?? null);
-    if (!same) this.saveWa({});
-  }
-
   ngOnInit() {
-    this.readWaReturn();
+    this.destroyRef.onDestroy(() => this.loadHold.cancel());
+    // Deep link: …/lab-settings?tab=report opens the Report tab (WhatsApp lives there).
+    if (this.router.parseUrl(this.router.url).queryParams['tab'] === 'report') this.tab.set('report');
     this.wa.settings().subscribe({
       next: s => { if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s); },
       error: () => this.waSettings.set(null),   // no permission / older server → card hidden
@@ -1048,6 +1110,7 @@ export class LabSettingsComponent implements OnInit {
       error: () => this.reportTpl.set(null),
     });
     this.tenantState.ensureLoaded();
+    this.samplePresets.reload();
     this.labCfg.ensureLoaded();
     this.entitlements.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
@@ -1056,6 +1119,7 @@ export class LabSettingsComponent implements OnInit {
         this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
         this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
+        this.techReportNotes.set(c?.techReportNotes === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.autoAssignValidatorsEnabled.set(c?.autoAssignValidatorsEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
@@ -1067,7 +1131,9 @@ export class LabSettingsComponent implements OnInit {
           c?.labStructure === 'standalone' || c?.labStructure === 'individual' ? 'standalone'
           : c?.labStructure === 'integrated' ? 'integrated'
           : 'auto');
-      }
+        this.loadHold.done();
+      },
+      error: () => this.loadHold.done(),
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
     // backend keys branch-lab-config / auto-assign on the X-Active-Branch
@@ -1078,10 +1144,13 @@ export class LabSettingsComponent implements OnInit {
     this.api.get<Department[]>(bid ? `/api/tenants/departments?branchId=${bid}` : '/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
-    this.api.get<Role[]>('/api/roles/').subscribe({
+    // Name-only pickers (GET api/roles/picker, api/users/picker): readable with
+    // manage_lab_settings, so the auto-assign editor works for a Lab Admin
+    // (Technical) without the user-admin lists (manage_users).
+    this.api.get<Role[]>('/api/roles/picker').subscribe({
       next: l => this._roles.set(l ?? [])
     });
-    this.api.get<User[]>('/api/users/').subscribe({
+    this.api.get<User[]>('/api/users/picker').subscribe({
       next: l => this._users.set((l ?? []).filter(u => u.isActive !== false))
     });
     this.api.get<AutoAssignConfig[]>('/api/tenants/auto-assign-configs').subscribe({
@@ -1092,7 +1161,7 @@ export class LabSettingsComponent implements OnInit {
   /** Per-branch master toggle. Off → all received tests go to the queue. */
   setAutoAssignEnabled(v: boolean) {
     this.autoAssignEnabled.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'Auto-assign on for this branch' : 'Auto-assign off — tests go to the queue'),
       error: e => { this.autoAssignEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -1102,7 +1171,7 @@ export class LabSettingsComponent implements OnInit {
    *  shared validation queue. */
   setAutoAssignValidatorsEnabled(v: boolean) {
     this.autoAssignValidatorsEnabled.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { autoAssignValidatorsEnabled: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignValidatorsEnabled: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'Validator auto-assign on for this branch' : 'Validator auto-assign off — results wait in the shared queue'),
       error: e => { this.autoAssignValidatorsEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -1171,7 +1240,7 @@ export class LabSettingsComponent implements OnInit {
       validatorUserIds: change.validatorUserIds ?? this.validatorsFor(departmentId),
       validatorRoleIds: change.validatorRoleIds ?? this.validatorRolesFor(departmentId),
     };
-    this.api.put<unknown>('/api/tenants/auto-assign-configs', body).subscribe({
+    this.api.put<unknown>('/api/tenants/auto-assign-configs', body).pipe(this.tracked()).subscribe({
       next: () => {
         const patch: AutoAssignConfig = {
           departmentId,
@@ -1194,7 +1263,37 @@ export class LabSettingsComponent implements OnInit {
   }
 
   setAllowNoScan(v: boolean) {
-    this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).pipe(this.tracked()).subscribe({
+      next: t => this.tenantState.update(t),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  // ── Sample-search preset (tenant-wide) ─────────────────────────────
+  private readonly samplePresets = inject(SampleSearchPresetService);
+  /** The lab's explicit choice; null = automatic (follows the ID format). */
+  readonly samplePresetSetting = computed<boolean | null>(() => this.tenantState.tenant()?.sampleSearchPreset ?? null);
+  readonly samplePresetDefault = computed(() => this.samplePresets.config()?.defaultEnabled ?? true);
+  readonly samplePresetOn = computed(() => this.samplePresetSetting() ?? this.samplePresetDefault());
+  /** "2609" now and "2610" next month, from the lab's real format. */
+  readonly presetExample = computed<{ now: string; next: string } | null>(() => {
+    const c = this.samplePresets.config();
+    if (!c) return null;
+    const d = labDate(new Date(), c.timeZone);
+    const n = nextLabMonth(d);
+    const a = sampleIdHead(c.prefix, c.datePrefix, c.separator, d);
+    return a ? { now: a, next: sampleIdHead(c.prefix, c.datePrefix, c.separator, n) } : null;
+  });
+
+  setSamplePreset(v: boolean) {
+    this.api.patch<Tenant>('/api/tenants/current', { sampleSearchPreset: v }).pipe(this.tracked()).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success(v ? 'Sample search pre-fills the current ID start' : 'Sample search starts empty'); },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  resetSamplePreset() {
+    this.api.patch<Tenant>('/api/tenants/current', { resetSampleSearchPreset: true }).pipe(this.tracked()).subscribe({
       next: t => this.tenantState.update(t),
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1204,7 +1303,7 @@ export class LabSettingsComponent implements OnInit {
    *  tenantState so the lab screens flip immediately (no reload). */
   setScanMode(v: 'scan' | 'manual') {
     if (this.scanMode() === v) return;
-    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success(v === 'manual' ? 'Manual entry — scanner hidden on lab screens' : 'Scan mode — QR/barcode scanner shown'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1241,7 +1340,7 @@ export class LabSettingsComponent implements OnInit {
     const cur = this.tenantState.tenant()?.calcConstants ?? null;
     const curNorm = cur ? JSON.stringify(JSON.parse(cur)) : null;
     if ((next ? JSON.stringify(next) : null) === curNorm) return;
-    this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Calculation constants saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1251,7 +1350,7 @@ export class LabSettingsComponent implements OnInit {
   saveSampleNumberWidth() {
     const width = Math.min(Math.max(Math.trunc(this.sampleNumberWidth() || 1), 1), 9);
     this.sampleNumberWidth.set(width);
-    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });

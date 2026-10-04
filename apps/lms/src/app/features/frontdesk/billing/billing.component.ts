@@ -10,9 +10,10 @@ import { ToastService } from '../../../core/services/toast.service';
 import { PrinterService } from '../../../core/printer/printer.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
+import { payBillFromWallet, VendorWalletBalance } from '../../../shared/utils/wallet-payment';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
@@ -25,6 +26,8 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
 import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
 import { SkeletonTableComponent, BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -35,18 +38,9 @@ interface PayModeDef {
   iconPath: string;
 }
 
-/** Slim shape of /api/vendors used by the billing wallet picker. */
-interface VendorWallet {
-  id: string;
-  name: string;
-  code?: string;
-  totalCredit: number;
-  usedCredit: number;
-  balance: number;
-  outstanding: number;
-  notifyThreshold?: number | null;
-  isActive: boolean;
-}
+/** Slim shape of /api/vendors used by the billing wallet picker (balances
+ *  are ledger-derived on the server). */
+type VendorWallet = VendorWalletBalance;
 
 /** Slim shape of /api/billing/config used to read the
  *  FrontdeskCanSeeWalletBalance flag. */
@@ -72,7 +66,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // page (:host:not(.pf-embedded)) without affecting the inline/embedded use
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
-  imports: [SkeletonTableComponent, BusyComponent,
+  imports: [SkeletonTableComponent, BusyComponent, BusyDirective,
     CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent,
     TileComponent,
@@ -125,6 +119,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
                   </div>
                   <button type="button" class="pf-bill-print-icon pf-no-print"
+                          [disabled]="printing()" [pfBusy]="printing()" pfBusyLabel="Preparing invoice…"
                           (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -244,7 +239,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                               (click)="refundMode.set(m.key)">{{ m.label }}</button>
                     }
                   </div>
-                  <button type="button" class="pf-refund__btn" [disabled]="refunding()" (click)="doRefund()">
+                  <button type="button" class="pf-refund__btn" [disabled]="refunding()"
+                          [pfBusy]="refunding()" pfBusyLabel="Recording refund…" (click)="doRefund()">
                     {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
                   </button>
                 </div>
@@ -488,6 +484,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               <pf-touch-btn size="md" variant="primary" [full]="true"
                             (pressed)="confirm()"
                             [disabled]="saving() || !canConfirm()"
+                            [busy]="saving()" busyLabel="Recording payment…"
                             class="mt-3 block pf-bill-confirm">
                 <span icon-left>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -535,7 +532,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           <p class="pf-pay-modal__sub">{{ invoiceNumber() }} · {{ effectivePayable() | inr }}</p>
 
           <div class="pf-pay-modal__actions">
-            <button type="button" class="pf-pay-modal__btn" (click)="printInvoice()">
+            <button type="button" class="pf-pay-modal__btn" [disabled]="printing()"
+                    [pfBusy]="printing()" pfBusyLabel="Preparing invoice…" (click)="printInvoice()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
@@ -561,6 +559,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-eyebrow {
       margin: 0;
       font-size: 10.5px;
@@ -1529,7 +1528,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
      * keep a single column. Nothing extra needed for portrait iPad —
      * it already uses both columns. Just ensure the modal stays a
      * centred card (not a phone sheet) and clears safe-area. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
         margin-bottom: env(safe-area-inset-bottom);
       }
@@ -1966,7 +1965,7 @@ export class BillingComponent implements OnInit, OnChanges {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
     // Tests catalogue — used to derive the report TAT estimate.
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: l => this._tests.set(l ?? []),
       error: () => { /* TAT is non-critical; silently skip if it fails */ }
     });
@@ -2196,45 +2195,36 @@ export class BillingComponent implements OnInit, OnChanges {
       }
       return;
     }
-    // 'wallet' mode charges the selected vendor's credit BEFORE
-    // recording the payment. If the charge fails (insufficient
-    // balance / inactive wallet), abort without recording payment so
-    // reception can pick a different vendor or mode.
+    // 'wallet' mode bills the selected partner's tab and records the payment
+    // in ONE server transaction (H8). If it fails (inactive wallet,
+    // overpayment), nothing is written, so reception can pick a different
+    // vendor or mode.
     if (this._mode() === 'wallet') {
       const vendor = this.selectedVendor();
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
       const applyAndPay = (currentBill: Bill) => {
         // Charge the SERVER's outstanding on the (recomputed) bill.
         const amount = Math.max(0, currentBill.balance);
-        this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
-          amount, billId: currentBill.id,
-          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
+        // H8: ONE call — the bill payment, the partner's charge ledger row and
+        // the wallet cache commit in one server transaction. It returns the
+        // settled bill AND the partner with its new ledger-derived balance.
+        payBillFromWallet(this.api, currentBill.id, vendor.id, amount, {
+          referenceNo: this._referenceNo() || vendor.code || vendor.name,
+          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`,
         }).subscribe({
-          next: (updatedVendor) => {
-            // The /charge endpoint returns the vendor with its NEW balance —
-            // patch the cached list so every bound view (selected card, wallet
+          next: ({ bill: updated, vendor: updatedVendor }) => {
+            // Patch the cached list so every bound view (selected card, wallet
             // rows) reflects the raised outstanding immediately, no refetch.
             if (updatedVendor?.id) {
               this._vendors.update(list => (list ?? []).map(v => v.id === updatedVendor.id ? { ...v, ...updatedVendor } : v));
             }
-            // Wallet charge succeeded → record the bill payment so the
-            // bill is marked paid and the running totals on the FD
-            // landing pick it up.
-            this.api.post<Bill>(`/api/billing/${currentBill.id}/payment`, {
-              amount, mode: 'wallet',
-              referenceNo: this._referenceNo() || vendor.code || vendor.name
-            }).subscribe({
-              next: (updated) => {
-                if (updated) this._bill.set(updated);
-                this._saving.set(false);
-                this._paid.set(true);
-                this.clearDraft();
-                this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
-                this.billingEvents.notifyPaid();
-                this._paymentDoneOpen.set(true);
-              },
-              error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
-            });
+            if (updated) this._bill.set(updated);
+            this._saving.set(false);
+            this._paid.set(true);
+            this.clearDraft();
+            this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
+            this.billingEvents.notifyPaid();
+            this._paymentDoneOpen.set(true);
           },
           error: e => {
             this._saving.set(false);
@@ -2324,7 +2314,15 @@ export class BillingComponent implements OnInit, OnChanges {
    *  totals, footer) and trigger a download. Built client-side with
    *  jsPDF so we don't need a server round-trip; the structured output
    *  is sharper and more usable than a window.print() screenshot. */
+  /** The invoice PDF is being built (template, QR, logo, printer routing). */
+  readonly printing = signal(false);
   async printInvoice() {
+    if (this.printing()) return;
+    this.printing.set(true);
+    try { await this.buildAndPrintInvoice(); } finally { this.printing.set(false); }
+  }
+
+  private async buildAndPrintInvoice() {
     const b = this._bill();
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {
@@ -2375,7 +2373,7 @@ export class BillingComponent implements OnInit, OnChanges {
           name: ((tpl?.labName) || this.auth.user()?.tenantName) || undefined,
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined, email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(b, tpl),   // the bill's branch-GST snapshot
         },
       };
       if (this.isNativePlatform()) {
