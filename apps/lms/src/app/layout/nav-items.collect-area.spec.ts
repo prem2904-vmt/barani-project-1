@@ -1,5 +1,5 @@
 import { NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withCollectionFallback } from './nav-items';
-import { ProcessWorkflowConfig } from '../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, workAreaIconPath } from '../shared/models/process-workflow.model';
 
 /** Collect page = the system Collect WORK AREA when a workflow is active. */
 const cat = (id: string, name: string, order: number) => ({ id, name, icon: 'folder', color: '#7c3aed', order });
@@ -24,12 +24,17 @@ const collectItems = (items: NavItem[] | null) =>
   (items ?? []).filter(i => i.href === '/sample-collection' || /collect/i.test(i.label));
 
 describe('menusFromWorkflow — system Collect work area', () => {
-  it('keeps the canonical Frontdesk icon when a workflow stores the Reception person-plus icon', () => {
+  it('static nav fallbacks use the picker icons for Frontdesk and Collect', () => {
+    expect(PRIMARY_NAV.find(i => i.id === 'frontdesk')?.iconPath).toEqual(workAreaIconPath('reception'));
+    expect(PRIMARY_NAV.find(i => i.id === 'sample-collection')?.iconPath).toEqual(workAreaIconPath('collect'));
+  });
+
+  it('uses the Frontdesk icon selected in the workflow builder', () => {
     const cfg = stored();
     cfg.categories[0] = { ...cfg.categories[0], icon: 'reception' };
     const items = menusFromWorkflow(cfg, ctxWith('register_patient', 'collect_sample', 'enter_result'))!;
     expect(items.find(i => i.id === 'frontdesk')?.iconPath)
-      .toEqual(PRIMARY_NAV.find(i => i.id === 'frontdesk')?.iconPath);
+      .toEqual(workAreaIconPath('reception'));
   });
 
   it('shows Collect (from the workflow, right after Frontdesk) for a collect_sample holder, once', () => {
@@ -37,6 +42,7 @@ describe('menusFromWorkflow — system Collect work area', () => {
     expect(items.map(i => i.id)).toEqual(['frontdesk', 'collect', 'lab']);
     const collect = items[1];
     expect(collect).toEqual(expect.objectContaining({ label: 'Collect', href: '/sample-collection', permissions: ['collect_sample'] }));
+    expect(collect.iconPath).toEqual(workAreaIconPath('collect'));
     expect(collectItems(items).length).toBe(1);
   });
 

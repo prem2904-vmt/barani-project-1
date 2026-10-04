@@ -7,8 +7,8 @@ import {
   signal,
 } from "@angular/core";
 import { DatePipe } from "@angular/common";
-import { ThemeService } from '../../core/services/theme.service';
-import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from "../../core/services/theme.service";
+import { HeroBandComponent } from "../../shared/components/hero-band/hero-band.component";
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
 import { OpdGateService } from "../opd/shared/opd-gate.service";
@@ -71,196 +71,169 @@ interface KpiCard {
   template: `
     <section class="pf-ov pf-band-page">
       @if (theme.isNewDesign()) {
-      <!-- Common hero search (designer band): the admin settings jump-box —
+        <!-- Common hero search (designer band): the admin settings jump-box —
            same q()/setQ pipeline as the inline box it replaces. -->
-      <pf-hero-band
-        placeholder="Search settings & pages — users, billing, inventory, referral…"
-        [value]="q()"
-        (valueChange)="setQ($event)">
-        <ng-container band-tools>
-          <!-- Date range rides in the search bar (owner) — one control
+        <pf-hero-band
+          placeholder="Search settings & pages — users, billing, inventory, referral…"
+          [value]="q()"
+          (valueChange)="setQ($event)"
+        >
+          <ng-container band-tools>
+            <!-- Date range rides in the search bar (owner) — one control
                strip instead of a separate filter row. -->
-          <div class="pf-ov__filter pf-ov__filter--band">
-            <!-- Neutral kit segment (ND-PATTERN §3): the selected range is a
+            <div class="pf-ov__filter pf-ov__filter--band">
+              <!-- Neutral kit segment (ND-PATTERN §3): the selected range is a
                  raised neutral segment, never the primary gradient. -->
-            <span class="nd-seg pf-ov__seg" role="radiogroup" aria-label="Date range">
-              @for (r of ranges; track r.key) {
-                <button type="button" class="nd-seg__item pf-ov__range" role="radio" [attr.aria-checked]="range() === r.key"
-                        (click)="setRange(r.key)">{{ r.label }}</button>
-              }
-            </span>
-            <!-- Phone: the pills don't fit, so the range collapses to a
+              <span
+                class="nd-seg pf-ov__seg"
+                role="radiogroup"
+                aria-label="Date range"
+              >
+                @for (r of ranges; track r.key) {
+                  <button
+                    type="button"
+                    class="nd-seg__item pf-ov__range"
+                    role="radio"
+                    [attr.aria-checked]="range() === r.key"
+                    (click)="setRange(r.key)"
+                  >
+                    {{ r.label }}
+                  </button>
+                }
+              </span>
+              <!-- Phone: the pills don't fit, so the range collapses to a
                  calendar ICON that opens the same list — and it lives in the
                  search bar rather than as a "Today" pill parked under it
                  (owner). Shown only <=640px in the new design. -->
-            <div class="pf-ov__range-dd pf-ov__range-dd--band">
-              <button type="button" class="pf-ov__range-ddbtn pf-ov__range-ddbtn--icon"
-                      [class.is-open]="filterOpen()"
-                      [attr.aria-expanded]="filterOpen()"
-                      [attr.aria-label]="'Date range — ' + rangeLabel()"
-                      [title]="'Date range — ' + rangeLabel()"
-                      (click)="filterOpen.set(!filterOpen())">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <rect x="3" y="5" width="18" height="16" rx="2"/>
-                  <path d="M8 3v4M16 3v4M3 10h18"/>
-                </svg>
-              </button>
-              @if (filterOpen()) {
-                <div class="pf-ov__range-bd" aria-hidden="true" (click)="filterOpen.set(false)"></div>
-                <div class="pf-ov__range-pop" role="menu" aria-label="Date range">
-                  @for (r of ranges; track r.key) {
-                    <button type="button" role="menuitemradio" class="pf-ov__range-opt"
-                            [class.is-on]="range() === r.key"
-                            [attr.aria-checked]="range() === r.key"
-                            (click)="setRange(r.key); filterOpen.set(false)">{{ r.label }}</button>
-                  }
-                </div>
-              }
+              <div class="pf-ov__range-dd pf-ov__range-dd--band">
+                <button
+                  type="button"
+                  class="pf-ov__range-ddbtn pf-ov__range-ddbtn--icon"
+                  [class.is-open]="filterOpen()"
+                  [attr.aria-expanded]="filterOpen()"
+                  [attr.aria-label]="'Date range — ' + rangeLabel()"
+                  [title]="'Date range — ' + rangeLabel()"
+                  (click)="filterOpen.set(!filterOpen())"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="5" width="18" height="16" rx="2" />
+                    <path d="M8 3v4M16 3v4M3 10h18" />
+                  </svg>
+                </button>
+                @if (filterOpen()) {
+                  <div
+                    class="pf-ov__range-bd"
+                    aria-hidden="true"
+                    (click)="filterOpen.set(false)"
+                  ></div>
+                  <div
+                    class="pf-ov__range-pop"
+                    role="menu"
+                    aria-label="Date range"
+                  >
+                    @for (r of ranges; track r.key) {
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        class="pf-ov__range-opt"
+                        [class.is-on]="range() === r.key"
+                        [attr.aria-checked]="range() === r.key"
+                        (click)="setRange(r.key); filterOpen.set(false)"
+                      >
+                        {{ r.label }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
             </div>
-          </div>
-        </ng-container>
-        <!-- Refresh is a quiet button on the band, not a bar icon (owner):
+          </ng-container>
+          <!-- Refresh is a quiet button on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
-        <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [pfBusy]="loading()" pfBusyLabel="Refreshing…" (click)="load()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
-            </svg>
-            Refresh
-          </button>
-        </ng-container>
-      </pf-hero-band>
+          <ng-container band-actions>
+            <button
+              type="button"
+              class="pf-hb-btn pf-hb-btn--ghost press"
+              (click)="load()"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+              Refresh
+            </button>
+          </ng-container>
+        </pf-hero-band>
       }
       @if (!theme.isNewDesign()) {
-      <!-- NEW design drops the big page titles app-wide (the navbar carries
+        <!-- NEW design drops the big page titles app-wide (the navbar carries
            the context); classic keeps its greeting header. -->
-      <header class="pf-ov__hdr">
-        <div class="pf-ov__hdr-l">
-          <p class="pf-ov__eyebrow">{{ today | date: "EEEE, MMM d" }}</p>
-          <h1 class="pf-ov__title">
-            Overview · <span class="text-gradient">{{ userName() }}</span>
-          </h1>
-        </div>
-      </header>
+        <header class="pf-ov__hdr">
+          <div class="pf-ov__hdr-l">
+            <p class="pf-ov__eyebrow">{{ today | date: "EEEE, MMM d" }}</p>
+            <h1 class="pf-ov__title">
+              Overview · <span class="text-gradient">{{ userName() }}</span>
+            </h1>
+          </div>
+        </header>
       }
 
       <div class="pf-band-body pf-ov__body">
-      <!-- Admin search: one box that jumps to any config screen (item 140). -->
-      <label class="pf-ov__search pf-classic-only">
-        <svg
-          class="pf-ov__search-ic"
-          width="17"
-          height="17"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-        <input
-          class="pf-ov__search-in"
-          type="search"
-          name="search-admin-settings"
-          [value]="q()"
-          (input)="setQ($any($event.target).value)"
-          placeholder="Search settings & pages — users, billing, inventory, referral…"
-          aria-label="Search admin configuration and pages"
-        />
-        @if (q()) {
-          <button
-            type="button"
-            class="pf-ov__search-clr"
-            (click)="setQ('')"
-            aria-label="Clear search"
+        <!-- Admin search: one box that jumps to any config screen (item 140). -->
+        <label class="pf-ov__search pf-classic-only">
+          <svg
+            class="pf-ov__search-ic"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        }
-      </label>
-
-      @if (q().trim()) {
-        <!-- Search mode: flat list of matching config screens, links straight in. -->
-        <p class="pf-ov__section">
-          {{ results().length }} match{{
-            results().length === 1 ? "" : "es"
-          }}
-          for “{{ q() }}”
-        </p>
-        <div class="pf-ov__cards">
-          @for (r of results(); track r.href) {
-            <a
-              [routerLink]="[r.href]"
-              [queryParams]="r.queryParams ?? null"
-              class="pf-ov__card nd-card press"
-            >
-              <span class="nd-card__icon pf-ov__card-ic">
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path [attr.d]="r.icon" />
-                </svg>
-              </span>
-              <span class="pf-ov__card-t">{{ r.label }}</span>
-              <span class="pf-ov__card-s">{{ r.hint }}</span>
-            </a>
-          } @empty {
-            <p class="pf-band-empty">
-              No settings or pages match “{{ q() }}”.
-            </p>
-          }
-        </div>
-      } @else {
-        <!-- Date filter -->
-        <div class="pf-ov__filter pf-classic-only" role="tablist" aria-label="Date range">
-          <!-- Desktop / iPad: segmented pills. -->
-          @for (r of ranges; track r.key) {
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            class="pf-ov__search-in"
+            type="search"
+            name="search-admin-settings"
+            [value]="q()"
+            (input)="setQ($any($event.target).value)"
+            placeholder="Search settings & pages — users, billing, inventory, referral…"
+            aria-label="Search admin configuration and pages"
+          />
+          @if (q()) {
             <button
               type="button"
-              role="tab"
-              class="pf-ov__range"
-              [class.pf-ov__range--on]="range() === r.key"
-              [attr.aria-selected]="range() === r.key"
-              (click)="setRange(r.key)"
+              class="pf-ov__search-clr"
+              (click)="setQ('')"
+              aria-label="Clear search"
             >
-              {{ r.label }}
-            </button>
-          }
-          <!-- Phone: a single status button + dropdown (same pattern as the lab
-             Stats popover) so the row stays compact. -->
-          <div class="pf-ov__range-dd">
-            <button
-              type="button"
-              class="pf-ov__range-ddbtn"
-              [class.is-open]="filterOpen()"
-              [attr.aria-expanded]="filterOpen()"
-              (click)="filterOpen.set(!filterOpen())"
-            >
-              <span>{{ rangeLabel() }}</span>
               <svg
                 width="15"
                 height="15"
@@ -271,144 +244,234 @@ interface KpiCard {
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path d="m6 9 6 6 6-6" />
+                <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
-            @if (filterOpen()) {
-              <div
-                class="pf-ov__range-bd"
-                aria-hidden="true"
-                (click)="filterOpen.set(false)"
-              ></div>
-              <div class="pf-ov__range-pop" role="menu" aria-label="Date range">
-                @for (r of ranges; track r.key) {
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    class="pf-ov__range-opt"
-                    [class.is-on]="range() === r.key"
-                    [attr.aria-checked]="range() === r.key"
-                    (click)="setRange(r.key); filterOpen.set(false)"
+          }
+        </label>
+
+        @if (q().trim()) {
+          <!-- Search mode: flat list of matching config screens, links straight in. -->
+          <p class="pf-ov__section">
+            {{ results().length }} match{{
+              results().length === 1 ? "" : "es"
+            }}
+            for “{{ q() }}”
+          </p>
+          <div class="pf-ov__cards">
+            @for (r of results(); track r.href) {
+              <a
+                [routerLink]="[r.href]"
+                [queryParams]="r.queryParams ?? null"
+                class="pf-ov__card nd-card press"
+              >
+                <span class="nd-card__icon pf-ov__card-ic">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                   >
-                    {{ r.label }}
-                  </button>
-                }
+                    <path [attr.d]="r.icon" />
+                  </svg>
+                </span>
+                <span class="pf-ov__card-t">{{ r.label }}</span>
+                <span class="pf-ov__card-s">{{ r.hint }}</span>
+              </a>
+            } @empty {
+              <p class="pf-band-empty">
+                No settings or pages match “{{ q() }}”.
+              </p>
+            }
+          </div>
+        } @else {
+          <!-- Date filter -->
+          <div
+            class="pf-ov__filter pf-classic-only"
+            role="tablist"
+            aria-label="Date range"
+          >
+            <!-- Desktop / iPad: segmented pills. -->
+            @for (r of ranges; track r.key) {
+              <button
+                type="button"
+                role="tab"
+                class="pf-ov__range"
+                [class.pf-ov__range--on]="range() === r.key"
+                [attr.aria-selected]="range() === r.key"
+                (click)="setRange(r.key)"
+              >
+                {{ r.label }}
+              </button>
+            }
+            <!-- Phone: a single status button + dropdown (same pattern as the lab
+             Stats popover) so the row stays compact. -->
+            <div class="pf-ov__range-dd">
+              <button
+                type="button"
+                class="pf-ov__range-ddbtn"
+                [class.is-open]="filterOpen()"
+                [attr.aria-expanded]="filterOpen()"
+                (click)="filterOpen.set(!filterOpen())"
+              >
+                <span>{{ rangeLabel() }}</span>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              @if (filterOpen()) {
+                <div
+                  class="pf-ov__range-bd"
+                  aria-hidden="true"
+                  (click)="filterOpen.set(false)"
+                ></div>
+                <div
+                  class="pf-ov__range-pop"
+                  role="menu"
+                  aria-label="Date range"
+                >
+                  @for (r of ranges; track r.key) {
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      class="pf-ov__range-opt"
+                      [class.is-on]="range() === r.key"
+                      [attr.aria-checked]="range() === r.key"
+                      (click)="setRange(r.key); filterOpen.set(false)"
+                    >
+                      {{ r.label }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+            <span class="pf-ov__filter-spacer"></span>
+            <button
+              type="button"
+              class="pf-ov__refresh press pf-classic-only"
+              (click)="load()"
+              aria-label="Refresh"
+              [class.pf-ov__refresh--busy]="loading()"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Hero: connected KPI grid for the chosen window. -->
+          <div
+            class="pf-ov__kpis"
+            [class.pf-ov__kpis--loading]="loading() && !metrics()"
+          >
+            @for (c of cards; track c.key) {
+              <div class="pf-ov__kpi nd-card">
+                <span class="nd-card__icon pf-ov__kpi-ic">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.9"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path [attr.d]="c.icon" />
+                  </svg>
+                </span>
+                <span class="pf-ov__kpi-l">{{ c.label }}</span>
+                <span class="pf-ov__kpi-v">{{ formatCard(c) }}</span>
               </div>
             }
           </div>
-          <span class="pf-ov__filter-spacer"></span>
-          <button
-            type="button"
-            class="pf-ov__refresh press pf-classic-only"
-            (click)="load()"
-            aria-label="Refresh"
-            [class.pf-ov__refresh--busy]="loading()"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-          </button>
-        </div>
 
-        <!-- Hero: connected KPI grid for the chosen window. -->
-        <div
-          class="pf-ov__kpis"
-          [class.pf-ov__kpis--loading]="loading() && !metrics()"
-        >
-          @for (c of cards; track c.key) {
-            <div class="pf-ov__kpi nd-card">
-              <span class="nd-card__icon pf-ov__kpi-ic">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.9"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path [attr.d]="c.icon" />
-                </svg>
-              </span>
-              <span class="pf-ov__kpi-l">{{ c.label }}</span>
-              <span class="pf-ov__kpi-v">{{ formatCard(c) }}</span>
+          <!-- At-a-glance configuration counts. -->
+          <p class="pf-ov__section">Configuration</p>
+          <div class="pf-ov__stats">
+            <div class="pf-ov__stat nd-card">
+              <span class="pf-ov__stat-v">{{ branchCount() ?? "—" }}</span
+              ><span class="pf-ov__stat-l">Branches</span>
             </div>
-          }
-        </div>
+            <div class="pf-ov__stat nd-card">
+              <span class="pf-ov__stat-v">{{ deptCount() ?? "—" }}</span
+              ><span class="pf-ov__stat-l">Departments</span>
+            </div>
+            <div class="pf-ov__stat nd-card">
+              <span class="pf-ov__stat-v">{{ testCount() ?? "—" }}</span
+              ><span class="pf-ov__stat-l">Tests</span>
+            </div>
+            <div class="pf-ov__stat nd-card">
+              <span class="pf-ov__stat-v">{{ roleCount() ?? "—" }}</span
+              ><span class="pf-ov__stat-l">Roles</span>
+            </div>
+            <div class="pf-ov__stat nd-card">
+              <span class="pf-ov__stat-v">{{
+                summary()?.workflows ?? "—"
+              }}</span
+              ><span class="pf-ov__stat-l">Form flows</span>
+            </div>
+            @if (canOpen("/dashboard")) {
+              <a
+                routerLink="/dashboard"
+                class="pf-ov__stat pf-ov__stat--link nd-card press"
+              >
+                <span class="pf-ov__stat-v">TAT</span
+                ><span class="pf-ov__stat-l">Live turnaround →</span>
+              </a>
+            }
+          </div>
 
-        <!-- At-a-glance configuration counts. -->
-        <p class="pf-ov__section">Configuration</p>
-        <div class="pf-ov__stats">
-          <div class="pf-ov__stat nd-card">
-            <span class="pf-ov__stat-v">{{ branchCount() ?? "—" }}</span
-            ><span class="pf-ov__stat-l">Branches</span>
+          <!-- Shortcuts into the settings hub, grouped by relevance. -->
+          <p class="pf-ov__section">Manage</p>
+          <div class="pf-ov__cards">
+            @for (g of groups; track g.cat) {
+              <a
+                [routerLink]="g.href ? [g.href] : ['/admin/manage']"
+                [queryParams]="g.href ? null : { cat: g.cat }"
+                class="pf-ov__card nd-card press"
+              >
+                <span class="nd-card__icon pf-ov__card-ic">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path [attr.d]="g.icon" />
+                  </svg>
+                </span>
+                <span class="pf-ov__card-t">{{ g.label }}</span>
+                <span class="pf-ov__card-s">{{ g.blurb }}</span>
+              </a>
+            }
           </div>
-          <div class="pf-ov__stat nd-card">
-            <span class="pf-ov__stat-v">{{ deptCount() ?? "—" }}</span
-            ><span class="pf-ov__stat-l">Departments</span>
-          </div>
-          <div class="pf-ov__stat nd-card">
-            <span class="pf-ov__stat-v">{{ testCount() ?? "—" }}</span
-            ><span class="pf-ov__stat-l">Tests</span>
-          </div>
-          <div class="pf-ov__stat nd-card">
-            <span class="pf-ov__stat-v">{{ roleCount() ?? "—" }}</span
-            ><span class="pf-ov__stat-l">Roles</span>
-          </div>
-          <div class="pf-ov__stat nd-card">
-            <span class="pf-ov__stat-v">{{ summary()?.workflows ?? "—" }}</span
-            ><span class="pf-ov__stat-l">Form flows</span>
-          </div>
-          @if (canOpen("/dashboard")) {
-          <a
-            routerLink="/dashboard"
-            class="pf-ov__stat pf-ov__stat--link nd-card press"
-          >
-            <span class="pf-ov__stat-v">TAT</span
-            ><span class="pf-ov__stat-l">Live turnaround →</span>
-          </a>
-          }
-        </div>
-
-        <!-- Shortcuts into the settings hub, grouped by relevance. -->
-        <p class="pf-ov__section">Manage</p>
-        <div class="pf-ov__cards">
-          @for (g of groups; track g.cat) {
-            <a
-              [routerLink]="g.href ? [g.href] : ['/admin/manage']"
-              [queryParams]="g.href ? null : { cat: g.cat }"
-              class="pf-ov__card nd-card press"
-            >
-              <span class="nd-card__icon pf-ov__card-ic">
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path [attr.d]="g.icon" />
-                </svg>
-              </span>
-              <span class="pf-ov__card-t">{{ g.label }}</span>
-              <span class="pf-ov__card-s">{{ g.blurb }}</span>
-            </a>
-          }
-        </div>
-      }
+        }
       </div>
     </section>
   `,
@@ -556,8 +619,15 @@ interface KpiCard {
       }
 
       /* ── Date filter ── */
-      .pf-ov__filter--band { margin: 0 !important; flex-wrap: nowrap; }
-      .pf-ov__filter--band .pf-ov__range { height: 28px; padding: 0 10px; font-size: 12px; }
+      .pf-ov__filter--band {
+        margin: 0 !important;
+        flex-wrap: nowrap;
+      }
+      .pf-ov__filter--band .pf-ov__range {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
       .pf-ov__filter {
         display: flex;
         align-items: center;
@@ -710,7 +780,11 @@ interface KpiCard {
         display: grid;
         place-items: center;
         margin-bottom: 8px;
-        background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+        background: color-mix(
+          in srgb,
+          var(--color-primary, #7c3aed) 14%,
+          transparent
+        );
         color: var(--violet-text, #7c3aed);
       }
       .pf-ov__kpi-ic svg {
@@ -827,18 +901,49 @@ interface KpiCard {
          the violet kit chip on a kit card (no per-metric rainbow, no left
          colour bars); section labels in Noto (no mono); the range is a
          neutral nd-seg; only .pf-band-body scrolls. ── */
-      :host-context(.design-new) .pf-ov__kpi::before { display: none; }
-      .pf-ov__kpi.nd-card, .pf-ov__stat.nd-card, .pf-ov__card.nd-card { overflow: visible; }
-      .pf-ov__kpi-ic.nd-card__icon { width: 34px; height: 34px; border-radius: 10px; margin-bottom: 8px; }
-      .pf-ov__card-ic.nd-card__icon { width: 38px; height: 38px; border-radius: 11px; }
-      .pf-ov__seg { flex: none; }
-      .pf-ov__seg .nd-seg__item { height: 30px; }
-      :host-context(.design-new) .pf-ov__body { padding-top: 4px; }
+      :host-context(.design-new) .pf-ov__kpi::before {
+        display: none;
+      }
+      .pf-ov__kpi.nd-card,
+      .pf-ov__stat.nd-card,
+      .pf-ov__card.nd-card {
+        overflow: visible;
+      }
+      .pf-ov__kpi-ic.nd-card__icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+      }
+      .pf-ov__card-ic.nd-card__icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+      }
+      .pf-ov__seg {
+        flex: none;
+      }
+      .pf-ov__seg .nd-seg__item {
+        height: 30px;
+      }
+      :host-context(.design-new) .pf-ov__body {
+        padding-top: 4px;
+      }
       /* Phone: the range collapses to the calendar icon (below). */
-      @media (max-width: 640px) { .pf-ov__seg { display: none; } }
+      @media (max-width: 640px) {
+        .pf-ov__seg {
+          display: none;
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .pf-ov__card, .pf-ov__card:hover { transition: none; transform: none; }
-        .pf-ov__refresh--busy svg { animation: none; }
+        .pf-ov__card,
+        .pf-ov__card:hover {
+          transition: none;
+          transform: none;
+        }
+        .pf-ov__refresh--busy svg {
+          animation: none;
+        }
       }
 
       /* ---- Touch / non-hover overrides (additive; never affect desktop hover) ---- */
@@ -886,10 +991,16 @@ interface KpiCard {
         /* NEW design: the range belongs in the search bar as an icon, not as
            a "Today" pill under it (owner). The band copy turns on; the
            classic-row copy stays out of the way. */
-        :host-context(.design-new) .pf-ov__range-dd--band { display: inline-flex; }
-        :host-context(.design-new) .pf-ov__filter:not(.pf-ov__filter--band) { display: none !important; }
+        :host-context(.design-new) .pf-ov__range-dd--band {
+          display: inline-flex;
+        }
+        :host-context(.design-new) .pf-ov__filter:not(.pf-ov__filter--band) {
+          display: none !important;
+        }
         .pf-ov__range-ddbtn--icon {
-          width: 44px; height: 44px; padding: 0;
+          width: 44px;
+          height: 44px;
+          padding: 0;
           justify-content: center;
           border-radius: 9999px;
         }
@@ -993,14 +1104,14 @@ export class AdminOverviewComponent implements OnInit {
       label: "Cash in",
       kind: "money",
       color: "emerald",
-      icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+      icon: "M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5M19 16v6m3-3-3 3-3-3M18 12h.01M6 12h.01M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
     },
     {
       key: "cashOut",
       label: "Cash out",
       kind: "money",
       color: "rose",
-      icon: "M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+      icon: "M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5M19 22v-6m3 3-3-3-3 3M18 12h.01M6 12h.01M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
     },
     {
       key: "net",
@@ -1421,10 +1532,23 @@ export class AdminOverviewComponent implements OnInit {
       .get<SeedSummary>("/api/_seed/summary")
       .subscribe({ next: (s) => this.summary.set(s) });
     // Tenant-scoped KPI counts (branches/departments/roles/tests for THIS tenant).
-    this.api.get<unknown[]>("/api/tenants/branches").subscribe({ next: (b) => this.branchCount.set(b?.length ?? 0) });
-    this.api.get<unknown[]>("/api/tenants/departments").subscribe({ next: (d) => this.deptCount.set(d?.length ?? 0) });
-    this.api.get<unknown[]>("/api/roles/").subscribe({ next: (r) => this.roleCount.set(r?.length ?? 0) });
-    this.api.get<any>(testListUrl()).subscribe({ next: (t) => this.testCount.set(Array.isArray(t) ? t.length : (t?.total ?? t?.items?.length ?? 0)) });
+    this.api
+      .get<unknown[]>("/api/tenants/branches")
+      .subscribe({ next: (b) => this.branchCount.set(b?.length ?? 0) });
+    this.api
+      .get<unknown[]>("/api/tenants/departments")
+      .subscribe({ next: (d) => this.deptCount.set(d?.length ?? 0) });
+    this.api
+      .get<unknown[]>("/api/roles/")
+      .subscribe({ next: (r) => this.roleCount.set(r?.length ?? 0) });
+    this.api
+      .get<any>("/api/tests")
+      .subscribe({
+        next: (t) =>
+          this.testCount.set(
+            Array.isArray(t) ? t.length : (t?.total ?? t?.items?.length ?? 0),
+          ),
+      });
     this.load();
   }
 

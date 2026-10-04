@@ -59,14 +59,14 @@ describe('Collect work area — policy', () => {
 });
 
 describe('normalizeWorkflow', () => {
-  it('adds Collect exactly once, right after Frontdesk, enabled, with default roles + tube icon', () => {
+  it('adds Collect exactly once, right after Frontdesk, enabled, with default roles + Collect icon', () => {
     const out = normalizeWorkflow(withoutCC());
     const sorted = [...out.categories].sort((a, b) => a.order - b.order);
     expect(sorted.map(c => c.id)).toEqual(['frontdesk', 'collect', 'lab', 'validate', 'results', 'messages']);
     expect(sorted.map(c => c.order)).toEqual([0, 1, 2, 3, 4, 5]);
     const collect = sorted[1];
     expect(collect.name).toBe('Collect');
-    expect(collect.icon).toBe('tube');
+    expect(collect.icon).toBe('collect');
     expect(collect.roles).toEqual(COLLECT_AREA_DEFAULT_ROLES);
     const home = out.actions.filter(a => a.categoryId === COLLECT_AREA_ID);
     expect(home).toEqual([expect.objectContaining({ id: COLLECT_HOME_ACTION_ID, type: 'sample_collection', enabled: true })]);
@@ -84,6 +84,13 @@ describe('normalizeWorkflow', () => {
     expect(twice).toBe(once);
     expect(twice.categories.filter(c => c.id === 'collect').length).toBe(1);
     expect(twice.actions.filter(a => a.categoryId === 'collect').length).toBe(1);
+  });
+
+  it('migrates the legacy default Collect tube icon to the selectable Collect icon', () => {
+    const cfg = normalizeWorkflow(withoutCC());
+    const legacy = { ...cfg, categories: cfg.categories.map(c => c.id === 'collect' ? { ...c, icon: 'tube' } : c) };
+    const out = normalizeWorkflow(legacy);
+    expect(out.categories.find(c => c.id === 'collect')?.icon).toBe('collect');
   });
 
   it('adopts a dedicated collection menu as the Collect area instead of adding a duplicate', () => {
