@@ -461,6 +461,10 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
         max-width: none; max-height: none; border-radius: 20px 20px 0 0;
         border-bottom: 0;
       }
+      :host-context(html.cap-native) .pf-sc__card {
+        width: 100%; height: 100%;
+        border: 0; border-radius: 0; box-shadow: none;
+      }
       .pf-sc__viewport { aspect-ratio: auto; flex: 1 1 260px; min-height: 240px; }
       .pf-sc__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
       .pf-sc__foot .nd-btn { flex: 1 1 0; }

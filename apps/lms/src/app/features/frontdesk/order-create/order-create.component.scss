@@ -3354,7 +3354,7 @@
 .pf-sheet-handle { display: none; }
 @media (max-width: 1023px) {
   :host .pf-cart-backdrop { z-index: 79; bottom: var(--nd-nav-h, 0px); }
-:host .pf-cart-drawer.pf-cart-drawer--tall {
+  :host .pf-cart-drawer.pf-cart-drawer--tall {
     top: auto;
     /* Sits ON TOP of the always-visible bottom navbar. */
     bottom: var(--nd-nav-h, 0px);
@@ -3365,6 +3365,12 @@
     border-radius: 20px 20px 0 0;
     padding-bottom: 0;
     z-index: 80;
+  }
+  /* Native's older drawer rule reserves the floating navbar's height inside
+     the sheet. This sheet already ends above that navbar, so keep the space
+     outside the drawer instead of leaving a blank block below its footer. */
+  :host-context(html.cap-native) .pf-cart-drawer.pf-cart-drawer--tall {
+    padding-bottom: 0;
   }
   .pf-sheet-handle {
     display: block;
@@ -3416,6 +3422,7 @@
   .pf-cart-drawer .pf-oc-bill__foot--sticky {
     position: sticky;
     bottom: 0;
+    margin-top: auto;
     z-index: 2;
     background: var(--bg-card-solid);
     padding-bottom: 14px;   /* the nav below owns the bottom safe area */
