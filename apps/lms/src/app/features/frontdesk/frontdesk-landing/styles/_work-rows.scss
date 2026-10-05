@@ -36,7 +36,7 @@
   grid-template-areas: 'check body status' 'check body acts';
   padding-left: 12px;
 }
-.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--nd-sel-border); box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08); }
+.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--nd-sel-border); box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
 .pf-wrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
 /* Selected: a subtle violet tint + a 1px violet border. No gradient. */
@@ -49,6 +49,8 @@
 /* Priority: a thin stripe only for STAT (red) / Urgent (amber) — ND §6. */
 .pf-wrow[data-priority='STAT'] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--red-text, #dc2626) 75%, transparent); }
 .pf-wrow[data-priority='Urgent'] { box-shadow: inset 3px 0 0 #d97706; }
+.pf-wrow:hover[data-priority='STAT'] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--red-text, #dc2626) 75%, transparent), var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
+.pf-wrow:hover[data-priority='Urgent'] { box-shadow: inset 3px 0 0 #d97706, var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
 
 .pf-wrow__check { grid-area: check; justify-self: center; align-self: center; }
 .pf-wrow__check--none { width: 20px; height: 20px; }

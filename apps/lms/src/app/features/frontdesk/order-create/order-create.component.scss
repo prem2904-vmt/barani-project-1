@@ -1932,6 +1932,11 @@
 }
 /* Specimen picker on culture cart rows (desk-side choice). */
 .pf-cart-spec { margin-top: 6px; max-width: 230px; }
+.pf-crt:has(.pf-cart-spec) {
+  /* These rows have a title line and a 34px specimen control; reserve room
+     for both so the selector cannot paint into the following cart row. */
+  min-height: 90px;
+}
 /* Required specimen not chosen: the picker's own border turns danger (same
    language as .pf-input-error) and the inline message sits under it. */
 .pf-cart-spec--err :is(button, input) { border-color: var(--danger, #ef4444) !important; }
@@ -2336,6 +2341,7 @@
   scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
   margin-bottom: 4px;
 }
+.pf-oc-bill__body--cart { overflow: hidden; }
 .pf-oc-bill__foot {
   flex: none;
   display: grid;
@@ -2881,12 +2887,26 @@
 }
 
 /* Phase 1: compact single-line cart rows (>=44px), ~8-10 fit. */
-.pf-cart-list--compact { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pf-cart-list--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .pf-crt {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 6px;
+  /* Cart rows can contain a specimen picker as well as the title line.
+     Keep their natural height inside the capped flex scroller. */
+  flex: 0 0 auto;
   min-height: 44px;
   padding: 4px 6px 4px 12px;
   border-radius: 10px;
@@ -3223,7 +3243,12 @@
   from { transform: scaleY(1.8); opacity: 0.4; }
   to { transform: none; opacity: 1; }
 }
-.pf-oc-phase--cart { animation: pf-oc-cart-down 520ms var(--pf-spring) both; }
+.pf-oc-phase--cart {
+  flex: 1 1 auto;
+  min-height: 0;
+  animation: pf-oc-cart-down 520ms var(--pf-spring) both;
+}
+pf-package-suggest { flex: none; margin-top: auto; }
 @keyframes pf-oc-cart-down {
   from { opacity: 0; transform: translateY(-16px); }
   to { opacity: 1; transform: none; }
@@ -3382,6 +3407,7 @@
     background: var(--border-muted);
   }
   .pf-cart-drawer--tall .pf-oc-bill__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .pf-cart-drawer--tall .pf-oc-bill__body--cart { overflow: hidden; }
 }
 
 

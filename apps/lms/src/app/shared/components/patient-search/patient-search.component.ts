@@ -27,7 +27,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
            Pauses the animation while the field is focused so it doesn't
            distract the user mid-type. -->
       <span class="pulse" aria-hidden="true" [class.pulse--paused]="_focused()"></span>
-      <div class="field" [class.field-focused]="_focused()">
+      <div class="field" [class.field-focused]="_focused()" [class.field-invalid]="invalid">
         <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/>
@@ -37,7 +37,10 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
              ↵ opens the highlighted patient, ↑/↓ move the highlight. -->
         <input #searchInput type="text"
                pfKeys="patient" pfKeysEnter="Open" pfKeysEnterAria="Open selected patient" [pfKeysArrows]="true"
-               [attr.aria-label]="placeholder"
+               [attr.aria-label]="ariaLabel ?? placeholder"
+               [attr.data-nav]="dataNav ? '' : null"
+               [attr.aria-invalid]="invalid ? 'true' : null"
+               [attr.aria-describedby]="describedBy"
                [placeholder]="placeholder"
                [value]="query()"
                (input)="onInput($event)"
@@ -185,6 +188,8 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--glass-bg-hover);
       box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
     }
+    .field.field-invalid { border-color: var(--danger, #ef4444); }
+    .field.field-invalid.field-focused { box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger, #ef4444) 12%, transparent); }
     .field input {
       flex: 1;
       min-width: 0;
@@ -389,6 +394,10 @@ export class PatientSearchComponent {
   protected readonly name = patientDisplayName;
 
   @Input() placeholder = 'Search patient by name, MRN, phone, or ABHA';
+  @Input() ariaLabel: string | null = null;
+  @Input() dataNav = false;
+  @Input() invalid = false;
+  @Input() describedBy: string | null = null;
   /** Show a camera/QR scan button in the field — scan an ABHA (QR or number)
    *  to look the patient up and open them directly. */
   @Input() enableScan = false;

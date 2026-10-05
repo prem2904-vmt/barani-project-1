@@ -22,7 +22,20 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
   imports: [CurrencyInrPipe],
   template: `
     @if (suggestions().length > 0) {
-    <section class="pf-psg" aria-label="Packages that include your tests">
+    <div class="pf-psg-head">
+      <span>Package suggestions</span>
+      @if (suggestions().length > 1) {
+      <div class="pf-psg-nav" aria-label="Browse package suggestions">
+        <button type="button" aria-label="Previous package suggestion" (click)="scrollSuggestions(-1, suggestionsRail)" [disabled]="!canGoPrevious()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <button type="button" aria-label="Next package suggestion" (click)="scrollSuggestions(1, suggestionsRail)" [disabled]="!canGoNext()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </div>
+      }
+    </div>
+    <section class="pf-psg" #suggestionsRail (scroll)="updateSuggestionNav(suggestionsRail)" aria-label="Packages that include your tests">
       @for (s of suggestions(); track s.bundle.id) {
       <article class="pf-psg__card" [class.pf-psg__card--saving]="s.kind === 'saving'"
         [class.pf-psg__card--upgrade]="s.kind === 'upgrade'" [attr.data-kind]="s.kind">
@@ -107,18 +120,20 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
     }
   `,
   styles: [`
-    :host { display: block; }
+    :host { display: block; min-width: 0; container-type: inline-size; }
+    .pf-psg-head { display: none; }
     .pf-psg { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
     .pf-psg__card {
       border-radius: var(--nd-radius, 12px); border: 1px solid var(--nd-line);
       background: var(--nd-card-bg); padding: 10px 12px 4px;
+      min-width: 0;
     }
     .pf-psg__card--saving {
       background: var(--nd-in-tint);
       border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 32%, var(--nd-line));
     }
-    .pf-psg__main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .pf-psg__text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .pf-psg__main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+    .pf-psg__text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
     .pf-psg__text p { margin: 0; }
     .pf-psg__lead {
       display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700;
@@ -170,6 +185,51 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
     }
     .pf-psg__mprice { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
     .pf-psg__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* Billing can be a narrow phone sheet or a desktop side card. Keep its
+       suggestions in a horizontal, peekable rail when vertical space is at
+       a premium, so the cart and pinned payment actions remain in view. */
+    @container (max-width: 600px) {
+      .pf-psg-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 44px;
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      .pf-psg-nav { display: flex; align-items: center; gap: 4px; }
+      .pf-psg-nav button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border: 1px solid var(--nd-line);
+        border-radius: 10px;
+        background: var(--nd-card-bg);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .pf-psg-nav button:disabled { opacity: .45; cursor: default; }
+      .pf-psg-nav button:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+      .pf-psg {
+        flex-direction: row;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+        padding: 0 12px 2px 0;
+        margin-right: -12px;
+      }
+      .pf-psg::-webkit-scrollbar { display: none; }
+      .pf-psg__card {
+        flex: 0 0 min(86%, 320px);
+        scroll-snap-align: start;
+      }
+    }
     @media (prefers-reduced-motion: reduce) { .pf-psg__chev { transition: none; } }
   `],
 })
@@ -180,6 +240,17 @@ export class PackageSuggestCardComponent {
   readonly apply = output<PackageSuggestion<any>>();
 
   private readonly open = signal<ReadonlySet<string>>(new Set());
+  readonly canGoPrevious = signal(false);
+  readonly canGoNext = signal(true);
+  updateSuggestionNav(rail: HTMLElement): void {
+    this.canGoPrevious.set(rail.scrollLeft > 1);
+    this.canGoNext.set(rail.scrollLeft + rail.clientWidth < rail.scrollWidth - 1);
+  }
+  scrollSuggestions(direction: -1 | 1, rail: HTMLElement): void {
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    const step = rail.querySelector<HTMLElement>('.pf-psg__card')?.offsetWidth ?? rail.clientWidth;
+    rail.scrollBy({ left: direction * (step + 8), behavior });
+  }
   isOpen(id: string): boolean { return this.open().has(id); }
   toggle(id: string): void {
     this.open.update(cur => {

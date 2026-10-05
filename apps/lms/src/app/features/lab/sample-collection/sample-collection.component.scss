@@ -1892,6 +1892,12 @@
 
     /* COLLECTION side card */
     .pf-sc-side__close { display: none; }
+    .pf-sc-side__body {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
     .pf-sc-remaining { margin: 0; font-size: 13px; color: var(--text-secondary); }
     .pf-sc-remaining strong { font-size: 20px; color: var(--text-primary); font-variant-numeric: tabular-nums; margin-right: 4px; }
     .pf-sc-summary { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -2120,8 +2126,24 @@
       margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--text-muted);
     }
-    .pf-sc-tests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-    .pf-sc-tests__head { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-sc-tests__all { min-width: 0; }
+    .pf-sc-tests__all-head,
+    .pf-sc-tests__head {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      min-height: 44px; color: var(--text-primary);
+    }
+    .pf-sc-tests__all-head::-webkit-details-marker,
+    .pf-sc-tests__head::-webkit-details-marker { display: none; }
+    .pf-sc-tests__all-head { margin: 0; }
+    .pf-sc-tests__all-head .pf-sc-tests__count { margin-left: auto; font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-sc-tests__chev { flex: none; color: var(--text-tertiary); transition: transform var(--nd-dur-fast, 200ms) ease; }
+    .pf-sc-tests__all[open] > .pf-sc-tests__all-head > .pf-sc-tests__chev,
+    .pf-sc-tests__accordion[open] > .pf-sc-tests__head > .pf-sc-tests__chev { transform: rotate(180deg); }
+    .pf-sc-tests__all-head:focus-visible,
+    .pf-sc-tests__head:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 6px; }
+    .pf-sc-tests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-sc-tests__head { margin: 0; font-size: 13px; font-weight: 500; }
+    .pf-sc-tests__head > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
     .pf-sc-tests__list { list-style: none; margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 3px; }
     .pf-sc-tests__list li { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.35; }
     .pf-sc-tests__vol { flex: none; color: var(--text-muted); }
@@ -2149,7 +2171,8 @@
     .pf-sc-status__dot--nc { background: #f43f5e; }
     .pf-sc-status--nc { height: auto; min-height: 34px; white-space: normal; }
     .pf-tube__stamp--nc { white-space: normal; text-align: center; overflow-wrap: anywhere; }
-    .pf-sc-labelinfo { padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-sc-labelinfo { margin: 0; padding: 0 0 2px; line-height: 1.4; }
+    @media (prefers-reduced-motion: reduce) { .pf-sc-tests__chev { transition: none; } }
 
     /* New design: the drawer lives inside the shell (no teleport) BELOW the
        docked app bar (z 40), so the bar's avatar / branch / bell menus open

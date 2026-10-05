@@ -55,7 +55,7 @@
 .pf-card:hover {
   background: var(--glass-bg-hover);
   border-color: rgba(168, 85, 247, 0.45);
-  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08);
+  box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14));
 }
 
 .pf-card:active {
@@ -70,6 +70,9 @@
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(236, 72, 153, 0.06)) !important;
   border-color: rgba(168, 85, 247, 0.5) !important;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+.pf-card--selected:hover {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14));
 }
 
 .pf-card[data-priority='STAT']::before,

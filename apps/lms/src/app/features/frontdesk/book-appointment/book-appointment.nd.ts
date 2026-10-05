@@ -113,6 +113,9 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
   .pf-bka-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
   .pf-bka-card { min-width: 0; }
   .pf-bka-card .nd-card__body { gap: 12px; }
+  /* Let the shared patient search results float over the neighboring cards. */
+  .pf-bka-patient:focus-within { position: relative; z-index: 20; overflow: visible; }
+  .pf-bka-patient:focus-within .nd-card__body { overflow: visible; }
   .pf-bka-req, .pf-bka-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
   @media (min-width: 768px) {
     .pf-bka-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
