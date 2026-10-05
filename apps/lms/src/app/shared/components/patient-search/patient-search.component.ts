@@ -134,9 +134,9 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     </div>
   `,
   styles: [`
-    :host { display: block; height: 48px; }
+    :host { display: block; width: 100%; min-width: 0; height: 48px; }
 
-    .wrap { position: relative; width: 100%; height: 100%; }
+    .wrap { position: relative; width: 100%; min-width: 0; height: 100%; }
 
     /* ── Pulsing halo behind the field ──────────────────────── */
     .pulse {
@@ -288,6 +288,8 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       left: 0;
       right: 0;
       top: calc(100% + 12px);
+      width: 100%;
+      box-sizing: border-box;
       z-index: 50;
       max-height: 22rem;
       overflow-y: auto;

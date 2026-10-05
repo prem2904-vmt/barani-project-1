@@ -292,6 +292,13 @@
   .pf-selbar__link { height: 44px; min-height: 44px; }
   .pf-selbar__x { width: 44px; min-width: 44px; }
 }
+
+/* Native content already ends above the docked navbar, so don't subtract the
+   navbar height from the sticky offset a second time. */
+@media (max-width: 640px) {
+  :host-context(html.cap-native) .pf-selbar { bottom: 10px; }
+}
+
 @keyframes pf-selbar-rise {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
