@@ -623,7 +623,7 @@
       </div>
     </header>
 
-    <div class="pf-oc-bill__body">
+    <div class="pf-oc-bill__body" [class.pf-oc-bill__body--cart]="billPhaseView() === 'cart'">
       @if (!orderLocked() && trendogramOn() && trendEligible().length > 0) {
       <div class="pf-oc-trend">
         <div class="pf-oc-trend__dur">

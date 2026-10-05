@@ -169,34 +169,15 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                   </div>
                 } @else {
                   <div class="nd-field pf-bka-psearch">
-                    <label class="nd-field__lbl" for="pf-bka-pq">Find the patient</label>
-                    <span class="pf-bka-inputwrap">
-                      <svg class="pf-bka-inputwrap__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                      <input #patientInput id="pf-bka-pq" type="text" class="nd-input pf-bka-pq" data-nav autocomplete="off" spellcheck="false"
-                             role="combobox" aria-autocomplete="list" aria-controls="pf-bka-plist" [attr.aria-expanded]="pResults().length > 0"
-                             [attr.aria-activedescendant]="pHighlight() >= 0 ? 'pf-bka-p-' + pHighlight() : null"
-                             [class.nd-input--error]="showErr() && !patient()" [attr.aria-invalid]="showErr() && !patient() ? true : null"
-                             [attr.aria-describedby]="showErr() && !patient() ? 'pf-bka-e-patient' : null"
-                             placeholder="Name, phone or MRN" [value]="pQuery()" (input)="onPatientQuery($any($event.target).value)"
-                             (keydown.arrowDown)="movePatient($event, 1)" (keydown.arrowUp)="movePatient($event, -1)" />
-                    </span>
+                    <label class="nd-field__lbl">Find the patient</label>
+                    <pf-patient-search #patientSearch
+                      [dataNav]="true"
+                      ariaLabel="Find the patient"
+                      placeholder="Search patient · name, phone, MRN, ABHA…"
+                      [invalid]="showErr() && !patient()"
+                      [describedBy]="showErr() && !patient() ? 'pf-bka-e-patient' : null"
+                      (picked)="pickPatient($event)"></pf-patient-search>
                     @if (showErr() && !patient()) { <p class="pf-bka-err" id="pf-bka-e-patient">Pick the patient to book for.</p> }
-                    @if (pQuery().trim().length >= 2) {
-                      <ul class="pf-bka-results" id="pf-bka-plist" role="listbox" aria-label="Patients">
-                        @for (p of pResults(); track p.id; let i = $index) {
-                          <li>
-                            <button type="button" class="pf-bka-result" role="option" [id]="'pf-bka-p-' + i" tabindex="-1"
-                                    [attr.aria-selected]="i === pHighlight()" (mouseenter)="pHighlight.set(i)"
-                                    (mousedown)="$event.preventDefault()" (click)="pickPatient(p)">
-                              <span class="pf-bka-result__name">{{ nameOf(p) }}</span>
-                              <span class="pf-bka-result__meta nd-num">{{ patientMeta(p) }}@if (p.phone) { · {{ p.phone }} }</span>
-                            </button>
-                          </li>
-                        } @empty {
-                          <li class="pf-bka-note">{{ pLoading() ? 'Searching…' : 'No patient matches.' }}</li>
-                        }
-                      </ul>
-                    }
                   </div>
                 }
               </div>
@@ -1481,19 +1462,13 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   readonly phone = signal(false);
   protected readonly plural = plural;
   protected readonly todayIso = format(new Date(), "yyyy-MM-dd");
-  readonly patientInput = viewChild<ElementRef<HTMLInputElement>>("patientInput");
+  readonly patientSearch = viewChild(PatientSearchComponent);
   protected readonly periods: Array<{ id: SlotPeriod; label: string }> = [
     { id: "morning", label: "Morning" }, { id: "afternoon", label: "Afternoon" },
     { id: "evening", label: "Evening" }, { id: "night", label: "Night" },
   ];
   /** Book was pressed with something missing → inline field errors show. */
   protected readonly showErr = signal(false);
-  // Patient pick (same lookup as the shared patient search).
-  protected readonly pQuery = signal("");
-  protected readonly pResults = signal<Patient[]>([]);
-  protected readonly pLoading = signal(false);
-  protected readonly pHighlight = signal(-1);
-  private pTimer?: ReturnType<typeof setTimeout>;
   // Tests dropdown highlight (↑/↓ + Enter adds).
   protected readonly tHighlight = signal(0);
   protected readonly testDropOpen = computed(() => this.testSearchFocused() && this.testQuery().trim() !== "");
@@ -1540,35 +1515,14 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   /** "22/M · AA0006" — the name has its own emphasis. */
   protected patientMeta(p: Patient): string { return formatPatientMeta(p); }
 
-  onPatientQuery(v: string) {
-    this.pQuery.set(v);
-    clearTimeout(this.pTimer);
-    const q = v.trim();
-    if (q.length < 2) { this.pResults.set([]); this.pLoading.set(false); this.pHighlight.set(-1); return; }
-    this.pLoading.set(true);
-    this.pTimer = setTimeout(() => {
-      this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(q)}&limit=10`).subscribe({
-        next: (list) => { this.pResults.set(list ?? []); this.pLoading.set(false); this.pHighlight.set(list?.length ? 0 : -1); },
-        error: () => { this.pResults.set([]); this.pLoading.set(false); },
-      });
-    }, 220);
-  }
-  movePatient(e: Event, delta: number) {
-    const n = this.pResults().length;
-    if (!n) return;
-    e.preventDefault();
-    const i = this.pHighlight();
-    this.pHighlight.set(i < 0 ? (delta > 0 ? 0 : n - 1) : (i + delta + n) % n);
-  }
   pickPatient(p: Patient) {
     this.setPatient(p);
-    this.pQuery.set(""); this.pResults.set([]); this.pHighlight.set(-1);
     // Keyboard-first: straight on to the date.
     setTimeout(() => this.focusNav(this.navEls().findIndex(el => el.matches("pf-nd-date"))));
   }
   changePatient() {
     this.clearPatient();
-    setTimeout(() => this.patientInput()?.nativeElement.focus());
+    setTimeout(() => this.patientSearch()?.focus());
   }
   moveTest(e: Event, delta: number) {
     const n = this.filteredTests().length;
@@ -1590,9 +1544,9 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       const root = this.host();
       const bad = !this.patient()
-        ? root.querySelector<HTMLElement>(".pf-bka-pq")
+        ? root.querySelector<HTMLElement>("pf-patient-search")
         : root.querySelector<HTMLElement>('.pf-bka-chip[tabindex="0"]');
-      bad?.focus();
+      if (!this.patient()) this.patientSearch()?.focus();
       bad?.scrollIntoView?.({ block: "nearest" });
     });
   }
@@ -1604,12 +1558,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.attemptBook(); return; }
     const t = e.target as HTMLElement;
     if (t.tagName === "TEXTAREA") return;
-    if (t.classList.contains("pf-bka-pq")) {
-      e.preventDefault();
-      const p = this.pResults()[this.pHighlight()];
-      if (p) this.pickPatient(p);
-      return;
-    }
+    if (t.closest("pf-patient-search")) return;
     if (t.id === "pf-bka-tq" && this.testDropOpen()) {
       e.preventDefault();
       const tt = this.filteredTests()[this.tHighlight()];
@@ -1839,7 +1788,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     // New design, web only: the patient search has focus on arrival.
     let autofocused = false;
     effect(() => {
-      const el = this.patientInput()?.nativeElement;
+      const el = this.patientSearch();
       if (!el || autofocused || !this.web() || !this.theme.isNewDesign()) return;
       autofocused = true;
       setTimeout(() => el.focus());

@@ -21,6 +21,7 @@
    the header + body are exactly 1rem/2rem/2.5rem). */
 .pf-page {
   --pf-hb-bleed: 1rem;
+  --pf-card-hover-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
 }
 @media (min-width: 768px) { .pf-page { --pf-hb-bleed: 2rem; } }
 @media (min-width: 1024px) { .pf-page { --pf-hb-bleed: 2.5rem; } }

@@ -691,7 +691,7 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </header>
-              <div class="nd-card__body">
+              <div class="nd-card__body pf-sc-side__body">
                 <!-- ONE status line (neutral chip, violet mark). The tiles
                      already show each vial, so there is no per-tube list. -->
                 <span class="nd-chip nd-chip--static pf-sc-status">
@@ -733,26 +733,6 @@
                     }
                   </dl>
                 }
-                <!-- What each tube is for (the tiles hide their test lists). -->
-                <section class="pf-sc-sec" aria-label="Tests by tube">
-                  <h3 class="pf-sc-sec__title">Tests</h3>
-                  <ul class="pf-sc-tests">
-                    @for (smp of orderedSamples(g); track smp.id) {
-                      <li class="pf-sc-tests__tube">
-                        <p class="pf-sc-tests__head">
-                          <span class="pf-sc-dot" [style.background]="container(smp).kind !== 'vacutainer' ? container(smp).color : tube(smp).color" aria-hidden="true"></span>
-                          <span>{{ tube(smp).label }}</span>
-                        </p>
-                        <ul class="pf-sc-tests__list">
-                          @for (t of tubeTests(smp); track $index) {
-                            <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol nd-num">{{ t.vol }} mL</span> }</li>
-                          }
-                        </ul>
-                      </li>
-                    }
-                  </ul>
-                </section>
-
                 <!-- Progress of this order over time. -->
                 <section class="pf-sc-sec" aria-label="Timeline">
                   <h3 class="pf-sc-sec__title">Timeline</h3>
@@ -772,11 +752,34 @@
                   </ol>
                 </section>
 
-                <p class="pf-sc-labelinfo">
-                  {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
-                </p>
+                <!-- Keep the panel compact until the collector asks for the
+                     per-tube detail. Each tube can then reveal its full list. -->
+                <section class="pf-sc-sec" aria-label="Tests by tube">
+                  <h3 class="pf-sc-sec__title">Tests</h3>
+                  <ul class="pf-sc-tests">
+                    @for (smp of orderedSamples(g); track smp.id) {
+                      <li class="pf-sc-tests__tube">
+                        <details class="pf-sc-tests__accordion">
+                          <summary class="pf-sc-tests__head">
+                            <span class="pf-sc-dot" [style.background]="container(smp).kind !== 'vacutainer' ? container(smp).color : tube(smp).color" aria-hidden="true"></span>
+                            <span>{{ tube(smp).label }}</span>
+                            <svg class="pf-sc-tests__chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                          </summary>
+                          <ul class="pf-sc-tests__list">
+                            @for (t of tubeTests(smp); track $index) {
+                              <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol nd-num">{{ t.vol }} mL</span> }</li>
+                            }
+                          </ul>
+                        </details>
+                      </li>
+                    }
+                  </ul>
+                </section>
               </div>
               <footer class="nd-card__foot pf-sc-foot">
+            <p class="pf-sc-labelinfo nd-span">
+              {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
+            </p>
             @if (dispatchSelect(); as sel) {
               <!-- Partial-dispatch selection mode: pick collected tubes, then
                    send just those to the lab. Everything else in the footer is
@@ -788,7 +791,7 @@
                 </svg>
                 <span class="pf-btn__text">Cancel</span>
               </button>
-              <span class="pf-drawer__remaining nd-span">Tap collected tubes to select</span>
+              <span class="pf-drawer__remaining">Tap collected tubes to select</span>
               <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text nd-btn nd-btn--primary nd-span" (click)="confirmPartialDispatch(g)"
                       [disabled]="sel.size === 0 || dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
                       [attr.aria-label]="'Dispatch ' + sel.size" [attr.data-label]="'Dispatch ' + sel.size">
@@ -871,7 +874,7 @@
                 </svg>
                 <span class="pf-btn__text">Choose</span>
               </button>
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial nd-btn nd-btn--primary nd-span" (click)="dispatchCollected(g)"
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial nd-btn nd-btn--primary" (click)="dispatchCollected(g)"
                       [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
                       [attr.aria-label]="'Dispatch ' + collectedCount(g)" [attr.data-label]="'Dispatch ' + collectedCount(g)">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
