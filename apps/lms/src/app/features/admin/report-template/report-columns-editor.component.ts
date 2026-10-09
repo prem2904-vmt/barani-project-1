@@ -261,7 +261,7 @@ export interface ColumnsEditorState {
                 <button type="button" class="pf-link-btn pf-link-btn--danger" (click)="removeSig(i)" aria-label="Remove signatory"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </li>
             } @empty {
-              <li class="pf-ce-dim" style="padding: 6px 0;">No slots — the department signs automatically (Tested by + Validated by).</li>
+              <li class="pf-ce-dim" style="padding: 6px 0;">No slots — the department's tester, then validator, sign automatically (no caption under the name).</li>
             }
           </ul>
           @if (signatories().length < 7) {
