@@ -23,7 +23,7 @@ import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
-import { WorkStatus, WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { WorkStatus, WorkStatusFilter, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
 import { MergedWorkRow, WORK_STATUS_LABEL, sortByDailySerial } from './work-merge';
 import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -795,10 +795,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         && o.status !== 'cancelled';
       if (!active) return false;
 
-      // If the order is partially validated and we are viewing today's work,
-      // it should be visible in the queue (since today's validation activity
-      // brought it into the Today feed).
-      if (o.status === 'partially_validated' && this.workBounds().isToday) {
+      // A partially-validated order genuinely touched TODAY (a line just
+      // validated) belongs in Today's queue even if it was created earlier —
+      // but an old straggler merely swept in by the today-feed's 30-day
+      // ready-for-handover floor (OrderRepository.TodayQuery) must still
+      // respect the date range like everything else (owner 2026-10-09).
+      if (o.status === 'partially_validated' && hadTodayActivity(o.updatedAt, this.workBounds())) {
         return true;
       }
 
@@ -823,6 +825,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  time compare. */
   readonly completedOrders = computed(() => {
     const unpaid = this._unpaidOrderIds();
+    const bounds = this.workBounds();
     const filtered = this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
@@ -831,10 +834,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       // stays in Payments due until it's settled, not here.
       if (unpaid.has(o.id)) return false;
       // A report completed TODAY for an order created on an earlier day must
-      // still surface for hand-over. The Today feed includes such orders (see
-      // ListTodayAsync), so don't gate completed work by creation date in the
-      // today view; only constrain by creation date for historical ranges.
-      return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
+      // still surface for hand-over — but "created on an earlier day" is NOT
+      // the same as "merely present in the today feed": that feed also carries
+      // in up to 30 days of still-undelivered ready-for-handover stragglers
+      // (OrderRepository.TodayQuery) regardless of when they last moved, which
+      // is exactly what let 20+ old orders leak into Completed (owner
+      // 2026-10-09). `hadTodayActivity` checks the order's OWN last-touched
+      // time, so only a GENUINE today hand-over gets the bonus; a stale one
+      // falls back to its creation date like every other historical range.
+      return inWorkWindow(o.createdAt, bounds, hadTodayActivity(o.updatedAt, bounds));
     });
     return sortByDailySerial(filtered);
   });
@@ -854,15 +862,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const map = this._billingOrdersMap();
     const ordersToday = this._orders();
     const pendingBills = this._bills().filter(b => b.balance > 0);
-    const bounds = this.workBounds(); const feed = this._feedIds();
+    const bounds = this.workBounds();
     const list: Order[] = [];
     for (const b of pendingBills) {
       let o = ordersToday.find(ord => ord.id === b.orderId);
       if (!o) {
         o = map[b.orderId];
       }
-      // The date range applies to every status (work-status-filter.ts).
-      if (o && inWorkWindow(o.createdAt, bounds, feed.has(o.id))) {
+      // The date range applies to every status (work-status-filter.ts). The
+      // Today bonus is real activity (hadTodayActivity), never bare presence
+      // in the today feed — that feed also carries in up to 30 days of
+      // still-undelivered stragglers regardless of when they last moved
+      // (owner 2026-10-09; same fix as completedOrders above).
+      if (o && inWorkWindow(o.createdAt, bounds, hadTodayActivity(o.updatedAt, bounds))) {
         list.push(o);
       }
     }

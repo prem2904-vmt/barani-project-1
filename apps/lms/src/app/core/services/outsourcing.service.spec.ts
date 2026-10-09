@@ -51,6 +51,28 @@ describe('OutsourcingService — server paging', () => {
     expect(svc.counts()).toEqual({ outsourced: 5, completed: 0 });
   });
 
+  /**
+   * Owner (2026-10-09): the Outsourced tab's count badge never moved with
+   * the front desk's date filter — it always showed the server's whole
+   * (90–365 day) window total. `dateWindow` is the front desk's date-range
+   * predicate (wired by merged-outsourced-loader.ts); once it's set, counts
+   * must narrow to it rather than the server's date-blind total.
+   */
+  it('counts(): once a dateWindow is set (the front desk date filter), counts narrow to it — never the server\'s whole-window total', async () => {
+    const p = svc.load();
+    flush(page([tube('1'), tube('2')], 5, 1, false)); // server says 5 total in the WIDE window
+    await p;
+    expect(svc.counts()).toEqual({ outsourced: 5, completed: 0 }); // no dateWindow yet — server total stands
+
+    // Front desk narrows to "Today": only tube '1' falls inside it.
+    svc.dateWindow.set(t => t.sampleId === '1');
+    expect(svc.counts()).toEqual({ outsourced: 1, completed: 0 });
+
+    // Clearing the date window (no caller narrowing) restores the server total.
+    svc.dateWindow.set(null);
+    expect(svc.counts()).toEqual({ outsourced: 5, completed: 0 });
+  });
+
   it('loadMore() appends the next page, deduped, and stops once every row is loaded', async () => {
     const p1 = svc.load();
     flush(page([tube('1'), tube('2')], 3, 1, true));

@@ -50,3 +50,24 @@ export function inWorkWindow(createdAt: string | Date | null | undefined, b: Wor
   const t = new Date(createdAt).getTime();
   return t >= b.start && t < b.end;
 }
+
+/**
+ * `inWorkWindow`'s "today feed" bit — but computed from REAL activity, never
+ * from "the order happens to be present in the fetched today feed". The
+ * server's today feed (OrderRepository.TodayQuery) carries in up to 30 days
+ * of still-undelivered ready-for-handover orders (validated / completed /
+ * partially_validated) so a stale hand-over is never dropped — every one of
+ * those is trivially "in the feed" whether its status changed an hour ago or
+ * three weeks ago. Passing that bare feed-membership straight into
+ * `inWorkWindow` defeated the Today view's date scope entirely (owner
+ * 2026-10-09: "Completed shows 20+ including old orders"). The row's own
+ * `updatedAt` — stamped by OrderRepository.MutateOrderAsync every time
+ * RecomputeStatusAsync flips the order's status — tells the two apart: only
+ * an order actually touched TODAY earns the Today view's hand-over bonus; an
+ * old, merely-still-open straggler falls back to its creation date like any
+ * other historical row. */
+export function hadTodayActivity(updatedAt: string | Date | null | undefined, b: WorkBounds): boolean {
+  if (!b.isToday || !updatedAt) return false;
+  const t = new Date(updatedAt).getTime();
+  return t >= b.start && t < b.end;
+}

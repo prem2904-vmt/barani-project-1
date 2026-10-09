@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { FrontdeskLandingComponent } from './frontdesk-landing.component';
 import {
-  WorkStatusFilter, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue,
+  WorkStatusFilter, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue,
 } from './work-status-filter';
 
 /**
@@ -43,6 +43,48 @@ describe('work-status-filter — the chip + date rule', () => {
     expect(inWorkWindow(older, today, true)).toBe(true);     // in today's feed
     expect(inWorkWindow(older, yesterday, true)).toBe(false); // feed only means "today"
     expect(inWorkWindow(null, today)).toBe(false);
+  });
+
+  /**
+   * Owner (2026-10-09): "Completed shows 20+ including old orders". The
+   * today feed's 30-day ready-for-handover floor (OrderRepository.TodayQuery)
+   * makes a 3-week-old-but-still-undelivered order trivially "in the feed",
+   * so passing bare feed membership as `inWorkWindow`'s today-feed bit
+   * defeated the date scope. `hadTodayActivity` checks the order's OWN
+   * `updatedAt` instead — only real today activity earns the bonus.
+   */
+  it('hadTodayActivity: only Today view + a genuinely TODAY updatedAt qualifies', () => {
+    const day = Date.UTC(2026, 8, 29, 18, 30); // 30 Sep IST 00:00
+    const today: import('./work-status-filter').WorkBounds = { start: day, end: day + 86_400_000, isToday: true };
+    const yesterday: import('./work-status-filter').WorkBounds = { start: day - 86_400_000, end: day, isToday: false };
+    const updatedToday = new Date(day + 3_600_000).toISOString();
+    const updatedWeeksAgo = new Date(day - 21 * 86_400_000).toISOString();
+
+    // A straggler the today feed's 30-day floor carried in, last touched
+    // three weeks ago — no bonus; falls back to its own creation date.
+    expect(hadTodayActivity(updatedWeeksAgo, today)).toBe(false);
+    // The same order, but actually validated/completed an hour ago today.
+    expect(hadTodayActivity(updatedToday, today)).toBe(true);
+    // Never a bonus outside the Today view, however fresh updatedAt is.
+    expect(hadTodayActivity(updatedToday, yesterday)).toBe(false);
+    // No updatedAt at all (legacy row) — no bonus, never a thrown error.
+    expect(hadTodayActivity(null, today)).toBe(false);
+    expect(hadTodayActivity(undefined, today)).toBe(false);
+  });
+
+  it('end to end: inWorkWindow(createdAt, bounds, hadTodayActivity(updatedAt, bounds)) scopes Completed to Today', () => {
+    const day = Date.UTC(2026, 8, 29, 18, 30);
+    const today: import('./work-status-filter').WorkBounds = { start: day, end: day + 86_400_000, isToday: true };
+    const createdWeeksAgo = new Date(day - 21 * 86_400_000).toISOString();
+    const updatedWeeksAgo = createdWeeksAgo;
+    const updatedToday = new Date(day + 3_600_000).toISOString();
+
+    // The reported bug: an order created AND last touched weeks ago, merely
+    // swept in by the 30-day floor, must NOT show under Today.
+    expect(inWorkWindow(createdWeeksAgo, today, hadTodayActivity(updatedWeeksAgo, today))).toBe(false);
+    // The legitimate hand-over: created weeks ago, but genuinely validated
+    // TODAY — still surfaces under Today.
+    expect(inWorkWindow(createdWeeksAgo, today, hadTodayActivity(updatedToday, today))).toBe(true);
   });
 });
 

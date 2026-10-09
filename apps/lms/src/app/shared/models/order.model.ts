@@ -25,6 +25,13 @@ export interface Order {
   customFields?: string;
   createdBy?: string;
   createdAt: string;
+  /** Last write to the order row itself (status flips included — stamped by
+   *  OrderRepository.MutateOrderAsync / RecomputeStatusAsync). Used to tell a
+   *  genuinely TODAY status change (validated / completed just now) apart
+   *  from an order merely swept in by the today-feed's 30-day ready-for-
+   *  handover floor (OrderRepository.TodayQuery) — see work-status-filter.ts
+   *  `hadTodayActivity`. */
+  updatedAt?: string | null;
   totalAmount?: number;
   /** Server-computed: 'unbilled' | 'unpaid' | 'paid'. */
   billStatus?: 'unbilled' | 'unpaid' | 'paid' | null;

@@ -76,7 +76,19 @@ export class OutsourcingService {
    *  client-computed-from-what's-loaded count otherwise (unpaged server, or
    *  before the first page lands). */
   private readonly _serverCounts = signal<OutsourcedServerCounts | null>(null);
-  readonly counts = computed(() => this._serverCounts() ?? countByStatus(this.windowed()));
+  /** A `dateWindow` means a caller (the frontdesk merged view) is narrowing
+   *  to a specific date range — `merged-outsourced-loader.ts` always calls
+   *  `loadAllFor` first, so the WHOLE window is loaded by the time this
+   *  reads. The server's counts know only `days` / `status` / `partnerId`,
+   *  not the front desk's Today / Yesterday / custom picker, so preferring
+   *  them here showed the SAME Outsourced total no matter which date range
+   *  was selected (owner 2026-10-09: "counts too"). Counting the already-
+   *  windowed rows client-side is both correct and cheap once they're fully
+   *  loaded; the server count is still the cheaper, accurate answer for a
+   *  caller with no date window (the dedicated Outsourced tab, possibly
+   *  mid-pagination). */
+  readonly counts = computed(() =>
+    this.dateWindow() ? countByStatus(this.windowed()) : (this._serverCounts() ?? countByStatus(this.windowed())));
 
   private readonly _total = signal<number | null>(null);
   /** The SERVER's own hasMore flag (page*pageSize<total), set verbatim from

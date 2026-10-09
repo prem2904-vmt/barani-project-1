@@ -56,8 +56,19 @@ export function wireMergedOutsourcedLoader(
 ) {
   return effect(() => {
     const bounds = workBounds();
-    const feed = feedIds();
-    outsourcing.dateWindow.set(t => inWorkWindow(t.createdAt, bounds, feed.has(t.orderId)));
+    // Still a dependency (re-run on every refresh — see the doc above) even
+    // though the predicate below no longer uses feed MEMBERSHIP: an
+    // OutsourcedTube carries no order-level `updatedAt`, so there is no real
+    // "today activity" signal to award the Today-view hand-over bonus with —
+    // unlike completedOrders/paymentsDueOrders (frontdesk-landing.component.ts),
+    // passing bare feed presence here let an order resolved weeks ago but
+    // still sitting in the today feed's 30-day ready-for-handover floor
+    // (OrderRepository.TodayQuery) bypass the date range entirely. Falling
+    // back to plain creation-day scoping (no bonus) keeps Outsourced's Today
+    // view honest; a tube still pending from an earlier day shows under
+    // Yesterday / a custom range like everything else (owner 2026-10-09).
+    feedIds();
+    outsourcing.dateWindow.set(t => inWorkWindow(t.createdAt, bounds));
     if (rightTab() === null) {
       void outsourcing.loadAllFor('all', windowDaysFor(bounds));
     }
