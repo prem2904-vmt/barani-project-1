@@ -10,6 +10,7 @@ import { firstValueFrom } from 'rxjs';
 import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { completedTubeStatus, planReadiness, ReportReadiness, reportReadinessUrl } from '../../../shared/utils/report-readiness';
+import { istDayStart, labDaysAgo } from '../../../shared/utils/lab-clock';
 import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -637,7 +638,11 @@ const COUNTERS: CounterSpec[] = [
            Read-only history with ONE action: Edit re-opens the whole tube
            (the unit of entry) back into this same tech's My Work after a
            mandatory reason, which the backend records in the audit trail. -->
-      <p class="pf-mw-completed-cap">Showing the last {{ completedDays }} days.</p>
+      <div class="pf-mw-completed-hdr">
+        <p class="pf-mw-completed-cap">Showing {{ completedWindowLabel() }}.</p>
+        <pf-segmented class="pf-mw-completed-seg" size="sm" [options]="completedWindowOptions"
+                      [value]="completedWindow()" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
+      </div>
       @if (completedLoading() && completedTubes().length === 0) {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           @for (i of [0,1,2]; track i) {
@@ -650,7 +655,7 @@ const COUNTERS: CounterSpec[] = [
       } @else if (completedTubes().length === 0) {
         <pf-tile tone="default" padding="xl">
           <p class="text-center text-sm" style="color: var(--text-tertiary);">
-            Nothing completed in the last {{ completedDays }} days.
+            Nothing completed {{ completedWindow() === 'today' ? 'today' : 'in the last 7 days' }}.
           </p>
         </pf-tile>
       } @else {
@@ -1857,8 +1862,11 @@ const COUNTERS: CounterSpec[] = [
     .pf-tq--done   { --tq-accent: #34d399; }
 
     /* Primary zone — the tap target for open / pick. */
-    .pf-mw-completed-cap { margin: 0 0 10px; font-size: 11.5px;
+    .pf-mw-completed-hdr { display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+    .pf-mw-completed-cap { margin: 0; font-size: 11.5px;
       font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
+    .pf-mw-completed-seg { flex: 0 0 auto; }
     .pf-tq__main {
       flex: 1 1 auto; min-width: 0;
       padding: 13px 12px 13px 16px;
@@ -3203,7 +3211,27 @@ export class MyWorkComponent implements OnInit {
   // the window), fetched lazily from its own endpoint and grouped into
   // tubes. Kept in its own signal so opening the tab never disturbs the
   // queue rows the other tabs share.
-  readonly completedDays = 7;
+  // Default TODAY only (owner 2026-10-09: it used to always show the last 7
+  // days, so a tube finished last week was still sitting in "Completed").
+  // No existing way to widen the range existed, so a small Today/7-days
+  // toggle is added — the same small range-toggle pattern the frontdesk
+  // right panel's date filter uses, kept intentionally tiny here (one
+  // tech's own recent work, not a whole-branch work list).
+  readonly completedWindowOptions: SegmentedOption<'today' | '7d'>[] = [
+    { value: 'today', label: 'Today' },
+    { value: '7d', label: '7 days' },
+  ];
+  private readonly _completedWindow = signal<'today' | '7d'>('today');
+  readonly completedWindow = this._completedWindow.asReadonly();
+  /** IST calendar days the server resolves `days` against (OrderRepository.
+   *  ListCompletedByTechAsync) — 1 = today only, never a rolling 24h. */
+  readonly completedDays = computed(() => this._completedWindow() === 'today' ? 1 : 7);
+  readonly completedWindowLabel = computed(() => this._completedWindow() === 'today' ? 'today' : 'the last 7 days');
+  setCompletedWindow(w: 'today' | '7d') {
+    if (this._completedWindow() === w) return;
+    this._completedWindow.set(w);
+    this.loadCompleted();
+  }
   private readonly _completed = signal<OrderTest[]>([]);
   private readonly _completedLoading = signal(false);
   readonly completedLoading = this._completedLoading.asReadonly();
@@ -3264,8 +3292,12 @@ export class MyWorkComponent implements OnInit {
       return;
     }
     if (plan.kind === 'generate') {
-      const ok = await this.dialog.confirm({ title: plan.title, message: plan.message, confirmLabel: 'Generate now', icon: 'printer' });
-      if (!ok) return;
+      // Print means print: every test is already validated, so generate the
+      // final report (the same call "Generate now" used) and print it
+      // straight away — no confirm dialog in the way (owner 2026-10-09). If
+      // generation turns out to be impossible after all (e.g. a line got
+      // un-validated a moment ago), releaseAndPrint's own catch still surfaces
+      // a clear toast — never a silent no-op.
       await this.releaseAndPrint('/api/reports/generate', { orderId, type: 'final' });
       return;
     }
@@ -3298,8 +3330,13 @@ export class MyWorkComponent implements OnInit {
    *  finished and whether it is merely submitted or already validated. */
   readonly completedTubes = computed(() => {
     // Belt-and-braces on the API's ?days window: the Completed tab only
-    // ever shows the last 7 days, whatever the server returns.
-    const cutoff = Date.now() - this.completedDays * 24 * 60 * 60 * 1000;
+    // ever shows this many IST calendar days, whatever the server returns.
+    // An IST-day-aligned cutoff, not a rolling `Date.now() - N*24h` one — the
+    // same mirror relationship as everywhere else "today" is computed
+    // client-side (shared/utils/lab-clock.ts, the TS twin of the server's
+    // LabClock): days=1 must mean exactly TODAY, never drift across the IST
+    // midnight boundary depending on what time it is right now.
+    const cutoff = istDayStart(labDaysAgo(Math.max(0, this.completedDays() - 1))).getTime();
     const bySample = new Map<string, OrderTest[]>();
     for (const t of this._completed()) {
       const done = t.validatedAt ?? t.resultedAt;
@@ -3336,7 +3373,7 @@ export class MyWorkComponent implements OnInit {
 
   private loadCompleted() {
     this._completedLoading.set(true);
-    this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays}`).subscribe({
+    this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays()}`).subscribe({
       next: l => {
         this._completed.set(l ?? []);
         this._completedLoading.set(false);
@@ -3524,7 +3561,7 @@ export class MyWorkComponent implements OnInit {
     // Completed has a dedicated endpoint and counts TUBES (its rows), so it
     // can't ride the endpointFor loop below.
     if (this._tab() !== 'completed') {
-      this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays}`).subscribe({
+      this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays()}`).subscribe({
         next: l => {
           const tubes = new Set((l ?? []).map(t => t.subOrder?.id ?? t.id));
           this._counts.update(c => ({ ...c, completed: tubes.size }));
