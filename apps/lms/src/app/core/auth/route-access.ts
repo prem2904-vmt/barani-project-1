@@ -59,7 +59,10 @@ export const TEST_MASTER_PERMS = ['manage_tests', 'manage_test_master'];
 /** Changing prices / tax slab / "offered here" (the pricing table). */
 export const TEST_PRICING_PERMS = ['manage_tests', 'manage_test_pricing'];
 
-export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'];
+export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments', 'manage_bridges'];
+/** Prefrontal Bridges (bridge-api v1, D12): add / rename / remove / Wi-Fi /
+ *  analyzer assignment. Granted to Lab Admin + Lab Admin (Technical). */
+export const BRIDGE_PERMS = ['manage_bridges'];
 // inventory_transfer included: the Stores entry APIs (/api/inventory/items, /alerts) accept it.
 export const INVENTORY_WORK_PERMS = ['inventory_receive', 'inventory_issue', 'inventory_count', 'inventory_transfer', 'manage_inventory'];
 export const FINANCE_PERMS = ['collect_payment', 'create_bill', 'manage_tenant'];
@@ -137,6 +140,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/setup':                   { perms: ADMIN_PERMS },
   '/lab/settings':            { perms: LAB_SETTINGS_HUB_PERMS, module: 'lab' },
   '/admin/microbiology':      { perms: ['manage_lab_settings'], module: 'lab' },
+  // Prefrontal Bridges — list, add, one Bridge (the server enforces each action).
+  '/admin/bridges':           { perms: BRIDGE_PERMS, module: 'lab' },
   // Lab analyzers (instrument connector) — the same lab-admin perm as Lab settings / Microbiology.
   '/admin/instruments':       { perms: ['manage_lab_settings'], module: 'lab' },
   '/admin/users':             { perms: ['manage_users'] },

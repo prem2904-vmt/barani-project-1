@@ -1974,3 +1974,47 @@ ledger words, tests covered, barcode-link body).
   (with permission) — never "No items match".
 - ≤900px: every side card is a sheet (Test Master pattern); ATTENTION opens
   from a band chip.
+
+## 28. Prefrontal Bridges (Lab settings → Bridges)
+
+Zero-touch analyzer boxes (bridge-api v1, `prefrontal-bridge/docs/ZERO-TOUCH-PLAN.md`).
+Pure rules + every word live in `shared/bridges/` (`bridge-status.ts` is the ONE
+home for status / link / command words and the copy of EVERY contract error
+code); the screens are `features/admin/bridges/`. Gate: `manage_bridges`.
+
+- **List (`/admin/bridges`):** band search; BRIDGES = AG-Grid with the ND skin
+  (`nd-grid-theme`): Bridge (+ serial · analyzers), Branch, Status (dot +
+  word, "Last seen …" when not online), Last message, Queue (+ "N held"),
+  Version (update hint), Wi-Fi (SSID · signal words). ADD side card: one
+  primary **Add Bridge**, the server's nearby offers (row action "Add"), the
+  status counts.
+- **Detail (`/admin/bridges/:id`):** band = back · context chips (name, status
+  `.nd-sdot`, serial, branch) · Refresh + ⋮ (Rename, Move branch, Refresh
+  settings, Restart, **Remove** — red, DialogService confirm that NAMES the
+  discarded queue / held counts). ANALYZERS card: new-source callouts
+  ("Sysmex XN-350 connected on port 6661 — link it?", secondary **Link it** +
+  tertiary Ignore), the assigned analyzers grid (Connection = "Listens on
+  port N" / "Connects to host:port", framing, link state, queue; row actions
+  Connection / Remove), footer primary **Assign analyzer**. BRIDGE side card:
+  status line, facts (Wi-Fi, address, last result, waiting, software, model,
+  serial, added by, security pin), Recent activity (command words + state);
+  footer secondaries Change Wi-Fi / Setup hotspot.
+- **Add (`/admin/bridges/add`):** method tiles (`.nd-tile-sel`): Scan its QR
+  (the shared scanner modal), Type the code (`XXXXX-XXXXX`, formatted as you
+  type), Found on this network (server offer; adding asks the admin to check
+  the serial), **On this Wi-Fi** (mDNS — phone / desktop apps ONLY; plain web
+  never shows a local option). DETAILS side card: optional name, branch
+  (pf-select, default the active branch), ONE primary **Add Bridge**. Phone
+  app + QR also offers **Add + set up Wi-Fi** (the hotspot relay: progress
+  steps, then the shared Wi-Fi picker, primary **Send to Bridge**).
+- **Dialogs** use the kit's `.nd-dialog` (centred card on web, a sheet above
+  the navbar on phones): Change Wi-Fi (scan → pick → PSK / enterprise PEAP;
+  no CA and no server domain → an amber warning AND a DialogService confirm),
+  Link analyzer (new vs existing, `.nd-seg`), Assign analyzer (listen /
+  connect, port, framing via pf-select).
+- **Shell:** "New Bridge found nearby — add it?" — a small banner, ONE offer
+  at a time, `manage_bridges` only, never over the Bridges screens; "Not now"
+  hides that Bridge 24 h (per browser).
+- The QR link `/b#1.S.C.P.F` is public: the fragment is handed to the add
+  screen through sessionStorage and scrubbed from the address bar — a claim
+  secret never rides a URL param.

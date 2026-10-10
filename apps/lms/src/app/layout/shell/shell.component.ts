@@ -35,6 +35,7 @@ import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
 import { UpdateBannerComponent } from "../../shared/components/update-banner/update-banner.component";
+import { BridgeNearbyBannerComponent } from "../../shared/components/bridge-nearby-banner/bridge-nearby-banner.component";
 import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
@@ -69,6 +70,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
     PatientProfileModalComponent,
     CallOverlayComponent,
     UpdateBannerComponent,
+    BridgeNearbyBannerComponent,
     PeopleDrawerComponent,
     ChatWindowsComponent,
     ChatPopupsComponent,
@@ -193,6 +195,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
            it already renders nothing outside the desktop app / a build with
            no resolved update channel (UpdaterService.available). -->
       <pf-update-banner></pf-update-banner>
+
+      <!-- "New Bridge found nearby — Add?" (manage_bridges only; server
+           nearby path, works on the web) + the new-analyzer toast + native
+           Bridge-QR deep links. Renders nothing for everyone else. -->
+      <pf-bridge-nearby-banner></pf-bridge-nearby-banner>
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)

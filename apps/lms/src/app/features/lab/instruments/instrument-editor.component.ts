@@ -31,6 +31,10 @@ import {
   PairedInstrument, ParserType, RawLogEntry, TransportType,
 } from '../../../shared/instruments/instrument.models';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
+import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
+import type { BridgeDto } from '../../../shared/bridges/bridge.models';
+import { connectedViaOptions, transportOptionsFor } from '../../../shared/bridges/bridge-assign';
+import { bridgeErrorText } from '../../../shared/bridges/bridge-status';
 
 type Tab = 'status' | WizardStep;
 const RAW_CAP = 64_000;
@@ -72,7 +76,16 @@ export class InstrumentEditorComponent {
   protected readonly previewLine = previewLine;
 
   // ── Option lists ─────────────────────────────────────────────────────
-  readonly transportOptions: PfSelectOption<TransportType>[] = TRANSPORT_OPTIONS;
+  // Prefrontal Bridge (bridge-api v1): "Connected through: This computer |
+  // Prefrontal Bridge ‹pick›". Through a Bridge only listen / connect exist,
+  // and the save also calls PUT /api/instruments/{id}/bridge.
+  private readonly pfBridgesApi = inject(BridgesApiService);
+  readonly pfBridges = signal<BridgeDto[]>([]);
+  /** '' = this computer; else the Bridge id. */
+  readonly connectedVia = signal<string>('');
+  readonly connectedViaOptions = computed<PfSelectOption<string>[]>(() => connectedViaOptions(this.pfBridges()));
+  readonly showConnectedVia = computed(() => this.pfBridges().length > 0 || !!this.dto()?.bridgeId);
+  readonly transportOptions = computed<PfSelectOption<TransportType>[]>(() => transportOptionsFor(TRANSPORT_OPTIONS, !!this.connectedVia()));
   readonly baudOptions: PfSelectOption<number>[] = BAUD_RATES.map((b) => ({ value: b, label: String(b) }));
   readonly dataBitOptions: PfSelectOption<number>[] = DATA_BITS.map((b) => ({ value: b, label: String(b) }));
   readonly parityOptions = PARITIES;
@@ -228,6 +241,8 @@ export class InstrumentEditorComponent {
 
   private async init() {
     this.loadTests();
+    // Bridges are optional: an older server (404) or no permission → none.
+    this.pfBridgesApi.list().subscribe({ next: (l) => this.pfBridges.set(Array.isArray(l) ? l : []), error: () => undefined });
     if (this.bridge.available) void this.loadPorts();
     const id = this.id();
     if (!id) { this.loading.set(false); return; }
@@ -255,7 +270,16 @@ export class InstrumentEditorComponent {
     this.dto.set(dto);
     this.configBase = dto.config ?? null;
     this.form.set(formFromInstrument(dto));
+    this.connectedVia.set(dto.bridgeId ?? '');
     this.dirty.set(false);
+  }
+
+  /** Pick "This computer" or a Bridge; a Bridge can't do serial / folder. */
+  setConnectedVia(v: string) {
+    this.connectedVia.set(v ?? '');
+    const t = this.form().transport;
+    if (v && t !== 'tcp-server' && t !== 'tcp-client') this.patch({ transport: 'tcp-server' });
+    else this.dirty.set(true);
   }
 
   private loadTests() {
@@ -349,7 +373,16 @@ export class InstrumentEditorComponent {
     try {
       const body = buildUpsert(this.form(), this.configBase, this.dto()?.profileKey ?? null);
       const id = this.id();
-      const saved = await firstValueFrom(id ? this.api.update(id, body) : this.api.create(body));
+      let saved = await firstValueFrom(id ? this.api.update(id, body) : this.api.create(body));
+      const via = this.connectedVia() || null;
+      if ((saved.bridgeId ?? null) !== via) {
+        try {
+          saved = await firstValueFrom(this.pfBridgesApi.assignInstrument(saved.id, via));
+        } catch (e) {
+          const err = ApiError.from(e);
+          this.toasts.error(bridgeErrorText(err.code, err.message));
+        }
+      }
       this.applyDto(saved);
       if (this.mapsDirty() || (!id && this.maps().length)) {
         const maps = await firstValueFrom(this.api.saveCodeMaps(saved.id, toCodeMapUpserts(this.maps())));

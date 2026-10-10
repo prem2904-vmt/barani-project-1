@@ -131,8 +131,14 @@
             </header>
             <div class="nd-card__body">
               <div class="pf-ie-grid">
+                @if (showConnectedVia()) {
+                  <div class="nd-field pf-ie-span"><span class="nd-field__lbl">Connected through</span>
+                    <pf-select [options]="connectedViaOptions()" [value]="connectedVia()" (valueChange)="setConnectedVia($event)"></pf-select>
+                    @if (connectedVia()) { <p class="nd-field__hint">The Bridge talks to the analyzer on its own network port — no lab PC needed.</p> }
+                  </div>
+                }
                 <div class="nd-field pf-ie-span"><span class="nd-field__lbl">Type</span>
-                  <pf-select [options]="transportOptions" [value]="form().transport" (valueChange)="patch({ transport: $event })"></pf-select></div>
+                  <pf-select [options]="transportOptions()" [value]="form().transport" (valueChange)="patch({ transport: $event })"></pf-select></div>
                 @switch (form().transport) {
                   @case ('serial') {
                     <div class="nd-field pf-ie-span"><span class="nd-field__lbl">Port <span class="nd-dot-unpriced" aria-hidden="true"></span></span>
@@ -157,9 +163,9 @@
                       <pf-select [options]="flowOptions" [value]="form().serial.flow" (valueChange)="setFlow($event)"></pf-select></div>
                   }
                   @case ('tcp-server') {
-                    <label class="nd-field"><span class="nd-field__lbl">Port the lab PC listens on <span class="nd-dot-unpriced" aria-hidden="true"></span></span>
+                    <label class="nd-field"><span class="nd-field__lbl">Port the {{ connectedVia() ? 'Bridge' : 'lab PC' }} listens on <span class="nd-dot-unpriced" aria-hidden="true"></span></span>
                       <input class="nd-input nd-num" inputmode="numeric" [value]="form().tcpServer.port ?? ''" (input)="patchTcpServer($any($event.target).value)" placeholder="5001" /></label>
-                    <p class="nd-field__hint pf-ie-span">Set the analyzer's LIS host to this PC's IP address and this port.</p>
+                    <p class="nd-field__hint pf-ie-span">Set the analyzer's LIS host to {{ connectedVia() ? 'the Bridge (192.168.50.1)' : "this PC's IP address" }} and this port.</p>
                     @if (issueFor('tcpServer.port') && dirty()) { <p class="nd-field__hint pf-ie-err pf-ie-span">{{ issueFor('tcpServer.port') }}</p> }
                   }
                   @case ('tcp-client') {
