@@ -25,7 +25,7 @@ const { applyMaps } = require('./mapper');
 const { DiskQueue } = require('./queue');
 const { RawLog } = require('./rawlog');
 const { Uploader } = require('./uploader');
-const { toBuffer, C } = require('./bytes');
+const { toBuffer, C, NAMES } = require('./bytes');
 
 const VERSION = '0.1.0';
 
@@ -36,6 +36,14 @@ function idempotencyKey(instrumentId, protocol, text, index) {
 function istDayKey(ms) {
   // Business day in IST (UTC+05:30) — "messages today" on the status card.
   return new Date(ms + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+/** A single, payload-less control byte — some analyzers (e.g. the Mindray
+ *  BC-5130) ping a lone <STX> every few seconds between real messages. ENQ
+ *  and VT are excluded: those are genuine protocol-start signals (ASTM
+ *  handshake / MLLP block), never noise. */
+function isLoneKeepAliveByte(buf) {
+  return !!buf && buf.length === 1 && buf[0] < 0x20 && buf[0] !== C.ENQ && buf[0] !== C.VT;
 }
 
 class Connector extends EventEmitter {
@@ -103,10 +111,30 @@ class Connector extends EventEmitter {
     this.active = null;           // the config the running transport / links use
     this.transportKey = null;     // JSON of the effective transport settings that are running
     this.reloading = null;        // in-flight reload() (serialised)
+    this._chain = Promise.resolve(); // serialises start()/stop()/reload() against each other — at most one touches this.transport at a time
+    this.generation = 0;             // bumped on every transport (re)start/stop; a transport's own event handlers check this and no-op once stale
+    this._keepAlive = null;          // { byte, count, windowStart } — throttles raw.log for a repeating lone control-byte keep-alive
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────
-  async start() {
+  // start(), stop() and reload() all funnel through _enqueue so at most one
+  // of them ever runs at a time per connector. Two independent triggers (the
+  // host's "instrument saved" IPC and the heartbeat's own background config
+  // poll landing close together, or a retrying start() overlapping a reload)
+  // could otherwise each create a transport without the other knowing,
+  // leaving an orphaned, untracked socket holding the analyzer's (often
+  // single) connection slot. _startTransport()'s generation token is the
+  // second half of the fix: even a transport that slips through briefly
+  // tears itself down the moment it notices it has been superseded.
+  _enqueue(fn) {
+    const run = this._chain.then(fn, fn);
+    this._chain = run.catch(() => {});
+    return run;
+  }
+
+  start() { return this._enqueue(() => this._start()); }
+
+  async _start() {
     this.stopped = false;
     this._setState('starting');
     const cfg = await this._loadConfig();
@@ -121,16 +149,31 @@ class Connector extends EventEmitter {
     this._kick(0);
   }
 
-  async stop() {
+  stop() { return this._enqueue(() => this._stop()); }
+
+  async _stop() {
     this.stopped = true;
     clearTimeout(this.hbTimer);
     clearTimeout(this.drainTimer);
     clearTimeout(this.cfgTimer);
     for (const l of this.links.values()) l.close();
     this.links.clear();
-    if (this.transport) { try { await this.transport.stop(); } catch { /* ignore */ } }
-    this.transport = null;
+    await this._stopTransport();
     this._setState('stopped');
+  }
+
+  /** Stop and clear the current transport, if any. Bumps the generation
+   *  token FIRST so an in-flight _startTransport (one that was started just
+   *  before this ran, e.g. a TCP client whose start() resolves before the
+   *  socket actually connects) recognises — once its await resolves — that
+   *  it has been superseded, and tears itself down instead of being left
+   *  live: never more than one transport / client socket per instrument. */
+  async _stopTransport() {
+    this.generation++;
+    const t = this.transport;
+    this.transport = null;
+    this.transportKey = null;
+    if (t) { try { await t.stop(); } catch { /* ignore */ } }
   }
 
   /**
@@ -145,7 +188,7 @@ class Connector extends EventEmitter {
    */
   reload() {
     if (this.reloading) return this.reloading.then(() => this.reload());
-    this.reloading = this._reload().finally(() => { this.reloading = null; });
+    this.reloading = this._enqueue(() => this._reload()).finally(() => { this.reloading = null; });
     return this.reloading;
   }
 
@@ -157,8 +200,7 @@ class Connector extends EventEmitter {
     if (!cfg || this.stopped) return none;
     const tKey = this._transportKey(cfg);
     if (!this.transport || tKey !== this.transportKey) {
-      if (this.transport) { try { await this.transport.stop(); } catch { /* ignore */ } }
-      this.transport = null;
+      await this._stopTransport();
       this._closeLinks();
       this.rawlog.write('note', 'configuration changed — restarting the connection');
       try { await this._startTransport(cfg); } catch { /* _startTransport recorded the failure; the next reload retries */ }
@@ -209,44 +251,87 @@ class Connector extends EventEmitter {
 
   async _startTransport(cfg) {
     const t = createTransport({ ...(cfg.transport || {}), ...(this.o.transportOverride || {}) }, this.deps);
+    const gen = ++this.generation;
     this.transport = t;
     this.active = cfg;
     this.transportKey = null;
+    // True only while THIS transport is still the one the connector owns —
+    // a stop()/reload() that ran while we were (still synchronously, or via
+    // an awaited t.start()) coming up bumps `generation` and/or replaces
+    // `this.transport`, and every handler below checks this before touching
+    // connector state, so a superseded transport's late events are no-ops.
+    const isCurrent = () => this.generation === gen && this.transport === t;
     // Links read the CURRENT config when a session opens, so a live reload of
     // the link/parser applies without restarting the transport.
     const linkCfg = () => (this.active && this.active.link) || { type: 'auto' };
     const parserCfg = () => (this.active && this.active.parser) || {};
-    t.on('status', (s) => this._setState(s));
-    t.on('error', (e) => { this._recordError(e.message); this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
+    t.on('status', (s) => { if (isCurrent()) this._setState(s); });
+    t.on('error', (e) => { if (!isCurrent()) return; this._recordError(e.message); this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
     t.on('session-start', (id, info) => {
+      if (!isCurrent()) return;
       this.rawlog.write('note', `session ${id} opened ${info && info.remote ? `(${info.remote})` : ''}`);
       this.links.set(id, this._makeLink(linkCfg(), parserCfg(), id));
     });
     t.on('session-end', (id) => {
+      if (!isCurrent()) return;
       const l = this.links.get(id);
       if (l) { l.flush(); l.close(); }
       this.links.delete(id);
       this.rawlog.write('note', `session ${id} closed`);
     });
     t.on('data', (buf, id) => {
-      this.rawlog.write('in', buf);
+      if (!isCurrent()) return;
+      this._logIncoming(buf);
       this.emit('raw', { dir: 'in', bytes: buf });
       let l = this.links.get(id);
       if (!l) { l = this._makeLink(linkCfg(), parserCfg(), id); this.links.set(id, l); }
       l.feed(buf);
     });
     t.on('file', (text, name) => {
+      if (!isCurrent()) return;
       this.rawlog.write('note', `file ${name}`);
       this.rawlog.write('in', text);
       this._onFile(text, parserCfg());
     });
     try {
       await t.start();
+      if (!isCurrent()) {
+        // A stop()/reload() raced us while we were connecting — this
+        // transport has already been superseded. Tear it down rather than
+        // leaving an untracked, still-open socket holding the analyzer's
+        // (often single) connection slot.
+        try { await t.stop(); } catch { /* ignore */ }
+        return;
+      }
       this.transportKey = this._transportKey(cfg);
       this.rawlog.write('note', `started ${t.describe()}`);
     } catch (e) {
-      this._fail(`${t.describe()}: ${e.message}`);
+      if (isCurrent()) this._fail(`${t.describe()}: ${e.message}`);
       throw e;
+    }
+  }
+
+  /** Writes incoming bytes to raw.log — except a repeating lone control-byte
+   *  keep-alive ping (see isLoneKeepAliveByte), which would otherwise flood
+   *  the log every few seconds: log the first one, then at most once a
+   *  minute while it keeps repeating. Either way the bytes are still fed to
+   *  the link (harmless once a real protocol is established; see
+   *  link/index.js for the auto-detect side of this fix). */
+  _logIncoming(buf) {
+    if (!isLoneKeepAliveByte(buf)) { this.rawlog.write('in', buf); this._keepAlive = null; return; }
+    const byte = buf[0];
+    const name = NAMES[byte] || `x${byte.toString(16).padStart(2, '0')}`;
+    const t = this.now();
+    if (!this._keepAlive || this._keepAlive.byte !== byte) {
+      this._keepAlive = { byte, count: 1, windowStart: t };
+      this.rawlog.write('note', `<< <${name}> keep-alive (analyzer idle ping) — suppressing repeats for up to a minute`);
+      return;
+    }
+    this._keepAlive.count++;
+    if (t - this._keepAlive.windowStart >= 60000) {
+      this.rawlog.write('note', `<< <${name}> keep-alive × ${this._keepAlive.count} in the last minute`);
+      this._keepAlive.count = 0;
+      this._keepAlive.windowStart = t;
     }
   }
 
@@ -464,4 +549,4 @@ class Connector extends EventEmitter {
   _emitStatus() { this.emit('status', this.status()); }
 }
 
-module.exports = { Connector, idempotencyKey, VERSION };
+module.exports = { Connector, idempotencyKey, isLoneKeepAliveByte, VERSION };
