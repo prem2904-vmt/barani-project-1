@@ -12,6 +12,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { OpdDeskApi } from './desk-api.service';
 import type { OpdVisitRow, PaymentDue, ProcedureToBook, QueueDoctor } from './desk.models';
 import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { SegmentedComponent, type SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { addDays, labToday } from '../../../shared/utils/lab-clock';
 import { statusWord } from './visit-status';
@@ -70,7 +71,7 @@ export function deskFilter(rows: OpdVisitRow[], f: DeskFilter, doctorId: string 
 @Component({
   selector: 'pf-opd-desk',
   standalone: true,
-  imports: [RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonRowsComponent, CurrencyInrPipe, NdDateComponent],
+  imports: [RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonRowsComponent, CurrencyInrPipe, NdDateComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './desk.page.html',
   styleUrls: ['./opd-b.scss'],
@@ -122,6 +123,14 @@ export class OpdDeskPage {
     { id: 'due', label: 'Payments due' },
     ...(this.toBook() !== null ? [{ id: 'tobook' as const, label: 'Procedures to book' }] : []),
   ]);
+  readonly filterOptions = computed<SegmentedOption<DeskFilter>[]>(() => {
+    const c = this.counts();
+    return this.filters().map(f => ({
+      value: f.id,
+      label: f.label,
+      count: c[f.id],
+    }));
+  });
 
   constructor() {
     this.load();

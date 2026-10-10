@@ -198,24 +198,25 @@ describe('Reports list (nd) — band', () => {
   it('ONE status filter in the pill: neutral radios with plain tabular counts, no stats strip', async () => {
     const { el } = await render();
     const band = el.querySelector('pf-hero-band') as HTMLElement;
-    const seg = band.querySelector('.nd-seg.pf-rq-seg') as HTMLElement;
-    expect(seg.getAttribute('role')).toBe('radiogroup');
+    const seg = band.querySelector('pf-segmented.pf-rq-seg') as HTMLElement;
+    const rg = seg.querySelector('[role=radiogroup]') || seg;
+    expect(rg.getAttribute('role')).toBe('radiogroup');
     const items = [...seg.querySelectorAll<HTMLElement>('[role=radio]')];
-    expect(items.map(i => i.querySelector('.pf-rq-seg__lbl')!.textContent!.trim()))
+    expect(items.map(i => (i.querySelector('.seg-lbl') || i.querySelector('.pf-rq-seg__lbl'))!.textContent!.trim()))
       .toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Failed']);
-    expect(items.map(i => i.querySelector('.pf-rq-seg__count')!.textContent!.trim())).toEqual(['4', '2', '2', '1', '1']);
-    items.forEach(i => expect(i.querySelector('.pf-rq-seg__count')!.classList).toContain('nd-num'));
+    expect(items.map(i => (i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.textContent!.trim())).toEqual(['4', '2', '2', '1', '1']);
+    items.forEach(i => expect((i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.classList).toContain('nd-num'));
     // Default = Completed, raised neutral (aria-checked), never a gradient.
     expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-filter')).toBe('pending');
     // No duplicate strip anywhere, no second filter control.
-    expect(el.querySelector('.pf-rq-stats, .pf-rq-stat, .pf-rq-statbtn, pf-segmented, .pf-rq-filter-m')).toBeNull();
+    expect(el.querySelector('.pf-rq-stats, .pf-rq-stat, .pf-rq-statbtn, .pf-rq-filter-m')).toBeNull();
     expect(el.querySelectorAll('[role=radiogroup]').length).toBe(1);
   });
 
   it('no coloured status dots — only Failed may use the muted red (its count)', async () => {
     const { el } = await render();
     expect(el.querySelector('.seg-dot, .pf-rq-stat__dot, .pf-rq-row__accent')).toBeNull();
-    const warn = [...el.querySelectorAll('.pf-rq-seg__count--warn')];
+    const warn = [...el.querySelectorAll('.seg-count--warn, .pf-rq-seg__count--warn')];
     expect(warn.length).toBe(1);
     expect(warn[0].closest('[data-filter]')?.getAttribute('data-filter')).toBe('failed');
     expect(ndCss()).not.toMatch(/#(a78bfa|f59e0b|38bdf8|10b981|f43f5e)/i);

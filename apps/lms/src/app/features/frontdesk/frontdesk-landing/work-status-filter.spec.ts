@@ -95,18 +95,11 @@ describe('Front desk — status chips on the component', () => {
 describe('Front desk — status chips + date filter markup', () => {
   const html = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.html', 'utf8');
   const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, 'text/html');
-  const group = doc.querySelector('[aria-label="Filter by status"]')!;
 
-  it('chips are toggle buttons (aria-pressed), not tabs, with a count each', () => {
-    expect(group.getAttribute('role')).toBe('group');
-    const chips = [...group.querySelectorAll('button')];
-    expect(chips.length).toBe(4);
-    for (const c of chips) {
-      expect(c.getAttribute('role')).toBeNull();
-      expect(c.hasAttribute('[attr.aria-pressed]')).toBe(true);
-      expect(c.hasAttribute('[class.pf-tabs__btn--on]')).toBe(true);
-      expect(c.querySelector('.pf-tabs__count')).not.toBeNull();
-    }
+  it('uses pf-segmented for work status filter with counts and allowDeselect', () => {
+    expect(html).toMatch(/<pf-segmented class="pf-tabs"/);
+    expect(html).toMatch(/\[options\]="workStatusSegmentOptions\(\)"/);
+    expect(html).toMatch(/\[allowDeselect\]="true"/);
   });
 
   it('the date filter is no longer hidden behind the In progress chip', () => {

@@ -81,8 +81,8 @@ describe('Frontdesk landing — work card header', () => {
       .not.toMatch(/Search patient, order, sample, test/);
   });
 
-  it('phones: the same search stacks full width above the list switcher', () => {
-    const wrap = between(html, '<div class="pf-list-wrap">', '<div class="pf-mtabs"');
+  it('phones: the same search stacks full width below the list switcher', () => {
+    const wrap = between(html, '<div class="pf-mtabs"', '<div class="pf-appt-split"');
     expect(wrap).toMatch(/pf-work-find pf-work-find--phone/);
     expect(scss).toMatch(/\.pf-work-find--phone \.pf-work-find__input \{[^}]*min-height: 44px[^}]*font-size: 16px/);
   });
@@ -91,10 +91,9 @@ describe('Frontdesk landing — work card header', () => {
     expect(scss).toMatch(/\.pf-work-hdr__filter \{[^}]*min-width: 0;[^}]*overflow-x: auto/);
   });
 
-  it('selected tabs / date pills are neutral (no violet) in the new design', () => {
-    const block = between(scss, '/* ══ Card-header filters', '/* ══ Work card header');
-    expect(block).toMatch(/\.pf-tabs__btn--on[\s\S]*color: var\(--text-primary\)/);
-    expect(block).not.toMatch(/#7c3aed|#8749ee|#c4b5fd|139, 92, 246|gradient-primary/i);
+  it('card-header filters use shared pf-segmented in the new design', () => {
+    expect(html).toMatch(/<pf-segmented class="pf-tabs"/);
+    expect(html).toMatch(/<pf-segmented class="pf-hdr-date-pills"/);
   });
 });
 

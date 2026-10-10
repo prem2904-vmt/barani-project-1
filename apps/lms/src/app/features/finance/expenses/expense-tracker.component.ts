@@ -28,6 +28,7 @@ import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
 import { DayClosingComponent } from './day-closing.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { dayLabel, inr } from './expense-format';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -61,7 +62,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
   selector: 'pf-expense-tracker',
   standalone: true,
   imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent,
-    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent],
+    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-xt pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -220,11 +221,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     </section>
 
     <ng-template #tabSwitch>
-      <span class="nd-seg pf-xt__tabs" role="tablist" aria-label="Expenses">
-        @for (t of tabs(); track t) {
-          <button type="button" role="tab" class="nd-seg__item pf-xt__tab" [attr.aria-selected]="tab() === t" (click)="setTab(t)">{{ tabLabel[t] }}</button>
-        }
-      </span>
+      <pf-segmented class="pf-xt__tabs" [options]="expenseTabOptions()" [value]="tab()" (valueChange)="setTab($any($event))" />
     </ng-template>
 
     <ng-template #filterHead let-sheet="sheet">
@@ -406,7 +403,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     /* Section switch: in the band pill (new design) / its own row (classic). */
     .pf-xt__tabrow { align-self: flex-start; flex: none; }
     .pf-xt__tabs { flex: none; }
-    .pf-xt__tab { height: 32px; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
+    .pf-xt__tab { height: 26px; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
     .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
@@ -562,6 +559,9 @@ export class ExpenseTrackerComponent {
     const list = this.tabs();
     return p && list.includes(p) ? p : (list[0] ?? 'all');
   });
+  readonly expenseTabOptions = computed<SegmentedOption<ExpenseTab>[]>(() =>
+    this.tabs().map(t => ({ value: t, label: this.tabLabel[t] }))
+  );
   readonly closingDate = signal(labToday());
 
   // ── Filters ───────────────────────────────────────────────────────────

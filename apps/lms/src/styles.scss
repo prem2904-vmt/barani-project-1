@@ -253,7 +253,6 @@
    Active toggle = white pill + #ecd8ff ring + violet text, exactly like
    the frontdesk section tabs; counts go mono-on-soft-violet. !important
    beats the component-scoped gradient styles. */
-:root.light.design-new pf-segmented .seg-item.is-selected,
 :root.light.design-new .pf-mw-tab--on {
   background: #ffffff !important;
   color: #8749ee !important;
@@ -2434,7 +2433,6 @@ html.pf-design-mode {
    the dark palette (holistic pass): quiet violet toggles, outline
    Receive actions, soft-violet avatars. Gradient stays reserved for the
    ONE primary button per screen. ══ */
-:root.dark.design-new pf-segmented .seg-item.is-selected,
 :root.dark.design-new .pf-mw-tab--on {
   background: rgba(139, 92, 246, 0.16) !important;
   color: #c4b5fd !important;
@@ -2444,15 +2442,56 @@ html.pf-design-mode {
   background: rgba(139, 92, 246, 0.25) !important;
   color: #ddd6fe !important;
 }
-/* Admin band pages (ND-PATTERN §3): segmented controls are NEUTRAL — the
-   selected segment is a raised card surface with normal text, both themes. */
-:root.design-new .pf-band-page pf-segmented .seg-item.is-selected {
+/* New design: segmented controls follow Figma spec (32px capsule, white raised pill, violet selected text/icon) */
+:root.design-new pf-segmented .seg-item.is-selected,
+:root.design-new .nd-seg .nd-seg__item[aria-checked='true'],
+:root.design-new .nd-seg .nd-seg__item[aria-selected='true'],
+:root.design-new .nd-seg .nd-seg__item[role='tab'][aria-selected='true'],
+:root.design-new .nd-seg .nd-seg__item.is-selected {
   background: var(--nd-card-bg) !important;
-  color: var(--text-primary) !important;
+  color: var(--color-violet-600, #7c3aed) !important;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18), inset 0 0 0 1px var(--nd-line) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
-:root.design-new .pf-band-page pf-segmented .bar { background: var(--nd-chip-bg); }
+:root.dark.design-new pf-segmented .seg-item.is-selected,
+:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'],
+:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'],
+:root.dark.design-new .nd-seg .nd-seg__item[role='tab'][aria-selected='true'],
+:root.dark.design-new .nd-seg .nd-seg__item.is-selected {
+  background: var(--nd-card-bg) !important;
+  color: var(--color-violet-400, #c4b5fd) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+:root.design-new pf-segmented .seg-item.is-selected .seg-ico,
+:root.design-new pf-segmented .seg-item.is-selected svg,
+:root.design-new .nd-seg .nd-seg__item[aria-checked='true'] svg,
+:root.design-new .nd-seg .nd-seg__item[aria-selected='true'] svg {
+  color: var(--color-violet-600, #7c3aed) !important;
+}
+:root.dark.design-new pf-segmented .seg-item.is-selected .seg-ico,
+:root.dark.design-new pf-segmented .seg-item.is-selected svg,
+:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'] svg,
+:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'] svg {
+  color: var(--color-violet-400, #c4b5fd) !important;
+}
+:root.design-new pf-segmented .seg-item.is-selected .nd-num,
+:root.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
+:root.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
+  color: var(--color-violet-600, #7c3aed) !important;
+  opacity: 0.85;
+}
+:root.dark.design-new pf-segmented .seg-item.is-selected .nd-num,
+:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
+:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
+  color: var(--color-violet-400, #c4b5fd) !important;
+  opacity: 0.85;
+}
+:root.design-new pf-segmented .bar,
+:root.design-new .nd-seg {
+  background: var(--nd-chip-bg) !important;
+  border-color: var(--nd-line) !important;
+  border-radius: 9999px !important;
+}
 :root.dark.design-new .pf-mw-scan__btn,
 /* Avatars in dark-new: soft violet disc, violet-tinted initials —
    the dark twin of the light designer disc. */

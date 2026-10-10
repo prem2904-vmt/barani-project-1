@@ -56,13 +56,7 @@
         <header class="nd-card__head">
           <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h18v12H3zM3 11h18M8 3v4M16 3v4"/></svg></span>
           <span class="nd-card__label">Today's visits</span>
-          <div class="nd-seg pf-dk-seg" role="radiogroup" aria-label="Filter visits">
-            @for (f of filters(); track f.id) {
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="filter() === f.id" (click)="filter.set(f.id)">
-                {{ f.label }} <span class="nd-num pf-dk-n">{{ counts()[f.id] }}</span>
-              </button>
-            }
-          </div>
+          <pf-segmented class="pf-dk-seg" [options]="filterOptions()" [value]="filter()" mode="text" (valueChange)="filter.set($any($event))" aria-label="Filter visits" />
         </header>
         <div class="nd-card__body">
           @if (error(); as err) {
