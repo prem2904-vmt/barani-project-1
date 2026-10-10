@@ -34,6 +34,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
@@ -169,7 +170,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -230,6 +231,54 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { id: 'today' as DateRange, label: 'Today' },
     { id: 'custom' as DateRange, label: 'Custom' },
   ];
+
+  readonly apptDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'today', label: 'Today' },
+    { value: 'tomorrow', label: 'Tomorrow' },
+    { value: 'custom', label: this.apptCustomRangeLabel(), clearable: !!this.apptCustomStart() },
+  ]);
+
+  readonly leftTabSegmentOptions = computed<SegmentedOption<'appt' | 'home'>[]>(() => {
+    const opts: SegmentedOption<'appt' | 'home'>[] = [];
+    if (this.showAppt()) {
+      opts.push({ value: 'appt', label: 'Appointments', count: this.visibleAppointments().length });
+    }
+    if (this.showHome()) {
+      opts.push({ value: 'home', label: 'Home collection', count: this.homeCollections().length });
+    }
+    return opts;
+  });
+
+  readonly workDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'today', label: 'Today' },
+    { value: 'custom', label: this.workCustomRangeLabel(), clearable: !!this.workCustomStart() },
+  ]);
+
+  readonly workStatusSegmentOptions = computed<SegmentedOption<WorkStatus>[]>(() => {
+    const opts: SegmentedOption<WorkStatus>[] = [
+      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length, tone: 'active' },
+      { value: 'done', label: 'Completed', count: this.completedOrders().length, tone: 'ok' },
+    ];
+    if (this.showPaymentsDue()) {
+      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueOrders().length, tone: 'warning' });
+    }
+    opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced });
+    return opts;
+  });
+
+  onApptDateOptionClick(e: { value: DateRange; target: HTMLElement; event: MouseEvent }) {
+    if (e.value === 'custom') {
+      this.openApptDatePicker(e.target as HTMLButtonElement, e.event);
+    }
+  }
+
+  onWorkDateOptionClick(e: { value: DateRange; target: HTMLElement; event: MouseEvent }) {
+    if (e.value === 'custom') {
+      this.openWorkDatePicker(e.target as HTMLButtonElement, e.event);
+    }
+  }
 
   readonly dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

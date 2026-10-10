@@ -701,7 +701,7 @@
 .pf-rq-seg__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .pf-rq-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
 .pf-rq-seg__count { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
-.pf-rq-seg__item[aria-checked='true'] .pf-rq-seg__count { color: var(--text-secondary); }
+.pf-rq-seg__item[aria-checked='true'] .pf-rq-seg__count { color: var(--color-violet-600, #7c3aed); }
 .pf-rq-seg__count--warn,
 .pf-rq-seg__item[aria-checked='true'] .pf-rq-seg__count--warn { color: var(--red-text, #b91c1c); }
 

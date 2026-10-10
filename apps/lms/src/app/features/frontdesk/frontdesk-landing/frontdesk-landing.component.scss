@@ -292,70 +292,24 @@
   :host-context(.design-new) .pf-daystrip__n { font-size: 13px; }
 }
 
-/* ══ Card-header filters, both cards, both themes (new design, ND §3) ══
-   The section tabs (APPOINTMENTS / IN PROGRESS …) and the date range
-   (Yesterday · Today …) are ND segmented controls: a neutral track,
-   the selected segment raised on the card surface with primary text —
-   never violet (violet is for real CTAs only). Both are 36px tall so
-   the two card headers line up with the work card's search field.
-   Counts are plain Noto Sans tabular numbers, never monospace chips. */
-:host-context(.light.design-new),
-:host-context(.dark.design-new) {
-  .pf-tabs,
-  .pf-hdr-date-pills {
-    height: 36px;
-    padding: 2px;
-    gap: 2px;
-    border-radius: var(--nd-radius-sm, 10px);
-    background: var(--nd-chip-bg);
-    border: 1px solid var(--nd-line);
-    box-shadow: none;
+/* ══ Card-header filters use shared canonical pf-segmented (32px capsule, violet selected text/count) ══ */
+.pf-tabs,
+.pf-hdr-date-pills {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+:host-context(.design-new) {
+  .pf-tabs__btn--on {
+    background: var(--nd-card-bg, #ffffff) !important;
+    color: var(--color-violet-600, #7c3aed) !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    .pf-tabs__count {
+      background: transparent !important;
+      color: var(--color-violet-600, #7c3aed) !important;
+    }
   }
-  .pf-tabs__btn,
-  .pf-hdr-date-pill {
-    height: 30px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    box-shadow: none;
-    color: var(--text-secondary);
-    font-size: 12.5px;
-    font-weight: 500;
-    letter-spacing: 0;
-    text-transform: none;
-  }
-  .pf-tabs__btn:not(.pf-tabs__btn--on):hover,
-  .pf-hdr-date-pill:not(.pf-hdr-date-pill--on):hover { background: transparent; color: var(--text-primary); }
-  .pf-tabs__btn--on,
-  .pf-tabs__btn--on:hover,
-  .pf-hdr-date-pill--on,
-  .pf-hdr-date-pill--on:hover {
-    background: var(--nd-card-bg);
-    border-color: transparent;
-    color: var(--text-primary) !important;
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
-  }
-  .pf-hdr-date-pill--on * { color: var(--text-primary) !important; }
-  /* !important: the light-theme 'ok' tone paints a green chip with it. */
-  .pf-tabs__count,
-  .pf-tabs__count[data-tone],
-  .pf-tabs__btn--on .pf-tabs__count {
-    min-width: 0;
-    height: auto;
-    padding: 0;
-    border: 0 !important;
-    border-radius: 0;
-    background: none !important;
-    font-family: inherit;
-    font-variant-numeric: tabular-nums;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: var(--text-muted) !important;
-  }
-  .pf-tabs__btn--on .pf-tabs__count { color: var(--text-secondary) !important; }
+}
 
   /* Header strips: identical height on both cards. */
   .pf-appt-split__hdr--tabs { min-height: 52px; padding: 8px 12px; gap: 10px; }
@@ -381,7 +335,6 @@
     font-weight: 500;
     color: var(--text-muted);
   }
-}
 
 /* ══ Work card header: search, then the filter — ONE row (ND §1) ══
    Compact kit search (icon + .nd-input, 36px) first, then the tab
@@ -446,15 +399,18 @@
   .pf-work-hdr .pf-hdr-filter { display: inline-flex !important; }
 }
 
-/* Phones: pane headers are hidden; the search stacks full width above
+/* Phones: pane headers are hidden; the search stacks full width below
    the list switcher (the filter row). 44px target, 16px text (no iOS zoom). */
 @media (max-width: 640px) {
+  .pf-mtabs {
+    margin-bottom: 8px;
+  }
   .pf-work-find--phone {
     display: flex;
     flex: none;
     width: 100%;
     max-width: none;
-    margin: 0 0 8px;
+    margin: 0 0 10px;
   }
   .pf-work-find--phone .pf-work-find__input {
     min-height: 44px;

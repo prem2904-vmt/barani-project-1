@@ -262,20 +262,10 @@
                accordion for an icon segmented control: Appointments /
                In progress / Completed. Hidden on iPad/desktop where
                all panes lay out side by side. -->
-          <!-- Phones: the pane headers are hidden, so the work card's search
-               stacks full width ABOVE the list switcher (the filter row). -->
-          @if (mobileList() !== 'appt' && mobileList() !== 'home') {
-          <label class="pf-work-find pf-work-find--phone">
-            <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input class="nd-input pf-work-find__input" type="search" [value]="workQuery()"
-              (input)="setWorkQuery($any($event.target).value)" placeholder="Search this list"
-              aria-label="Search patient, order, sample or test in this list" />
-          </label>
-          }
+          <!-- Mobile list switcher — phones (≤640px) drop the pane
+               accordion for an icon segmented control: Appointments /
+               In progress / Completed. Hidden on iPad/desktop where
+               all panes lay out side by side. -->
           <div class="pf-mtabs" role="tablist" aria-label="List view">
             @if (showAppt()) {
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'appt'"
@@ -344,6 +334,20 @@
             }
           </div>
 
+          <!-- Phones: the search stacks full width BELOW the list switcher (the filter row). -->
+          @if (mobileList() !== 'appt' && mobileList() !== 'home') {
+          <label class="pf-work-find pf-work-find--phone">
+            <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input class="nd-input pf-work-find__input" type="search" [value]="workQuery()"
+              (input)="setWorkQuery($any($event.target).value)" placeholder="Search this list"
+              aria-label="Search patient, order, sample or test in this list" />
+          </label>
+          }
+
           <!-- Two-pane layout: Left pane (Appointments & Home collection), Right pane (In progress & Completed).
                The middle handle is mouse + touch draggable on viewports >= 1024px; the resulting split percentage
                is saved to localStorage so the chosen ratio sticks across sessions. -->
@@ -372,54 +376,46 @@
                 </a>
                 }
 
-                <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
-                  @if (showAppt()) {
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="leftTab() === 'appt'" [attr.aria-selected]="leftTab() === 'appt'"
-                    (click)="setLeftTab('appt')">
-                    Appointments
-                    <span class="pf-tabs__count" data-tone="active">{{ visibleAppointments().length }}</span>
-                  </button>
-                  }
+                @if (theme.isNewDesign()) {
                   @if (showHome()) {
-                  <button type="button" role="tab" class="pf-tabs__btn press"
-                    [class.pf-tabs__btn--on]="leftTab() === 'home'" [attr.aria-selected]="leftTab() === 'home'"
-                    (click)="setLeftTab('home')">
-                    Home collection
-                    <span class="pf-tabs__count" data-tone="active">{{ homeCollections().length }}</span>
-                  </button>
+                    <pf-segmented class="pf-tabs"
+                                  [options]="leftTabSegmentOptions()"
+                                  [value]="$any(leftTab())"
+                                  (valueChange)="setLeftTab($any($event))" />
+                  } @else if (showAppt()) {
+                    <span class="nd-card__label" style="font-weight: 600; font-size: 13px; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.04em;">Appointments</span>
+                    <span class="nd-num" style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-left: 2px;">{{ visibleAppointments().length }}</span>
                   }
-                </div>
+                } @else {
+                  <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
+                    @if (showAppt()) {
+                    <button type="button" role="tab" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="leftTab() === 'appt'" [attr.aria-selected]="leftTab() === 'appt'"
+                      (click)="setLeftTab('appt')">
+                      Appointments
+                      <span class="pf-tabs__count" data-tone="active">{{ visibleAppointments().length }}</span>
+                    </button>
+                    }
+                    @if (showHome()) {
+                    <button type="button" role="tab" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="leftTab() === 'home'" [attr.aria-selected]="leftTab() === 'home'"
+                      (click)="setLeftTab('home')">
+                      Home collection
+                      <span class="pf-tabs__count" data-tone="active">{{ homeCollections().length }}</span>
+                    </button>
+                    }
+                  </div>
+                }
 
                 <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
                   <!-- Date filters for Left Pane -->
                   @if (leftTab() === 'appt' || leftTab() === 'home') {
-                  <div class="pf-hdr-date-pills">
-                    @for (opt of apptDateOptions; track opt.id) {
-                    @if (opt.id === 'custom') {
-                    <button #apptCustomBtn type="button" class="pf-hdr-date-pill"
-                      [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
-                      [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()"
-                      (click)="openApptDatePicker(apptCustomBtn, $event)">
-                      {{ apptCustomRangeLabel() }}
-                    </button>
-                    @if (apptDateRange() === 'custom' && apptCustomStart()) {
-                    <button type="button" class="pf-hdr-date-pill__clear" (click)="clearApptCustom()"
-                      aria-label="Clear custom range">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                    }
-                    } @else {
-                    <button type="button" class="pf-hdr-date-pill"
-                      [class.pf-hdr-date-pill--on]="apptDateRange() === opt.id" (click)="setApptDateRange(opt.id)">
-                      {{ opt.label }}
-                    </button>
-                    }
-                    }
-                  </div>
+                  <pf-segmented class="pf-hdr-date-pills"
+                                [options]="apptDateSegmentOptions()"
+                                [value]="apptDateRange()"
+                                (valueChange)="setApptDateRange($any($event))"
+                                (optionClick)="onApptDateOptionClick($event)"
+                                (optionClear)="clearApptCustom()" />
                   }
 
                   <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
@@ -686,65 +682,22 @@
                   <!-- STATUS chips: toggle filters. Tap = only that status; tap the
                        same chip again = all statuses. The date range (right) stays
                        applied either way; counts are for the chosen dates. -->
-                  <div class="pf-tabs" role="group" aria-label="Filter by status" (click)="$event.stopPropagation()">
-                    <button type="button" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-pressed]="rightTab() === 'ip'"
-                      [attr.title]="rightTab() === 'ip' ? 'Showing In progress only — tap to show all statuses' : 'Show In progress only'"
-                      (click)="setRightTab('ip')">
-                      In progress
-                      <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length + draftOrders().length
-                        }}</span>
-                    </button>
-                    <button type="button" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-pressed]="rightTab() === 'done'"
-                      [attr.title]="rightTab() === 'done' ? 'Showing Completed only — tap to show all statuses' : 'Show Completed only'"
-                      (click)="setRightTab('done')">
-                      Completed
-                      <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
-                    </button>
-                    @if (showPaymentsDue()) {
-                    <button type="button" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'billing'"
-                      [attr.aria-pressed]="rightTab() === 'billing'"
-                      [attr.title]="rightTab() === 'billing' ? 'Showing Payments due only — tap to show all statuses' : 'Show Payments due only'" (click)="setRightTab('billing')">
-                      Payments due
-                      <span class="pf-tabs__count" data-tone="warning">{{ paymentsDueOrders().length }}</span>
-                    </button>
-                    }
-                    <button type="button" class="pf-tabs__btn press"
-                      [class.pf-tabs__btn--on]="rightTab() === 'out'" [attr.aria-pressed]="rightTab() === 'out'"
-                      [attr.title]="rightTab() === 'out' ? 'Showing Outsourced only — tap to show all statuses' : 'Show Outsourced only'"
-                      (click)="setRightTab('out')">
-                      Outsourced
-                      <span class="pf-tabs__count">{{ outsourcing.counts().outsourced }}</span>
-                    </button>
-                  </div>
+                  <pf-segmented class="pf-tabs"
+                                [options]="workStatusSegmentOptions()"
+                                [value]="$any(rightTab())"
+                                [allowDeselect]="true"
+                                (valueChange)="setRightTab($any($event))" />
                 </div>
 
                 <!-- Date filter — applies to EVERY status (independent of the chips). -->
                 <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
                   <!-- Date filters for Right Pane -->
-                  <div class="pf-hdr-date-pills">
-                    @for (opt of workDateOptions; track opt.id) {
-                    @if (opt.id === 'custom') {
-                    <button #workCustomBtn type="button" class="pf-hdr-date-pill"
-                      [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
-                      [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
-                      (click)="openWorkDatePicker(workCustomBtn, $event)">
-                      {{ workCustomRangeLabel() }}
-                    </button>
-                    @if (workDateRange() === 'custom' && workCustomStart()) {
-                    <button type="button" class="pf-hdr-date-pill__clear" (click)="clearWorkCustom()"
-                      aria-label="Clear custom range">×</button>
-                    }
-                    } @else {
-                    <button type="button" class="pf-hdr-date-pill"
-                      [class.pf-hdr-date-pill--on]="workDateRange() === opt.id" (click)="setWorkDateRange(opt.id)">
-                      {{ opt.label }}
-                    </button>
-                    }
-                    }
-                  </div>
+                  <pf-segmented class="pf-hdr-date-pills"
+                                [options]="workDateSegmentOptions()"
+                                [value]="workDateRange()"
+                                (valueChange)="setWorkDateRange($any($event))"
+                                (optionClick)="onWorkDateOptionClick($event)"
+                                (optionClear)="clearWorkCustom()" />
 
                   <!-- Dropdown filter for Work (visible on mobile/tablet only < 1024px) -->
                   <div class="pf-hdr-filter">

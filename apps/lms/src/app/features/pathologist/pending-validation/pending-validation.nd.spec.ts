@@ -150,7 +150,7 @@ describe('Pathologist queue (nd) — layout', () => {
     expect(tabs.map(words)).toEqual(['All 3', 'Assigned to me 1']);
     expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-tab')).toBe('all');
     // No classic chrome in the new design.
-    expect(el.querySelector('pf-segmented, pf-screen-header, pf-kpi-strip, pf-avatar')).toBeNull();
+    expect(el.querySelector('pf-screen-header, pf-kpi-strip, pf-avatar')).toBeNull();
   });
 
   it('no monospace anywhere in the new-design CSS; tokens only (no raw decoration hues)', () => {

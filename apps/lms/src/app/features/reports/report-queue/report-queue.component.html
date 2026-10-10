@@ -10,18 +10,8 @@
       [value]="query()"
       (valueChange)="setQuery($event)">
       <ng-container band-tools>
-        <div class="nd-seg pf-rq-seg" role="radiogroup" aria-label="Show reports" (keydown)="onFilterKey($event)">
-          @for (f of ndFilters(); track f.value) {
-          <button type="button" class="nd-seg__item pf-rq-seg__item" role="radio"
-                  [attr.data-filter]="f.value"
-                  [attr.aria-checked]="filter() === f.value"
-                  [attr.tabindex]="filter() === f.value ? 0 : -1"
-                  (click)="setFilter(f.value)">
-            <span class="pf-rq-seg__lbl">{{ f.label }}</span>
-            <span class="pf-rq-seg__count nd-num" [class.pf-rq-seg__count--warn]="f.value === 'failed' && f.count > 0">{{ f.count }}</span>
-          </button>
-          }
-        </div>
+        <pf-segmented class="pf-rq-seg" [options]="filterOptions()" [value]="filter()" mode="text"
+                      (valueChange)="setFilter($any($event))" />
       </ng-container>
       <ng-container band-actions>
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()" aria-label="Refresh" title="Refresh">

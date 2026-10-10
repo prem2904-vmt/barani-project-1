@@ -57,7 +57,6 @@ describe('My Work — new-design remap', () => {
     for (const o of opts) {
       expect(o.dot).toBeUndefined();
       expect(typeof o.count).toBe('number');
-      // Selected state is the icon chip, so every tab needs an icon.
       expect(o.iconPath?.length).toBeGreaterThan(0);
     }
   });

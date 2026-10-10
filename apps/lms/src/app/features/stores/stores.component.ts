@@ -124,13 +124,7 @@ const ICON = {
               <header class="nd-card__head">
                 <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
                 <span class="nd-card__label" id="st-stock-t">Stock</span>
-                <div class="nd-seg st-filter" role="radiogroup" aria-label="Show">
-                  @for (f of stockFilters; track f.key) {
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="stockStatus() === f.key" (click)="stockStatus.set(f.key)">
-                      {{ f.label }} <span class="nd-num inv-muted">{{ filterCount(f.key) }}</span>
-                    </button>
-                  }
-                </div>
+                <pf-segmented class="st-filter" [options]="stockFilterOptions()" [value]="stockStatus()" mode="text" (valueChange)="stockStatus.set($any($event))" aria-label="Show" />
                 <span class="nd-card__spacer"></span>
                 <span class="inv-count nd-num">{{ itemsLabel() }}</span>
               </header>
@@ -357,11 +351,7 @@ const ICON = {
             @if (lastLabel()) {
               <p class="inv-title">Lot label</p>
               <div class="inv-label">
-                <div class="nd-seg" role="radiogroup" aria-label="Label type">
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'both'" (click)="labelMode.set('both')">Both</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'barcode'" (click)="labelMode.set('barcode')">Barcode</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode() === 'qr'" (click)="labelMode.set('qr')">QR</button>
-                </div>
+                <pf-segmented [options]="labelModeOptions" [value]="labelMode()" mode="text" (valueChange)="labelMode.set($any($event))" aria-label="Label type" />
                 <div class="inv-label__paper pf-print-label">
                   <pf-barcode-display [code]="lastLabel()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
                 </div>
@@ -594,6 +584,18 @@ export class StoresComponent implements OnInit, AfterViewInit {
     const k2 = this.kpis();
     return k === 'all' ? k2.total : k === 'ok' ? k2.inStock : k === 'low' ? k2.low : k2.out;
   }
+  readonly stockFilterOptions = computed<SegmentedOption<StockStatus>[]>(() =>
+    this.stockFilters.map(f => ({
+      value: f.key,
+      label: f.label,
+      count: this.filterCount(f.key),
+    }))
+  );
+  readonly labelModeOptions: SegmentedOption<'both' | 'barcode' | 'qr'>[] = [
+    { value: 'both', label: 'Both' },
+    { value: 'barcode', label: 'Barcode' },
+    { value: 'qr', label: 'QR' },
+  ];
   readonly attentionCount = computed(() => this.kpis().low + this.kpis().out + this.expiring().length);
   readonly itemsLabel = computed(() => plural(this.stockRows().length, 'item'));
 

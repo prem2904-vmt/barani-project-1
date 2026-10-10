@@ -89,17 +89,7 @@ type Tab = 'mine' | 'all';
         [value]="query()"
         (valueChange)="query.set($event)">
         <ng-container band-tools>
-          <div class="nd-seg pv-seg" role="radiogroup" aria-label="Show">
-            @for (o of ndTabs(); track o.value) {
-              <button type="button" class="nd-seg__item pv-seg__item" role="radio"
-                      [attr.data-tab]="o.value"
-                      [attr.aria-checked]="tab() === o.value"
-                      (click)="setTab(o.value)">
-                <span>{{ o.label }}</span>
-                <span class="pv-seg__count nd-num">{{ o.count }}</span>
-              </button>
-            }
-          </div>
+          <pf-segmented class="pv-seg" [options]="ndTabs()" [value]="tab()" (valueChange)="setTab($any($event))" />
         </ng-container>
         <ng-container band-actions>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
@@ -127,19 +117,7 @@ type Tab = 'mine' | 'all';
             <span class="pv-count nd-num">{{ countLabel() }}</span>
             <span class="nd-card__spacer"></span>
             @if (deptFilters().length > 1) {
-              <div class="nd-seg pv-depts" role="radiogroup" aria-label="Department">
-                <button type="button" class="nd-seg__item pv-seg__item" role="radio"
-                        [attr.aria-checked]="dept() === null" (click)="dept.set(null)">
-                  <span>All</span>
-                </button>
-                @for (d of deptFilters(); track d.id) {
-                  <button type="button" class="nd-seg__item pv-seg__item" role="radio"
-                          [attr.aria-checked]="dept() === d.id" (click)="dept.set(d.id)">
-                    <span>{{ d.name }}</span>
-                    <span class="pv-seg__count nd-num">{{ d.count }}</span>
-                  </button>
-                }
-              </div>
+              <pf-segmented class="pv-depts" [options]="deptSegmentOptions()" [value]="dept()" (valueChange)="dept.set($any($event))" />
             }
           </header>
 
@@ -566,7 +544,7 @@ type Tab = 'mine' | 'all';
     .pv-seg__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
     .pv-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pv-seg__count { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
-    .pv-seg__item[aria-checked='true'] .pv-seg__count { color: var(--text-secondary); }
+    .pv-seg__item[aria-checked='true'] .pv-seg__count { color: var(--color-violet-600, #7c3aed); }
 
     /* Queue card header: count is plain muted text, never a pill. */
     .pv-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
@@ -765,6 +743,10 @@ export class PendingValidationComponent implements OnInit {
   private readonly tabTiles = computed(() =>
     this._tab() === 'mine' ? this.allTiles().filter(t => t.mine) : this.allTiles());
   readonly deptFilters = computed(() => departmentsIn(this.tabTiles()));
+  readonly deptSegmentOptions = computed<SegmentedOption<string | null>[]>(() => [
+    { value: null, label: 'All' },
+    ...this.deptFilters().map(d => ({ value: d.id, label: d.name, count: d.count })),
+  ]);
   readonly visibleTiles = computed(() => {
     const d = this.dept();
     const tiles = this.tabTiles();
