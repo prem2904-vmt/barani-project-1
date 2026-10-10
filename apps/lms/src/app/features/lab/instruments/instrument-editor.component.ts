@@ -20,15 +20,15 @@ import { plural } from '../../../shared/utils/plural';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
 import {
-  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, FLOW_CONTROLS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, PARITIES,
-  PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, buildInstrumentConfig, buildUpsert,
-  codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
+  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, FLOW_CONTROLS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
+  PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
+  buildUpsert, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
   mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
-  ConnectorStatus, DetectResult, Hl7SampleIdField, ImageCodeDto, InstrumentDto, InstrumentMessage, ListenEvent, MessageSummaryDto,
-  PairedInstrument, ParserType, RawLogEntry, TransportType,
+  ConnectorStatus, DetectResult, Hl7SampleIdField, ImageCodeDto, InstrumentDto, InstrumentMessage, ListenEvent, LoincSuggestionDto,
+  MessageSummaryDto, PairedInstrument, ParserType, RawLogEntry, TransportType,
 } from '../../../shared/instruments/instrument.models';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
 import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
@@ -191,6 +191,14 @@ export class InstrumentEditorComponent {
     return out;
   });
   readonly serverUnmapped = signal<string[]>([]);
+  /** code (uppercased) → a unit seen for it (server message preview / listen
+   *  session) — passed to the suggestions endpoint so a single-candidate
+   *  WBC/PLT match can be ×1000-suggested; best-effort, never required. */
+  private serverUnmappedUnits = new Map<string, string>();
+  /** Codes on the ignore list the last "Add unmapped codes" / typed lookup
+   *  skipped (age/sex/height/weight…) — the quiet note under the table. */
+  readonly loincSkipped = signal<LoincSkip[]>([]);
+  private readonly loincLookupTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   // ── Serial ports (Electron) ──────────────────────────────────────────
   readonly ports = signal<PfSelectOption<string>[]>([]);
@@ -234,6 +242,7 @@ export class InstrumentEditorComponent {
     this.destroyRef.onDestroy(() => {
       this.offListen?.();
       this.offStatus?.();
+      for (const t of this.loincLookupTimers.values()) clearTimeout(t);
       const sid = this.sessionId();
       if (sid) void this.bridge.listenStop(sid);
     });
@@ -299,11 +308,23 @@ export class InstrumentEditorComponent {
     this.api.messages({ state: 'all', instrumentId: id, pageSize: 100 }).subscribe({
       next: (page) => {
         const codes = new Set<string>();
-        for (const m of page?.items ?? []) for (const c of m.unmappedCodes ?? []) codes.add(c);
+        this.serverUnmappedUnits.clear();
+        for (const m of page?.items ?? []) {
+          for (const c of m.unmappedCodes ?? []) codes.add(c);
+          for (const p of m.preview ?? []) if (p.code && p.unit) this.serverUnmappedUnits.set(p.code.trim().toUpperCase(), p.unit);
+        }
         this.serverUnmapped.set([...codes]);
       },
       error: () => undefined,
     });
+  }
+
+  /** A known unit for `code` (listen session first, else a server message's
+   *  preview) — best-effort context for the LOINC factor suggestion. */
+  private codeUnitHint(code: string): string | null {
+    const key = code.trim().toUpperCase();
+    for (const r of this.previewData()) if (r.code.trim().toUpperCase() === key && r.unit) return r.unit;
+    return this.serverUnmappedUnits.get(key) ?? null;
   }
 
   loadRecent(id = this.id()) {
@@ -313,6 +334,10 @@ export class InstrumentEditorComponent {
       error: () => this.recent.set([]),
     });
   }
+
+  /** "N codes auto-matched by LOINC — confirm in Code mapping" banner
+   *  (Status tab): summed across the recent-results list. */
+  readonly recentAutoMatchedCount = computed(() => this.recent().reduce((n, m) => n + (m.autoMatchedCodes?.length ?? 0), 0));
 
   private async loadPorts() {
     const list = await this.bridge.listSerialPorts();
@@ -443,7 +468,9 @@ export class InstrumentEditorComponent {
   pickTest(i: number, key: string) {
     const t = this.tests().find((x) => x.catalogKey === key);
     const unit = this.maps()[i]?.unit || t?.derivedUnit || t?.unit || '';
-    this.patchMap(i, { testCatalogKey: key, testName: t?.name ?? null, unit });
+    // A human pick from the full list always wins over an earlier LOINC
+    // auto-fill — the chip only ever describes the CURRENT test.
+    this.patchMap(i, { testCatalogKey: key, testName: t?.name ?? null, unit, loincMatched: false });
   }
   numOrNull(v: unknown): number | null { const s = String(v ?? '').trim(); if (!s) return null; const n = Number(s); return Number.isFinite(n) ? n : null; }
   addRow() { this.setMaps([...this.maps(), emptyCodeMapRow()]); }
@@ -458,19 +485,92 @@ export class InstrumentEditorComponent {
     const before = this.maps().filter((r) => r.testCatalogKey).length;
     this.setMaps(withM51Defaults(this.maps()));
     const added = this.maps().filter((r) => r.testCatalogKey).length - before;
-    this.toasts.success(added > 0 ? `${plural(added, 'Medonic M51 code')} added` : 'Medonic M51 codes are already mapped');
+    this.toasts.success(added > 0 ? `${plural(added, 'Mindray / Medonic code')} added` : 'Mindray / Medonic codes are already mapped');
   }
   readonly unmappedCandidates = computed(() => {
     const onGrid = new Set(this.maps().map((r) => r.analyzerCode.trim().toUpperCase()));
     const all = [...this.listenCodes(), ...this.serverUnmapped()];
     return [...new Set(all.map((c) => c.trim()).filter((c) => c && !onGrid.has(c.toUpperCase())))];
   });
-  addUnmapped() {
-    const { rows, added } = mergeUnmappedCodes(this.maps(), this.unmappedCandidates());
+  /** "Add unmapped codes": asks the server for a LOINC match per code first
+   *  (single match pre-fills test + factor/decimals/unit, several candidates
+   *  get a picker limited to them, a non-analyte code is skipped — never
+   *  added); falls back to plain blank rows (old behaviour) if the lookup
+   *  can't run (no saved instrument yet, or the request fails). */
+  async addUnmapped() {
+    const codes = this.unmappedCandidates();
+    if (!codes.length) { this.toasts.success('No new codes to add'); return; }
+    const id = this.id();
+    let suggestions: LoincSuggestionDto[] | null = null;
+    if (id) {
+      try { suggestions = await firstValueFrom(this.api.codeMapSuggestions(id, codes, codes.map((c) => this.codeUnitHint(c)))); }
+      catch { suggestions = null; }
+    }
+    if (suggestions?.length) {
+      const { rows, added, matched, skipped } = applyLoincSuggestions(this.maps(), suggestions);
+      this.loincSkipped.set(skipped);
+      if (added) this.setMaps(rows);
+      const msg = added
+        ? `${plural(added, 'code')} added${matched ? ` (${plural(matched, 'match')} by LOINC)` : ''}`
+        : (skipped.length ? 'No new codes to add — the rest aren’t tests' : 'No new codes to add');
+      this.toasts.success(msg);
+      return;
+    }
+    const { rows, added } = mergeUnmappedCodes(this.maps(), codes);
     if (added) this.setMaps(rows);
     this.toasts.success(added ? `${plural(added, 'code')} added — pick the test for each` : 'No new codes to add');
   }
   mapIssueAt(i: number): string | null { return this.mapIssues().find((x) => x.index === i)?.message ?? null; }
+  skippedCodesText(): string { return this.loincSkipped().map((s) => `${s.code} (${s.reason})`).join(', '); }
+
+  /** Analyzer-code box: edits the row as usual, and debounces a LOINC
+   *  lookup for a blank-test row so typing a LOINC code (e.g. straight off
+   *  an HL7 capture) auto-fills the same way "Add unmapped codes" does. */
+  onAnalyzerCodeInput(i: number, value: string) {
+    this.patchMap(i, { analyzerCode: value, loincMatched: false, loincCandidates: undefined });
+    const existing = this.loincLookupTimers.get(i);
+    if (existing) clearTimeout(existing);
+    const code = value.trim();
+    const id = this.id();
+    if (!code || !id) return;
+    this.loincLookupTimers.set(i, setTimeout(() => void this.lookupLoincForRow(i, code), 400));
+  }
+  private async lookupLoincForRow(i: number, code: string) {
+    const id = this.id();
+    const row = this.maps()[i];
+    if (!id || !row || row.testCatalogKey || row.analyzerCode.trim() !== code) return;
+    let suggestions: LoincSuggestionDto[];
+    try { suggestions = await firstValueFrom(this.api.codeMapSuggestions(id, [code], [this.codeUnitHint(code)])); }
+    catch { return; }
+    const sug = suggestions[0];
+    const current = this.maps()[i];
+    // Stale by the time the response lands (row removed, test picked, or the
+    // code box moved on) — never clobber whatever is there now.
+    if (!sug || !current || current.testCatalogKey || current.analyzerCode.trim() !== code) return;
+    if (!sug.isTest) return; // a typed ignore-list code is left to the human, never mutated
+    if (sug.candidates.length === 1) {
+      const c = sug.candidates[0];
+      this.patchMap(i, {
+        testCatalogKey: c.catalogKey, testName: c.testName,
+        factor: sug.suggestedFactor ?? 1, decimals: sug.suggestedDecimals ?? null,
+        unit: sug.suggestedUnit ?? c.unit ?? current.unit, loincMatched: true,
+      });
+      this.toasts.success(`Matched by LOINC: ${c.testName}`);
+    } else if (sug.candidates.length > 1) {
+      this.patchMap(i, { loincCandidates: [...sug.candidates] });
+    }
+  }
+  loincCandidateOptions(r: CodeMapRow): PfSelectOption<string>[] {
+    return (r.loincCandidates ?? []).map((c) => ({ value: c.catalogKey, label: c.testName, hint: c.catalogKey }));
+  }
+  /** Choosing from the LOINC-ambiguous picker — same effect as `pickTest`,
+   *  scoped to the candidates the server actually matched. */
+  pickLoincCandidate(i: number, catalogKey: string) {
+    const row = this.maps()[i];
+    const c = row?.loincCandidates?.find((x) => x.catalogKey === catalogKey);
+    if (!c) return;
+    this.patchMap(i, { testCatalogKey: c.catalogKey, testName: c.testName, unit: row.unit || c.unit || '', loincCandidates: undefined });
+  }
 
   // ── Listen mode ──────────────────────────────────────────────────────
   async startListen() {

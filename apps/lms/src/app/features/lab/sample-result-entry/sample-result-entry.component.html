@@ -556,6 +556,10 @@
           <span class="pf-sre__an-chip" [attr.data-kind]="ab.kind" [attr.title]="ab.title">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg>
             <span>{{ ab.label }}</span>
+            @if (ab.autoMatched) {
+              <!-- Subtle: a code map wasn't set up yet — confirm in Code mapping. -->
+              <span class="pf-sre__an-auto" aria-hidden="true">•</span>
+            }
           </span>
           @for (fl of ab.flags; track $index) {
             <span class="pf-sre__an-flag nd-num" [attr.data-flag]="fl" [attr.title]="'Analyzer flag ' + fl">{{ fl }}</span>

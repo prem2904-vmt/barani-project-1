@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import {
   CodeMapDto, CodeMapUpsert, DeviceKeyDto, ImageCodeDto, ImageMapUpsert, InstrumentDto, InstrumentUpsert,
-  MessageDetailDto, MessagePage, MessageSummaryDto, SamplePrefillDto,
+  LoincSuggestionDto, MessageDetailDto, MessagePage, MessageSummaryDto, SamplePrefillDto,
 } from './instrument.models';
 
 export type MessageStateFilter = 'unmatched' | 'qc' | 'matched' | 'superseded' | 'duplicate' | 'all';
@@ -29,6 +29,18 @@ export function messagesUrl(q: MessageQuery = {}): string {
   p.set('page', String(Math.max(1, q.page ?? 1)));
   p.set('pageSize', String(Math.min(100, Math.max(1, q.pageSize ?? 50))));
   return `/api/instruments/messages?${p.toString()}`;
+}
+
+/** Query string for GET /api/instruments/{id}/code-map-suggestions (pure —
+ *  spec'd). `units` (same order/length as `codes`) carries the analyzer's
+ *  own OBX-6 unit for a code when the caller already has it (from a real
+ *  message/preview); blank entries are fine, omitted entirely when nothing
+ *  is known for any code. */
+export function codeMapSuggestionsUrl(id: string, codes: readonly string[], units?: readonly (string | null | undefined)[]): string {
+  const p = new URLSearchParams();
+  p.set('codes', codes.join(','));
+  if (units?.some((u) => !!u)) p.set('units', codes.map((_, i) => units[i] ?? '').join(','));
+  return `/api/instruments/${encodeURIComponent(id)}/code-map-suggestions?${p.toString()}`;
 }
 
 /**
@@ -82,5 +94,12 @@ export class InstrumentsApiService {
   /** Result-entry prefill for one tube (runs newest first, QC excluded). */
   prefillForSample(orderSampleId: string): Observable<SamplePrefillDto> {
     return this.api.get<SamplePrefillDto>(`/api/instruments/results/by-sample/${encodeURIComponent(orderSampleId)}`);
+  }
+
+  /** LOINC auto-match suggestions for codes with no code-map row yet (the
+   *  editor's "Add unmapped codes" / a typed-code lookup). */
+  codeMapSuggestions(id: string, codes: string[], units?: (string | null | undefined)[]): Observable<LoincSuggestionDto[]> {
+    if (!codes.length) return of([]);
+    return this.api.get<LoincSuggestionDto[]>(codeMapSuggestionsUrl(id, codes, units));
   }
 }

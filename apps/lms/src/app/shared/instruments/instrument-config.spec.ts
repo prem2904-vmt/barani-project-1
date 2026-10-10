@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { DetectResult, InstrumentDto } from './instrument.models';
+import type { DetectResult, InstrumentDto, LoincSuggestionDto } from './instrument.models';
 import {
-  CBC_DEFAULT_MAPS, DEFAULT_TEXT_LINE_PATTERN, applyDetectProposal, buildInstrumentConfig, buildUpsert, codesFromMessages,
-  connectionSummary, controlCharsText, emptyCodeMapRow, emptyInstrumentForm, formFromInstrument, mergeUnmappedCodes,
-  previewLine, previewRows, renderControlChars, statusWord, toCodeMapUpserts, validateCodeMaps, validateInstrumentForm,
-  withCbcDefaults, withM51Defaults, M51_HL7_MAPS,
+  CBC_DEFAULT_MAPS, DEFAULT_TEXT_LINE_PATTERN, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig, buildUpsert,
+  codesFromMessages, connectionSummary, controlCharsText, emptyCodeMapRow, emptyInstrumentForm, formFromInstrument,
+  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, statusWord, toCodeMapUpserts, validateCodeMaps,
+  validateInstrumentForm, withCbcDefaults, withM51Defaults, M51_HL7_MAPS,
 } from './instrument-config';
-import { messagesUrl } from './instruments-api.service';
+import { codeMapSuggestionsUrl, messagesUrl } from './instruments-api.service';
 
 describe('instrument config — wizard form → contract config JSON', () => {
   it('serial: port, 9600 8N1, flow control → rtscts / xon', () => {
@@ -158,6 +158,94 @@ describe('instrument config — code maps', () => {
       { analyzerCode: 'WBC', testCatalogKey: 'HEM019', parameterName: null, factor: 1000, offset: 0, decimals: 0, unit: null },
       { analyzerCode: 'wbc', testCatalogKey: 'HEM019', parameterName: null, factor: 1, offset: 0, decimals: null, unit: null },
     ]);
+  });
+});
+
+describe('instrument config — LOINC auto-match (applyLoincSuggestions)', () => {
+  const single = (code: string, catalogKey: string, testName: string, opts: Partial<LoincSuggestionDto> = {}): LoincSuggestionDto => ({
+    code, isTest: true, skipReason: null, candidates: [{ testId: 't-' + catalogKey, testName, catalogKey, unit: null }],
+    suggestedFactor: null, suggestedDecimals: null, suggestedUnit: null, confidence: 'loinc-exact', ...opts,
+  });
+
+  it('a single candidate fills the test + the suggested factor/decimals/unit and flags loincMatched', () => {
+    const s = single('6690-2', 'HEM019', 'Total Leukocyte Count', { suggestedFactor: 1000, suggestedDecimals: 0, suggestedUnit: 'cells/µL' });
+    const { rows, added, matched, skipped } = applyLoincSuggestions([], [s]);
+    expect(added).toBe(1);
+    expect(matched).toBe(1);
+    expect(skipped).toEqual([]);
+    expect(rows).toEqual([{
+      analyzerCode: '6690-2', testCatalogKey: 'HEM019', parameterName: '', factor: 1000, offset: 0, decimals: 0,
+      unit: 'cells/µL', testName: 'Total Leukocyte Count', loincMatched: true, loincCandidates: undefined,
+    }]);
+  });
+
+  it('no special-case factor falls back to factor 1 and the candidate’s OWN unit', () => {
+    const s = single('718-7', 'HEM011', 'Haemoglobin', { candidates: [{ testId: 't2', testName: 'Haemoglobin', catalogKey: 'HEM011', unit: 'g/dL' }] });
+    const { rows } = applyLoincSuggestions([], [s]);
+    expect(rows[0]).toMatchObject({ testCatalogKey: 'HEM011', factor: 1, decimals: null, unit: 'g/dL' });
+  });
+
+  it('an EXISTING blank row for the same code is filled in place, not duplicated', () => {
+    const s = single('6690-2', 'HEM019', 'Total Leukocyte Count');
+    const { rows, added } = applyLoincSuggestions([emptyCodeMapRow('6690-2')], [s]);
+    expect(added).toBe(0); // filled in place, not a new row
+    expect(rows).toHaveLength(1);
+    expect(rows[0].testCatalogKey).toBe('HEM019');
+  });
+
+  it('a row that already has a test is left untouched', () => {
+    const existing = { ...emptyCodeMapRow('6690-2'), testCatalogKey: 'CUSTOM' };
+    const s = single('6690-2', 'HEM019', 'Total Leukocyte Count');
+    const { rows, added, matched } = applyLoincSuggestions([existing], [s]);
+    expect(added).toBe(0);
+    expect(matched).toBe(1); // still counted — the caller may ignore it; the row itself is untouched
+    expect(rows[0].testCatalogKey).toBe('CUSTOM');
+  });
+
+  it('two or more candidates: the row carries loincCandidates, no test picked, no auto-pick factor', () => {
+    const s: LoincSuggestionDto = {
+      code: '6690-2', isTest: true, skipReason: null, confidence: 'loinc-exact',
+      candidates: [
+        { testId: 't1', testName: 'Total Leukocyte Count', catalogKey: 'HEM019', unit: 'cells/µL' },
+        { testId: 't2', testName: 'Haemoglobin', catalogKey: 'HEM011', unit: 'g/dL' },
+      ],
+      suggestedFactor: null, suggestedDecimals: null, suggestedUnit: null,
+    };
+    const { rows, added, matched } = applyLoincSuggestions([], [s]);
+    expect(added).toBe(1);
+    expect(matched).toBe(0);
+    expect(rows[0].testCatalogKey).toBe('');
+    expect(rows[0].loincCandidates).toHaveLength(2);
+  });
+
+  it('a non-analyte (ignore-list) code is skipped — never added as a row', () => {
+    const s: LoincSuggestionDto = { code: '30525-0', isTest: false, skipReason: 'age', candidates: [], suggestedFactor: null, suggestedDecimals: null, suggestedUnit: null, confidence: null };
+    const { rows, added, skipped } = applyLoincSuggestions([], [s]);
+    expect(added).toBe(0);
+    expect(rows).toEqual([]);
+    expect(skipped).toEqual([{ code: '30525-0', reason: 'age' }]);
+  });
+
+  it('a LOINC code with no candidate (not ignored, not matched) adds a plain blank row', () => {
+    const s: LoincSuggestionDto = { code: '88888-3', isTest: true, skipReason: null, candidates: [], suggestedFactor: null, suggestedDecimals: null, suggestedUnit: null, confidence: null };
+    const { rows, added, matched } = applyLoincSuggestions([], [s]);
+    expect(added).toBe(1);
+    expect(matched).toBe(0);
+    expect(rows[0]).toMatchObject({ analyzerCode: '88888-3', testCatalogKey: '' });
+  });
+});
+
+describe('instrument config — code-map-suggestions URL (codeMapSuggestionsUrl)', () => {
+  it('codes joined; no units param when nothing is known', () => {
+    const url = codeMapSuggestionsUrl('i1', ['6690-2', '718-7']);
+    expect(url).toBe('/api/instruments/i1/code-map-suggestions?codes=6690-2%2C718-7');
+  });
+
+  it('units carried 1:1 by index, blank for an unknown code', () => {
+    const url = codeMapSuggestionsUrl('i1', ['6690-2', '718-7'], ['10^3/uL', null]);
+    const q = new URL('http://x' + url).searchParams;
+    expect(q.get('codes')).toBe('6690-2,718-7');
+    expect(q.get('units')).toBe('10^3/uL,');
   });
 });
 
