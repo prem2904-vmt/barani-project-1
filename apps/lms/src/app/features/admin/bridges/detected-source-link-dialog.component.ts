@@ -90,6 +90,7 @@ export function linkableInstruments(list: readonly InstrumentDto[], bridge: Pick
     .pf-dsl__seg { align-self: flex-start; }
     .pf-dsl__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .pf-dsl__err { margin: 0; font-size: 12.5px; color: var(--red-text, #dc2626); }
+    @media (max-width: 640px) { .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
     @media (max-width: 640px) { .pf-dsl__row { grid-template-columns: minmax(0, 1fr); } .pf-dsl__seg { align-self: stretch; } }
   `],
 })

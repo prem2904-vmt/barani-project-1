@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
-import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
@@ -59,7 +59,7 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
 @Component({
   selector: 'pf-bridge-add',
   standalone: true,
-  imports: [HeroBandComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, SkeletonRowsComponent, SelectComponent, BusyDirective, BridgeWifiFormComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, BarcodeScannerModalComponent, ScreenHeaderComponent, SkeletonRowsComponent, SelectComponent, BusyDirective, BridgeWifiFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-bra pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -241,7 +241,17 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
               }
               @if (error()) { <p class="pf-bra__err" role="alert">{{ error() }}</p> }
             </div>
-            <div class="nd-card__foot">
+            @if (!isPhone) {
+              <div class="nd-card__foot"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+            }
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- The side card's actions: its footer on web / tablet, the kit's
+         bottom bar above the navbar on phones (ND §8) — ONE copy rendered. -->
+    <ng-template #actionsTpl>
               @if (relay(); as flow) {
                 @switch (flow.state().step) {
                   @case ('pick_network') {
@@ -276,17 +286,17 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
                   {{ busy() ? 'Adding…' : 'Add Bridge' }}
                 </button>
               }
-            </div>
-          </aside>
-        </div>
-      </div>
-    </section>
+    </ng-template>
+    @if (isPhone) {
+      <div class="nd-bottombar pf-bra__bar"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+    }
 
     @if (scanning()) {
       <pf-barcode-scanner-modal title="Scan the Bridge QR" noun="Bridge QR" (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
     }
   `,
   styles: [`
+    @use '../../../shared/styles/nd-mixins' as nd;
     :host { display: block; min-height: 0; }
     .pf-bra__split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
     @media (max-width: 1023px) { .pf-bra__split { grid-template-columns: minmax(0, 1fr); } }
@@ -306,6 +316,8 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-bra__pick { width: 100%; min-height: 56px; padding: 8px 12px; text-align: left; border-radius: 12px; border: 1px solid var(--nd-line); background: transparent; color: var(--text-primary); cursor: pointer; }
     .pf-bra__pick:disabled { opacity: 0.55; cursor: not-allowed; }
+    /* The kit's neutral selected state (the base rules above would out-rank it). */
+    .pf-bra__method[aria-checked='true'], .pf-bra__pick[aria-checked='true'] { @include nd.neutral-selected; }
     .pf-bra__pick-main { display: flex; flex-direction: column; gap: 2px; }
     .pf-bra__facts { margin: 0; display: grid; }
     .pf-bra__facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--nd-line); }
@@ -331,18 +343,23 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__step[data-state='active'] .pf-bra__step-dot { border-color: var(--color-primary, #7c3aed); box-shadow: inset 0 0 0 4px var(--nd-card-bg); background: var(--color-primary, #7c3aed); }
     .pf-bra__rescan { align-self: flex-start; }
     @media (max-width: 640px) {
+      /* ND §12: card labels are 12px on phones — beat the global phone h2 cap. */
+      .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; }
       .pf-bra__methods { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .pf-bra__method { grid-template-columns: minmax(0, 1fr); min-height: 96px; }
       .pf-bra__method-ic { grid-row: auto; margin-bottom: 4px; }
       .pf-bra__code { max-width: none; }
       .pf-bra__facts > div { grid-template-columns: 100px minmax(0, 1fr); }
+      .pf-bra__body { padding-bottom: 96px !important; }
+      .pf-bra__bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px; }
+      .pf-bra__bar > :only-child, .pf-bra__bar > .nd-span { grid-column: 1 / -1; }
+      .pf-bra__bar .nd-btn { min-height: 44px; }
     }
   `],
 })
 export class BridgeAddComponent implements OnInit, OnDestroy {
   private readonly api = inject(BridgesApiService);
   private readonly router = inject(Router);
-  private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly dialogs = inject(DialogService);
   private readonly clock = inject(BRIDGE_COMMAND_CLOCK);
@@ -350,6 +367,7 @@ export class BridgeAddComponent implements OnInit, OnDestroy {
   protected readonly local = inject(BridgeLocalService);
   protected readonly nearby = inject(BridgeNearbyService);
   protected readonly relaySteps = RELAY_STEPS;
+  readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
   protected readonly ago = (iso: string | null | undefined) => agoText(iso);
   protected readonly isText = (s: unknown): s is string => typeof s === 'string' && !!s;
   protected readonly statusWord = bridgeStatusWord;
@@ -417,7 +435,7 @@ export class BridgeAddComponent implements OnInit, OnDestroy {
     void this.nearby.poll();
     if (this.nearbyParam()) { this.method.set('nearby'); this.nearbyId.set(this.nearbyParam()!); }
     const handed = takeQrHandoff();
-    if (handed) this.onScanned(handed, true);
+    if (handed) this.onScanned(handed);
     else if (this.relayParam()) { this.relayOnScan = true; this.method.set('qr'); this.scanning.set(true); }
   }
 
@@ -440,7 +458,7 @@ export class BridgeAddComponent implements OnInit, OnDestroy {
     if (el.value !== v) el.value = v;
   }
 
-  onScanned(text: string, fromLink = false): void {
+  onScanned(text: string): void {
     this.scanning.set(false);
     const p = parseBridgeQr(text);
     this.method.set('qr');
@@ -448,7 +466,6 @@ export class BridgeAddComponent implements OnInit, OnDestroy {
     this.qrError.set(null);
     this.qr.set(p.payload);
     if (this.relayOnScan && this.canRelay()) { this.relayOnScan = false; this.startRelay(false); return; }
-    if (fromLink) this.toasts.info(`Bridge ${p.payload.serialShort} — check the details and add it.`);
   }
 
   private request(): ClaimRequest | null {

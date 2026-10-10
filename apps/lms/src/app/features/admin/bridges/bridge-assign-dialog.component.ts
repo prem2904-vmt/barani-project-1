@@ -99,6 +99,7 @@ import { linkableInstruments } from './detected-source-link-dialog.component';
     .pf-bad__seg { flex-wrap: wrap; }
     .pf-bad__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
     .pf-bad__err { margin: 0; font-size: 12px; color: var(--red-text, #dc2626); }
+    @media (max-width: 640px) { .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
     @media (max-width: 640px) { .pf-bad__row { grid-template-columns: minmax(0, 1fr); } .pf-bad__seg .nd-seg__item { min-height: 44px; } }
   `],
 })

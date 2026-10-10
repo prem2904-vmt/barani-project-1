@@ -126,11 +126,14 @@ const OTHER = '\u0000other';
     </div>
   `,
   styles: [`
+    @use '../../../shared/styles/nd-mixins' as nd;
     :host { display: block; }
     .pf-bwf { display: flex; flex-direction: column; gap: 14px; }
     .pf-bwf__nets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
     .pf-bwf__net { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px; text-align: left; border-radius: 12px;
       border: 1px solid var(--nd-line); background: transparent; color: var(--text-primary); cursor: pointer; }
+    /* The kit's neutral selected state (the base rule above would out-rank it). */
+    .pf-bwf__net[aria-checked='true'] { @include nd.neutral-selected; }
     .pf-bwf__net-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .pf-bwf__wifi, .pf-bwf__lock { flex: none; color: var(--text-secondary); }
     .pf-bwf__fields { display: flex; flex-direction: column; gap: 12px; }

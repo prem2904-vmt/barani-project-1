@@ -113,6 +113,7 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
     .pf-bwd__ok { flex: none; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 999px;
       color: var(--color-primary, #7c3aed); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 12%, transparent)); }
     @keyframes pf-bwd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @media (max-width: 640px) { .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
     @media (prefers-reduced-motion: reduce) { .pf-bwd__pulse { animation: none; } }
   `],
 })

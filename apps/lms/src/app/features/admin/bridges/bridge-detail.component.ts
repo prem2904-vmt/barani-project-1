@@ -124,7 +124,7 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab settings · Bridges" [title]="b()?.name || 'Bridge'" parentRoute="/admin/bridges"></pf-screen-header>
 
-      <div class="pf-band-body pf-brd__body">
+      <div class="pf-band-body pf-band-body--fill pf-brd__body">
         @if (skeleton()) {
           <pf-skeleton-detail label="Loading Bridge…"></pf-skeleton-detail>
         } @else if (notFound()) {
@@ -263,8 +263,13 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
   `,
   styles: [`
     :host { display: block; min-height: 0; }
-    .pf-brd__split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
-    @media (max-width: 1023px) { .pf-brd__split { grid-template-columns: minmax(0, 1fr); } }
+    /* Desktop: the two cards fill the band body and only their bodies scroll
+       (ND §1); one column below 1024px, where the body scrolls as usual. */
+    .pf-brd__split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    @media (max-width: 1023px) {
+      .pf-brd__split { grid-template-columns: minmax(0, 1fr); align-items: start; flex: none; }
+      .pf-brd .pf-brd__body.pf-band-body--fill { overflow-y: auto; display: block; }
+    }
     .pf-brd__main, .pf-brd__side { min-width: 0; }
     .pf-brd__count { margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
     .pf-brd__mainbody { gap: 12px; }
@@ -275,6 +280,7 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
     .pf-brd__main ::ng-deep .pf-brd-cell__name { font-weight: 600; color: var(--text-primary); }
     .pf-brd__main ::ng-deep .ag-row { cursor: pointer; }
     .pf-brd__main ::ng-deep .pf-brd-acts { display: flex; gap: 6px; align-items: center; height: 100%; }
+    .pf-brd__main ::ng-deep .ag-cell.pf-brd-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-brd__sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-brd__source { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border-radius: 12px;
       border: 1px solid var(--nd-sel-border, rgba(124, 58, 237, 0.4)); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 6%, transparent)); flex-wrap: wrap; }
@@ -305,6 +311,8 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
     .pf-brd__act-t { font-size: 13px; color: var(--text-primary); }
     .pf-brd__act-err { font-size: 12px; color: var(--red-text, #dc2626); }
     @media (max-width: 640px) {
+      /* ND §12: card labels are 12px on phones — beat the global phone h2 cap. */
+      .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; }
       .pf-brd__hide-phone { display: none; }
       .pf-brd__source-acts { width: 100%; }
       .pf-brd__source-acts .nd-btn { flex: 1 1 0; min-height: 44px; }
@@ -386,11 +394,13 @@ export class BridgeDetailComponent implements OnInit {
       `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>` +
       `<span class="nd-rowact__t">${esc(label)}</span></button>`;
     const cols: ColDef<BridgeAnalyzerRow>[] = [
-      { colId: 'name', headerName: 'Analyzer', flex: 1.3, minWidth: 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
-        cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.name ?? '', this.isPhone ? p.data?.connection : p.data?.makeModel, 'pf-brd-cell__name') },
-      { colId: 'connection', headerName: 'Connection', flex: 1.3, minWidth: 180, valueGetter: (p) => p.data?.connection ?? '',
+      { colId: 'name', headerName: 'Analyzer', flex: 1.3, minWidth: this.isPhone ? 120 : 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+        cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.name ?? '',
+          this.isPhone ? [p.data?.connection, linkStateWord(p.data?.linkState).label].filter(Boolean).join(' · ')
+            : (p.data?.makeModel && p.data.makeModel !== p.data.name ? p.data.makeModel : ''), 'pf-brd-cell__name') },
+      { colId: 'connection', headerName: 'Connection', flex: 1.3, minWidth: 170, valueGetter: (p) => p.data?.connection ?? '',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.connection ?? '', p.data?.framing) },
-      { colId: 'link', headerName: 'Link', flex: 1, minWidth: 130, valueGetter: (p) => p.data?.linkState ?? '',
+      { colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 96 : 120, valueGetter: (p) => p.data?.linkState ?? '',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => {
           const w = linkStateWord(p.data?.linkState);
           return `<div class="pf-brd-cell"><span class="nd-sdot" data-tone="${sdotTone(w.tone)}">${esc(w.label)}</span>${p.data?.lastMessageAt ? `<span class="pf-brd-cell__sub">Last result ${esc(agoText(p.data.lastMessageAt).toLowerCase())}</span>` : ''}</div>`;
@@ -399,12 +409,13 @@ export class BridgeDetailComponent implements OnInit {
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<span class="nd-num">${esc(p.data?.queueDepth ?? 0)}</span>` },
     ];
     if (manage) {
-      cols.push({ colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 200 : 112, minWidth: web ? 200 : 112, flex: 0,
+      cols.push({ colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 224 : 124, minWidth: web ? 224 : 124, flex: 0, cellClass: 'pf-brd-actcell',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<div class="pf-brd-acts">${
           btn('edit', 'Connection', 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z', p.data?.name ?? '')}${
           btn('unassign', 'Remove', 'M18 6 6 18M6 6l12 12', p.data?.name ?? '')}</div>` });
     }
-    if (this.isPhone) return cols.filter((c) => ['name', 'link', 'actions'].includes(c.colId ?? ''));
+    // Phones: the connection + link state ride the name cell's second line.
+    if (this.isPhone) return cols.filter((c) => ['name', 'actions'].includes(c.colId ?? ''));
     return cols;
   });
 

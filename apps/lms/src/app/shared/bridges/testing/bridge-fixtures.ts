@@ -14,7 +14,9 @@ import type {
 } from '../bridge.models';
 
 export const T0 = '2026-10-11T09:00:00Z';
-const ago = (min: number) => new Date(Date.parse(T0) - min * 60_000).toISOString();
+/** Relative to the moment the fixtures load, so "3 min ago" reads true in screenshots. */
+const LOADED_AT = Date.now();
+const ago = (min: number) => new Date(LOADED_AT - min * 60_000).toISOString();
 
 /** B.0 claim-secret vector: secret "7K2Q-F9MX-RT" normalises to this. */
 export const VECTOR_CLAIM_SECRET = '7K2QF9MXRT';

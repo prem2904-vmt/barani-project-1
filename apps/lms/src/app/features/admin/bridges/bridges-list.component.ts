@@ -130,15 +130,27 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
                 <p class="nd-field__hint">{{ plural(queuedTotal(), 'result') }} waiting on Bridges that are offline — they send them when back online.</p>
               }
             </div>
-            <div class="nd-card__foot">
-              <button type="button" class="nd-btn nd-btn--primary nd-span press" (click)="add()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add Bridge
-              </button>
-            </div>
+            @if (!isPhone) {
+              <div class="nd-card__foot">
+                <button type="button" class="nd-btn nd-btn--primary nd-span press" (click)="add()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Add Bridge
+                </button>
+              </div>
+            }
           </aside>
         </div>
       </div>
+      @if (isPhone) {
+        <!-- Phones: the side card's primary rides the kit's bottom bar (ND §8). -->
+        <div class="nd-bottombar">
+          <span class="nd-bottombar__info nd-num">{{ countLabel() }}</span>
+          <button type="button" class="nd-btn nd-btn--primary press" (click)="add()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Add Bridge
+          </button>
+        </div>
+      }
     </section>
   `,
   styles: [`
@@ -153,7 +165,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
     .pf-brl__main ::ng-deep .pf-brl-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-brl__main ::ng-deep .pf-brl-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-brl__main ::ng-deep .pf-brl-cell__name { font-weight: 600; color: var(--text-primary); }
-    .pf-brl-status, .pf-brl__main ::ng-deep .pf-brl-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap;
+    .pf-brl-status, .pf-brl__main ::ng-deep .pf-brl-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
       --pf-brl-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-brl-tone) 70%, var(--text-primary)); }
     .pf-brl-status[data-tone='green'], .pf-brl__main ::ng-deep .pf-brl-status[data-tone='green'] { --pf-brl-tone: var(--green-text, #15803d); }
     .pf-brl-status[data-tone='amber'], .pf-brl__main ::ng-deep .pf-brl-status[data-tone='amber'] { --pf-brl-tone: var(--amber-text, #b45309); }
@@ -174,7 +186,10 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
     .pf-brl__stat dd { margin: 0; font-size: 13px; color: var(--text-primary); }
     .pf-brl__stat dt { font-size: 12.5px; }
     @media (max-width: 640px) {
-      .pf-brl__grid { height: calc(100dvh - 400px); min-height: 260px; }
+      /* ND §12: card labels are 12px on phones — beat the global phone h2 cap. */
+      .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+      .pf-brl__grid { height: min(56dvh, 460px); min-height: 220px; }
+      .pf-brl .pf-brl__body.pf-band-body--fill { overflow-y: auto; display: block; padding-bottom: 96px; }
       .pf-brl__hide-phone { display: none; }
     }
   `],
@@ -216,21 +231,21 @@ export class BridgesListComponent {
       return `<div class="pf-brl-cell"><span class="pf-brl-status" data-tone="${st.tone}"><span class="pf-brl-status__dot" aria-hidden="true"></span>${esc(st.label)}</span>${seen ? `<span class="pf-brl-cell__sub">${esc(seen)}</span>` : ''}</div>`;
     };
     const cols: ColDef<BridgeDto>[] = [
-      { colId: 'name', headerName: 'Bridge', flex: 1.4, minWidth: 180, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+      { colId: 'name', headerName: 'Bridge', flex: 1.4, minWidth: 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => cell(p.data?.name ?? '', [p.data?.serialShort, plural(p.data?.analyzers?.length ?? 0, 'analyzer')].filter(Boolean).join(' · '), 'pf-brl-cell__name') },
-      { colId: 'branch', headerName: 'Branch', flex: 0.8, minWidth: 110, valueGetter: (p) => p.data?.branchName ?? '' },
-      { colId: 'status', headerName: 'Status', flex: 1, minWidth: 150, valueGetter: (p) => STATUS_ORDER.indexOf((p.data?.status ?? 'never') as typeof STATUS_ORDER[number]),
+      { colId: 'branch', headerName: 'Branch', flex: 0.7, minWidth: 90, valueGetter: (p) => p.data?.branchName ?? '' },
+      { colId: 'status', headerName: 'Status', flex: 1, minWidth: 140, valueGetter: (p) => STATUS_ORDER.indexOf((p.data?.status ?? 'never') as typeof STATUS_ORDER[number]),
         cellRenderer: (p: { data?: BridgeDto }) => status(p.data) },
-      { colId: 'lastMessage', headerName: 'Last message', flex: 0.9, minWidth: 130, valueGetter: (p) => p.data?.lastMessageAt ?? '',
+      { colId: 'lastMessage', headerName: 'Last message', flex: 0.8, minWidth: 110, valueGetter: (p) => p.data?.lastMessageAt ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => cell(agoText(p.data?.lastMessageAt) || '—') },
-      { colId: 'queue', headerName: 'Queue', width: 110, minWidth: 100, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueTotal ?? 0,
+      { colId: 'queue', headerName: 'Queue', width: 90, minWidth: 84, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueTotal ?? 0,
         cellRenderer: (p: { data?: BridgeDto }) => {
           const held = p.data?.quarantineTotal ?? 0;
           return `<div class="pf-brl-cell"><span class="nd-num">${esc(p.data?.queueTotal ?? 0)}</span>${held ? `<span class="pf-brl-cell__sub nd-num">${esc(held)} held</span>` : ''}</div>`;
         } },
-      { colId: 'version', headerName: 'Version', flex: 0.8, minWidth: 110, valueGetter: (p) => p.data?.version ?? '',
+      { colId: 'version', headerName: 'Version', flex: 0.8, minWidth: 100, valueGetter: (p) => p.data?.version ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => cell(versionText(p.data ?? { version: null })) },
-      { colId: 'wifi', headerName: 'Wi-Fi', flex: 1.1, minWidth: 150, valueGetter: (p) => p.data?.network?.ssid ?? '',
+      { colId: 'wifi', headerName: 'Wi-Fi', flex: 1.1, minWidth: 130, valueGetter: (p) => p.data?.network?.ssid ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => cell(wifiSummary(p.data ?? {})) },
       { colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 96 : 64, minWidth: web ? 96 : 64, flex: 0, cellClass: 'pf-brl-actcell',
         cellRenderer: (p: { data?: BridgeDto }) =>
