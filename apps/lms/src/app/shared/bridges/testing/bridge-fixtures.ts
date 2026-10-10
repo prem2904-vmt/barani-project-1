@@ -168,7 +168,7 @@ export const FX_INSTRUMENTS: InstrumentDto[] = [
 
 export const FX_IDENTITY: LocalIdentity = {
   v: 1, serial: VECTOR_SERIAL, serialShort: 'ABCD-1234', model: 'pi5', version: '0.2.0',
-  publicKey: 'A8z1x9mQ2c0kN4p7Vw3rT6yU5iO1aS2dF3gH4jK5lZ6x', alg: 'ES256', tlsFingerprint: VECTOR_FP,
+  publicKey: 'Am_wO5SSQc4drdQ1GeaWDgqFtBppoFwygQOqK84VlMoW', alg: 'ES256', tlsFingerprint: VECTOR_FP,
   claimState: 'unclaimed', network: { mode: 'hotspot', ssid: 'Prefrontal-Bridge-1234' }, serverUrl: null, serverReachable: false, iface: 'hotspot',
 };
 
@@ -185,7 +185,7 @@ export const FX_LOCAL_NETWORKS: LocalWifiNetworks = {
 
 export const FX_TICKET: BridgeClaimTicket = {
   v: 1, serial: VECTOR_SERIAL, publicKey: FX_IDENTITY.publicKey, alg: 'ES256', nonce: 'n'.repeat(43),
-  issuedAt: T0, claimState: 'unclaimed', signature: 'MEUCIQ-signature-b64url',
+  issuedAt: T0, claimState: 'unclaimed', signature: 'oNVVuDsyFQbTr1YiZJcy9oig8lGtv2g_psqti3GU04j83H9pzqr2uB1WGdCkFkO7jL0OXoOxP0xjwrAL2t63CA',
 };
 
 export const FX_MDNS_EVENT: BridgeMdnsEvent = {
