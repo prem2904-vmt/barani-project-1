@@ -48,7 +48,7 @@
       </pf-hero-band>
       }
 
-      @if (!deepLinkMode() && !embedded) {
+      @if (!deepLinkMode() && !embedded && !theme.isNewDesign()) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
         [noBack]="!!queueFrom() && theme.isNewDesign()"
@@ -100,6 +100,55 @@
         </pf-barcode-scanner-modal>
       }
 
+      @if (theme.isNewDesign() && !embedded) {
+        <section class="nd-card pf-sc-queue-card">
+          <header class="nd-card__head">
+            <span class="nd-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+                <line x1="16" x2="16" y1="2" y2="6"/>
+                <line x1="8" x2="8" y1="2" y2="6"/>
+                <line x1="3" x2="21" y1="10" y2="10"/>
+              </svg>
+            </span>
+            <span class="nd-card__label">
+              Pending collection · {{ filteredGroups().length }} patient{{ filteredGroups().length === 1 ? '' : 's' }}
+            </span>
+          </header>
+
+          <div class="nd-card__body pf-sc-queue-body">
+            @if (!queueLoaded()) {
+              @if (queueSkeleton()) {
+                <pf-skeleton-rows class="pf-sc__skel" [rows]="4" label="Loading the collection queue…"></pf-skeleton-rows>
+              }
+            } @else if (filteredGroups().length === 0) {
+              <div class="nd-empty pf-sc__empty">No samples waiting for collection.</div>
+            } @else {
+              <div class="pf-sc__grid">
+                @for (g of filteredGroups(); track g.orderId) {
+                  <button type="button" class="pf-sc__pcard" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
+                    <div class="pf-sc__pcard-info">
+                      <span class="pf-sc__pcard-name"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
+                      <span class="pf-sc__pcard-ord nd-num">{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}</span>
+                    </div>
+                    <div class="pf-sc__pcard-meta">
+                      @if (g.paymentHold) {
+                        <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
+                      }
+                      @if (waitingLabel(g)) {
+                        <span class="pf-sc__pcard-wait">{{ waitingLabel(g) }}</span>
+                      }
+                      <svg class="pf-sc__pcard-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </div>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      } @else {
       <h3 class="pf-sc__section">
         Pending collection · {{ filteredGroups().length }} patient<span [class.hidden]="filteredGroups().length === 1">s</span>
       </h3>
@@ -164,6 +213,7 @@
             </li>
           }
         </ul>
+      }
       }
       } @else if (!activeGroup() && theme.isNewDesign()) {
         <!-- New design, deep-link + order still loading: the SAME frame the

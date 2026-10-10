@@ -2817,27 +2817,28 @@ export class MyWorkComponent implements OnInit {
     // New design: palette only — no colour dots, the counts carry it.
     const nd = this.theme.isNewDesign();
     const dot = (c: string) => (nd ? undefined : c);
+    const ico = (paths: string[]) => (nd ? paths : undefined);
     const opts: SegmentedOption<Tab>[] = [
       {
         value: 'service_queue',
         label: 'Queue',
         dot: dot('#a78bfa'),
         count: this.countFor('service_queue'),
-        iconPath: ['M4 6h16M4 12h16M4 18h10'],
+        iconPath: ico(['M4 6h16M4 12h16M4 18h10']),
       },
       {
         value: 'my_work',
         label: 'My Work',
         dot: dot('#f59e0b'),
         count: this.countFor('my_work'),
-        iconPath: ['M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M14 3v5h5', 'm9 14 2 2 4-4'],
+        iconPath: ico(['M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M14 3v5h5', 'm9 14 2 2 4-4']),
       },
       {
         value: 'completed',
         label: 'Completed',
         dot: dot('#10b981'),
         count: this.countFor('completed'),
-        iconPath: ['M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'm8.5 12.5 2.5 2.5 4.5-5'],
+        iconPath: ico(['M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'm8.5 12.5 2.5 2.5 4.5-5']),
       },
     ];
     if (this.cultureAsTab()) {
@@ -2846,11 +2847,11 @@ export class MyWorkComponent implements OnInit {
         label: 'Culture',
         dot: dot('#38bdf8'),
         count: this.cultureCount(),
-        iconPath: [
+        iconPath: ico([
           'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0',
           'M8.4 10a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0',
           'M13.5 13.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0-2.2 0',
-        ],
+        ]),
       });
     }
     return opts;

@@ -419,10 +419,10 @@
   display: none;
   align-items: center;
   gap: 4px;
-  background: var(--seg-track);
+  // background: var(--seg-track);
   padding: 2px;
   border-radius: 9999px;
-  border: 1px solid var(--border-secondary);
+  // border: 1px solid var(--border-secondary);
   
   /* Horizontal scroll on overflow in narrow spaces */
   flex-shrink: 1;

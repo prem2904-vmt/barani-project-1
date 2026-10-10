@@ -194,7 +194,7 @@
 @media (pointer: coarse) { .nd-check { width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: -12px; } }
 @media (prefers-reduced-motion: reduce) { .nd-check__box, .nd-check__box > svg { transition: none; } }
 
-/* ── Segmented controls (Figma spec: 32px capsule, white raised pill, violet active text/icon) ── */
+/* ── Segmented controls (32px capsule, white raised pill, violet active text/icon) ── */
 .nd-seg {
   display: inline-flex;
   align-items: center;
@@ -213,7 +213,11 @@
   gap: 6px;
   white-space: nowrap;
   height: 26px;
+  max-height: 26px;
+  min-height: 26px !important;
+  min-width: 0 !important;
   padding: 0 14px;
+  margin: 0;
   border: 0;
   border-radius: 9999px;
   background: transparent;
@@ -221,6 +225,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
@@ -247,7 +252,7 @@
 .nd-seg__item[aria-checked='true'] .pf-rq-seg__count,
 .nd-seg__item[aria-selected='true'] .pf-rq-seg__count {
   color: var(--color-violet-600, #7c3aed);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 .nd-seg__item[aria-checked='true'] svg,
 .nd-seg__item[aria-selected='true'] svg,
@@ -258,11 +263,15 @@
 :root.dark .nd-seg__item[aria-pressed='true'],
 :root.dark .nd-seg__item[role='tab'][aria-selected='true'],
 :root.dark .nd-seg__item.is-selected {
+  background: var(--nd-card-bg, #1e293b) !important;
   color: var(--color-violet-400, #c4b5fd) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
 }
 :root.dark .nd-seg__item[aria-checked='true'] .nd-num,
 :root.dark .nd-seg__item[aria-selected='true'] .nd-num,
-:root.dark .nd-seg__item.is-selected .nd-num,
+:root.dark .nd-seg__item.is-selected .nd-num {
+  color: var(--color-violet-400, #c4b5fd);
+}
 :root.dark .nd-seg__item[aria-checked='true'] svg,
 :root.dark .nd-seg__item[aria-selected='true'] svg,
 :root.dark .nd-seg__item.is-selected svg {

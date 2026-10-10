@@ -298,6 +298,19 @@
   display: inline-flex;
   vertical-align: middle;
 }
+.pf-tabs__count {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-tabs__count {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.pf-tabs-ignore {
+  display: inline-flex;
+  vertical-align: middle;
+}
 
 :host-context(.design-new) {
   .pf-tabs__btn--on {
@@ -341,13 +354,16 @@
    filter in its own horizontal scroller so it never overflows the card.
    The search shrinks first; the date range folds into its icon menu
    when the card is too narrow to hold all three. */
-.pf-work-hdr { gap: 10px; }
+.pf-work-hdr {
+  gap: 10px;
+  width: 100%;
+}
 .pf-work-find {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 240px;
-  max-width: 320px;
+  flex: 0 1 200px;
+  max-width: 260px;
   min-width: 132px;
   margin: 0;
   cursor: text;
@@ -372,6 +388,13 @@
   scrollbar-width: none;
 }
 .pf-work-hdr__filter::-webkit-scrollbar { display: none; }
+.pf-work-hdr__date {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .pf-work-find--phone { display: none; }
 .pf-work-nomatch {
   list-style: none;
@@ -394,7 +417,7 @@
 @container (max-width: 600px) {
   .pf-work-hdr .pf-work-hdr__filter { flex: 0 1 auto; }
 }
-@container (max-width: 1080px) {
+@container (max-width: 760px) {
   .pf-work-hdr .pf-hdr-date-pills { display: none !important; }
   .pf-work-hdr .pf-hdr-filter { display: inline-flex !important; }
 }
