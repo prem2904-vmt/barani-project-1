@@ -101,7 +101,11 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
       gap: 6px;
       white-space: nowrap;
       height: 26px;
-      padding: 0 14px;
+      max-height: 26px;
+      min-height: 26px !important;
+      min-width: 0 !important;
+      padding: 0 12px;
+      margin: 0;
       border: 0;
       border-radius: 9999px;
       background: transparent;
@@ -109,12 +113,13 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
       font: inherit;
       font-size: 12.5px;
       font-weight: 500;
+      line-height: 1;
       cursor: pointer;
       transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
       box-sizing: border-box;
     }
-    .sz-sm .seg-item { height: 26px; padding: 0 14px; font-size: 12.5px; }
-    .sz-md .seg-item { height: 30px; padding: 0 16px; font-size: 13px; }
+    .sz-sm .seg-item { height: 26px; max-height: 26px; min-height: 26px !important; padding: 0 12px; font-size: 12.5px; }
+    .sz-md .seg-item { height: 30px; max-height: 30px; min-height: 30px !important; padding: 0 14px; font-size: 13px; }
 
     .seg-item:hover:not(:disabled):not(.is-selected) {
       color: var(--text-primary, #0f172a);
@@ -139,8 +144,8 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
       flex-shrink: 0;
       color: var(--text-tertiary, #94a3b8);
       transition: color 0.15s ease;
@@ -154,6 +159,7 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
 
     .seg-lbl {
       display: inline-block;
+      line-height: 1;
     }
 
     .seg-count {
@@ -163,10 +169,11 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
       font-variant-numeric: tabular-nums;
       color: var(--text-tertiary, #94a3b8);
       transition: color 0.15s ease;
+      line-height: 1;
     }
     .seg-item.is-selected .seg-count {
       color: var(--color-violet-600, #7c3aed);
-      opacity: 0.85;
+      opacity: 0.9;
     }
     .seg-count--warn,
     .seg-item.is-selected .seg-count--warn {
@@ -190,13 +197,6 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
     .seg-clear:hover {
       opacity: 1;
       background: rgba(124, 58, 237, 0.12);
-    }
-
-    @media (pointer: coarse) {
-      .sz-sm { height: 38px; }
-      .sz-sm .seg-item { height: 32px; padding: 0 16px; }
-      .sz-md { height: 42px; }
-      .sz-md .seg-item { height: 36px; padding: 0 18px; }
     }
 
     @media (max-width: 640px) {

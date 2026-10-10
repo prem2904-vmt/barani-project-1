@@ -682,15 +682,50 @@
                   <!-- STATUS chips: toggle filters. Tap = only that status; tap the
                        same chip again = all statuses. The date range (right) stays
                        applied either way; counts are for the chosen dates. -->
+                  @if (theme.isNewDesign()) {
                   <pf-segmented class="pf-tabs"
                                 [options]="workStatusSegmentOptions()"
                                 [value]="$any(rightTab())"
                                 [allowDeselect]="true"
                                 (valueChange)="setRightTab($any($event))" />
+                  } @else {
+                  <div class="pf-tabs" role="group" aria-label="Filter by status" (click)="$event.stopPropagation()">
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-pressed]="rightTab() === 'ip'"
+                      [attr.title]="rightTab() === 'ip' ? 'Showing In progress only — tap to show all statuses' : 'Show In progress only'"
+                      (click)="setRightTab('ip')">
+                      In progress
+                      <span class="pf-tabs__count" data-tone="active">{{ visibleOrders().length + draftOrders().length }}</span>
+                    </button>
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'done'" [attr.aria-pressed]="rightTab() === 'done'"
+                      [attr.title]="rightTab() === 'done' ? 'Showing Completed only — tap to show all statuses' : 'Show Completed only'"
+                      (click)="setRightTab('done')">
+                      Completed
+                      <span class="pf-tabs__count" data-tone="ok">{{ completedOrders().length }}</span>
+                    </button>
+                    @if (showPaymentsDue()) {
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'billing'"
+                      [attr.aria-pressed]="rightTab() === 'billing'"
+                      [attr.title]="rightTab() === 'billing' ? 'Showing Payments due only — tap to show all statuses' : 'Show Payments due only'" (click)="setRightTab('billing')">
+                      Payments due
+                      <span class="pf-tabs__count" data-tone="warning">{{ paymentsDueOrders().length }}</span>
+                    </button>
+                    }
+                    <button type="button" class="pf-tabs__btn press"
+                      [class.pf-tabs__btn--on]="rightTab() === 'out'" [attr.aria-pressed]="rightTab() === 'out'"
+                      [attr.title]="rightTab() === 'out' ? 'Showing Outsourced only — tap to show all statuses' : 'Show Outsourced only'"
+                      (click)="setRightTab('out')">
+                      Outsourced
+                      <span class="pf-tabs__count">{{ outsourcing.counts().outsourced }}</span>
+                    </button>
+                  </div>
+                  }
                 </div>
 
                 <!-- Date filter — applies to EVERY status (independent of the chips). -->
-                <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
+                <div class="pf-work-hdr__date" (click)="$event.stopPropagation()">
                   <!-- Date filters for Right Pane -->
                   <pf-segmented class="pf-hdr-date-pills"
                                 [options]="workDateSegmentOptions()"

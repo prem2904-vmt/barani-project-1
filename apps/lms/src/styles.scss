@@ -1618,7 +1618,8 @@ html[data-theme="light"] .pf-vial__outline {
      be small and clusters of them stack vertically when stretched. */
   .pf-msgs__react-pill, .pf-msgs__tab-pill, .pf-msgs__edited-tag,
   .pf-msgs__sys-body, .pf-msgs__pinned-tag-icon,
-  .chip, [class*='__chip'] {
+  .chip, [class*='__chip'],
+  .seg-item, .nd-seg__item, pf-segmented button {
     min-width: auto;
     min-height: auto;
   }
@@ -2442,7 +2443,7 @@ html.pf-design-mode {
   background: rgba(139, 92, 246, 0.25) !important;
   color: #ddd6fe !important;
 }
-/* New design: segmented controls follow Figma spec (32px capsule, white raised pill, violet selected text/icon) */
+/* New design: segmented controls follow Figma spec (32px capsule, white raised pill, violet active text/icon) */
 :root.design-new pf-segmented .seg-item.is-selected,
 :root.design-new .nd-seg .nd-seg__item[aria-checked='true'],
 :root.design-new .nd-seg .nd-seg__item[aria-selected='true'],
@@ -2478,13 +2479,13 @@ html.pf-design-mode {
 :root.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
 :root.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
   color: var(--color-violet-600, #7c3aed) !important;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 :root.dark.design-new pf-segmented .seg-item.is-selected .nd-num,
 :root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
 :root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
   color: var(--color-violet-400, #c4b5fd) !important;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 :root.design-new pf-segmented .bar,
 :root.design-new .nd-seg {
@@ -2770,7 +2771,7 @@ html.pf-design-mode {
   button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
   button[class*="--active"]:not(.pf-topnav-active),
   button[class*="is-active"],
-  button[class*="is-selected"],
+  button[class*="is-selected"]:not(.seg-item):not(.nd-seg__item),
   a[class*="--on"],
   a[class*="--active"]:not(.pf-topnav-link--on),
   label[class*="--on"] {
@@ -2786,7 +2787,7 @@ html.pf-design-mode {
   button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
   button[class*="--active"]:not(.pf-topnav-active),
   button[class*="is-active"],
-  button[class*="is-selected"],
+  button[class*="is-selected"]:not(.seg-item):not(.nd-seg__item),
   a[class*="--on"],
   a[class*="--active"]:not(.pf-topnav-link--on),
   label[class*="--on"] {

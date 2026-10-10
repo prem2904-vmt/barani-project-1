@@ -9,10 +9,10 @@ import { filterOrdersByWorkQuery, orderMatchesWorkQuery, patientMatchesWorkQuery
  *  numbers, never monospace. */
 
 const DIR = 'apps/lms/src/app/features/frontdesk/frontdesk-landing';
-const html = readFileSync(`${DIR}/frontdesk-landing.component.html`, 'utf8');
-const scss = readFileSync(`${DIR}/frontdesk-landing.component.scss`, 'utf8');
-const cards = readFileSync(`${DIR}/styles/_cards.scss`, 'utf8');
-const mobile = readFileSync(`${DIR}/styles/_mobile.scss`, 'utf8');
+const html = readFileSync(`${DIR}/frontdesk-landing.component.html`, 'utf8').replace(/\r\n/g, '\n');
+const scss = readFileSync(`${DIR}/frontdesk-landing.component.scss`, 'utf8').replace(/\r\n/g, '\n');
+const cards = readFileSync(`${DIR}/styles/_cards.scss`, 'utf8').replace(/\r\n/g, '\n');
+const mobile = readFileSync(`${DIR}/styles/_mobile.scss`, 'utf8').replace(/\r\n/g, '\n');
 
 const between = (s: string, from: string, to: string) => {
   const a = s.indexOf(from);
