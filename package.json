@@ -186,6 +186,7 @@
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "multicast-dns": "^7.2.5",
     "pdfjs-dist": "^4.10.38",
     "postcss": "^8.5.10",
     "preact": "^10.29.1",

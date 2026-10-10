@@ -99,6 +99,8 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Notifications are alerts, not records: they have a retention period (read 7 days, unread 30 days). Nothing that must be kept lives only in a notification.
 - Never print, log or commit secrets (DB URLs, tokens, keys) except owner-authorised dev keys. Rotate anything exposed.
 
+- Pinning a self-signed certificate in Node: `checkServerIdentity` is NEVER called when the chain itself fails (self-signed), so a pin check there silently never runs; and `https.request({ agent: false, createConnection })` ignores `createConnection` and opens its own CA-verified socket. Do the TLS handshake first (`tls.connect`, `rejectUnauthorized: false`), check the leaf's SPKI pin on `secureConnect`, and only then write the request over THAT socket (`createConnection`, no `agent`) — a pin mismatch must be proven to send nothing (Wi-Fi password) (electron/bridges/local-request.js, Prefrontal Bridge 2026-10-10).
+
 ## 6. UI
 - Follow `docs/ND-PATTERN.md`: the new design, light / dark, phone-first, 44px targets, no truncation.
 - No native browser controls (`select`, `datalist`, `window.confirm`): use pf-select and DialogService. SVG icons only, never emoji.
