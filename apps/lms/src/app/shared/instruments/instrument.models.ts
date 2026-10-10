@@ -91,6 +91,10 @@ export interface InstrumentDto {
   createdAt?: string;
   updatedAt?: string;
   unmatchedCount?: number;
+  /** Prefrontal Bridge this analyzer is connected through (bridge-api v1,
+   *  additive; absent = this computer / a paired desktop). */
+  bridgeId?: string | null;
+  bridgeName?: string | null;
 }
 
 export interface InstrumentUpsert {

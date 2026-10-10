@@ -10,7 +10,7 @@ import { FOREVER_RETRY, HUB_FACTORY } from './hub-factory';
 /** A work list a screen shows. Screens subscribe by area, never by event. */
 export type WorkArea =
   | 'frontdesk' | 'collection' | 'receive' | 'my_work' | 'validation'
-  | 'reports' | 'billing' | 'appointments' | 'consults';
+  | 'reports' | 'billing' | 'appointments' | 'consults' | 'bridges';
 
 /** Server → client, exactly as WorkHub sends it: ids + type, no PHI. */
 export interface WorkEvent {
@@ -45,6 +45,10 @@ const BY_TYPE: Record<string, WorkArea[]> = {
   'result.validated':    ['validation', 'my_work', 'reports', 'frontdesk'],
   'result.rejected':     ['validation', 'my_work', 'frontdesk'],
   'patient.created':     ['frontdesk'],
+  // Prefrontal Bridge (bridge-api v1, C.8): online/offline, claim, revoke,
+  // command completion, and a new unknown analyzer that talked to a Bridge.
+  'bridge.updated':         ['bridges'],
+  'bridge.source_detected': ['bridges'],
 };
 const BY_PREFIX: Record<string, WorkArea[]> = {
   order:       ['frontdesk', 'collection', 'billing'],
@@ -55,6 +59,7 @@ const BY_PREFIX: Record<string, WorkArea[]> = {
   appointment: ['appointments', 'frontdesk', 'collection'],
   consult:     ['consults'],
   patient:     ['frontdesk'],
+  bridge:      ['bridges'],
 };
 
 export function workAreasFor(type: string): WorkArea[] {
@@ -145,6 +150,12 @@ export class WorkEventsService {
   /** Server push → subscribers. Public for the tests and any in-app emitter. */
   push(e: WorkEvent): void {
     if (e && typeof e.type === 'string' && e.type) this.bus.next(e);
+  }
+
+  /** Raw events of ONE type, undebounced — for a one-off reaction such as
+   *  the shell's "new analyzer found" toast. Lists use {@link on}. */
+  ofType(type: string): Observable<WorkEvent> {
+    return this.bus.pipe(filter(e => e.type === type));
   }
 
   /**
