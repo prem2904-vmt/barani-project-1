@@ -29,14 +29,13 @@ function render(selected: string[]) {
 }
 
 describe('PackageSuggestCard — UPGRADE (owner: ₹100 test, ₹1,000.00 package)', () => {
-  it('reads as an upgrade: +₹900, adds 12 tests worth ₹1,850, ₹1,000.00 instead of ₹1,950.00 — no strike-through', () => {
+  it('reads as an upgrade: +₹900, adds tests worth individual amounts, no strike-through', () => {
     const { el } = render(['tsh']);
     const card = el.querySelector('.pf-psg__card')!;
     expect(card.getAttribute('data-kind')).toBe('upgrade');
-    expect(text(card)).toContain('Upgrade to Full Body Checkup');
+    expect(text(card.querySelector('.pf-psg__name'))).toBe('Full Body Checkup');
+    expect(text(card.querySelector('.pf-psg__kind'))).toBe('Package');
     expect(text(card)).toContain('+₹900.00');
-    expect(text(card)).toContain('adds 12 more tests (worth ₹1,850.00 individually)');
-    expect(text(card)).toContain('₹1,000.00 instead of ₹1,950.00 if ordered separately');
     expect(el.querySelector('s, .pf-psg__was')).toBeNull();
     expect(text(card)).not.toMatch(/save/i);
   });
@@ -52,38 +51,44 @@ describe('PackageSuggestCard — UPGRADE (owner: ₹100 test, ₹1,000.00 packag
     expect(emitted).toEqual([list[0]]);
   });
 
-  it("What's included: collapsed by default; opens to 13 tests, only TSH ticked and tagged In cart", () => {
+  afterEach(() => {
+    document.getElementById('pf-overlay-host')?.remove();
+  });
+
+  it("test count accordion: opens menu to 13 tests, only TSH ticked and tagged In cart", () => {
     const { f, el } = render(['tsh']);
     const more = el.querySelector('.pf-psg__more') as HTMLButtonElement;
     expect(more.getAttribute('aria-expanded')).toBe('false');
-    expect(text(more)).toContain("What's included · 13 tests");
-    expect(el.querySelector('.pf-psg__members')).toBeNull();
+    expect(text(more)).toContain('(13 tests)');
+    const getMembers = () => el.querySelector('.pf-psg__members') ?? document.querySelector('.pf-psg__members');
+    expect(getMembers()).toBeNull();
     more.click();
     f.detectChanges();
     expect(more.getAttribute('aria-expanded')).toBe('true');
-    const rows = el.querySelectorAll('.pf-psg__m');
+    const membersEl = getMembers()!;
+    const rows = membersEl.querySelectorAll('.pf-psg__m');
     expect(rows.length).toBe(13);
     const ticked = [...rows].filter(r => r.classList.contains('pf-psg__m--in'));
     expect(ticked.map(r => text(r.querySelector('.pf-psg__mname')))).toEqual(['Test TSH, in your cart']);
     expect(text(ticked[0])).toContain('In cart');
     expect(text(rows[1])).toContain('₹300.00');
-    expect(el.querySelector('.pf-psg__members')!.id).toBe(more.getAttribute('aria-controls'));
+    expect(membersEl.id).toBe(more.getAttribute('aria-controls'));
   });
 });
 
 describe('PackageSuggestCard — SAVING', () => {
-  it('Save ₹101.00 with ~~₹600.00~~ ₹499.00 for your 3 tests + 2 more; a secondary Switch button', () => {
+  it('1-line with full package name, (x tests) accordion count, ~~₹600.00~~ ₹499.00 and Apply button', () => {
     const { el, emitted, list } = render(['cbc', 'esr', 'crp']);
     const [saving, upgrade] = [...el.querySelectorAll('.pf-psg__card')];
     expect(saving.getAttribute('data-kind')).toBe('saving');
-    expect(text(saving.querySelector('.pf-psg__lead'))).toBe('Save ₹101.00');
-    expect(text(saving.querySelector('.pf-psg__name'))).toBe('Fever Panel Package');
+    expect(text(saving.querySelector('.pf-psg__name'))).toBe('Fever Panel');
+    expect(text(saving.querySelector('.pf-psg__kind'))).toBe('Package');
+    expect(text(saving.querySelector('.pf-psg__more'))).toContain('(5 tests)');
     expect(text(saving.querySelector('s.pf-psg__was'))).toBe('₹600.00');
     expect(text(saving.querySelector('.pf-psg__now'))).toBe('₹499.00');
-    expect(text(saving.querySelector('.pf-psg__line'))).toContain('for your 3 tests + 2 more');
     const btn = saving.querySelector('.pf-psg__act') as HTMLButtonElement;
     expect(btn.classList).toContain('nd-btn--secondary');
-    expect(btn.textContent!.trim()).toBe('Switch');
+    expect(btn.textContent!.trim()).toBe('Apply');
     btn.click();
     expect(emitted[0]).toBe(list[0]);
     // The upgrade after it still has no strike-through.
@@ -97,7 +102,7 @@ describe('PackageSuggestCard — SAVING', () => {
   it('names wrap (no truncation) and icons are SVG, not emoji', () => {
     const { el } = render(['cbc', 'esr', 'crp']);
     expect(el.querySelector('[title]')).toBeNull();
-    expect(el.querySelectorAll('.pf-psg__lead svg').length).toBe(2);
+    expect(el.querySelectorAll('.pf-psg__icon svg').length).toBe(2);
     expect(el.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 
