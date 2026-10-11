@@ -75,12 +75,17 @@ describe('SelectComponent enterAdvances', () => {
     expect(c.isOpen()).toBe(true);
   });
 
-  it('enterAdvances does not change ArrowDown/ArrowUp/Space-opens-when-closed behaviour', () => {
-    const c = make({ enterAdvances: true, value: 'Clear' });
-    const ev = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
-    Object.defineProperty(ev, 'target', { value: document.createElement('button') });
-    c.onKey(ev);
-    expect(ev.defaultPrevented).toBe(true);
-    expect(c.isOpen()).toBe(true);
+  it('enterAdvances does not change Alt+ArrowDown / Space-opens-when-closed behaviour', () => {
+    // Plain ArrowDown/ArrowUp on a CLOSED select now step the value
+    // (type-to-select, 2026-10-11 — select-type-ahead.spec.ts); Alt+ArrowDown
+    // and Space are the "open the list" keys.
+    for (const init of [{ key: 'ArrowDown', altKey: true }, { key: ' ' }]) {
+      const c = make({ enterAdvances: true, value: 'Clear' });
+      const ev = new KeyboardEvent('keydown', { ...init, cancelable: true });
+      Object.defineProperty(ev, 'target', { value: document.createElement('button') });
+      c.onKey(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(c.isOpen()).toBe(true);
+    }
   });
 });

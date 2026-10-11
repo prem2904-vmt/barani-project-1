@@ -145,4 +145,39 @@ describe('Result entry grid — full Enter-advance chain (real DOM events)', () 
 
     expect(c.valueOf('hb')).toBe('14.5');
   });
+
+  it('type-to-select: typing on the closed dropdown + Enter sets the value once (same setValue path) and advances', async () => {
+    const { f, el, c } = await render();
+    const setValue = vi.spyOn(c, 'setValue');
+    const trigger = el.querySelector<HTMLElement>('[data-param="appearance"] .pf-dd__trigger')!;
+    trigger.focus();
+    const key = (k: string) => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    key('t'); key('u');
+    f.detectChanges();
+    expect(trigger.textContent?.trim()).toBe('Turbid');
+    expect(document.querySelector('.pf-dd__panel')).toBeNull();
+    expect(setValue).not.toHaveBeenCalled();
+    key('Enter');
+    expect(setValue).toHaveBeenCalledTimes(1);
+    expect(setValue).toHaveBeenCalledWith('appearance', 'Turbid');
+    expect(c.valueOf('appearance')).toBe('Turbid');
+    expect(onParam('nitrites')).toBe(true);
+
+    // Yes/No: ArrowDown steps without opening, Escape reverts, "y" + Enter commits.
+    const yn = document.activeElement as HTMLElement;
+    const key2 = (k: string) => yn.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    key2('ArrowDown');
+    f.detectChanges();
+    expect(yn.textContent?.trim()).toBe('Yes');
+    expect(document.querySelector('.pf-dd__panel')).toBeNull();
+    key2('Escape');
+    f.detectChanges();
+    expect(yn.textContent?.trim()).toBe('— Choose —');
+    expect(c.valueOf('nitrites') ?? '').toBe('');
+    key2('n');
+    key2('Enter');
+    expect(c.valueOf('nitrites')).toBe('no');
+    expect(setValue).toHaveBeenCalledTimes(2);
+    expect(onParam('collected_on')).toBe(true);
+  });
 });

@@ -606,9 +606,13 @@ export class SampleResultEntryComponent {
     this.setValue(testId, paramName, (values ?? []).map((x) => String(x ?? "")).filter((x) => x.trim() !== ""));
   }
 
-  onSelectChange(testId: string, paramName: string, value: any) {
+  /** A pick from the open list advances to the next field. A type-to-select
+   *  commit doesn't: Enter already bubbles to `onEnterKey` (one advance), and
+   *  Tab / a click elsewhere is the user moving focus themselves. */
+  onSelectChange(testId: string, paramName: string, value: any,
+                 source: 'pick' | 'enter' | 'blur' | 'revert' = 'pick') {
     this.setValue(testId, paramName, String(value ?? ''));
-    this.advanceFromSelect(testId, paramName);
+    if (source === 'pick') this.advanceFromSelect(testId, paramName);
   }
 
   advanceFromSelect(testId: string, paramName: string) {
