@@ -96,14 +96,14 @@
   .pf-bka-cal__grid { flex: 1 1 auto; min-height: max-content; display: flex; flex-direction: column; gap: 4px; overflow: visible; }
   .pf-bka-cal__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
   .pf-bka-cal__dow { padding: 2px 0 4px; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
-  .pf-bka-cal__weeks { flex: 1 1 auto; min-height: max-content; display: grid; grid-template-rows: repeat(6, minmax(40px, 1fr)); gap: 4px; }
+  .pf-bka-cal__weeks { flex: 1 1 auto; min-height: max-content; display: grid; grid-template-rows: repeat(6, minmax(32px, 1fr)); gap: 2px; }
   .pf-bka-cal__weeks--next { animation: pf-bka-cal-next var(--pf-dur, 220ms) var(--pf-spring, ease) both; }
   .pf-bka-cal__weeks--prev { animation: pf-bka-cal-prev var(--pf-dur, 220ms) var(--pf-spring, ease) both; }
   @keyframes pf-bka-cal-next { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
   @keyframes pf-bka-cal-prev { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
   .pf-bka-cal__day {
     position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    min-width: 0; min-height: 40px; height: 100%; padding: 0;
+    min-width: 0; min-height: 32px; height: 100%; padding: 0;
     border-radius: 10px; border: 1px solid transparent; background: transparent;
     font: inherit; color: var(--text-primary); cursor: pointer;
     transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
@@ -112,7 +112,7 @@
     display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 4px;
     border-radius: 999px; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums;
   }
-  .pf-bka-cal__day:hover:not([aria-disabled='true']) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: var(--pf-chip-bg); }
+  .pf-bka-cal__day:hover:not([aria-disabled='true']) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, #ffffff)); }
   .pf-bka-cal__day:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
   .pf-bka-cal__day--out { color: var(--text-muted, var(--text-tertiary)); }
   .pf-bka-cal__day--out .pf-bka-cal__n { font-weight: 400; }

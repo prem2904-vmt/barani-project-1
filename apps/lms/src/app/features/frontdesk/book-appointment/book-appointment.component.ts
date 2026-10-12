@@ -195,7 +195,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               <div class="pf-card__body">
                 <label class="pf-field">
                   <span class="pf-field__lbl">Appointment date</span>
-                  <pf-date data-nav label="Appointment date" [value]="selectedDate()" [min]="todayIso"
+                  <pf-date data-nav label="Appointment date" [hasPopup]="false" [value]="selectedDate()" [min]="todayIso"
                               (valueChange)="$event && selectDate($event)"></pf-date>
                 </label>
                 <!-- The whole month (fills the card): ‹ Month Year ›, weekday

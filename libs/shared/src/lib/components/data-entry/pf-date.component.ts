@@ -95,6 +95,7 @@ export class PfDateComponent {
   readonly label = input<string>('Date');
   readonly inputId = input<string | null>(null);
   readonly valueChange = output<string | null>();
+  readonly hasPopup = input<boolean>(true);
 
   private readonly typing = signal<string | null>(null);
   readonly error = signal<string | null>(null);
@@ -105,7 +106,7 @@ export class PfDateComponent {
   readonly popoverStyle = signal<{ top?: string; bottom?: string; left: string }>({ left: '0px' });
 
   updateCoords(): void {
-    const root = this.elRef.nativeElement.querySelector('.pf-date') as HTMLElement;
+    const root = (this.elRef.nativeElement.querySelector('span') || this.elRef.nativeElement) as HTMLElement;
     if (!root) return;
     const rect = root.getBoundingClientRect();
     const popHeight = 320;
@@ -165,6 +166,11 @@ export class PfDateComponent {
 
   togglePicker(event: MouseEvent): void {
     event.stopPropagation();
+    if (!this.hasPopup()) {
+      const inputEl = this.elRef.nativeElement.querySelector('input') as HTMLInputElement;
+      inputEl?.focus();
+      return;
+    }
     const nextState = !this.isOpen();
     this.isOpen.set(nextState);
     if (nextState) {
