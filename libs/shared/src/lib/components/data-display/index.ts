@@ -8,3 +8,6 @@ export * from '../../primitives/chip.component.js';
 export * from '../../primitives/clock.component.js';
 export * from '../../primitives/tile.component.js';
 export * from './barcode-display.component.js';
+export * from './tat-indicator.component.js';
+export * from './daily-no.component.js';
+export * from './origin-badge.component.js';

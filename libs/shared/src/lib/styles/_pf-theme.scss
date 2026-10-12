@@ -125,12 +125,32 @@
   --rose-text: #fda4af;
   /* Segmented/pill TRACK background (the container behind tab pills). */
   --seg-track: rgba(0, 0, 0, 0.18);
+  --pf-dark-shade: rgba(168, 42, 184, 0.30);
+  --pf-dark-shade-mid: rgba(104, 34, 124, 0.16);
+  --pf-dark-shade-base: rgba(10, 10, 21, 0.55);
+  --pf-dark-surface: #120e1c;
+  --pf-band-bg: var(--pf-dark-surface);
+  --pf-band-sweep: linear-gradient(180deg, var(--pf-dark-shade-base) 0%, var(--pf-dark-shade-mid) 55%, var(--pf-dark-shade) 100%);
+  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-edge: rgba(232, 121, 249, 0.18);
+  --pf-band-bg-glass: rgba(18, 14, 28, 0.84);
+  --pf-band-glow: 0 24px 40px -20px rgba(192, 38, 211, 0.26);
+
 }
 
 /* =============================================================
    LIGHT THEME
    ============================================================= */
-:root.light {
+:root.light, :root[data-theme="light"] {
+  --pf-band-bg: #ffffff;
+  --pf-band-sweep: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%, rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-edge: rgba(124, 58, 237, 0.10);
+  --pf-band-bg-glass: rgba(255, 255, 255, 0.72);
+  --pf-band-glow: none;
+
   /* Designer light world (Figma "Prefrontal LMS UI", 446-113):
      whisper-lavender page, PURE WHITE cards, neutral gray text ramp
      (#111928 → #9CA3AF) and #E5E7EB hairlines. The violet identity comes
