@@ -49,7 +49,8 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
          Band = back · tenant · actions (ONE primary); the pill = the
          patient's name only; every section is a card on the same screen
          (3 / 2 / 1 columns). Ctrl/⌘+Enter saves from anywhere. -->
-    <section class="pf-band-page pf-reg">
+    <section class="pf-page pf-reg">
+      <header class="pf-page__header px-4 md:px-8 lg:px-10">
       <pf-hero-band class="pf-reg-band" [back]="true" [backTo]="parentRoute()" [backAction]="backFn"
                     [customSearch]="true" [contextBar]="true" [standardPill]="true">
         <ng-container band-actions>
@@ -139,8 +140,9 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
           </span>
         </div>
       </pf-hero-band>
+      </header>
 
-      <div class="pf-band-body pf-reg-body">
+      <div class="pf-page__body pf-reg-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
         @if (displayConfig(); as cfg) {
           <pf-workflow-renderer class="pf-reg-form"
             [config]="cfg"

@@ -71,7 +71,8 @@ const STATUS_CLASS: Record<string, string> = {
          the main card, DAY (the chosen day's list → an appointment's
          detail) the collapsible RIGHT companion. ≤900px: one card at a
          time, the detail is a sheet; phones open on the day list. -->
-    <section class="pf-band-page pf-apc">
+    <section class="pf-page pf-apc">
+      <header class="pf-page__header px-4 md:px-8 lg:px-10">
       <pf-hero-band class="pf-apc-band" [back]="true" backTo="/frontdesk" [customSearch]="true">
         <ng-container band-actions>
           @if (!phone()) {
@@ -129,8 +130,9 @@ const STATUS_CLASS: Record<string, string> = {
           </div>
         </div>
       </pf-hero-band>
+      </header>
 
-      <div class="pf-band-body pf-band-body--fill pf-apc-body">
+      <div class="pf-page__body pf-apc-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
         <div class="pf-apc-panels" [class.pf-apc-panels--collapsed]="sideCollapsed() && !narrow()"
              [class.pf-apc-panels--narrow]="narrow()">
 

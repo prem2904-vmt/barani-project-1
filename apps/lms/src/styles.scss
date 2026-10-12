@@ -103,7 +103,8 @@
    shell's height, the band stays put and only the body scrolls — no
    page-level scroll. The gutter IS the band bleed, so the band always
    reaches edge to edge whatever padding utilities the page carried. */
-:root.design-new .shell-main > :has(> .pf-band-page) {
+:root.design-new .shell-main > :has(> .pf-band-page),
+:root.design-new .shell-main > :has(> .pf-page) {
   display: block;
   height: 100%;
   min-height: 0;

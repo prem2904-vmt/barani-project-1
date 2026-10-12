@@ -100,7 +100,8 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
          the pill = the context bar (date · slot · patient). Cards in reading
          order: PATIENT · DATE → TIME SLOT → DETAILS. Enter = next field;
          Ctrl/⌘+Enter books from anywhere. -->
-    <section class="pf-band-page pf-bka" (keydown)="onFormKey($event)">
+    <section class="pf-page pf-bka" (keydown)="onFormKey($event)">
+      <header class="pf-page__header px-4 md:px-8 lg:px-10">
       <pf-hero-band class="pf-bka-band" [back]="true" backTo="/frontdesk/appointments"
                     [customSearch]="true" [contextBar]="true" [standardPill]="true">
         <ng-container band-actions>
@@ -137,8 +138,9 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
           }
         </div>
       </pf-hero-band>
+      </header>
 
-      <div class="pf-band-body pf-bka-body">
+      <div class="pf-page__body pf-bka-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
         @if (errorMsg()) {
           <p class="pf-bka-alert" role="alert">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"

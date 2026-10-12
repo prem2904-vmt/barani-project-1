@@ -1,7 +1,23 @@
 
   /* The page fills the shell (the frontdesk outlet nests it): only the
      body — and at ≥1200px only the card bodies — scroll. */
-  :host:has(> .pf-bka) { height: 100%; }
+  :host { display: block; height: 100%; }
+  .pf-bka.pf-page {
+    --pf-hb-bleed: 1rem;
+  }
+  @media (min-width: 768px) {
+    .pf-bka.pf-page { --pf-hb-bleed: 2rem; }
+  }
+  @media (min-width: 1024px) {
+    .pf-bka.pf-page { --pf-hb-bleed: 2.5rem; }
+  }
+  @media (max-width: 640px) {
+    .pf-bka.pf-page {
+      --pf-hb-bleed: max(1rem, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+  }
   /* ── Pill = the context bar: date · slot · patient ── */
   .pf-bka-ctx.pf-ctx { gap: 8px; }
   .pf-bka-ctx__none { font-size: 13px; font-weight: 400; color: var(--text-tertiary); }
