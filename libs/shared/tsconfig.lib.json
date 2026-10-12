@@ -9,6 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
+    "lib": ["es2022", "dom"],
     "types": []
   },
   "include": ["src/**/*.ts"],

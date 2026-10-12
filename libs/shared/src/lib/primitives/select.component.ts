@@ -1,10 +1,10 @@
 import {
   ApplicationRef, ChangeDetectionStrategy, Component, ElementRef,
   EmbeddedViewRef, EventEmitter, HostListener, Input,
-  OnDestroy, Output, TemplateRef, ViewChild, ViewContainerRef,
+  OnDestroy, Output, TemplateRef, ViewChild,
   ViewEncapsulation, inject, signal
 } from '@angular/core';
-import { TYPE_AHEAD_RESET_MS, TypeAheadBuffer, highlightParts, matchLabel, typeAheadIndex } from '../utils/type-ahead';
+import { TYPE_AHEAD_RESET_MS, TypeAheadBuffer, highlightParts, matchLabel, typeAheadIndex } from '../utils/index.js';
 
 export interface PfSelectOption<T = string> {
   value: T;
@@ -363,7 +363,6 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
 })
 export class SelectComponent<T = unknown> implements OnDestroy {
   private readonly el = inject(ElementRef<HTMLElement>);
-  private readonly vcr = inject(ViewContainerRef);
   private readonly appRef = inject(ApplicationRef);
 
   @ViewChild('panelTpl') private readonly panelTpl!: TemplateRef<void>;
