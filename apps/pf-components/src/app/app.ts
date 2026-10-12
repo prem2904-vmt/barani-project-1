@@ -17,6 +17,11 @@ import {
   ChipComponent,
   ClockComponent,
   ConfirmDialogComponent,
+  DailyNoComponent,
+  HeroBandComponent,
+  OriginBadgeComponent,
+  ScreenHeaderComponent,
+  TatIndicatorComponent,
   CurrencyInrPipe,
   ImageEditorComponent,
   LoadingLogoComponent,
@@ -78,6 +83,11 @@ import {
     ChipComponent,
     ClockComponent,
     ConfirmDialogComponent,
+    DailyNoComponent,
+    HeroBandComponent,
+    OriginBadgeComponent,
+    ScreenHeaderComponent,
+    TatIndicatorComponent,
     CurrencyInrPipe,
     ImageEditorComponent,
     LoadingLogoComponent,
@@ -182,6 +192,13 @@ export class App implements OnInit {
   protected readonly barcodeMode = signal<'barcode' | 'qr' | 'both'>('both');
   protected readonly barcodeCode = signal('PF-2026-9901');
 
+
+  // ── New Clinical Components State ───────────────────────────────────────
+  protected readonly heroTenantName = signal('Micro World');
+  protected readonly heroSearchVal = signal('');
+  protected readonly tatMinutes = signal(15);
+  protected readonly dailyNoVal = signal(12);
+  protected readonly originKind = signal<string>('master');
   protected readonly statusChipTone = signal<'neutral' | 'violet' | 'urgent' | 'required'>('urgent');
 
   // Input states

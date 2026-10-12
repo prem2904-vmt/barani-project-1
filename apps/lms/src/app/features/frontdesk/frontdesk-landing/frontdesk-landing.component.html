@@ -426,7 +426,7 @@
                   }
 
                   <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
-                  @if (showAppt()) {
+                  @if (showAppt() || showHome()) {
                   <div class="pf-hdr-filter">
                     <button type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"

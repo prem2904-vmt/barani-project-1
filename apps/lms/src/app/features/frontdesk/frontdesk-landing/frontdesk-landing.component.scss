@@ -304,10 +304,12 @@
 }
 
 /* ══ Card-header filters use shared canonical pf-segmented (32px capsule, violet selected text/count) ══ */
-.pf-tabs,
-.pf-hdr-date-pills {
+.pf-tabs {
   display: inline-flex;
   vertical-align: middle;
+}
+.pf-hdr-date-pills {
+  display: none !important;
 }
 .pf-tabs__count {
   font-family: inherit;

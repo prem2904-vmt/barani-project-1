@@ -42,6 +42,199 @@ export interface CategoryGroup {
 }
 
 export const CATALOG_COMPONENTS: ComponentDoc[] = [
+  // ── Layout (Hero Band & Clinical Headers) ───────────────────────────────────
+  {
+    id: 'hero-band',
+    name: 'Hero Band',
+    selector: 'pf-hero-band',
+    category: 'Layout',
+    summary: 'The signature Prefrontal screen header (Figma 446-113). Combines brand gradient, tenant logo, context search pill, and primary actions CTA.',
+    importStatement: "import { HeroBandComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-hero-band [tenantName]="'Micro World'">
+  <ng-container band-actions>
+    <pf-button variant="primary">+ New Patient</pf-button>
+  </ng-container>
+  <ng-container band-tools>
+    <button type="button" class="pf-hb-tool" title="Scan QR"><pf-scan-icon [size]="18" /></button>
+  </ng-container>
+</pf-hero-band>`,
+    inputs: [
+      { name: 'tenantName', type: 'string', required: false, default: "'Micro World'", description: 'Name of the clinic or lab tenant.' },
+      { name: 'tenantLogo', type: 'string | null', required: false, default: 'null', description: 'URL of uploaded transparent PNG branding logo.' },
+      { name: 'back', type: 'boolean', required: false, default: 'false', description: 'Renders the back chevron affordance on the left.' },
+      { name: 'placeholder', type: 'string', required: false, default: "'Search patient · name, phone, MRN...'", description: 'Placeholder for built-in search input.' },
+      { name: 'tabsOnly', type: 'boolean', required: false, default: 'false', description: 'Replaces search field with tab switcher across the full pill.' },
+      { name: 'contextBar', type: 'boolean', required: false, default: 'false', description: 'Expands pill into multi-chip context bar.' },
+    ],
+    outputs: [
+      { name: 'valueChange', type: 'EventEmitter<string>', description: 'Emitted on search input keystrokes.' },
+      { name: 'submitted', type: 'EventEmitter<string>', description: 'Emitted on Enter keypress in search.' },
+      { name: 'backAction', type: 'EventEmitter<void>', description: 'Emitted when the back button is clicked.' }
+    ],
+    clinicalScenario: 'Topmost context header across all main clinical screens: Frontdesk Reception, Sample Collection, Lab Workspace, and Results Validation.',
+    guidance: [
+      'The hero band is the ONLY place where the primary gradient is used for the single main CTA button.',
+      'The search pill overlaps the bottom edge of the band by -33px for depth.',
+      'Never hide the bottom navigation bar when using the hero band.'
+    ],
+    recipes: [
+      {
+        title: 'Frontdesk Landing with Patient Search & Actions',
+        scenario: 'Canonical frontdesk reception screen with tenant branding and scan tool.',
+        templateSnippet: `<pf-hero-band [tenantName]="'Micro World'" [placeholder]="'Search patient · name, phone, MRN...'">
+  <ng-container band-actions>
+    <pf-button variant="primary">+ New Patient</pf-button>
+  </ng-container>
+  <ng-container band-tools>
+    <button type="button" class="pf-hb-tool" title="Scan QR"><pf-scan-icon [size]="18" /></button>
+  </ng-container>
+</pf-hero-band>`
+      }
+    ]
+  },
+
+  // ── Navigation (Screen Header & Alerts) ────────────────────────────────────
+  {
+    id: 'screen-header',
+    name: 'Screen Header',
+    selector: 'pf-screen-header',
+    category: 'Navigation',
+    summary: 'Standard screen navigation header with back affordance, screen title, subtitle, and action buttons.',
+    importStatement: "import { ScreenHeaderComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-screen-header [title]="'Test Catalog'" [subtitle]="'Manage laboratory test master and pricing'" [showBack]="true">
+  <div header-actions>
+    <pf-button variant="secondary">Export CSV</pf-button>
+    <pf-button variant="primary">Add Test</pf-button>
+  </div>
+</pf-screen-header>`,
+    inputs: [
+      { name: 'title', type: 'string', required: true, default: "''", description: 'Main screen title.' },
+      { name: 'subtitle', type: 'string', required: false, default: "''", description: 'Subordinate description or breadcrumb.' },
+      { name: 'showBack', type: 'boolean', required: false, default: 'false', description: 'Shows leading back button chevron.' },
+      { name: 'noBack', type: 'boolean', required: false, default: 'false', description: 'Forces back button to remain hidden.' }
+    ],
+    outputs: [
+      { name: 'back', type: 'EventEmitter<void>', description: 'Emitted when user taps back chevron.' }
+    ]
+  },
+  {
+    id: 'notification-bell',
+    name: 'Notification Bell',
+    selector: 'pf-notification-bell',
+    category: 'Navigation',
+    summary: 'Top navigation alert bell with live badge counter and dropdown notification inbox drawer.',
+    importStatement: "import { NotificationBellComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-notification-bell [unreadCount]="4" />`,
+    inputs: [
+      { name: 'unreadCount', type: 'number', required: false, default: '0', description: 'Number of unread notifications.' }
+    ]
+  },
+
+  // ── Data Entry (Patient Search) ───────────────────────────────────────────
+  {
+    id: 'patient-search',
+    name: 'Patient Search',
+    selector: 'pf-patient-search',
+    category: 'Data Entry',
+    summary: 'Universal patient lookup input with keyboard shortcut (⌘K), suggestions popover, and advanced filter dialog trigger.',
+    importStatement: "import { PatientSearchComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" />`,
+    inputs: [
+      { name: 'placeholder', type: 'string', required: false, default: "'Search patient...'", description: 'Input placeholder.' }
+    ]
+  },
+
+  // ── Data Display (Clinical Indicators & Chips) ────────────────────────────
+  {
+    id: 'tat-indicator',
+    name: 'TAT Indicator',
+    selector: 'pf-tat-indicator',
+    category: 'Data Display',
+    summary: 'Turn Around Time clock chip. Displays remaining specimen processing time with overdue and urgency warning states.',
+    importStatement: "import { TatIndicatorComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-tat-indicator [remainingMinutes]="15" />
+<pf-tat-indicator [remainingMinutes]="-10" />
+<pf-tat-indicator [remainingMinutes]="120" />`,
+    inputs: [
+      { name: 'remainingMinutes', type: 'number | null', required: false, default: 'null', description: 'Minutes remaining until specimen TAT deadline.' },
+      { name: 'state', type: "'normal' | 'dueSoon' | 'overdue' | null", required: false, default: 'null', description: 'Visual state override.' },
+      { name: 'label', type: 'string | null', required: false, default: 'null', description: 'Text label override.' }
+    ],
+    clinicalScenario: 'Specimen processing queues in Hematology, Biochemistry, and emergency STAT tracking.',
+    guidance: [
+      'Green/slate indicates test is on schedule.',
+      'Amber dot indicates test is due within 30 minutes.',
+      'Rose/red dot indicates test has breached clinical TAT SLA.'
+    ]
+  },
+  {
+    id: 'daily-no',
+    name: 'Daily Number',
+    selector: 'pf-daily-no',
+    category: 'Data Display',
+    summary: 'Accession daily sequence badge (#12). Prefixes patient names on specimen intake queues and analyzer logs.',
+    importStatement: "import { DailyNoComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-daily-no [no]="12" />`,
+    inputs: [
+      { name: 'no', type: 'number | string | null', required: true, default: 'null', description: 'Daily accession counter sequence.' }
+    ]
+  },
+  {
+    id: 'origin-badge',
+    name: 'Origin Badge',
+    selector: 'pf-origin-badge',
+    category: 'Data Display',
+    summary: 'Test master single-source pill: Master, Customised, Branch, or Own test.',
+    importStatement: "import { OriginBadgeComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-origin-badge origin="master" />
+<pf-origin-badge origin="clone" />
+<pf-origin-badge origin="own" />`,
+    inputs: [
+      { name: 'origin', type: 'string | null', required: false, default: "'master'", description: 'Test catalog origin: master, clone, own, or branch.' },
+      { name: 'catalogMode', type: 'string | null', required: false, default: 'null', description: "Optional override (e.g. 'clone')." }
+    ]
+  },
+  {
+    id: 'presence-avatar',
+    name: 'Presence Avatar',
+    selector: 'pf-presence-avatar',
+    category: 'Data Display',
+    summary: 'Clinical user avatar with real-time presence dot (online, away, in consultation, offline).',
+    importStatement: "import { PresenceAvatarComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-presence-avatar [name]="'Dr. Ananya Rao'" [status]="'online'" [size]="36" />`,
+    inputs: [
+      { name: 'name', type: 'string', required: true, default: "''", description: 'Full user or physician display name.' },
+      { name: 'status', type: "'online' | 'busy' | 'away' | 'offline'", required: false, default: "'online'", description: 'Current live presence state.' },
+      { name: 'size', type: 'number', required: false, default: '32', description: 'Pixel diameter of the circular avatar.' }
+    ]
+  },
+  {
+    id: 'kpi-strip',
+    name: 'KPI Strip',
+    selector: 'pf-kpi-strip',
+    category: 'Data Display',
+    summary: 'High-density operational metric cards strip for clinical queues (STAT counts, ready for dispatch, pending phlebotomy).',
+    importStatement: "import { KpiStripComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-kpi-strip screen="frontdesk_landing" />`,
+    inputs: [
+      { name: 'screen', type: 'string', required: true, default: "'frontdesk_landing'", description: 'Context screen identifier determining which KPI metrics display.' }
+    ]
+  },
+
+  // ── Feedback (Critical Alerts) ────────────────────────────────────────────
+  {
+    id: 'critical-ack-strip',
+    name: 'Critical Panic Ack Strip',
+    selector: 'pf-critical-ack-strip',
+    category: 'Feedback',
+    summary: 'Emergency panic value doctor notification and laboratory acknowledgement banner for life-threatening lab results.',
+    importStatement: "import { CriticalAckStripComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-critical-ack-strip [criticalCount]="2" />`,
+    inputs: [
+      { name: 'criticalCount', type: 'number', required: false, default: '1', description: 'Number of unacknowledged panic values.' }
+    ]
+  },
+
   // ── General ──────────────────────────────────────────────────────────────
   {
     id: 'button',
