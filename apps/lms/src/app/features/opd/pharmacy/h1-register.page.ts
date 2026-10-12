@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
@@ -25,7 +25,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 @Component({
   selector: 'pf-pharmacy-h1-register',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, NdDateComponent, SkeletonTableComponent, BusyDirective, PharmacySectionsComponent],
+  imports: [AgGridAngular, HeroBandComponent, PfDateComponent, SkeletonTableComponent, BusyDirective, PharmacySectionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
@@ -44,24 +44,24 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         </ng-container>
       </pf-hero-band>
       <div class="ph-body ph-body--one">
-        <section class="nd-card" aria-labelledby="ph-h1-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M8 7h8M8 11h6"/></svg></span>
-            <span class="nd-card__label" id="ph-h1-t">{{ reg() === 'X' ? 'Schedule X register' : reg() === 'H1' ? 'H1 register' : 'H1 & X register' }}</span>
-            <div class="nd-seg" role="radiogroup" aria-label="Which register">
+        <section class="pf-card" aria-labelledby="ph-h1-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M8 7h8M8 11h6"/></svg></span>
+            <span class="pf-card__label" id="ph-h1-t">{{ reg() === 'X' ? 'Schedule X register' : reg() === 'H1' ? 'H1 register' : 'H1 & X register' }}</span>
+            <div class="pf-seg" role="radiogroup" aria-label="Which register">
               @for (o of regs; track o.v) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="reg() === o.v" [attr.aria-pressed]="reg() === o.v" (click)="setReg(o.v)">{{ o.l }}</button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="reg() === o.v" [attr.aria-pressed]="reg() === o.v" (click)="setReg(o.v)">{{ o.l }}</button>
               }
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <pf-nd-date label="From" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-nd-date>
+              <pf-date label="From" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-date>
               <span class="ph-sub">to</span>
-              <pf-nd-date label="To" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-nd-date>
+              <pf-date label="To" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-date>
             </div>
-            <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">{{ rows().length }} {{ rows().length === 1 ? 'entry' : 'entries' }}</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ph-sub pf-num">{{ rows().length }} {{ rows().length === 1 ? 'entry' : 'entries' }}</span>
           </header>
-          <div class="nd-card__body ph-card-body--flush" style="position:relative">
+          <div class="pf-card__body ph-card-body--flush" style="position:relative">
             @if (showSkeleton()) { <pf-skeleton-table [rows]="8" [cols]="7"></pf-skeleton-table> }
             <ag-grid-angular class="ph-grid" style="height:100%" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="cols" [overlayNoRowsTemplate]="noRows"></ag-grid-angular>
           </div>

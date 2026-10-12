@@ -88,8 +88,8 @@ the operations they drew before (`report-chart.fingerprint.spec.ts` pins the
 v1 drawings); other tools' names (`scatter`, `doughnut`, `spline`,
 `stacked-bar`…) map to ours; an unknown kind still draws as a line.
 
-Controls are the kit's: `.nd-seg` for the 2–3-way choices, `pf-select` for the
-unit, `.nd-toggle[role=switch]` for on / off, kit inputs, SVG icons, light + dark.
+Controls are the kit's: `.pf-seg` for the 2–3-way choices, `pf-select` for the
+unit, `.pf-toggle[role=switch]` for on / off, kit inputs, SVG icons, light + dark.
 
 ## 2. Storage (no migration)
 

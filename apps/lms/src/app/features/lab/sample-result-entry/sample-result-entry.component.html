@@ -1,10 +1,10 @@
-<!-- Result entry on the nd pattern (docs/ND-PATTERN.md → "Result entry"):
+<!-- Result entry on the nd pattern (docs/PF-PATTERN.md → "Result entry"):
      band (back + tenant + actions, identical on every step) whose pill is
      the CONTEXT BAR → full-width RESULTS cards, one per test. Save draft /
      Submit live in the band's actions (phones: a compact bottom bar). -->
 <!-- pfNumpadScope: the touch numpad's Next walks these fields down the list
      (same set Enter walks) and ends on the visible Submit. -->
-<section class="pf-sre nd-page" [class.pf-sre--view]="viewOnly()"
+<section class="pf-sre pf-page" [class.pf-sre--view]="viewOnly()"
          pfNumpadScope="input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger"
          pfNumpadCta=".pf-sre-submit">
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
@@ -26,20 +26,20 @@
     <!-- CONTEXT BAR: the subject as read-only chips. -->
     <div band-search class="pf-sre-ctx">
       @if (sample(); as s) {
-        <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--patient"
+        <span class="pf-chip pf-chip--static pf-sre-chip pf-sre-chip--patient"
               [title]="patientName() + (patientMeta() ? ' · ' + patientMeta() : '')">
           <span class="pf-sre-chip__name"><pf-daily-no [of]="s" />{{ patientName() }}</span>
-          @if (patientMeta()) { <span class="pf-sre-chip__meta nd-num">{{ patientMeta() }}</span> }
+          @if (patientMeta()) { <span class="pf-sre-chip__meta pf-num">{{ patientMeta() }}</span> }
         </span>
         <!-- PHONES only: the current sample ID. With more than one tube it
              is the tube switcher (the tabs control is desktop / tablet). -->
         @if (tubeTabs().length > 1) {
           <span class="pf-sre-switch pf-sre-phone">
-            <button type="button" class="nd-chip pf-sre-chip pf-sre-chip--sample pf-sre-chip--switch"
+            <button type="button" class="pf-chip pf-sre-chip pf-sre-chip--sample pf-sre-chip--switch"
                     aria-haspopup="listbox" [attr.aria-expanded]="tubeMenuOpen()"
                     [attr.aria-label]="'Sample ' + activeBarcode() + ' — switch tube'"
                     (click)="tubeMenuOpen.set(!tubeMenuOpen())">
-              <span class="nd-num pf-sre-chip__id">{{ activeBarcode() }}</span>
+              <span class="pf-num pf-sre-chip__id">{{ activeBarcode() }}</span>
               @switch (tabMarks()[activeTubeId() ?? ""]) {
                   @case ("complete") {
                     <svg class="pf-sre-tab__ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Every field filled"><path d="M20 6 9 17l-5-5"/></svg>
@@ -55,7 +55,7 @@
                   <button type="button" class="pf-sre-switch__opt" role="option"
                           [attr.data-tube]="tab.id" [attr.aria-selected]="tab.id === activeTubeId()"
                           (click)="pickTube(tab.id)">
-                    <span class="nd-num pf-sre-switch__id">{{ tab.barcode || "Tube" }}</span>
+                    <span class="pf-num pf-sre-switch__id">{{ tab.barcode || "Tube" }}</span>
                     @if (tab.tests) { <span class="pf-sre-switch__tests">{{ tab.tests }}</span> }
                     @switch (tabMarks()[tab.id]) {
                   @case ("complete") {
@@ -69,22 +69,22 @@
             }
           </span>
         } @else {
-          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--sample pf-sre-phone" title="Sample ID">
-            <span class="nd-num pf-sre-chip__id">{{ s.barcode || "—" }}</span>
+          <span class="pf-chip pf-chip--static pf-sre-chip pf-sre-chip--sample pf-sre-phone" title="Sample ID">
+            <span class="pf-num pf-sre-chip__id">{{ s.barcode || "—" }}</span>
             @if (hasWritable()) { <span class="pf-sre-tab__dot" aria-hidden="true"></span> }
           </span>
         }
         @if (urgent()) {
-          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--urgent" title="Order priority">Urgent</span>
+          <span class="pf-chip pf-chip--static pf-sre-chip pf-sre-chip--urgent" title="Order priority">Urgent</span>
         }
         @if (s.order?.orderNumber) {
-          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
-            <span class="pf-sre-chip__meta">Order</span><span class="nd-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>
+          <span class="pf-chip pf-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
+            <span class="pf-sre-chip__meta">Order</span><span class="pf-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>
           </span>
         }
         <span class="pf-sre-ctx__grow"></span>
         @if (viewOnly()) {
-          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--ro" title="Read-only view — nothing here can be changed">
+          <span class="pf-chip pf-chip--static pf-sre-chip pf-sre-chip--ro" title="Read-only view — nothing here can be changed">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/></svg>
             Read-only
           </span>
@@ -98,16 +98,16 @@
          indicator moves (it slides). Phones: its own scrollable row. -->
     <ng-container band-tools>
       @if (tubeTabs().length) {
-        <span #tabsEl class="nd-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
+        <span #tabsEl class="pf-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
           <span class="pf-sre-tabs__ind" aria-hidden="true"></span>
           @for (tab of tubeTabs(); track tab.id) {
-            <button type="button" class="nd-seg__item pf-sre-tab" role="tab"
+            <button type="button" class="pf-seg__item pf-sre-tab" role="tab"
                     [attr.data-tube]="tab.id"
                     [attr.aria-selected]="tab.id === activeTubeId()"
                     [attr.aria-pressed]="tab.id === activeTubeId()"
                     (click)="openSibling(tab.id)" [title]="tab.tests"
                     [attr.aria-label]="(tab.barcode || 'Tube') + (tab.tests ? ' — ' + tab.tests : '')">
-              <span class="nd-num pf-sre-tab__id">{{ tab.barcode || "Tube" }}</span>
+              <span class="pf-num pf-sre-tab__id">{{ tab.barcode || "Tube" }}</span>
               @switch (tabMarks()[tab.id]) {
                   @case ("complete") {
                     <svg class="pf-sre-tab__ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Every field filled"><path d="M20 6 9 17l-5-5"/></svg>
@@ -125,11 +125,11 @@
        primary). Web + tablet: text buttons + the technician chip. Phones:
        44px ICON buttons (label kept for AT + tooltip) + an initials avatar. -->
   <ng-template #actions>
-    <span class="nd-chip nd-chip--static pf-sre-techchip"
+    <span class="pf-chip pf-chip--static pf-sre-techchip"
           [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span class="pf-sre-techchip__name">{{ techName() }}</span>
-      <span class="pf-sre-techchip__reg nd-num">Reg {{ techRegId() }}</span>
+      <span class="pf-sre-techchip__reg pf-num">Reg {{ techRegId() }}</span>
     </span>
     <span class="pf-sre-techavatar" role="img"
           [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">{{ techInitials() }}</span>
@@ -211,29 +211,29 @@
     }
   </ng-template>
 
-  <div class="nd-body pf-sre-body">
+  <div class="pf-body pf-sre-body">
     <!-- ─── Main column: one RESULTS card per test ─────────────────── -->
     <div class="pf-sre-main" aria-label="Results">
       @if (showSkeleton()) {
         <!-- Same frame as the loaded page; the skeleton (then the first card)
              is the zoom target the queue tile morphs straight into. Held
              through the morph so the target never swaps mid-animation. -->
-        <section class="nd-card pf-sre-card pf-sre-card--skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true">
+        <section class="pf-card pf-sre-card pf-sre-card--skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
             </span>
-            <span class="nd-card__label pf-sre-card__label">Results</span>
+            <span class="pf-card__label pf-sre-card__label">Results</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             <span class="pf-sre-skel__bar" style="width: 60%"></span>
             <span class="pf-sre-skel__bar"></span>
             <span class="pf-sre-skel__bar" style="width: 80%"></span>
           </div>
         </section>
       } @else if (!sample()) {
-        <section class="nd-card pf-sre-card" [pfZoomTarget]="zoomKeys()">
-          <div class="nd-card__body"><p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p></div>
+        <section class="pf-card pf-sre-card" [pfZoomTarget]="zoomKeys()">
+          <div class="pf-card__body"><p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p></div>
         </section>
       } @else {
         <!-- Order-level extras, only when they apply: the validator's
@@ -261,7 +261,7 @@
                refresh, not a device command). Its own small bar, independent
                of .pf-sre-strip's other (mutually exclusive) conditions. -->
           <div class="pf-sre-fetchbar">
-            <button type="button" class="nd-btn nd-btn--secondary nd-btn--sm pf-sre-fetch"
+            <button type="button" class="pf-btn pf-btn--secondary pf-btn--sm pf-sre-fetch"
                     [disabled]="fetchingAnalyzer()" (click)="fetchFromAnalyzer()">
               {{ fetchingAnalyzer() ? 'Checking…' : 'Fetch from analyzer' }}
             </button>
@@ -276,16 +276,16 @@
                          (valueChange)="applyAnalyzerRun($event)"></pf-select>
             }
             @if (validateMode()) {
-              <span class="nd-chip nd-chip--static pf-sre-strip__meta nd-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
+              <span class="pf-chip pf-chip--static pf-sre-strip__meta pf-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
               <!-- The validator signs this report: no registration number
                    yet → the gentle "add it" line (they fill it themselves). -->
               <pf-regno-prompt />
             }
             @if (trendEligible().length > 0 && !viewOnly()) {
               <!-- Serial-result trend charts in the report (persists on the order). -->
-              <button type="button" class="nd-toggle pf-sre-trend" role="switch" [attr.aria-checked]="trendogramOn()"
+              <button type="button" class="pf-toggle pf-sre-trend" role="switch" [attr.aria-checked]="trendogramOn()"
                       (click)="toggleTrendogram()">
-                <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+                <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
                 Include Trendogram
                 <span class="pf-sre-trend__n">{{ trendEligible().length }} repeat test{{ trendEligible().length === 1 ? "" : "s" }}</span>
               </button>
@@ -307,7 +307,7 @@
               <ul class="pf-sre__flags pf-sre-report" role="status" aria-label="Submit all">
                 @for (r of submitReport(); track r.sampleId) {
                   <li class="pf-sre__flag" [class.pf-sre__flag--crit]="!r.ok" [class.pf-sre-report--ok]="r.ok">
-                    <strong class="nd-num">{{ r.barcode }}</strong> · {{ r.ok ? "Submitted" : "Not submitted — " + (r.message || "failed") }}
+                    <strong class="pf-num">{{ r.barcode }}</strong> · {{ r.ok ? "Submitted" : "Not submitted — " + (r.message || "failed") }}
                   </li>
                 }
               </ul>
@@ -347,12 +347,12 @@
         <!-- Outsourced tests on this (old, shared) tube: performed by the
              partner lab — read-only here, never an editable field. -->
         @if (outsourcedTests().length > 0) {
-          <section class="nd-card pf-sre-card pf-sre__outsourced" aria-label="Outsourced tests">
-            <div class="nd-card__body pf-sre-card__body">
+          <section class="pf-card pf-sre-card pf-sre__outsourced" aria-label="Outsourced tests">
+            <div class="pf-card__body pf-sre-card__body">
               @for (t of outsourcedTests(); track t.id) {
                 <div class="pf-sre__out-row">
                   <span class="pf-sre__out-name">{{ t.test?.name ?? "Test" }}</span>
-                  <span class="nd-chip nd-chip--static pf-sre__out-chip">{{ outsourcedChip(t) }}</span>
+                  <span class="pf-chip pf-chip--static pf-sre__out-chip">{{ outsourcedChip(t) }}</span>
                 </div>
               }
               <p class="pf-sre__out-hint">Results come back from the partner lab — the front desk attaches their report.</p>
@@ -365,13 +365,13 @@
           } @else {
             <!-- FLAT block: a profile (titled with its name) or a run of
                  single-value tests — one card, one table, one row each. -->
-            <section class="nd-card pf-sre-card pf-sre__test" [pfZoomTarget]="bi === 0 ? zoomKeys() : null">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true">
+            <section class="pf-card pf-sre-card pf-sre__test" [pfZoomTarget]="bi === 0 ? zoomKeys() : null">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
                 </span>
-                <h2 class="nd-card__label pf-sre-card__label">{{ blockLabel(blk) }}</h2>
-                <span class="nd-card__spacer"></span>
+                <h2 class="pf-card__label pf-sre-card__label">{{ blockLabel(blk) }}</h2>
+                <span class="pf-card__spacer"></span>
                 @if (blk.title && blk.tests.length > 1) {
                   <span class="pf-sre-card__count">{{ blk.tests.length }} tests</span>
                 }
@@ -379,7 +379,7 @@
                   <pf-report-note-button scope="profile" [key]="pid" [label]="blk.title ?? 'Profile'" [withText]="true"></pf-report-note-button>
                 }
               </header>
-              <div class="nd-card__body pf-sre-card__body">
+              <div class="pf-card__body pf-sre-card__body">
                 @if (blockProfileId(blk); as pid) {
                   <!-- The profile's report note (prints under the profile block). -->
                   <pf-report-note-slot class="pf-sre__rnote" scope="profile" [key]="pid" [label]="blk.title ?? 'Profile'"></pf-report-note-slot>
@@ -558,7 +558,7 @@
             <span>{{ ab.label }}</span>
           </span>
           @for (fl of ab.flags; track $index) {
-            <span class="pf-sre__an-flag nd-num" [attr.data-flag]="fl" [attr.title]="'Analyzer flag ' + fl">{{ fl }}</span>
+            <span class="pf-sre__an-flag pf-num" [attr.data-flag]="fl" [attr.title]="'Analyzer flag ' + fl">{{ fl }}</span>
           }
         }
       </ng-template>
@@ -601,7 +601,7 @@
                 [title]="param ? 'Attach an image or video to this value' : 'Attach an image or video to this result'"
                 [attr.aria-label]="param ? 'Attach an image or video to this value' : 'Attach an image or video'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          @if (count > 0) { <span class="pf-sre__attach-count nd-num">{{ count }}</span> }
+          @if (count > 0) { <span class="pf-sre__attach-count pf-num">{{ count }}</span> }
         </button>
       </ng-template>
 
@@ -722,13 +722,13 @@
                      (keydown.enter)="onEnterKey($event)" />
             }
             @case ("date") {
-              <pf-nd-date class="pf-sre__gdate"
+              <pf-date class="pf-sre__gdate"
                           [label]="p.title || p.name"
                           [attr.data-sre-field]="t.id + '::' + p.name"
                           [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                           [value]="asDateStr(getValue(t.id, p.name))"
                           (valueChange)="setValue(t.id, p.name, $event)"
-                          (keydown.enter)="onEnterKey($event)"></pf-nd-date>
+                          (keydown.enter)="onEnterKey($event)"></pf-date>
             }
             @default {
               <!-- Free text: a multi-line box that grows with the text (tall on
@@ -761,32 +761,32 @@
            tests in Grid, and every test in Form. -->
       <ng-template #testCard let-cardTests let-first="first">
         @for (t of cardTests; track t.id; let ti = $index) {
-          <section class="nd-card pf-sre-card pf-sre__test"
+          <section class="pf-card pf-sre-card pf-sre__test"
                    [pfZoomTarget]="first && ti === 0 ? zoomKeys() : null"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
               </span>
-              <h2 class="nd-card__label pf-sre-card__label pf-sre__test-name">{{ t.test?.name ?? "Test" }}</h2>
+              <h2 class="pf-card__label pf-sre-card__label pf-sre__test-name">{{ t.test?.name ?? "Test" }}</h2>
               @if (specimenLabel(t); as sp) {
                 <!-- The specimen chosen at the order desk (non-culture micro;
                      culture shows it on the bench). -->
-                <span class="nd-chip nd-chip--static pf-sre__test-pill" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+                <span class="pf-chip pf-chip--static pf-sre__test-pill" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
               }
               @if (t.status === "re_entry") {
-                <span class="nd-chip nd-chip--static pf-sre__test-pill pf-sre__test-pill--rejected">Re-entry needed</span>
+                <span class="pf-chip pf-chip--static pf-sre__test-pill pf-sre__test-pill--rejected">Re-entry needed</span>
               } @else if (t.status === "not_reported") {
-                <span class="nd-chip nd-chip--static pf-sre__test-pill" title="Closed without a value; never prints">Not reported</span>
+                <span class="pf-chip pf-chip--static pf-sre__test-pill" title="Closed without a value; never prints">Not reported</span>
               } @else if (t.status === "entered" || t.status === "validated") {
-                <span class="nd-chip nd-chip--static pf-sre__test-pill">
+                <span class="pf-chip pf-chip--static pf-sre__test-pill">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
                   Entered
                 </span>
                 @if (enteredByLabel(t)) { <span class="pf-sre__who" title="Entered by">{{ enteredByLabel(t) }}</span> }
               }
-              <span class="nd-card__spacer"></span>
+              <span class="pf-card__spacer"></span>
               @if (attachEnabled(t) || benchAttachmentsFor(t).length > 0) {
                 <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: benchAttachmentsFor(t).length }"></ng-container>
               }
@@ -794,19 +794,19 @@
               <!-- "+ Note": the small secondary button; "Notes (N)" once a
                    conversation exists (it is then always visible). -->
               @if (commentsFor(t.id, null).length > 0) {
-                <button type="button" class="nd-btn nd-btn--secondary pf-sre__note-btn pf-sre__note-btn--has"
+                <button type="button" class="pf-btn pf-btn--secondary pf-sre__note-btn pf-sre__note-btn--has"
                         (mousedown)="$event.preventDefault()" (click)="toggleOverall(t.id)" [attr.aria-expanded]="isOverallOpen(t.id)">
                   + Note ({{ commentsFor(t.id, null).length }})
                 </button>
               } @else {
-                <button type="button" class="nd-btn nd-btn--secondary pf-sre__note-btn"
+                <button type="button" class="pf-btn pf-btn--secondary pf-sre__note-btn"
                         (mousedown)="$event.preventDefault()" (click)="toggleOverall(t.id)" [attr.aria-expanded]="isOverallOpen(t.id)">
                   {{ isOverallOpen(t.id) ? "Close note" : "+ Note" }}
                 </button>
               }
             </header>
 
-            <div class="nd-card__body pf-sre-card__body">
+            <div class="pf-card__body pf-sre-card__body">
               @if (benchAttachmentsFor(t).length > 0) {
                 <ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container>
               }
@@ -834,12 +834,12 @@
               @if (isCultureTest(t)) {
                 <!-- Culture & Sensitivity is worked (and signed out) on the
                      Culture case page — one culture screen (owner). -->
-                <button type="button" class="nd-row pf-sre-culturelink press" (click)="openCultureBench(t)"
+                <button type="button" class="pf-row pf-sre-culturelink press" (click)="openCultureBench(t)"
                         [attr.aria-label]="'Open ' + (t.test?.name ?? 'culture') + ' on the culture bench'">
-                  <span class="nd-card__icon" aria-hidden="true">
+                  <span class="pf-card__icon" aria-hidden="true">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg>
                   </span>
-                  <span class="nd-row__name">Culture: open on the bench</span>
+                  <span class="pf-row__name">Culture: open on the bench</span>
                   <svg class="pf-sre-culturelink__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 </button>
               } @else if (parametersFor(t).length === 0) {

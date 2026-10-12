@@ -20,7 +20,7 @@
   row-gap: 6px;
   min-height: 64px;
   padding: 10px 12px 10px 14px;
-  border-radius: var(--nd-radius, 12px);
+  border-radius: var(--pf-radius, 12px);
   /* A soft tinted fill + gentle shadow so rows read as cards against the
      white pane (owner: "too white") — the glass tokens flip per theme, so
      light and dark both get the classic tinted surface. */
@@ -29,20 +29,20 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(124, 58, 237, 0.05);
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
+  transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease, box-shadow var(--pf-dur-fast) ease;
 }
 .pf-wlist--sel .pf-wrow {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   grid-template-areas: 'check body status' 'check body acts';
   padding-left: 12px;
 }
-.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--nd-sel-border); box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
+.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--pf-sel-border); box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
 .pf-wrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
 /* Selected: a subtle violet tint + a 1px violet border. No gradient. */
 .pf-wrow.pf-wrow--sel,
 .pf-wrow.pf-wrow--sel:hover {
-  background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 7%, var(--nd-card-bg));
+  background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 7%, var(--pf-card-bg));
   border-color: var(--color-violet-600, #7c3aed);
 }
 
@@ -134,15 +134,15 @@
   height: 18px;
   padding: 0 7px;
   border-radius: 999px;
-  border: 1px solid var(--nd-line);
-  background: var(--nd-chip-bg);
+  border: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 500;
   white-space: nowrap;
 }
 
-/* Row actions: the kit's .nd-rowact, right-aligned in a fixed-width slot so
+/* Row actions: the kit's .pf-rowact, right-aligned in a fixed-width slot so
    the action lines up in every row. */
 .pf-wrow__acts {
   grid-area: acts;
@@ -182,7 +182,7 @@
     font-size: 13px;
   }
   .pf-wrow__acts { align-self: center; }
-  .pf-wrow__acts .nd-rowact { min-height: 44px; }
+  .pf-wrow__acts .pf-rowact { min-height: 44px; }
   /* Rows that can't be selected don't reserve the checkbox column. */
   .pf-wlist--sel .pf-wrow:has(.pf-wrow__check--none) {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -204,11 +204,11 @@
   flex-shrink: 0;
   margin: 10px 12px 0;
   padding: 8px 8px 8px 14px;
-  border-radius: var(--nd-radius, 12px);
-  border: 1px solid var(--nd-line);
-  background: var(--nd-card-bg);
-  box-shadow: var(--nd-shadow-sm);
-  animation: pf-selbar-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
+  border-radius: var(--pf-radius, 12px);
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  box-shadow: var(--pf-shadow-sm);
+  animation: pf-selbar-in var(--pf-dur, 320ms) var(--pf-spring, ease) both;
 }
 .pf-selbar__count {
   font-size: 13.5px;
@@ -253,7 +253,7 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
-.pf-selbar__x:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+.pf-selbar__x:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
 
 @keyframes pf-selbar-in {
   from { opacity: 0; transform: translateY(-6px); }
@@ -274,7 +274,7 @@
   .pf-selbar {
     order: 99;
     position: sticky;
-    bottom: calc(var(--nd-nav-h, 64px) + 10px);
+    bottom: calc(var(--pf-nav-h, 64px) + 10px);
     z-index: 30;
     margin: 8px 0 0;
     padding: 10px 10px 10px 14px;

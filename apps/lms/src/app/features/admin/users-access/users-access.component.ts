@@ -62,15 +62,15 @@ export function isDeletableRole(r: Pick<Role, 'isPreSeeded' | 'tenantId' | 'name
   return !r.isPreSeeded && !!r.tenantId && !(r.name in ROLE_INFO);
 }
 
-/** Kit row action (ND-PATTERN): a 32px secondary TEXT button on web, a
+/** Kit row action (PF-PATTERN): a 32px secondary TEXT button on web, a
  *  neutral 44px ICON button on touch (label kept for AT + tooltip). */
 function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = web ? 'nd-rowact' : 'nd-rowact nd-rowact--icon';
+  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
   b.title = title;
   b.setAttribute('aria-label', title);
-  b.innerHTML = `${icon}<span class="nd-rowact__t">${label}</span>`;
+  b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
   return b;
 }
 
@@ -187,7 +187,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         </div>
 
         <div class="flex items-center gap-3 ml-auto">
-          <span class="text-[12px] nd-num" style="color: var(--text-muted);">
+          <span class="text-[12px] pf-num" style="color: var(--text-muted);">
             @if (tab() === 'users') {
               {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
             } @else {
@@ -205,7 +205,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
           @if (listSkeleton()) {
-            <!-- First load: the grid's shape (ND-PATTERN "Loading feedback"). -->
+            <!-- First load: the grid's shape (PF-PATTERN "Loading feedback"). -->
             <pf-skeleton-table class="pf-ua-gridskel" [rows]="10" [cols]="5" label="Loading users…"></pf-skeleton-table>
           }
           <ag-grid-angular
@@ -241,7 +241,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
   styles: [`
     /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
     .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
-    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
+    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
     :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
     .pf-ua-count {
       font-size: 12px; font-variant-numeric: tabular-nums;
@@ -373,7 +373,7 @@ export class UsersAccessComponent implements OnInit {
     wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
     for (const label of branchScopeChips(params.data?.branchScope)) {
       const chip = document.createElement('span');
-      chip.className = 'nd-chip nd-chip--static pf-ua-branch';
+      chip.className = 'pf-chip pf-chip--static pf-ua-branch';
       chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
       chip.textContent = label;
       wrap.appendChild(chip);
@@ -388,7 +388,7 @@ export class UsersAccessComponent implements OnInit {
     wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
     for (const label of this.userDepartments(params.data?.id)) {
       const chip = document.createElement('span');
-      chip.className = 'nd-chip nd-chip--static pf-ua-dept';
+      chip.className = 'pf-chip pf-chip--static pf-ua-dept';
       chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
       chip.textContent = label;
       wrap.appendChild(chip);
@@ -402,15 +402,15 @@ export class UsersAccessComponent implements OnInit {
     if (!params.data) return wrap;
 
     const u = params.data;
-    // Kit switch (.nd-toggle[role=switch]) — ON = brand violet, never green.
+    // Kit switch (.pf-toggle[role=switch]) — ON = brand violet, never green.
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'nd-toggle pf-ua-status';
+    btn.className = 'pf-toggle pf-ua-status';
     btn.setAttribute('role', 'switch');
     btn.setAttribute('aria-checked', String(!!u.isActive));
     btn.setAttribute('aria-label', `${u.isActive ? 'Active' : 'Inactive'} — ${u.isActive ? 'deactivate' : 'reactivate'} ${u.displayName || u.username || 'user'}`);
     btn.title = u.isActive ? 'Active' : 'Inactive';
-    btn.innerHTML = '<span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>';
+    btn.innerHTML = '<span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>';
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const ctx = params.context as { toggleActive?: (u: User, el?: HTMLElement) => void };
@@ -464,7 +464,7 @@ export class UsersAccessComponent implements OnInit {
     const r = params.data;
     // Neutral static chip; the small violet dot marks a pre-seeded role. No green.
     const badge = document.createElement('span');
-    badge.className = 'nd-chip nd-chip--static pf-ua-type';
+    badge.className = 'pf-chip pf-chip--static pf-ua-type';
     badge.style.cssText = 'cursor:default;height:26px;';
     if (r.isPreSeeded) {
       badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--color-violet-600, #7c3aed);display:inline-block;flex-shrink:0;" aria-hidden="true"></span>Pre-seeded';
@@ -662,7 +662,7 @@ export class UsersAccessComponent implements OnInit {
     warmRoleEditor: () => { void prefetch(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor); },
   };
 
-  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   private readonly pageOpen = inject(PageOpenService);
   private readonly destroyRef = inject(DestroyRef);
   /** First load: skeleton rows over the grid until users + roles land. */

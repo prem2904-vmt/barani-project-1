@@ -74,14 +74,14 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
   template: `
     <section class="pf-band-page ph">
       <pf-hero-band [back]="true" backTo="/opd/pharmacy" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx ph-ctx">
+        <div band-search class="pf-ctx ph-ctx">
           @if (rx(); as d) {
-            <span class="nd-ctx__primary">{{ d.patient.name }}</span>
-            @if (d.patient.meta) { <span class="nd-ctx__chip nd-num">{{ d.patient.meta }}</span> }
-            @if (d.visitNumber) { <span class="nd-ctx__chip nd-num">{{ d.visitNumber }}</span> }
-            <span class="nd-ctx__chip">Rx · {{ d.lines.length }} {{ d.lines.length === 1 ? 'medicine' : 'medicines' }}</span>
+            <span class="pf-ctx__primary">{{ d.patient.name }}</span>
+            @if (d.patient.meta) { <span class="pf-ctx__chip pf-num">{{ d.patient.meta }}</span> }
+            @if (d.visitNumber) { <span class="pf-ctx__chip pf-num">{{ d.visitNumber }}</span> }
+            <span class="pf-ctx__chip">Rx · {{ d.lines.length }} {{ d.lines.length === 1 ? 'medicine' : 'medicines' }}</span>
           } @else {
-            <span class="nd-ctx__primary">Prescription</span>
+            <span class="pf-ctx__primary">Prescription</span>
           }
         </div>
       </pf-hero-band>
@@ -89,16 +89,16 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
       @if (showSkeleton()) {
         <div class="ph-body"><pf-skeleton-detail></pf-skeleton-detail><div></div></div>
       } @else if (error()) {
-        <div class="ph-body ph-body--one"><div class="nd-card"><div class="nd-empty"><p class="nd-empty__title">Couldn't open this prescription</p><p class="nd-empty__body">{{ error() }}</p></div></div></div>
+        <div class="ph-body ph-body--one"><div class="pf-card"><div class="pf-empty"><p class="pf-empty__title">Couldn't open this prescription</p><p class="pf-empty__body">{{ error() }}</p></div></div></div>
       } @else if (rx(); as d) {
         <div class="ph-body">
-          <section class="nd-card" aria-labelledby="ph-d-t">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
-              <span class="nd-card__label" id="ph-d-t">Counter</span>
-              <span class="nd-card__note">Rx from {{ d.doctor.name }}{{ d.completedAt ? ' · ' + time(d.completedAt) : '' }} · Batch pick: {{ pharmacistPick() ? 'pharmacist picks' : 'earliest expiry' }}</span>
+          <section class="pf-card" aria-labelledby="ph-d-t">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
+              <span class="pf-card__label" id="ph-d-t">Counter</span>
+              <span class="pf-card__note">Rx from {{ d.doctor.name }}{{ d.completedAt ? ' · ' + time(d.completedAt) : '' }} · Batch pick: {{ pharmacistPick() ? 'pharmacist picks' : 'earliest expiry' }}</span>
             </header>
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               @if (d.consultStatus !== 'completed') {
                 <div class="ph-note" data-tone="bad" role="status"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>The doctor hasn't completed this consult yet — medicines can be given once it is completed.</span></div>
               }
@@ -130,7 +130,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                             <div style="margin-top:6px"><pf-pharmacy-drug-picker [down]="true" placeholder="Not in the drug master — pick the drug to give" (picked)="pickFree(l, $event)"></pf-pharmacy-drug-picker></div>
                           }
                         </td>
-                        <td class="nd-num" data-l="Batch">
+                        <td class="pf-num" data-l="Batch">
                           @if (d.consultStatus !== 'completed' || !drug || s.skip || l.remaining <= 0) { <span class="ph-muted">—</span> }
                           @else if (pharmacistPick()) {
                             <pf-select size="sm" [options]="batchOptions(l)" [value]="s.batchId ?? ''" (valueChange)="setBatch(l, $event)" placeholder="Pick a batch"></pf-select>
@@ -149,16 +149,16 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                             @if (s.qty < l.remaining) { <div class="ph-sub">{{ l.remaining - s.qty }} later</div> }
                             @else if (s.qty > l.remaining) {
                               <div class="ph-sub pf-exp-amber">{{ s.qty - l.remaining }} more than prescribed ({{ l.quantity }})</div>
-                              <input class="nd-input" type="text" style="font-size:12.5px;padding:4px 8px;margin-top:4px;width:180px" placeholder="Reason (required)" [value]="s.overrideReason" [attr.aria-label]="'Reason for giving more of ' + l.drugName" (input)="setOverrideReason(l, $any($event.target).value)" />
+                              <input class="pf-input" type="text" style="font-size:12.5px;padding:4px 8px;margin-top:4px;width:180px" placeholder="Reason (required)" [value]="s.overrideReason" [attr.aria-label]="'Reason for giving more of ' + l.drugName" (input)="setOverrideReason(l, $any($event.target).value)" />
                             }
-                          } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : (d.consultStatus === 'completed' ? 0 : l.quantity) }}</span> }
+                          } @else { <span class="ph-muted pf-num">{{ l.remaining <= 0 ? l.dispensed : (d.consultStatus === 'completed' ? 0 : l.quantity) }}</span> }
                         </td>
                         <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
                         <td class="r" data-l="MRP">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(unitMrp(l)) : '' }}</td>
                         <td class="r" data-l="Amount">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(lineAmount(l)) : '' }}</td>
                         <td class="ph-td-act">
                           @if (d.consultStatus === 'completed' && l.remaining > 0) {
-                            <button type="button" class="nd-btn nd-btn--tertiary" (click)="toggleSkip(l)" [attr.aria-label]="(s.skip ? 'Give ' : 'Skip ') + l.drugName">{{ s.skip ? 'Give' : 'Skip' }}</button>
+                            <button type="button" class="pf-btn pf-btn--tertiary" (click)="toggleSkip(l)" [attr.aria-label]="(s.skip ? 'Give ' : 'Skip ') + l.drugName">{{ s.skip ? 'Give' : 'Skip' }}</button>
                           }
                         </td>
                       </tr>
@@ -167,42 +167,42 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                 </table>
               </div>
               @if (d.dispenses.length) {
-                <p class="ph-sub">Given earlier: @for (x of d.dispenses; track x.id) { <span class="nd-num">{{ x.number }} ({{ inr(x.total, false) }}){{ $last ? '' : ', ' }}</span> }</p>
+                <p class="ph-sub">Given earlier: @for (x of d.dispenses; track x.id) { <span class="pf-num">{{ x.number }} ({{ inr(x.total, false) }}){{ $last ? '' : ', ' }}</span> }</p>
               }
             </div>
           </section>
 
           @if (!done() && d.consultStatus !== 'completed') {
-            <aside class="nd-card" aria-labelledby="ph-w-t">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
-                <span class="nd-card__label" id="ph-w-t">Waiting on the doctor</span>
+            <aside class="pf-card" aria-labelledby="ph-w-t">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+                <span class="pf-card__label" id="ph-w-t">Waiting on the doctor</span>
               </header>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
                 <p class="ph-sub">The doctor hasn't completed this prescription yet — there's nothing to give or bill until the consult is marked complete.</p>
               </div>
             </aside>
           } @else if (!done()) {
-            <aside class="nd-card" aria-labelledby="ph-b-t">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-                <span class="nd-card__label" id="ph-b-t">Billing</span>
-                <span class="nd-card__spacer"></span>
-                <span class="ph-sub nd-num">{{ giveCount() }} {{ giveCount() === 1 ? 'item' : 'items' }}</span>
+            <aside class="pf-card" aria-labelledby="ph-b-t">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                <span class="pf-card__label" id="ph-b-t">Billing</span>
+                <span class="pf-card__spacer"></span>
+                <span class="ph-sub pf-num">{{ giveCount() }} {{ giveCount() === 1 ? 'item' : 'items' }}</span>
               </header>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
                 @for (l of giving(); track l.rxLineId) {
-                  <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><span>{{ given(l)?.name }} <span class="ph-muted nd-num">× {{ st(l).qty }}</span></span><span class="nd-num">{{ inr(lineAmount(l)) }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><span>{{ given(l)?.name }} <span class="ph-muted pf-num">× {{ st(l).qty }}</span></span><span class="pf-num">{{ inr(lineAmount(l)) }}</span></div>
                 }
-                <div class="nd-field">
-                  <label class="nd-field__lbl" for="ph-disc">Discount (₹, before GST)</label>
-                  <input id="ph-disc" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="discount() || ''" (input)="setDiscount($any($event.target).value)" placeholder="0" />
+                <div class="pf-field">
+                  <label class="pf-field__lbl" for="ph-disc">Discount (₹, before GST)</label>
+                  <input id="ph-disc" class="pf-input pf-num" type="number" min="0" inputmode="decimal" [value]="discount() || ''" (input)="setDiscount($any($event.target).value)" placeholder="0" />
                 </div>
-                <div class="nd-field">
-                  <span class="nd-field__lbl" id="ph-pay-l">Payment</span>
-                  <div class="nd-seg" role="radiogroup" aria-labelledby="ph-pay-l" style="width:100%">
+                <div class="pf-field">
+                  <span class="pf-field__lbl" id="ph-pay-l">Payment</span>
+                  <div class="pf-seg" role="radiogroup" aria-labelledby="ph-pay-l" style="width:100%">
                     @for (m of modes; track m.v) {
-                      <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
+                      <button type="button" class="pf-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
                     }
                   </div>
                 </div>
@@ -211,13 +211,13 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                     <span>{{ rxOnly() }} prescription-only (Schedule H / H1 / X) — covered by this prescription.{{ h1Count() ? ' ' + h1Count() + ' will be entered in the H1 register.' : '' }}</span></div>
                 }
                 @if (h1Count() > 0) {
-                  <div class="nd-field">
-                    <label class="nd-field__lbl" for="ph-h1-addr">Patient's address (Schedule H1 / X register — required)</label>
-                    <input id="ph-h1-addr" class="nd-input" type="text" [value]="patientAddress()" (input)="patientAddress.set($any($event.target).value)" placeholder="House no., street, city" />
+                  <div class="pf-field">
+                    <label class="pf-field__lbl" for="ph-h1-addr">Patient's address (Schedule H1 / X register — required)</label>
+                    <input id="ph-h1-addr" class="pf-input" type="text" [value]="patientAddress()" (input)="patientAddress.set($any($event.target).value)" placeholder="House no., street, city" />
                   </div>
                 }
               </div>
-              <div class="nd-card__foot">
+              <div class="pf-card__foot">
                 <div class="ph-sum">
                   <span>Taxable value</span><span>{{ inr(totals().taxable) }}</span>
                   @if (totals().discount > 0) { <span>Discount</span><span>−{{ inr(totals().discount) }}</span> }
@@ -225,46 +225,46 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                   <span>Round-off</span><span>{{ totals().roundOff >= 0 ? '+' : '−' }}{{ inr(abs(totals().roundOff)) }}</span>
                 </div>
                 <div class="ph-total"><span>Total</span><strong>{{ inr(totals().payable) }}</strong></div>
-                <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!canGive() || saving()" (click)="give(false)">Give, bill later</button>
+                <button type="button" class="pf-btn pf-btn--secondary" [disabled]="!canGive() || saving()" (click)="give(false)">Give, bill later</button>
                 @if (!isPhone()) {
-                  <button type="button" class="nd-btn" [class.nd-btn--primary]="canGive()" [class.nd-btn--secondary]="!canGive()"
+                  <button type="button" class="pf-btn" [class.pf-btn--primary]="canGive()" [class.pf-btn--secondary]="!canGive()"
                           [disabled]="!canGive() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="give(true)">Take payment {{ inr(totals().payable, false) }}</button>
                 }
               </div>
             </aside>
             @if (isPhone()) {
-              <div class="nd-bottombar" role="region" aria-label="Payment">
-                <span class="nd-bottombar__info nd-num">{{ inr(totals().payable, false) }} · {{ giveCount() }} {{ giveCount() === 1 ? 'item' : 'items' }}</span>
-                <button type="button" class="nd-btn" [class.nd-btn--primary]="canGive()" [class.nd-btn--secondary]="!canGive()"
+              <div class="pf-bottombar" role="region" aria-label="Payment">
+                <span class="pf-bottombar__info pf-num">{{ inr(totals().payable, false) }} · {{ giveCount() }} {{ giveCount() === 1 ? 'item' : 'items' }}</span>
+                <button type="button" class="pf-btn" [class.pf-btn--primary]="canGive()" [class.pf-btn--secondary]="!canGive()"
                         [disabled]="!canGive() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="give(true)">Take payment</button>
               </div>
             }
           } @else {
-            <aside class="nd-card" aria-labelledby="ph-i-t">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>
-                <span class="nd-card__label" id="ph-i-t">Instructions</span>
-                <span class="nd-card__spacer"></span>
-                <span class="nd-chip nd-chip--static nd-num">
+            <aside class="pf-card" aria-labelledby="ph-i-t">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>
+                <span class="pf-card__label" id="ph-i-t">Instructions</span>
+                <span class="pf-card__spacer"></span>
+                <span class="pf-chip pf-chip--static pf-num">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--violet-text, #7c3aed)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                   {{ doneLabel() }}
                 </span>
               </header>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
                 @if (dueNow(); as due) {
                   <div class="ph-note" data-tone="warn" role="status">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
                     <span>Billed later — {{ inr(due, false) }} still due.</span>
                   </div>
-                  <div class="nd-field">
-                    <span class="nd-field__lbl" id="ph-cp-l">Collect payment</span>
-                    <div class="nd-seg" role="radiogroup" aria-labelledby="ph-cp-l" style="width:100%">
+                  <div class="pf-field">
+                    <span class="pf-field__lbl" id="ph-cp-l">Collect payment</span>
+                    <div class="pf-seg" role="radiogroup" aria-labelledby="ph-cp-l" style="width:100%">
                       @for (m of modes; track m.v) {
-                        <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
+                        <button type="button" class="pf-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
                       }
                     </div>
                   </div>
-                  <button type="button" class="nd-btn nd-btn--primary" style="width:100%" [disabled]="collecting()" [pfBusy]="collecting()" pfBusyLabel="Collecting…" (click)="collectPayment()">Collect {{ inr(due, false) }}</button>
+                  <button type="button" class="pf-btn pf-btn--primary" style="width:100%" [disabled]="collecting()" [pfBusy]="collecting()" pfBusyLabel="Collecting…" (click)="collectPayment()">Collect {{ inr(due, false) }}</button>
                 }
                 @for (i of instructions(); track $index) {
                   <div class="ph-instr">
@@ -281,10 +281,10 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                 <p class="ph-title">WhatsApp to {{ rx()?.patient?.phone || 'the patient' }}</p>
                 <div class="ph-wa">{{ waText() }}</div>
               </div>
-              <div class="nd-card__foot">
-                <button type="button" class="nd-btn nd-btn--secondary" (click)="print()">Print</button>
-                <a class="nd-btn nd-btn--primary" [href]="waHref()" target="_blank" rel="noopener" (click)="afterSend()">Send on WhatsApp</a>
-                <button type="button" class="nd-btn nd-btn--tertiary nd-span" (click)="back()">Back to prescriptions</button>
+              <div class="pf-card__foot">
+                <button type="button" class="pf-btn pf-btn--secondary" (click)="print()">Print</button>
+                <a class="pf-btn pf-btn--primary" [href]="waHref()" target="_blank" rel="noopener" (click)="afterSend()">Send on WhatsApp</a>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-span" (click)="back()">Back to prescriptions</button>
               </div>
             </aside>
           }

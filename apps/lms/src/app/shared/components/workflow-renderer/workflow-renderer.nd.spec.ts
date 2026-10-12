@@ -36,21 +36,21 @@ describe('WorkflowRendererComponent — new design', () => {
     return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance };
   }
 
-  it('every step is its own nd-card at once (icon chip, label, "N required"); no action buttons', () => {
+  it('every step is its own pf-card at once (icon chip, label, "N required"); no action buttons', () => {
     const { el } = create();
-    const cards = el.querySelectorAll('.pf-wr-cards > .pf-wr-card.nd-card');
+    const cards = el.querySelectorAll('.pf-wr-cards > .pf-wr-card.pf-card');
     expect(cards.length).toBe(2);
-    expect(cards[0].querySelector('.nd-card__icon svg')).not.toBeNull();
-    expect(cards[0].querySelector('.nd-card__label')!.textContent!.trim()).toBe('Identity');
+    expect(cards[0].querySelector('.pf-card__icon svg')).not.toBeNull();
+    expect(cards[0].querySelector('.pf-card__label')!.textContent!.trim()).toBe('Identity');
     expect(cards[0].querySelector('.pf-wr-card__note')!.textContent!.trim()).toBe('1 required');
     expect(el.querySelector('[data-field="phone"]')).not.toBeNull();
     expect(el.querySelector('[data-field="first_name"]')).not.toBeNull();
-    expect(el.querySelector('h3, button.pf-btn, .nd-btn--primary, [role="tablist"]')).toBeNull();
+    expect(el.querySelector('h3, button.pf-btn, .pf-btn--primary, [role="tablist"]')).toBeNull();
   });
 
   it('Title is its own segmented field in nd (not the first-name prefix); wide fields span the card', () => {
     const { el } = create();
-    expect(el.querySelector('[data-field="title"] [role="radiogroup"].nd-seg')).not.toBeNull();
+    expect(el.querySelector('[data-field="title"] [role="radiogroup"].pf-seg')).not.toBeNull();
     expect(el.querySelector('pf-select.w-\\[104px\\]')).toBeNull();
     expect(el.querySelector('[data-field="phone"]')!.closest('.pf-wr-span')).not.toBeNull();
     expect(el.querySelector('[data-field="first_name"]')!.closest('.pf-wr-span')).toBeNull();

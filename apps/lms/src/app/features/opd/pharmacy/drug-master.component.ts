@@ -72,33 +72,33 @@ export function originWord(o: PharmacyDrugRow['origin'] | undefined, isNew?: boo
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
-    <section class="nd-card" style="height:100%" aria-labelledby="ph-dm-t">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
-        <span class="nd-card__label" id="ph-dm-t">Drug master</span>
+    <section class="pf-card" style="height:100%" aria-labelledby="ph-dm-t">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
+        <span class="pf-card__label" id="ph-dm-t">Drug master</span>
         <label class="ph-add__box" style="height:36px;flex:1 1 220px;max-width:340px">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ph-muted"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="search" placeholder="Search — generic, brand, HSN" aria-label="Search drugs" [value]="q()" (input)="q.set($any($event.target).value)" />
         </label>
         <span style="display:inline-flex;align-items:center;gap:8px">
           <span class="ph-sub" id="ph-dm-inact">Show off</span>
-          <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="showInactive()" aria-labelledby="ph-dm-inact" (click)="showInactive.set(!showInactive())"><span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span></button>
+          <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="showInactive()" aria-labelledby="ph-dm-inact" (click)="showInactive.set(!showInactive())"><span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span></button>
         </span>
-        <span class="nd-card__spacer"></span>
-        <span class="ph-sub nd-num">{{ rows().length }} drugs · double-click a cell to edit</span>
-        <button type="button" class="nd-btn nd-btn--secondary" style="height:36px" (click)="addDrug()">Add drug</button>
+        <span class="pf-card__spacer"></span>
+        <span class="ph-sub pf-num">{{ rows().length }} drugs · double-click a cell to edit</span>
+        <button type="button" class="pf-btn pf-btn--secondary" style="height:36px" (click)="addDrug()">Add drug</button>
         @if (inlineActions() && dirtyCount()) {
-          <button type="button" class="nd-btn nd-btn--tertiary" (click)="discard()">Discard</button>
-          <button type="button" class="nd-btn nd-btn--secondary" style="height:36px" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">Save ({{ dirtyCount() }})</button>
+          <button type="button" class="pf-btn pf-btn--tertiary" (click)="discard()">Discard</button>
+          <button type="button" class="pf-btn pf-btn--secondary" style="height:36px" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">Save ({{ dirtyCount() }})</button>
         }
       </header>
-      <div class="nd-card__body ph-card-body--flush" style="position:relative">
+      <div class="pf-card__body ph-card-body--flush" style="position:relative">
         @if (showSkeleton()) { <pf-skeleton-table [rows]="10" [cols]="8"></pf-skeleton-table> }
         <ag-grid-angular class="ph-grid" style="height:100%" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="cols"
                          [getRowId]="rowId" [stopEditingWhenCellsLoseFocus]="true" [animateRows]="true"
                          (gridReady)="ready($event)" (cellValueChanged)="edited($event)" (cellClicked)="clicked($event)"></ag-grid-angular>
       </div>
-      <p class="ph-sub" style="margin:0;padding:8px 14px;border-top:1px solid var(--nd-line)">One shared Prefrontal drug master, referenced by every clinic — a change here is kept as this lab's own version; the master is never copied. MRP includes GST.</p>
+      <p class="ph-sub" style="margin:0;padding:8px 14px;border-top:1px solid var(--pf-line)">One shared Prefrontal drug master, referenced by every clinic — a change here is kept as this lab's own version; the master is never copied. MRP includes GST.</p>
     </section>
   `,
 })
@@ -157,7 +157,7 @@ export class PharmacyDrugMasterComponent {
       valueGetter: p => originWord(p.data?.origin, p.data?.isNew),
       cellRenderer: (p: { data?: DrugGridRow; value: string }) =>
         p.data?.origin === 'override' && !p.data.isNew
-          ? `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span> <button type="button" class="nd-btn nd-btn--tertiary" data-act="revert" style="height:28px">Revert</button>`
+          ? `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span> <button type="button" class="pf-btn pf-btn--tertiary" data-act="revert" style="height:28px">Revert</button>`
           : `<span style="color:var(--text-tertiary);font-size:12px">${p.value}</span>`,
     },
   ];

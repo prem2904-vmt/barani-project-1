@@ -335,9 +335,9 @@ describe('ProfileLayoutDesignerComponent — Custom layout pages', () => {
   it('table box rows: Top / Fill / Center and Compact / Normal / Relaxed are saved on the box, undoable', () => {
     const { f, c, el, emitted } = make({ sections: saved([tbl('table')]) });
     c.select('table'); f.detectChanges();
-    const segs = [...el.querySelectorAll('[aria-label="Rows in this box"] .nd-seg__item')].map(e => e.textContent!.trim());
+    const segs = [...el.querySelectorAll('[aria-label="Rows in this box"] .pf-seg__item')].map(e => e.textContent!.trim());
     expect(segs).toEqual(['Top', 'Fill', 'Center']);
-    expect([...el.querySelectorAll('[aria-label="Row spacing"] .nd-seg__item')].map(e => e.textContent!.trim())).toEqual(['Compact', 'Normal', 'Relaxed']);
+    expect([...el.querySelectorAll('[aria-label="Row spacing"] .pf-seg__item')].map(e => e.textContent!.trim())).toEqual(['Compact', 'Normal', 'Relaxed']);
     c.setVAlign('fill'); c.setRowSpacing('relaxed');
     let box = pagesOf(emitted)[0].boxes[0];
     expect([box.vAlign, box.rowSpacing]).toEqual(['fill', 'relaxed']);
@@ -471,7 +471,7 @@ describe('ProfileLayoutDesignerComponent — kit rules', () => {
     const { f, c, el } = make({ sections: saved([{ id: 'a', kind: 'analyzer', ref: '12003', x: 120, y: 0, w: 30, h: 30 }, { id: 'table', kind: 'table', x: 0, y: 0, w: 100, h: 80 }]) });
     c.select('a'); f.detectChanges();
     expect(el.querySelector('select, datalist')).toBeNull();
-    expect(el.querySelector('.nd-btn--primary')).toBeNull();
+    expect(el.querySelector('.pf-btn--primary')).toBeNull();
     expect(el.querySelectorAll('svg').length).toBeGreaterThan(3);
     expect(/[\u{1F300}-\u{1FAFF}]/u.test(el.textContent ?? '')).toBe(false);
   });

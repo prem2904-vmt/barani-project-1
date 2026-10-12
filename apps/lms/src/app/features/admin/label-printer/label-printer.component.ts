@@ -35,7 +35,7 @@ export const PREVIEW_LABEL: LabelData = {
  *   • Document printer — an OS printer for A4 invoices/reports (Electron).
  * At print time the transport auto-selects USB → Bluetooth.
  *
- * New design (ND-PATTERN): band pill = context bar (Printing · this station ·
+ * New design (PF-PATTERN): band pill = context bar (Printing · this station ·
  * label-printer status), Test print is the ONE primary; kit cards below — the
  * work (label + position) left, the station's printer + quality right.
  */
@@ -59,24 +59,24 @@ export const PREVIEW_LABEL: LabelData = {
             </button>
           </ng-container>
           <!-- Context bar: what this page is, whose station, and the printer's state. -->
-          <div band-search class="nd-ctx pf-lp-ctx">
-            <span class="nd-ctx__primary">Printing</span>
-            <span class="nd-ctx__chip pf-lp-status" [attr.data-state]="printerState()" role="status">
+          <div band-search class="pf-ctx pf-lp-ctx">
+            <span class="pf-ctx__primary">Printing</span>
+            <span class="pf-ctx__chip pf-lp-status" [attr.data-state]="printerState()" role="status">
               <span class="pf-lp-status__mark" aria-hidden="true">
                 @if (printerState() === 'connected') {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                 }
               </span>
-              <span class="nd-ctx__k">Label printer</span>{{ printerStatusText() }}
+              <span class="pf-ctx__k">Label printer</span>{{ printerStatusText() }}
             </span>
-            <span class="nd-ctx__chip pf-lp-ctx__station"><span class="nd-ctx__k">This station</span>{{ stationLabel }}</span>
+            <span class="pf-ctx__chip pf-lp-ctx__station"><span class="pf-ctx__k">This station</span>{{ stationLabel }}</span>
           </div>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" title="Printing"
         subtitle="Set up this station's printers and label. USB is used automatically when connected, otherwise Bluetooth.">
         <div actions>
-          <button type="button" class="nd-btn nd-btn--primary press" (click)="test()" [disabled]="busy()" [pfBusy]="testing()" pfBusyLabel="Printing…">Test print</button>
+          <button type="button" class="pf-btn pf-btn--primary press" (click)="test()" [disabled]="busy()" [pfBusy]="testing()" pfBusyLabel="Printing…">Test print</button>
         </div>
       </pf-screen-header>
 
@@ -85,32 +85,32 @@ export const PREVIEW_LABEL: LabelData = {
 
       <!-- ── MAIN: the label itself ─────────────────────────────── -->
       <div class="pf-lp-col">
-      <section class="nd-card pf-lp-card" data-card="label" aria-labelledby="pf-lp-h-label">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>
-          <h3 class="nd-card__label" id="pf-lp-h-label">Label size</h3>
-          <span class="nd-card__note">The roll loaded in this station's printer, and where the print lands on it.</span>
+      <section class="pf-card pf-lp-card" data-card="label" aria-labelledby="pf-lp-h-label">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>
+          <h3 class="pf-card__label" id="pf-lp-h-label">Label size</h3>
+          <span class="pf-card__note">The roll loaded in this station's printer, and where the print lands on it.</span>
         </div>
-        <div class="nd-card__body pf-lp-body">
-          <div class="nd-field">
-            <span class="nd-field__lbl" id="pf-lp-presets">Common tube labels</span>
+        <div class="pf-card__body pf-lp-body">
+          <div class="pf-field">
+            <span class="pf-field__lbl" id="pf-lp-presets">Common tube labels</span>
             <div class="pf-lp-presets" role="group" aria-labelledby="pf-lp-presets">
               @for (p of sizePresets; track p.label) {
-                <button type="button" class="nd-chip pf-lp-preset nd-num" [attr.aria-pressed]="isPreset(p)"
+                <button type="button" class="pf-chip pf-lp-preset pf-num" [attr.aria-pressed]="isPreset(p)"
                         (click)="printConfig.setLabelSize(p.widthMm, p.heightMm)">{{ p.label }}</button>
               }
             </div>
           </div>
           <div class="pf-lp-sizes">
-            <label class="nd-field pf-lp-size">
-              <span class="nd-field__lbl">Width (mm)</span>
-              <input type="number" min="10" max="120" step="0.1" inputmode="decimal" class="nd-input nd-num" data-field="width"
+            <label class="pf-field pf-lp-size">
+              <span class="pf-field__lbl">Width (mm)</span>
+              <input type="number" min="10" max="120" step="0.1" inputmode="decimal" class="pf-input pf-num" data-field="width"
                      [value]="cfg().labelWidthMm" (change)="onSize('w', $any($event.target).valueAsNumber)">
             </label>
             <span class="pf-lp-times" aria-hidden="true">×</span>
-            <label class="nd-field pf-lp-size">
-              <span class="nd-field__lbl">Height (mm)</span>
-              <input type="number" min="10" max="120" step="0.1" inputmode="decimal" class="nd-input nd-num" data-field="height"
+            <label class="pf-field pf-lp-size">
+              <span class="pf-field__lbl">Height (mm)</span>
+              <input type="number" min="10" max="120" step="0.1" inputmode="decimal" class="pf-input pf-num" data-field="height"
                      [value]="cfg().labelHeightMm" (change)="onSize('h', $any($event.target).valueAsNumber)">
             </label>
           </div>
@@ -127,7 +127,7 @@ export const PREVIEW_LABEL: LabelData = {
                 <canvas #prev class="pf-lp-label__bmp" role="img"
                         [attr.aria-label]="'Sample label, ' + cfg().labelWidthMm + ' by ' + cfg().labelHeightMm + ' millimetres, ' + codeLabel()"></canvas>
               </div>
-              <figcaption class="pf-lp-cap nd-num">{{ cfg().labelWidthMm }} × {{ cfg().labelHeightMm }} mm · landscape, code beside the text</figcaption>
+              <figcaption class="pf-lp-cap pf-num">{{ cfg().labelWidthMm }} × {{ cfg().labelHeightMm }} mm · landscape, code beside the text</figcaption>
             </figure>
             <div class="pf-nudge" role="group" aria-label="Nudge print position">
               <button type="button" (click)="printConfig.nudge(0, -0.5)" aria-label="Up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
@@ -141,12 +141,12 @@ export const PREVIEW_LABEL: LabelData = {
           </div>
           <div class="pf-lp-align" data-card="align">
             <div class="pf-lp-align__info">
-              <span class="nd-field__lbl">Print position</span>
-              <p class="pf-lp-offsets nd-num">X {{ cfg().offsetXmm }} mm · Y {{ cfg().offsetYmm }} mm · Code {{ cfg().rotation }}°</p>
+              <span class="pf-field__lbl">Print position</span>
+              <p class="pf-lp-offsets pf-num">X {{ cfg().offsetXmm }} mm · Y {{ cfg().offsetYmm }} mm · Code {{ cfg().rotation }}°</p>
             </div>
             <div class="pf-lp-row">
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="resetAlign()">Reset</button>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="printConfig.rotate()">
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="resetAlign()">Reset</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="printConfig.rotate()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
                 Rotate code ({{ cfg().rotation }}°)
               </button>
@@ -163,20 +163,20 @@ export const PREVIEW_LABEL: LabelData = {
 
       <!-- ── DOCUMENT PRINTER (invoices) ───────────────────────── -->
       @if (isElectron) {
-        <section class="nd-card pf-lp-card" data-card="docs" aria-labelledby="pf-lp-h-docs">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
-            <h3 class="nd-card__label" id="pf-lp-h-docs">Invoice / document printer</h3>
+        <section class="pf-card pf-lp-card" data-card="docs" aria-labelledby="pf-lp-h-docs">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+            <h3 class="pf-card__label" id="pf-lp-h-docs">Invoice / document printer</h3>
           </div>
-          <div class="nd-card__body pf-lp-body">
+          <div class="pf-card__body pf-lp-body">
             <div class="pf-lp-docs">
-              <div class="nd-field pf-lp-docs__pick">
-                <span class="nd-field__lbl">A4 printer for invoices &amp; reports</span>
+              <div class="pf-field pf-lp-docs__pick">
+                <span class="pf-field__lbl">A4 printer for invoices &amp; reports</span>
                 <pf-select class="block w-full" [options]="docPrinterOptions()" [value]="cfg().documentPrinter ?? ''"
                            [searchable]="systemPrinters().length > 8"
                            (valueChange)="printConfig.setDocumentPrinter($any($event))"></pf-select>
               </div>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="loadSystemPrinters()">Refresh</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="loadSystemPrinters()">Refresh</button>
             </div>
           </div>
         </section>
@@ -185,12 +185,12 @@ export const PREVIEW_LABEL: LabelData = {
 
       <!-- ── SIDE: this station's printers + quality ─────────────── -->
       <div class="pf-lp-col">
-      <section class="nd-card pf-lp-card" data-card="printer" aria-labelledby="pf-lp-h-printer">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg></span>
-          <h3 class="nd-card__label" id="pf-lp-h-printer">Label printer</h3>
+      <section class="pf-card pf-lp-card" data-card="printer" aria-labelledby="pf-lp-h-printer">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg></span>
+          <h3 class="pf-card__label" id="pf-lp-h-printer">Label printer</h3>
         </div>
-        <div class="nd-card__body pf-lp-body">
+        <div class="pf-card__body pf-lp-body">
           @if (!supported()) {
             <p class="pf-note">
               Tube labels print only on a label printer, driven by the installed <b>Prefrontal</b>
@@ -207,7 +207,7 @@ export const PREVIEW_LABEL: LabelData = {
                 </span>
               </div>
               @if (cfg().labelRoute === 'system') {
-                <button type="button" class="nd-btn nd-btn--secondary" (click)="printConfig.setLabelRoute('printer')">Ask each time</button>
+                <button type="button" class="pf-btn pf-btn--secondary" (click)="printConfig.setLabelRoute('printer')">Ask each time</button>
               }
             </div>
           }
@@ -221,7 +221,7 @@ export const PREVIEW_LABEL: LabelData = {
                   @else { Not connected }
                 </span>
               </div>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="refreshUsb()">Refresh</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="refreshUsb()">Refresh</button>
             </div>
 
             <div class="pf-lp-conn" data-conn="ble">
@@ -232,7 +232,7 @@ export const PREVIEW_LABEL: LabelData = {
                   @if (printer.bleConnected()) { <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
                 </span>
               </div>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="startBlePair()" [disabled]="pairing()">
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="startBlePair()" [disabled]="pairing()">
                 {{ pairing() ? 'Scanning…' : 'Pair Bluetooth' }}
               </button>
             </div>
@@ -261,7 +261,7 @@ export const PREVIEW_LABEL: LabelData = {
                   @if (printer.connected()) { <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
                 </span>
               </div>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="scan()" [disabled]="busy()" [pfBusy]="scanning()" pfBusyLabel="Scanning…">
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="scan()" [disabled]="busy()" [pfBusy]="scanning()" pfBusyLabel="Scanning…">
                 {{ scanning() ? 'Scanning…' : 'Scan' }}
               </button>
             </div>
@@ -283,38 +283,38 @@ export const PREVIEW_LABEL: LabelData = {
       </section>
 
       <!-- ── Code & print quality (driver) ──────────────────────── -->
-      <section class="nd-card pf-lp-card" data-card="quality" aria-labelledby="pf-lp-h-quality">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
-          <h3 class="nd-card__label" id="pf-lp-h-quality">Code &amp; quality</h3>
+      <section class="pf-card pf-lp-card" data-card="quality" aria-labelledby="pf-lp-h-quality">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
+          <h3 class="pf-card__label" id="pf-lp-h-quality">Code &amp; quality</h3>
         </div>
-        <div class="nd-card__body pf-lp-body">
+        <div class="pf-card__body pf-lp-body">
           <div class="pf-lp-code">
             <div class="pf-lp-conn__txt">
               <span class="pf-lp-conn__k">Code on every label</span>
-              <span class="pf-lp-conn__v pf-lp-code__v"><span class="nd-chip nd-chip--static pf-lp-codechip">{{ codeLabel() }}</span>
+              <span class="pf-lp-conn__v pf-lp-code__v"><span class="pf-chip pf-chip--static pf-lp-codechip">{{ codeLabel() }}</span>
                 <span class="pf-hint">Organisation policy, set by an admin</span></span>
             </div>
             @if (canEditCode) {
-              <a class="nd-btn nd-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings">Lab settings</a>
+              <a class="pf-btn pf-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings">Lab settings</a>
             }
           </div>
-          <label class="nd-field pf-lp-slider">
-            <span class="nd-field__lbl pf-lp-slider__lbl">Darkness / thickness <span class="nd-num">{{ cfg().density }}/15</span></span>
+          <label class="pf-field pf-lp-slider">
+            <span class="pf-field__lbl pf-lp-slider__lbl">Darkness / thickness <span class="pf-num">{{ cfg().density }}/15</span></span>
             <input type="range" min="1" max="15" class="pf-range" data-field="density" [value]="cfg().density"
                    (input)="printConfig.setDensity($any($event.target).valueAsNumber)">
           </label>
-          <label class="nd-field pf-lp-slider">
-            <span class="nd-field__lbl pf-lp-slider__lbl">Speed <span class="nd-num">{{ cfg().speed }}/5</span></span>
+          <label class="pf-field pf-lp-slider">
+            <span class="pf-field__lbl pf-lp-slider__lbl">Speed <span class="pf-num">{{ cfg().speed }}/5</span></span>
             <input type="range" min="1" max="5" class="pf-range" data-field="speed" [value]="cfg().speed"
                    (input)="printConfig.setSpeed($any($event.target).valueAsNumber)">
           </label>
-          <label class="nd-field pf-lp-slider">
-            <span class="nd-field__lbl pf-lp-slider__lbl">Code size <span class="nd-num">{{ cfg().codeScalePct }}%</span></span>
+          <label class="pf-field pf-lp-slider">
+            <span class="pf-field__lbl pf-lp-slider__lbl">Code size <span class="pf-num">{{ cfg().codeScalePct }}%</span></span>
             <input type="range" min="50" max="130" class="pf-range" data-field="codeScale" [value]="cfg().codeScalePct"
                    (input)="printConfig.setCodeScale($any($event.target).valueAsNumber)">
           </label>
-          <p class="nd-field__hint">Higher darkness = bolder/thicker; slower speed = crisper. Shrink <strong>Code size</strong>
+          <p class="pf-field__hint">Higher darkness = bolder/thicker; slower speed = crisper. Shrink <strong>Code size</strong>
             for narrow tube labels — but not so small the scanner can't read it.</p>
         </div>
       </section>
@@ -333,9 +333,9 @@ export const PREVIEW_LABEL: LabelData = {
     .pf-lp-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
     @media (min-width: 1024px) { .pf-lp-grid { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); } }
     .pf-lp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-    .pf-lp-card .nd-card__body { overflow: visible; }
+    .pf-lp-card .pf-card__body { overflow: visible; }
     .pf-lp-body { padding: 14px 16px 16px; gap: 14px; }
-    .pf-lp-card .nd-card__note { flex: 1 1 180px; }
+    .pf-lp-card .pf-card__note { flex: 1 1 180px; }
 
     /* Context bar: the printer-status chip carries the ONE violet mark. */
     .pf-lp-ctx__station, .pf-lp-status { gap: 6px; }
@@ -356,15 +356,15 @@ export const PREVIEW_LABEL: LabelData = {
        every theme (it represents the physical label). 1 printer dot = 1 CSS
        px (8 px/mm) so the bitmap is shown crisp at its real resolution. */
     .pf-lp-stage { display: flex; align-items: center; gap: 16px; padding: 18px 16px 12px;
-      border-radius: var(--nd-radius, 12px); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
+      border-radius: var(--pf-radius, 12px); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     .pf-lp-fig { flex: 1 1 auto; min-width: 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .pf-lp-label { position: relative; max-width: 100%; background: #fff; border-radius: 4px; overflow: hidden;
       box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.12); }
     .pf-lp-label__bmp { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
     .pf-lp-cap { font-size: 12px; color: var(--text-tertiary); text-align: center; }
     .pf-lp-warn { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px;
-      border-radius: var(--nd-radius-sm, 10px); font-size: 12.5px; line-height: 1.45; text-wrap: pretty;
-      color: var(--text-primary); background: var(--nd-chip-bg); border: 1px solid var(--nd-sel-border); }
+      border-radius: var(--pf-radius-sm, 10px); font-size: 12.5px; line-height: 1.45; text-wrap: pretty;
+      color: var(--text-primary); background: var(--pf-chip-bg); border: 1px solid var(--pf-sel-border); }
     .pf-lp-warn > svg { flex: none; margin-top: 1px; color: var(--text-secondary); }
 
     /* Print position: the pad beside the preview, the readout + actions below. */
@@ -375,14 +375,14 @@ export const PREVIEW_LABEL: LabelData = {
     .pf-nudge { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
     .pf-nudge-mid { display: flex; gap: 4px; }
     .pf-nudge button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
-      border-radius: 9px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); cursor: pointer; }
-    .pf-nudge button:hover { border-color: var(--nd-sel-border); }
-    .pf-nudge button:active { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+      border-radius: 9px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); cursor: pointer; }
+    .pf-nudge button:hover { border-color: var(--pf-sel-border); }
+    .pf-nudge button:active { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pf-nudge button:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
     /* Connection rows (USB / Bluetooth) + the code row */
     .pf-lp-conn, .pf-lp-code { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+      padding: 10px 12px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-lp-code { padding: 0; border: 0; background: transparent; }
     .pf-lp-conn__txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
     .pf-lp-conn__k { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
@@ -391,19 +391,19 @@ export const PREVIEW_LABEL: LabelData = {
     .pf-lp-code__v { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
     .pf-lp-card[data-card='quality'] .pf-lp-body { gap: 12px; }
     .pf-lp-codelink { flex: none; text-decoration: none; }
-    .pf-lp-conn .nd-btn { flex: none; height: 40px; min-height: 40px; }
+    .pf-lp-conn .pf-btn { flex: none; height: 40px; min-height: 40px; }
 
     /* Sliders: slate accent, value in tabular numbers on the label row */
     .pf-lp-slider__lbl { display: flex; justify-content: space-between; gap: 8px; }
-    .pf-lp-slider__lbl .nd-num { color: var(--text-primary); font-weight: 600; }
-    .pf-range { width: 100%; min-width: 0; height: 24px; margin: 0; accent-color: var(--nd-toggle-on, #aeb8c2); cursor: pointer; }
+    .pf-lp-slider__lbl .pf-num { color: var(--text-primary); font-weight: 600; }
+    .pf-range { width: 100%; min-width: 0; height: 24px; margin: 0; accent-color: var(--pf-toggle-on, #aeb8c2); cursor: pointer; }
 
     /* Document printer */
     .pf-lp-docs { display: flex; align-items: flex-end; gap: 10px; }
     .pf-lp-docs__pick { flex: 1 1 auto; }
 
-    .pf-note { margin: 0; border-radius: var(--nd-radius, 12px); padding: 12px 14px; font-size: 13px; line-height: 1.5;
-      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); color: var(--text-secondary); text-wrap: pretty; }
+    .pf-note { margin: 0; border-radius: var(--pf-radius, 12px); padding: 12px 14px; font-size: 13px; line-height: 1.5;
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line); color: var(--text-secondary); text-wrap: pretty; }
     .pf-wrap { overflow-wrap: anywhere; }
     /* Connected = neutral text + a violet check (never green). */
     .pf-ok { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 12.5px; color: var(--text-secondary); }
@@ -411,18 +411,18 @@ export const PREVIEW_LABEL: LabelData = {
     .pf-muted { margin: 0; padding: 12px 14px; font-size: 13px; color: var(--text-muted); }
     .pf-hint { font-size: 12px; color: var(--text-muted); }
     .pf-mono { display: block; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
-    .pf-list { border: 1px solid var(--nd-line); background: var(--nd-card-bg); border-radius: var(--nd-radius-sm, 10px); overflow: hidden; }
+    .pf-list { border: 1px solid var(--pf-line); background: var(--pf-card-bg); border-radius: var(--pf-radius-sm, 10px); overflow: hidden; }
     .pf-row { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
-      text-align: left; background: transparent; color: var(--text-primary); border: 0; border-bottom: 1px solid var(--nd-line); cursor: pointer; font: inherit; font-size: 13.5px; }
+      text-align: left; background: transparent; color: var(--text-primary); border: 0; border-bottom: 1px solid var(--pf-line); cursor: pointer; font: inherit; font-size: 13.5px; }
     .pf-row:last-child { border-bottom: 0; }
-    .pf-row:hover { background: var(--nd-chip-bg); }
+    .pf-row:hover { background: var(--pf-chip-bg); }
 
     /* Touch tiers (iPad + phones, and touch-first devices at any width):
        44px targets everywhere. */
     @include dt.tablet-tier {
       .pf-lp-preset { height: 44px; }
       .pf-nudge button { width: 44px; height: 44px; }
-      .pf-lp-conn .nd-btn { height: 44px; min-height: 44px; }
+      .pf-lp-conn .pf-btn { height: 44px; min-height: 44px; }
       .pf-range { height: 44px; }
       .pf-lp-codelink { min-height: 44px; height: 44px; }
     }
@@ -436,7 +436,7 @@ export const PREVIEW_LABEL: LabelData = {
       /* The label shrinks to the phone: smooth scaling reads better than
          nearest-neighbour at a fractional scale. */
       .pf-lp-stage { flex-direction: column; }
-      .pf-lp-card .nd-card__note { flex-basis: 100%; }
+      .pf-lp-card .pf-card__note { flex-basis: 100%; }
       .pf-lp-label__bmp { image-rendering: auto; }
     }
     @media (prefers-reduced-motion: reduce) { .pf-nudge button { transition: none; } }

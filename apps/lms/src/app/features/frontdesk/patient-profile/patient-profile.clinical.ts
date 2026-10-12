@@ -1,5 +1,5 @@
 /**
- * Patient profile — CLINICAL-FIRST helpers (docs/ND-PATTERN.md §22).
+ * Patient profile — CLINICAL-FIRST helpers (docs/PF-PATTERN.md §22).
  *
  * Pure functions, no Angular: the page reads
  *  - GET /api/patients/{id}                    → patient, orders (history), appointments

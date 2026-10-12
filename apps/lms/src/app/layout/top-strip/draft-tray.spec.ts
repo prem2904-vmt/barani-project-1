@@ -105,7 +105,7 @@ describe('draft tray — template + styles', () => {
   it('solid chips: no dashed borders, no pill radius, tabular figures, kit tokens, light + dark', () => {
     expect(css).not.toMatch(/dashed/);
     expect(css).not.toMatch(/9999px/);
-    expect(css).toMatch(/\.pf-draftshelf__chip \{[^}]*border-radius:\s*var\(--nd-radius-chip/);
+    expect(css).toMatch(/\.pf-draftshelf__chip \{[^}]*border-radius:\s*var\(--pf-radius-chip/);
     expect(css).toMatch(/\.pf-draftshelf__chip \{[^}]*font-variant-numeric:\s*tabular-nums/);
     expect(css).toMatch(/:host-context\(\.dark\) \.pf-draftshelf__chip \{/);
     expect(css).toContain('prefers-reduced-motion');

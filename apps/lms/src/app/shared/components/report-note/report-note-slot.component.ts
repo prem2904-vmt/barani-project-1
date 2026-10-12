@@ -30,12 +30,12 @@ import { ReportNoteViewComponent } from './report-note-view.component';
         </span>
         <pf-report-note-view class="pf-rns__text" [text]="text()"></pf-report-note-view>
         @if (canEdit()) {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-rns__edit" (click)="store.setOpen(scope(), key(), true)"
+          <button type="button" class="pf-btn pf-btn--tertiary pf-rns__edit" (click)="store.setOpen(scope(), key(), true)"
                   [attr.aria-label]="'Edit report note — ' + label()">Edit</button>
         }
       </div>
     } @else if (showAdd() && canEdit()) {
-      <button type="button" class="nd-btn nd-btn--quiet pf-rns__add" (click)="store.setOpen(scope(), key(), true)"
+      <button type="button" class="pf-btn pf-btn--quiet pf-rns__add" (click)="store.setOpen(scope(), key(), true)"
               [attr.aria-label]="'Add report note — ' + label()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         Add report note
@@ -46,7 +46,7 @@ import { ReportNoteViewComponent } from './report-note-view.component';
     :host { display: block; min-width: 0; }
     :host:empty { display: none; }
     .pf-rns__saved { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: start; padding: 8px 10px;
-      border-radius: 10px; border: 1px dashed var(--nd-line, var(--border-muted)); background: var(--nd-card-bg, transparent); }
+      border-radius: 10px; border: 1px dashed var(--pf-line, var(--border-muted)); background: var(--pf-card-bg, transparent); }
     .pf-rns__tag { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
       letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-rns__text { grid-column: 1; }
@@ -96,10 +96,10 @@ export class ReportNoteSlotComponent {
     :host { display: inline-flex; }
     .pf-rnb { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 30px; height: 30px; padding: 0 7px;
       border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
-    .pf-rnb:hover { background: var(--nd-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
+    .pf-rnb:hover { background: var(--pf-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
     .pf-rnb:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
-    .pf-rnb[aria-pressed='true'] { border-color: var(--nd-sel-border, var(--nd-line)); background: var(--nd-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
-    .pf-rnb--text { border-color: var(--nd-line, var(--border-muted)); color: var(--text-secondary); height: 32px; padding: 0 10px; }
+    .pf-rnb[aria-pressed='true'] { border-color: var(--pf-sel-border, var(--pf-line)); background: var(--pf-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
+    .pf-rnb--text { border-color: var(--pf-line, var(--border-muted)); color: var(--text-secondary); height: 32px; padding: 0 10px; }
     .pf-rnb--has { color: var(--text-primary); }
     .pf-rnb__dot { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--color-violet-600, #7c3aed); }
     @media (pointer: coarse) { .pf-rnb { min-width: 44px; height: 44px; } }

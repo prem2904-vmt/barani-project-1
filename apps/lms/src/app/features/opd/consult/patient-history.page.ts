@@ -25,9 +25,9 @@ import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.servic
   template: `
     <section class="pf-band-page ph">
       <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx">
-          <span class="nd-ctx__primary">OPD history</span>
-          <span class="nd-ctx__chip"><span class="nd-ctx__k">Consults</span>{{ rows().length }}</span>
+        <div band-search class="pf-ctx">
+          <span class="pf-ctx__primary">OPD history</span>
+          <span class="pf-ctx__chip"><span class="pf-ctx__k">Consults</span>{{ rows().length }}</span>
         </div>
       </pf-hero-band>
       <div class="pf-band-body ph__body">
@@ -35,13 +35,13 @@ import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.servic
           @for (i of [1, 2]; track i) { <div class="ph__skel"></div> }
         }
         @for (c of rows(); track c.visitId) {
-          <article class="nd-card ph__card" [attr.data-day]="day(c.visitDate)" [class.ph__card--on]="dock.selectedKey() === day(c.visitDate)">
-            <div class="nd-card__head">
-              <span class="nd-card__label">{{ c.visitDate | date:'EEE, MMM d, y' }}</span>
-              <span class="nd-card__note">{{ c.doctorName }}@if (c.departmentName) { · {{ c.departmentName }}}</span>
-              <button type="button" class="nd-btn nd-btn--quiet" (click)="open(c.visitId)">Open</button>
+          <article class="pf-card ph__card" [attr.data-day]="day(c.visitDate)" [class.ph__card--on]="dock.selectedKey() === day(c.visitDate)">
+            <div class="pf-card__head">
+              <span class="pf-card__label">{{ c.visitDate | date:'EEE, MMM d, y' }}</span>
+              <span class="pf-card__note">{{ c.doctorName }}@if (c.departmentName) { · {{ c.departmentName }}}</span>
+              <button type="button" class="pf-btn pf-btn--quiet" (click)="open(c.visitId)">Open</button>
             </div>
-            <div class="nd-card__body ph__cb">
+            <div class="pf-card__body ph__cb">
               @if (c.diagnoses.length) { <p class="ph__dx"><b>Diagnosis:</b> {{ dx(c) }}</p> }
               @if (c.chiefComplaint) { <p class="ph__t"><b>Complaint:</b> {{ c.chiefComplaint }}</p> }
               @if (c.form) {
@@ -61,7 +61,7 @@ import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.servic
           </article>
         } @empty {
           @if (!loading()) {
-            <div class="nd-empty"><p class="nd-empty__title">No completed OPD consults yet</p></div>
+            <div class="pf-empty"><p class="pf-empty__title">No completed OPD consults yet</p></div>
           }
         }
       </div>
@@ -82,7 +82,7 @@ import { JourneyDockService, journeyDayKey } from '../shared/journey-dock.servic
     .ph__muted { margin: 0; font-size: 12px; color: var(--text-tertiary); }
     .ph__card--on { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent); }
     .ph__dock { margin-inline: calc(-1 * var(--pf-hb-bleed, 0px)); }
-    .ph__skel { height: 140px; border-radius: 16px; background: var(--nd-chip-bg); }
+    .ph__skel { height: 140px; border-radius: 16px; background: var(--pf-chip-bg); }
   `],
 })
 export class OpdPatientHistoryPage implements OnInit, OnDestroy {

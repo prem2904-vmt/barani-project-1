@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { labToday } from '../../../shared/utils/lab-clock';
@@ -30,15 +30,15 @@ export const PO_WORDS: Record<PoStatus, string> = { draft: 'Draft', sent: 'Sent'
 @Component({
   selector: 'pf-pharmacy-purchase-orders',
   standalone: true,
-  imports: [HeroBandComponent, NdDateComponent, SelectComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
+  imports: [HeroBandComponent, PfDateComponent, SelectComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
     <section class="pf-band-page ph">
       <pf-hero-band [back]="true" backTo="/opd/pharmacy" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx ph-ctx">
-          <span class="nd-ctx__primary">{{ po()?.poNumber || (po() ? 'Draft order' : editing() ? 'New order' : 'Purchase orders') }}</span>
-          @if (po(); as p) { <span class="nd-ctx__chip">{{ words[p.status] }}</span><span class="nd-ctx__chip">{{ p.supplierName }}</span> }
+        <div band-search class="pf-ctx ph-ctx">
+          <span class="pf-ctx__primary">{{ po()?.poNumber || (po() ? 'Draft order' : editing() ? 'New order' : 'Purchase orders') }}</span>
+          @if (po(); as p) { <span class="pf-ctx__chip">{{ words[p.status] }}</span><span class="pf-ctx__chip">{{ p.supplierName }}</span> }
         </div>
         <pf-pharmacy-sections band-tools active="purchases"></pf-pharmacy-sections>
         <ng-container band-actions>
@@ -50,64 +50,64 @@ export const PO_WORDS: Record<PoStatus, string> = { draft: 'Draft', sent: 'Sent'
       </pf-hero-band>
 
       <div class="ph-body ph-body--left">
-        <aside class="nd-card" aria-labelledby="ph-pol-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01"/></svg></span>
-            <span class="nd-card__label" id="ph-pol-t">Orders</span>
-            <span class="nd-card__spacer"></span>
-            <div class="nd-seg" role="radiogroup" aria-label="Show">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="open()" (click)="open.set(true)">Open</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="!open()" (click)="open.set(false)">All</button>
+        <aside class="pf-card" aria-labelledby="ph-pol-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01"/></svg></span>
+            <span class="pf-card__label" id="ph-pol-t">Orders</span>
+            <span class="pf-card__spacer"></span>
+            <div class="pf-seg" role="radiogroup" aria-label="Show">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="open()" (click)="open.set(true)">Open</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="!open()" (click)="open.set(false)">All</button>
             </div>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @for (r of list(); track r.id) {
               <button type="button" class="ph-row press" [attr.aria-current]="r.id === po()?.id" (click)="openPo(r.id)">
                 <span class="ph-row__main"><span class="ph-row__name">{{ r.supplierName }}</span>
-                  <span class="ph-row__meta nd-num">{{ r.poNumber || 'Draft' }} · {{ r.lines }} {{ r.lines === 1 ? 'line' : 'lines' }}</span></span>
-                <span class="ph-row__end"><span class="nd-num">{{ inr(r.total, false) }}</span>
+                  <span class="ph-row__meta pf-num">{{ r.poNumber || 'Draft' }} · {{ r.lines }} {{ r.lines === 1 ? 'line' : 'lines' }}</span></span>
+                <span class="ph-row__end"><span class="pf-num">{{ inr(r.total, false) }}</span>
                   <span class="ph-dot" [attr.data-tone]="r.status === 'received' ? 'done' : r.status === 'cancelled' ? 'bad' : r.status === 'draft' ? null : 'warn'">{{ words[r.status] }}</span></span>
               </button>
             } @empty { <p class="ph-sub ph-empty-pad">No {{ open() ? 'open ' : '' }}purchase orders.</p> }
           </div>
         </aside>
 
-        <section class="nd-card" aria-labelledby="ph-po-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span>
-            <span class="nd-card__label" id="ph-po-t">{{ receiving() ? 'Goods received' : 'Order' }}</span>
-            <span class="nd-card__note">{{ receiving() ? 'Enter the batch no., expiry and MRP printed on each carton.' : 'Cost is per unit before GST.' }}</span>
+        <section class="pf-card" aria-labelledby="ph-po-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span>
+            <span class="pf-card__label" id="ph-po-t">{{ receiving() ? 'Goods received' : 'Order' }}</span>
+            <span class="pf-card__note">{{ receiving() ? 'Enter the batch no., expiry and MRP printed on each carton.' : 'Cost is per unit before GST.' }}</span>
           </header>
           @if (!editing() && !po()) {
-            <div class="nd-card__body"><div class="nd-empty"><p class="nd-empty__title">Pick an order or start a new one</p><p class="nd-empty__body">Draft → send to the supplier → receive the goods; received goods become batches in stock.</p>
-              <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="startNew()">New order</button></div></div>
+            <div class="pf-card__body"><div class="pf-empty"><p class="pf-empty__title">Pick an order or start a new one</p><p class="pf-empty__body">Draft → send to the supplier → receive the goods; received goods become batches in stock.</p>
+              <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="startNew()">New order</button></div></div>
           } @else if (receiving()) {
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="ph-tablewrap"><table class="ph-table">
                 <thead><tr><th>Drug</th><th class="r">Ordered</th><th class="r">Got</th><th class="r">Now</th><th>Batch no.</th><th>Expiry</th><th class="r">MRP ₹</th></tr></thead>
                 <tbody>
                   @for (g of grn(); track g.poLineId; let i = $index) {
                     <tr>
                       <td>{{ g.name }}</td><td class="r">{{ g.ordered }}</td><td class="r">{{ g.received }}</td>
-                      <td class="r"><input class="nd-input nd-num" style="width:80px" type="number" min="0" [value]="g.qty" (input)="setGrn(i, 'qty', +$any($event.target).value)" [attr.aria-label]="'Receive now ' + g.name" /></td>
-                      <td><input class="nd-input nd-num" style="width:120px" [value]="g.batchNo" (input)="setGrn(i, 'batchNo', $any($event.target).value)" [attr.aria-label]="'Batch ' + g.name" /></td>
-                      <td style="min-width:160px"><pf-nd-date [label]="'Expiry ' + g.name" [value]="g.expiry" [min]="today" (valueChange)="setGrn(i, 'expiry', $event)"></pf-nd-date></td>
-                      <td class="r"><input class="nd-input nd-num" style="width:90px" type="number" min="0" step="0.01" [value]="g.mrp || ''" (input)="setGrn(i, 'mrp', +$any($event.target).value)" [attr.aria-label]="'MRP ' + g.name" /></td>
+                      <td class="r"><input class="pf-input pf-num" style="width:80px" type="number" min="0" [value]="g.qty" (input)="setGrn(i, 'qty', +$any($event.target).value)" [attr.aria-label]="'Receive now ' + g.name" /></td>
+                      <td><input class="pf-input pf-num" style="width:120px" [value]="g.batchNo" (input)="setGrn(i, 'batchNo', $any($event.target).value)" [attr.aria-label]="'Batch ' + g.name" /></td>
+                      <td style="min-width:160px"><pf-date [label]="'Expiry ' + g.name" [value]="g.expiry" [min]="today" (valueChange)="setGrn(i, 'expiry', $event)"></pf-date></td>
+                      <td class="r"><input class="pf-input pf-num" style="width:90px" type="number" min="0" step="0.01" [value]="g.mrp || ''" (input)="setGrn(i, 'mrp', +$any($event.target).value)" [attr.aria-label]="'MRP ' + g.name" /></td>
                     </tr>
                   }
                 </tbody>
               </table></div>
             </div>
-            <div class="nd-card__foot">
-              <button type="button" class="nd-btn nd-btn--danger" (click)="cancelPo()" [disabled]="po()?.status !== 'sent'">Cancel order</button>
-              <button type="button" class="nd-btn" [class.nd-btn--primary]="grnReady()" [class.nd-btn--secondary]="!grnReady()" [disabled]="!grnReady() || busy()" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="receive()">Receive goods</button>
+            <div class="pf-card__foot">
+              <button type="button" class="pf-btn pf-btn--danger" (click)="cancelPo()" [disabled]="po()?.status !== 'sent'">Cancel order</button>
+              <button type="button" class="pf-btn" [class.pf-btn--primary]="grnReady()" [class.pf-btn--secondary]="!grnReady()" [disabled]="!grnReady() || busy()" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="receive()">Receive goods</button>
             </div>
           } @else if (editing()) {
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="ph-fields">
-                <div class="nd-field"><span class="nd-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="supplierId()" (valueChange)="supplierId.set($event)" placeholder="Pick a supplier" [searchable]="true"></pf-select></div>
-                <div class="nd-field"><span class="nd-field__lbl">Expected on</span><pf-nd-date label="Expected on" [value]="expected()" [min]="today" (valueChange)="expected.set($event)"></pf-nd-date></div>
-                <div class="nd-field ph-span"><label class="nd-field__lbl" for="ph-pon">Notes</label><input id="ph-pon" class="nd-input" [value]="notes()" (input)="notes.set($any($event.target).value)" /></div>
+                <div class="pf-field"><span class="pf-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="supplierId()" (valueChange)="supplierId.set($event)" placeholder="Pick a supplier" [searchable]="true"></pf-select></div>
+                <div class="pf-field"><span class="pf-field__lbl">Expected on</span><pf-date label="Expected on" [value]="expected()" [min]="today" (valueChange)="expected.set($event)"></pf-date></div>
+                <div class="pf-field ph-span"><label class="pf-field__lbl" for="ph-pon">Notes</label><input id="ph-pon" class="pf-input" [value]="notes()" (input)="notes.set($any($event.target).value)" /></div>
               </div>
               <div class="ph-tablewrap"><table class="ph-table">
                 <thead><tr><th>Drug</th><th class="r">Qty</th><th class="r">Cost ₹</th><th class="r">GST</th><th class="r">Total</th><th><span class="sr-only">Remove</span></th></tr></thead>
@@ -115,25 +115,25 @@ export const PO_WORDS: Record<PoStatus, string> = { draft: 'Draft', sent: 'Sent'
                   @for (l of lines(); track l.drugId; let i = $index) {
                     <tr>
                       <td>{{ l.name }} <span class="ph-sub">{{ l.strength }}</span></td>
-                      <td class="r"><input class="nd-input nd-num" style="width:90px;margin-left:auto;text-align:right" type="number" min="1" [value]="l.qty" (input)="setLine(i, 'qty', +$any($event.target).value)" [attr.aria-label]="'Quantity ' + l.name" /></td>
-                      <td class="r"><input class="nd-input nd-num" style="width:90px;margin-left:auto;text-align:right" type="number" min="0" step="0.01" [value]="l.unitCost || ''" (input)="setLine(i, 'unitCost', +$any($event.target).value)" [attr.aria-label]="'Cost ' + l.name" /></td>
+                      <td class="r"><input class="pf-input pf-num" style="width:90px;margin-left:auto;text-align:right" type="number" min="1" [value]="l.qty" (input)="setLine(i, 'qty', +$any($event.target).value)" [attr.aria-label]="'Quantity ' + l.name" /></td>
+                      <td class="r"><input class="pf-input pf-num" style="width:90px;margin-left:auto;text-align:right" type="number" min="0" step="0.01" [value]="l.unitCost || ''" (input)="setLine(i, 'unitCost', +$any($event.target).value)" [attr.aria-label]="'Cost ' + l.name" /></td>
                       <td class="r">{{ l.taxSlab }}%</td>
                       <td class="r">{{ inr(total(l)) }}</td>
-                      <td><button type="button" class="nd-btn nd-btn--icon" (click)="removeLine(i)" [attr.aria-label]="'Remove ' + l.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td>
+                      <td><button type="button" class="pf-btn pf-btn--icon" (click)="removeLine(i)" [attr.aria-label]="'Remove ' + l.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></td>
                     </tr>
                   } @empty { <tr><td colspan="6" class="ph-muted" style="text-align:center;padding:20px">Add the drugs to order below.</td></tr> }
                 </tbody>
               </table></div>
               <pf-pharmacy-drug-picker (picked)="addLine($event)"></pf-pharmacy-drug-picker>
-              <p class="ph-sub ph-right nd-num">Order total {{ inr(grand()) }}</p>
+              <p class="ph-sub ph-right pf-num">Order total {{ inr(grand()) }}</p>
             </div>
-            <div class="nd-card__foot">
-              @if (po()?.status === 'draft') { <button type="button" class="nd-btn nd-btn--danger" (click)="cancelPo()">Cancel order</button> }
-              <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!valid() || busy()" (click)="saveDraft(false)">Save draft</button>
-              <button type="button" class="nd-btn nd-span" [class.nd-btn--primary]="valid()" [class.nd-btn--secondary]="!valid()" [disabled]="!valid() || busy()" [pfBusy]="busy()" pfBusyLabel="Sending…" (click)="saveDraft(true)">Send to supplier</button>
+            <div class="pf-card__foot">
+              @if (po()?.status === 'draft') { <button type="button" class="pf-btn pf-btn--danger" (click)="cancelPo()">Cancel order</button> }
+              <button type="button" class="pf-btn pf-btn--secondary" [disabled]="!valid() || busy()" (click)="saveDraft(false)">Save draft</button>
+              <button type="button" class="pf-btn pf-span" [class.pf-btn--primary]="valid()" [class.pf-btn--secondary]="!valid()" [disabled]="!valid() || busy()" [pfBusy]="busy()" pfBusyLabel="Sending…" (click)="saveDraft(true)">Send to supplier</button>
             </div>
           } @else if (po(); as p) {
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="ph-tablewrap"><table class="ph-table">
                 <thead><tr><th>Drug</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Cost ₹</th></tr></thead>
                 <tbody>@for (l of p.lines; track l.id) { <tr><td>{{ l.drugName }}</td><td class="r">{{ l.qty }}</td><td class="r">{{ l.receivedQty }}</td><td class="r">{{ inr(l.unitCost) }}</td></tr> }</tbody>

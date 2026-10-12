@@ -35,17 +35,17 @@ import { ApiError } from '../../../shared/models/api-response.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (view(); as v) {
-    <section class="nd-card pf-wab" data-testid="ls-wa-billing-card" [attr.data-mode]="v.billing.own ? 'own' : 'shared'">
-      <div class="nd-card__head">
-        <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg></span>
-        <h3 class="nd-card__label pf-wab__title">WhatsApp usage &amp; billing</h3>
-        <span class="nd-card__spacer"></span>
+    <section class="pf-card pf-wab" data-testid="ls-wa-billing-card" [attr.data-mode]="v.billing.own ? 'own' : 'shared'">
+      <div class="pf-card__head">
+        <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg></span>
+        <h3 class="pf-card__label pf-wab__title">WhatsApp usage &amp; billing</h3>
+        <span class="pf-card__spacer"></span>
         @if (v.billing.own) {
-          <span class="nd-chip nd-chip--static pf-wab__chip" data-testid="wab-payment" [attr.data-status]="v.billing.payment.status">
+          <span class="pf-chip pf-chip--static pf-wab__chip" data-testid="wab-payment" [attr.data-status]="v.billing.payment.status">
             <span class="pf-wab__dot" [attr.data-tone]="payment().tone" aria-hidden="true"></span>{{ payment().label }}
           </span>
         } @else {
-          <span class="nd-chip nd-chip--static pf-wab__chip" data-testid="wab-payment" data-status="shared">
+          <span class="pf-chip pf-chip--static pf-wab__chip" data-testid="wab-payment" data-status="shared">
             <span class="pf-wab__dot" data-tone="muted" aria-hidden="true"></span>Prefrontal pays
           </span>
         }
@@ -99,7 +99,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
           @if (categories().length) {
             <ul class="pf-wab__cats" data-testid="wab-categories" aria-label="Messages by Meta pricing category this month">
               @for (c of categories(); track c.category) {
-                <li class="nd-chip nd-chip--static pf-wab__cat">{{ categoryLabel(c.category) }} <strong>{{ c.volume }}</strong> · {{ inr(c.cost) }}</li>
+                <li class="pf-chip pf-chip--static pf-wab__cat">{{ categoryLabel(c.category) }} <strong>{{ c.volume }}</strong> · {{ inr(c.cost) }}</li>
               }
             </ul>
           }
@@ -109,15 +109,15 @@ import { ApiError } from '../../../shared/models/api-response.model';
             <div class="pf-wab__block-head">
               <span class="pf-wab__block-t">Prepaid balance <span class="pf-wab__src">estimated</span></span>
               @if (canManage()) {
-                <button type="button" class="nd-btn nd-btn--secondary pf-wab__btn-sm" data-testid="wab-balance-update" [disabled]="busy()" [pfBusy]="act() === 'balance'" pfBusyLabel="Saving…" (click)="updateBalance()">
+                <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn-sm" data-testid="wab-balance-update" [disabled]="busy()" [pfBusy]="act() === 'balance'" pfBusyLabel="Saving…" (click)="updateBalance()">
                   {{ v.billing.balance?.source ? 'I added funds' : 'Start tracking' }}
                 </button>
               }
             </div>
             @if (v.billing.balance?.source; as src) {
               <p class="pf-wab__big" data-testid="wab-balance-amount">{{ inr(v.billing.balance!.estimated) }}
-                @if (v.billing.balance!.isOut) { <span class="nd-chip nd-chip--static pf-wab__flag" data-tone="bad">Used up</span> }
-                @else if (v.billing.balance!.isLow) { <span class="nd-chip nd-chip--static pf-wab__flag" data-tone="wait">Low</span> }
+                @if (v.billing.balance!.isOut) { <span class="pf-chip pf-chip--static pf-wab__flag" data-tone="bad">Used up</span> }
+                @else if (v.billing.balance!.isLow) { <span class="pf-chip pf-chip--static pf-wab__flag" data-tone="wait">Low</span> }
               </p>
               <p class="pf-wab__hint">You confirmed {{ inr(v.billing.balance!.reported) }} on {{ date(v.billing.balance!.reportedAt) }}; Prefrontal sent
                 {{ v.billing.balance!.messagesSince }} message(s) from your number since, about {{ inr(v.billing.balance!.spentSince) }} at Meta's utility rate.
@@ -129,12 +129,12 @@ import { ApiError } from '../../../shared/models/api-response.model';
 
           <!-- ── Pay at Meta ── -->
           <div class="pf-wab__actions">
-            <a class="nd-btn nd-btn--primary pf-wab__btn" data-testid="wab-add-payment" [href]="v.billing.links.paymentMethods" target="_blank" rel="noopener noreferrer">
+            <a class="pf-btn pf-btn--primary pf-wab__btn" data-testid="wab-add-payment" [href]="v.billing.links.paymentMethods" target="_blank" rel="noopener noreferrer">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>
               {{ v.billing.payment.status === 'set' ? 'Add funds or update payment method' : 'Add or update payment method' }}
             </a>
-            <a class="nd-btn nd-btn--secondary pf-wab__btn" data-testid="wab-account-billing" [href]="v.billing.links.accountBilling" target="_blank" rel="noopener noreferrer">Billing &amp; payments at Meta</a>
-            <button type="button" class="nd-btn nd-btn--secondary pf-wab__btn" data-testid="wab-steps-toggle" (click)="showSteps.set(!showSteps())" [attr.aria-expanded]="showSteps()">
+            <a class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-account-billing" [href]="v.billing.links.accountBilling" target="_blank" rel="noopener noreferrer">Billing &amp; payments at Meta</a>
+            <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-steps-toggle" (click)="showSteps.set(!showSteps())" [attr.aria-expanded]="showSteps()">
               {{ showSteps() ? 'Hide steps' : 'How to pay Meta' }}
             </button>
           </div>
@@ -158,16 +158,16 @@ import { ApiError } from '../../../shared/models/api-response.model';
               <span class="pf-wab__block-t">Alerts</span>
               <div class="pf-wab__fields">
                 <label class="pf-wab__field">
-                  <span class="nd-field__lbl">Monthly spend limit (₹, blank = off)</span>
-                  <input class="nd-input" type="text" inputmode="decimal" autocomplete="off" data-testid="wab-limit"
+                  <span class="pf-field__lbl">Monthly spend limit (₹, blank = off)</span>
+                  <input class="pf-input" type="text" inputmode="decimal" autocomplete="off" data-testid="wab-limit"
                          [ngModel]="limitText()" (ngModelChange)="limitText.set($event)" [disabled]="busy()" placeholder="e.g. 500" />
                 </label>
                 <label class="pf-wab__field">
-                  <span class="nd-field__lbl">Warn when the estimated balance is below (₹)</span>
-                  <input class="nd-input" type="text" inputmode="decimal" autocomplete="off" data-testid="wab-lowlevel"
+                  <span class="pf-field__lbl">Warn when the estimated balance is below (₹)</span>
+                  <input class="pf-input" type="text" inputmode="decimal" autocomplete="off" data-testid="wab-lowlevel"
                          [ngModel]="lowText()" (ngModelChange)="lowText.set($event)" [disabled]="busy()" placeholder="200" />
                 </label>
-                <button type="button" class="nd-btn nd-btn--secondary pf-wab__btn" data-testid="wab-save-thresholds" [disabled]="busy() || !thresholdsDirty()" [pfBusy]="act() === 'thresholds'" pfBusyLabel="Saving…" (click)="saveThresholds()">Save alerts</button>
+                <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-save-thresholds" [disabled]="busy() || !thresholdsDirty()" [pfBusy]="act() === 'thresholds'" pfBusyLabel="Saving…" (click)="saveThresholds()">Save alerts</button>
               </div>
               <p class="pf-wab__hint">Alerts go to lab admins: at 80 % and 100 % of the monthly limit (once a month), when the estimated balance drops below the level, and whenever Meta refuses a message for payment.</p>
             </div>
@@ -186,8 +186,8 @@ import { ApiError } from '../../../shared/models/api-response.model';
           <div class="pf-wab__block" data-testid="wab-credits" [attr.data-state]="v.credits.isExhausted ? 'exhausted' : v.credits.isLow ? 'low' : 'ok'">
             <div class="pf-wab__block-head">
               <span class="pf-wab__block-t">Message credits on the shared number</span>
-              @if (v.credits.isExhausted) { <span class="nd-chip nd-chip--static pf-wab__flag" data-tone="bad">Used up</span> }
-              @else if (v.credits.isLow) { <span class="nd-chip nd-chip--static pf-wab__flag" data-tone="wait">Running low</span> }
+              @if (v.credits.isExhausted) { <span class="pf-chip pf-chip--static pf-wab__flag" data-tone="bad">Used up</span> }
+              @else if (v.credits.isLow) { <span class="pf-chip pf-chip--static pf-wab__flag" data-tone="wait">Running low</span> }
             </div>
             <p class="pf-wab__big" data-testid="wab-credits-balance">{{ v.credits.balance ?? 0 }} <span class="pf-wab__src">credits left</span></p>
             <p class="pf-wab__hint">{{ v.credits.usedThisMonth }} used this month · one credit per message sent from the shared number.
@@ -209,7 +209,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
             }
           </span>
           @if (v.billing.own && canManage()) {
-            <button type="button" class="nd-btn nd-btn--secondary pf-wab__btn-sm" data-testid="wab-refresh" [disabled]="busy()" [pfBusy]="act() === 'refresh'" pfBusyLabel="Refreshing…" (click)="refresh()">Refresh usage</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-wab__btn-sm" data-testid="wab-refresh" [disabled]="busy()" [pfBusy]="act() === 'refresh'" pfBusyLabel="Refreshing…" (click)="refresh()">Refresh usage</button>
           }
         </div>
       </div>
@@ -238,13 +238,13 @@ import { ApiError } from '../../../shared/models/api-response.model';
     .pf-wab__dot[data-tone='wait'] { background: #d97706; }
     .pf-wab__dot[data-tone='bad']  { background: #dc2626; }
 
-    .pf-wab__alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--nd-radius, 12px);
+    .pf-wab__alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--pf-radius, 12px);
       border: 1px solid rgba(220, 38, 38, 0.35); background: rgba(220, 38, 38, 0.06); color: #b91c1c; }
     .pf-wab__alert[data-tone='wait'] { border-color: rgba(217, 119, 6, 0.4); background: rgba(217, 119, 6, 0.08); color: #b45309; }
     .pf-wab__alert svg { flex-shrink: 0; margin-top: 1px; }
     .pf-wab__alert-t { margin: 0; font-size: 13px; font-weight: 600; }
     .pf-wab__alert-s { margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
-    .pf-wab__warn { margin: 0; padding: 10px 12px; border-radius: var(--nd-radius, 12px); font-size: 12.5px; line-height: 1.5;
+    .pf-wab__warn { margin: 0; padding: 10px 12px; border-radius: var(--pf-radius, 12px); font-size: 12.5px; line-height: 1.5;
       border: 1px solid rgba(217, 119, 6, 0.4); background: rgba(217, 119, 6, 0.08); color: #b45309; }
 
     .pf-wab__facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 16px; }
@@ -254,7 +254,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
     .pf-wab__cats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-wab__cat { height: auto; min-height: 28px; gap: 4px; }
 
-    .pf-wab__block { border-top: 1px solid var(--nd-line, rgba(148,163,184,0.25)); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .pf-wab__block { border-top: 1px solid var(--pf-line, rgba(148,163,184,0.25)); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
     .pf-wab__block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
     .pf-wab__block-t { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-wab__big { margin: 0; font-size: 22px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -269,8 +269,8 @@ import { ApiError } from '../../../shared/models/api-response.model';
     .pf-wab__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-wab__fields { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
     .pf-wab__field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 220px; min-width: 0; }
-    .pf-wab__field .nd-input { font-size: 16px; }
-    .pf-wab__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--nd-line, rgba(148,163,184,0.25)); padding-top: 10px; }
+    .pf-wab__field .pf-input { font-size: 16px; }
+    .pf-wab__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--pf-line, rgba(148,163,184,0.25)); padding-top: 10px; }
     .pf-wab__synced { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.5; }
     .pf-wab__load-err { margin: 0 0 16px; }
 

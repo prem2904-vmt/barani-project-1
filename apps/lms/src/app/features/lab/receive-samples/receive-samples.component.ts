@@ -373,8 +373,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   <button type="button" class="press" [disabled]="busy()"
                           [pfBusy]="busy() && busyKey() === rowKey(g)" pfBusyLabel="Receiving…"
                           [class.pf-rs-row__btn]="!theme.isNewDesign()"
-                          [class.nd-rowact]="theme.isNewDesign()"
-                          [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                          [class.pf-rowact]="theme.isNewDesign()"
+                          [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
                           (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
                           [attr.aria-label]="'Receive ' + (g.sampleId || g.patientName || '')" title="Receive">
                     @if (theme.isNewDesign()) {
@@ -383,7 +383,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                         <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
                       </svg>
                     }
-                    <span class="nd-rowact__t">Receive</span>
+                    <span class="pf-rowact__t">Receive</span>
                   </button>
                 }
               </li>
@@ -963,16 +963,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
     /* ── New design (owner): palette + pattern ──
        No coloured stripes (an Urgent order only, where they exist); pending =
-       neutral row + .nd-rowact Receive; received = quieter row, small violet
+       neutral row + .pf-rowact Receive; received = quieter row, small violet
        check + muted "Received", no pill, no green/amber/teal. The sample ID
        is the primary line (16.5 / 600, Noto tabular). */
     :host-context(.design-new) .pf-rs-row {
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px);
     }
-    :host-context(.design-new) .pf-rs-row:hover { background: var(--nd-card-bg); border-color: var(--nd-sel-border); }
+    :host-context(.design-new) .pf-rs-row:hover { background: var(--pf-card-bg); border-color: var(--pf-sel-border); }
     :host-context(.design-new) .pf-rs-row--pending,
-    :host-context(.design-new) .pf-rs-row--received { border-left: 1px solid var(--nd-line); }
-    :host-context(.design-new) .pf-rs-row--received { background: var(--nd-card-bg); }
+    :host-context(.design-new) .pf-rs-row--received { border-left: 1px solid var(--pf-line); }
+    :host-context(.design-new) .pf-rs-row--received { background: var(--pf-card-bg); }
     :host-context(.design-new) .pf-rs-row--received .pf-rs-row__sample,
     :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name,
     :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name-main { color: var(--text-tertiary) !important; }
@@ -982,8 +982,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     }
     :host-context(.design-new) .pf-rs-row__patient { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
     :host-context(.design-new) .pf-rs-row__chip {
-      background: var(--nd-chip-bg); border: 0; color: var(--text-secondary);
-      font-weight: 500; letter-spacing: 0; border-radius: var(--nd-radius-chip, 8px);
+      background: var(--pf-chip-bg); border: 0; color: var(--text-secondary);
+      font-weight: 500; letter-spacing: 0; border-radius: var(--pf-radius-chip, 8px);
     }
     :host-context(.design-new) .pf-rs-row__chip.pf-rs-done {
       background: none; border: 0; padding: 0 4px; gap: 5px; color: var(--text-tertiary);
@@ -1005,7 +1005,7 @@ export class ReceiveSamplesComponent implements OnInit {
   private readonly api = inject(ApiService);
   /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
   readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (nd-kit .nd-rowact). */
+  /** Row actions: text on web, icon on touch (pf-kit .pf-rowact). */
   readonly webPointer = webPointerSignal();
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);

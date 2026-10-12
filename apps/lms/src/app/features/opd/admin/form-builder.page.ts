@@ -58,52 +58,52 @@ const AUTOSAVE_MS = 900;
     .fb-ctx { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; width: 100%; }
     .fb-name { flex: 0 1 280px; min-width: 140px; height: 36px; border: 1px solid transparent; border-radius: 10px; padding: 0 10px; font: inherit; font-size: 15px; font-weight: 600;
       color: var(--text-primary); background: transparent; }
-    .fb-name:hover { border-color: var(--nd-line); }
-    .fb-name:focus { outline: 0; border-color: var(--color-violet-600, #7c3aed); background: var(--nd-card-bg); }
+    .fb-name:hover { border-color: var(--pf-line); }
+    .fb-name:focus { outline: 0; border-color: var(--color-violet-600, #7c3aed); background: var(--pf-card-bg); }
     .fb-ver { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--text-secondary);
-      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); white-space: nowrap; }
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line); white-space: nowrap; }
     .fb-ver--draft::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); margin-right: 6px; }
     .fb-lib { width: 190px; }
     .fb-used { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-tertiary); }
-    .fb-div { width: 1px; align-self: stretch; background: var(--nd-line); }
+    .fb-div { width: 1px; align-self: stretch; background: var(--pf-line); }
     .fb-wrap { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; }
     .fb-wrap--narrow { grid-template-columns: minmax(0, 1fr); }
     .fb-main { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
     .fb-tool { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .fb-tool__note { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
-    .fb-stage { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-radius: var(--nd-radius-card, 16px); background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--nd-chip-bg));
-      border: 1px solid var(--nd-line); padding: 16px; overscroll-behavior: contain; }
+    .fb-stage { flex: 1 1 auto; min-height: 0; overflow-y: auto; border-radius: var(--pf-radius-card, 16px); background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-chip-bg));
+      border: 1px solid var(--pf-line); padding: 16px; overscroll-behavior: contain; }
     .fb-canvas { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
-    .fb-phone { width: 390px; max-width: 100%; margin: 0 auto; border-radius: 28px; border: 8px solid color-mix(in srgb, var(--text-primary) 18%, transparent); padding: 10px; background: var(--bg-primary, var(--nd-card-bg)); }
-    .fb-pbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border-radius: 14px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
+    .fb-phone { width: 390px; max-width: 100%; margin: 0 auto; border-radius: 28px; border: 8px solid color-mix(in srgb, var(--text-primary) 18%, transparent); padding: 10px; background: var(--bg-primary, var(--pf-card-bg)); }
+    .fb-pbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border-radius: 14px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); }
     .fb-pbar b { font-size: 14.5px; color: var(--text-primary); }
     .fb-pbar span { font-size: 12.5px; color: var(--text-secondary); }
-    .fb-pbar__st { margin-left: auto; font-size: 11.5px !important; padding: 2px 10px; border-radius: 999px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
-    .fb-vit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 14px; border-radius: 14px; background: var(--nd-card-bg); border: 1px dashed var(--nd-line); }
+    .fb-pbar__st { margin-left: auto; font-size: 11.5px !important; padding: 2px 10px; border-radius: 999px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
+    .fb-vit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 14px; border-radius: 14px; background: var(--pf-card-bg); border: 1px dashed var(--pf-line); }
     .fb-vit__v { display: inline-flex; gap: 4px; align-items: baseline; font-size: 12px; color: var(--text-tertiary); }
     .fb-vit__v b { font-size: 13.5px; color: var(--text-primary); }
     .fb-lock { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em; }
-    .fb-pane { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
+    .fb-pane { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); }
     .fb-pane__h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .fb-pane__step { font-size: 11.5px; color: var(--text-tertiary); }
     .fb-pane__h h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
-    .fb-own { margin-left: auto; font-size: 12px; color: var(--violet-text, #6d28d9); border: 1px dashed var(--nd-sel-border); border-radius: 999px; padding: 4px 10px; }
+    .fb-own { margin-left: auto; font-size: 12px; color: var(--violet-text, #6d28d9); border: 1px dashed var(--pf-sel-border); border-radius: 999px; padding: 4px 10px; }
     .fb-sec__h { display: flex; align-items: center; gap: 10px; }
     .fb-sec__h h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); }
     .fb-sec__n { font-size: 12px; color: var(--text-tertiary); }
     .fb-section { display: flex; flex-direction: column; gap: 10px; }
-    .fb-section + .fb-section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--nd-line); }
+    .fb-section + .fb-section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--pf-line); }
     .fb-sec-title { flex: 0 1 auto; min-width: 100px; height: 30px; border: 1px solid transparent; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); background: transparent; }
-    .fb-sec-title:hover { border-color: var(--nd-line); }
-    .fb-sec-title:focus { outline: 0; border-color: var(--color-violet-600, #7c3aed); background: var(--nd-card-bg); text-transform: none; }
+    .fb-sec-title:hover { border-color: var(--pf-line); }
+    .fb-sec-title:focus { outline: 0; border-color: var(--color-violet-600, #7c3aed); background: var(--pf-card-bg); text-transform: none; }
     .fb-sec-tools { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
-    .fb-sec-tools .nd-btn--icon { width: 28px !important; height: 28px; min-height: 28px; }
+    .fb-sec-tools .pf-btn--icon { width: 28px !important; height: 28px; min-height: 28px; }
     .fb-add-section { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
-    .fb-undo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--nd-chip-bg); font-size: 12.5px; color: var(--text-secondary); }
-    .fb-add { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px dashed var(--nd-sel-border); }
+    .fb-undo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--pf-chip-bg); font-size: 12.5px; color: var(--text-secondary); }
+    .fb-add { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px dashed var(--pf-sel-border); }
     .fb-add__row { display: flex; gap: 8px; align-items: center; }
-    .fb-add__row .nd-input { flex: 1 1 auto; }
+    .fb-add__row .pf-input { flex: 1 1 auto; }
     .fb-add__pv { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--text-secondary); min-height: 30px; }
     .fb-add__pv b { color: var(--text-primary); }
     .fb-add__k { font-size: 12px; color: var(--text-tertiary); }
@@ -111,10 +111,10 @@ const AUTOSAVE_MS = 900;
     .fb-ex { height: 28px; padding: 0 10px; font-size: 12px; }
     .fb-blk { opacity: .78; }
     .fb-blk__in { display: flex; flex-wrap: wrap; gap: 6px; }
-    .fb-blk__search { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--nd-line); color: var(--text-tertiary); font-size: 13px; width: 100%; }
-    .fb-next { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line); font-size: 12.5px; color: var(--text-secondary); }
+    .fb-blk__search { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--pf-line); color: var(--text-tertiary); font-size: 13px; width: 100%; }
+    .fb-next { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12.5px; color: var(--text-secondary); }
     .fb-paper { max-width: 760px; margin: 0 auto; padding: 28px 32px; border-radius: 6px; background: #fff; color: #111827; box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
-      --text-primary: #111827; --text-secondary: #4b5563; --text-tertiary: #6b7280; --nd-line: #e5e7eb; }
+      --text-primary: #111827; --text-secondary: #4b5563; --text-tertiary: #6b7280; --pf-line: #e5e7eb; }
     .fb-paper__h { display: flex; justify-content: space-between; gap: 12px; border-bottom: 2px solid #111827; padding-bottom: 10px; }
     .fb-paper__h b { font-size: 16px; }
     .fb-paper__h small { display: block; font-size: 11px; color: #6b7280; }
@@ -125,7 +125,7 @@ const AUTOSAVE_MS = 900;
     .fb-paper__foot { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; font-size: 11px; color: #6b7280; }
     .fb-side { min-height: 0; }
     .fb-savestate--err { color: var(--red-text, #dc2626); }
-    @media (max-width: 640px) { .fb-savestate span:not(.nd-savestate__dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+    @media (max-width: 640px) { .fb-savestate span:not(.pf-savestate__dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
     @media (max-width: 640px) {
       .fb-stage { padding: 10px; }
       .fb-paper { padding: 18px; }
@@ -140,10 +140,10 @@ const AUTOSAVE_MS = 900;
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" backTo="/admin/opd/forms" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
-            <span class="nd-savestate fb-savestate" [class.fb-savestate--err]="saveState() === 'error'" role="status" aria-live="polite">
+            <span class="pf-savestate fb-savestate" [class.fb-savestate--err]="saveState() === 'error'" role="status" aria-live="polite">
               @switch (saveState()) {
-                @case ('saving') { <span class="nd-savestate__dot" aria-hidden="true"></span><span>Saving draft…</span> }
-                @case ('dirty') { <span class="nd-savestate__dot" aria-hidden="true"></span><span>Draft changes</span> }
+                @case ('saving') { <span class="pf-savestate__dot" aria-hidden="true"></span><span>Saving draft…</span> }
+                @case ('dirty') { <span class="pf-savestate__dot" aria-hidden="true"></span><span>Draft changes</span> }
                 @case ('error') { <span>Draft not saved — retrying on the next change</span> }
                 @default { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Draft saves automatically</span> }
               }
@@ -162,7 +162,7 @@ const AUTOSAVE_MS = 900;
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14v6h16v-6M12 4v12M7 9l5-5 5 5"/></svg>
               {{ publishing() ? 'Publishing…' : vstate().publishLabel }}</button>
           </ng-container>
-          <div band-search class="nd-ctx fb-ctx">
+          <div band-search class="pf-ctx fb-ctx">
             @if (ready()) {
               <input class="fb-name" [value]="name()" aria-label="Form name" maxlength="160" autocomplete="off" (change)="rename($any($event.target).value)">
               <span class="fb-ver" [class.fb-ver--draft]="vstate().draft">{{ vstate().chip }}</span>
@@ -170,38 +170,38 @@ const AUTOSAVE_MS = 900;
                          triggerLabel="Form library" (valueChange)="switchForm($event)"></pf-select>
               <span class="fb-div" aria-hidden="true"></span>
               <span class="fb-used"><span>Used by</span>
-                @for (u of usedBy(); track u.id) { <button type="button" class="nd-chip press" (click)="openUse(u)">{{ u.name }}</button> }
+                @for (u of usedBy(); track u.id) { <button type="button" class="pf-chip press" (click)="openUse(u)">{{ u.name }}</button> }
                 @empty { <span>No service yet — attach it in OPD Master</span> }
               </span>
-            } @else { <span class="nd-ctx__primary">{{ isNew() ? 'New form' : 'Form' }}</span> }
+            } @else { <span class="pf-ctx__primary">{{ isNew() ? 'New form' : 'Form' }}</span> }
           </div>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="OPD · Consultation form" [title]="name() || 'New form'" parentRoute="/admin/opd/forms">
         <div actions class="oa-actions">
-          <button type="button" class="nd-btn nd-btn--secondary press" (click)="setTry(!trying())" [disabled]="!ready()">{{ trying() ? 'Back to editing' : 'Try it as a doctor' }}</button>
-          <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!vstate().canPublish || publishing() || !ready()" (click)="publish()">{{ vstate().publishLabel }}</button>
+          <button type="button" class="pf-btn pf-btn--secondary press" (click)="setTry(!trying())" [disabled]="!ready()">{{ trying() ? 'Back to editing' : 'Try it as a doctor' }}</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!vstate().canPublish || publishing() || !ready()" (click)="publish()">{{ vstate().publishLabel }}</button>
         </div>
       </pf-screen-header>
 
       <div class="pf-band-body pf-band-body--fill">
         @if (!ready()) {
-          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-form [fields]="6" [cols]="2" label="Loading the form…"></pf-skeleton-form></div></section>
+          <section class="pf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="6" [cols]="2" label="Loading the form…"></pf-skeleton-form></div></section>
         } @else {
         <div class="fb-wrap" [class.fb-wrap--narrow]="narrow()">
           <div class="fb-main">
             <div class="fb-tool">
-              <span class="nd-seg" role="radiogroup" aria-label="View as">
+              <span class="pf-seg" role="radiogroup" aria-label="View as">
                 @for (v of views; track v.value) {
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === v.value" (click)="setView(v.value)">{{ v.label }}</button>
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="view() === v.value" (click)="setView(v.value)">{{ v.label }}</button>
                 }
               </span>
-              <span class="nd-seg" role="radiogroup" aria-label="Fill with">
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="fill() === 'sample'" (click)="setFill('sample')">Sample patient</button>
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="fill() === 'empty'" (click)="setFill('empty')">Empty</button>
+              <span class="pf-seg" role="radiogroup" aria-label="Fill with">
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="fill() === 'sample'" (click)="setFill('sample')">Sample patient</button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="fill() === 'empty'" (click)="setFill('empty')">Empty</button>
               </span>
               @if (narrow()) {
-                <button type="button" class="nd-btn nd-btn--secondary press" (click)="sheetOpen.set(true)">{{ inspectorTitle() }}</button>
+                <button type="button" class="pf-btn pf-btn--secondary press" (click)="sheetOpen.set(true)">{{ inspectorTitle() }}</button>
               }
               <span class="fb-tool__note">Past consults keep the version they were filled with.</span>
             </div>
@@ -209,10 +209,10 @@ const AUTOSAVE_MS = 900;
             <div class="fb-stage" (click)="stageClick($event)">
               @if (view() === 'print') {
                 <div class="fb-paper" role="document" aria-label="Printed consult summary">
-                  <div class="fb-paper__h"><div><b>{{ clinic() }}</b><small>Consultation summary</small></div><span class="nd-num">{{ sample() ? 'OPD-2609-0142' : 'OPD-——' }}</span></div>
+                  <div class="fb-paper__h"><div><b>{{ clinic() }}</b><small>Consultation summary</small></div><span class="pf-num">{{ sample() ? 'OPD-2609-0142' : 'OPD-——' }}</span></div>
                   <div class="fb-paper__pt">
                     <span>Patient <b>{{ sample() ? 'Mrs. Kavitha Ramesh' : '—' }}</b></span><span>Age / sex <b>{{ sample() ? '42 Y / F' : '—' }}</b></span>
-                    <span>Doctor <b>{{ sample() ? 'Dr. Ananya Rao' : '—' }}</b></span><span>Date <b class="nd-num">{{ sample() ? '29 Sep 2026' : '—' }}</b></span>
+                    <span>Doctor <b>{{ sample() ? 'Dr. Ananya Rao' : '—' }}</b></span><span>Date <b class="pf-num">{{ sample() ? '29 Sep 2026' : '—' }}</b></span>
                   </div>
                   <div class="fb-paper__blk"><span class="fb-paper__mk">Built-in</span><b>Vitals:</b> {{ sample() ? 'BP 128/82 mmHg · Pulse 84/min · Temp 99.1 °F · SpO₂ 98% · BMI 26.2' : '' }}</div>
                   <div class="fb-paper__blk"><span class="fb-paper__mk">{{ name() }}</span><p class="fb-paper__t">Examination findings</p>
@@ -225,17 +225,17 @@ const AUTOSAVE_MS = 900;
               } @else {
                 <div [class.fb-phone]="view() === 'phone'">
                   <div class="fb-canvas">
-                    <div class="fb-pbar"><b>{{ sample() ? 'Mrs. Kavitha Ramesh' : 'Patient name' }}</b><span class="nd-num">{{ sample() ? '42 F · AA0112 · Token A3' : '— · — · —' }}</span>
+                    <div class="fb-pbar"><b>{{ sample() ? 'Mrs. Kavitha Ramesh' : 'Patient name' }}</b><span class="pf-num">{{ sample() ? '42 F · AA0112 · Token A3' : '— · — · —' }}</span>
                       <span class="fb-pbar__st">{{ trying() ? 'Trying as a doctor' : sample() ? 'Sample patient' : 'Empty form' }}</span></div>
                     <div class="fb-vit" role="group" aria-label="Vitals — built in, filled at the vitals station">
                       <span class="fb-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Built-in</span>
-                      @for (v of vitals; track v.k) { <span class="fb-vit__v">{{ v.k }} <b class="nd-num">{{ sample() ? v.v : '—' }}</b>{{ v.u }}</span> }
+                      @for (v of vitals; track v.k) { <span class="fb-vit__v">{{ v.k }} <b class="pf-num">{{ sample() ? v.v : '—' }}</b>{{ v.u }}</span> }
                     </div>
                     <div class="fb-pane">
-                      <div class="fb-pane__h"><span class="fb-pane__step nd-num">Step 1 of 4</span><h2>Assessment &amp; diagnosis</h2>
+                      <div class="fb-pane__h"><span class="fb-pane__step pf-num">Step 1 of 4</span><h2>Assessment &amp; diagnosis</h2>
                         @if (doc().allowAddons !== false) { <span class="fb-own" title="Doctors can add their own questions on top of yours">+ Add my own field</span> }</div>
                       @if (undo() && !trying()) {
-                        <div class="fb-undo"><span>Deleted “{{ undo()!.q.label }}” — past consults keep it.</span><button type="button" class="nd-btn nd-btn--tertiary press" (click)="undoDelete()">Undo</button></div>
+                        <div class="fb-undo"><span>Deleted “{{ undo()!.q.label }}” — past consults keep it.</span><button type="button" class="pf-btn pf-btn--tertiary press" (click)="undoDelete()">Undo</button></div>
                       }
                       @for (section of doc().sections; track section.key; let si = $index) {
                         <div class="fb-section">
@@ -247,13 +247,13 @@ const AUTOSAVE_MS = 900;
                             <span class="fb-sec__n">{{ plural(section.fields.length, 'question') }}</span>
                             @if (!trying()) {
                               <span class="fb-sec-tools">
-                                <button type="button" class="nd-btn nd-btn--icon" (click)="moveSection(si, -1)" [disabled]="si === 0" aria-label="Move section up" title="Move section up">
+                                <button type="button" class="pf-btn pf-btn--icon" (click)="moveSection(si, -1)" [disabled]="si === 0" aria-label="Move section up" title="Move section up">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
                                 </button>
-                                <button type="button" class="nd-btn nd-btn--icon" (click)="moveSection(si, 1)" [disabled]="si === doc().sections.length - 1" aria-label="Move section down" title="Move section down">
+                                <button type="button" class="pf-btn pf-btn--icon" (click)="moveSection(si, 1)" [disabled]="si === doc().sections.length - 1" aria-label="Move section down" title="Move section down">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                                 </button>
-                                <button type="button" class="nd-btn nd-btn--icon" (click)="removeSection(si)" [disabled]="doc().sections.length <= 1" aria-label="Remove section" title="Remove section">
+                                <button type="button" class="pf-btn pf-btn--icon" (click)="removeSection(si)" [disabled]="doc().sections.length <= 1" aria-label="Remove section" title="Remove section">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                                 </button>
                               </span>
@@ -266,17 +266,17 @@ const AUTOSAVE_MS = 900;
                           @if (!trying()) {
                             <div class="fb-add">
                               <span class="fb-add__row">
-                                <input class="nd-input" [id]="'fb-add-' + section.key" [value]="addText()" autocomplete="off" placeholder="Add a question — type it the way you'd say it"
+                                <input class="pf-input" [id]="'fb-add-' + section.key" [value]="addText()" autocomplete="off" placeholder="Add a question — type it the way you'd say it"
                                        [attr.aria-label]="'Add a question to ' + section.title + ': type it as a sentence'" [attr.aria-describedby]="'fb-add-pv-' + section.key"
                                        (input)="addText.set($any($event.target).value)" (keydown.enter)="addFromSentence(si)">
-                                <button type="button" class="nd-btn nd-btn--secondary press" (click)="openTypes(false, null, si)">Browse answer types</button>
+                                <button type="button" class="pf-btn pf-btn--secondary press" (click)="openTypes(false, null, si)">Browse answer types</button>
                               </span>
                               <span class="fb-add__pv" [id]="'fb-add-pv-' + section.key" aria-live="polite">
                                 @if (parsed(); as p) {
                                   <b>{{ parsedType() }}</b><span>“{{ p.label }}”@if (p.choices.length) { · {{ p.choices.join(', ') }} }</span><span class="fb-add__enter">Enter to add</span>
                                 } @else {
                                   <span class="fb-add__k">Try</span>
-                                  @for (e of examples; track e) { <button type="button" class="nd-chip fb-ex press" (click)="addText.set(e); focusAdd(section.key)">{{ e }}</button> }
+                                  @for (e of examples; track e) { <button type="button" class="pf-chip fb-ex press" (click)="addText.set(e); focusAdd(section.key)">{{ e }}</button> }
                                 }
                               </span>
                             </div>
@@ -284,7 +284,7 @@ const AUTOSAVE_MS = 900;
                         </div>
                       }
                       @if (!trying()) {
-                        <button type="button" class="nd-btn nd-btn--secondary fb-add-section press" (click)="addSection()">
+                        <button type="button" class="pf-btn pf-btn--secondary fb-add-section press" (click)="addSection()">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                           Add section</button>
                       }
@@ -303,7 +303,7 @@ const AUTOSAVE_MS = 900;
 
           @if (!narrow() || sheetOpen()) {
             @if (narrow()) { <div class="oa-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
-            <aside class="nd-card fb-side" [class.oa-side--sheet]="narrow()" aria-label="Question settings" [attr.role]="narrow() ? 'dialog' : null">
+            <aside class="pf-card fb-side" [class.oa-side--sheet]="narrow()" aria-label="Question settings" [attr.role]="narrow() ? 'dialog' : null">
               <pf-opd-form-inspector [list]="list()" [selectedKey]="selected()" [mode]="inspectorMode()" [allowAddons]="doc().allowAddons !== false"
                                      (listChange)="setList($event)" (closed)="select(null)" (browse)="openTypes(false, null, doc().sections.length - 1)" (changeType)="openTypes(true, null)"
                                      (allowAddonsChange)="setAllowAddons($event)" (resetTry)="resetTry()" (stopTry)="setTry(false)"></pf-opd-form-inspector>

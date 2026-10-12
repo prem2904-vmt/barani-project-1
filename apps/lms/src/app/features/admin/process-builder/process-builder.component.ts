@@ -100,14 +100,14 @@ const LANE_COLOR = '#7c3aed';
 
       <div class="pf-band-body">
       <div class="pb-name-row">
-        <input class="nd-input pb-name" [ngModel]="name()" (ngModelChange)="name.set($event); dirty.set(true)" placeholder="Workflow name" aria-label="Workflow name" />
+        <input class="pf-input pb-name" [ngModel]="name()" (ngModelChange)="name.set($event); dirty.set(true)" placeholder="Workflow name" aria-label="Workflow name" />
         @if (isActive()) {
-          <span class="nd-chip nd-chip--static pb-active">
+          <span class="pf-chip pf-chip--static pb-active">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             Active — drives the live navigation
           </span>
         }
-        @if (dirty()) { <span class="nd-savestate pb-dirty"><span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
+        @if (dirty()) { <span class="pf-savestate pb-dirty"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
       </div>
       <p class="pb-hint pf-classic-only">Configuring <strong class="pb-scope-tag">{{ branchName(scope()) }}</strong> · work-area names become the navigation · <svg class="pb-hint-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> actions are locked to their area</p>
 
@@ -159,7 +159,7 @@ const LANE_COLOR = '#7c3aed';
                   }
                 </div>
                 <input class="pb-lane-name" [ngModel]="lane.cat.name" (ngModelChange)="renameCategory(li, $event)" />
-                <span class="pb-lane-count nd-num">{{ lane.items.length }}</span>
+                <span class="pb-lane-count pf-num">{{ lane.items.length }}</span>
                 <div class="pb-lane-tools">
                   <button type="button" class="pb-mini" [disabled]="li === 0" (click)="moveCategory(li, -1)" title="Move left" aria-label="Move left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
                   <button type="button" class="pb-mini" [disabled]="li === lanes().length - 1" (click)="moveCategory(li, 1)" title="Move right" aria-label="Move right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
@@ -192,9 +192,9 @@ const LANE_COLOR = '#7c3aed';
                       @for (p of iconFor(item.type); track $index) { <path [attr.d]="p" /> }
                     </svg>
                     <span class="pb-label">{{ labelFor(item) }}</span>
-                    <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type, lane.cat.id)" (click)="toggleAction(li, ii)"
+                    <button type="button" class="pf-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type, lane.cat.id)" (click)="toggleAction(li, ii)"
                             [attr.aria-label]="labelFor(item) + (item.enabled ? ' — shown' : ' — hidden')"
-                            [title]="toggleTip(item, lane.cat.id)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+                            [title]="toggleTip(item, lane.cat.id)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
                     @if (locked(item.type, lane.cat.id)) {
                       <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="lockTip(item.type)">
                         <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
@@ -217,7 +217,7 @@ const LANE_COLOR = '#7c3aed';
         <span class="pb-preview-lbl">Navigation preview</span>
         @for (lane of lanes(); track lane.cat.id) {
           @if (enabledCount(lane) > 0) {
-            <span class="pb-preview-item"><span class="pb-dot"></span>{{ lane.cat.name }} <em class="nd-num">{{ enabledCount(lane) }}</em></span>
+            <span class="pb-preview-item"><span class="pb-dot"></span>{{ lane.cat.name }} <em class="pf-num">{{ enabledCount(lane) }}</em></span>
           }
         }
       </div>
@@ -262,23 +262,23 @@ const LANE_COLOR = '#7c3aed';
     .pb-board { display: flex; gap: 16px; align-items: stretch; }
     @media (max-width: 820px) { .pb-board { flex-direction: column; } }
 
-    .pb-palette { width: 206px; flex-shrink: 0; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-card); background: var(--nd-card-bg); padding: 12px; align-self: flex-start; position: sticky; top: 8px; box-shadow: var(--nd-shadow-sm); }
+    .pb-palette { width: 206px; flex-shrink: 0; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-card); background: var(--pf-card-bg); padding: 12px; align-self: flex-start; position: sticky; top: 8px; box-shadow: var(--pf-shadow-sm); }
     @media (max-width: 820px) { .pb-palette { width: 100%; position: static; } }
     .pb-palette-hd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; }
     .pb-palette-hd span { font-weight: 400; color: var(--text-tertiary); }
     .pb-palette-list { display: flex; flex-direction: column; gap: 7px; min-height: 60px; }
     @media (max-width: 820px) { .pb-palette-list { flex-direction: row; flex-wrap: wrap; } .pb-palette-list .pb-chip { flex: 0 1 auto; } }
     .pb-chip { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px; background: var(--bg-card-solid, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); color: var(--text-secondary); font-size: 12.5px; font-weight: 600; cursor: grab; transition: transform .12s, border-color .15s, color .15s; }
-    .pb-chip:hover { color: var(--text-primary); border-color: var(--nd-sel-border); transform: translateY(-1px); }
+    .pb-chip:hover { color: var(--text-primary); border-color: var(--pf-sel-border); transform: translateY(-1px); }
     .pb-chip:active { cursor: grabbing; }
 
     .pb-lanes { flex: 1; min-width: 0; display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; align-items: stretch; }
     @media (max-width: 820px) { .pb-lanes { flex-direction: column; overflow-x: visible; } }
-    .pb-lane { --lane: var(--color-primary, #7c3aed); flex: 1 1 226px; min-width: 214px; max-width: 300px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-card); background: var(--nd-card-bg); display: flex; flex-direction: column; box-shadow: var(--nd-shadow-sm); transition: transform var(--nd-dur-fast) var(--nd-spring), box-shadow var(--nd-dur-fast) ease; overflow: hidden; }
+    .pb-lane { --lane: var(--color-primary, #7c3aed); flex: 1 1 226px; min-width: 214px; max-width: 300px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-card); background: var(--pf-card-bg); display: flex; flex-direction: column; box-shadow: var(--pf-shadow-sm); transition: transform var(--pf-dur-fast) var(--pf-spring), box-shadow var(--pf-dur-fast) ease; overflow: hidden; }
     .pb-lane:hover { transform: translateY(-2px); }
     @media (max-width: 820px) { .pb-lane { max-width: none; width: 100%; } }
     .pb-lane-hd { display: flex; align-items: center; gap: 8px; padding: 11px 11px; border-bottom: 1px solid var(--glass-border);
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
     .pb-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--color-violet-600, #7c3aed); }
     .pb-lane-name { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text-primary); font-size: 14px; font-weight: 700; padding: 2px 4px; border-radius: 6px; transition: background .15s; }
     .pb-lane-name:hover, .pb-lane-name:focus { background: rgba(255,255,255,0.05); outline: none; }
@@ -307,7 +307,7 @@ const LANE_COLOR = '#7c3aed';
       transition: background .12s, border-color .12s, color .12s;
     }
     .pb-iconopt:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
-    .pb-iconopt[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--violet-text, #7c3aed); }
+    .pb-iconopt[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); color: var(--violet-text, #7c3aed); }
     .pb-mini { width: 23px; height: 23px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; font-size: 13px; line-height: 1; transition: background .15s, color .15s; }
     .pb-mini:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text-primary); }
     .pb-mini:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -316,18 +316,18 @@ const LANE_COLOR = '#7c3aed';
        <=640px block surfaces them and drives the collapse. */
     .pb-lane-expand { display: none; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--text-secondary); border-radius: 9px; cursor: pointer; flex-shrink: 0; }
     .pb-lane-chev { transition: transform .18s ease; }
-    .pb-lane-count { display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; align-items: center; justify-content: center; flex-shrink: 0; }
+    .pb-lane-count { display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--pf-chip-bg); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; align-items: center; justify-content: center; flex-shrink: 0; }
     .pb-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--glass-border); }
     .pb-roles-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-role { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid var(--glass-border); background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .pb-role--on, .pb-role[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); }
+    .pb-role--on, .pb-role[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); color: var(--text-primary); }
     .pb-role-all { font-size: 10px; color: var(--text-tertiary); font-style: italic; }
     .pb-role-add { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px dashed var(--glass-border); background: transparent; color: var(--text-secondary); cursor: pointer; }
     .pb-role-add:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
-    .pb-role-add--done { border-style: solid; border-color: var(--nd-sel-border); color: var(--text-primary); background: var(--nd-sel-bg); }
+    .pb-role-add--done { border-style: solid; border-color: var(--pf-sel-border); color: var(--text-primary); background: var(--pf-sel-bg); }
     .pb-lane-list { flex: 1; display: flex; flex-direction: column; gap: 7px; padding: 10px; min-height: 64px; }
     .pb-action { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 10px; background: var(--bg-card-solid, rgba(255,255,255,0.05)); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 12.5px; font-weight: 600; cursor: grab; transition: transform .12s, border-color .15s, background .15s; }
-    .pb-action:hover { border-color: var(--nd-sel-border); transform: translateX(2px); }
+    .pb-action:hover { border-color: var(--pf-sel-border); transform: translateX(2px); }
     .pb-action.cdk-drag-dragging { cursor: grabbing; }
     .pb-action--off { opacity: 0.45; }
     .pb-ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--violet-text, #7c3aed); }
@@ -336,16 +336,16 @@ const LANE_COLOR = '#7c3aed';
     .pb-action--locked { opacity: 0.92; cursor: default; }
     .pb-action--locked .pb-ic { color: var(--violet-text); }
     .pb-lock { width: 13px; height: 13px; color: var(--text-tertiary); flex-shrink: 0; }
-    .pb-toggle { flex: none; }   /* kit slate switch (.nd-toggle) */
+    .pb-toggle { flex: none; }   /* kit slate switch (.pf-toggle) */
     .pb-empty { font-size: 11.5px; color: var(--text-tertiary); text-align: center; padding: 14px 4px; border: 1px dashed var(--glass-border); border-radius: 10px; }
     .pb-add-lane { width: 56px; flex-shrink: 0; align-self: stretch; border: 1.5px dashed var(--glass-border); border-radius: 16px; background: transparent; color: var(--text-tertiary); font-size: 12px; font-weight: 700; cursor: pointer; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.05em; transition: border-color .15s, color .15s, background .15s; }
-    .pb-add-lane:hover { border-color: var(--nd-sel-border); color: var(--text-primary); background: var(--nd-sel-bg); }
+    .pb-add-lane:hover { border-color: var(--pf-sel-border); color: var(--text-primary); background: var(--pf-sel-bg); }
     @media (max-width: 820px) { .pb-add-lane { width: 100%; writing-mode: horizontal-tb; min-height: 50px; } }
 
     .pb-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 20px; padding: 14px 16px; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent); border: 1px solid var(--glass-border); }
     .pb-preview-lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-preview-item { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 5px 11px; border-radius: 999px; background: var(--bg-card-solid, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); }
-    .pb-preview-item em { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--nd-chip-bg); color: var(--text-secondary); font-weight: 600; }
+    .pb-preview-item em { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--pf-chip-bg); color: var(--text-secondary); font-weight: 600; }
 
     /* CDK drag visuals */
     .cdk-drag-preview { border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }

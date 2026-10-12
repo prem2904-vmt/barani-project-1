@@ -429,7 +429,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
          frame: the screen being left eases out under the destination's
          frame (pf-page-frame). enter: the CSS fallback for the view-
          transition page-open where the API is missing (older WebKit). */
-      /* !important: a screen that entered with a filled animation (nd-anim-in
+      /* !important: a screen that entered with a filled animation (pf-anim-in
          …) would otherwise keep its animated opacity on top of this. */
       .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
         opacity: 0 !important; transform: scale(0.985); pointer-events: none;
@@ -480,7 +480,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
       :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
       /* OPD consult (features/opd/consult) toggles html.pf-opd-immersive while
          open: it hides only the TOP chrome. The bottom navbar stays visible
-         (owner rule, ND kit) — the consult ends at the measured --pf-nav-h. */
+         (owner rule, PF kit) — the consult ends at the measured --pf-nav-h. */
       :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
       :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
 

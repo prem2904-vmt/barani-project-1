@@ -134,14 +134,14 @@ describe('Result entry grid — full Enter-advance chain (real DOM events)', () 
     f.detectChanges();
     key2('Enter'); // THE OTHER REGRESSION: yes/no -> next row.
     expect(onParam('collected_on')).toBe(true);
-    expect(document.activeElement!.classList.contains('pf-ndd__in')).toBe(true);
+    expect(document.activeElement!.classList.contains('pf-date__in')).toBe(true);
 
     // Kit date/time: typing + Enter is a single keystroke (never swallowed).
     (document.activeElement as HTMLInputElement).value = '26092026';
     document.activeElement!.dispatchEvent(new Event('input'));
     pressEnter();
     expect(onParam('collection_time')).toBe(true);
-    expect(document.activeElement!.classList.contains('pf-ndt__in')).toBe(true);
+    expect(document.activeElement!.classList.contains('pf-time__in')).toBe(true);
 
     expect(c.valueOf('hb')).toBe('14.5');
   });

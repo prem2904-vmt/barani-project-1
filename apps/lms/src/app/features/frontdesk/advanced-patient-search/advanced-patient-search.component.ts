@@ -16,7 +16,7 @@ import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { phoneLast10 } from '../../../shared/utils/indian-phone';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -73,7 +73,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent, NdDateComponent],
+  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -246,11 +246,11 @@ const PAGE_SIZE = 20;
                   </div>
                   @if (filters().dateRange === 'custom') {
                     <div class="pf-aps-custom-range">
-                      <pf-nd-date label="From" [value]="filters().dateFrom || null"
-                                  (valueChange)="setFilter('dateFrom', $event ?? '')"></pf-nd-date>
+                      <pf-date label="From" [value]="filters().dateFrom || null"
+                                  (valueChange)="setFilter('dateFrom', $event ?? '')"></pf-date>
                       <span class="pf-aps-range-sep" aria-hidden="true">→</span>
-                      <pf-nd-date label="To" [value]="filters().dateTo || null"
-                                  (valueChange)="setFilter('dateTo', $event ?? '')"></pf-nd-date>
+                      <pf-date label="To" [value]="filters().dateTo || null"
+                                  (valueChange)="setFilter('dateTo', $event ?? '')"></pf-date>
                     </div>
                   }
                 </div>

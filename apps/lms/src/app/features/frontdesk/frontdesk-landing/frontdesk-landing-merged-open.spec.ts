@@ -14,7 +14,7 @@ import { Order } from '../../../shared/models/order.model';
  * `openMergedRow` is a plain prototype method (not a field/computed), so it
  * can be exercised directly via the component's prototype — the established
  * pattern this file's siblings (work-status-filter.spec.ts,
- * work-rows.nd.spec.ts) already use for FrontdeskLandingComponent without
+ * work-rows.pf.spec.ts) already use for FrontdeskLandingComponent without
  * constructing the whole (huge, heavily-injected) component.
  */
 describe('FrontdeskLandingComponent.openMergedRow', () => {

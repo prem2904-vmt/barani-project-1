@@ -15,7 +15,7 @@ import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.mode
 import { WorkEventsService } from '../../core/services/work-events.service';
 
 /**
- * Billing counter (ND-PATTERN §17): the band + ONE pill search, a LEFT queue
+ * Billing counter (PF-PATTERN §17): the band + ONE pill search, a LEFT queue
  * of patients waiting to pay (oldest first), the cart + payment taken right
  * here in the main card (Order & Payments' inline panel), a compact success
  * state with Next patient, and the MONEY summary card on the right.
@@ -165,7 +165,7 @@ function render(opts: Opts = {}) {
 }
 
 const flush = () => new Promise(r => setTimeout(r, 0));
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 const neverToOrderScreen = (router: { navigate: any; navigateByUrl: any }) => {
   for (const call of router.navigate.mock.calls) expect(JSON.stringify(call)).not.toContain('/frontdesk/order');
   for (const call of router.navigateByUrl.mock.calls) expect(String(call[0])).not.toContain('/frontdesk/order');
@@ -227,7 +227,7 @@ describe('Billing counter — the queue (LEFT)', () => {
     f.detectChanges();
     expect(el.querySelectorAll('.pf-bc-qrow').length).toBe(0);
     expect(el.querySelector('.pf-bc-queue')?.textContent).toContain('No one in the queue matches');
-    expect(el.querySelector('.pf-bc-queue .nd-card__head')?.textContent).toContain('0 of 3');
+    expect(el.querySelector('.pf-bc-queue .pf-card__head')?.textContent).toContain('0 of 3');
   });
 
   it('empty queue: "No one waiting to pay"', () => {
@@ -306,7 +306,7 @@ describe('Billing counter — select → cart → pay here', () => {
     expect(panel!.textContent).toContain('Pay later');
     // Until the panel is complete the CTA is a disabled secondary: no primary.
     expect(primaries(el).length).toBe(0);
-    const cta = main.querySelector('.nd-card__foot .pf-bc-primary') as HTMLButtonElement;
+    const cta = main.querySelector('.pf-card__foot .pf-bc-primary') as HTMLButtonElement;
     expect(cta.disabled).toBe(true);
     expect(cta.textContent).toMatch(/Collect ₹1,000/);
   });
@@ -351,8 +351,8 @@ describe('Billing counter — select → cart → pay here', () => {
     expect(c.queue().map((r: any) => r.orderId)).toEqual(['o3', 'o4']);
     expect(el.querySelector('.pf-bc-queue')?.textContent).not.toContain('Paravai');
     // Print receipt (secondary) + Next patient (the one primary).
-    const foot = el.querySelector('.pf-bc-main .nd-card__foot')!;
-    expect(Array.from(foot.querySelectorAll('.nd-btn--secondary')).map(b => b.textContent?.trim())).toContain('Print receipt');
+    const foot = el.querySelector('.pf-bc-main .pf-card__foot')!;
+    expect(Array.from(foot.querySelectorAll('.pf-btn--secondary')).map(b => b.textContent?.trim())).toContain('Print receipt');
     const ps = primaries(el);
     expect(ps.length).toBe(1);
     expect(ps[0].textContent?.trim()).toBe('Next patient');
@@ -423,7 +423,7 @@ describe('Billing counter — Pay later', () => {
     expect(ps.length).toBe(1);
     expect(ps[0].textContent?.trim()).toBe('Save — pay later');
     // The Pay-later choice itself is never violet primary.
-    expect(el.querySelector('.pf-ipp__kind.nd-btn--primary')).toBeNull();
+    expect(el.querySelector('.pf-ipp__kind.pf-btn--primary')).toBeNull();
     // With an advance the label says what is collected now.
     c.payPanel().setAdvance('300');
     f.detectChanges();
@@ -455,8 +455,8 @@ describe('Billing counter — Pay later', () => {
     expect(done.textContent).toContain('Paravai Munusamy');
     expect(toasts.success).toHaveBeenCalledWith(expect.stringContaining('due later'));
     // Print the bill (secondary) + Next patient (the ONE primary).
-    const foot = el.querySelector('.pf-bc-main .nd-card__foot')!;
-    expect(Array.from(foot.querySelectorAll('.nd-btn--secondary')).map(b => b.textContent?.trim())).toContain('Print bill');
+    const foot = el.querySelector('.pf-bc-main .pf-card__foot')!;
+    expect(Array.from(foot.querySelectorAll('.pf-btn--secondary')).map(b => b.textContent?.trim())).toContain('Print bill');
     const ps = primaries(el);
     expect(ps.length).toBe(1);
     expect(ps[0].textContent?.trim()).toBe('Next patient');
@@ -517,7 +517,7 @@ describe('Billing counter — Pay later', () => {
     await flush();
     f.detectChanges();
     expect(c.selectedOrderId()).toBe('o1');
-    const cta = el.querySelector('.pf-bc-main .nd-card__foot .pf-bc-primary') as HTMLButtonElement;
+    const cta = el.querySelector('.pf-bc-main .pf-card__foot .pf-bc-primary') as HTMLButtonElement;
     expect(cta.textContent).toMatch(/Collect ₹1,000/);
     const kinds = Array.from(el.querySelectorAll('.pf-ipp__kind')).map(b => b.textContent?.trim());
     expect(kinds).toContain('Pay later');
@@ -685,10 +685,10 @@ describe('Billing counter — three cards (desktop)', () => {
   it('QUEUE left, BILLING middle, MONEY right; no tabs', () => {
     const { el } = render();
     expect(el.querySelector('.pf-bc-switch')).toBeNull();
-    const cards = Array.from(el.querySelectorAll('.pf-bc-panels > .nd-card'));
+    const cards = Array.from(el.querySelectorAll('.pf-bc-panels > .pf-card'));
     expect(cards.map(x => x.getAttribute('aria-label'))).toEqual(['Queue', 'Billing', 'Money']);
-    expect(cards[0].querySelector('.nd-card__label')?.textContent?.trim()).toBe('Waiting to pay');
-    expect(cards[1].querySelector('.nd-card__label')?.textContent?.trim()).toBe('Billing');
+    expect(cards[0].querySelector('.pf-card__label')?.textContent?.trim()).toBe('Waiting to pay');
+    expect(cards[1].querySelector('.pf-card__label')?.textContent?.trim()).toBe('Billing');
   });
 
   it('nothing picked: a short prompt and no primary', () => {
@@ -726,11 +726,11 @@ describe('Billing counter — MONEY card', () => {
   it('day-end uses the kit date and capitalised modes', () => {
     const { el } = render();
     const side = el.querySelector('.pf-bc-side')!;
-    const typed = side.querySelector('pf-nd-date input[type="text"]') as HTMLInputElement;
+    const typed = side.querySelector('pf-date input[type="text"]') as HTMLInputElement;
     expect(typed.placeholder).toBe('dd/mm/yyyy');
     const natives = side.querySelectorAll('input[type="date"]');
     expect(natives.length).toBe(1);
-    expect(natives[0].classList.contains('pf-ndd__native')).toBe(true);
+    expect(natives[0].classList.contains('pf-date__native')).toBe(true);
     const modes = Array.from(side.querySelectorAll('.pf-bc-recon tbody td:first-child')).map(t => t.textContent?.trim());
     expect(modes).toEqual(['Cash', 'UPI', 'Card refund']);
     const titles = Array.from(side.querySelectorAll('.pf-bc-sec')).map(t => t.textContent?.trim());

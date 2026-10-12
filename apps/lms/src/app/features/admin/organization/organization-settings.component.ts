@@ -53,23 +53,23 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
       <!-- Organization display NAME — distinct from the login handle below.
            The page used to show only the handle, so "arun-labs" read as if
            it were the organization's name (UAT item 16). -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-          <h3 class="nd-card__label pf-ls__title">Organization name</h3>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <h3 class="pf-card__label pf-ls__title">Organization name</h3>
         </div>
-        <div class="nd-card__body pf-ls__body">
+        <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
             The display name shown across the app, on reports and invoices —
             e.g. "Arun Labs". The lowercase sign-in handle below is separate.
           </p>
           <div class="pf-ls__row">
-            <label class="nd-field pf-ls__grow">
-              <span class="nd-field__lbl">Name</span>
-              <input class="nd-input" maxlength="80" [ngModel]="orgName()" (ngModelChange)="orgName.set($event)"
+            <label class="pf-field pf-ls__grow">
+              <span class="pf-field__lbl">Name</span>
+              <input class="pf-input" maxlength="80" [ngModel]="orgName()" (ngModelChange)="orgName.set($event)"
                      placeholder="e.g. Arun Labs" />
             </label>
-            <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press"
+            <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press"
                     [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()" [pfBusy]="orgNameSaving()"
                     (click)="saveOrgName()">
               {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
@@ -81,23 +81,23 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
       @if (showSec('identity')) {
       <!-- Organization login handle (tenant "username") — OPS-13 -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
-          <h3 class="nd-card__label pf-ls__title">Organization login handle</h3>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
+          <h3 class="pf-card__label pf-ls__title">Organization login handle</h3>
         </div>
-        <div class="nd-card__body pf-ls__body">
+        <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
             This is the organization name your staff type on the sign-in screen.
             <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle will stop working.
           </p>
           <div class="pf-ls__row">
-            <label class="nd-field pf-ls__grow">
-              <span class="nd-field__lbl">Handle</span>
-              <input class="nd-input" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
+            <label class="pf-field pf-ls__grow">
+              <span class="pf-field__lbl">Handle</span>
+              <input class="pf-input" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
                      placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
             </label>
-            <button type="button" class="nd-btn nd-btn--primary pf-save-slug pf-ls__save pf-classic-only press"
+            <button type="button" class="pf-btn pf-btn--primary pf-save-slug pf-ls__save pf-classic-only press"
                     [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" [pfBusy]="slugSaving()" (click)="saveSlug()">
               {{ slugSaving() ? 'Saving…' : 'Save handle' }}
             </button>
@@ -108,15 +108,15 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
       @if (showSec('patient')) {
       <!-- Patient ID format -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2M15 12h2M7 16h10"/></svg></span>
-          <h3 class="nd-card__label pf-ls__title">Patient ID format</h3>
-          <span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidEnabled()" aria-label="Custom patient ID format"
-                  (click)="pidEnabled.set(!pidEnabled())"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2M15 12h2M7 16h10"/></svg></span>
+          <h3 class="pf-card__label pf-ls__title">Patient ID format</h3>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidEnabled()" aria-label="Custom patient ID format"
+                  (click)="pidEnabled.set(!pidEnabled())"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
         </div>
-        <div class="nd-card__body pf-ls__body">
+        <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
             Choose how new patient IDs are generated. The running number is <strong>continuous</strong>
             (never resets); the date is just a prefix. Existing patient IDs are never changed.
@@ -124,21 +124,21 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
         @if (pidEnabled()) {
           <div class="pf-ls__grid pf-ls__grid--4">
-            <div class="nd-field">
-              <span class="nd-field__lbl">Date prefix</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Date prefix</span>
               <pf-select [options]="dateOptions" [value]="pidDate()" (valueChange)="pidDate.set($any($event))"></pf-select>
             </div>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
-              <input class="nd-input nd-num" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="pf-input pf-num" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="nd-input nd-num" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input pf-num" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Prefix <span class="pf-ls__opt">(optional)</span></span>
-              <input class="nd-input nd-num" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Prefix <span class="pf-ls__opt">(optional)</span></span>
+              <input class="pf-input pf-num" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
             </label>
           </div>
 
@@ -147,26 +147,26 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
             <span class="pf-ls__inline-toggle-text">
               <strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric IDs (a001 … then b, c …). Off = plain numbers.</span>
             </span>
-            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidSerial() === 'alpha'" aria-label="Include letters"
-                    (click)="pidSerial.set(pidSerial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+            <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidSerial() === 'alpha'" aria-label="Include letters"
+                    (click)="pidSerial.set(pidSerial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
           </div>
 
           @if (pidSerial() === 'alpha') {
-            <div class="nd-field pf-ls__letters">
-              <span class="nd-field__lbl">Letters</span>
+            <div class="pf-field pf-ls__letters">
+              <span class="pf-field__lbl">Letters</span>
               <pf-select [options]="letterOptions" [value]="pidLetters()" (valueChange)="pidLetters.set(+$any($event))"></pf-select>
             </div>
             <p class="pf-ls__hint">
               Alphanumeric odometer: the number runs up to <strong>6 digits</strong> (max 999999), then the
               <strong>uppercase</strong> letters advance at the chosen fixed width. Example (AA):
-              <span class="nd-num">AA001 … AA999999, AB001 …, ZZ999999</span>.
+              <span class="pf-num">AA001 … AA999999, AB001 …, ZZ999999</span>.
             </p>
           }
-          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ pidPreview() }}</strong></p>
+          <p class="pf-ls__preview">Preview: <strong class="pf-num">{{ pidPreview() }}</strong></p>
         } @else {
-          <p class="pf-ls__hint">Using the built-in format (e.g. <span class="nd-num">DEL-2606-000042-7</span>).</p>
+          <p class="pf-ls__hint">Using the built-in format (e.g. <span class="pf-num">DEL-2606-000042-7</span>).</p>
         }
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="pidSaving()" [pfBusy]="pidSaving()" (click)="savePatientId()">
+          <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press" [disabled]="pidSaving()" [pfBusy]="pidSaving()" (click)="savePatientId()">
             {{ pidSaving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>
@@ -175,43 +175,43 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
       @if (showSec('sample')) {
       <!-- Sample ID format (prefix = space code) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17a3 3 0 0 0 6 0V2"/><path d="M8 2h8M9 12h6"/></svg></span>
-          <h3 class="nd-card__label pf-ls__title">Sample ID format</h3>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17a3 3 0 0 0 6 0V2"/><path d="M8 2h8M9 12h6"/></svg></span>
+          <h3 class="pf-card__label pf-ls__title">Sample ID format</h3>
         </div>
-        <div class="nd-card__body pf-ls__body">
+        <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
-            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="nd-num">MIC-2607-00001</span>).
+            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
             The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
           </p>
           <div class="pf-ls__grid pf-ls__grid--3">
-            <div class="nd-field">
-              <span class="nd-field__lbl">Date</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Date</span>
               <pf-select [options]="dateOptions" [value]="sampleFmt.date()" (valueChange)="sampleFmt.date.set($any($event))"></pf-select>
             </div>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
-              <input class="nd-input nd-num" maxlength="3" [ngModel]="sampleFmt.sep()" (ngModelChange)="sampleFmt.sep.set($event)" placeholder="none" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="pf-input pf-num" maxlength="3" [ngModel]="sampleFmt.sep()" (ngModelChange)="sampleFmt.sep.set($event)" placeholder="none" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">{{ sampleFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="nd-input nd-num" type="number" min="1" [attr.max]="sampleFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="sampleFmt.pad()" (ngModelChange)="onFormatPadChange(sampleFmt, $event)" (keydown)="preventMinus($event)" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">{{ sampleFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input pf-num" type="number" min="1" [attr.max]="sampleFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="sampleFmt.pad()" (ngModelChange)="onFormatPadChange(sampleFmt, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
           <div class="pf-ls__inline-toggle">
             <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="sampleFmt.serial() === 'alpha'" aria-label="Include letters"
-                    (click)="sampleFmt.serial.set(sampleFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+            <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="sampleFmt.serial() === 'alpha'" aria-label="Include letters"
+                    (click)="sampleFmt.serial.set(sampleFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
           </div>
           @if (sampleFmt.serial() === 'alpha') {
-            <div class="nd-field pf-ls__letters">
-              <span class="nd-field__lbl">Letters</span>
+            <div class="pf-field pf-ls__letters">
+              <span class="pf-field__lbl">Letters</span>
               <pf-select [options]="letterShortOptions" [value]="sampleFmt.letters()" (valueChange)="sampleFmt.letters.set(+$any($event))"></pf-select>
             </div>
           }
-          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ sampleFmt.preview() }}</strong></p>
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" [pfBusy]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
+          <p class="pf-ls__preview">Preview: <strong class="pf-num">{{ sampleFmt.preview() }}</strong></p>
+          <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" [pfBusy]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
             {{ sampleFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>
@@ -220,43 +220,43 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
       @if (showSec('order')) {
       <!-- Order ID format (prefix = module code) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
-          <h3 class="nd-card__label pf-ls__title">Order ID format</h3>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
+          <h3 class="pf-card__label pf-ls__title">Order ID format</h3>
         </div>
-        <div class="nd-card__body pf-ls__body">
+        <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
-            Each order's ID is <strong>MODULE-DATE-NUMBER</strong> (e.g. <span class="nd-num">LAB-2607-000042</span>).
-            The <strong>module</strong> is set automatically (lab orders → <span class="nd-num">LAB</span>; OPD/IPD later). The number restarts <strong>each month per module</strong>.
+            Each order's ID is <strong>MODULE-DATE-NUMBER</strong> (e.g. <span class="pf-num">LAB-2607-000042</span>).
+            The <strong>module</strong> is set automatically (lab orders → <span class="pf-num">LAB</span>; OPD/IPD later). The number restarts <strong>each month per module</strong>.
           </p>
           <div class="pf-ls__grid pf-ls__grid--3">
-            <div class="nd-field">
-              <span class="nd-field__lbl">Date</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Date</span>
               <pf-select [options]="dateOptions" [value]="orderFmt.date()" (valueChange)="orderFmt.date.set($any($event))"></pf-select>
             </div>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
-              <input class="nd-input nd-num" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="pf-input pf-num" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">{{ orderFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="nd-input nd-num" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">{{ orderFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="pf-input pf-num" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
           <div class="pf-ls__inline-toggle">
             <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
-                    (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+            <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
+                    (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
           </div>
           @if (orderFmt.serial() === 'alpha') {
-            <div class="nd-field pf-ls__letters">
-              <span class="nd-field__lbl">Letters</span>
+            <div class="pf-field pf-ls__letters">
+              <span class="pf-field__lbl">Letters</span>
               <pf-select [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))"></pf-select>
             </div>
           }
-          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ orderFmt.preview() }}</strong></p>
-          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="orderFmt.saving()" [pfBusy]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
+          <p class="pf-ls__preview">Preview: <strong class="pf-num">{{ orderFmt.preview() }}</strong></p>
+          <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press" [disabled]="orderFmt.saving()" [pfBusy]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
             {{ orderFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
         </div>
@@ -267,7 +267,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
     </section>
   `,
   styles: [`
-    /* nd-kit cards in a readable column; the band body scrolls, never the page. */
+    /* pf-kit cards in a readable column; the band body scrolls, never the page. */
     .pf-ls__col { display: flex; flex-direction: column; gap: 16px; max-width: 56rem; margin-inline: auto; width: 100%; }
     .pf-ls__card { overflow: visible; }
     .pf-ls__body { overflow: visible; gap: 14px; padding: 14px 16px 18px; }

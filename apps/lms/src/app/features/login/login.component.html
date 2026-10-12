@@ -152,7 +152,7 @@
           <!-- Belt-and-braces: type="submit" + (click) so the button
                works whether the form's ngSubmit fires or not (iOS WKWebView).
                Both call the same guarded method. -->
-          <button #submitBtn type="submit" class="nd-btn nd-btn--primary lg__submit"
+          <button #submitBtn type="submit" class="pf-btn pf-btn--primary lg__submit"
                   (click)="submit($event)"
                   [disabled]="working()"
                   [attr.aria-busy]="working()">
@@ -168,7 +168,7 @@
           </button>
 
           @if (addMode()) {
-            <button type="button" class="nd-btn nd-btn--tertiary lg__cancel" (click)="cancelAdd()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--tertiary lg__cancel" (click)="cancelAdd()">Cancel</button>
           }
         </form>
 

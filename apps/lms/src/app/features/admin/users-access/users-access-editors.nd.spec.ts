@@ -20,11 +20,11 @@ import { RoleEditorComponent } from './role-editor.component';
 import { UsersAccessComponent } from './users-access.component';
 
 /**
- * Users & Access — ND-PATTERN "Editors". Create user, edit user and the role
+ * Users & Access — PF-PATTERN "Editors". Create user, edit user and the role
  * editor carry the band (back · tenant · ONE primary) with the pill as the
- * CONTEXT BAR; sections are nd-cards with kit fields, roles / permissions are
+ * CONTEXT BAR; sections are pf-cards with kit fields, roles / permissions are
  * slate switches (role=switch), no native select, no mono / green. The list's
- * row actions are kit .nd-rowact buttons and its status is a slate switch.
+ * row actions are kit .pf-rowact buttons and its status is a slate switch.
  */
 const roles = [
   { id: 'r1', name: 'Lab Technician', isPreSeeded: true, scope: 'tenant' },
@@ -89,13 +89,13 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelector('select, datalist, code, .mono, .font-mono, .c-green, .c-amber, pf-tile')).toBeNull();
   expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
-  expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(1);
+  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(1);
 }
 
 describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
   const noFacts = (el: HTMLElement) => {
-    expect(el.querySelectorAll('pf-hero-band .nd-ctx__chip').length).toBe(0);
-    expect(el.querySelectorAll('pf-hero-band .nd-ctx > *').length).toBe(1);
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx > *').length).toBe(1);
   };
 
   it('Create user: band + ONE primary; the pill is only the name ("New user" → typed) with a pencil', async () => {
@@ -108,15 +108,15 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     f.detectChanges();
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Priya Raman');
     noFacts(el);
-    (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
-    expect(document.activeElement).toBe(el.querySelector('.pf-band-body input.nd-input'));
+    (el.querySelector('.pf-ctx__edit') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(el.querySelector('.pf-band-body input.pf-input'));
     expect(el.querySelector('pf-screen-header')!.classList.contains('pf-classic-only')).toBe(true);
     hygiene(el);
   });
 
   it('Create user: roles are slate switches (aria-checked, no --on class); one on enables Create', () => {
     const { el, f, c } = render(UserInviteComponent);
-    const sw = el.querySelectorAll<HTMLButtonElement>('.pf-uf-roles .nd-toggle[role="switch"]');
+    const sw = el.querySelectorAll<HTMLButtonElement>('.pf-uf-roles .pf-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     expect(sw[0].getAttribute('aria-checked')).toBe('false');
     sw[0].click();
@@ -128,10 +128,10 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect((el.querySelector('pf-hero-band .pf-hb-btn--primary') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('Create user: sections are nd-cards with kit fields; title + country code are pf-select', () => {
+  it('Create user: sections are pf-cards with kit fields; title + country code are pf-select', () => {
     const { el } = render(UserInviteComponent);
-    expect(el.querySelectorAll('.pf-band-body .nd-card .nd-card__head .nd-card__icon svg').length).toBeGreaterThanOrEqual(3);
-    expect(el.querySelectorAll('.pf-band-body input.nd-input').length).toBeGreaterThanOrEqual(4);
+    expect(el.querySelectorAll('.pf-band-body .pf-card .pf-card__head .pf-card__icon svg').length).toBeGreaterThanOrEqual(3);
+    expect(el.querySelectorAll('.pf-band-body input.pf-input').length).toBeGreaterThanOrEqual(4);
     expect(el.querySelector('.pf-uf-phone pf-select')).not.toBeNull();
   });
 
@@ -140,8 +140,8 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save changes');
-    expect(el.querySelectorAll('.pf-uf-roles .nd-toggle[aria-checked="true"]').length).toBe(1);
-    expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('nd-input')).toBe(true);
+    expect(el.querySelectorAll('.pf-uf-roles .pf-toggle[aria-checked="true"]').length).toBe(1);
+    expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('pf-input')).toBe(true);
     hygiene(el);
   });
 
@@ -180,7 +180,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('pf-hero-band .pf-ue-active')!.textContent).toContain('Deactivate');
   });
 
-  it('New role: "New role" → the typed name, pencil focuses Role name; role type nd-seg; permissions are switches', () => {
+  it('New role: "New role" → the typed name, pencil focuses Role name; role type pf-seg; permissions are switches', () => {
     const { el, f, c, txt } = render(RoleEditorComponent);
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New role');
     c.onNameChange('Billing Supervisor');
@@ -188,12 +188,12 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Billing Supervisor');
     noFacts(el);
     expect(el.querySelector('.pf-uf-ctx__badge')).toBeNull();
-    (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
+    (el.querySelector('.pf-ctx__edit') as HTMLButtonElement).click();
     expect(document.activeElement?.classList.contains('pf-re-name')).toBe(true);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
-    expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(0);
-    const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .nd-toggle[role="switch"]');
+    expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
+    const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .pf-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     sw[1].click();
     f.detectChanges();
@@ -224,16 +224,16 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(doc.textContent).toContain('Specialisation');
   });
 
-  it('New role in an OPD tenant: role type General / Doctor is a 2-item nd-seg', () => {
+  it('New role in an OPD tenant: role type General / Doctor is a 2-item pf-seg', () => {
     const { el } = render(RoleEditorComponent, { opd: true });
-    expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(2);
+    expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(2);
   });
 
   it('Edit role: the role name + ONE tiny muted badge (Pre-seeded), no pencil (the name is locked), no fact chips', () => {
     const { el, txt } = render(RoleEditorComponent, { id: 'r1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Lab Technician');
     expect(txt(el.querySelector('.pf-uf-ctx__badge'))).toBe('Pre-seeded');
-    expect(el.querySelector('.nd-ctx__edit')).toBeNull();
+    expect(el.querySelector('.pf-ctx__edit')).toBeNull();
     noFacts(el);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save');
     hygiene(el);
@@ -254,21 +254,21 @@ describe('Users & Access list — current rules', () => {
     expect(el.querySelector('.font-mono')).toBeNull();
   });
 
-  it('row actions are kit .nd-rowact (text on web), status is a slate switch, role type a neutral chip', () => {
+  it('row actions are kit .pf-rowact (text on web), status is a slate switch, role type a neutral chip', () => {
     const { c } = render(UsersAccessComponent);
     const actions = c.userColDefs().find((d: any) => d.colId === 'actions').cellRenderer;
     const ctx = { ...c.gridContext, canCall: () => true, isOnline: () => true };
     const cell = actions({ data: users[0], context: ctx }) as HTMLElement;
     const btns = Array.from(cell.querySelectorAll('button'));
-    expect(btns.every(b => b.classList.contains('nd-rowact'))).toBe(true);
-    expect(btns.map(b => b.querySelector('.nd-rowact__t')!.textContent)).toEqual(['Call', 'Edit', 'Reset password']);
+    expect(btns.every(b => b.classList.contains('pf-rowact'))).toBe(true);
+    expect(btns.map(b => b.querySelector('.pf-rowact__t')!.textContent)).toEqual(['Call', 'Edit', 'Reset password']);
     const status = c.userColDefs().find((d: any) => d.colId === 'status').cellRenderer;
     const sw = (status({ data: users[0], context: ctx }) as HTMLElement).querySelector('button')!;
     expect(sw.getAttribute('role')).toBe('switch');
     expect(sw.getAttribute('aria-checked')).toBe('true');
-    expect(sw.classList.contains('nd-toggle')).toBe(true);
+    expect(sw.classList.contains('pf-toggle')).toBe(true);
     const type = c.roleColDefs().find((d: any) => d.colId === 'isPreSeeded').cellRenderer;
-    const custom = (type({ data: roles[1] }) as HTMLElement).querySelector('.nd-chip')!;
+    const custom = (type({ data: roles[1] }) as HTMLElement).querySelector('.pf-chip')!;
     expect(custom.textContent).toBe('Custom');
     expect(custom.getAttribute('style') ?? '').not.toMatch(/16,\s*185|10b981|059669/);
   });
@@ -278,7 +278,7 @@ describe('Users & Access list — current rules', () => {
     const actions = c.userColDefs().find((d: any) => d.colId === 'actions').cellRenderer;
     const cell = actions({ data: users[0], context: { ...c.gridContext, web: () => false } }) as HTMLElement;
     const edit = Array.from(cell.querySelectorAll('button')).find(b => b.textContent === 'Edit')!;
-    expect(edit.classList.contains('nd-rowact--icon')).toBe(true);
+    expect(edit.classList.contains('pf-rowact--icon')).toBe(true);
     expect(edit.querySelector('svg')).not.toBeNull();
     expect(edit.getAttribute('aria-label')).toContain('Edit');
   });

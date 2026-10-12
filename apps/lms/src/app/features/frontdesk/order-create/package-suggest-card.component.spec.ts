@@ -42,9 +42,9 @@ describe('PackageSuggestCard — UPGRADE (owner: ₹100 test, ₹1,000.00 packag
 
   it('is quiet: a text (tertiary) Upgrade button, never a primary', () => {
     const { el, emitted, list } = render(['tsh']);
-    expect(el.querySelector('.nd-btn--primary')).toBeNull();
+    expect(el.querySelector('.pf-btn--primary')).toBeNull();
     const btn = el.querySelector('.pf-psg__act') as HTMLButtonElement;
-    expect(btn.classList).toContain('nd-btn--tertiary');
+    expect(btn.classList).toContain('pf-btn--tertiary');
     expect(btn.textContent!.trim()).toBe('Upgrade');
     expect(btn.getAttribute('aria-label')).toBe('Upgrade to Full Body Checkup for ₹900.00 more');
     btn.click();
@@ -87,7 +87,7 @@ describe('PackageSuggestCard — SAVING', () => {
     expect(text(saving.querySelector('s.pf-psg__was'))).toBe('₹600.00');
     expect(text(saving.querySelector('.pf-psg__now'))).toBe('₹499.00');
     const btn = saving.querySelector('.pf-psg__act') as HTMLButtonElement;
-    expect(btn.classList).toContain('nd-btn--secondary');
+    expect(btn.classList).toContain('pf-btn--secondary');
     expect(btn.textContent!.trim()).toBe('Apply');
     btn.click();
     expect(emitted[0]).toBe(list[0]);

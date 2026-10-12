@@ -595,7 +595,7 @@ export const appRoutes: Route[] = [
       {
         path: 'messages',
         canActivate: [...routeGuards('/messages')],
-        // New design → the nd-kit screen; classic → the original page.
+        // New design → the pf-kit screen; classic → the original page.
         loadComponent: () => import('./features/messages/messages-route.component').then(m => m.MessagesRouteComponent)
       },
 

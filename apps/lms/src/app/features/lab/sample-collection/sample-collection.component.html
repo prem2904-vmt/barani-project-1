@@ -12,7 +12,7 @@
            own header) but keep the queue + scan so the tech can draw tubes. -->
       <!-- Common hero search (designer band): first thing under the navbar
            so the seam stays flush like every other band screen. ONE band per
-           screen (ND-PATTERN): while a patient's drawer is open the drawer's
+           screen (PF-PATTERN): while a patient's drawer is open the drawer's
            band (back + context pills) is THE band, so the queue's steps out. -->
       @if (!deepLinkMode() && !embedded && theme.isNewDesign() && !activeGroup()) {
       <pf-hero-band
@@ -101,9 +101,9 @@
       }
 
       @if (theme.isNewDesign() && !embedded) {
-        <section class="nd-card pf-sc-queue-card">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true">
+        <section class="pf-card pf-sc-queue-card">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
                 <line x1="16" x2="16" y1="2" y2="6"/>
@@ -111,25 +111,25 @@
                 <line x1="3" x2="21" y1="10" y2="10"/>
               </svg>
             </span>
-            <span class="nd-card__label">
+            <span class="pf-card__label">
               Pending collection · {{ filteredGroups().length }} patient{{ filteredGroups().length === 1 ? '' : 's' }}
             </span>
           </header>
 
-          <div class="nd-card__body pf-sc-queue-body">
+          <div class="pf-card__body pf-sc-queue-body">
             @if (!queueLoaded()) {
               @if (queueSkeleton()) {
                 <pf-skeleton-rows class="pf-sc__skel" [rows]="4" label="Loading the collection queue…"></pf-skeleton-rows>
               }
             } @else if (filteredGroups().length === 0) {
-              <div class="nd-empty pf-sc__empty">No samples waiting for collection.</div>
+              <div class="pf-empty pf-sc__empty">No samples waiting for collection.</div>
             } @else {
               <div class="pf-sc__grid">
                 @for (g of filteredGroups(); track g.orderId) {
                   <button type="button" class="pf-sc__pcard" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
                     <div class="pf-sc__pcard-info">
                       <span class="pf-sc__pcard-name"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
-                      <span class="pf-sc__pcard-ord nd-num">{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}</span>
+                      <span class="pf-sc__pcard-ord pf-num">{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}</span>
                     </div>
                     <div class="pf-sc__pcard-meta">
                       @if (g.paymentHold) {
@@ -219,18 +219,18 @@
         <!-- New design, deep-link + order still loading: the SAME frame the
              drawer will show (band + VIALS + COLLECTION skeleton), so the
              slide-in from Order & Payments lands on the real layout. -->
-        <div class="pf-drawer pf-drawer--nd nd-fullscreen pf-sc-skel" aria-busy="true" aria-label="Opening collection">
+        <div class="pf-drawer pf-drawer--nd pf-fullscreen pf-sc-skel" aria-busy="true" aria-label="Opening collection">
           <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
             <div band-search class="pf-sc-ctx"><span class="pf-sc-skel__bar" style="width: 220px"></span></div>
           </pf-hero-band>
-          <div class="nd-body nd-body--split pf-sc-body">
-            <section class="nd-card">
-              <header class="nd-card__head"><span class="nd-card__label">Vials</span></header>
-              <div class="nd-card__body"><div class="pf-sc-skel__grid"><span class="pf-sc-skel__tile"></span><span class="pf-sc-skel__tile"></span></div></div>
+          <div class="pf-body pf-body--split pf-sc-body">
+            <section class="pf-card">
+              <header class="pf-card__head"><span class="pf-card__label">Vials</span></header>
+              <div class="pf-card__body"><div class="pf-sc-skel__grid"><span class="pf-sc-skel__tile"></span><span class="pf-sc-skel__tile"></span></div></div>
             </section>
-            <aside class="nd-card">
-              <header class="nd-card__head"><span class="nd-card__label">Collection</span></header>
-              <div class="nd-card__body"><span class="pf-sc-skel__bar" style="width: 60%"></span><span class="pf-sc-skel__bar"></span><span class="pf-sc-skel__bar" style="width: 80%"></span></div>
+            <aside class="pf-card">
+              <header class="pf-card__head"><span class="pf-card__label">Collection</span></header>
+              <div class="pf-card__body"><span class="pf-sc-skel__bar" style="width: 60%"></span><span class="pf-sc-skel__bar"></span><span class="pf-sc-skel__bar" style="width: 80%"></span></div>
             </aside>
           </div>
         </div>
@@ -252,63 +252,62 @@
 
     <!-- ─── Collect drawer ────────────────────────────────────────────── -->
     @if (activeGroup(); as g) {
-      <div #drawerEl class="pf-drawer pf-drawer--nd nd-fullscreen" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
-        <div class="pf-drawer__panel nd-page" [pfZoomTarget]="g.orderId" (click)="$event.stopPropagation()">
+      <div #drawerEl class="pf-drawer pf-drawer--nd pf-fullscreen" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
+        <div class="pf-drawer__panel pf-page" [pfZoomTarget]="g.orderId" (click)="$event.stopPropagation()">
           <!-- Band: IDENTICAL to every step (back + tenant). The pill is the
                CONTEXT BAR: subject chips (patient, order, samples) + this
-               step's filters + the counter. (docs/ND-PATTERN.md) -->
+               step's filters + the counter. (docs/PF-PATTERN.md) -->
           <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
             <div band-search class="pf-sc-ctx">
               @if (canOpenPatient(g)) {
-                <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--patient" (click)="openPatient(g)"
+                <button type="button" class="pf-chip pf-sc-chip pf-sc-chip--patient" (click)="openPatient(g)"
                         [attr.aria-label]="'Open patient ' + patientFullName(g)">
                   <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
                   @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
                 </button>
               } @else {
-                <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--patient">
+                <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--patient">
                   <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
                   @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
                 </span>
               }
-              <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--order" title="Order ID">
-                <span class="pf-sc-chip__meta">Order</span><span class="nd-num">{{ g.orderNo }}</span>
+              <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--order" title="Order ID">
+                <span class="pf-sc-chip__meta">Order</span><span class="pf-num">{{ g.orderNo }}</span>
               </span>
               @if (g.samples.length === 1) {
-                <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--samples" title="Sample ID">
-                  <span class="pf-sc-chip__meta">Sample</span><span class="nd-num">{{ g.samples[0].barcode ?? '—' }}</span>
+                <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--samples" title="Sample ID">
+                  <span class="pf-sc-chip__meta">Sample</span><span class="pf-num">{{ g.samples[0].barcode ?? '—' }}</span>
                 </span>
               } @else {
                 <span class="pf-sc-samples">
-                  <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--samples" [attr.aria-expanded]="samplesOpen()"
+                  <button type="button" class="pf-chip pf-sc-chip pf-sc-chip--samples" [attr.aria-expanded]="samplesOpen()"
                           (click)="samplesOpen.set(!samplesOpen())">{{ g.samples.length }} samples</button>
                   <span class="pf-sc-samples__pop" [class.pf-sc-samples__pop--open]="samplesOpen()" role="list">
-                    @for (x of g.samples; track x.id) { <span class="nd-num" role="listitem">{{ x.barcode ?? '—' }}</span> }
+                    @for (x of g.samples; track x.id) { <span class="pf-num" role="listitem">{{ x.barcode ?? '—' }}</span> }
                   </span>
                 </span>
               }
               <span class="pf-sc-ctx__grow"></span>
-              <span class="nd-band-chip pf-sc-ctx__count" aria-live="polite">
+              <span class="pf-band-chip pf-sc-ctx__count" aria-live="polite">
                 <strong>@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</strong> drawn
               </span>
             </div>
           </pf-hero-band>
 
-          <div class="pf-drawer__progressbar" aria-hidden="true">
-            <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
-          </div>
-
-          <div class="nd-body nd-body--split pf-sc-body">
+          <div class="pf-body pf-body--split pf-sc-body">
             <!-- Main card: VIALS (like the catalogue card). -->
-            <section class="nd-card pf-sc-vials" aria-label="Vials">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true">
+            <section class="pf-card pf-sc-vials" aria-label="Vials">
+              <div class="pf-drawer__progressbar" aria-hidden="true">
+                <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
+              </div>
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/></svg>
                 </span>
-                <span class="nd-card__label">Vials</span>
-                <span class="nd-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
+                <span class="pf-card__label">Vials</span>
+                <span class="pf-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
               </header>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
                 <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
                   @for (s of visibleSamples(g); track s.id) {
                     <div class="pf-tube-wrap">
@@ -352,7 +351,7 @@
                 <!-- Outsourced tube: the SAME tile, tube and tap-to-draw flow —
                      only this small neutral mark at the top differs. -->
                 @if (s.outsourcedVendorId) {
-                  <span class="nd-chip nd-chip--static pf-tube__out">Outsourced</span>
+                  <span class="pf-chip pf-chip--static pf-tube__out">Outsourced</span>
                 }
                 <span class="pf-sc-illo">
                 @if (drawn(s)) {
@@ -655,10 +654,10 @@
                        the column height; holding the vial ~2s peeks it. No
                        textual hint and no draw-volume pill — the card carries
                        only the container name and the sample id. -->
-                  <p class="pf-tube__code">Sample ID&nbsp;<span class="nd-num">{{ s.barcode ?? '—' }}</span></p>
+                  <p class="pf-tube__code">Sample ID&nbsp;<span class="pf-num">{{ s.barcode ?? '—' }}</span></p>
 
                   @if (drawn(s)) {
-                    <span class="pf-tube__stamp nd-num">
+                    <span class="pf-tube__stamp pf-num">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m5 12 4 4L19 6"/>
                       </svg>
@@ -728,23 +727,23 @@
 
             <!-- Side card: COLLECTION (like the BILLING card). On phones it is
                  the sheet opened from the bottom bar. -->
-            @if (actionsOpen()) { <div class="nd-sheet-backdrop pf-sc-backdrop" (click)="actionsOpen.set(false)"></div> }
-            <aside class="nd-card pf-sc-side" [class.pf-sc-side--open]="actionsOpen()" aria-label="Collection">
-              <span class="nd-sheet__handle" aria-hidden="true"></span>
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true">
+            @if (actionsOpen()) { <div class="pf-sheet-backdrop pf-sc-backdrop" (click)="actionsOpen.set(false)"></div> }
+            <aside class="pf-card pf-sc-side" [class.pf-sc-side--open]="actionsOpen()" aria-label="Collection">
+              <span class="pf-sheet__handle" aria-hidden="true"></span>
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 </span>
-                <span class="nd-card__label">Collection</span>
-                <span class="nd-card__spacer"></span>
-                <button type="button" class="nd-btn nd-btn--icon pf-sc-side__close" (click)="actionsOpen.set(false)" aria-label="Close collection">
+                <span class="pf-card__label">Collection</span>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--icon pf-sc-side__close" (click)="actionsOpen.set(false)" aria-label="Close collection">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </header>
-              <div class="nd-card__body pf-sc-side__body">
+              <div class="pf-card__body pf-sc-side__body">
                 <!-- ONE status line (neutral chip, violet mark). The tiles
                      already show each vial, so there is no per-tube list. -->
-                <span class="nd-chip nd-chip--static pf-sc-status">
+                <span class="pf-chip pf-chip--static pf-sc-status">
                   @if (g.notCollected > 0 && g.notCollected === g.totalVials) {
                     <span class="pf-sc-status__dot pf-sc-status__dot--nc" aria-hidden="true"></span>
                     {{ notCollectedText(g) }}
@@ -756,11 +755,11 @@
                     All vials collected
                   } @else {
                     <span class="pf-sc-status__dot" aria-hidden="true"></span>
-                    <span class="nd-num">{{ g.totalVials - g.collected - g.notCollected }} of {{ g.totalVials }}</span> remaining
+                    <span class="pf-num">{{ g.totalVials - g.collected - g.notCollected }} of {{ g.totalVials }}</span> remaining
                   }
                 </span>
                 @if (g.notCollected > 0 && g.notCollected < g.totalVials) {
-                  <span class="nd-chip nd-chip--static pf-sc-status pf-sc-status--nc">
+                  <span class="pf-chip pf-chip--static pf-sc-status pf-sc-status--nc">
                     <span class="pf-sc-status__dot pf-sc-status__dot--nc" aria-hidden="true"></span>
                     {{ notCollectedText(g) }}
                   </span>
@@ -792,7 +791,7 @@
                           [class.pf-sc-timeline__step--stopped]="st.tone === 'stopped'">
                         <span class="pf-sc-timeline__mark" aria-hidden="true"></span>
                         <span class="pf-sc-timeline__label">{{ st.label }}</span>
-                        <span class="pf-sc-timeline__at nd-num">
+                        <span class="pf-sc-timeline__at pf-num">
                           @if (st.at && st.done) { {{ st.at | date:'shortTime' }} }
                           @else if (st.note) { {{ st.note }} }
                           @else { — }
@@ -817,7 +816,7 @@
                           </summary>
                           <ul class="pf-sc-tests__list">
                             @for (t of tubeTests(smp); track $index) {
-                              <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol nd-num">{{ t.vol }} mL</span> }</li>
+                              <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol pf-num">{{ t.vol }} mL</span> }</li>
                             }
                           </ul>
                         </details>
@@ -826,15 +825,15 @@
                   </ul>
                 </section>
               </div>
-              <footer class="nd-card__foot pf-sc-foot">
-            <p class="pf-sc-labelinfo nd-span">
+              <footer class="pf-card__foot pf-sc-foot">
+            <p class="pf-sc-labelinfo pf-span">
               {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
             </p>
             @if (dispatchSelect(); as sel) {
               <!-- Partial-dispatch selection mode: pick collected tubes, then
                    send just those to the lab. Everything else in the footer is
                    parked until Cancel / confirm. -->
-              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text nd-btn nd-btn--secondary" (click)="cancelPartialDispatch()"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text pf-btn pf-btn--secondary" (click)="cancelPartialDispatch()"
                       aria-label="Cancel" data-label="Cancel">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>
@@ -842,7 +841,7 @@
                 <span class="pf-btn__text">Cancel</span>
               </button>
               <span class="pf-drawer__remaining">Tap collected tubes to select</span>
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text nd-btn nd-btn--primary nd-span" (click)="confirmPartialDispatch(g)"
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text pf-btn pf-btn--primary pf-span" (click)="confirmPartialDispatch(g)"
                       [disabled]="sel.size === 0 || dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
                       [attr.aria-label]="'Dispatch ' + sel.size" [attr.data-label]="'Dispatch ' + sel.size">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -852,12 +851,12 @@
               </button>
             } @else {
             @if (isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="undispatchOrder(g)" [disabled]="dispatching()"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="undispatchOrder(g)" [disabled]="dispatching()"
                       [pfBusy]="dispatching()" pfBusyLabel="Undoing dispatch…">
                 {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
               </button>
             } @else {
-              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="rejectOrder(g)"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="rejectOrder(g)"
                       [disabled]="pendingCount(g) === 0"
                       aria-label="Can't collect" data-label="Can't collect">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -869,7 +868,7 @@
             @if (scan.manualEntry()) {
               <!-- Manual mode: nothing to print — show what to hand-write on
                    each container instead. -->
-              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="writeUpOpen.set(true)"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="writeUpOpen.set(true)"
                       aria-label="Label by hand" data-label="Label by hand">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
@@ -879,7 +878,7 @@
             } @else {
               <!-- Print the order's tube labels (barcode + QR) — available any time
                    in the drawer so tubes can be labelled before or after the draw. -->
-              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="printLabels(g)"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="printLabels(g)"
                       [disabled]="printing()" [pfBusy]="printing()" pfBusyLabel="Printing labels…"
                       aria-label="Print labels" data-label="Print labels">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -895,7 +894,7 @@
                  "Payment pending" note for collectors without billing access. -->
             @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold && dispatchStep()) {
               @if (canBill()) {
-                <button type="button" class="pf-btn pf-btn-primary nd-btn nd-btn--primary nd-span" (click)="goToBilling(g)"
+                <button type="button" class="pf-btn pf-btn-primary pf-btn pf-btn--primary pf-span" (click)="goToBilling(g)"
                         aria-label="Bill" data-label="Bill">
                   <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 5h18v14H3z"/><path d="M3 10h18M7 15h3"/>
@@ -903,10 +902,10 @@
                   <span class="pf-btn__text">Bill</span>
                 </button>
               } @else {
-                <span class="pf-drawer__remaining nd-span">Payment pending — dispatch locked</span>
+                <span class="pf-drawer__remaining pf-span">Payment pending — dispatch locked</span>
               }
             } @else if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-primary nd-btn nd-btn--primary nd-span" (click)="dispatchOrder(g)" [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
+              <button type="button" class="pf-btn pf-btn-primary pf-btn pf-btn--primary pf-span" (click)="dispatchOrder(g)" [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
                       aria-label="Dispatch" data-label="Dispatch">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
@@ -917,14 +916,14 @@
               <!-- Series, some tubes drawn, more still to come. One click hands
                    ALL drawn tubes to the lab (OPS-66 — no select-then-confirm).
                    "Choose" opens tube-by-tube selection for the rare subset. -->
-              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text nd-btn nd-btn--secondary" (click)="startPartialDispatch(g)"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text pf-btn pf-btn--secondary" (click)="startPartialDispatch(g)"
                       aria-label="Choose tubes" data-label="Choose">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
                 <span class="pf-btn__text">Choose</span>
               </button>
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial nd-btn nd-btn--primary" (click)="dispatchCollected(g)"
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial pf-btn pf-btn--primary" (click)="dispatchCollected(g)"
                       [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
                       [attr.aria-label]="'Dispatch ' + collectedCount(g)" [attr.data-label]="'Dispatch ' + collectedCount(g)">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -933,8 +932,8 @@
                 <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + collectedCount(g) }}</span>
               </button>
             }
-            <button type="button" class="pf-btn pf-drawer__finish nd-btn nd-span" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
-                    [class.nd-btn--primary]="finishIsPrimary(g)" [class.nd-btn--secondary]="!finishIsPrimary(g)"
+            <button type="button" class="pf-btn pf-drawer__finish pf-btn pf-span" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
+                    [class.pf-btn--primary]="finishIsPrimary(g)" [class.pf-btn--secondary]="!finishIsPrimary(g)"
                     (click)="close()" [disabled]="doneDisabled(g)"
                     [attr.aria-label]="doneLabel(g)"
                     [attr.data-label]="doneLabel(g)">
@@ -955,15 +954,15 @@
           </div>
 
           <!-- Phones: the COLLECTION card as a sticky bottom bar. -->
-          <div class="nd-bottombar pf-sc-bar">
-            <span class="nd-bottombar__info">{{ g.collected }}/{{ g.totalVials }} drawn</span>
-            <button type="button" class="nd-btn nd-btn--icon" (click)="actionsOpen.set(true)" aria-label="More collection actions">
+          <div class="pf-bottombar pf-sc-bar">
+            <span class="pf-bottombar__info">{{ g.collected }}/{{ g.totalVials }} drawn</span>
+            <button type="button" class="pf-btn pf-btn--icon" (click)="actionsOpen.set(true)" aria-label="More collection actions">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
             </button>
             @if (dispatchCtaShown(g)) {
-              <button type="button" class="nd-btn nd-btn--primary pf-sc-bar__cta" (click)="actionsOpen.set(true)">Dispatch…</button>
+              <button type="button" class="pf-btn pf-btn--primary pf-sc-bar__cta" (click)="actionsOpen.set(true)">Dispatch…</button>
             } @else {
-              <button type="button" class="nd-btn pf-sc-bar__cta" [class.nd-btn--primary]="finishIsPrimary(g)" [class.nd-btn--secondary]="!finishIsPrimary(g)"
+              <button type="button" class="pf-btn pf-sc-bar__cta" [class.pf-btn--primary]="finishIsPrimary(g)" [class.pf-btn--secondary]="!finishIsPrimary(g)"
                       (click)="close()" [disabled]="doneDisabled(g)">{{ doneLabel(g) }}</button>
             }
           </div>
@@ -1049,8 +1048,8 @@
             }
           </div>
           <footer class="pf-rej__foot">
-            <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="cancelReject()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn-danger nd-btn nd-btn--danger"
+            <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="cancelReject()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn-danger pf-btn pf-btn--danger"
                     [disabled]="!canSubmitReject() || rejectBusy()" [pfBusy]="rejectBusy()" pfBusyLabel="Saving…"
                     (click)="submitReject()">
               {{ rejectBusy() ? 'Saving…' : 'Mark ' + (pendingCount(r.group) === 1 ? 'tube' : pendingCount(r.group) + ' tubes') + ' not collected' }}

@@ -11,7 +11,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -52,7 +52,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 const TEST_LIST_CAP = 300;
 
 /**
- * Admin → Inventory (ND-PATTERN: band → main card + side card).
+ * Admin → Inventory (PF-PATTERN: band → main card + side card).
  *
  *  • Items — the item grid (AG-Grid, like Test Master) is the MAIN card; the
  *    picked item opens the ITEM side card: Batches · Receive · Label ·
@@ -69,7 +69,7 @@ const TEST_LIST_CAP = 300;
   selector: 'pf-inventory',
   standalone: true,
   imports: [BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
-    HeroBandComponent, NdDateComponent, SegmentedComponent, SelectComponent],
+    HeroBandComponent, PfDateComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../stores/inv-layout.scss'],
   template: `
@@ -81,10 +81,10 @@ const TEST_LIST_CAP = 300;
                       [value]="tab() === 'items' ? q() : testQ()" (valueChange)="onBandSearch($event)">
           <ng-container band-tools>
             @if (narrow() && tab() === 'items') {
-              <button type="button" class="nd-chip pf-inv-attnchip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
+              <button type="button" class="pf-chip pf-inv-attnchip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
                       [attr.aria-expanded]="attnOpen()" [attr.aria-label]="'Attention, ' + attentionCount()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
-                <span class="nd-num">{{ attentionCount() }}</span>
+                <span class="pf-num">{{ attentionCount() }}</span>
               </button>
             }
             <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
@@ -119,7 +119,7 @@ const TEST_LIST_CAP = 300;
         </div>
         <div class="flex items-center gap-2">
           <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
-          <button type="button" class="nd-btn nd-btn--secondary" (click)="startNew()">New item</button>
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="startNew()">New item</button>
         </div>
       </div>
 
@@ -127,22 +127,22 @@ const TEST_LIST_CAP = 300;
       @if (showItems()) {
         <div class="inv-body">
           <!-- MAIN: the item grid -->
-          <section class="nd-card" aria-labelledby="pf-inv-items-t">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-              <span class="nd-card__label" id="pf-inv-items-t">Items</span>
-              <span class="nd-card__note">{{ web() ? 'Click' : 'Tap' }} an item for its batches, stock, label and ledger</span>
-              <span class="inv-count nd-num">{{ itemsLabel() }}</span>
+          <section class="pf-card" aria-labelledby="pf-inv-items-t">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+              <span class="pf-card__label" id="pf-inv-items-t">Items</span>
+              <span class="pf-card__note">{{ web() ? 'Click' : 'Tap' }} an item for its batches, stock, label and ledger</span>
+              <span class="inv-count pf-num">{{ itemsLabel() }}</span>
             </header>
-            <div class="nd-card__body inv-main__body">
+            <div class="pf-card__body inv-main__body">
               @if (loading()) {
                 <pf-skeleton-table [rows]="8" [cols]="4" label="Loading inventory…"></pf-skeleton-table>
               } @else if (!items().length) {
-                <div class="nd-empty">
-                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-                  <p class="nd-empty__title">No items yet</p>
-                  <p class="nd-empty__body">Add the tubes, reagents and kits this lab stocks. Each gets a scannable barcode; the Stores desk receives, issues and counts them.</p>
-                  <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="startNew()">Add the first item</button>
+                <div class="pf-empty">
+                  <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+                  <p class="pf-empty__title">No items yet</p>
+                  <p class="pf-empty__body">Add the tubes, reagents and kits this lab stocks. Each gets a scannable barcode; the Stores desk receives, issues and counts them.</p>
+                  <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="startNew()">Add the first item</button>
                 </div>
               } @else {
                 @if (!visibleItems().length) {
@@ -158,12 +158,12 @@ const TEST_LIST_CAP = 300;
 
           <!-- SIDE: the picked item / the item editor / attention -->
           @if (!narrow()) {
-            <aside class="nd-card pf-inv-side" aria-labelledby="pf-inv-side-t">
+            <aside class="pf-card pf-inv-side" aria-labelledby="pf-inv-side-t">
               <ng-container [ngTemplateOutlet]="sideCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
             </aside>
           } @else if (editing() || sel() || attnOpen()) {
             <div class="inv-sheet-backdrop" (click)="closeSide()"></div>
-            <aside class="nd-card inv-side--sheet pf-inv-side" role="dialog" aria-modal="true" aria-labelledby="pf-inv-side-t" (keydown.escape)="closeSide()">
+            <aside class="pf-card inv-side--sheet pf-inv-side" role="dialog" aria-modal="true" aria-labelledby="pf-inv-side-t" (keydown.escape)="closeSide()">
               <span class="inv-sheet-handle" aria-hidden="true"></span>
               <ng-container [ngTemplateOutlet]="sideCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
             </aside>
@@ -175,28 +175,28 @@ const TEST_LIST_CAP = 300;
       @if (showBom()) {
         <div class="inv-body inv-body--left">
           <!-- LEFT: the tests (navigation companion) -->
-          <section class="nd-card" aria-labelledby="pf-inv-tests-t">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-              <span class="nd-card__label" id="pf-inv-tests-t">Tests</span>
-              <span class="nd-card__spacer"></span>
-              <span class="inv-count nd-num">{{ plural(testRows().length, 'test') }}</span>
+          <section class="pf-card" aria-labelledby="pf-inv-tests-t">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+              <span class="pf-card__label" id="pf-inv-tests-t">Tests</span>
+              <span class="pf-card__spacer"></span>
+              <span class="inv-count pf-num">{{ plural(testRows().length, 'test') }}</span>
             </header>
-            <div class="nd-card__body pf-inv-tests">
+            <div class="pf-card__body pf-inv-tests">
               <ul class="inv-rows" role="list">
                 @for (t of testRows().slice(0, testCap); track t.id) {
                   <li>
                     <button type="button" class="inv-row" [attr.aria-pressed]="bomTestId() === t.id" (click)="selectTest(t.id)">
                       <span class="inv-row__main">
                         <span class="inv-row__name">{{ t.name }}</span>
-                        @if (testMeta(t); as m) { <span class="inv-row__meta nd-num">{{ m }}</span> }
+                        @if (testMeta(t); as m) { <span class="inv-row__meta pf-num">{{ m }}</span> }
                       </span>
                     </button>
                   </li>
                 } @empty {
-                  <li class="nd-empty nd-empty--compact">
-                    <p class="nd-empty__title">{{ tests().length ? 'No tests match' : 'No tests yet' }}</p>
-                    <p class="nd-empty__body">{{ tests().length ? 'Try another name or code.' : 'Tests come from the Test Master.' }}</p>
+                  <li class="pf-empty pf-empty--compact">
+                    <p class="pf-empty__title">{{ tests().length ? 'No tests match' : 'No tests yet' }}</p>
+                    <p class="pf-empty__body">{{ tests().length ? 'Try another name or code.' : 'Tests come from the Test Master.' }}</p>
                   </li>
                 }
               </ul>
@@ -208,12 +208,12 @@ const TEST_LIST_CAP = 300;
 
           <!-- MAIN: what the picked test consumes (a sheet on narrow widths) -->
           @if (!narrow()) {
-            <section class="nd-card pf-inv-bom" aria-labelledby="pf-inv-bom-t">
+            <section class="pf-card pf-inv-bom" aria-labelledby="pf-inv-bom-t">
               <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
             </section>
           } @else if (bomTestId()) {
             <div class="inv-sheet-backdrop" (click)="selectTest('')"></div>
-            <section class="nd-card inv-side--sheet pf-inv-bom" role="dialog" aria-modal="true" aria-labelledby="pf-inv-bom-t" (keydown.escape)="selectTest('')">
+            <section class="pf-card inv-side--sheet pf-inv-bom" role="dialog" aria-modal="true" aria-labelledby="pf-inv-bom-t" (keydown.escape)="selectTest('')">
               <span class="inv-sheet-handle" aria-hidden="true"></span>
               <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
             </section>
@@ -226,87 +226,87 @@ const TEST_LIST_CAP = 300;
     <!-- ══ Side card: editor / picked item / attention ══ -->
     <ng-template #sideCard let-sheet="sheet">
       @if (editing()) {
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
-          <h3 class="nd-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
-          <span class="nd-card__spacer"></span>
-          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+          <h3 class="pf-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
-        <div class="nd-card__body pf-inv-editor">
+        <div class="pf-card__body pf-inv-editor">
           <div class="inv-fields">
-            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-sku">SKU <span class="nd-dot-unpriced" aria-label="required"></span></label>
-              <input id="pf-inv-sku" class="nd-input nd-num" [class.nd-input--error]="itemError()?.field==='sku'||itemError()?.field==='code'" [value]="form().sku ?? ''" (input)="setF('sku', $any($event.target).value)"/>
+            <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-sku">SKU <span class="pf-dot-unpriced" aria-label="required"></span></label>
+              <input id="pf-inv-sku" class="pf-input pf-num" [class.pf-input--error]="itemError()?.field==='sku'||itemError()?.field==='code'" [value]="form().sku ?? ''" (input)="setF('sku', $any($event.target).value)"/>
               @if (itemError()?.field==='sku'||itemError()?.field==='code') { <span class="inv-err">{{ itemError()!.message }}</span> }
             </div>
-            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-uom">Unit</label>
-              <input id="pf-inv-uom" class="nd-input" [value]="form().uom ?? ''" (input)="setF('uom', $any($event.target).value)" placeholder="piece"/></div>
-            <div class="nd-field inv-span"><label class="nd-field__lbl" for="pf-inv-name">Name <span class="nd-dot-unpriced" aria-label="required"></span></label>
-              <input id="pf-inv-name" class="nd-input" [class.nd-input--error]="itemError()?.field==='name'" [value]="form().name ?? ''" (input)="setF('name', $any($event.target).value)"/>
+            <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-uom">Unit</label>
+              <input id="pf-inv-uom" class="pf-input" [value]="form().uom ?? ''" (input)="setF('uom', $any($event.target).value)" placeholder="piece"/></div>
+            <div class="pf-field inv-span"><label class="pf-field__lbl" for="pf-inv-name">Name <span class="pf-dot-unpriced" aria-label="required"></span></label>
+              <input id="pf-inv-name" class="pf-input" [class.pf-input--error]="itemError()?.field==='name'" [value]="form().name ?? ''" (input)="setF('name', $any($event.target).value)"/>
               @if (itemError()?.field==='name') { <span class="inv-err">{{ itemError()!.message }}</span> }
             </div>
-            <div class="nd-field"><span class="nd-field__lbl">Category</span>
+            <div class="pf-field"><span class="pf-field__lbl">Category</span>
               <pf-select [options]="categoryOptions" [value]="form().category ?? 'consumable'" (valueChange)="setF('category', $event)" aria-label="Category"></pf-select></div>
-            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-reorder">Reorder level</label>
-              <input id="pf-inv-reorder" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="form().reorderLevel ?? 0" (input)="setF('reorderLevel', +$any($event.target).value)"/></div>
-            <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-near">Near-expiry (days)</label>
-              <input id="pf-inv-near" class="nd-input nd-num" type="number" min="1" inputmode="numeric" [value]="form().nearExpiryDays ?? 30" (input)="setF('nearExpiryDays', +$any($event.target).value)"/></div>
-            <div class="nd-field pf-inv-active">
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!form().isActive" (click)="setF('isActive', !form().isActive)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span><span>Active</span>
+            <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-reorder">Reorder level</label>
+              <input id="pf-inv-reorder" class="pf-input pf-num" type="number" min="0" inputmode="decimal" [value]="form().reorderLevel ?? 0" (input)="setF('reorderLevel', +$any($event.target).value)"/></div>
+            <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-near">Near-expiry (days)</label>
+              <input id="pf-inv-near" class="pf-input pf-num" type="number" min="1" inputmode="numeric" [value]="form().nearExpiryDays ?? 30" (input)="setF('nearExpiryDays', +$any($event.target).value)"/></div>
+            <div class="pf-field pf-inv-active">
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!!form().isActive" (click)="setF('isActive', !form().isActive)">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span><span>Active</span>
               </button>
             </div>
-            <div class="nd-field inv-span"><label class="nd-field__lbl" for="pf-inv-barcode">Barcode</label>
-              <input id="pf-inv-barcode" class="nd-input nd-num" autocomplete="off" [class.nd-input--error]="itemError()?.field==='barcode'" [value]="form().barcode ?? ''" (input)="setF('barcode', $any($event.target).value)" placeholder="Supplier barcode (GTIN)"/>
+            <div class="pf-field inv-span"><label class="pf-field__lbl" for="pf-inv-barcode">Barcode</label>
+              <input id="pf-inv-barcode" class="pf-input pf-num" autocomplete="off" [class.pf-input--error]="itemError()?.field==='barcode'" [value]="form().barcode ?? ''" (input)="setF('barcode', $any($event.target).value)" placeholder="Supplier barcode (GTIN)"/>
               @if (itemError()?.field==='barcode') { <span class="inv-err">{{ itemError()!.message }}</span> }
-              <span class="nd-field__hint">Scan or type the supplier's barcode so the Stores desk finds this item by scan. Left blank, a new item gets its own.</span>
+              <span class="pf-field__hint">Scan or type the supplier's barcode so the Stores desk finds this item by scan. Left blank, a new item gets its own.</span>
             </div>
           </div>
         </div>
-        <div class="nd-card__foot">
-          <button type="button" class="nd-btn nd-btn--secondary press" (click)="editing.set(false)">Cancel</button>
-          <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+        <div class="pf-card__foot">
+          <button type="button" class="pf-btn pf-btn--secondary press" (click)="editing.set(false)">Cancel</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
         </div>
       } @else if (sel(); as it) {
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-          <span class="nd-card__label" id="pf-inv-side-t">Item</span>
-          <span class="nd-card__spacer"></span>
-          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="closeSide()" [attr.aria-label]="sheet ? 'Close' : 'Close the item'">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+          <span class="pf-card__label" id="pf-inv-side-t">Item</span>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="closeSide()" [attr.aria-label]="sheet ? 'Close' : 'Close the item'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
-        <div class="nd-card__body">
+        <div class="pf-card__body">
           <div class="inv-subject">
             <div>
               <p class="inv-subject__name">{{ it.name }}</p>
-              <p class="inv-subject__meta nd-num">{{ it.sku }} · {{ it.category }}{{ it.isActive ? '' : ' · Off' }}</p>
-              @if (it.barcode) { <p class="inv-subject__meta nd-num">Barcode {{ it.barcode }}</p> }
+              <p class="inv-subject__meta pf-num">{{ it.sku }} · {{ it.category }}{{ it.isActive ? '' : ' · Off' }}</p>
+              @if (it.barcode) { <p class="inv-subject__meta pf-num">Barcode {{ it.barcode }}</p> }
             </div>
             <div class="inv-onhand">
               <span class="inv-onhand__v">{{ it.onHand | number:'1.0-2' }}</span>
               <span class="inv-onhand__u">{{ it.uom }} · reorder at {{ it.reorderLevel | number:'1.0-2' }}</span>
-              @if (level(it) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
+              @if (level(it) !== 'ok') { <span class="pf-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
             </div>
           </div>
-          <div class="nd-seg pf-inv-sections" role="radiogroup" aria-label="Item section">
+          <div class="pf-seg pf-inv-sections" role="radiogroup" aria-label="Item section">
             @for (s of sections; track s.v) {
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="section() === s.v" (click)="setSection(it, s.v)">{{ s.l }}</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="section() === s.v" (click)="setSection(it, s.v)">{{ s.l }}</button>
             }
           </div>
 
           @switch (section()) {
             @case ('receive') {
               <div class="inv-fields rcv-form">
-                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-lot">Lot no.</label>
-                  <input id="pf-inv-lot" class="nd-input nd-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)"/></div>
-                <div class="nd-field"><span class="nd-field__lbl">Expiry</span>
-                  <pf-nd-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-nd-date></div>
-                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-cost">Unit cost (₹)</label>
-                  <input id="pf-inv-cost" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)"/></div>
-                <div class="nd-field"><label class="nd-field__lbl" for="pf-inv-qty">Quantity ({{ it.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
-                  <input id="pf-inv-qty" class="nd-input nd-num" [class.nd-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)"/>
+                <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-lot">Lot no.</label>
+                  <input id="pf-inv-lot" class="pf-input pf-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)"/></div>
+                <div class="pf-field"><span class="pf-field__lbl">Expiry</span>
+                  <pf-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-date></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-cost">Unit cost (₹)</label>
+                  <input id="pf-inv-cost" class="pf-input pf-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)"/></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="pf-inv-qty">Quantity ({{ it.uom }}) <span class="pf-dot-unpriced" aria-label="required"></span></label>
+                  <input id="pf-inv-qty" class="pf-input pf-num" [class.pf-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)"/>
                   @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="inv-err">{{ rcvError()!.message }}</span> }
                 </div>
               </div>
@@ -314,10 +314,10 @@ const TEST_LIST_CAP = 300;
             }
             @case ('label') {
               <div class="inv-label label-wrap">
-                <div class="nd-seg" role="radiogroup" aria-label="Label type">
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
+                <div class="pf-seg" role="radiogroup" aria-label="Label type">
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
                 </div>
                 <div class="inv-label__paper pf-print-label">
                   <pf-barcode-display [code]="labelCode() || it.barcode || it.sku" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
@@ -331,9 +331,9 @@ const TEST_LIST_CAP = 300;
                   <div class="inv-line">
                     <span class="inv-line__main">
                       <span class="inv-line__name">{{ ledgerWord(t.type) }}</span>
-                      <span class="inv-line__meta nd-num">{{ t.at | date:'d MMM y, h:mm a' }}{{ t.reason ? ' · ' + t.reason : '' }}</span>
+                      <span class="inv-line__meta pf-num">{{ t.at | date:'d MMM y, h:mm a' }}{{ t.reason ? ' · ' + t.reason : '' }}</span>
                     </span>
-                    <span class="inv-line__end nd-num" [class.inv-strong]="t.delta > 0">{{ signedQty(t.delta) }}</span>
+                    <span class="inv-line__end pf-num" [class.inv-strong]="t.delta > 0">{{ signedQty(t.delta) }}</span>
                   </div>
                 } @empty { <p class="inv-sub">{{ ledgerLoading() ? 'Loading…' : 'No stock movements yet.' }}</p> }
               </div>
@@ -343,16 +343,16 @@ const TEST_LIST_CAP = 300;
                 @for (b of batches(); track b.id) {
                   <div class="inv-line pf-inv-batch">
                     <span class="inv-line__main">
-                      <span class="inv-line__name nd-num">{{ b.lotNumber || 'No lot no.' }}</span>
-                      <span class="inv-line__meta nd-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }}
-                        @if (b.expired) { · <span class="nd-sdot" data-tone="bad">Expired</span> }</span>
+                      <span class="inv-line__name pf-num">{{ b.lotNumber || 'No lot no.' }}</span>
+                      <span class="inv-line__meta pf-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }}
+                        @if (b.expired) { · <span class="pf-sdot" data-tone="bad">Expired</span> }</span>
                     </span>
                     <span class="inv-line__end">
-                      <button type="button" class="nd-btn nd-btn--icon pf-inv-adj" (click)="adjust(b, -1)" aria-label="Decrease">
+                      <button type="button" class="pf-btn pf-btn--icon pf-inv-adj" (click)="adjust(b, -1)" aria-label="Decrease">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
                       </button>
                       <span class="inv-strong pf-inv-batch__q">{{ b.qtyOnHand | number:'1.0-2' }}</span>
-                      <button type="button" class="nd-btn nd-btn--icon pf-inv-adj" (click)="adjust(b, 1)" aria-label="Increase">
+                      <button type="button" class="pf-btn pf-btn--icon pf-inv-adj" (click)="adjust(b, 1)" aria-label="Increase">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                       </button>
                     </span>
@@ -363,46 +363,46 @@ const TEST_LIST_CAP = 300;
             }
           }
         </div>
-        <div class="nd-card__foot">
+        <div class="pf-card__foot">
           @switch (section()) {
             @case ('receive') {
-              <button type="button" class="nd-btn nd-btn--secondary press" (click)="setSection(it, 'batches')">Cancel</button>
-              <button type="button" class="nd-btn press" [class.nd-btn--primary]="rcv().qty > 0" [class.nd-btn--secondary]="rcv().qty <= 0"
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="setSection(it, 'batches')">Cancel</button>
+              <button type="button" class="pf-btn press" [class.pf-btn--primary]="rcv().qty > 0" [class.pf-btn--secondary]="rcv().qty <= 0"
                       [disabled]="rcv().qty<=0 || receiving()" [pfBusy]="receiving()" pfBusyLabel="Adding stock…" (click)="doReceive(it)">Add stock</button>
             }
             @case ('label') {
-              <button type="button" class="nd-btn nd-btn--secondary press" (click)="startEdit(it)">Edit item</button>
-              <button type="button" class="nd-btn nd-btn--primary press" (click)="printLabel()">Print label</button>
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="pf-btn pf-btn--primary press" (click)="printLabel()">Print label</button>
             }
             @default {
-              <button type="button" class="nd-btn nd-btn--secondary press" (click)="startEdit(it)">Edit item</button>
-              <button type="button" class="nd-btn nd-btn--primary press" (click)="openReceive(it)">Receive stock</button>
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="pf-btn pf-btn--primary press" (click)="openReceive(it)">Receive stock</button>
             }
           }
         </div>
       } @else {
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
-          <span class="nd-card__label" id="pf-inv-side-t">Attention</span>
-          <span class="nd-card__spacer"></span>
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+          <span class="pf-card__label" id="pf-inv-side-t">Attention</span>
+          <span class="pf-card__spacer"></span>
           @if (sheet) {
-            <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="closeSide()" aria-label="Close attention">
+            <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="closeSide()" aria-label="Close attention">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           }
         </header>
-        <div class="nd-card__body">
+        <div class="pf-card__body">
           <div class="inv-kpis" role="list" aria-label="Stock summary">
-            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ items().length | number }}</span><span class="nd-sdot">Items</span></div>
-            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ lowStock().length | number }}</span><span class="nd-sdot" data-tone="warn">Low</span></div>
-            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="nd-sdot" data-tone="warn">Expiring</span></div>
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ items().length | number }}</span><span class="pf-sdot">Items</span></div>
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ lowStock().length | number }}</span><span class="pf-sdot" data-tone="warn">Low</span></div>
+            <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="pf-sdot" data-tone="warn">Expiring</span></div>
           </div>
           <p class="inv-title">At or below reorder level</p>
           <div class="pf-inv-alert">
             @for (l of lowStock(); track l.id) {
               <div class="inv-line alert-row">
                 <span class="inv-line__main"><span class="inv-line__name alert-row__name">{{ l.name }}</span></span>
-                <span class="inv-line__end nd-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
+                <span class="inv-line__end pf-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
               </div>
             } @empty { <p class="inv-sub">Every item is above its reorder level.</p> }
           </div>
@@ -412,9 +412,9 @@ const TEST_LIST_CAP = 300;
               <div class="inv-line alert-row">
                 <span class="inv-line__main">
                   <span class="inv-line__name alert-row__name">{{ e.item }}</span>
-                  <span class="inv-line__meta nd-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}</span>
+                  <span class="inv-line__meta pf-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}</span>
                 </span>
-                <span class="inv-line__end"><span class="nd-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
+                <span class="inv-line__end"><span class="pf-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
               </div>
             } @empty { <p class="inv-sub">Nothing expiring within its item's near-expiry window.</p> }
           </div>
@@ -425,24 +425,24 @@ const TEST_LIST_CAP = 300;
 
     <!-- ══ Consumables card for the picked test ══ -->
     <ng-template #bomCard let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-        <span class="nd-card__label" id="pf-inv-bom-t">Per-test consumables</span>
-        @if (bomTest(); as t) { <span class="nd-card__note">{{ t.name }}</span> } @else { <span class="nd-card__spacer"></span> }
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+        <span class="pf-card__label" id="pf-inv-bom-t">Per-test consumables</span>
+        @if (bomTest(); as t) { <span class="pf-card__note">{{ t.name }}</span> } @else { <span class="pf-card__spacer"></span> }
         @if (sheet) {
-          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="selectTest('')" aria-label="Close consumables">
+          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="selectTest('')" aria-label="Close consumables">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         }
       </header>
       @if (bomTestId()) {
-        <div class="nd-card__body pf-inv-bom__body">
+        <div class="pf-card__body pf-inv-bom__body">
           <p class="inv-sub">What one {{ bomTest()?.name || 'test' }} uses. It's deducted from this branch's stock (earliest expiry first) when the sample is collected.</p>
           @if (!items().length) {
             <div class="inv-note">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
               <div class="inv-note__body">There are no inventory items to map yet.
-                <div class="inv-note__actions"><button type="button" class="nd-btn nd-btn--quiet" (click)="setTab('items'); startNew()">Create an item</button></div>
+                <div class="inv-note__actions"><button type="button" class="pf-btn pf-btn--quiet" (click)="setTab('items'); startNew()">Create an item</button></div>
               </div>
             </div>
           }
@@ -453,30 +453,30 @@ const TEST_LIST_CAP = 300;
             <div class="bom-line">
               <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
                          placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
-              <input class="nd-input nd-num bom-line__qty" type="number" min="0" step="0.001" inputmode="decimal" [value]="line.qtyPerTest" (input)="setLine($index,'qtyPerTest', +$any($event.target).value)" aria-label="Quantity per test"/>
-              <span class="bom-line__cover nd-num">{{ coverLabel(line) }}</span>
-              <button type="button" class="nd-btn nd-btn--icon pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
+              <input class="pf-input pf-num bom-line__qty" type="number" min="0" step="0.001" inputmode="decimal" [value]="line.qtyPerTest" (input)="setLine($index,'qtyPerTest', +$any($event.target).value)" aria-label="Quantity per test"/>
+              <span class="bom-line__cover pf-num">{{ coverLabel(line) }}</span>
+              <button type="button" class="pf-btn pf-btn--icon pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
           } @empty {
-            <div class="nd-empty nd-empty--compact">
-              <p class="nd-empty__title">Nothing mapped</p>
-              <p class="nd-empty__body">This test doesn't use any stock yet. Add the items it consumes.</p>
+            <div class="pf-empty pf-empty--compact">
+              <p class="pf-empty__title">Nothing mapped</p>
+              <p class="pf-empty__body">This test doesn't use any stock yet. Add the items it consumes.</p>
             </div>
           }
-          <div><button type="button" class="nd-btn nd-btn--tertiary" (click)="addLine()">+ Add item</button></div>
+          <div><button type="button" class="pf-btn pf-btn--tertiary" (click)="addLine()">+ Add item</button></div>
         </div>
-        <div class="nd-card__foot">
-          <button type="button" class="nd-btn nd-btn--secondary press" (click)="selectTest(bomTestId())">Revert</button>
-          <button type="button" class="nd-btn nd-btn--primary press" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()">Save consumables</button>
+        <div class="pf-card__foot">
+          <button type="button" class="pf-btn pf-btn--secondary press" (click)="selectTest(bomTestId())">Revert</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()">Save consumables</button>
         </div>
       } @else {
-        <div class="nd-card__body">
-          <div class="nd-empty">
-            <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-            <p class="nd-empty__title">Pick a test</p>
-            <p class="nd-empty__body">Map the tubes, reagents and kits one test uses. Collection then deducts them from stock automatically, and you see how many tests the stock still covers.</p>
+        <div class="pf-card__body">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+            <p class="pf-empty__title">Pick a test</p>
+            <p class="pf-empty__body">Map the tubes, reagents and kits one test uses. Collection then deducts them from stock automatically, and you see how many tests the stock still covers.</p>
           </div>
         </div>
       }
@@ -515,7 +515,7 @@ const TEST_LIST_CAP = 300;
 
     @media (max-width: 640px) {
       .pf-inv-bomhead { display: none; }
-      .bom-line { grid-template-columns: minmax(0, 1fr) 96px 44px; padding-bottom: 10px; border-bottom: 1px solid var(--nd-line); }
+      .bom-line { grid-template-columns: minmax(0, 1fr) 96px 44px; padding-bottom: 10px; border-bottom: 1px solid var(--pf-line); }
       .bom-line__item { grid-column: 1 / -1; }
       .bom-line__cover { grid-column: 1 / 2; grid-row: 2; }
       .bom-line__qty { grid-row: 2; grid-column: 2; }
@@ -532,7 +532,7 @@ export class InventoryComponent implements OnInit {
   private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
   /** ≤900px: no side column — the side card is a sheet. */
   protected readonly narrow = mediaSignal('(max-width: 900px)');
@@ -795,7 +795,7 @@ export class InventoryComponent implements OnInit {
     this.receiving.set(true);
     try {
       // Contract (fix 7 — expiry = end of day IST): send the <input type=date>
-      // / pf-nd-date value as a literal "<YYYY-MM-DD>T00:00:00Z" string —
+      // / pf-date value as a literal "<YYYY-MM-DD>T00:00:00Z" string —
       // never through `new Date(...)` first, which would shift the date by
       // the browser's local timezone. The server stores the date part
       // VERBATIM and treats it as an IST calendar date: a lot dated 31 Oct is

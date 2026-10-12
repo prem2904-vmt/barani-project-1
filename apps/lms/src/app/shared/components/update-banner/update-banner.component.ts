@@ -35,8 +35,8 @@ import { UpdaterService } from '../../../core/services/updater.service';
           }
         </div>
         <div class="pf-update-banner__actions">
-          <button type="button" class="nd-btn nd-btn--secondary" (click)="updater.dismiss()">Later</button>
-          <button type="button" class="nd-btn nd-btn--primary" (click)="updater.restartNow()">Restart now</button>
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="updater.dismiss()">Later</button>
+          <button type="button" class="pf-btn pf-btn--primary" (click)="updater.restartNow()">Restart now</button>
         </div>
       </div>
     }
@@ -53,9 +53,9 @@ import { UpdaterService } from '../../../core/services/updater.service';
       gap: 12px;
       max-width: calc(100vw - 32px);
       padding: 10px 14px;
-      border-radius: var(--nd-radius, 12px);
-      background: var(--nd-card-bg, #fff);
-      border: 1px solid var(--nd-line, #e5e7eb);
+      border-radius: var(--pf-radius, 12px);
+      background: var(--pf-card-bg, #fff);
+      border: 1px solid var(--pf-line, #e5e7eb);
       box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
     }
     .pf-update-banner__icon {
@@ -90,7 +90,7 @@ import { UpdaterService } from '../../../core/services/updater.service';
       display: flex;
       gap: 8px;
     }
-    .pf-update-banner__actions .nd-btn {
+    .pf-update-banner__actions .pf-btn {
       min-height: 32px;
       height: 32px;
       padding: 0 12px;

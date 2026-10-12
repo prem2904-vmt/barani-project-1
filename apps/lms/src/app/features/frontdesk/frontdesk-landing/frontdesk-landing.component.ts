@@ -660,7 +660,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
-  /** FIRST-load skeletons for the lists (ND-PATTERN "Loading feedback"):
+  /** FIRST-load skeletons for the lists (PF-PATTERN "Loading feedback"):
    *  their shape instead of an "All caught up" flash before the data lands.
    *  Later polls / range changes keep the rows on screen. */
   private readonly apptHold = createLoadHold(true);

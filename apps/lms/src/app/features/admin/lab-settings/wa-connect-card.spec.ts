@@ -125,8 +125,8 @@ describe('WhatsApp connect card — states', () => {
     expect(script.src).toBe('https://connect.facebook.net/en_US/sdk.js');
     const connect = p.q('wac-connect') as HTMLButtonElement;
     expect(connect.textContent).toContain('Connect WhatsApp');
-    expect(connect.classList.contains('nd-btn--primary')).toBe(true);
-    expect(p.el.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    expect(connect.classList.contains('pf-btn--primary')).toBe(true);
+    expect(p.el.querySelectorAll('.pf-btn--primary').length).toBe(1);
     expect(connect.querySelector('svg')).not.toBeNull();   // SVG icon, never emoji
   });
 
@@ -159,7 +159,7 @@ describe('WhatsApp connect card — states', () => {
     expect(tpl).toContain('Report with PDF');
     expect(tpl).toContain('In review');
     expect(p.q('wac-connect')).toBeNull();
-    expect(p.q('wac-disconnect')!.classList.contains('nd-btn--danger')).toBe(true);
+    expect(p.q('wac-disconnect')!.classList.contains('pf-btn--danger')).toBe(true);
     expect(p.q('wac-refresh')).not.toBeNull();
     expect(p.el.textContent).not.toMatch(/token/i);
   });

@@ -30,17 +30,17 @@ import {
     <input #file type="file" class="pf-out-acts__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
     <div class="pf-out-acts">
       @if (rowReport(tube()); as rep) {
-        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()"
+        <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()"
                 [attr.aria-label]="'View partner report for ' + (tube().barcode ?? 'this tube')" (click)="view(rep.url)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
           </svg>
-          <span class="nd-rowact__t">View</span>
+          <span class="pf-rowact__t">View</span>
         </button>
       }
       @if (rowReport(tube())) {
-        <button type="button" class="nd-rowact pf-out-acts__attach-btn" [class.nd-rowact--icon]="!web()" [disabled]="busy()"
+        <button type="button" class="pf-rowact pf-out-acts__attach-btn" [class.pf-rowact--icon]="!web()" [disabled]="busy()"
                 [pfBusy]="busy() && busyAct() === 'attach'" pfBusyLabel="Saving…"
                 [attr.aria-label]="(attachState(tube()) === 'separate' ? 'Attach partner report to our report for ' : 'Detach partner report from our report for ') + (tube().barcode ?? 'this tube')"
                 (click)="toggleAttach()">
@@ -48,29 +48,29 @@ import {
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/>
           </svg>
-          <span class="nd-rowact__t">{{ attachState(tube()) === 'separate' ? 'Attach to report' : 'Detach from report' }}</span>
+          <span class="pf-rowact__t">{{ attachState(tube()) === 'separate' ? 'Attach to report' : 'Detach from report' }}</span>
         </button>
       }
       @if (tube().status === 'completed') {
-        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy()"
+        <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" [disabled]="busy()"
                 [pfBusy]="busy() && busyAct() === 'undo'" pfBusyLabel="Undoing…"
                 [attr.aria-label]="'Undo completed for ' + (tube().barcode ?? 'this tube')" (click)="undo()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
           </svg>
-          <span class="nd-rowact__t">Undo</span>
+          <span class="pf-rowact__t">Undo</span>
         </button>
       } @else if (tube().hasReport) {
-        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy()"
+        <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" [disabled]="busy()"
                 [pfBusy]="busy() && busyAct() === 'complete'" pfBusyLabel="Completing…"
                 [attr.aria-label]="'Mark completed for ' + (tube().barcode ?? 'this tube')" (click)="markCompleted()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
-          <span class="nd-rowact__t">Mark completed</span>
+          <span class="pf-rowact__t">Mark completed</span>
         </button>
       }
-      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy()"
+      <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" [disabled]="busy()"
               [pfBusy]="busy() && busyAct() === 'upload'" pfBusyLabel="Uploading…"
               [attr.aria-label]="(tube().hasReport ? 'Replace partner report for ' : 'Upload partner report for ') + (tube().barcode ?? 'this tube')"
               (click)="pick()">
@@ -78,7 +78,7 @@ import {
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>
         </svg>
-        <span class="nd-rowact__t">{{ busy() ? 'Uploading…' : (tube().hasReport ? 'Replace report' : 'Upload report') }}</span>
+        <span class="pf-rowact__t">{{ busy() ? 'Uploading…' : (tube().hasReport ? 'Replace report' : 'Upload report') }}</span>
       </button>
     </div>
   `,

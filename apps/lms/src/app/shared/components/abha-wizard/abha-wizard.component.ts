@@ -107,26 +107,26 @@ import { BusyDirective } from '../../directives/busy.directive';
     .pf-abw__go { margin-top: 6px; padding: 12px; border-radius: 11px; border: 0; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; background: linear-gradient(135deg, #7c3aed, #a855f7); }
     .pf-abw__go:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* NEW DESIGN (ND-PATTERN "Patient registration"): an nd-card modal —
+    /* NEW DESIGN (PF-PATTERN "Patient registration"): an pf-card modal —
        16px radius, kit inputs, Noto tabular numbers (never monospace),
        neutral info text (never green); phones: a sheet ABOVE the navbar. */
     :host-context(.design-new) .pf-abw__backdrop { background: rgba(15, 23, 42, 0.45); }
-    :host-context(.design-new) .pf-abw { border-radius: var(--nd-radius-card, 16px); background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22); }
-    :host-context(.design-new) .pf-abw__head { border-bottom-color: var(--nd-line); }
+    :host-context(.design-new) .pf-abw { border-radius: var(--pf-radius-card, 16px); background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22); }
+    :host-context(.design-new) .pf-abw__head { border-bottom-color: var(--pf-line); }
     :host-context(.design-new) .pf-abw__title { font-size: 16px; font-weight: 600; }
     :host-context(.design-new) .pf-abw__label { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-secondary); }
     :host-context(.design-new) .pf-abw__input {
-      min-height: 40px; border-radius: var(--nd-radius-sm, 10px); font-size: 13.5px; font-weight: 500; letter-spacing: 0;
+      min-height: 40px; border-radius: var(--pf-radius-sm, 10px); font-size: 13.5px; font-weight: 500; letter-spacing: 0;
       font-family: inherit; font-variant-numeric: tabular-nums;
       border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
-      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg)); color: var(--text-primary);
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg)); color: var(--text-primary);
     }
     :host-context(.design-new) .pf-abw__input:focus { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     :host-context(.design-new) .pf-abw__otp { font-family: inherit; font-size: 20px; letter-spacing: 0.3em; }
     :host-context(.design-new) .pf-abw__info { color: var(--text-secondary); }
     :host-context(.design-new) .pf-abw__go { border-radius: 12px; font-weight: 600; }
     @media (max-width: 640px) {
-      :host-context(.design-new) .pf-abw__backdrop { align-items: flex-end; padding: 0; bottom: var(--nd-nav-h, 0px); }
+      :host-context(.design-new) .pf-abw__backdrop { align-items: flex-end; padding: 0; bottom: var(--pf-nav-h, 0px); }
       :host-context(.design-new) .pf-abw { max-width: none; border-radius: 20px 20px 0 0; max-height: calc(100% - env(safe-area-inset-top, 0px)); overflow-y: auto; }
       :host-context(.design-new) .pf-abw__input { min-height: 44px; font-size: 16px; }
     }

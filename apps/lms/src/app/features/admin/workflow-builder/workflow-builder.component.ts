@@ -68,14 +68,14 @@ interface HistoryRow {
 
         <div class="pf-band-body">
         @if (screens().length === 0) {
-          <div class="nd-card pf-wf-empty"><p>No workflows yet.</p></div>
+          <div class="pf-card pf-wf-empty"><p>No workflows yet.</p></div>
         } @else if (visibleScreens().length === 0) {
           <p class="pf-band-empty">No forms match "{{ q() }}".</p>
         } @else {
           <ul class="pf-wf-list">
             @for (r of visibleScreens(); track r.screenName) {
-              <li class="nd-row pf-wf-row" (click)="openBuilder(r.screenName)">
-                <span class="nd-card__icon pf-wf-icon" aria-hidden="true">
+              <li class="pf-row pf-wf-row" (click)="openBuilder(r.screenName)">
+                <span class="pf-card__icon pf-wf-icon" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/>
                     <rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/>
@@ -83,21 +83,21 @@ interface HistoryRow {
                 </span>
                 <span class="pf-wf-main">
                   <span class="pf-wf-titlerow">
-                    <span class="nd-row__name pf-wf-name">{{ prettify(r.screenName) }}</span>
-                    <span class="nd-chip nd-chip--static pf-wf-status" [attr.data-status]="r.status">
+                    <span class="pf-row__name pf-wf-name">{{ prettify(r.screenName) }}</span>
+                    <span class="pf-chip pf-chip--static pf-wf-status" [attr.data-status]="r.status">
                       @if (r.status === 'published') {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                         Published
                       } @else { {{ r.status }} }
                     </span>
                   </span>
-                  <span class="nd-row__meta nd-num pf-wf-meta">v{{ r.version }} · {{ stepCount(r) }} steps · {{ fieldCount(r) }} fields</span>
+                  <span class="pf-row__meta pf-num pf-wf-meta">v{{ r.version }} · {{ stepCount(r) }} steps · {{ fieldCount(r) }} fields</span>
                 </span>
-                <button type="button" class="nd-rowact pf-wf-edit" [class.nd-rowact--icon]="!web()"
+                <button type="button" class="pf-rowact pf-wf-edit" [class.pf-rowact--icon]="!web()"
                         (click)="$event.stopPropagation(); openBuilder(r.screenName)"
                         [attr.aria-label]="'Edit ' + prettify(r.screenName)" title="Edit">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  <span class="nd-rowact__t">Edit</span>
+                  <span class="pf-rowact__t">Edit</span>
                 </button>
               </li>
             }
@@ -114,10 +114,10 @@ interface HistoryRow {
                secondary, Publish = the ONE primary); pill = CONTEXT BAR. -->
           <pf-hero-band class="pf-wfe-band" [back]="true" backTo="/admin/workflows" [customSearch]="true" [contextBar]="true">
             <ng-container band-actions>
-              <span class="nd-savestate pf-wfe-savestate" role="status" aria-live="polite"
+              <span class="pf-savestate pf-wfe-savestate" role="status" aria-live="polite"
                     [attr.aria-label]="builder.isDirty() ? 'Unsaved changes' : 'All changes saved'">
                 @if (builder.isDirty()) {
-                  <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-wfe-savestate__t">Unsaved changes</span>
+                  <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-wfe-savestate__t">Unsaved changes</span>
                 } @else {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-wfe-savestate__t">All changes saved</span>
                 }
@@ -144,7 +144,7 @@ interface HistoryRow {
                   More
                 </button>
                 @if (moreOpen()) {
-                  <div class="nd-card pf-wfe-menu nd-anim-in" role="menu">
+                  <div class="pf-card pf-wfe-menu pf-anim-in" role="menu">
                     <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); openPreview()">Preview</button>
                     <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); openHistory()">Version history</button>
                     <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); resetWorkflow()">Reload from server</button>
@@ -164,17 +164,17 @@ interface HistoryRow {
             </ng-container>
 
             <!-- The pill = [workflow title ✎ · "Published v4"] | [step tabs]
-                 (ND-PATTERN §14). Nothing else: the step card shows the rest. -->
-            <div band-search class="nd-ctx pf-wfe-ctx">
-              <span class="nd-ctx__primary pf-wfe-ctx__name">
+                 (PF-PATTERN §14). Nothing else: the step card shows the rest. -->
+            <div band-search class="pf-ctx pf-wfe-ctx">
+              <span class="pf-ctx__primary pf-wfe-ctx__name">
                 @if (titleEditing()) {
-                  <input #titleIn class="nd-input pf-wfe-titlein" [value]="wf.title" aria-label="Workflow title"
+                  <input #titleIn class="pf-input pf-wfe-titlein" [value]="wf.title" aria-label="Workflow title"
                          (keydown.enter)="commitTitle(titleIn.value)" (keydown.escape)="titleEditing.set(false)"
                          (blur)="commitTitle(titleIn.value)" />
                 } @else {
                   <span class="pf-wfe-ctx__nametext">{{ wf.title }}</span>
-                  <span class="pf-wfe-ctx__badge nd-num" [title]="'Version ' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '')">{{ statusBadge() }}</span>
-                  <button type="button" class="nd-ctx__edit press" (click)="editTitle()" aria-label="Edit workflow title" title="Edit title">
+                  <span class="pf-wfe-ctx__badge pf-num" [title]="'Version ' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '')">{{ statusBadge() }}</span>
+                  <button type="button" class="pf-ctx__edit press" (click)="editTitle()" aria-label="Edit workflow title" title="Edit title">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                   </button>
                 }
@@ -191,11 +191,11 @@ interface HistoryRow {
                           [attr.aria-label]="s.title + ', ' + s.fields.length + ' fields'"
                           (click)="builder.selectStep(s.id)">
                     <span>{{ s.title }}</span>
-                    <span class="nd-num pf-wfe-tab__n" aria-hidden="true">{{ s.fields.length }}</span>
+                    <span class="pf-num pf-wfe-tab__n" aria-hidden="true">{{ s.fields.length }}</span>
                   </button>
                 }
               </div>
-              <button type="button" class="nd-ctx__edit pf-wfe-addstep press" (click)="addStep()" aria-label="Add step" title="Add step">
+              <button type="button" class="pf-ctx__edit pf-wfe-addstep press" (click)="addStep()" aria-label="Add step" title="Add step">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
               </button>
             </div>
@@ -218,21 +218,21 @@ interface HistoryRow {
         <div class="pf-wfe-grid" [class.pf-wfe-grid--nd]="theme.isNewDesign()">
           @if (!theme.isNewDesign()) {
           <!-- ──────── Steps panel (classic rail) ──────── -->
-          <div class="nd-card pf-wfe-rail">
-            <div class="nd-card__head">
-              <span class="nd-card__label">Steps</span><span class="nd-card__spacer"></span>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="addStep()">+ Add</button>
+          <div class="pf-card pf-wfe-rail">
+            <div class="pf-card__head">
+              <span class="pf-card__label">Steps</span><span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-wfe-mini" (click)="addStep()">+ Add</button>
             </div>
             <ul cdkDropList (cdkDropListDropped)="onStepDrop($event)" class="pf-wfe-steps">
               @for (s of wf.steps; track s.id) {
-                <li cdkDrag class="nd-row pf-step-item" [class.nd-row--in]="builder.selectedStepId() === s.id"
+                <li cdkDrag class="pf-row pf-step-item" [class.pf-row--in]="builder.selectedStepId() === s.id"
                     (click)="builder.selectStep(s.id)">
                   <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                   </span>
                   <span class="pf-wfe-rowtext">
-                    <span class="nd-row__name">{{ s.title }}</span>
-                    <span class="nd-row__meta nd-num">{{ s.type }} · {{ s.fields.length }} fields</span>
+                    <span class="pf-row__name">{{ s.title }}</span>
+                    <span class="pf-row__meta pf-num">{{ s.type }} · {{ s.fields.length }} fields</span>
                   </span>
                 </li>
               }
@@ -240,101 +240,101 @@ interface HistoryRow {
           </div>
           }
 
-          <!-- ──────── Detail: stacked nd-cards ──────── -->
+          <!-- ──────── Detail: stacked pf-cards ──────── -->
           @if (builder.selectedStep(); as step) {
             <div class="pf-wfe-detail" role="tabpanel">
-              <section class="nd-card pf-wfe-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon" aria-hidden="true">
+              <section class="pf-card pf-wfe-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
                   </span>
-                  <span class="nd-card__label">Step</span>
-                  <span class="nd-card__note nd-num">{{ stepIndex(step.id) + 1 }} of {{ wf.steps.length }}</span>
-                  <span class="nd-card__spacer"></span>
-                  <button type="button" class="nd-rowact pf-wfe-mv" [class.nd-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === 0"
+                  <span class="pf-card__label">Step</span>
+                  <span class="pf-card__note pf-num">{{ stepIndex(step.id) + 1 }} of {{ wf.steps.length }}</span>
+                  <span class="pf-card__spacer"></span>
+                  <button type="button" class="pf-rowact pf-wfe-mv" [class.pf-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === 0"
                           (click)="moveStep(step.id, -1)" aria-label="Move step earlier" title="Move earlier">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-                    <span class="nd-rowact__t">Move earlier</span>
+                    <span class="pf-rowact__t">Move earlier</span>
                   </button>
-                  <button type="button" class="nd-rowact pf-wfe-mv" [class.nd-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === wf.steps.length - 1"
+                  <button type="button" class="pf-rowact pf-wfe-mv" [class.pf-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === wf.steps.length - 1"
                           (click)="moveStep(step.id, 1)" aria-label="Move step later" title="Move later">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-                    <span class="nd-rowact__t">Move later</span>
+                    <span class="pf-rowact__t">Move later</span>
                   </button>
-                  <button type="button" class="nd-rowact pf-wfe-delstep" [class.nd-rowact--icon]="!web()"
+                  <button type="button" class="pf-rowact pf-wfe-delstep" [class.pf-rowact--icon]="!web()"
                           (click)="deleteStep(step.id)" aria-label="Delete step" title="Delete step">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                    <span class="nd-rowact__t">Delete step</span>
+                    <span class="pf-rowact__t">Delete step</span>
                   </button>
                 </div>
-                <div class="nd-card__body pf-wfe-cardbody">
+                <div class="pf-card__body pf-wfe-cardbody">
                   <div class="pf-wfe-grid2">
-                    <label class="nd-field">
-                      <span class="nd-field__lbl">Title</span>
-                      <input type="text" class="nd-input" [ngModel]="step.title"
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">Title</span>
+                      <input type="text" class="pf-input" [ngModel]="step.title"
                              (ngModelChange)="builder.updateStep(step.id, { title: $event })" />
                     </label>
-                    <label class="nd-field">
-                      <span class="nd-field__lbl">Name</span>
-                      <input type="text" class="nd-input nd-num" [ngModel]="step.name"
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">Name</span>
+                      <input type="text" class="pf-input pf-num" [ngModel]="step.name"
                              (ngModelChange)="builder.updateStep(step.id, { name: $event })" />
                     </label>
                   </div>
                   <div class="pf-wfe-grid3">
-                    <div class="nd-field">
-                      <span class="nd-field__lbl">Type</span>
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Type</span>
                       <pf-select [options]="stepTypeSelectOptions" [value]="step.type"
                                  (valueChange)="builder.updateStep(step.id, { type: $any($event) })"></pf-select>
                     </div>
-                    <button type="button" class="nd-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.isRequired"
+                    <button type="button" class="pf-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.isRequired"
                             (click)="builder.updateStep(step.id, { isRequired: !step.isRequired })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                       <span>Required</span>
                     </button>
-                    <button type="button" class="nd-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.canSkip"
+                    <button type="button" class="pf-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.canSkip"
                             (click)="builder.updateStep(step.id, { canSkip: !step.canSkip })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                       <span>Can be skipped</span>
                     </button>
                   </div>
                 </div>
               </section>
 
-              <section class="nd-card pf-wfe-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon" aria-hidden="true">
+              <section class="pf-card pf-wfe-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
                   </span>
-                  <span class="nd-card__label">Fields</span>
-                  <span class="nd-card__note nd-num">{{ step.fields.length }} {{ step.fields.length === 1 ? 'field' : 'fields' }}</span>
-                  <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="openAddField(step.id)">+ Add field</button>
+                  <span class="pf-card__label">Fields</span>
+                  <span class="pf-card__note pf-num">{{ step.fields.length }} {{ step.fields.length === 1 ? 'field' : 'fields' }}</span>
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-wfe-mini" (click)="openAddField(step.id)">+ Add field</button>
                 </div>
-                <div class="nd-card__body pf-wfe-cardbody">
+                <div class="pf-card__body pf-wfe-cardbody">
                   <ul cdkDropList (cdkDropListDropped)="onFieldDrop(step.id, $event)" class="pf-wfe-fields">
                     @for (f of step.fields; track f.id) {
-                      <li cdkDrag class="nd-row pf-field-item">
+                      <li cdkDrag class="pf-row pf-field-item">
                         <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                         </span>
                         <span class="pf-wfe-rowtext">
-                          <span class="nd-row__name">
+                          <span class="pf-row__name">
                             {{ f.title }}
                             @if (f.isRequired) { <span class="pf-wfe-req" aria-label="required">*</span> }
                           </span>
-                          <span class="nd-row__meta">
-                            <span class="nd-num">{{ f.storageKey }}</span> · {{ f.type }}
+                          <span class="pf-row__meta">
+                            <span class="pf-num">{{ f.storageKey }}</span> · {{ f.type }}
                             @if (f.showWhen && f.showWhen.length > 0) { · conditional }
                           </span>
                         </span>
-                        <button type="button" class="nd-rowact pf-field-action" [class.nd-rowact--icon]="!web()"
+                        <button type="button" class="pf-rowact pf-field-action" [class.pf-rowact--icon]="!web()"
                                 (click)="openEditField(step.id, f)" [attr.aria-label]="'Edit ' + f.title" title="Edit field">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                          <span class="nd-rowact__t">Edit</span>
+                          <span class="pf-rowact__t">Edit</span>
                         </button>
-                        <button type="button" class="nd-rowact pf-field-delete" [class.nd-rowact--icon]="!web()"
+                        <button type="button" class="pf-rowact pf-field-delete" [class.pf-rowact--icon]="!web()"
                                 (click)="deleteField(step.id, f.id)" [attr.aria-label]="'Delete ' + f.title" title="Delete field">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                          <span class="nd-rowact__t">Delete</span>
+                          <span class="pf-rowact__t">Delete</span>
                         </button>
                       </li>
                     } @empty {
@@ -344,14 +344,14 @@ interface HistoryRow {
                 </div>
               </section>
 
-              <section class="nd-card pf-wfe-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon" aria-hidden="true">
+              <section class="pf-card pf-wfe-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
                   </span>
-                  <span class="nd-card__label">Visibility</span>
+                  <span class="pf-card__label">Visibility</span>
                 </div>
-                <div class="nd-card__body pf-wfe-cardbody">
+                <div class="pf-card__body pf-wfe-cardbody">
                   <h3 class="pf-wfe-h">Show this step when</h3>
                   <pf-condition-builder [rules]="step.showWhen ?? []" [fields]="builder.allFields()" emptyLabel="Always shown."
                     (rulesChange)="builder.setStepShowConditions(step.id, $event.length === 0 ? undefined : $event)"></pf-condition-builder>
@@ -361,16 +361,16 @@ interface HistoryRow {
                 </div>
               </section>
 
-              <section class="nd-card pf-wfe-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon" aria-hidden="true">
+              <section class="pf-card pf-wfe-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </span>
-                  <span class="nd-card__label">After this step</span>
+                  <span class="pf-card__label">After this step</span>
                 </div>
-                <div class="nd-card__body pf-wfe-cardbody">
+                <div class="pf-card__body pf-wfe-cardbody">
                   <div class="pf-route-row">
-                    <span class="nd-field__lbl">Default next step</span>
+                    <span class="pf-field__lbl">Default next step</span>
                     <pf-select [options]="defaultNextOptions(step.id)" [value]="step.afterStep.defaultNextStep ?? ''"
                                placeholder="— Finish workflow —"
                                (valueChange)="setDefaultNext(step.id, $any($event) || null)"></pf-select>
@@ -378,28 +378,28 @@ interface HistoryRow {
                   @for (route of step.afterStep.conditionalRoutes ?? []; let i = $index; track i) {
                     <div class="pf-route-card">
                       <div class="pf-route-card__head">
-                        <span class="pf-wfe-h">Conditional route <span class="nd-num">{{ i + 1 }}</span></span>
-                        <button type="button" class="nd-rowact pf-route-remove" [class.nd-rowact--icon]="!web()"
+                        <span class="pf-wfe-h">Conditional route <span class="pf-num">{{ i + 1 }}</span></span>
+                        <button type="button" class="pf-rowact pf-route-remove" [class.pf-rowact--icon]="!web()"
                                 (click)="removeRoute(step.id, i)" aria-label="Remove route" title="Remove route">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                          <span class="nd-rowact__t">Remove</span>
+                          <span class="pf-rowact__t">Remove</span>
                         </button>
                       </div>
                       <pf-condition-builder [rules]="route.conditions" [fields]="builder.allFields()"
                         emptyLabel="Add rules to trigger this route." (rulesChange)="updateRouteConditions(step.id, i, $event)"></pf-condition-builder>
                       <div class="pf-route-row">
-                        <span class="nd-field__lbl">Go to step</span>
+                        <span class="pf-field__lbl">Go to step</span>
                         <pf-select [options]="goToStepOptions(step.id)" [value]="route.goToStep"
                                    (valueChange)="updateRouteTarget(step.id, i, $any($event))"></pf-select>
                       </div>
                     </div>
                   }
-                  <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="addRoute(step.id)">+ Add conditional route</button>
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-wfe-mini" (click)="addRoute(step.id)">+ Add conditional route</button>
                 </div>
               </section>
             </div>
           } @else {
-            <div class="nd-card pf-wfe-empty"><p>{{ theme.isNewDesign() ? 'Pick a step in the bar above.' : 'Select a step on the left.' }}</p></div>
+            <div class="pf-card pf-wfe-empty"><p>{{ theme.isNewDesign() ? 'Pick a step in the bar above.' : 'Select a step on the left.' }}</p></div>
           }
         </div>
         </div>
@@ -423,18 +423,18 @@ interface HistoryRow {
       @if (previewOpen()) {
         <div class="pf-wfe-overlay pf-preview-overlay" role="dialog" aria-modal="true" aria-label="Preview">
           <div class="pf-wfe-scrim" (click)="closePreview()"></div>
-          <div class="nd-card pf-preview-modal nd-anim-in">
-            <header class="nd-card__head pf-preview-header">
-              <span class="nd-card__icon" aria-hidden="true">
+          <div class="pf-card pf-preview-modal pf-anim-in">
+            <header class="pf-card__head pf-preview-header">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               </span>
-              <span class="nd-card__label">Preview</span>
-              <span class="nd-card__note">{{ builder.workflow()!.title }}</span>
-              <button type="button" class="nd-btn nd-btn--icon pf-close-btn" (click)="closePreview()" aria-label="Close">
+              <span class="pf-card__label">Preview</span>
+              <span class="pf-card__note">{{ builder.workflow()!.title }}</span>
+              <button type="button" class="pf-btn pf-btn--icon pf-close-btn" (click)="closePreview()" aria-label="Close">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </header>
-            <div class="nd-card__body pf-preview-body">
+            <div class="pf-card__body pf-preview-body">
               <pf-workflow-renderer
                 [config]="builder.workflow()!"
                 [context]="previewContext()"
@@ -450,18 +450,18 @@ interface HistoryRow {
       @if (historyOpen()) {
         <div class="pf-wfe-overlay pf-wfe-overlay--side" role="dialog" aria-modal="true" aria-label="Version history">
           <div class="pf-wfe-scrim" (click)="closeHistory()"></div>
-          <aside class="nd-card pf-history-panel">
-            <header class="nd-card__head pf-history-header">
-              <span class="nd-card__icon" aria-hidden="true">
+          <aside class="pf-card pf-history-panel">
+            <header class="pf-card__head pf-history-header">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
               </span>
-              <span class="nd-card__label">Version history</span>
-              <span class="nd-card__spacer"></span>
-              <button type="button" class="nd-btn nd-btn--icon pf-close-btn" (click)="closeHistory()" aria-label="Close">
+              <span class="pf-card__label">Version history</span>
+              <span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--icon pf-close-btn" (click)="closeHistory()" aria-label="Close">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </header>
-            <section class="nd-card__body">
+            <section class="pf-card__body">
               @if (historyLoading()) {
                 <div class="flex justify-center py-3">
                   <pf-skeleton-rows [rows]="3" [dense]="true" [avatar]="false" label="Loading history…"></pf-skeleton-rows>
@@ -471,15 +471,15 @@ interface HistoryRow {
               } @else {
                 <ul class="pf-wfe-fields">
                   @for (h of historyRows(); track h.id) {
-                    <li class="nd-row pf-history-row">
+                    <li class="pf-row pf-history-row">
                       <span class="pf-wfe-rowtext">
-                        <span class="nd-row__name">{{ h.changeSummary ?? '(no summary)' }}</span>
-                        <span class="nd-row__meta nd-num">{{ h.changedAt | date:'short' }}</span>
+                        <span class="pf-row__name">{{ h.changeSummary ?? '(no summary)' }}</span>
+                        <span class="pf-row__meta pf-num">{{ h.changedAt | date:'short' }}</span>
                       </span>
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="restoreFromHistory(h)"
+                      <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="restoreFromHistory(h)"
                               aria-label="Restore this version" title="Restore this version">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
-                        <span class="nd-rowact__t">Restore</span>
+                        <span class="pf-rowact__t">Restore</span>
                       </button>
                     </li>
                   }
@@ -493,11 +493,11 @@ interface HistoryRow {
     }
   `,
   styles: [`
-    /* ═══ ND-PATTERN: list rows, editor (band + context bar + step tabs),
-       stacked nd-cards; overlays sit above the always-visible navbar. ═══ */
+    /* ═══ PF-PATTERN: list rows, editor (band + context bar + step tabs),
+       stacked pf-cards; overlays sit above the always-visible navbar. ═══ */
     .pf-wf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .pf-wf-row { cursor: pointer; gap: 12px; padding: 10px 12px; transition: border-color var(--nd-dur-fast) ease; }
-    .pf-wf-row:hover { border-color: var(--nd-sel-border); }
+    .pf-wf-row { cursor: pointer; gap: 12px; padding: 10px 12px; transition: border-color var(--pf-dur-fast) ease; }
+    .pf-wf-row:hover { border-color: var(--pf-sel-border); }
     .pf-wf-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .pf-wf-titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .pf-wf-name { flex: 0 1 auto; font-size: 14.5px; font-weight: 600; }
@@ -508,23 +508,23 @@ interface HistoryRow {
     /* Editor */
     .pf-wfe-body { display: flex; flex-direction: column; gap: 14px; }
     /* The pill: [title ✎ · badge] | [step tabs] + — one line on web; phones
-       stack the name over a sideways-scrolling tabs row (ND-PATTERN §14). */
-    .pf-wfe-ctx.nd-ctx { flex-wrap: nowrap; gap: 12px; padding: 2px 0; overflow: visible; }
+       stack the name over a sideways-scrolling tabs row (PF-PATTERN §14). */
+    .pf-wfe-ctx.pf-ctx { flex-wrap: nowrap; gap: 12px; padding: 2px 0; overflow: visible; }
     .pf-wfe-ctx__name { flex: 0 1 auto; min-width: 120px; max-width: 40%; }
-    .pf-wfe-ctx__badge { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line);
-      background: var(--nd-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); text-transform: capitalize; }
+    .pf-wfe-ctx__badge { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--pf-line);
+      background: var(--pf-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); text-transform: capitalize; }
     .pf-wfe-titlein { min-width: 220px; font-size: 15px; font-weight: 600; }
-    .pf-wfe-ctx__div { flex: none; width: 1px; align-self: stretch; margin: 4px 0; background: var(--nd-line); }
+    .pf-wfe-ctx__div { flex: none; width: 1px; align-self: stretch; margin: 4px 0; background: var(--pf-line); }
     .pf-wfe-tabs { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; padding: 3px;
-      border-radius: 12px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+      border-radius: 12px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
       overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .pf-wfe-tabs::-webkit-scrollbar { display: none; }
     .pf-wfe-tabs__ind { position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0; border-radius: 9px;
-      background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
-      transition: transform var(--nd-dur) var(--nd-spring), width var(--nd-dur) var(--nd-spring), opacity var(--nd-dur-fast) ease; }
+      background: var(--pf-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+      transition: transform var(--pf-dur) var(--pf-spring), width var(--pf-dur) var(--pf-spring), opacity var(--pf-dur-fast) ease; }
     .pf-wfe-tab { position: relative; z-index: 1; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
       height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary);
-      font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--nd-dur-fast) ease; }
+      font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--pf-dur-fast) ease; }
     .pf-wfe-tab:hover { color: var(--text-primary); }
     .pf-wfe-tab[aria-selected='true'] { color: var(--text-primary); font-weight: 600; }
     .pf-wfe-tab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
@@ -533,7 +533,7 @@ interface HistoryRow {
     .pf-wfe-mv { flex: none; }
     @media (prefers-reduced-motion: reduce) { .pf-wfe-tabs__ind, .pf-wfe-tab { transition: none; } }
     @media (max-width: 640px) {
-      .pf-wfe-ctx.nd-ctx { flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0 6px; overflow: visible; }
+      .pf-wfe-ctx.pf-ctx { flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0 6px; overflow: visible; }
       .pf-wfe-ctx__name { flex: 1 1 100%; max-width: none; min-width: 0; }
       .pf-wfe-ctx__div { display: none; }
       .pf-wfe-tabs { flex: 1 1 0; }
@@ -547,13 +547,13 @@ interface HistoryRow {
     .pf-wfe-steps { padding: 8px; }
     .pf-step-item { cursor: pointer; }
     .pf-wfe-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-    .pf-wfe-card .nd-card__body { overflow: visible; }
+    .pf-wfe-card .pf-card__body { overflow: visible; }
     .pf-wfe-cardbody { gap: 14px; padding: 14px 16px 16px; }
     .pf-wfe-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
     .pf-wfe-grid3 { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px 20px; align-items: end; }
     .pf-wfe-toggle { min-height: 40px; font-size: 13px; }
     .pf-wfe-rowtext { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .pf-wfe-rowtext .nd-row__meta { flex: none; }
+    .pf-wfe-rowtext .pf-row__meta { flex: none; }
     .pf-wfe-req { color: var(--red-text, #b91c1c); }
     .pf-wfe-h { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-wfe-hint { margin: 12px 0 0; font-size: 12px; color: var(--text-tertiary); }
@@ -561,8 +561,8 @@ interface HistoryRow {
     .pf-drag-handle { display: inline-flex; color: var(--text-muted); cursor: move; flex: none; }
     .pf-field-item { gap: 8px; }
     .pf-route-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: center; }
-    .pf-route-card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--nd-radius);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pf-route-card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--pf-radius);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-route-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
     /* Band: phone = icons; the three utility actions fold behind Save draft/Publish. */
@@ -572,12 +572,12 @@ interface HistoryRow {
     .pf-wfe-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; min-width: 200px; padding: 6px; gap: 2px; }
     .pf-wfe-menu__item { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px;
       background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-    .pf-wfe-menu__item:hover { background: var(--nd-chip-bg); }
+    .pf-wfe-menu__item:hover { background: var(--pf-chip-bg); }
 
     /* Undo toast: above the navbar. */
     .pf-undo-toast {
       position: fixed; left: 50%; transform: translateX(-50%); z-index: 50;
-      bottom: calc(var(--nd-nav-h, 0px) + 16px);
+      bottom: calc(var(--pf-nav-h, 0px) + 16px);
       padding: 10px 16px; border-radius: 14px; background: rgba(15, 23, 42, 0.95); color: #ffffff; font-size: 13px;
       display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
     }
@@ -586,7 +586,7 @@ interface HistoryRow {
     .pf-undo-btn:hover { background: rgba(255, 255, 255, 0.25); }
 
     /* Overlays: end ABOVE the always-visible navbar. */
-    .pf-wfe-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 60;
+    .pf-wfe-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 60;
       display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pf-wfe-overlay--side { justify-content: flex-end; padding: 0; }
     .pf-wfe-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
@@ -594,14 +594,14 @@ interface HistoryRow {
     .pf-preview-header { position: sticky; top: 0; z-index: 1; }
     .pf-preview-body { padding: 18px 20px; }
     .pf-history-panel { position: relative; height: 100%; width: 100%; max-width: 28rem; border-radius: 0;
-      animation: pf-wfe-slide var(--nd-dur) var(--nd-spring) both; }
-    .pf-history-footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); }
+      animation: pf-wfe-slide var(--pf-dur) var(--pf-spring) both; }
+    .pf-history-footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--pf-line); font-size: 12px; color: var(--text-tertiary); }
     .pf-close-btn { width: 36px; height: 36px; min-height: 36px; margin-left: auto; }
     @keyframes pf-wfe-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 
     @media (max-width: 1023px) {
       .pf-wfe-grid3 { grid-template-columns: 1fr 1fr; }
-      .pf-wfe-grid3 > .nd-field { grid-column: 1 / -1; }
+      .pf-wfe-grid3 > .pf-field { grid-column: 1 / -1; }
     }
     @media (max-width: 640px) {
       .pf-wfe-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -631,12 +631,12 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
   private readonly _screens = signal<WorkflowConfigRecord[]>([]);
   readonly screens = this._screens.asReadonly();
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icons on touch (ND-PATTERN). */
+  /** Row actions: text on web, icons on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
   /** Phones: Preview / History / Reset live in a "More" menu in the band. */
   protected readonly moreOpen = signal(false);
 
-  // ── Pill: title ✎ + step tabs with a sliding indicator (ND-PATTERN §14) ──
+  // ── Pill: title ✎ + step tabs with a sliding indicator (PF-PATTERN §14) ──
   protected readonly titleEditing = signal(false);
   private readonly titleIn = viewChild<ElementRef<HTMLInputElement>>('titleIn');
   editTitle(): void {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 /** Frontdesk empty states follow the ND pattern (owner: "still in old icon,
- *  fix it"): the kit's .nd-empty — violet icon tile with a STROKED 1.8 SVG,
+ *  fix it"): the kit's .pf-empty — violet icon tile with a STROKED 1.8 SVG,
  *  a title, a one-line body and, when there is one, a SECONDARY action. No
  *  amber / orange / green tints, no filled glyphs, no coloured pills. */
 
@@ -9,7 +9,7 @@ const FD = 'apps/lms/src/app/features/frontdesk';
 const html = readFileSync(`${FD}/frontdesk-landing/frontdesk-landing.component.html`, 'utf8');
 const cards = readFileSync(`${FD}/frontdesk-landing/styles/_cards.scss`, 'utf8');
 const mobile = readFileSync(`${FD}/frontdesk-landing/styles/_mobile.scss`, 'utf8');
-const kit = readFileSync('apps/lms/src/app/shared/styles/_nd-kit.scss', 'utf8');
+const kit = readFileSync('libs/shared/src/lib/styles/_pf-kit.scss', 'utf8');
 const outsourced = readFileSync(`${FD}/outsourced/outsourced-list.component.ts`, 'utf8');
 const postPay = readFileSync(`${FD}/post-payment/post-payment.component.html`, 'utf8');
 const postPayScss = readFileSync(`${FD}/post-payment/post-payment.component.scss`, 'utf8');
@@ -24,12 +24,12 @@ const root = parse(html);
 const tiles = () => [...root.querySelectorAll<HTMLElement>('[data-empty]')];
 
 describe('Frontdesk landing — ND empty states', () => {
-  it('every tab empty state is the kit\'s nd-empty (appointments, home, in progress, completed, payments due)', () => {
+  it('every tab empty state is the kit\'s pf-empty (appointments, home, in progress, completed, payments due)', () => {
     expect(tiles().map(t => t.dataset['empty']).sort()).toEqual(['all', 'appt', 'done', 'due', 'home', 'ip']);
     for (const t of tiles()) {
-      expect(t.classList).toContain('nd-empty');
-      expect(t.querySelector('.nd-empty__icon svg')).not.toBeNull();
-      expect(t.querySelector('.nd-empty__title')?.textContent?.trim()).toBeTruthy();
+      expect(t.classList).toContain('pf-empty');
+      expect(t.querySelector('.pf-empty__icon svg')).not.toBeNull();
+      expect(t.querySelector('.pf-empty__title')?.textContent?.trim()).toBeTruthy();
       expect(t.getAttribute('style')).toBeNull();
       expect(t.querySelector('[style]')).toBeNull();
     }
@@ -37,7 +37,7 @@ describe('Frontdesk landing — ND empty states', () => {
 
   it('icons are stroked SVG at 1.8 — no fills, no emoji', () => {
     for (const t of tiles()) {
-      const svg = t.querySelector('.nd-empty__icon svg')!;
+      const svg = t.querySelector('.pf-empty__icon svg')!;
       expect(svg.getAttribute('fill')).toBe('none');
       expect(svg.getAttribute('stroke-width')).toBe('1.8');
       expect(svg.querySelector('[fill]:not([fill="none"])')).toBeNull();
@@ -47,8 +47,8 @@ describe('Frontdesk landing — ND empty states', () => {
 
   it('"All caught up" uses a clipboard icon (not a tube) and a one-line body', () => {
     const ip = root.querySelector('[data-empty="ip"]')!;
-    expect(ip.querySelector('.nd-empty__title')?.textContent?.trim()).toBe('All caught up');
-    expect(ip.querySelector('.nd-empty__body')?.textContent?.trim()).toBe('No orders in progress for this range.');
+    expect(ip.querySelector('.pf-empty__title')?.textContent?.trim()).toBe('All caught up');
+    expect(ip.querySelector('.pf-empty__body')?.textContent?.trim()).toBe('No orders in progress for this range.');
     expect(ip.querySelector('rect[width="8"][height="4"]')).not.toBeNull(); // clipboard clip
   });
 
@@ -56,9 +56,9 @@ describe('Frontdesk landing — ND empty states', () => {
     const actions = tiles().flatMap(t => [...t.querySelectorAll('a, button')]);
     expect(actions.length).toBe(2); // Open calendar, New patient
     for (const a of actions) {
-      expect(a.classList).toContain('nd-btn');
-      expect(a.classList).toContain('nd-btn--secondary');
-      expect(a.classList).not.toContain('nd-btn--primary');
+      expect(a.classList).toContain('pf-btn');
+      expect(a.classList).toContain('pf-btn--secondary');
+      expect(a.classList).not.toContain('pf-btn--primary');
     }
   });
 
@@ -71,7 +71,7 @@ describe('Frontdesk landing — ND empty states', () => {
 
   it('queue drawers use the compact ND empty state, not bare text', () => {
     expect(html).not.toMatch(/<p class="pf-empty">/);
-    expect(root.querySelectorAll('.nd-empty.nd-empty--compact').length).toBe(2);
+    expect(root.querySelectorAll('.pf-empty.pf-empty--compact').length).toBe(2);
   });
 });
 
@@ -86,25 +86,25 @@ describe('Frontdesk landing — phone list tabs', () => {
   });
 });
 
-describe('ND kit — empty state', () => {
-  it('defines nd-empty in the kit, violet-only', () => {
+describe('PF kit — empty state', () => {
+  it('defines pf-empty in the kit, violet-only', () => {
     const block = kit.slice(kit.indexOf('/* ── Empty state'), kit.indexOf('/* ── Neutral selected states'));
-    expect(block).toMatch(/\.nd-empty \{/);
-    expect(block).toMatch(/\.nd-empty__icon \{[^}]*--color-primary/);
+    expect(block).toMatch(/\.pf-empty \{/);
+    expect(block).toMatch(/\.pf-empty__icon \{[^}]*--color-primary/);
     expect(block).not.toMatch(AMBER);
   });
 });
 
 describe('Frontdesk — other empty / success marks', () => {
-  it('outsourced list empty state is nd-empty', () => {
+  it('outsourced list empty state is pf-empty', () => {
     const r = parse(outsourced.slice(outsourced.indexOf('template: `') + 11, outsourced.indexOf('`,\n  styles')));
     const e = r.querySelector('[data-empty="out"]')!;
-    expect(e.classList).toContain('nd-empty');
-    expect(e.querySelector('.nd-empty__icon svg')?.getAttribute('stroke-width')).toBe('1.8');
+    expect(e.classList).toContain('pf-empty');
+    expect(e.querySelector('.pf-empty__icon svg')?.getAttribute('stroke-width')).toBe('1.8');
   });
 
   it('post-payment paid mark is the violet tile — no green disc or pulsing ring', () => {
-    expect(postPay).toMatch(/pf-pp-pay__check nd-empty__icon/);
+    expect(postPay).toMatch(/pf-pp-pay__check pf-empty__icon/);
     expect(postPay).not.toMatch(/pf-pp-pay__ring|#10b981/);
     expect(postPayScss).not.toMatch(/pf-pp-pay__ring|linear-gradient\(135deg, #10b981/);
   });

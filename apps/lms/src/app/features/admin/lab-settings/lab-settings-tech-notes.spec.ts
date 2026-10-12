@@ -45,7 +45,7 @@ describe('Lab settings — technician notes on report', () => {
   it('is an ND switch card under the Report tab, off by default', () => {
     const p = make({});
     expect(p.sw()).not.toBeNull();
-    expect(p.sw()!.classList.contains('nd-toggle')).toBe(true);
+    expect(p.sw()!.classList.contains('pf-toggle')).toBe(true);
     expect(p.sw()!.getAttribute('aria-checked')).toBe('false');
     expect(p.el.querySelector('[data-testid="ls-tech-notes"]')!.textContent).toContain('prints on the final report');
   });

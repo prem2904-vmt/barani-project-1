@@ -37,7 +37,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
               {{ label() }}
               @if (m.kind === 'report_updated') { <span class="pf-rwa__muted">· updated report</span> }
             </span>
-            <span class="pf-rwa__when nd-num">{{ (m.readAt || m.deliveredAt || m.sentAt || m.failedAt || m.createdAt) | date: 'd MMM, h:mm a' }}</span>
+            <span class="pf-rwa__when pf-num">{{ (m.readAt || m.deliveredAt || m.sentAt || m.failedAt || m.createdAt) | date: 'd MMM, h:mm a' }}</span>
           </div>
           @if (m.errorReason && (m.status === 'failed' || m.status === 'skipped' || m.status === 'queued' || m.status === 'held')) {
             <p class="pf-rwa__reason" [class.pf-rwa__reason--bad]="m.status === 'failed'">
@@ -45,7 +45,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
             </p>
           }
           @if (attachmentLine(); as att) { <p class="pf-rwa__muted" data-testid="rwa-attachment">{{ att }}</p> }
-          @if (m.toDisplay || m.to) { <p class="pf-rwa__muted pf-rwa__to nd-num">To {{ m.toDisplay || m.to }}</p> }
+          @if (m.toDisplay || m.to) { <p class="pf-rwa__muted pf-rwa__to pf-num">To {{ m.toDisplay || m.to }}</p> }
         } @else {
           <p class="pf-rwa__muted">
             @if (st.patientOptOut) {
@@ -62,14 +62,14 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 
         @if (canDeliver()) {
           <div class="pf-rwa__acts">
-            <button type="button" class="nd-btn nd-btn--secondary pf-rwa__btn" (click)="resend()"
+            <button type="button" class="pf-btn pf-btn--secondary pf-rwa__btn" (click)="resend()"
                     [disabled]="busy() || sending() || st.patientOptOut || (!st.configured && !st.canSend)" [pfBusy]="sending()" pfBusyLabel="Sending…">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
               {{ sending() ? 'Sending…' : st.latest ? 'Send again' : 'Send now' }}
             </button>
-            <button type="button" class="nd-toggle pf-rwa__opt" role="switch" [attr.aria-checked]="st.patientOptOut"
+            <button type="button" class="pf-toggle pf-rwa__opt" role="switch" [attr.aria-checked]="st.patientOptOut"
                     [disabled]="busy()" (click)="toggleOptOut()">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               Don't send WhatsApp to this patient
             </button>
           </div>
@@ -79,7 +79,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
   `,
   styles: [`
     :host { display: block; }
-    .pf-rwa { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-rwa { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
     .pf-rwa__sec { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-rwa__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
     .pf-rwa__status { --pf-tone: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pf-tone); }

@@ -14,7 +14,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { TenantStateService } from '../../../../core/services/tenant-state.service';
 
 /**
- * Test editor — LOADING FEEDBACK (ND-PATTERN "Loading feedback"; owner,
+ * Test editor — LOADING FEEDBACK (PF-PATTERN "Loading feedback"; owner,
  * 2026-09-29: "if I hit Edit, the screen stays still for a long time and
  * then things appear"). Opening an existing record draws the editor's own
  * shape on the FIRST render (never a blank "Edit test" form), Save is not

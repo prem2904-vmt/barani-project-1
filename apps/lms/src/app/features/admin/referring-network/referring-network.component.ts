@@ -39,14 +39,14 @@ const svg = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill
 const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
 const ICON_POWER = svg('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/>');
 
-/** Kit row action (ND-PATTERN): text button on web, 44px icon on touch. */
+/** Kit row action (PF-PATTERN): text button on web, 44px icon on touch. */
 function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = web ? 'nd-rowact' : 'nd-rowact nd-rowact--icon';
+  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
   b.title = title;
   b.setAttribute('aria-label', title);
-  b.innerHTML = `${icon}<span class="nd-rowact__t">${label}</span>`;
+  b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
   return b;
 }
 
@@ -143,11 +143,11 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       <div class="pf-band-body">
       <div class="pf-rn-grid">
         <!-- ── Hospitals (left) ────────────────────────────────── -->
-        <aside class="pf-rn-pane pf-rn-pane--list nd-card">
-          <header class="nd-card__head pf-rn-pane__hdr">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
-            <h2 class="nd-card__label pf-rn-pane__title">Hospitals</h2>
-            <span class="pf-rn-pane__count nd-num">{{ hospitals().length }}</span>
+        <aside class="pf-rn-pane pf-rn-pane--list pf-card">
+          <header class="pf-card__head pf-rn-pane__hdr">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
+            <h2 class="pf-card__label pf-rn-pane__title">Hospitals</h2>
+            <span class="pf-rn-pane__count pf-num">{{ hospitals().length }}</span>
           </header>
           <input type="search" class="pf-rn-search pf-classic-only"
                  placeholder="Search hospitals…"
@@ -173,8 +173,8 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
                     <div class="min-w-0 flex-1">
                       <p class="pf-rn-row__name">{{ h.name }}</p>
                       <p class="pf-rn-row__meta">
-                        @if (h.code) { <span class="nd-num">{{ h.code }}</span> · }
-                        <span class="nd-num">{{ h.doctorCount }}</span> doctor<span [class.hidden]="h.doctorCount === 1">s</span>
+                        @if (h.code) { <span class="pf-num">{{ h.code }}</span> · }
+                        <span class="pf-num">{{ h.doctorCount }}</span> doctor<span [class.hidden]="h.doctorCount === 1">s</span>
                         @if (!h.isActive) { · <span class="pf-rn-row__inactive">Inactive</span> }
                       </p>
                     </div>
@@ -185,14 +185,14 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
           }
           @if (independentCount() > 0) {
             <!-- Doctors with no hospital live in the Doctors view. -->
-            <button type="button" class="nd-btn nd-btn--tertiary pf-rn-indep press" (click)="showIndependent()">
-              <span class="nd-num">{{ independentCount() }}</span> independent doctor{{ independentCount() === 1 ? '' : 's' }}
+            <button type="button" class="pf-btn pf-btn--tertiary pf-rn-indep press" (click)="showIndependent()">
+              <span class="pf-num">{{ independentCount() }}</span> independent doctor{{ independentCount() === 1 ? '' : 's' }}
             </button>
           }
         </aside>
 
         <!-- ── Doctors at the selected hospital (right) ────────── -->
-        <section class="pf-rn-pane nd-card">
+        <section class="pf-rn-pane pf-card">
           @if (!selectedHospital(); as _) {
             <div class="pf-rn-placeholder">
               <p class="pf-rn-placeholder__title">Pick a hospital to manage its doctors</p>
@@ -202,21 +202,21 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </div>
           }
           @if (selectedHospital(); as h) {
-            <header class="nd-card__head pf-rn-pane__hdr">
-              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <header class="pf-card__head pf-rn-pane__hdr">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
               <div class="min-w-0 flex-1">
                 <h2 class="pf-rn-pane__title pf-rn-pane__title--name">{{ h.name }}</h2>
                 <p class="pf-rn-pane__sub">
-                  @if (h.code) { <span class="nd-num">{{ h.code }}</span> · }
-                  @if (h.phone) { <span class="nd-num">{{ h.phone }}</span> · }
+                  @if (h.code) { <span class="pf-num">{{ h.code }}</span> · }
+                  @if (h.phone) { <span class="pf-num">{{ h.phone }}</span> · }
                   @if (h.address) { {{ h.address }} }
                   @if (!h.code && !h.phone && !h.address) { no details yet }
                 </p>
               </div>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-rn-hdrbtn press" (click)="openHospitalEditor(h)">Edit hospital</button>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-rn-hdrbtn press" (click)="openLinkEditor(h)">Link doctors</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-rn-hdrbtn press" (click)="openHospitalEditor(h)">Edit hospital</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-rn-hdrbtn press" (click)="openLinkEditor(h)">Link doctors</button>
               <!-- Secondary: "Add hospital" in the band is this view's one primary. -->
-              <button type="button" class="nd-btn nd-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null, h.id)">
+              <button type="button" class="pf-btn pf-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null, h.id)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add doctor
@@ -243,22 +243,22 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
                       <p class="pf-rn-doc__sub">
                         @if (d.qualification) { {{ d.qualification }} }
                         @if (d.qualification && d.registrationNo) { · }
-                        @if (d.registrationNo) { Reg #<span class="nd-num">{{ d.registrationNo }}</span> }
+                        @if (d.registrationNo) { Reg #<span class="pf-num">{{ d.registrationNo }}</span> }
                       </p>
                       <p class="pf-rn-doc__contact">
-                        @if (d.phone) { <span class="nd-num">{{ d.phone }}</span> }
+                        @if (d.phone) { <span class="pf-num">{{ d.phone }}</span> }
                         @if (d.phone && d.email) { · }
                         @if (d.email) { {{ d.email }} }
                       </p>
                       @if (otherHospitals(d, h.id); as others) { <p class="pf-rn-doc__also">Also at {{ others }}</p> }
                     </div>
                     <div class="pf-rn-doc__actions">
-                      @if (!d.isActive) { <span class="nd-chip nd-chip--static pf-rn-chip">Inactive</span> }
+                      @if (!d.isActive) { <span class="pf-chip pf-chip--static pf-rn-chip">Inactive</span> }
                       <!-- Row actions: text on web, icon on touch. -->
-                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openDoctorEditor(d, null)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
-                      <button type="button" class="nd-rowact pf-rn-unlink" [class.nd-rowact--icon]="!web()" (click)="unlinkDoctor(d, h)" aria-label="Remove from this hospital" title="Remove from this hospital"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.84 12.25 20.25 10.84a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="m5.16 11.75-1.41 1.41a5 5 0 0 0 7.07 7.07l1.41-1.41"/><path d="M8 2v3M2 8h3M16 22v-3M22 16h-3"/></svg><span class="nd-rowact__t">Remove</span></button>
+                      <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openDoctorEditor(d, null)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="pf-rowact__t">Edit</span></button>
+                      <button type="button" class="pf-rowact pf-rn-unlink" [class.pf-rowact--icon]="!web()" (click)="unlinkDoctor(d, h)" aria-label="Remove from this hospital" title="Remove from this hospital"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.84 12.25 20.25 10.84a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="m5.16 11.75-1.41 1.41a5 5 0 0 0 7.07 7.07l1.41-1.41"/><path d="M8 2v3M2 8h3M16 22v-3M22 16h-3"/></svg><span class="pf-rowact__t">Remove</span></button>
                       @if (d.isActive) {
-                        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="deactivateDoctor(d)" aria-label="Deactivate doctor" title="Deactivate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">Deactivate</span></button>
+                        <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="deactivateDoctor(d)" aria-label="Deactivate doctor" title="Deactivate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="pf-rowact__t">Deactivate</span></button>
                       }
                     </div>
                   </li>
@@ -279,7 +279,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
           <input type="search" class="pf-rn-search pf-rn-search--docs pf-classic-only"
                  placeholder="Search doctors…" [value]="doctorSearch()"
                  (input)="doctorSearch.set(asInput($event))" />
-          <span class="pf-rn-docbar__count nd-num">{{ gridDoctors().length }} doctor{{ gridDoctors().length === 1 ? '' : 's' }}</span>
+          <span class="pf-rn-docbar__count pf-num">{{ gridDoctors().length }} doctor{{ gridDoctors().length === 1 ? '' : 's' }}</span>
         </div>
         <div class="pf-rn-docgrid">
           @if (loadingDoctorsShown()) {
@@ -302,13 +302,13 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
         <div class="pf-rn-modal-bd" (click)="closeHospitalEditor()"></div>
-        <div class="pf-rn-modal nd-card" role="dialog" aria-modal="true" [attr.aria-label]="he.id ? 'Edit hospital' : 'Add hospital'">
-          <span class="nd-sheet__handle" aria-hidden="true"></span>
-          <header class="nd-card__head pf-rn-modal__hdr">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
-            <h3 class="nd-card__label">{{ he.id ? 'Edit hospital' : 'Add hospital' }}</h3>
-            <span class="nd-card__spacer"></span>
-            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeHospitalEditor()" aria-label="Close" title="Close">
+        <div class="pf-rn-modal pf-card" role="dialog" aria-modal="true" [attr.aria-label]="he.id ? 'Edit hospital' : 'Add hospital'">
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
+          <header class="pf-card__head pf-rn-modal__hdr">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
+            <h3 class="pf-card__label">{{ he.id ? 'Edit hospital' : 'Add hospital' }}</h3>
+            <span class="pf-card__spacer"></span>
+            <button type="button" class="pf-btn pf-btn--icon pf-rn-modal__close press" (click)="closeHospitalEditor()" aria-label="Close" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
@@ -318,29 +318,29 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input class="nd-input" type="text" [(ngModel)]="he.name" (input)="clearHospErr('name')" [class.nd-input--error]="hospErr('name')" placeholder="Apollo Hospitals" />
+              <input class="pf-input" type="text" [(ngModel)]="he.name" (input)="clearHospErr('name')" [class.pf-input--error]="hospErr('name')" placeholder="Apollo Hospitals" />
               @if (hospErr('name')) { <p class="pf-rn-fld__err">{{ hospErr('name') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Code</span>
-              <input class="nd-input" type="text" [(ngModel)]="he.code" (input)="clearHospErr('code')" [class.nd-input--error]="hospErr('code')" placeholder="APO" />
+              <input class="pf-input" type="text" [(ngModel)]="he.code" (input)="clearHospErr('code')" [class.pf-input--error]="hospErr('code')" placeholder="APO" />
               @if (hospErr('code')) { <p class="pf-rn-fld__err">{{ hospErr('code') }}</p> }
             </label>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Address</span>
-              <input class="nd-input" type="text" [(ngModel)]="he.address" placeholder="21 Greams Lane, Chennai" />
+              <input class="pf-input" type="text" [(ngModel)]="he.address" placeholder="21 Greams Lane, Chennai" />
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input class="nd-input" type="tel" [(ngModel)]="he.phone" placeholder="+91 44 1234 5678" />
+              <input class="pf-input" type="tel" [(ngModel)]="he.phone" placeholder="+91 44 1234 5678" />
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input class="nd-input" type="email" [(ngModel)]="he.email" placeholder="referrals@apollo.com" />
+              <input class="pf-input" type="email" [(ngModel)]="he.email" placeholder="referrals@apollo.com" />
             </label>
             <label class="pf-rn-fld">
               <span>GSTIN</span>
-              <input class="nd-input" type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
+              <input class="pf-input" type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
             </label>
             <div class="pf-rn-fld pf-rn-fld--wide">
               <span>Doctors <span class="pf-rn-fld__opt">optional</span></span>
@@ -351,16 +351,16 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </div>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Notes</span>
-              <textarea class="nd-input" rows="2" [(ngModel)]="he.notes" placeholder="Panel rates, commission deal, billing quirks…"></textarea>
+              <textarea class="pf-input" rows="2" [(ngModel)]="he.notes" placeholder="Panel rates, commission deal, billing quirks…"></textarea>
             </label>
           </div>
           <footer class="pf-rn-modal__ftr">
             @if (he.id) {
-              <button type="button" class="nd-btn nd-btn--tertiary press" (click)="deactivateHospital()">Deactivate</button>
+              <button type="button" class="pf-btn pf-btn--tertiary press" (click)="deactivateHospital()">Deactivate</button>
             }
             <span class="flex-1"></span>
-            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press"
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press"
                     [disabled]="!he.name?.trim() || savingHospital()" [pfBusy]="savingHospital()" pfBusyLabel="Saving…" (click)="saveHospital()">
               @if (savingHospital()) { Saving… } @else { Save hospital }
             </button>
@@ -371,13 +371,13 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       <!-- ── Link existing doctors to a hospital ───────────────── -->
       @if (linkEditor(); as le) {
         <div class="pf-rn-modal-bd" (click)="closeLinkEditor()"></div>
-        <div class="pf-rn-modal pf-rn-modal--sm nd-card" role="dialog" aria-modal="true" aria-label="Link doctors">
-          <span class="nd-sheet__handle" aria-hidden="true"></span>
-          <header class="nd-card__head pf-rn-modal__hdr">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-            <h3 class="nd-card__label">Link doctors</h3>
-            <span class="nd-card__spacer"></span>
-            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeLinkEditor()" aria-label="Close" title="Close">
+        <div class="pf-rn-modal pf-rn-modal--sm pf-card" role="dialog" aria-modal="true" aria-label="Link doctors">
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
+          <header class="pf-card__head pf-rn-modal__hdr">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <h3 class="pf-card__label">Link doctors</h3>
+            <span class="pf-card__spacer"></span>
+            <button type="button" class="pf-btn pf-btn--icon pf-rn-modal__close press" (click)="closeLinkEditor()" aria-label="Close" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
@@ -396,8 +396,8 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
           </div>
           <footer class="pf-rn-modal__ftr">
             <span class="flex-1"></span>
-            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeLinkEditor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press"
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeLinkEditor()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press"
                     [disabled]="!le.doctorIds.length || savingLink()" [pfBusy]="savingLink()" pfBusyLabel="Linking…" (click)="saveLinks()">
               @if (savingLink()) { Linking… } @else { Link doctors }
             </button>
@@ -408,13 +408,13 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       <!-- ── Doctor editor modal ───────────────────────────────── -->
       @if (doctorEditor(); as de) {
         <div class="pf-rn-modal-bd" (click)="closeDoctorEditor()"></div>
-        <div class="pf-rn-modal nd-card" role="dialog" aria-modal="true" [attr.aria-label]="de.id ? 'Edit doctor' : 'Add doctor'">
-          <span class="nd-sheet__handle" aria-hidden="true"></span>
-          <header class="nd-card__head pf-rn-modal__hdr">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-            <h3 class="nd-card__label">{{ de.id ? 'Edit doctor' : 'Add doctor' }}</h3>
-            <span class="nd-card__spacer"></span>
-            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeDoctorEditor()" aria-label="Close" title="Close">
+        <div class="pf-rn-modal pf-card" role="dialog" aria-modal="true" [attr.aria-label]="de.id ? 'Edit doctor' : 'Add doctor'">
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
+          <header class="pf-card__head pf-rn-modal__hdr">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <h3 class="pf-card__label">{{ de.id ? 'Edit doctor' : 'Add doctor' }}</h3>
+            <span class="pf-card__spacer"></span>
+            <button type="button" class="pf-btn pf-btn--icon pf-rn-modal__close press" (click)="closeDoctorEditor()" aria-label="Close" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
@@ -424,7 +424,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input class="nd-input" type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.nd-input--error]="docErr('name')" placeholder="Dr. Priya Krishnan" />
+              <input class="pf-input" type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.pf-input--error]="docErr('name')" placeholder="Dr. Priya Krishnan" />
               @if (docErr('name')) { <p class="pf-rn-fld__err">{{ docErr('name') }}</p> }
             </label>
             <div class="pf-rn-fld pf-rn-fld--wide">
@@ -436,34 +436,34 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </div>
             <label class="pf-rn-fld">
               <span>Designation</span>
-              <input class="nd-input" type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
+              <input class="pf-input" type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
             </label>
             <label class="pf-rn-fld">
               <span>Department</span>
-              <input class="nd-input" type="text" [(ngModel)]="de.department" placeholder="Cardiology" />
+              <input class="pf-input" type="text" [(ngModel)]="de.department" placeholder="Cardiology" />
             </label>
             <label class="pf-rn-fld">
               <span>Qualification</span>
-              <input class="nd-input" type="text" [(ngModel)]="de.qualification" placeholder="MBBS, MD" />
+              <input class="pf-input" type="text" [(ngModel)]="de.qualification" placeholder="MBBS, MD" />
             </label>
             <label class="pf-rn-fld">
               <span>Registration #</span>
-              <input class="nd-input" type="text" [(ngModel)]="de.registrationNo" placeholder="TN-12345" />
+              <input class="pf-input" type="text" [(ngModel)]="de.registrationNo" placeholder="TN-12345" />
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input class="nd-input" type="tel" [(ngModel)]="de.phone" (input)="clearDocErr('phone')" [class.nd-input--error]="docErr('phone')" placeholder="+91 98765 43210" />
+              <input class="pf-input" type="tel" [(ngModel)]="de.phone" (input)="clearDocErr('phone')" [class.pf-input--error]="docErr('phone')" placeholder="+91 98765 43210" />
               @if (docErr('phone')) { <p class="pf-rn-fld__err">{{ docErr('phone') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input class="nd-input" type="email" [(ngModel)]="de.email" placeholder="priya@apollo.com" />
+              <input class="pf-input" type="email" [(ngModel)]="de.email" placeholder="priya@apollo.com" />
             </label>
           </div>
           <footer class="pf-rn-modal__ftr">
             <span class="flex-1"></span>
-            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press"
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press"
                     [disabled]="!de.name?.trim() || savingDoctor()" [pfBusy]="savingDoctor()" pfBusyLabel="Saving…" (click)="saveDoctor()">
               @if (savingDoctor()) { Saving… } @else { Save doctor }
             </button>
@@ -486,7 +486,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
     :host-context(.design-new) .pf-rn-grid { margin-top: 0; }
     /* Panes = kit cards with the BILLING header; bodies pad inside. */
     .pf-rn-pane { min-height: 200px; overflow: visible; }
-    .pf-rn-pane > :not(.nd-card__head) { margin-left: 14px; margin-right: 14px; }
+    .pf-rn-pane > :not(.pf-card__head) { margin-left: 14px; margin-right: 14px; }
     .pf-rn-pane > :last-child { margin-bottom: 14px; }
     .pf-rn-pane--list { gap: 10px; }
     .pf-rn-pane__hdr { margin: 0 0 10px; }
@@ -515,9 +515,9 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       color: var(--text-primary); cursor: pointer;
       transition: background 0.12s, border-color 0.12s;
     }
-    .pf-rn-row:hover { background: var(--nd-chip-bg); }
-    /* Neutral selected state (aria-selected), never violet (ND-PATTERN §3). */
-    .pf-rn-row[aria-selected='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+    .pf-rn-row:hover { background: var(--pf-chip-bg); }
+    /* Neutral selected state (aria-selected), never violet (PF-PATTERN §3). */
+    .pf-rn-row[aria-selected='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pf-rn-row__name { margin: 0; font-size: 13.5px; font-weight: 600; }
     .pf-rn-row__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
     .pf-rn-row__inactive { color: var(--text-secondary); font-weight: 600; }
@@ -531,9 +531,9 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
     .pf-rn-doc {
       display: flex; gap: 12px;
       padding: 12px;
-      background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius);
+      background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius);
     }
     .pf-rn-doc__main { flex: 1; min-width: 0; }
     .pf-rn-doc__name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
@@ -551,16 +551,16 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
     .pf-rn-doc__btn--danger:hover { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
 
     /* ── Editor modal ─────────────────────────────────────────── */
-    /* Editor modal = nd-card modal (web) / sheet above the navbar (phones). */
-    .pf-rn-modal-bd { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); background: rgba(0,0,0,0.45); z-index: 79; }
+    /* Editor modal = pf-card modal (web) / sheet above the navbar (phones). */
+    .pf-rn-modal-bd { position: fixed; top: 0; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); background: rgba(0,0,0,0.45); z-index: 79; }
     .pf-rn-modal {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 80; width: calc(100% - 32px); max-width: 560px;
-      max-height: calc(100dvh - var(--nd-nav-h, 0px) - 32px);
+      max-height: calc(100dvh - var(--pf-nav-h, 0px) - 32px);
       box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
     }
     /* Centered modal: fade only (a transform keyframe would un-centre it). */
-    .pf-rn-modal { animation: pf-rn-fade var(--nd-dur) var(--nd-spring) both; }
+    .pf-rn-modal { animation: pf-rn-fade var(--pf-dur) var(--pf-spring) both; }
     @keyframes pf-rn-fade { from { opacity: 0; } to { opacity: 1; } }
     .pf-rn-modal__hdr { flex: none; }
     .pf-rn-modal__close { width: 36px; height: 36px; min-height: 36px; }
@@ -579,9 +579,9 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
     .pf-rn-modal__ftr {
       display: flex; align-items: center; gap: 8px;
       padding: 12px 16px;
-      border-top: 1px solid var(--nd-line); flex: none;
+      border-top: 1px solid var(--pf-line); flex: none;
     }
-    .pf-rn-modal__ftr .nd-btn { height: 40px; min-height: 40px; }
+    .pf-rn-modal__ftr .pf-btn { height: 40px; min-height: 40px; }
 
     /* ───────────────────────────────────────────────────────────────
        Cross-platform overrides — ADDITIVE ONLY.
@@ -631,15 +631,15 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       .pf-rn-pane__hdr { flex-wrap: wrap; }
       .pf-rn-pane__hdr > .min-w-0 { flex-basis: 100%; }
 
-      /* The sheet sits ABOVE the always-visible navbar (ND-PATTERN §8). */
+      /* The sheet sits ABOVE the always-visible navbar (PF-PATTERN §8). */
       .pf-rn-modal {
-        top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px);
+        top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px);
         transform: none;
         width: 100%; max-width: none;
-        max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+        max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
         border-radius: 20px 20px 0 0;
       }
-      .pf-rn-modal { animation: nd-rise var(--nd-dur-sheet) var(--nd-spring-bounce) both; }
+      .pf-rn-modal { animation: pf-rise var(--pf-dur-sheet) var(--pf-spring-bounce) both; }
       .pf-rn-modal__body { max-height: 60dvh; }
       .pf-rn-fld input, .pf-rn-fld textarea { font-size: 16px; }
       .pf-rn-search { font-size: 16px; }
@@ -669,10 +669,10 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
     .pf-rn-docgrid {
       position: relative; width: 100%;
       height: calc(100dvh - 280px); min-height: 360px;
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius); overflow: hidden;
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius); overflow: hidden;
     }
     :host-context(.design-new) .pf-rn-docgrid { flex: 1 1 auto; height: auto; min-height: 320px; }
-    .pf-rn-docgrid__skel { position: absolute; inset: 0; z-index: 2; background: var(--nd-card-bg, var(--bg-primary)); padding: 16px; }
+    .pf-rn-docgrid__skel { position: absolute; inset: 0; z-index: 2; background: var(--pf-card-bg, var(--bg-primary)); padding: 16px; }
     @media (max-width: 640px) {
       .pf-rn-hfilter, .pf-rn-search--docs { width: 100%; }
       .pf-rn-docbar__count { margin-left: 0; }
@@ -685,7 +685,7 @@ export class ReferringNetworkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
   // ── State ───────────────────────────────────────────────────────
@@ -855,7 +855,7 @@ export class ReferringNetworkComponent implements OnInit {
     }
     for (const h of hs) {
       const chip = document.createElement('span');
-      chip.className = 'nd-chip nd-chip--static';
+      chip.className = 'pf-chip pf-chip--static';
       chip.style.cssText = 'height:24px;font-size:11.5px;';
       chip.textContent = h.name;
       wrap.appendChild(chip);
@@ -868,7 +868,7 @@ export class ReferringNetworkComponent implements OnInit {
     wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
     if (!p.data) return wrap;
     const chip = document.createElement('span');
-    chip.className = 'nd-chip nd-chip--static';
+    chip.className = 'pf-chip pf-chip--static';
     chip.style.cssText = 'height:24px;font-size:11.5px;';
     chip.textContent = p.data.isActive ? 'Active' : 'Inactive';
     wrap.appendChild(chip);

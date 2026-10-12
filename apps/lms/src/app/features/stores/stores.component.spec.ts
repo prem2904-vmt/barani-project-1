@@ -15,7 +15,7 @@ const items = [
 const alerts = { lowStock: [{ id: 'i2', name: 'Glucose reagent', onHand: 20, reorderLevel: 50 }], expiring: [{ id: 'b1', item: 'Glucose reagent', lotNumber: 'L1', daysLeft: 4, qtyOnHand: 10 }] };
 function TestBed_reset() { TestBed.resetTestingModule(); }
 /** Visible primaries (band + kit). */
-const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length;
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length;
 /** ND hygiene: no native select / datalist, no monospace costume, no emoji glyph icons. */
 function hygiene(el: HTMLElement) {
   expect(el.querySelector('select, datalist')).toBeNull();
@@ -79,7 +79,7 @@ describe('Stores desk — ND band + cards', () => {
     expect(filters).toEqual(['All 3', 'In stock 1', 'Low 1', 'Out 1']);
     const kpis = p.el.querySelectorAll('.inv-kpi');
     expect(kpis.length).toBe(3);
-    expect(Array.from(kpis).map(k => k.querySelector('.nd-sdot')!.getAttribute('data-tone'))).toEqual(['warn', 'bad', 'warn']);
+    expect(Array.from(kpis).map(k => k.querySelector('.pf-sdot')!.getAttribute('data-tone'))).toEqual(['warn', 'bad', 'warn']);
     expect(p.el.querySelector('.kpi--green, .pill--green, .btn--green')).toBeNull();
     expect(text(p.el.querySelector('aside'))).toContain('4 days left');
   });
@@ -88,7 +88,7 @@ describe('Stores desk — ND band + cards', () => {
     let p = await render({ items: [] });
     await waitHold(); p.f.detectChanges();
     expect(text(p.body())).toContain('No inventory items yet');
-    const link = p.el.querySelector('.pf-band-body a.nd-btn')!;
+    const link = p.el.querySelector('.pf-band-body a.pf-btn')!;
     expect(text(link).trim()).toBe('Create items');
     expect(link.getAttribute('href')).toBe('/admin/inventory');
     p.cmp.enterAction('receive'); p.f.detectChanges();
@@ -99,7 +99,7 @@ describe('Stores desk — ND band + cards', () => {
     p = await render({ items: [], perms: ['inventory_receive'] });
     p.cmp.enterAction('receive'); p.f.detectChanges();
     expect(text(p.body())).toContain('Ask an inventory admin');
-    expect(p.el.querySelector('.pf-band-body a.nd-btn')).toBeNull();
+    expect(p.el.querySelector('.pf-band-body a.pf-btn')).toBeNull();
   });
 
   it('Receive: pick an item → side card with the kit date picker (no native date input) and ONE primary that posts the same receive payload', async () => {
@@ -111,8 +111,8 @@ describe('Stores desk — ND band + cards', () => {
     rows[0].click(); p.f.detectChanges();
     const side = p.el.querySelector('aside')!;
     expect(text(side)).toContain('EDTA tube 3ml');
-    expect(side.querySelector('pf-nd-date')).not.toBeNull();
-    expect(side.querySelector('input[type="date"]:not(.pf-ndd__native)')).toBeNull();
+    expect(side.querySelector('pf-date')).not.toBeNull();
+    expect(side.querySelector('input[type="date"]:not(.pf-date__native)')).toBeNull();
     expect(primaries(p.el)).toBe(1);
     p.cmp.setR('lot', 'L9'); p.cmp.setR('expiry', '2027-05-31'); p.cmp.setR('cost', 4); p.cmp.setR('qty', 10); p.f.detectChanges();
     (p.api.post as any).mockImplementation(() => of({ lotBarcode: 'LOT123' }));

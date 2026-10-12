@@ -81,7 +81,7 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(req.candidates).toEqual(expect.arrayContaining(['AMC 30', 'CFM 5', 'CAZ 30', 'IPM 10']));
     expect(req.candidates).not.toContain('VA 30');
     expect(c.ai()).toBe('pending');
-    const pill = el.querySelector('.pm-sense.nd-ai-glow[data-ai-working="true"]');
+    const pill = el.querySelector('.pm-sense.pf-ai-glow[data-ai-working="true"]');
     expect(pill?.textContent).toContain('PF Sense · reading…');
     expect(pill?.querySelector('pf-logo-mark')).toBeTruthy();
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(4);
@@ -165,10 +165,10 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(emitted.length).toBe(0);                         // AI answer ≠ a write
     c.pickCode(20, 'CFM 5');
     expect(emitted.length).toBe(0);
-    el.querySelector<HTMLButtonElement>('.pm-controls .nd-btn--primary')!.click();   // Review
+    el.querySelector<HTMLButtonElement>('.pm-controls .pf-btn--primary')!.click();   // Review
     f.detectChanges();
     expect(c.mode()).toBe('review');
-    const prim = el.querySelectorAll('.pm-controls .nd-btn--primary');
+    const prim = el.querySelectorAll('.pm-controls .pf-btn--primary');
     expect(prim.length).toBe(1);
     expect(prim[0].textContent?.trim()).toBe('Apply to table');
     expect(emitted.length).toBe(0);
@@ -192,7 +192,7 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(pickers.length).toBe(4);                          // not a static "No code" chip
     expect(el.querySelector('.pm-drow[data-n="1"] .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
     expect(el.querySelector('.pm-drow[data-n="1"] .pm-drow__drug')?.textContent?.trim()).toBe('Not applied — pick a code');
-    const apply = () => el.querySelector<HTMLButtonElement>('.pm-controls .nd-btn--primary')!;
+    const apply = () => el.querySelector<HTMLButtonElement>('.pm-controls .pf-btn--primary')!;
     expect(apply().textContent?.trim()).toBe('Apply to table');
     expect(apply().disabled).toBe(true);
     expect(el.querySelector('.pm-controls .pm-hinttext')?.textContent).toContain('0 zones go to the AST table');
@@ -235,12 +235,12 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     f.detectChanges();
     const stage = el.querySelector('.pm-stage')!, list = el.querySelector('.pm-list')!;
-    expect(stage.classList.contains('nd-ai-glow')).toBe(true);
+    expect(stage.classList.contains('pf-ai-glow')).toBe(true);
     expect(stage.getAttribute('data-ai-working')).toBe('true');
-    expect(list.classList.contains('nd-ai-glow')).toBe(true);
+    expect(list.classList.contains('pf-ai-glow')).toBe(true);
     expect(list.getAttribute('data-ai-working')).toBe('true');
-    expect(el.querySelectorAll('pf-select.pm-codesel.nd-ai-glow[data-ai-working="true"]').length).toBe(4);
-    expect(el.querySelectorAll('circle.pm-badge.nd-ai-glow-mark[data-ai-working="true"]').length).toBe(4);
+    expect(el.querySelectorAll('pf-select.pm-codesel.pf-ai-glow[data-ai-working="true"]').length).toBe(4);
+    expect(el.querySelectorAll('circle.pm-badge.pf-ai-glow-mark[data-ai-working="true"]').length).toBe(4);
     pending.next(RESULT); pending.complete();
     f.detectChanges();
     expect(working().length).toBe(0);                        // fades out (the class stays for the fade)
@@ -258,18 +258,18 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(el.querySelectorAll('[data-ai-working="true"]').length).toBe(0);
   });
 
-  it('kit: .nd-ai-glow rotates a conic rainbow, never blocks taps, and is static under reduced motion', () => {
-    const kit = readFileSync('apps/lms/src/app/shared/styles/_nd-kit.scss', 'utf8');
-    expect(kit).toMatch(/@property --nd-ai-angle/);
-    const base = /\.nd-ai-glow::before, \.nd-ai-glow::after \{([^}]*)\}/.exec(kit)?.[1] ?? '';
-    expect(base).toMatch(/conic-gradient\(from var\(--nd-ai-angle\)/);
+  it('kit: .pf-ai-glow rotates a conic rainbow, never blocks taps, and is static under reduced motion', () => {
+    const kit = readFileSync('libs/shared/src/lib/styles/_pf-kit.scss', 'utf8');
+    expect(kit).toMatch(/@property --pf-ai-angle/);
+    const base = /\.pf-ai-glow::before, \.pf-ai-glow::after \{([^}]*)\}/.exec(kit)?.[1] ?? '';
+    expect(base).toMatch(/conic-gradient\(from var\(--pf-ai-angle\)/);
     expect(base).toMatch(/pointer-events: none/);
-    expect(base).toMatch(/animation: nd-ai-spin 3\.5s linear infinite/);
-    expect(kit).toMatch(/\.nd-ai-glow\[data-ai-working='true'\]::before/);
+    expect(base).toMatch(/animation: pf-ai-spin 3\.5s linear infinite/);
+    expect(kit).toMatch(/\.pf-ai-glow\[data-ai-working='true'\]::before/);
     // The reduced-motion block that carries the AI glow (the kit has others
     // after it, e.g. the loading-feedback "held" pulse).
-    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)', kit.lastIndexOf('.nd-ai-glow::before, .nd-ai-glow::after, .nd-ai-glow-mark')));
-    expect(rm).toMatch(/\.nd-ai-glow::before, \.nd-ai-glow::after[^{]*\{[^}]*animation: none/);
+    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)', kit.lastIndexOf('.pf-ai-glow::before, .pf-ai-glow::after, .pf-ai-glow-mark')));
+    expect(rm).toMatch(/\.pf-ai-glow::before, \.pf-ai-glow::after[^{]*\{[^}]*animation: none/);
   });
 
   it('no user-facing "AI" text anywhere in the modal (branded PF Sense)', () => {

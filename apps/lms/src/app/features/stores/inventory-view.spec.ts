@@ -65,7 +65,7 @@ describe('inventory-view', () => {
     expect(c.querySelector('.inv-cell__meta')!.textContent).toBe('SKU · kit');
     expect(itemCell('A', '').querySelector('.inv-cell__meta')).toBeNull();
     const d = dotCell('Low', 'warn');
-    expect(d.className).toBe('nd-sdot');
+    expect(d.className).toBe('pf-sdot');
     expect(d.getAttribute('data-tone')).toBe('warn');
     expect(dotCell('In stock', '').hasAttribute('data-tone')).toBe(false);
   });

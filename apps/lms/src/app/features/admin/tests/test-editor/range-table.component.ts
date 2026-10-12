@@ -406,7 +406,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
   styles: [`
     :host { display: block; min-width: 0; max-width: 100%; }
     .rtb {
-      --rtb-line: var(--nd-line, var(--glass-border, #e5e7eb));
+      --rtb-line: var(--pf-line, var(--glass-border, #e5e7eb));
       --rtb-err: var(--red-border, #dc2626);
       --rtb-field: color-mix(in srgb, var(--text-primary) 22%, transparent);
       display: flex; flex-direction: column; gap: 10px; font-family: inherit; font-variant-numeric: tabular-nums;
@@ -439,7 +439,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__in {
       display: block; width: 100%; min-width: 0; height: 36px; padding: 0 10px; box-sizing: border-box; border-radius: 9px;
       font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-primary);
-      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg, transparent)); border: 1px solid var(--rtb-field);
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg, transparent)); border: 1px solid var(--rtb-field);
       transition: border-color .2s ease, box-shadow .2s ease;
     }
     .rtb__in::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
@@ -458,7 +458,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__agebtn {
       display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 36px; padding: 0 8px 0 10px;
       box-sizing: border-box; border-radius: 9px; border: 1px solid var(--rtb-field); cursor: pointer;
-      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg, transparent));
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg, transparent));
       font: inherit; font-size: 13.5px; font-weight: 500; color: var(--text-primary); text-align: left;
     }
     .rtb__agebtn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -471,12 +471,12 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     .rtb__rm { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; vertical-align: middle;
       border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .rtb__rm:hover { color: var(--text-primary); background: var(--nd-chip-bg, rgba(127,127,127,.12)); }
+    .rtb__rm:hover { color: var(--text-primary); background: var(--pf-chip-bg, rgba(127,127,127,.12)); }
 
     .rtb__add { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 32px; padding: 0 10px 0 6px;
       border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 500;
       color: var(--text-secondary); cursor: pointer; }
-    .rtb__add:hover { color: var(--text-primary); background: var(--nd-chip-bg, rgba(127,127,127,.12)); }
+    .rtb__add:hover { color: var(--text-primary); background: var(--pf-chip-bg, rgba(127,127,127,.12)); }
     .rtb__add--rm { color: var(--text-tertiary); padding-left: 0; }
 
     .rtb__msg { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--rtb-err); }
@@ -484,7 +484,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     /* Age editor (desktop: a row under the group; phone: inside the card). */
     .rtb__ageed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px;
-      background: var(--nd-chip-bg, rgba(127,127,127,.08)); }
+      background: var(--pf-chip-bg, rgba(127,127,127,.08)); }
     .rtb__in--age { width: 72px; }
     .rtb__sel--unit { width: 112px; }
 
@@ -500,7 +500,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     /* ── Phone cards ───────────────────────────────────────────────── */
     .rtb__cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .rtb__card { border: 1px solid var(--rtb-line); border-radius: 12px; background: var(--nd-card-bg, transparent); }
+    .rtb__card { border: 1px solid var(--rtb-line); border-radius: 12px; background: var(--pf-card-bg, transparent); }
     .rtb__card.rtb__row--err { border-color: var(--rtb-err); }
     .rtb__card > .rtb__msg { padding: 0 14px 10px; }
     .rtb__cardhead { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 56px; padding: 10px 12px 10px 14px;
@@ -514,18 +514,18 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__prevtxt { white-space: pre-line; color: var(--text-secondary); }
     .rtb__uchip { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; line-height: 18px;
       font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
-      background: var(--nd-chip-bg, rgba(127,127,127,.14)); border: 1px solid var(--rtb-line); }
+      background: var(--pf-chip-bg, rgba(127,127,127,.14)); border: 1px solid var(--rtb-line); }
     .rtb__l2 { font-size: 14px; color: var(--text-secondary); line-height: 1.35; overflow-wrap: anywhere; white-space: pre-line; }
     .rtb__chev { flex: none; color: var(--text-tertiary); transition: transform .2s ease; }
     .rtb__card--open .rtb__chev { transform: rotate(180deg); }
     .rtb__cardbody { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 12px; }
     .rtb__grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .rtb__fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .rtb__seg { display: flex; padding: 2px; gap: 2px; border-radius: 10px; background: var(--nd-chip-bg, rgba(127,127,127,.1));
+    .rtb__seg { display: flex; padding: 2px; gap: 2px; border-radius: 10px; background: var(--pf-chip-bg, rgba(127,127,127,.1));
       border: 1px solid var(--rtb-line); }
     .rtb__segi { flex: 1 1 0; height: 40px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary);
       font: inherit; font-size: 14px; cursor: pointer; }
-    .rtb__segi[aria-checked='true'] { background: var(--nd-card-bg, var(--bg-secondary)); color: var(--text-primary);
+    .rtb__segi[aria-checked='true'] { background: var(--pf-card-bg, var(--bg-secondary)); color: var(--text-primary);
       box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 500; }
 
     @media (max-width: 640px) {

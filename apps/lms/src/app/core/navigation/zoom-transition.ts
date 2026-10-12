@@ -5,7 +5,7 @@ import {
 } from '@angular/router';
 
 /**
- * LIST → DETAIL ZOOM, one mechanism for every lab module (docs/ND-PATTERN.md
+ * LIST → DETAIL ZOOM, one mechanism for every lab module (docs/PF-PATTERN.md
  * §9: "list → detail = zoom, step → step = slide").
  *
  *   <div [pfZoomSource]="[tube.sampleId]">…tile…</div>          (the list)
@@ -35,7 +35,7 @@ import {
 export const ZOOM_NAME = 'pf-zoom';
 /** Morph length: the nd spring over ~400ms reads as one continuous zoom. */
 export const ZOOM_MS = 400;
-export const ZOOM_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';   // --nd-spring
+export const ZOOM_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';   // --pf-spring
 export const ZOOM_IN_CLASS = 'pf-vt-zoom-in';
 export const ZOOM_OUT_CLASS = 'pf-vt-zoom-out';
 /** Marks whatever we named, so a stale name can always be found and cleared. */

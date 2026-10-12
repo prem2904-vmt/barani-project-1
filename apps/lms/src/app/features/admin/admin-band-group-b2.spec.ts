@@ -137,13 +137,13 @@ describe('Admin band B2 — Organization & Identity', () => {
     expect(p.actions().length).toBe(1);
   });
 
-  it('kit controls: nd-card sections, pf-select (no native select), slate switches', () => {
+  it('kit controls: pf-card sections, pf-select (no native select), slate switches', () => {
     const p = make();
-    expect(p.body()!.querySelectorAll('section.nd-card').length).toBe(2);
+    expect(p.body()!.querySelectorAll('section.pf-card').length).toBe(2);
     pillTabs(p).click('Order ID');
     expect(p.el.querySelector('select')).toBeNull();
     expect(p.body()!.querySelector('pf-select')).not.toBeNull();
-    const sw = p.body()!.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    const sw = p.body()!.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('false');
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('true');

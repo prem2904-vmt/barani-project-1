@@ -15,13 +15,13 @@ import {
 } from '../../../shared/models/expense.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ModalPortalDirective } from '../../../shared/directives/modal-portal.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { ndGridDark, ndGridLight } from '../../../shared/utils/nd-grid-theme';
+import { ndGridDark, ndGridLight } from '../../../shared/utils/pf-grid-theme';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { plural } from '../../../shared/utils/plural';
@@ -61,7 +61,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent,
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
     ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -104,8 +104,8 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Daily work" title="Expenses" subtitle="Enter day-to-day expenses and cash in, with the bill photo.">
         <div actions>
-          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" (click)="exportCsv()">Export CSV</button>
-          @if (can().canAdd) { <button type="button" class="nd-btn nd-btn--primary" (click)="openAdd()">Add expense</button> }
+          <button type="button" class="pf-btn pf-btn--secondary" [disabled]="exporting()" (click)="exportCsv()">Export CSV</button>
+          @if (can().canAdd) { <button type="button" class="pf-btn pf-btn--primary" (click)="openAdd()">Add expense</button> }
         </div>
       </pf-screen-header>
 
@@ -121,33 +121,33 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
         <div class="pf-xt__panels" [class.pf-xt__panels--narrow]="narrow()">
           @if (narrow()) {
             @if (sheetOpen()) {
-              <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
-              <aside class="nd-card pf-xt__side pf-xt__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
-                <span class="nd-sheet__handle" aria-hidden="true"></span>
+              <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="pf-card pf-xt__side pf-xt__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
+                <span class="pf-sheet__handle" aria-hidden="true"></span>
                 <ng-container *ngTemplateOutlet="filterHead; context: { sheet: true }"></ng-container>
                 <ng-container *ngTemplateOutlet="filterBody"></ng-container>
               </aside>
             }
           } @else {
-            <aside class="nd-card pf-xt__side" aria-label="Filters">
+            <aside class="pf-card pf-xt__side" aria-label="Filters">
               <ng-container *ngTemplateOutlet="filterHead; context: { sheet: false }"></ng-container>
               <ng-container *ngTemplateOutlet="filterBody"></ng-container>
             </aside>
           }
 
-          <section class="nd-card pf-xt__main" aria-label="Expense book">
-            <header class="nd-card__head pf-xt__head">
-              <span class="nd-card__icon" aria-hidden="true">
+          <section class="pf-card pf-xt__main" aria-label="Expense book">
+            <header class="pf-card__head pf-xt__head">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
               </span>
-              <h2 class="nd-card__label">{{ tab() === 'mine' ? 'My expenses' : 'Expense book' }}</h2>
+              <h2 class="pf-card__label">{{ tab() === 'mine' ? 'My expenses' : 'Expense book' }}</h2>
               @if (seesAll()) {
-                <span class="nd-seg pf-xt__view" role="radiogroup" aria-label="View">
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'entries'" (click)="view.set('entries')">Entries</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'days'" (click)="view.set('days')">Day book</button>
+                <span class="pf-seg pf-xt__view" role="radiogroup" aria-label="View">
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="view() === 'entries'" (click)="view.set('entries')">Entries</button>
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="view() === 'days'" (click)="view.set('days')">Day book</button>
                 </span>
               }
-              <span class="pf-xt__count nd-num" aria-live="polite">{{ countLabel() }}</span>
+              <span class="pf-xt__count pf-num" aria-live="polite">{{ countLabel() }}</span>
             </header>
 
             @if (book(); as b) {
@@ -156,18 +156,18 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                    result) is the one emphasised figure. -->
               <div class="pf-xt__stats" [class.pf-xt__stats--book]="seesAll()" role="group" aria-label="Range totals">
                 @if (seesAll()) {
-                  <div class="pf-xt__stat"><span class="pf-xt__statk">Opening</span><span class="pf-xt__statv nd-num">{{ b.opening ?? 0 | inr }}</span><span class="pf-xt__stath nd-num">{{ dayShort(b.from) }}</span></div>
+                  <div class="pf-xt__stat"><span class="pf-xt__statk">Opening</span><span class="pf-xt__statv pf-num">{{ b.opening ?? 0 | inr }}</span><span class="pf-xt__stath pf-num">{{ dayShort(b.from) }}</span></div>
                   <span class="pf-xt__op" aria-hidden="true">+</span>
                 }
-                <div class="pf-xt__stat"><span class="pf-xt__statk">Cash in</span><span class="pf-xt__statv nd-num">{{ b.totalCashIn | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'Top-ups in range' : 'You entered' }}</span></div>
+                <div class="pf-xt__stat"><span class="pf-xt__statk">Cash in</span><span class="pf-xt__statv pf-num">{{ b.totalCashIn | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'Top-ups in range' : 'You entered' }}</span></div>
                 @if (seesAll()) { <span class="pf-xt__op" aria-hidden="true">−</span> }
-                <div class="pf-xt__stat"><span class="pf-xt__statk">Expenses</span><span class="pf-xt__statv nd-num">{{ b.totalExpenses | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'All modes' : 'You entered' }}</span></div>
+                <div class="pf-xt__stat"><span class="pf-xt__statk">Expenses</span><span class="pf-xt__statv pf-num">{{ b.totalExpenses | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'All modes' : 'You entered' }}</span></div>
                 @if (seesAll()) {
                   <span class="pf-xt__op" aria-hidden="true">=</span>
                   <div class="pf-xt__stat pf-xt__stat--result" [attr.data-neg]="(b.closing ?? 0) < 0">
                     <span class="pf-xt__statk">Closing</span>
-                    <span class="pf-xt__statv nd-num" [class.pf-xt__neg]="(b.closing ?? 0) < 0">{{ b.closing ?? 0 | inr }}</span>
-                    <span class="pf-xt__stath nd-num">{{ (b.closing ?? 0) < 0 ? 'Below zero · ' + dayShort(b.to) : dayShort(b.to) }}</span>
+                    <span class="pf-xt__statv pf-num" [class.pf-xt__neg]="(b.closing ?? 0) < 0">{{ b.closing ?? 0 | inr }}</span>
+                    <span class="pf-xt__stath pf-num">{{ (b.closing ?? 0) < 0 ? 'Below zero · ' + dayShort(b.to) : dayShort(b.to) }}</span>
                   </div>
                 }
               </div>
@@ -177,14 +177,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
               @if (listSkeleton()) {
                 <pf-skeleton-table class="pf-xt__skel" [rows]="8" [cols]="5" label="Loading expenses…"></pf-skeleton-table>
               } @else if (view() === 'entries' && !loading() && visibleEntries().length === 0) {
-                <div class="nd-empty nd-empty--compact">
-                  <span class="nd-empty__icon" aria-hidden="true">
+                <div class="pf-empty pf-empty--compact">
+                  <span class="pf-empty__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/></svg>
                   </span>
-                  <p class="nd-empty__title">{{ q().trim() ? 'No entries match "' + q().trim() + '"' : 'No expenses in this range' }}</p>
-                  <p class="nd-empty__body">{{ q().trim() ? 'Try another item, vendor or category.' : (can().canAdd ? 'Add the first one — snap the bill on your phone.' : 'Widen the date range.') }}</p>
+                  <p class="pf-empty__title">{{ q().trim() ? 'No entries match "' + q().trim() + '"' : 'No expenses in this range' }}</p>
+                  <p class="pf-empty__body">{{ q().trim() ? 'Try another item, vendor or category.' : (can().canAdd ? 'Add the first one — snap the bill on your phone.' : 'Widen the date range.') }}</p>
                   @if (can().canAdd && !q().trim()) {
-                    <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="openAdd()">Add expense</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="openAdd()">Add expense</button>
                   }
                 </div>
               } @else if (view() === 'entries') {
@@ -197,7 +197,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                                  (cellClicked)="onDayClicked($event)"></ag-grid-angular>
               }
               @if (book()?.truncated && view() === 'entries') {
-                <p class="pf-xt__more nd-num">Showing the latest {{ book()!.entries.length }} entries — narrow the dates, or Export CSV for every row.</p>
+                <p class="pf-xt__more pf-num">Showing the latest {{ book()!.entries.length }} entries — narrow the dates, or Export CSV for every row.</p>
               }
             </div>
           </section>
@@ -206,16 +206,16 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       </div>
 
       @if (can().canAdd && tab() !== 'closing') {
-        <!-- Phone bottom bar (ND .nd-bottombar, above the navbar): the range's
+        <!-- Phone bottom bar (ND .pf-bottombar, above the navbar): the range's
              spend + the ONE primary. "Snap bill" opens the rear camera first,
              then the form with the photo attached. -->
-        <div class="nd-bottombar pf-xt__bar" role="region" aria-label="Add expense">
-          <span class="nd-bottombar__info nd-num">{{ barInfo() }}</span>
-          <label class="nd-btn nd-btn--secondary nd-btn--icon pf-xt__snap" title="Snap bill" aria-label="Snap a bill photo">
+        <div class="pf-bottombar pf-xt__bar" role="region" aria-label="Add expense">
+          <span class="pf-bottombar__info pf-num">{{ barInfo() }}</span>
+          <label class="pf-btn pf-btn--secondary pf-btn--icon pf-xt__snap" title="Snap bill" aria-label="Snap a bill photo">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             <input class="pf-xt__file" type="file" accept="image/*" capture="environment" (change)="snapBill($event)" />
           </label>
-          <button type="button" class="nd-btn nd-btn--primary" (click)="openAdd()">Add expense</button>
+          <button type="button" class="pf-btn pf-btn--primary" (click)="openAdd()">Add expense</button>
         </div>
       }
     </section>
@@ -225,14 +225,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     </ng-template>
 
     <ng-template #filterHead let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
         </span>
-        <h2 class="nd-card__label">Filters</h2>
-        <span class="nd-card__spacer"></span>
+        <h2 class="pf-card__label">Filters</h2>
+        <span class="pf-card__spacer"></span>
         @if (sheet) {
-          <button type="button" class="nd-btn nd-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
+          <button type="button" class="pf-btn pf-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         }
@@ -240,48 +240,48 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     </ng-template>
 
     <ng-template #filterBody>
-      <div class="nd-card__body pf-xt__filters">
-        <div class="nd-field">
-          <span class="nd-field__lbl" id="pf-xt-range-lbl">Dates (IST)</span>
+      <div class="pf-card__body pf-xt__filters">
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-xt-range-lbl">Dates (IST)</span>
           <!-- Three presets share the row evenly (never wrap); a custom range
                is simply picking From / To below — the presets then show
                none selected and the date row says "Custom range". -->
-          <span class="nd-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-range-lbl">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'month'" (click)="setQuick('month')">This month</button>
+          <span class="pf-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-range-lbl">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === 'month'" (click)="setQuick('month')">This month</button>
           </span>
           <div class="pf-xt__dates" [attr.data-custom]="quick() === 'custom'">
             @if (quick() === 'custom') { <span class="pf-xt__custom">Custom range</span> }
             <label class="pf-xt__dates-lbl" for="pf-xt-from">From</label>
-            <pf-nd-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-nd-date>
+            <pf-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-date>
             <label class="pf-xt__dates-lbl" for="pf-xt-to">To</label>
-            <pf-nd-date label="To" inputId="pf-xt-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-nd-date>
+            <pf-date label="To" inputId="pf-xt-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-date>
           </div>
         </div>
-        <div class="nd-field">
-          <span class="nd-field__lbl" id="pf-xt-kind-lbl">Type</span>
-          <span class="nd-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-kind-lbl">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === ''" (click)="kind.set('')">All</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'expense'" (click)="kind.set('expense')">Expenses</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'cash_in'" (click)="kind.set('cash_in')">Cash in</button>
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-xt-kind-lbl">Type</span>
+          <span class="pf-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-kind-lbl">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === ''" (click)="kind.set('')">All</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'expense'" (click)="kind.set('expense')">Expenses</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'cash_in'" (click)="kind.set('cash_in')">Cash in</button>
           </span>
         </div>
-        <div class="nd-field">
-          <label class="nd-field__lbl" for="pf-xt-cat">Category</label>
+        <div class="pf-field">
+          <label class="pf-field__lbl" for="pf-xt-cat">Category</label>
           <pf-select id="pf-xt-cat" size="sm" [options]="categoryFilterOptions()" [value]="categoryId()" [searchable]="true"
                      (valueChange)="categoryId.set($event)"></pf-select>
         </div>
-        <div class="nd-field">
-          <label class="nd-field__lbl" for="pf-xt-mode">Payment mode</label>
+        <div class="pf-field">
+          <label class="pf-field__lbl" for="pf-xt-mode">Payment mode</label>
           <pf-select id="pf-xt-mode" size="sm" [options]="modeFilterOptions" [value]="mode()" (valueChange)="mode.set($any($event) ?? '')"></pf-select>
         </div>
 
         @if (book(); as b) {
-          <div class="nd-field">
-            <span class="nd-field__lbl">By category</span>
+          <div class="pf-field">
+            <span class="pf-field__lbl">By category</span>
             @if (b.byCategory.length === 0) {
-              <p class="nd-field__hint">No expenses in this range.</p>
+              <p class="pf-field__hint">No expenses in this range.</p>
             } @else {
               <!-- Name · count · amount on one aligned row, with a hairline
                    share bar (of the range's expenses) under each. Tapping a
@@ -292,8 +292,8 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                     <button type="button" class="pf-xt__totrow" [attr.aria-pressed]="categoryId() === c.key" (click)="toggleCategory(c.key)"
                             [attr.aria-label]="c.label + ', ' + c.count + ' · ' + (c.total | inr) + (categoryId() === c.key ? ' — filtering, tap to clear' : '')">
                       <span class="pf-xt__totname">{{ c.label }}</span>
-                      <span class="pf-xt__totn nd-num">{{ c.count }}</span>
-                      <span class="pf-xt__totv nd-num">{{ c.total | inr }}</span>
+                      <span class="pf-xt__totn pf-num">{{ c.count }}</span>
+                      <span class="pf-xt__totv pf-num">{{ c.total | inr }}</span>
                       <span class="pf-xt__totbar" aria-hidden="true"><span [style.width.%]="share(c.total, b.totalExpenses)"></span></span>
                     </button>
                   </li>
@@ -302,14 +302,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
             }
           </div>
           @if (b.byMode.length > 0) {
-            <div class="nd-field">
-              <span class="nd-field__lbl">By payment mode</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">By payment mode</span>
               <ul class="pf-xt__totals pf-xt__totals--static" aria-label="Expenses by payment mode">
                 @for (m of b.byMode; track m.key) {
                   <li class="pf-xt__totrow">
                     <span class="pf-xt__totname">{{ m.label }}</span>
-                    <span class="pf-xt__totn nd-num">{{ m.count }}</span>
-                    <span class="pf-xt__totv nd-num">{{ m.total | inr }}</span>
+                    <span class="pf-xt__totn pf-num">{{ m.count }}</span>
+                    <span class="pf-xt__totv pf-num">{{ m.total | inr }}</span>
                   </li>
                 }
               </ul>
@@ -318,9 +318,9 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
         }
 
         @if (can().isAdmin) {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-xt__managecats" (click)="catsOpen.set(true)">Manage categories</button>
+          <button type="button" class="pf-btn pf-btn--tertiary pf-xt__managecats" (click)="catsOpen.set(true)">Manage categories</button>
         }
-        <p class="nd-field__hint">
+        <p class="pf-field__hint">
           @if (seesAll()) {
             Opening + cash in − expenses = closing (all payment modes). A closed day is locked for everyone until an admin reopens it.
           } @else {
@@ -341,9 +341,9 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
         <div class="pf-xt-modal__backdrop" (click)="billsFor.set(null)"></div>
         <div class="pf-xt-modal__card">
           <header class="pf-xt-modal__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></span>
-            <h2 id="pf-xt-bills-title" class="nd-card__label pf-xt-modal__title">Bills · {{ e.description }}</h2>
-            <button type="button" class="nd-btn nd-btn--icon" (click)="billsFor.set(null)" aria-label="Close">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></span>
+            <h2 id="pf-xt-bills-title" class="pf-card__label pf-xt-modal__title">Bills · {{ e.description }}</h2>
+            <button type="button" class="pf-btn pf-btn--icon" (click)="billsFor.set(null)" aria-label="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </header>
@@ -369,25 +369,25 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
         <div class="pf-xt-modal__backdrop" (click)="catsOpen.set(false)"></div>
         <div class="pf-xt-modal__card">
           <header class="pf-xt-modal__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><path d="M7 7h.01"/></svg></span>
-            <h2 id="pf-xt-cats-title" class="nd-card__label pf-xt-modal__title">Expense categories</h2>
-            <button type="button" class="nd-btn nd-btn--icon" (click)="catsOpen.set(false)" aria-label="Close">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><path d="M7 7h.01"/></svg></span>
+            <h2 id="pf-xt-cats-title" class="pf-card__label pf-xt-modal__title">Expense categories</h2>
+            <button type="button" class="pf-btn pf-btn--icon" (click)="catsOpen.set(false)" aria-label="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </header>
           <form class="pf-xt-modal__add" (submit)="$event.preventDefault(); createCategory()">
-            <input class="nd-input" type="text" maxlength="80" placeholder="New category — e.g. Generator diesel" aria-label="New category name"
+            <input class="pf-input" type="text" maxlength="80" placeholder="New category — e.g. Generator diesel" aria-label="New category name"
                    [value]="newCat()" (input)="newCat.set($any($event.target).value)" />
-            <button type="submit" class="nd-btn nd-btn--secondary" [disabled]="!newCat().trim() || catBusy()" [pfBusy]="catBusy()" pfBusyLabel="Adding…">Add</button>
+            <button type="submit" class="pf-btn pf-btn--secondary" [disabled]="!newCat().trim() || catBusy()" [pfBusy]="catBusy()" pfBusyLabel="Adding…">Add</button>
           </form>
           <ul class="pf-xt-modal__cats">
             @for (c of categories(); track c.id) {
-              <li class="nd-row pf-xt-modal__cat">
-                <span class="nd-row__name" [class.pf-xt__off]="!c.isActive">{{ c.name }}</span>
-                @if (!c.isActive) { <span class="nd-chip nd-chip--static">Off</span> }
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="c.isActive"
+              <li class="pf-row pf-xt-modal__cat">
+                <span class="pf-row__name" [class.pf-xt__off]="!c.isActive">{{ c.name }}</span>
+                @if (!c.isActive) { <span class="pf-chip pf-chip--static">Off</span> }
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="c.isActive"
                         [attr.aria-label]="'Use ' + c.name" (click)="toggleCategoryActive(c)">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </li>
             }
@@ -408,14 +408,14 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
     .pf-xt__side--sheet {
-      position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 80; max-height: 80dvh;
+      position: fixed; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 80; max-height: 80dvh;
       border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-    .pf-xt__side--sheet .nd-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
+    .pf-xt__side--sheet .pf-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     .pf-xt__filters { gap: 20px; overflow-y: auto; }
     /* Presets fill the row in equal columns — never wrap. */
     .pf-xt__seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
-    .pf-xt__seg .nd-seg__item { height: 32px; padding: 0 6px; white-space: nowrap; font-size: 12.5px; }
+    .pf-xt__seg .pf-seg__item { height: 32px; padding: 0 6px; white-space: nowrap; font-size: 12.5px; }
     .pf-xt__dates { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 4px; }
     .pf-xt__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
     .pf-xt__custom { grid-column: 1 / -1; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
@@ -426,19 +426,19 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       width: 100%; min-height: 44px; padding: 10px 8px 9px; border: 0; border-radius: 10px; background: transparent;
       font: inherit; font-size: 13px; color: var(--text-primary); text-align: left;
     }
-    button.pf-xt__totrow { cursor: pointer; transition: background var(--nd-dur-fast, 200ms) ease; }
+    button.pf-xt__totrow { cursor: pointer; transition: background var(--pf-dur-fast, 200ms) ease; }
     button.pf-xt__totrow:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
     button.pf-xt__totrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
-    .pf-xt__totrow[aria-pressed='true'] { background: var(--nd-in-tint); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
-    .pf-xt__totals li + li .pf-xt__totrow, li.pf-xt__totrow + li.pf-xt__totrow { border-top: 1px solid var(--nd-line); border-radius: 0; }
+    .pf-xt__totrow[aria-pressed='true'] { background: var(--pf-in-tint); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+    .pf-xt__totals li + li .pf-xt__totrow, li.pf-xt__totrow + li.pf-xt__totrow { border-top: 1px solid var(--pf-line); border-radius: 0; }
     .pf-xt__totals li + li .pf-xt__totrow[aria-pressed='true'] { border-radius: 10px; border-top-color: transparent; }
     .pf-xt__totals--static .pf-xt__totrow { min-height: 40px; padding-block: 9px; }
     .pf-xt__totname { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
     .pf-xt__totn { font-size: 12px; color: var(--text-tertiary); text-align: right; }
     .pf-xt__totv { text-align: right; font-weight: 500; }
-    .pf-xt__totbar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--nd-chip-bg); overflow: hidden; }
-    .pf-xt__totbar > span { display: block; height: 100%; border-radius: inherit; background: var(--nd-toggle-on); }
-    .pf-xt__totrow[aria-pressed='true'] .pf-xt__totbar > span { background: var(--nd-switch-on); }
+    .pf-xt__totbar { grid-column: 1 / -1; height: 3px; border-radius: 999px; background: var(--pf-chip-bg); overflow: hidden; }
+    .pf-xt__totbar > span { display: block; height: 100%; border-radius: inherit; background: var(--pf-toggle-on); }
+    .pf-xt__totrow[aria-pressed='true'] .pf-xt__totbar > span { background: var(--pf-switch-on); }
     .pf-xt__managecats { align-self: flex-start; }
     .pf-xt__main { min-width: 0; min-height: 0; }
     .pf-xt__head { flex-wrap: wrap; row-gap: 8px; }
@@ -448,11 +448,11 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
        (Closing) on a quiet tinted plate. */
     .pf-xt__stats {
       display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 4px;
-      padding: 12px 14px; border-bottom: 1px solid var(--nd-line);
+      padding: 12px 14px; border-bottom: 1px solid var(--pf-line);
     }
     .pf-xt__stats--book { grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1.15fr); }
     .pf-xt__stat { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; min-width: 0; border-radius: 12px; }
-    .pf-xt__stat--result { background: var(--nd-chip-bg); padding-inline: 14px; }
+    .pf-xt__stat--result { background: var(--pf-chip-bg); padding-inline: 14px; }
     .pf-xt__statk { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
     .pf-xt__statv { font-size: 17px; font-weight: 500; line-height: 1.25; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pf-xt__stat--result .pf-xt__statv { font-size: 19px; font-weight: 600; }
@@ -478,7 +478,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .ag-cell > .ag-cell-wrapper { flex: 1 1 auto; width: 100%; min-width: 0; }
     .pf-xt__main ::ng-deep .ag-cell-wrapper > .ag-cell-value { flex: 1 1 auto; min-width: 0; }
     .pf-xt__main ::ng-deep .ag-cell .pf-xt-cell { width: 100%; min-width: 0; }
-    .pf-xt__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
+    .pf-xt__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
     .pf-xt__main ::ng-deep .pf-xt-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-xt__main ::ng-deep .pf-xt-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-xt__main ::ng-deep .pf-xt-cell--end { align-items: flex-end; text-align: right; }
@@ -487,26 +487,26 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-amt--neg { color: var(--red-text, #dc2626); }
     .pf-xt__main ::ng-deep .pf-xt-num { font-variant-numeric: tabular-nums; text-align: right; display: block; }
     .pf-xt__main ::ng-deep .pf-xt-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; color: var(--text-secondary); }
-    .pf-xt__main ::ng-deep .pf-xt-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nd-toggle-off, #cbd5e1); flex: none; }
+    .pf-xt__main ::ng-deep .pf-xt-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-off, #cbd5e1); flex: none; }
     .pf-xt__main ::ng-deep .pf-xt-status[data-closed='true'] .pf-xt-status__dot { background: var(--violet-text, #7c3aed); }
     .pf-xt__main ::ng-deep .pf-xt-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
     .pf-xt__main ::ng-deep .ag-cell.pf-xt-actcell { padding-left: 6px; padding-right: 6px; }
-    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact--icon { width: 44px; height: 44px; }
+    .pf-xt__main ::ng-deep .pf-xt-acts .pf-rowact--icon { width: 44px; height: 44px; }
     /* Quiet row actions: no outline at rest (the whole row already opens the
        entry); the outline comes back on row hover / keyboard focus. */
-    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact { border-color: transparent; background: transparent; color: var(--text-tertiary); }
-    .pf-xt__main ::ng-deep .ag-row-hover .pf-xt-acts .nd-rowact,
-    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact:focus-visible { border-color: var(--nd-line); color: var(--text-primary); }
-    .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+    .pf-xt__main ::ng-deep .pf-xt-acts .pf-rowact { border-color: transparent; background: transparent; color: var(--text-tertiary); }
+    .pf-xt__main ::ng-deep .ag-row-hover .pf-xt-acts .pf-rowact,
+    .pf-xt__main ::ng-deep .pf-xt-acts .pf-rowact:focus-visible { border-color: var(--pf-line); color: var(--text-primary); }
+    .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--pf-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
     .pf-xt-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pf-xt-modal__backdrop { position: absolute; inset: 0; background: rgba(5, 5, 15, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
     .pf-xt-modal__card { position: relative; width: 100%; max-width: 32rem; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; overflow-y: auto;
-      border-radius: var(--nd-radius-card, 18px); background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); }
+      border-radius: var(--pf-radius-card, 18px); background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); }
     .pf-xt-modal__head { display: flex; align-items: center; gap: 12px; }
     .pf-xt-modal__title { margin: 0; flex: 1 1 auto; }
     .pf-xt-modal__bills { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
     .pf-xt-modal__bill { display: flex; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; }
-    .pf-xt-modal__thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--nd-line); background: var(--glass-bg); color: var(--text-tertiary); }
+    .pf-xt-modal__thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--pf-line); background: var(--glass-bg); color: var(--text-tertiary); }
     .pf-xt-modal__thumb img { width: 100%; height: 100%; object-fit: cover; }
     .pf-xt-modal__name { font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
     .pf-xt-modal__add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
@@ -515,7 +515,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt-modal__hint { margin: 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-xt__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-xt__snap { position: relative; width: 44px; height: 44px; flex: none; cursor: pointer; }
-    .pf-xt__bar .nd-btn--primary { min-height: 44px; flex: none; }
+    .pf-xt__bar .pf-btn--primary { min-height: 44px; flex: none; }
     @media (max-width: 640px) {
       .pf-xt__addbtn { display: none; }
       .pf-xt__body--bar { padding-bottom: 76px; }
@@ -529,9 +529,9 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
       .pf-xt__stat--result .pf-xt__statv { font-size: 17px; }
       .pf-xt__view { margin-left: 0; order: 3; }
       .pf-xt__main ::ng-deep .pf-xt-acts { gap: 4px; }
-      .pf-xt-modal { align-items: flex-end; padding: 0; bottom: var(--nd-nav-h, 0px); }
+      .pf-xt-modal { align-items: flex-end; padding: 0; bottom: var(--pf-nav-h, 0px); }
       .pf-xt-modal__card { max-width: none; border-radius: 18px 18px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
-      .pf-xt-modal__add .nd-input { font-size: 16px; min-height: 44px; }
+      .pf-xt-modal__add .pf-input { font-size: 16px; min-height: 44px; }
     }
   `],
 })
@@ -629,9 +629,9 @@ export class ExpenseTrackerComponent {
     return `<span class="${cls}">${e.kind === 'cash_in' ? '+' : ''}${this.esc(inr(e.amount))}</span>`;
   }
   private rowBtn(act: string, label: string, path: string, aria: string, web: boolean) {
-    return `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="${act}" aria-label="${this.esc(aria)}" title="${this.esc(label)}">` +
+    return `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="${act}" aria-label="${this.esc(aria)}" title="${this.esc(label)}">` +
       `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>` +
-      `<span class="nd-rowact__t">${this.esc(label)}</span></button>`;
+      `<span class="pf-rowact__t">${this.esc(label)}</span></button>`;
   }
   private billsHtml(e: ExpenseEntry) {
     const n = e.attachments.length;

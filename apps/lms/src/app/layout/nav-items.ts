@@ -46,7 +46,7 @@ export interface NavItem {
    * Only render when the tenant is entitled to this product module
    * (TenantEntitlementsService.moduleEnabled). Gates whole work areas
    * (inventory / messages / home collection / reports) that a tenant's plan
-   * may not include. AND-ed with the other visibility checks.
+   * may not include. APF-ed with the other visibility checks.
    */
   module?: ModuleKey;
 }

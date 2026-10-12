@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type ColDef } from 'ag-grid-community';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { labToday } from '../../../shared/utils/lab-clock';
@@ -32,63 +32,63 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
 @Component({
   selector: 'pf-pharmacy-returns',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, NdDateComponent, SelectComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
+  imports: [AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
     <section class="pf-band-page ph">
       <pf-hero-band [back]="true" backTo="/opd/pharmacy" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx ph-ctx"><span class="nd-ctx__primary">Returns</span><span class="nd-ctx__chip nd-num">{{ rows().length }} recent</span></div>
+        <div band-search class="pf-ctx ph-ctx"><span class="pf-ctx__primary">Returns</span><span class="pf-ctx__chip pf-num">{{ rows().length }} recent</span></div>
         <pf-pharmacy-sections band-tools active="returns"></pf-pharmacy-sections>
       </pf-hero-band>
       <div class="ph-body">
-        <section class="nd-card" aria-labelledby="ph-rt-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></span>
-            <span class="nd-card__label" id="ph-rt-t">Returns ledger</span>
+        <section class="pf-card" aria-labelledby="ph-rt-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></span>
+            <span class="pf-card__label" id="ph-rt-t">Returns ledger</span>
           </header>
-          <div class="nd-card__body ph-card-body--flush">
+          <div class="pf-card__body ph-card-body--flush">
             <ag-grid-angular class="ph-grid" style="height:100%" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="cols" [overlayNoRowsTemplate]="noRows"></ag-grid-angular>
           </div>
         </section>
-        <aside class="nd-card" aria-labelledby="ph-rs-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
-            <span class="nd-card__label" id="ph-rs-t">New return</span>
-            <span class="nd-card__spacer"></span>
-            <div class="nd-seg" role="radiogroup" aria-label="Return kind">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'patient'" (click)="kind.set('patient')">From patient</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'supplier'" (click)="kind.set('supplier')">To supplier</button>
+        <aside class="pf-card" aria-labelledby="ph-rs-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="pf-card__label" id="ph-rs-t">New return</span>
+            <span class="pf-card__spacer"></span>
+            <div class="pf-seg" role="radiogroup" aria-label="Return kind">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'patient'" (click)="kind.set('patient')">From patient</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'supplier'" (click)="kind.set('supplier')">To supplier</button>
             </div>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @if (kind() === 'patient') {
-              <div class="nd-field"><span class="nd-field__lbl">Sale date</span><pf-nd-date label="Sale date" [value]="day()" [max]="today" (valueChange)="setDay($event)"></pf-nd-date></div>
+              <div class="pf-field"><span class="pf-field__lbl">Sale date</span><pf-date label="Sale date" [value]="day()" [max]="today" (valueChange)="setDay($event)"></pf-date></div>
               @if (!sale()) {
                 @for (s of sales(); track s.id) {
                   <button type="button" class="ph-row press" (click)="openSale(s)">
-                    <span class="ph-row__main"><span class="ph-row__name">{{ s.customerName || 'Customer' }}</span><span class="ph-row__meta nd-num">{{ s.number }} · {{ s.lines }} {{ s.lines === 1 ? 'item' : 'items' }}</span></span>
+                    <span class="ph-row__main"><span class="ph-row__name">{{ s.customerName || 'Customer' }}</span><span class="ph-row__meta pf-num">{{ s.number }} · {{ s.lines }} {{ s.lines === 1 ? 'item' : 'items' }}</span></span>
                     <span class="ph-row__end">
-                      <span class="nd-num">{{ inr(s.total) }}</span>
+                      <span class="pf-num">{{ inr(s.total) }}</span>
                       <span class="ph-dot" [attr.data-tone]="s.paid >= s.total ? 'done' : 'warn'">{{ s.paid >= s.total ? 'Paid' : 'Due ' + inr(s.total - s.paid, false) }}</span>
                     </span>
                   </button>
                 } @empty { <p class="ph-sub">No completed sales that day.</p> }
               } @else {
-                <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ sale()!.customerName || 'Customer' }}</span><span class="ph-row__meta nd-num">{{ sale()!.number }}</span></span>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="sale.set(null)">Change</button></div>
-                <div class="nd-field"><span class="nd-field__lbl">Item</span><pf-select [options]="lineOpts()" [value]="lineId()" (valueChange)="lineId.set($event)" placeholder="Which item?"></pf-select></div>
+                <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ sale()!.customerName || 'Customer' }}</span><span class="ph-row__meta pf-num">{{ sale()!.number }}</span></span>
+                  <button type="button" class="pf-btn pf-btn--tertiary" (click)="sale.set(null)">Change</button></div>
+                <div class="pf-field"><span class="pf-field__lbl">Item</span><pf-select [options]="lineOpts()" [value]="lineId()" (valueChange)="lineId.set($event)" placeholder="Which item?"></pf-select></div>
                 <div class="ph-fields">
-                  <div class="nd-field"><label class="nd-field__lbl" for="ph-rpq">Quantity back</label><input id="ph-rpq" class="nd-input nd-num" type="number" min="1" [max]="maxBack()" [value]="qty() || ''" (input)="qty.set(+$any($event.target).value)" /></div>
-                  <div class="nd-field"><label class="nd-field__lbl" for="ph-rpr">Reason</label><input id="ph-rpr" class="nd-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Dose changed" /></div>
+                  <div class="pf-field"><label class="pf-field__lbl" for="ph-rpq">Quantity back</label><input id="ph-rpq" class="pf-input pf-num" type="number" min="1" [max]="maxBack()" [value]="qty() || ''" (input)="qty.set(+$any($event.target).value)" /></div>
+                  <div class="pf-field"><label class="pf-field__lbl" for="ph-rpr">Reason</label><input id="ph-rpr" class="pf-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Dose changed" /></div>
                 </div>
-                <div class="nd-field"><span class="nd-field__lbl">Refund by</span>
+                <div class="pf-field"><span class="pf-field__lbl">Refund by</span>
                   @if (!billPaid()) {
                     <p class="ph-sub">Nothing was paid on this bill — the return just reduces it, no refund.</p>
                   } @else if (canRefund()) {
-                    <div class="nd-seg" role="radiogroup" aria-label="Refund by">
+                    <div class="pf-seg" role="radiogroup" aria-label="Refund by">
                       @for (m of refundModes; track m.v) {
-                        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="refundMode() === m.v" [attr.aria-pressed]="refundMode() === m.v" (click)="refundMode.set(m.v)">{{ m.l }}</button>
+                        <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="refundMode() === m.v" [attr.aria-pressed]="refundMode() === m.v" (click)="refundMode.set(m.v)">{{ m.l }}</button>
                       }
                     </div>
                   } @else {
@@ -103,12 +103,12 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
             } @else {
               @if (sDrug(); as d) {
                 <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ d.name }}</span><span class="ph-row__meta">{{ d.generic }}</span></span>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="sDrug.set(null)">Change</button></div>
-                <div class="nd-field"><span class="nd-field__lbl">Batch</span><pf-select [options]="batchOpts()" [value]="batchId()" (valueChange)="batchId.set($event)" placeholder="Which batch?"></pf-select></div>
+                  <button type="button" class="pf-btn pf-btn--tertiary" (click)="sDrug.set(null)">Change</button></div>
+                <div class="pf-field"><span class="pf-field__lbl">Batch</span><pf-select [options]="batchOpts()" [value]="batchId()" (valueChange)="batchId.set($event)" placeholder="Which batch?"></pf-select></div>
                 <div class="ph-fields">
-                  <div class="nd-field"><label class="nd-field__lbl" for="ph-rsq">Quantity</label><input id="ph-rsq" class="nd-input nd-num" type="number" min="1" [value]="qty() || ''" (input)="qty.set(+$any($event.target).value)" /></div>
-                  <div class="nd-field"><span class="nd-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="supplierId()" (valueChange)="supplierId.set($event)" placeholder="Batch supplier"></pf-select></div>
-                  <div class="nd-field ph-span"><label class="nd-field__lbl" for="ph-rsr">Reason</label><input id="ph-rsr" class="nd-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Near expiry, damaged" /></div>
+                  <div class="pf-field"><label class="pf-field__lbl" for="ph-rsq">Quantity</label><input id="ph-rsq" class="pf-input pf-num" type="number" min="1" [value]="qty() || ''" (input)="qty.set(+$any($event.target).value)" /></div>
+                  <div class="pf-field"><span class="pf-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="supplierId()" (valueChange)="supplierId.set($event)" placeholder="Batch supplier"></pf-select></div>
+                  <div class="pf-field ph-span"><label class="pf-field__lbl" for="ph-rsr">Reason</label><input id="ph-rsr" class="pf-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Near expiry, damaged" /></div>
                 </div>
               } @else {
                 <pf-pharmacy-drug-picker [down]="true" placeholder="Which drug goes back?" (picked)="pickDrug($event)"></pf-pharmacy-drug-picker>
@@ -118,9 +118,9 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
           @if (kind() === 'patient' && refundBlocked()) {
             <p class="ph-sub" role="alert">You don't have permission to process a refund on this paid sale — ask someone who does.</p>
           }
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="clear()">Clear</button>
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()" [disabled]="!ready() || busy()" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="submit()">Record return</button>
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="clear()">Clear</button>
+            <button type="button" class="pf-btn" [class.pf-btn--primary]="ready()" [class.pf-btn--secondary]="!ready()" [disabled]="!ready() || busy()" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="submit()">Record return</button>
           </div>
         </aside>
       </div>

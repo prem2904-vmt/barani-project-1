@@ -99,7 +99,7 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
           <pf-select size="sm" [searchable]="true" [options]="addOptions()" [value]="''"
                      placeholder="Add a specimen from the master…" (valueChange)="add($event)"></pf-select>
         </div>
-        <span class="pf-as__count"><span class="nd-num">{{ rows().length }}</span> allowed</span>
+        <span class="pf-as__count"><span class="pf-num">{{ rows().length }}</span> allowed</span>
       </div>
       @if (inherited()) {
         <p class="pf-hint pf-as__note">Read from the Admin Test Master. Your first save copies this list to the lab; the master is never changed.</p>
@@ -141,31 +141,31 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
                              placeholder="Test's own" (valueChange)="set(r.code, { container: $event })"></pf-select>
                 </td>
                 <td class="pf-as__num" data-label="Vol. (ml)">
-                  <input type="number" class="nd-input nd-num pf-as__in" min="0" step="0.5" inputmode="decimal"
+                  <input type="number" class="pf-input pf-num pf-as__in" min="0" step="0.5" inputmode="decimal"
                          [attr.aria-label]="'Volume of ' + r.name" [ngModel]="r.volumeMl"
                          (ngModelChange)="set(r.code, { volumeMl: $event === '' || $event == null ? null : +$event })" />
                 </td>
                 <!-- Free text grows with its content (ND: no truncation): an
                      auto-sizing textarea, one line when short. -->
                 <td data-label="Transport">
-                  <textarea rows="1" class="nd-input pf-as__in pf-as__grow" [attr.aria-label]="'Transport for ' + r.name"
+                  <textarea rows="1" class="pf-input pf-as__in pf-as__grow" [attr.aria-label]="'Transport for ' + r.name"
                             [ngModel]="r.transport" (ngModelChange)="set(r.code, { transport: $event })"
                             (input)="grow($event)" (focus)="grow($event)"></textarea>
                 </td>
                 <td data-label="Instruction">
-                  <textarea rows="1" class="nd-input pf-as__in pf-as__grow" [attr.aria-label]="'Instruction for ' + r.name"
+                  <textarea rows="1" class="pf-input pf-as__in pf-as__grow" [attr.aria-label]="'Instruction for ' + r.name"
                             [ngModel]="r.instruction" (ngModelChange)="set(r.code, { instruction: $event })"
                             (input)="grow($event)" (focus)="grow($event)"></textarea>
                 </td>
                 <td class="pf-as__c" data-label="Default">
-                  <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="r.isDefault"
+                  <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="r.isDefault"
                           [attr.aria-label]="'Default: ' + r.name" (click)="setDefault(r.code, !r.isDefault)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                 </td>
                 @if (showPrice()) {
                   <td class="pf-as__num" data-label="Price (₹)">
-                    <input type="number" class="nd-input nd-num pf-as__in" min="0" step="0.01" inputmode="decimal"
+                    <input type="number" class="pf-input pf-num pf-as__in" min="0" step="0.01" inputmode="decimal"
                            [attr.aria-label]="'Price of ' + r.name" [placeholder]="basePriceText()"
                            [ngModel]="r.price" (ngModelChange)="set(r.code, { price: $event === '' || $event == null ? '' : +$event })" />
                   </td>

@@ -35,27 +35,27 @@ const OPERATORS: OperatorOption[] = [
     @for (rule of rules(); let i = $index; track i) {
       <div class="cb-row">
         @if (i > 0) {
-          <span class="nd-seg cb-logicseg" role="radiogroup" aria-label="Combine rules with">
-            <button type="button" class="nd-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'AND'" (click)="setLogic('AND')">AND</button>
-            <button type="button" class="nd-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'OR'" (click)="setLogic('OR')">OR</button>
+          <span class="pf-seg cb-logicseg" role="radiogroup" aria-label="Combine rules with">
+            <button type="button" class="pf-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'AND'" (click)="setLogic('AND')">AND</button>
+            <button type="button" class="pf-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'OR'" (click)="setLogic('OR')">OR</button>
           </span>
         }
 
         <div class="cb-fields">
-          <div class="nd-field cb-field">
-            <span class="nd-field__lbl">Field</span>
+          <div class="pf-field cb-field">
+            <span class="pf-field__lbl">Field</span>
             <pf-select [options]="fieldOptions()" [value]="rule.field" placeholder="— pick —"
                        (valueChange)="patch(i, { field: $any($event) })"></pf-select>
           </div>
-          <div class="nd-field cb-operator">
-            <span class="nd-field__lbl">Operator</span>
+          <div class="pf-field cb-operator">
+            <span class="pf-field__lbl">Operator</span>
             <pf-select [options]="operatorOptions" [value]="rule.operator"
                        (valueChange)="patch(i, { operator: $any($event) })"></pf-select>
           </div>
           @if (needsValue(rule.operator)) {
-            <label class="nd-field cb-value">
-              <span class="nd-field__lbl">Value</span>
-              <input type="text" class="nd-input" [ngModel]="rule.value"
+            <label class="pf-field cb-value">
+              <span class="pf-field__lbl">Value</span>
+              <input type="text" class="pf-input" [ngModel]="rule.value"
                      (ngModelChange)="patch(i, { value: coerceValue($event) })" />
             </label>
           }
@@ -66,7 +66,7 @@ const OPERATORS: OperatorOption[] = [
       </div>
     }
 
-    <button type="button" class="nd-btn nd-btn--tertiary cb-add" (click)="addRow()">+ Add condition</button>
+    <button type="button" class="pf-btn pf-btn--tertiary cb-add" (click)="addRow()">+ Add condition</button>
   `,
   styles: [`
     :host { display: flex; flex-direction: column; gap: 8px; }
@@ -79,7 +79,7 @@ const OPERATORS: OperatorOption[] = [
     .cb-operator, .cb-value { flex: 0 1 170px; }
     .cb-remove { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px;
       border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .cb-remove:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .cb-remove:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
     .cb-add { align-self: flex-start; height: 32px; min-height: 32px; font-size: 12.5px; }
     @media (pointer: coarse) {
       .cb-remove { width: 44px; height: 44px; }

@@ -19,25 +19,25 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
   imports: [SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="nd-card__head">
-      <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5"/></svg></span>
-      <span class="nd-card__label">{{ title() }}</span>
-      <span class="fi-count nd-num">{{ count() }}</span>
-      <span class="nd-card__spacer"></span>
+    <header class="pf-card__head">
+      <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5"/></svg></span>
+      <span class="pf-card__label">{{ title() }}</span>
+      <span class="fi-count pf-num">{{ count() }}</span>
+      <span class="pf-card__spacer"></span>
       @if (mode() === 'question') {
-        <button type="button" class="nd-btn nd-btn--icon fi-x" (click)="closed.emit()" aria-label="Done — close question settings">
+        <button type="button" class="pf-btn pf-btn--icon fi-x" (click)="closed.emit()" aria-label="Done — close question settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       }
     </header>
-    <div class="nd-card__body fi">
+    <div class="pf-card__body fi">
       @switch (mode()) {
         @case ('try') {
           <p class="fi-lead">Answer the way a doctor would. Questions with a condition appear as you answer.</p>
           <p class="fi-note">Nothing here is saved or sent. It's the doctor's view, with your draft changes.</p>
           <div class="fi-row">
-            <button type="button" class="nd-btn nd-btn--secondary press" (click)="resetTry.emit()">Reset answers</button>
-            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="stopTry.emit()">Back to editing</button>
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="resetTry.emit()">Reset answers</button>
+            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="stopTry.emit()">Back to editing</button>
           </div>
         }
         @case ('print') {
@@ -45,15 +45,15 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
           @for (q of list(); track q.key) {
             <div class="fi-pr">
               <span class="fi-pr__t">{{ q.label }}<small>{{ typeName(q) }}</small></span>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="q.print !== false" [attr.aria-label]="'Print ' + q.label"
-                      (click)="emit(patchQuestion(list(), q.key, { print: q.print === false }))"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="q.print !== false" [attr.aria-label]="'Print ' + q.label"
+                      (click)="emit(patchQuestion(list(), q.key, { print: q.print === false }))"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
             </div>
           }
           <p class="fi-note">Vitals, diagnosis, prescription, investigations and the review date always print.</p>
         }
         @case ('form') {
           <p class="fi-lead">Click any question on the screen to change it — or type a sentence under <b>Add a question</b>.</p>
-          <button type="button" class="nd-btn nd-btn--secondary press" (click)="browse.emit()">Browse answer types</button>
+          <button type="button" class="pf-btn pf-btn--secondary press" (click)="browse.emit()">Browse answer types</button>
           <div class="fi-sec">Built into every consult</div>
           @for (b of builtIns; track b.key) {
             <div class="fi-built">
@@ -64,8 +64,8 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
           }
           <p class="fi-note">Not questions on a form — every consult has them, whichever form a service uses.</p>
           <div class="fi-sec">Doctors</div>
-          <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="allowAddons()" (click)="allowAddonsChange.emit(!allowAddons())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Doctors may add their own questions</button>
+          <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="allowAddons()" (click)="allowAddonsChange.emit(!allowAddons())">
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Doctors may add their own questions</button>
           <p class="fi-note">On top of yours — they can't remove or change your questions.</p>
           <div class="fi-sec">Versions</div>
           <p class="fi-note">Changes save as a draft on their own. <b>Publish</b> makes the next version for new consults; past consults keep the version they were filled with.</p>
@@ -73,7 +73,7 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
         @case ('question') {
           @if (q(); as f) {
             <label class="fi-fld"><span class="fi-lbl">Question</span>
-              <input class="nd-input" [value]="f.label" maxlength="200" autocomplete="off" (input)="patch({ label: $any($event.target).value || f.label })"></label>
+              <input class="pf-input" [value]="f.label" maxlength="200" autocomplete="off" (input)="patch({ label: $any($event.target).value || f.label })"></label>
             <div class="fi-fld"><span class="fi-lbl">Answer type</span>
               <button type="button" class="fi-type press" (click)="changeType.emit()">
                 <span class="fi-type__t"><b>{{ f.sides ? 'Left & right · ' + Q_TYPES[f.type][0] : Q_TYPES[f.type][0] }}</b><small>{{ Q_TYPES[f.sides ? 'lr' : f.type][1] }}</small></span>
@@ -83,34 +83,34 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
               <div class="fi-fld"><span class="fi-lbl">Choices</span>
                 @for (c of f.choices ?? []; track $index; let k = $index) {
                   <span class="fi-ch">
-                    <input class="nd-input" [value]="c" [attr.aria-label]="'Choice ' + (k + 1)" (change)="setChoice(k, $any($event.target).value)">
-                    <button type="button" class="nd-btn nd-btn--icon" (click)="removeChoice(k)" [disabled]="(f.choices?.length ?? 0) <= 1" [attr.aria-label]="'Remove ' + c">
+                    <input class="pf-input" [value]="c" [attr.aria-label]="'Choice ' + (k + 1)" (change)="setChoice(k, $any($event.target).value)">
+                    <button type="button" class="pf-btn pf-btn--icon" (click)="removeChoice(k)" [disabled]="(f.choices?.length ?? 0) <= 1" [attr.aria-label]="'Remove ' + c">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                   </span>
                 }
-                <button type="button" class="nd-btn nd-btn--tertiary fi-add press" (click)="addChoice()">+ Add a choice</button>
+                <button type="button" class="pf-btn pf-btn--tertiary fi-add press" (click)="addChoice()">+ Add a choice</button>
               </div>
             }
             @if (f.type === 'num' || f.type === 'table') {
               <label class="fi-fld"><span class="fi-lbl">Unit</span>
-                <input class="nd-input" [value]="f.unit ?? ''" placeholder="e.g. kg, mm, days" maxlength="24" autocomplete="off" (input)="patch({ unit: $any($event.target).value || undefined })"></label>
+                <input class="pf-input" [value]="f.unit ?? ''" placeholder="e.g. kg, mm, days" maxlength="24" autocomplete="off" (input)="patch({ unit: $any($event.target).value || undefined })"></label>
             }
             @if (f.type === 'scale') {
               <div class="fi-fld"><span class="fi-lbl">Goes from</span>
-                <span class="fi-2"><input class="nd-input nd-num" inputmode="numeric" aria-label="Lowest" [value]="f.min ?? 0" (change)="setScale('min', $any($event.target).value)">
-                  <span>to</span><input class="nd-input nd-num" inputmode="numeric" aria-label="Highest" [value]="f.max ?? 10" (change)="setScale('max', $any($event.target).value)"></span></div>
+                <span class="fi-2"><input class="pf-input pf-num" inputmode="numeric" aria-label="Lowest" [value]="f.min ?? 0" (change)="setScale('min', $any($event.target).value)">
+                  <span>to</span><input class="pf-input pf-num" inputmode="numeric" aria-label="Highest" [value]="f.max ?? 10" (change)="setScale('max', $any($event.target).value)"></span></div>
             }
             @if (f.type === 'table') {
               <label class="fi-fld"><span class="fi-lbl">Columns</span>
-                <input class="nd-input" [value]="(f.cols ?? []).join(', ')" (change)="patch({ cols: splitList($any($event.target).value) })"></label>
+                <input class="pf-input" [value]="(f.cols ?? []).join(', ')" (change)="patch({ cols: splitList($any($event.target).value) })"></label>
               <label class="fi-fld"><span class="fi-lbl">Rows</span>
-                <input class="nd-input" [value]="(f.rows ?? []).join(', ')" (change)="patch({ rows: splitList($any($event.target).value) })"></label>
+                <input class="pf-input" [value]="(f.rows ?? []).join(', ')" (change)="patch({ rows: splitList($any($event.target).value) })"></label>
             }
             @if (f.type === 'diagram') {
               <div class="fi-fld"><span class="fi-lbl">Outline</span>
-                <span class="nd-seg" role="radiogroup" aria-label="Outline">
+                <span class="pf-seg" role="radiogroup" aria-label="Outline">
                   @for (o of shapes; track o.value) {
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(f.shape ?? 'body') === o.value" (click)="patch({ shape: o.value })">{{ o.label }}</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="(f.shape ?? 'body') === o.value" (click)="patch({ shape: o.value })">{{ o.label }}</button>
                   }
                 </span></div>
             }
@@ -136,8 +136,8 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
             }
             @if (f.type !== 'media' && f.type !== 'table' && f.type !== 'calc') {
               <div class="fi-fld">
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!f.sides" (click)="emit(setSides(list(), f.key, !f.sides))">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Left &amp; right sides?</button>
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!!f.sides" (click)="emit(setSides(list(), f.key, !f.sides))">
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Left &amp; right sides?</button>
                 <span class="fi-note">Ask for right and left separately — ears, eyes, nostrils, limbs.</span></div>
             }
             <div class="fi-fld"><span class="fi-lbl">Show only when…</span>
@@ -146,24 +146,24 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
                   <pf-select size="sm" [options]="sourceOptions()" [value]="f.when.key" (valueChange)="setCondSource($event)"></pf-select>
                   <span class="fi-cond__is">is</span>
                   <pf-select size="sm" [options]="valueOptions()" [value]="f.when.value" (valueChange)="patch({ when: { key: f.when.key, value: $event } })"></pf-select>
-                  <button type="button" class="nd-btn nd-btn--icon" (click)="patch({ when: null })" aria-label="Remove the condition">
+                  <button type="button" class="pf-btn pf-btn--icon" (click)="patch({ when: null })" aria-label="Remove the condition">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                 </span>
                 <span class="fi-note">Hidden until the doctor answers “{{ srcLabel() }}” with {{ f.when.value }}.</span>
               } @else if (sources().length) {
-                <button type="button" class="nd-btn nd-btn--secondary press" (click)="addCondition()">Add a condition</button>
+                <button type="button" class="pf-btn pf-btn--secondary press" (click)="addCondition()">Add a condition</button>
                 <span class="fi-note">e.g. show “Discharge type” only when “Ear discharge” is Yes.</span>
               } @else {
                 <span class="fi-note">Needs a Yes / No or Pick-one question above this one.</span>
               }
             </div>
             <div class="fi-box">
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="f.print !== false" (click)="patch({ print: f.print === false })">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Print on the report?</button>
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="f.print !== false" (click)="patch({ print: f.print === false })">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Print on the report?</button>
               <span class="fi-note">On the consult summary and prescription the patient takes home.</span>
               @if (f.type !== 'calc') {
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!f.required" (click)="patch({ required: !f.required })">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Required</button>
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!!f.required" (click)="patch({ required: !f.required })">
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Required</button>
                 <span class="fi-note">The doctor must answer before completing the consult.</span>
               }
             </div>
@@ -184,25 +184,25 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
     .fi-fld { display: flex; flex-direction: column; gap: 6px; }
     .fi-lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .fi-type { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px; text-align: left; border-radius: 12px;
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); font: inherit; cursor: pointer; }
-    .fi-type:hover { border-color: var(--nd-sel-border); }
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); font: inherit; cursor: pointer; }
+    .fi-type:hover { border-color: var(--pf-sel-border); }
     .fi-type__t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; font-size: 13px; }
     .fi-type__t small { font-size: 12px; color: var(--text-tertiary); }
     .fi-type__c { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
     .fi-ch { display: flex; gap: 6px; align-items: center; }
     .fi-add { align-self: flex-start; }
     .fi-2 { display: flex; align-items: center; gap: 8px; }
-    .fi-2 .nd-input { width: 80px; }
+    .fi-2 .pf-input { width: 80px; }
     .fi-cond { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .fi-cond pf-select { min-width: 120px; flex: 1 1 120px; }
     .fi-cond__is { font-size: 12.5px; color: var(--text-secondary); }
-    .fi-box { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--nd-line); }
-    .fi-pr, .fi-built { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 0; border-bottom: 1px solid var(--nd-line); }
+    .fi-box { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--pf-line); }
+    .fi-pr, .fi-built { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 0; border-bottom: 1px solid var(--pf-line); }
     .fi-pr__t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; font-size: 13px; color: var(--text-primary); }
     .fi-pr__t small { font-size: 12px; color: var(--text-tertiary); }
-    .fi-built__ic { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--nd-chip-bg); color: var(--text-secondary); flex: none; }
+    .fi-built__ic { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--pf-chip-bg); color: var(--text-secondary); flex: none; }
     .fi-lock { color: var(--text-tertiary); flex: none; }
-    @media (max-width: 640px) { .nd-input { font-size: 16px; } }
+    @media (max-width: 640px) { .pf-input { font-size: 16px; } }
   `],
 })
 export class OpdFormInspectorComponent {

@@ -2657,8 +2657,8 @@
 .pf-us__tenter { display: none; }
 :host-context(html.pf-keys-open) .pf-us__tenter {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--nd-line, #e5e7eb);
-  background: var(--nd-card-bg, #fff); color: var(--text-secondary);
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pf-line, #e5e7eb);
+  background: var(--pf-card-bg, #fff); color: var(--text-secondary);
   font-size: 11.5px; font-weight: 600; white-space: nowrap;
 }
 .pf-us__tcheck {
@@ -3129,8 +3129,8 @@
    results fade + scale up from 0.97 with rows staggered ~18ms, and on touch
    a Cancel slides in. Close is the reverse, quicker. Reduced motion: none. */
 :host {
-  --pf-spring: var(--nd-spring);
-  --pf-spring-bounce: var(--nd-spring-bounce);
+  --pf-spring: var(--pf-spring);
+  --pf-spring-bounce: var(--pf-spring-bounce);
 }
 
 /* Match the stock band input + icon (hero-band's .pf-hb__input / __glass). */
@@ -3264,14 +3264,14 @@ pf-package-suggest { flex: none; margin-top: auto; }
 }
 
 /* ════ Round 10 (owner): primary only for the main CTA; neutral controls ════ */
-/* Tokens come from the nd-kit (shared/styles/_nd-kit.scss, light + dark). */
+/* Tokens come from the pf-kit (shared/styles/_pf-kit.scss, light + dark). */
 :host {
-  --pf-neutral-sel-bg: var(--nd-sel-bg);
-  --pf-neutral-sel-border: var(--nd-sel-border);
-  --pf-neutral-chip-bg: var(--nd-chip-bg);
-  --pf-toggle-on: var(--nd-switch-on);
-  --pf-toggle-off: var(--nd-toggle-off);
-  --pf-toggle-urgent: var(--nd-toggle-urgent);
+  --pf-neutral-sel-bg: var(--pf-sel-bg);
+  --pf-neutral-sel-border: var(--pf-sel-border);
+  --pf-neutral-chip-bg: var(--pf-chip-bg);
+  --pf-toggle-on: var(--pf-switch-on);
+  --pf-toggle-off: var(--pf-toggle-off);
+  --pf-toggle-urgent: var(--pf-toggle-urgent);
 }
 
 /* Active scope tile: a subtle violet tint, not a solid primary fill. */
@@ -3369,15 +3369,15 @@ pf-package-suggest { flex: none; margin-top: auto; }
 /* ── Phone "Review & Pay" sheet: ~92% tall, grab handle, inner scroll ── */
 .pf-sheet-handle { display: none; }
 @media (max-width: 1023px) {
-  :host .pf-cart-backdrop { z-index: 79; bottom: var(--nd-nav-h, 0px); }
+  :host .pf-cart-backdrop { z-index: 79; bottom: var(--pf-nav-h, 0px); }
   :host .pf-cart-drawer.pf-cart-drawer--tall {
     top: auto;
     /* Sits ON TOP of the always-visible bottom navbar. */
-    bottom: var(--nd-nav-h, 0px);
+    bottom: var(--pf-nav-h, 0px);
     left: 0;
     right: 0;
-    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
-    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
+    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
     border-radius: 20px 20px 0 0;
     padding-bottom: 0;
     z-index: 80;
@@ -3495,14 +3495,14 @@ pf-package-suggest { flex: none; margin-top: auto; }
 .pf-cart-line__save { color: var(--violet-text, #6d28d9); }
 .pf-cart-collected {
   color: var(--text-secondary);
-  background: var(--nd-chip-bg);
-  border: 1px solid var(--nd-line);
+  background: var(--pf-chip-bg);
+  border: 1px solid var(--pf-line);
 }
-.pf-crt--included { background: var(--nd-chip-bg); }
+.pf-crt--included { background: var(--pf-chip-bg); }
 .pf-cart-amount--included,
 .pf-cart-meta--included { color: var(--text-tertiary) !important; }
 .pf-paid__msg { color: var(--text-primary) !important; }
 .pf-paid__msg svg { color: var(--violet-text, #6d28d9); }
 .pf-paid__sumline--done span:last-child { color: var(--violet-text, #6d28d9) !important; }
 .pf-oc-act--wa { color: var(--text-primary); }
-.pf-collect-icon { box-shadow: var(--nd-shadow-sm) !important; }
+.pf-collect-icon { box-shadow: var(--pf-shadow-sm) !important; }

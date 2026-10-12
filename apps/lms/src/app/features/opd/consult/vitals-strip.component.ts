@@ -98,13 +98,13 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
           <button type="button" class="vc__chip" role="listitem" [attr.data-flag]="f" [hidden]="i >= shown()" (click)="openTrend($event, k)"
                   [attr.aria-label]="label(k)[0] + ' ' + text(k) + ' ' + label(k)[1] + (f ? ', ' + f : '') + '. Show trend'">
             <span class="vc__k">{{ label(k)[0] }}</span>
-            <b class="nd-num">{{ text(k) }}</b>
+            <b class="pf-num">{{ text(k) }}</b>
             @if (label(k)[1]) { <span class="vc__u">{{ label(k)[1] }}</span> }
             @if (f) { <span class="vc__w">· {{ f === 'high' ? 'High' : 'Low' }}</span> }
           </button>
         }
         @if (shown() < keys().length) {
-          <button type="button" class="vc__chip vc__more nd-num" (click)="openAll($event)" [attr.aria-label]="'Show all ' + keys().length + ' vitals'">+{{ keys().length - shown() }}</button>
+          <button type="button" class="vc__chip vc__more pf-num" (click)="openAll($event)" [attr.aria-label]="'Show all ' + keys().length + ' vitals'">+{{ keys().length - shown() }}</button>
         }
       </div>
     } @else {
@@ -118,7 +118,7 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
       <pf-rx-popover [anchor]="a" title="Today's vitals" [minWidth]="260" (closed)="all.set(null)">
         <div class="vt">
           @for (k of keys(); track k) {
-            <div class="vt__row" [attr.data-flag]="flag(k)"><span>{{ label(k)[0] }}</span><b class="nd-num">{{ text(k) }} {{ label(k)[1] }}@if (flag(k); as f) { · {{ f === 'high' ? 'High' : 'Low' }} }</b></div>
+            <div class="vt__row" [attr.data-flag]="flag(k)"><span>{{ label(k)[0] }}</span><b class="pf-num">{{ text(k) }} {{ label(k)[1] }}@if (flag(k); as f) { · {{ f === 'high' ? 'High' : 'Low' }} }</b></div>
           }
           @if (vitals()?.recordedAt) { <p class="vt__prev">{{ vitals()?.recordedByName || 'Recorded' }} · {{ vitals()?.recordedAt | date:'h:mm a' }}</p> }
         </div>
@@ -143,12 +143,12 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
     }
   `,
   styles: [`
-    :host { display: block; min-width: 0; --vc-warn: #b45309; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, var(--nd-card-bg)); --vc-warn-line: color-mix(in srgb, #f59e0b 45%, transparent); }
+    :host { display: block; min-width: 0; --vc-warn: #b45309; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, var(--pf-card-bg)); --vc-warn-line: color-mix(in srgb, #f59e0b 45%, transparent); }
     :host-context(html.dark), :host-context([data-theme='dark']) { --vc-warn: #fbbf24; --vc-warn-bg: color-mix(in srgb, #f59e0b 12%, transparent); }
     .vc { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
     .vc--scroll { overflow-x: auto; scrollbar-width: none; }
     .vc--scroll::-webkit-scrollbar { display: none; }
-    .vc__chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: var(--nd-radius-chip, 8px);
+    .vc__chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: var(--pf-radius-chip, 8px);
       border: 1px solid transparent; background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent);
       font: inherit; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; cursor: pointer; }
     .vc__chip[hidden] { display: none; }
@@ -158,7 +158,7 @@ export function vitalDelta(key: VitalKey, cur: ConsultVitals | null | undefined,
     .vc__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .vc__chip[data-flag] { background: var(--vc-warn-bg); border-color: var(--vc-warn-line); color: var(--vc-warn); }
     .vc__chip[data-flag] b, .vc__chip[data-flag] .vc__w { color: var(--vc-warn); font-weight: 600; }
-    .vc__more { border: 1px dashed var(--nd-line); background: none; color: var(--text-secondary); font-weight: 600; }
+    .vc__more { border: 1px dashed var(--pf-line); background: none; color: var(--text-secondary); font-weight: 600; }
     .vc--none { gap: 8px; min-height: 28px; font-size: 12.5px; color: var(--text-tertiary); }
     .vt { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; color: var(--violet-text, #6d28d9); }
     .vt__row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--text-tertiary); }

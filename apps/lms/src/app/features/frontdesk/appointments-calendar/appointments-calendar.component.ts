@@ -21,12 +21,12 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { plural } from '../../../shared/utils/plural';
 import {
-  APPOINTMENTS_CALENDAR_ND_STYLES, ND_HOUR, apptStatusTone, apptStatusWord, apptTypeWord,
+  ND_HOUR, apptStatusTone, apptStatusWord, apptTypeWord,
   matchesAppointment, placeLanes
 } from './appointments-calendar.nd';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -59,14 +59,14 @@ const STATUS_CLASS: Record<string, string> = {
   selector: 'pf-appointments-calendar',
   standalone: true,
   imports: [BusyComponent, BusyDirective,
-    CommonModule, FormsModule, HeroBandComponent, NdDateComponent, SelectComponent,
+    CommonModule, FormsModule, HeroBandComponent, PfDateComponent, SelectComponent,
     ZoomSourceDirective, ZoomTargetDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'onEscape($event)' },
   template: `
     @if (theme.isNewDesign()) {
-    <!-- NEW DESIGN (ND-PATTERN §21): band (back · tenant · ONE primary) +
+    <!-- NEW DESIGN (PF-PATTERN §21): band (back · tenant · ONE primary) +
          the pill = search + the view switch + date navigation; CALENDAR is
          the main card, DAY (the chosen day's list → an appointment's
          detail) the collapsible RIGHT companion. ≤900px: one card at a
@@ -103,9 +103,9 @@ const STATUS_CLASS: Record<string, string> = {
         </label>
 
         <div band-tools class="pf-apc-tools">
-          <div class="nd-seg pf-apc-views" role="radiogroup" aria-label="Calendar view">
+          <div class="pf-seg pf-apc-views" role="radiogroup" aria-label="Calendar view">
             @for (v of allViews; track v) {
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === v"
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="view() === v"
                       [attr.tabindex]="view() === v ? 0 : -1"
                       (click)="setView(v)" (keydown)="onViewKey($event)">{{ viewLabel(v) }}</button>
             }
@@ -136,21 +136,21 @@ const STATUS_CLASS: Record<string, string> = {
 
           <!-- ══ MAIN card: the CALENDAR (≤900px Day view = the day list) ══ -->
           @if (narrow() && view() === 'day') {
-            <section class="nd-card pf-apc-main pf-apc-daycard" aria-label="Day">
+            <section class="pf-card pf-apc-main pf-apc-daycard" aria-label="Day">
               <ng-container *ngTemplateOutlet="dayHead; context: { collapsible: false }"></ng-container>
               <ng-container *ngTemplateOutlet="dayBody"></ng-container>
               @if (phone()) { <ng-container *ngTemplateOutlet="phoneCta"></ng-container> }
             </section>
           } @else {
-            <section class="nd-card pf-apc-main" aria-label="Calendar">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="calIcon"></ng-container></span>
-                <span class="nd-card__label">Calendar</span>
+            <section class="pf-card pf-apc-main" aria-label="Calendar">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="calIcon"></ng-container></span>
+                <span class="pf-card__label">Calendar</span>
                 <span class="pf-apc-range">{{ rangeLabel() }}</span>
-                <span class="nd-card__spacer"></span>
+                <span class="pf-card__spacer"></span>
                 @if (loading()) { <span class="pf-apc-count" role="status">Loading…</span> }
-                @else if (query().trim()) { <span class="pf-apc-count nd-num" role="status">{{ plural(filteredCount(), 'match', 'matches') }}</span> }
-                @else { <span class="pf-apc-count nd-num">{{ plural(filteredCount(), 'appointment') }}</span> }
+                @else if (query().trim()) { <span class="pf-apc-count pf-num" role="status">{{ plural(filteredCount(), 'match', 'matches') }}</span> }
+                @else { <span class="pf-apc-count pf-num">{{ plural(filteredCount(), 'appointment') }}</span> }
               </header>
               <div class="pf-apc-canvas">
                 @switch (view()) {
@@ -166,24 +166,24 @@ const STATUS_CLASS: Record<string, string> = {
           <!-- ══ SIDE card (RIGHT): the chosen DAY → an APPOINTMENT ════════ -->
           @if (!narrow()) {
             @if (sideCollapsed()) {
-              <aside class="nd-card pf-apc-strip" aria-label="Day">
+              <aside class="pf-card pf-apc-strip" aria-label="Day">
                 <button type="button" class="pf-apc-strip__btn" (click)="toggleSide()"
                         title="Show the day" aria-label="Show the day" aria-expanded="false">
-                  <span class="nd-btn nd-btn--icon pf-apc-strip__expand" aria-hidden="true">
+                  <span class="pf-btn pf-btn--icon pf-apc-strip__expand" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                          stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   </span>
-                  <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
+                  <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
                   <span class="pf-apc-strip__label">Day</span>
-                  <span class="pf-apc-strip__n nd-num">{{ dayList().length }}</span>
+                  <span class="pf-apc-strip__n pf-num">{{ dayList().length }}</span>
                 </button>
               </aside>
             } @else if (selectedAppt(); as a) {
-              <aside class="nd-card pf-apc-side pf-apc-detail" aria-label="Appointment" [pfZoomTarget]="a.id">
+              <aside class="pf-card pf-apc-side pf-apc-detail" aria-label="Appointment" [pfZoomTarget]="a.id">
                 <ng-container *ngTemplateOutlet="detailTpl; context: { a: a }"></ng-container>
               </aside>
             } @else {
-              <aside class="nd-card pf-apc-side" aria-label="Day">
+              <aside class="pf-card pf-apc-side" aria-label="Day">
                 <ng-container *ngTemplateOutlet="dayHead; context: { collapsible: true }"></ng-container>
                 <ng-container *ngTemplateOutlet="dayBody"></ng-container>
               </aside>
@@ -195,9 +195,9 @@ const STATUS_CLASS: Record<string, string> = {
       <!-- ≤900px: an appointment's detail is a sheet above the navbar. -->
       @if (narrow()) {
         @if (selectedAppt(); as a) {
-          <div class="nd-sheet-backdrop pf-apc-scrim" (click)="closeAppt()"></div>
-          <div class="nd-card nd-sheet pf-apc-sheet" role="dialog" aria-modal="true" aria-label="Appointment" [pfZoomTarget]="a.id">
-            <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <div class="pf-sheet-backdrop pf-apc-scrim" (click)="closeAppt()"></div>
+          <div class="pf-card pf-sheet pf-apc-sheet" role="dialog" aria-modal="true" aria-label="Appointment" [pfZoomTarget]="a.id">
+            <span class="pf-sheet__handle" aria-hidden="true"></span>
             <ng-container *ngTemplateOutlet="detailTpl; context: { a: a }"></ng-container>
           </div>
         }
@@ -206,14 +206,14 @@ const STATUS_CLASS: Record<string, string> = {
 
     <!-- ── DAY header + list (side card on web; main card ≤900px) ── -->
     <ng-template #dayHead let-collapsible="collapsible">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
-        <span class="nd-card__label">Day</span>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
+        <span class="pf-card__label">Day</span>
         <span class="pf-apc-range">{{ dayLabel() }}</span>
-        <span class="nd-card__spacer"></span>
-        <span class="pf-apc-count nd-num">{{ plural(dayList().length, 'appointment') }}</span>
+        <span class="pf-card__spacer"></span>
+        <span class="pf-apc-count pf-num">{{ plural(dayList().length, 'appointment') }}</span>
         @if (collapsible) {
-          <button type="button" class="nd-btn nd-btn--icon pf-apc-collapse" (click)="toggleSide()"
+          <button type="button" class="pf-btn pf-btn--icon pf-apc-collapse" (click)="toggleSide()"
                   title="Hide the day" aria-label="Hide the day" aria-expanded="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
@@ -227,32 +227,32 @@ const STATUS_CLASS: Record<string, string> = {
                   [attr.aria-pressed]="d.iso === cursorIso()" [attr.aria-label]="longDate(d.date)"
                   (click)="pickDay(d.iso)">
             <span class="pf-apc-strip7__dow">{{ d.weekday }}</span>
-            <span class="pf-apc-strip7__n nd-num">{{ d.label }}</span>
+            <span class="pf-apc-strip7__n pf-num">{{ d.label }}</span>
           </button>
         }
       </div>
     </ng-template>
 
     <ng-template #dayBody>
-      <div class="nd-card__body pf-apc-list">
+      <div class="pf-card__body pf-apc-list">
         @for (a of dayList(); track a.id; let i = $index) {
           <button type="button" class="pf-apc-row" [pfZoomSource]="a.id" [style.--i]="i"
                   [attr.aria-label]="rowLabel(a)" (click)="openAppt(a, $event)">
             <span class="pf-apc-row__who">
               <span class="pf-apc-row__name">{{ nameOf(a) }}</span>
-              <span class="pf-apc-row__meta nd-num">{{ metaOf(a) }}</span>
+              <span class="pf-apc-row__meta pf-num">{{ metaOf(a) }}</span>
             </span>
             <span class="pf-apc-status" [attr.data-tone]="statusTone(a.status)">
               <span class="pf-apc-status__dot" aria-hidden="true"></span>{{ statusWord(a.status) }}
             </span>
           </button>
         } @empty {
-          <div class="nd-empty nd-empty--compact pf-apc-empty">
-            <span class="nd-empty__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
-            <p class="nd-empty__title">{{ query().trim() ? 'No match on this day' : 'No appointments on this day' }}</p>
-            <p class="nd-empty__body">{{ query().trim() ? 'Clear the search or pick another day.' : 'Pick an empty slot in the calendar to book one.' }}</p>
+          <div class="pf-empty pf-empty--compact pf-apc-empty">
+            <span class="pf-empty__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="dayIcon"></ng-container></span>
+            <p class="pf-empty__title">{{ query().trim() ? 'No match on this day' : 'No appointments on this day' }}</p>
+            <p class="pf-empty__body">{{ query().trim() ? 'Clear the search or pick another day.' : 'Pick an empty slot in the calendar to book one.' }}</p>
             @if (!query().trim() && !cursorPast()) {
-              <button type="button" class="nd-btn nd-btn--secondary nd-empty__action press" (click)="bookOnDay()">Book on this day</button>
+              <button type="button" class="pf-btn pf-btn--secondary pf-empty__action press" (click)="bookOnDay()">Book on this day</button>
             }
           </div>
         }
@@ -261,77 +261,77 @@ const STATUS_CLASS: Record<string, string> = {
 
     <!-- ── One appointment (side card on web, a sheet ≤900px) ── -->
     <ng-template #detailTpl let-a="a">
-      <header class="nd-card__head">
-        <button type="button" class="nd-btn nd-btn--icon pf-apc-collapse" (click)="rescheduleOpen() ? rescheduleOpen.set(false) : closeAppt()"
+      <header class="pf-card__head">
+        <button type="button" class="pf-btn pf-btn--icon pf-apc-collapse" (click)="rescheduleOpen() ? rescheduleOpen.set(false) : closeAppt()"
                 [attr.aria-label]="rescheduleOpen() ? 'Back to the appointment' : 'Back to the day'"
                 [title]="rescheduleOpen() ? 'Back to the appointment' : 'Back to the day'">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <span class="nd-card__label">{{ rescheduleOpen() ? 'Reschedule' : 'Appointment' }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">{{ rescheduleOpen() ? 'Reschedule' : 'Appointment' }}</span>
+        <span class="pf-card__spacer"></span>
         @if (narrow()) {
-          <button type="button" class="nd-btn nd-btn--icon pf-apc-collapse" (click)="closeAppt()" aria-label="Close" title="Close">
+          <button type="button" class="pf-btn pf-btn--icon pf-apc-collapse" (click)="closeAppt()" aria-label="Close" title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         }
       </header>
-      <div class="nd-card__body pf-apc-dbody">
+      <div class="pf-card__body pf-apc-dbody">
         <div class="pf-apc-subject">
           <p class="pf-apc-subject__name">{{ nameOf(a) }}</p>
-          <p class="pf-apc-subject__meta nd-num">{{ metaOf(a) }}</p>
+          <p class="pf-apc-subject__meta pf-num">{{ metaOf(a) }}</p>
           <span class="pf-apc-status" [attr.data-tone]="statusTone(a.status)">
             <span class="pf-apc-status__dot" aria-hidden="true"></span>{{ statusWord(a.status) }}
           </span>
         </div>
         @if (!rescheduleOpen()) {
           <dl class="pf-apc-facts pf-apc-step" [class.pf-apc-step--back]="stepBack()">
-            <div><dt>When</dt><dd class="nd-num">{{ whenOf(a) }}</dd></div>
+            <div><dt>When</dt><dd class="pf-num">{{ whenOf(a) }}</dd></div>
             <div><dt>Type</dt><dd>{{ typeWord(a.type) }}</dd></div>
             <div><dt>Collection</dt><dd>{{ a.collectionType === 'home_collection' ? 'Home collection' : 'Walk-in (lab visit)' }}</dd></div>
-            @if (a.tokenNumber) { <div><dt>Token</dt><dd class="nd-num">{{ a.tokenNumber }}</dd></div> }
-            @if (a.patient?.phone) { <div><dt>Phone</dt><dd class="nd-num">{{ a.patient?.phone }}</dd></div> }
+            @if (a.tokenNumber) { <div><dt>Token</dt><dd class="pf-num">{{ a.tokenNumber }}</dd></div> }
+            @if (a.patient?.phone) { <div><dt>Phone</dt><dd class="pf-num">{{ a.patient?.phone }}</dd></div> }
             @if (testCount(a) > 0) { <div><dt>Tests</dt><dd>{{ plural(testCount(a), 'test') }} booked</dd></div> }
-            @if (a.address) { <div><dt>Address</dt><dd>{{ a.address }}@if (a.pincode) { · <span class="nd-num">{{ a.pincode }}</span> }</dd></div> }
+            @if (a.address) { <div><dt>Address</dt><dd>{{ a.address }}@if (a.pincode) { · <span class="pf-num">{{ a.pincode }}</span> }</dd></div> }
             @if (a.notes) { <div><dt>Notes</dt><dd>{{ a.notes }}</dd></div> }
           </dl>
         } @else {
           <div class="pf-apc-resched pf-apc-step pf-apc-step--fwd">
-            <label class="nd-field">
-              <span class="nd-field__lbl">New date</span>
-              <pf-nd-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-nd-date>
+            <label class="pf-field">
+              <span class="pf-field__lbl">New date</span>
+              <pf-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-date>
             </label>
-            <div class="nd-field">
-              <span class="nd-field__lbl">New time</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">New time</span>
               <pf-select [options]="timeOptions()" [value]="rTime" [searchable]="true" placeholder="Pick a time"
                          (valueChange)="rTime = $any($event)"></pf-select>
             </div>
-            <p class="nd-field__hint">The patient keeps the same booking; only the date and time move.</p>
+            <p class="pf-field__hint">The patient keeps the same booking; only the date and time move.</p>
           </div>
         }
       </div>
-      <footer class="nd-card__foot pf-apc-acts">
+      <footer class="pf-card__foot pf-apc-acts">
         @if (!rescheduleOpen()) {
-          <button type="button" class="nd-btn nd-btn--secondary nd-span pf-apc-act" (click)="openProfile(a)">Open profile</button>
+          <button type="button" class="pf-btn pf-btn--secondary pf-span pf-apc-act" (click)="openProfile(a)">Open profile</button>
           @if (a.status === 'booked') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="openReschedule()">Reschedule</button>
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" (click)="openReschedule()">Reschedule</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status === 'checked_in') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
             @if (a.type !== 'urgent') {
-              <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
+              <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
             }
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status !== 'cancelled' && a.status !== 'completed') {
-            <button type="button" class="nd-btn nd-btn--danger pf-apc-act" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel appointment</button>
+            <button type="button" class="pf-btn pf-btn--danger pf-apc-act" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel appointment</button>
           }
         } @else {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-apc-act" (click)="closeReschedule()">Back</button>
-          <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save new time</button>
+          <button type="button" class="pf-btn pf-btn--tertiary pf-apc-act" (click)="closeReschedule()">Back</button>
+          <button type="button" class="pf-btn pf-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save new time</button>
         }
       </footer>
     </ng-template>
@@ -345,11 +345,11 @@ const STATUS_CLASS: Record<string, string> = {
                   [attr.aria-current]="d.today ? 'date' : null" [attr.aria-label]="'Open ' + longDate(d.date)"
                   (click)="setDay(d.iso)">
             <span class="pf-apc-dayhdr__dow">{{ d.weekday }}</span>
-            <span class="pf-apc-dayhdr__n nd-num">{{ d.label }}</span>
+            <span class="pf-apc-dayhdr__n pf-num">{{ d.label }}</span>
           </button>
         }
         <div class="pf-apc-rail" aria-hidden="true">
-          @for (h of hours; track h) { <span class="pf-apc-rail__h nd-num" [style.top.px]="h * ND_HOUR">{{ hh(h) }}:00</span> }
+          @for (h of hours; track h) { <span class="pf-apc-rail__h pf-num" [style.top.px]="h * ND_HOUR">{{ hh(h) }}:00</span> }
         </div>
         @for (d of days; track d.iso) {
           <div class="pf-apc-col" [class.pf-apc-col--today]="d.today" [class.pf-apc-col--past]="d.past">
@@ -358,12 +358,12 @@ const STATUS_CLASS: Record<string, string> = {
                       [style.top.px]="s.top" [attr.aria-disabled]="slotPast(d.iso, s.time) ? true : null"
                       [attr.aria-label]="'Book ' + s.time + ', ' + longDate(d.date)"
                       (click)="onSlotClick(d.iso, s.hour, s.minute)">
-                <span class="pf-apc-slot__hint nd-num" aria-hidden="true">+ {{ s.time }}</span>
+                <span class="pf-apc-slot__hint pf-num" aria-hidden="true">+ {{ s.time }}</span>
               </button>
             }
             @if (d.today) {
               <div class="pf-apc-now" [style.top.px]="nowTopPx()" aria-hidden="true">
-                <span class="pf-apc-now__t nd-num">{{ nowLabel() }}</span>
+                <span class="pf-apc-now__t pf-num">{{ nowLabel() }}</span>
               </div>
             }
             @for (ev of evsFor(d.iso); track ev.appt.id) {
@@ -373,7 +373,7 @@ const STATUS_CLASS: Record<string, string> = {
                       [style.top.px]="ev.top" [style.left.%]="ev.left" [style.width.%]="ev.width"
                       [attr.aria-label]="rowLabel(ev.appt)" (click)="onEventClick(ev.appt, $event)">
                 <span class="pf-apc-ev__name">{{ nameOf(ev.appt) }}</span>
-                <span class="pf-apc-ev__meta nd-num">{{ metaOf(ev.appt) }}</span>
+                <span class="pf-apc-ev__meta pf-num">{{ metaOf(ev.appt) }}</span>
                 <span class="pf-apc-status" [attr.data-tone]="statusTone(ev.appt.status)">
                   <span class="pf-apc-status__dot" aria-hidden="true"></span><span class="pf-apc-status__w">{{ statusWord(ev.appt.status) }}</span>
                 </span>
@@ -396,12 +396,12 @@ const STATUS_CLASS: Record<string, string> = {
                  [class.pf-apc-mcell--out]="cell.outside" [class.pf-apc-mcell--today]="cell.today" [class.pf-apc-mcell--past]="cell.past"
                  [attr.aria-label]="'Book on ' + longDate(cell.date)"
                  (click)="onMonthCellClick(cell, $event)" (keydown.enter)="onMonthCellClick(cell, $any($event))">
-              <span class="pf-apc-mcell__n nd-num" [attr.aria-current]="cell.today ? 'date' : null">{{ cell.date.getDate() }}</span>
+              <span class="pf-apc-mcell__n pf-num" [attr.aria-current]="cell.today ? 'date' : null">{{ cell.date.getDate() }}</span>
               @if (cell.events.length > 0) {
-                <button type="button" class="nd-chip pf-apc-mcell__chip" (click)="onMonthPillClick(cell.iso, $event)"
+                <button type="button" class="pf-chip pf-apc-mcell__chip" (click)="onMonthPillClick(cell.iso, $event)"
                         (keydown.enter)="$event.stopPropagation()"
                         [attr.aria-label]="'Open ' + longDate(cell.date) + ': ' + plural(cell.events.length, 'appointment')">
-                  <span class="nd-num">{{ cell.events.length }}</span>
+                  <span class="pf-num">{{ cell.events.length }}</span>
                   <span class="pf-apc-mcell__word">{{ cell.events.length === 1 ? 'appointment' : 'appointments' }}</span>
                 </button>
               }
@@ -412,8 +412,8 @@ const STATUS_CLASS: Record<string, string> = {
     </ng-template>
 
     <ng-template #phoneCta>
-      <footer class="nd-card__foot pf-apc-foot">
-        <button type="button" class="nd-btn nd-btn--primary nd-span pf-apc-new press" (click)="bookNow()">New appointment</button>
+      <footer class="pf-card__foot pf-apc-foot">
+        <button type="button" class="pf-btn pf-btn--primary pf-span pf-apc-new press" (click)="bookNow()">New appointment</button>
       </footer>
     </ng-template>
 
@@ -675,7 +675,7 @@ const STATUS_CLASS: Record<string, string> = {
           } @else {
             <div class="mt-3 flex flex-col gap-2">
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New date
-                <pf-nd-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-nd-date></label>
+                <pf-date label="New date" [value]="rDate || null" (valueChange)="rDate = $event ?? ''"></pf-date></label>
               <label class="text-[12px] flex flex-col gap-1" style="color: var(--text-secondary);">New time
                 <pf-select [options]="timeOptions()" [value]="rTime" [searchable]="true" placeholder="Pick a time"
                            (valueChange)="rTime = $any($event)"></pf-select></label>
@@ -690,584 +690,7 @@ const STATUS_CLASS: Record<string, string> = {
     }
     }
   `,
-  styles: [APPOINTMENTS_CALENDAR_ND_STYLES, `
-    @use '../../../shared/styles/device-tier' as dt;
-    :host {
-      display: block;
-      /* WORK page: fill the shell's main area exactly so the PAGE itself
-       * never scrolls — scrolling happens inside the calendar grid. */
-      height: 100%;
-      /* Theme-aware grid line. Dark mode: faint white. Light mode (set
-       * via :host-context below): a soft slate so lines stay visible on
-       * the light lavender background. */
-      --pf-cal-grid: rgba(255, 255, 255, 0.10);
-      --pf-cal-grid-strong: rgba(255, 255, 255, 0.18);
-    }
-    :host-context(html[data-theme="light"]) {
-      --pf-cal-grid: rgba(15, 23, 42, 0.10);
-      --pf-cal-grid-strong: rgba(15, 23, 42, 0.18);
-    }
-    .pf-cal-page {
-      padding: 20px clamp(16px, 3vw, 32px);
-      display: flex; flex-direction: column; gap: 16px;
-      /* Non-scroll app screen: fill the host and clip — the only scroll
-       * lives inside the calendar grid (.pf-cal-time__body). position
-       * anchors the floating loading badge. */
-      height: 100%; min-height: 0; overflow: hidden; position: relative;
-    }
-    .pf-cal-hdr {
-      display: flex; align-items: center; justify-content: flex-start;
-      gap: 16px; flex-wrap: wrap;
-      flex: 0 0 auto;
-    }
-    .pf-cal-hdr__l { flex: 1; min-width: 0; }
-    .pf-cal-hdr__l h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
-    .pf-cal-hdr__l p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
-    .pf-cal-hdr__r { flex-shrink: 0; }
-
-    /* Back button — returns to /frontdesk (or browser history if it's
-     * the same origin). Sits at the very left of the calendar header. */
-    .pf-cal-back {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 7px 14px 7px 12px;
-      font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
-      flex-shrink: 0;
-    }
-    .pf-cal-back:hover {
-      background: var(--glass-bg-hover);
-      border-color: rgba(168, 85, 247, 0.45);
-      color: var(--text-primary);
-    }
-    .pf-cal-back:active { transform: translateY(1px); }
-    .pf-cal-back svg { color: var(--text-muted); }
-    .pf-cal-back:hover svg { color: var(--violet-text); }
-
-    /* Standard back chevron (sits before the title). Shown at ALL widths as
-     * the single, consistent back affordance. */
-    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
-    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
-    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-    /* Legacy back pill fully retired at every width so only the chevron shows. */
-    .pf-cal-back { display: none; }
-
-    .pf-cal-book {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 0.55rem 1rem; font-size: 12.5px; font-weight: 600;
-      border-radius: 9999px; border: 1px solid transparent;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899);
-      color: white; cursor: pointer; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.32);
-    }
-    .pf-cal-book:hover { filter: brightness(1.08); }
-
-    /* ── Toolbar ─────────────────────────────────────────────── */
-    .pf-cal-toolbar {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap;
-      flex: 0 0 auto;
-    }
-    .pf-cal-views {
-      display: inline-flex; padding: 3px;
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      border-radius: 10px;
-    }
-    .pf-cal-views button {
-      padding: 6px 14px; background: transparent; border: 0;
-      border-radius: 7px; font-size: 12.5px; font-weight: 600;
-      color: var(--text-secondary); cursor: pointer; letter-spacing: 0.02em;
-    }
-    .pf-cal-views button:hover { color: var(--text-primary); }
-    .pf-cal-views .pf-cal-view--on {
-      background: linear-gradient(135deg, #8b5cf6, #ec4899);
-      color: white;
-      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
-    }
-    .pf-cal-nav { display: inline-flex; align-items: center; gap: 6px; }
-    .pf-cal-nav__btn {
-      width: 30px; height: 30px;
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      border-radius: 8px; color: var(--text-primary); cursor: pointer;
-      font-size: 16px; line-height: 1; display: inline-flex;
-      align-items: center; justify-content: center;
-    }
-    .pf-cal-nav__btn:hover { background: var(--bg-hover); }
-    .pf-cal-nav__today { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; }
-    .pf-cal-nav__jump {
-      position: relative;
-      display: inline-flex; align-items: center; gap: 6px;
-      height: 30px; padding: 0 12px;
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      border-radius: 8px; color: var(--text-primary);
-      font-size: 12px; font-weight: 600; cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .pf-cal-nav__jump:hover {
-      background: var(--bg-hover);
-      border-color: rgba(168, 85, 247, 0.35);
-    }
-    .pf-cal-nav__jump-input {
-      /* Hidden native picker trigger (never visible — showPicker() only). */
-      position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
-      opacity: 0; pointer-events: none; border: 0; padding: 0;
-    }
-    .pf-cal-nav__title {
-      margin-left: 12px; font-size: 14px; font-weight: 600;
-      color: var(--text-primary); letter-spacing: -0.01em;
-    }
-
-    /* ── Frame ───────────────────────────────────────────────── */
-    .pf-cal-frame {
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      border-radius: 16px; backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      overflow: hidden; display: flex; flex-direction: column;
-      /* Non-scroll: the frame takes the remaining height of the page and
-       * lets its inner grid scroll. min-height:0 is required so the flex
-       * child can shrink below its content size. */
-      flex: 1 1 auto; min-height: 0;
-    }
-    .pf-cal-loading {
-      /* Float over the frame instead of taking flow space, so the
-       * non-scroll page height stays exact while loading. */
-      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
-      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
-      padding: 8px 14px; border-radius: 999px; font-size: 12.5px; color: var(--text-secondary);
-      background: var(--glass-bg-hover, var(--glass-bg)); border: 1px solid var(--glass-border);
-      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
-      pointer-events: none; z-index: 4;
-      animation: pf-cal-pill 320ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
-    }
-    @keyframes pf-cal-pill { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
-    @media (prefers-reduced-motion: reduce) { .pf-cal-loading { animation: none; } }
-    .pf-cal-past { opacity: 0.5; filter: saturate(0.6); }
-
-    /* ── Time grid (Day / Week) ──────────────────────────────── */
-    .pf-cal-time {
-      display: flex; flex-direction: column; flex: 1; min-height: 0;
-    }
-    .pf-cal-time__head {
-      display: grid;
-      grid-template-columns: 64px repeat(var(--col-count, 7), 1fr);
-      border-bottom: 1px solid var(--pf-cal-grid-strong);
-      background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
-    }
-    /* day view: head uses --col-count from body inline style; force it 1 */
-    .pf-cal-time__head .pf-cal-time__col-hdr--day { grid-column: 2 / -1; }
-    .pf-cal-time__col-hdr {
-      padding: 12px 10px; display: flex; flex-direction: column;
-      align-items: center; gap: 2px; cursor: pointer;
-      border-left: 1px solid var(--pf-cal-grid);
-    }
-    .pf-cal-time__col-hdr:first-child { border-left: 0; cursor: default; }
-    .pf-cal-time__weekday {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
-      text-transform: uppercase; color: var(--text-tertiary);
-    }
-    .pf-cal-time__daynum {
-      font-size: 16px; font-weight: 700; color: var(--text-primary);
-    }
-    .pf-cal-time__col-hdr.pf-cal-today .pf-cal-time__daynum {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-
-    .pf-cal-time__body {
-      display: grid;
-      grid-template-columns: 64px repeat(var(--col-count, 7), 1fr);
-      flex: 1; min-height: 0; overflow-y: auto;
-      position: relative; /* anchor for the .pf-cal-time__overlay */
-    }
-    .pf-cal-time__rail {
-      position: relative;
-      border-right: 1px solid var(--pf-cal-grid-strong);
-    }
-    .pf-cal-time__hour {
-      height: 44px; position: relative;
-      border-bottom: 1px dashed var(--pf-cal-grid);
-    }
-    .pf-cal-time__hour > span {
-      position: absolute; top: -7px; right: 8px;
-      font-size: 10.5px; color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-
-    .pf-cal-time__col {
-      position: relative;
-      border-left: 1px solid var(--pf-cal-grid);
-    }
-    .pf-cal-time__slot {
-      position: absolute; left: 0; right: 0;
-      background: transparent; border: 0; cursor: pointer;
-      /* Hour mark (:00) gets a solid line; half-hour (:30) gets a
-       * lighter dashed line. Both use the calendar grid colour so they
-       * adapt to light/dark mode. */
-      border-bottom: 1px solid var(--pf-cal-grid-strong);
-    }
-    .pf-cal-time__slot--half {
-      border-bottom-style: dashed;
-      border-bottom-color: var(--pf-cal-grid);
-    }
-    .pf-cal-time__slot:hover {
-      background: rgba(168, 85, 247, 0.08);
-    }
-    .pf-cal-past .pf-cal-time__slot { cursor: not-allowed; }
-    .pf-cal-past .pf-cal-time__slot:hover { background: transparent; }
-
-    /* ── Event chip (Day / Week) ─────────────────────────────── */
-    .pf-cal-event {
-      position: absolute;
-      min-height: 24px;
-      padding: 3px 8px;
-      border: 1px solid;
-      border-left-width: 3px;
-      border-radius: 6px;
-      cursor: pointer;
-      /* horizontal layout: monospace time on the left, name on the right */
-      display: flex; align-items: center; gap: 6px;
-      overflow: hidden; text-align: left;
-      font-size: 11.5px; line-height: 1.2;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
-    }
-    .pf-cal-event:hover { filter: brightness(1.15); z-index: 2; }
-    .pf-cal-event__time {
-      flex: 0 0 auto;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px; font-weight: 600; opacity: 0.85;
-      letter-spacing: 0.01em;
-    }
-    .pf-cal-event__title {
-      flex: 1 1 auto; min-width: 0;
-      font-weight: 600;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* Status palettes — dark mode (default). Light mode overrides below. */
-    .pf-cal-event--booked,
-    .pf-cal-month__event.pf-cal-event--booked {
-      background: rgba(139, 92, 246, 0.22); border-color: #8b5cf6; color: var(--violet-text);
-    }
-    .pf-cal-event--checked-in,
-    .pf-cal-month__event.pf-cal-event--checked-in {
-      background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: var(--green-text);
-    }
-    .pf-cal-event--completed,
-    .pf-cal-month__event.pf-cal-event--completed {
-      background: rgba(59, 130, 246, 0.22); border-color: #3b82f6; color: #bfdbfe;
-    }
-    .pf-cal-event--cancelled,
-    .pf-cal-month__event.pf-cal-event--cancelled {
-      background: rgba(156, 163, 175, 0.22); border-color: #9ca3af; color: #e5e7eb;
-    }
-    .pf-cal-event--no-show,
-    .pf-cal-month__event.pf-cal-event--no-show {
-      background: rgba(244, 63, 94, 0.22); border-color: #f43f5e; color: #fecdd3;
-    }
-
-    /* Light-mode palettes — solid darker text on the same tinted bg.
-     * :host-context lets the per-component styles see the html
-     * data-theme attribute set by the global theme switcher. */
-    :host-context(html[data-theme="light"]) .pf-cal-event--booked,
-    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--booked {
-      background: rgba(139, 92, 246, 0.16); border-color: #7c3aed; color: #4c1d95;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-event--checked-in,
-    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--checked-in {
-      background: rgba(16, 185, 129, 0.18); border-color: #059669; color: #064e3b;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-event--completed,
-    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--completed {
-      background: rgba(59, 130, 246, 0.16); border-color: #2563eb; color: #1e3a8a;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-event--cancelled,
-    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--cancelled {
-      background: rgba(156, 163, 175, 0.20); border-color: #6b7280; color: #1f2937;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-event--no-show,
-    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--no-show {
-      background: rgba(244, 63, 94, 0.16); border-color: #e11d48; color: #881337;
-    }
-
-    /* ── "Now" indicator overlay ─────────────────────────────── */
-    /* Absolutely positioned over the day-column area so the line is
-     * one continuous stroke across every day. Sits OUTSIDE the grid
-     * flow (position: absolute) so it doesn't claim a grid cell and
-     * push the day columns down. Pointer-events disabled so clicks
-     * fall through to the slot/event buttons below. */
-    .pf-cal-time__overlay {
-      position: absolute;
-      top: 0; bottom: 0; left: 64px; right: 0;
-      pointer-events: none;
-      z-index: 3;
-    }
-    .pf-cal-now {
-      position: absolute; left: 0; right: 0;
-      height: 0;
-      border-top: 2px solid #ec4899;
-      box-shadow: 0 0 8px rgba(236, 72, 153, 0.55);
-      transform: translateY(-1px);
-    }
-    /* Dot anchored to today's column. --today-col is the 0-based index
-     * of today within the visible week (0..6 in week view, 0 in day
-     * view); --col-count is the total columns. left = (today / cols)
-     * × 100% gives the column's left edge, then we nudge the dot to
-     * straddle it. */
-    .pf-cal-now::before {
-      content: ''; position: absolute;
-      left: calc((var(--today-col, 0) / var(--col-count, 1)) * 100% - 5px);
-      top: -6px;
-      width: 10px; height: 10px; border-radius: 50%;
-      background: #ec4899;
-      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
-    }
-    .pf-cal-now__label {
-      position: absolute;
-      left: calc((var(--today-col, 0) / var(--col-count, 1)) * 100% + 8px);
-      top: -16px;
-      padding: 1px 6px;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899);
-      color: white; border-radius: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 9.5px; font-weight: 700;
-      letter-spacing: 0.04em;
-      box-shadow: 0 2px 6px rgba(236, 72, 153, 0.35);
-    }
-
-    /* ── Month grid ──────────────────────────────────────────── */
-    .pf-cal-month { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    .pf-cal-month__dows {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      padding: 10px 12px; border-bottom: 1px solid var(--pf-cal-grid-strong);
-    }
-    .pf-cal-month__dows span {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
-      text-transform: uppercase; color: var(--text-tertiary); text-align: center;
-    }
-    .pf-cal-month__grid {
-      flex: 1; min-height: 0;
-      display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr;
-      /* Non-scroll page: if the 6 rows can't all fit the frame height
-       * (short viewports / iPad split), scroll INSIDE the grid rather
-       * than pushing the page. min-height:0 above lets this shrink. */
-      overflow-y: auto; -webkit-overflow-scrolling: touch;
-    }
-    .pf-cal-month__cell {
-      border-right: 1px solid var(--pf-cal-grid);
-      border-bottom: 1px solid var(--pf-cal-grid);
-      padding: 6px 6px 4px;
-      display: flex; flex-direction: column; gap: 4px; min-height: 90px;
-      cursor: pointer;
-      position: relative;
-    }
-    .pf-cal-month__cell:hover { background: rgba(168, 85, 247, 0.05); }
-    .pf-cal-month__cell:nth-child(7n) { border-right: 0; }
-    .pf-cal-month__cell--out { background: rgba(255,255,255,0.015); }
-    .pf-cal-month__cell--out .pf-cal-month__day { color: var(--text-muted); opacity: 0.55; }
-    .pf-cal-month__day {
-      font-size: 12.5px; font-weight: 600; color: var(--text-primary);
-      align-self: flex-end;
-    }
-    .pf-cal-month__cell--today .pf-cal-month__day {
-      width: 24px; height: 24px; border-radius: 50%;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 11.5px;
-    }
-    .pf-cal-month__summary {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding-bottom: 4px;
-    }
-    .pf-cal-month__pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 9999px;
-      background: rgba(139, 92, 246, 0.12);
-      border: 1px solid rgba(139, 92, 246, 0.25);
-      color: var(--violet-text);
-      font-size: 11px;
-      font-weight: 600;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-month__pill {
-      background: rgba(124, 58, 237, 0.08);
-      border-color: rgba(124, 58, 237, 0.22);
-      color: #6d28d9;
-    }
-    .pf-cal-month__badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #8b5cf6;
-      color: white;
-      font-size: 10px;
-      font-weight: 700;
-    }
-    :host-context(html[data-theme="light"]) .pf-cal-month__badge {
-      background: #7c3aed;
-    }
-    .pf-cal-month__label {
-      white-space: nowrap;
-    }
-    .pf-appt-overlay {
-      position: fixed; inset: 0; z-index: 60;
-      background: rgba(0,0,0,0.45);
-      display: flex; align-items: center; justify-content: center; padding: 16px;
-    }
-    .pf-appt-card {
-      width: 100%; max-width: 360px;
-      background: var(--surface-1, #1b1b25);
-      border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-    }
-    .pf-appt-x {
-      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
-      color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;
-    }
-    .pf-appt-x:hover { background: var(--surface-2, rgba(255,255,255,0.06)); }
-    .pf-appt-btn {
-      font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px;
-      border: 1px solid var(--border-subtle); background: var(--surface-2, rgba(255,255,255,0.04));
-      color: var(--text-secondary); cursor: pointer;
-    }
-    .pf-appt-btn:hover { filter: brightness(1.15); }
-    .pf-appt-btn--primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-    .pf-appt-btn--danger { color: var(--red-text); border-color: rgba(244,63,94,0.4); }
-
-    /* ═══════════════════════════════════════════════════════════
-     * CROSS-PLATFORM OVERRIDES (additive only)
-     * Desktop-web (>=1280px) is untouched: every rule below is
-     * gated by a max-width / pointer / platform query so it can
-     * never reach the desktop layout.
-     * ═══════════════════════════════════════════════════════════ */
-
-    /* (Non-scroll layout: the frame is now flex:1 and fills the page's
-     * remaining height on every size, so no explicit min-height is
-     * needed — that also removes the old 60vh mobile-chrome clip.) */
-
-    /* ── Touch affordances: only enable hover tint where a real hover
-     * pointer exists; on touch these were causing sticky highlights. */
-    @media (hover: none) {
-      .pf-cal-back:hover,
-      .pf-cal-book:hover,
-      .pf-cal-views button:hover,
-      .pf-cal-nav__btn:hover,
-      .pf-cal-nav__jump:hover,
-      .pf-cal-time__slot:hover,
-      .pf-cal-event:hover,
-      .pf-cal-month__cell:hover,
-      .pf-cal-month__pill:hover,
-      .pf-appt-btn:hover,
-      .pf-appt-x:hover { filter: none; }
-      .pf-cal-time__slot:hover { background: transparent; }
-      .pf-cal-event:hover { filter: none; z-index: auto; }
-      .pf-cal-month__cell:hover { background: transparent; }
-    }
-
-    /* ── Coarse pointer: bump small tap targets to >=44px without
-     * changing their visual box on desktop. */
-    @media (pointer: coarse) {
-      .pf-cal-back { min-height: 44px; }
-      .pf-cal-book { min-height: 44px; }
-      .pf-cal-nav__btn { width: 44px; height: 44px; }
-      .pf-cal-nav__today { width: auto; min-width: 44px; height: 44px; }
-      .pf-cal-nav__jump { height: 44px; }
-      .pf-cal-views button { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
-      .pf-cal-month__pill { min-height: 32px; padding-top: 7px; padding-bottom: 7px; }
-      .pf-appt-x { width: 44px; height: 44px; }
-      .pf-appt-btn { min-height: 44px; }
-    }
-
-    /* ── iPad band (641–1279): the time grid stays comfortable, but
-     * keep week columns from collapsing too far; month cells a touch
-     * shorter so the grid fits the viewport height. */
-    @include dt.tablet-band {
-      .pf-cal-time__head,
-      .pf-cal-time__body { min-width: 0; }
-      .pf-cal-month__cell { min-height: 76px; }
-    }
-
-    /* ── Phone (<=640): single-column, no horizontal overflow,
-     * full-width bottom sheet for the action card. */
-    @media (max-width: 640px) {
-      .pf-cal-page { padding: 14px 12px; gap: 12px; }
-
-      /* Header: keep the back/title/book on a compact wrapping row. */
-      .pf-cal-hdr { gap: 10px; }
-      .pf-cal-hdr__l h1 { font-size: 19px; }
-      .pf-cal-hdr__l p { font-size: 12px; }
-      .pf-cal-book { width: 100%; justify-content: center; padding: 11px 1rem; }
-      .pf-cal-hdr__r { width: 100%; }
-
-      /* Toolbar stacks: view switcher full width, nav row below. */
-      .pf-cal-toolbar { gap: 8px; }
-      .pf-cal-views { width: 100%; justify-content: space-between; }
-      .pf-cal-views button { flex: 1; text-align: center; }
-      .pf-cal-nav { width: 100%; flex-wrap: wrap; }
-      .pf-cal-nav__title {
-        margin-left: 0; width: 100%; order: 5;
-        font-size: 13px; text-align: center;
-      }
-      /* iOS: hidden jump-to-date input is focused on tap before its
-       * native picker opens — keep it >=16px so WKWebView doesn't zoom. */
-      .pf-cal-nav__jump-input { font-size: 16px; }
-
-      /* Day / Week grid: narrower time rail + allow the 7-day week to
-       * scroll horizontally instead of crushing columns to nothing.
-       * Each day column gets a sensible min so events stay readable. */
-      /* The FRAME scrolls, not the body: with the body as the scroller the
-         day headers stayed frozen while columns slid beneath them — you
-         could book against the wrong day. One scroller moves head, body and
-         the now-line overlay as a unit. */
-      .pf-cal-frame { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .pf-cal-time__body { overflow-x: visible; }
-      .pf-cal-time__head,
-      .pf-cal-time__body {
-        grid-template-columns: 44px repeat(var(--col-count, 7), minmax(64px, 1fr));
-        min-width: calc(44px + var(--col-count, 7) * 64px);
-      }
-      .pf-cal-time__overlay { left: 44px; }
-      .pf-cal-time__hour > span { right: 5px; font-size: 9.5px; }
-      .pf-cal-time__col-hdr { padding: 10px 6px; }
-
-      /* Event chips: stack time over name so short columns still read. */
-      .pf-cal-event { font-size: 11px; padding: 3px 6px; }
-      .pf-cal-event__time { font-size: 10px; }
-
-      /* Month grid: trim cell padding/height so all 6 rows fit. */
-      .pf-cal-month__dows { padding: 8px 6px; }
-      .pf-cal-month__cell { padding: 5px 4px 3px; min-height: 56px; }
-      .pf-cal-month__pill { padding: 3px 7px; font-size: 10px; gap: 4px; }
-      .pf-cal-month__label { display: none; }
-
-      /* Action card → bottom sheet that clears the bottom-nav pill and
-       * the home-indicator safe area on notched phones. */
-      .pf-appt-overlay { align-items: flex-end; padding: 0; }
-      .pf-appt-card {
-        max-width: 100%;
-        border-radius: 18px 18px 0 0;
-        padding-bottom: calc(16px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
-        max-height: 85dvh; overflow-y: auto;
-      }
-      /* iOS: 16px+ inputs to stop auto-zoom on focus. */
-      .pf-appt-card .pf-input { font-size: 16px; }
-      .pf-appt-btn { padding: 9px 14px; }
-    }
-  `]
+  styleUrl: './appointments-calendar.component.scss'
 })
 export class AppointmentsCalendarComponent {
   private readonly api = inject(ApiService);
@@ -1280,7 +703,7 @@ export class AppointmentsCalendarComponent {
   private readonly auth = inject(AuthService, { optional: true });
   private readonly zoom = inject(ZoomTransitionService);
 
-  // ── New design (ND-PATTERN §21) ─────────────────────────────────────────
+  // ── New design (PF-PATTERN §21) ─────────────────────────────────────────
   protected readonly plural = plural;
   protected readonly ND_HOUR = ND_HOUR;
   /** ≤900px: one card at a time (Day view = the day list); ≤640px: phones. */

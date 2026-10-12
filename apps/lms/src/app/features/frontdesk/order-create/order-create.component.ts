@@ -1252,7 +1252,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    // Back from registration (ND-PATTERN §15): the cart stashed before it.
+    // Back from registration (PF-PATTERN §15): the cart stashed before it.
     const resumed = this.route.snapshot.queryParamMap.get('resume') === 'registration' && this.adoptPendingOrder();
     if (pid) {
       this._opening.set(true);
@@ -2977,7 +2977,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.process.isEnabled?.('patient_registration') !== false && this.auth.hasPermission('register_patient'));
   // Registration opened from a half-built order comes BACK here with the
   // patient attached (?patientId=…&resume=registration); the cart it had is
-  // stashed first and restored on return (ND-PATTERN §15).
+  // stashed first and restored on return (PF-PATTERN §15).
   newPatient(): void {
     this.stashPendingOrder();
     this.router.navigate(['/frontdesk/patients/new'], { queryParams: { returnTo: 'order' } });

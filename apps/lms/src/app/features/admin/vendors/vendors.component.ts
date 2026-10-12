@@ -18,7 +18,7 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -78,7 +78,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
   imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, NdDateComponent
+    HeroBandComponent, PfDateComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -89,10 +89,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
         <pf-hero-band [back]="true" placeholder="Search vendors — name, code, contact, GSTIN…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
-            <span class="nd-seg pf-vn-seg" role="radiogroup" aria-label="Vendor status">
+            <span class="pf-seg pf-vn-seg" role="radiogroup" aria-label="Vendor status">
               @for (o of statusOptions(); track o.value) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
-                        (click)="status.set(o.value)">{{ o.label }} <span class="nd-num pf-vn-seg__n">{{ o.count }}</span></button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
+                        (click)="status.set(o.value)">{{ o.label }} <span class="pf-num pf-vn-seg__n">{{ o.count }}</span></button>
               }
             </span>
           </ng-container>
@@ -128,48 +128,48 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
       <div class="pf-band-body">
       @if (newVendorOpen()) {
-        <section class="nd-card nd-anim-in pf-vn-new" aria-label="New vendor">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
-            <h3 class="nd-card__label">New vendor</h3>
+        <section class="pf-card pf-anim-in pf-vn-new" aria-label="New vendor">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
+            <h3 class="pf-card__label">New vendor</h3>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-vn-new__body">
-            <div><label class="nd-field__lbl pf-vn-lbl">Name *</label>
-              <input type="text" class="nd-input" [class.nd-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/>
+            <div><label class="pf-field__lbl pf-vn-lbl">Name *</label>
+              <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/>
               @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
-            <div><label class="nd-field__lbl pf-vn-lbl">Code</label>
-              <input type="text" class="nd-input nd-num uppercase" [class.nd-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
+            <div><label class="pf-field__lbl pf-vn-lbl">Code</label>
+              <input type="text" class="pf-input pf-num uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
               @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
-            <div><label class="nd-field__lbl pf-vn-lbl">Contact name</label>
-              <input type="text" class="nd-input" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/></div>
-            <div><label class="nd-field__lbl pf-vn-lbl">Contact phone</label>
-              <input type="tel" class="nd-input" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/></div>
-            <div><label class="nd-field__lbl pf-vn-lbl">Contact email</label>
-              <input type="email" class="nd-input" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/></div>
-            <div><label class="nd-field__lbl pf-vn-lbl">GSTIN</label>
-              <input type="text" class="nd-input" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/></div>
-            <div class="sm:col-span-2"><label class="nd-field__lbl pf-vn-lbl">Address</label>
-              <input type="text" class="nd-input" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/></div>
+            <div><label class="pf-field__lbl pf-vn-lbl">Contact name</label>
+              <input type="text" class="pf-input" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/></div>
+            <div><label class="pf-field__lbl pf-vn-lbl">Contact phone</label>
+              <input type="tel" class="pf-input" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/></div>
+            <div><label class="pf-field__lbl pf-vn-lbl">Contact email</label>
+              <input type="email" class="pf-input" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/></div>
+            <div><label class="pf-field__lbl pf-vn-lbl">GSTIN</label>
+              <input type="text" class="pf-input" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/></div>
+            <div class="sm:col-span-2"><label class="pf-field__lbl pf-vn-lbl">Address</label>
+              <input type="text" class="pf-input" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/></div>
             <div>
-              <label class="nd-field__lbl pf-vn-lbl">Opening settlement (₹)</label>
-              <input type="number" min="0" step="1" class="nd-input"
+              <label class="pf-field__lbl pf-vn-lbl">Opening settlement (₹)</label>
+              <input type="number" min="0" step="1" class="pf-input"
                      [ngModel]="draft().openingCredit"
                      (ngModelChange)="patchDraft({ openingCredit: $event })"
                      placeholder="0"/>
-              <p class="nd-field__hint pf-vn-hint">Optional — a prepayment that offsets the tab.</p>
+              <p class="pf-field__hint pf-vn-hint">Optional — a prepayment that offsets the tab.</p>
             </div>
             <div>
-              <label class="nd-field__lbl pf-vn-lbl">Alert threshold (₹)</label>
-              <input type="number" min="0" step="1" class="nd-input"
+              <label class="pf-field__lbl pf-vn-lbl">Alert threshold (₹)</label>
+              <input type="number" min="0" step="1" class="pf-input"
                      [ngModel]="draft().notifyThreshold"
                      (ngModelChange)="patchDraft({ notifyThreshold: $event })"
                      placeholder="No limit"/>
-              <p class="nd-field__hint pf-vn-hint">Notify when the outstanding crosses this. Blank = unlimited.</p>
+              <p class="pf-field__hint pf-vn-hint">Notify when the outstanding crosses this. Blank = unlimited.</p>
             </div>
           </div>
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleNewVendor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…">
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleNewVendor()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…">
               {{ saving() ? 'Creating…' : 'Create vendor' }}
             </button>
           </div>
@@ -187,13 +187,13 @@ const EMPTY_DRAFT: NewVendorDraft = {
       } @else {
         <div class="space-y-3">
           @for (v of visibleVendors(); track v.id) {
-            <div class="nd-card pf-vn-card">
+            <div class="pf-card pf-vn-card">
               <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div class="min-w-0 flex-1">
                   <div class="pf-vendor__name-row flex items-center gap-2 mb-1">
                     <h3 class="pf-vendor__name">{{ v.name }}</h3>
-                    @if (v.code) { <span class="nd-chip nd-chip--static nd-num pf-vendor__code">{{ v.code }}</span> }
-                    @if (!v.isActive) { <span class="nd-chip nd-chip--static pf-vendor__code">Inactive</span> }
+                    @if (v.code) { <span class="pf-chip pf-chip--static pf-num pf-vendor__code">{{ v.code }}</span> }
+                    @if (!v.isActive) { <span class="pf-chip pf-chip--static pf-vendor__code">Inactive</span> }
                   </div>
                   @if (v.contactName || v.contactPhone) {
                     <p class="pf-vendor__meta">
@@ -201,7 +201,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                     </p>
                   }
                   @if (v.gstin) {
-                    <p class="pf-vendor__meta">GSTIN <span class="nd-num">{{ v.gstin }}</span></p>
+                    <p class="pf-vendor__meta">GSTIN <span class="pf-num">{{ v.gstin }}</span></p>
                   }
                 </div>
 
@@ -228,25 +228,25 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
               <div class="pf-vendor__actions">
                 <!-- Row actions: text on web, icons on touch (never a gradient). -->
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openTopUp(v)" aria-label="Top up" title="Top up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="nd-rowact__t">Top up</span></button>
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openPayment(v)" aria-label="Record payment" title="Record payment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="nd-rowact__t">Record payment</span></button>
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="emailStatement(v)" [disabled]="emailingId() === v.id"
-                        [attr.aria-label]="emailingId() === v.id ? 'Sending statement' : 'Email statement'" title="Email statement"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span class="nd-rowact__t">{{ emailingId() === v.id ? 'Sending…' : 'Email statement' }}</span></button>
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="toggleTransactions(v.id)" [attr.aria-expanded]="openTxnsId() === v.id"
-                        [attr.aria-label]="openTxnsId() === v.id ? 'Hide history' : 'View history'" [title]="openTxnsId() === v.id ? 'Hide history' : 'View history'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg><span class="nd-rowact__t">{{ openTxnsId() === v.id ? 'Hide history' : 'View history' }}</span></button>
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="toggleActive(v)"
-                        [attr.aria-label]="v.isActive ? 'Deactivate' : 'Reactivate'" [title]="v.isActive ? 'Deactivate' : 'Reactivate'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">{{ v.isActive ? 'Deactivate' : 'Reactivate' }}</span></button>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openTopUp(v)" aria-label="Top up" title="Top up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="pf-rowact__t">Top up</span></button>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openPayment(v)" aria-label="Record payment" title="Record payment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="pf-rowact__t">Record payment</span></button>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="emailStatement(v)" [disabled]="emailingId() === v.id"
+                        [attr.aria-label]="emailingId() === v.id ? 'Sending statement' : 'Email statement'" title="Email statement"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span class="pf-rowact__t">{{ emailingId() === v.id ? 'Sending…' : 'Email statement' }}</span></button>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleTransactions(v.id)" [attr.aria-expanded]="openTxnsId() === v.id"
+                        [attr.aria-label]="openTxnsId() === v.id ? 'Hide history' : 'View history'" [title]="openTxnsId() === v.id ? 'Hide history' : 'View history'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg><span class="pf-rowact__t">{{ openTxnsId() === v.id ? 'Hide history' : 'View history' }}</span></button>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleActive(v)"
+                        [attr.aria-label]="v.isActive ? 'Deactivate' : 'Reactivate'" [title]="v.isActive ? 'Deactivate' : 'Reactivate'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="pf-rowact__t">{{ v.isActive ? 'Deactivate' : 'Reactivate' }}</span></button>
               </div>
 
               @if (topUpVendorId() === v.id) {
                 <div class="pf-topup">
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div><label class="nd-field__lbl pf-vn-lbl">Amount (₹)</label>
-                      <input type="number" min="1" step="1" class="nd-input"
+                    <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
+                      <input type="number" min="1" step="1" class="pf-input"
                              [ngModel]="topUpAmount()" (ngModelChange)="topUpAmount.set($event)"
                              placeholder="50000"/></div>
-                    <div class="sm:col-span-2"><label class="nd-field__lbl pf-vn-lbl">Reason / reference</label>
-                      <input type="text" class="nd-input"
+                    <div class="sm:col-span-2"><label class="pf-field__lbl pf-vn-lbl">Reason / reference</label>
+                      <input type="text" class="pf-input"
                              [ngModel]="topUpReason()" (ngModelChange)="topUpReason.set($event)"
                              placeholder="UPI from accounts dept · ref XYZ"/></div>
                   </div>
@@ -261,20 +261,20 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
               @if (paymentVendorId() === v.id) {
                 <div class="pf-topup">
-                  <p class="nd-field__hint pf-vn-hint">
+                  <p class="pf-field__hint pf-vn-hint">
                     Record a payment received from this org (or credit granted by them). Adds to the wallet's available credit.
                   </p>
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div><label class="nd-field__lbl pf-vn-lbl">Amount (₹)</label>
-                      <input type="number" min="1" step="1" class="nd-input"
+                    <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
+                      <input type="number" min="1" step="1" class="pf-input"
                              [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
                              placeholder="50000"/></div>
-                    <div><label class="nd-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
-                      <pf-nd-date label="Payment date" inputId="pf-vn-payment-date"
+                    <div><label class="pf-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
+                      <pf-date label="Payment date" inputId="pf-vn-payment-date"
                                   [value]="paymentDate() || null"
-                                  (valueChange)="paymentDate.set($event ?? '')"></pf-nd-date></div>
-                    <div><label class="nd-field__lbl pf-vn-lbl">Note / reference</label>
-                      <input type="text" class="nd-input"
+                                  (valueChange)="paymentDate.set($event ?? '')"></pf-date></div>
+                    <div><label class="pf-field__lbl pf-vn-lbl">Note / reference</label>
+                      <input type="text" class="pf-input"
                              [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
                              placeholder="NEFT ref · UTR number"/></div>
                   </div>
@@ -319,7 +319,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                           <span class="pf-txn__amt" [class.pf-txn__amt--neg]="t.amount < 0">
                             {{ t.amount < 0 ? '−' : '+' }}{{ absMoney(t.amount) | inr }}
                           </span>
-                          <span class="pf-txn__when nd-num">{{ formatDate(t.paidAt || t.createdAt) }}</span>
+                          <span class="pf-txn__when pf-num">{{ formatDate(t.paidAt || t.createdAt) }}</span>
                         </li>
                       }
                     </ul>
@@ -385,7 +385,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
     }
-    /* Palette only (ND-PATTERN §2): owed = normal text, in credit = violet,
+    /* Palette only (PF-PATTERN §2): owed = normal text, in credit = violet,
        over the alert threshold = red (a real warning — the one exception). */
     .pf-vendor__bal-amt--low { color: var(--text-primary); }
     .pf-vendor__bal-amt--over { color: var(--red-text); }
@@ -404,31 +404,31 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-vendor__actions {
       margin-top: 14px;
       padding-top: 12px;
-      border-top: 1px solid var(--nd-line);
+      border-top: 1px solid var(--pf-line);
       display: flex; gap: 8px; flex-wrap: wrap;
     }
     /* ── ND audit ── */
     .pf-vn-seg { flex: none; }
-    .pf-vn-seg .nd-seg__item { height: 32px; }
+    .pf-vn-seg .pf-seg__item { height: 32px; }
     .pf-vn-seg__n { color: var(--text-tertiary); font-weight: 500; margin-left: 2px; }
     .pf-vn-new { margin-bottom: 16px; }
     .pf-vn-new__body { padding: 16px 18px; }
     .pf-vn-card { padding: 16px 18px; overflow: visible; }
     .pf-vn-lbl { display: block; margin-bottom: 6px; }
     .pf-vn-hint { margin-top: 4px; }
-    /* pf-nd-date defaults to inline-block (shrink to content) so it sits
+    /* pf-date defaults to inline-block (shrink to content) so it sits
      * next to other inline controls elsewhere; here it's the sole control
      * in its grid cell and must fill it exactly like the Amount / Note
      * inputs beside it. */
-    .pf-topup pf-nd-date { display: block; width: 100%; }
+    .pf-topup pf-date { display: block; width: 100%; }
 
     /* Inline top-up panel */
     .pf-topup {
       margin-top: 14px;
       padding: 14px;
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius);
+      background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius);
     }
 
     /* File attach button on the record-payment panel */
@@ -436,12 +436,12 @@ const EMPTY_DRAFT: NewVendorDraft = {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 8px 14px; border-radius: 10px; cursor: pointer;
       font-size: 12px; font-weight: 600;
-      background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line);
+      background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line);
       color: var(--text-secondary);
       max-width: 100%; overflow-wrap: anywhere;
     }
-    .pf-file-btn:hover { border-color: var(--nd-sel-border); }
+    .pf-file-btn:hover { border-color: var(--pf-sel-border); }
     .pf-file-clear {
       background: none; border: none; cursor: pointer;
       font-size: 11.5px; color: var(--red-text); text-decoration: underline;
@@ -455,9 +455,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-txns {
       margin-top: 14px;
       padding: 12px;
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius);
+      background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius);
     }
     .pf-txns__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .pf-txn {
@@ -471,7 +471,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     }
     .pf-txn__type {
       /* Neutral chip — the signed amount carries the direction. */
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-secondary);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); color: var(--text-secondary);
       padding: 2px 8px;
       border-radius: 9999px;
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
@@ -558,7 +558,7 @@ export class VendorsComponent implements OnInit {
 
   protected readonly vendors = signal<VendorRow[]>([]);
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
   /** Band pill: free-text search + Active / Inactive status filter. */

@@ -381,7 +381,7 @@
  *     than the room left, scrolls INSIDE its own card (visible overflow is
  *     kept only while its date-filter popover is open, so the popover can
  *     still escape the card);
- *   • its empty state uses the kit's compact metrics (.nd-empty--compact)
+ *   • its empty state uses the kit's compact metrics (.pf-empty--compact)
  *     so the card stays short;
  *   • the work pane, when expanded, takes the remaining height.
  * Phones (≤640px) show one pane at a time and keep their own rules. */
@@ -411,7 +411,7 @@
     border-radius: inherit !important;
     border-bottom-color: transparent !important;
   }
-  /* Mirrors .nd-empty.nd-empty--compact (shared/styles/_nd-kit.scss) —
+  /* Mirrors .pf-empty.pf-empty--compact (shared/styles/_pf-kit.scss) —
      Appointments pane, tablet only — the desktop pane and the work pane keep
      their full, centred empty state. */
   .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile {
@@ -420,9 +420,9 @@
     padding: 20px 12px;
     margin: 0;
   }
-  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__icon { width: 32px; height: 32px; border-radius: 10px; }
-  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__icon > svg { width: 16px; height: 16px; }
-  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__title { font-size: 13.5px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__icon { width: 32px; height: 32px; border-radius: 10px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__icon > svg { width: 16px; height: 16px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__title { font-size: 13.5px; }
 }
 
 @media (min-width: 1024px) {

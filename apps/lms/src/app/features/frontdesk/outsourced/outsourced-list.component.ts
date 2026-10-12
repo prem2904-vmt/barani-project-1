@@ -45,26 +45,26 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
     @if (svc.loading() && svc.rows().length === 0) {
       <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading outsourced tests…"></pf-skeleton-rows>
     } @else if (shown().length === 0) {
-      <div class="nd-empty pf-out__none" data-empty="out">
-        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
-        <p class="nd-empty__title">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
+      <div class="pf-empty pf-out__none" data-empty="out">
+        <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <p class="pf-empty__title">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
       </div>
     } @else {
       <ul class="pf-out__list" aria-label="Outsourced tests">
         @for (r of shown(); track r.sampleId) {
-          <li class="nd-row pf-out__row" [attr.data-status]="r.status">
+          <li class="pf-row pf-out__row" [attr.data-status]="r.status">
             <div class="pf-out__main">
-              <p class="pf-out__sample nd-num">{{ r.barcode ?? '—' }}</p>
-              <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="nd-num">{{ r.orderNumber ?? '' }}</span></p>
+              <p class="pf-out__sample pf-num">{{ r.barcode ?? '—' }}</p>
+              <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="pf-num">{{ r.orderNumber ?? '' }}</span></p>
               <p class="pf-out__tests">{{ testNames(r) }}</p>
             </div>
             <div class="pf-out__meta">
-              <span class="nd-chip nd-chip--static pf-out__partner">{{ r.partnerLabName ?? 'Partner lab' }}</span>
+              <span class="pf-chip pf-chip--static pf-out__partner">{{ r.partnerLabName ?? 'Partner lab' }}</span>
               <span class="pf-out__date">
-                @if (r.dispatchedAt) { Dispatched <span class="nd-num">{{ r.dispatchedAt | date:'d MMM, HH:mm' }}</span> }
+                @if (r.dispatchedAt) { Dispatched <span class="pf-num">{{ r.dispatchedAt | date:'d MMM, HH:mm' }}</span> }
                 @else { Not dispatched yet }
               </span>
-              <span class="nd-chip nd-chip--static pf-out__status" [attr.data-status]="r.status">
+              <span class="pf-chip pf-chip--static pf-out__status" [attr.data-status]="r.status">
                 @if (r.status === 'completed') {
                   <svg class="pf-out__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
@@ -72,14 +72,14 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
                 {{ statusLabel[r.status] }}
               </span>
               @if (attachLabel[attachState(r)]; as al) {
-                <span class="nd-chip nd-chip--static pf-out__attach" [attr.data-attach]="attachState(r)"
+                <span class="pf-chip pf-chip--static pf-out__attach" [attr.data-attach]="attachState(r)"
                       [attr.title]="attachState(r) === 'problem' ? rowReport(r)?.attachProblem : null">{{ al }}</span>
               }
               @if (rowReport(r); as rep) {
                 @if (uploads.isMissing(rep.url)) {
                   <!-- The server no longer has this file (it sat on a disk a
                        deploy wiped): say so, and point at Replace. -->
-                  <span class="nd-chip nd-chip--static pf-out__attach" data-attach="problem" data-testid="out-file-missing"
+                  <span class="pf-chip pf-chip--static pf-out__attach" data-attach="problem" data-testid="out-file-missing"
                         role="status">File no longer available — upload it again</span>
                 }
               }
@@ -94,7 +94,7 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
       <!-- Server paging (release 2026-10-01): the next page, appended — same
            pattern as the report queue (report-queue.component.html). -->
       <div class="pf-out__more">
-        <button type="button" class="nd-btn nd-btn--secondary pf-out__more-btn press"
+        <button type="button" class="pf-btn pf-btn--secondary pf-out__more-btn press"
                 [disabled]="svc.loadingMore()" [attr.aria-busy]="svc.loadingMore()" (click)="loadMore()">
           @if (svc.loadingMore()) { Loading… } @else { Load {{ svc.nextCount() }} more }
         </button>
@@ -120,7 +120,7 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
     .pf-out__attach[data-attach='problem'] { color: var(--warning-text, #b45309); }
     .pf-out__date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
     .pf-out__check { color: var(--violet-text, #6d28d9); }
-    .pf-out__row[data-status='completed'] { background: var(--nd-done-tint); border-color: var(--nd-sel-border); }
+    .pf-out__row[data-status='completed'] { background: var(--pf-done-tint); border-color: var(--pf-sel-border); }
     .pf-out__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
     @media (max-width: 640px) {
       .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }

@@ -770,7 +770,7 @@ import { BusyDirective } from '../../directives/busy.directive';
         cursor: not-allowed;
       }
 
-      /* Neutral avatar — the same anatomy as the Messages screen (nd-kit). */
+      /* Neutral avatar — the same anatomy as the Messages screen (pf-kit). */
       .pf-cw__init {
         position: relative; /* anchors the presence dot */
         display: inline-flex;
@@ -780,9 +780,9 @@ import { BusyDirective } from '../../directives/busy.directive';
         height: 26px;
         border-radius: 9999px;
         flex-shrink: 0;
-        background: var(--nd-chip-bg, #f3f4f6);
+        background: var(--pf-chip-bg, #f3f4f6);
         color: var(--text-secondary);
-        border: 1px solid var(--nd-line, var(--border-muted));
+        border: 1px solid var(--pf-line, var(--border-muted));
         font-size: 10.5px;
         font-weight: 600;
       }
@@ -819,7 +819,7 @@ import { BusyDirective } from '../../directives/busy.directive';
           var(--text-primary) 5%,
           var(--bg-card-solid, #fff)
         );
-        border: 1px solid var(--nd-line, var(--border-muted));
+        border: 1px solid var(--pf-line, var(--border-muted));
         color: var(--text-primary);
         font-size: 12.5px;
         line-height: 1.45;
@@ -856,15 +856,15 @@ import { BusyDirective } from '../../directives/busy.directive';
         min-width: 0;
         padding: 7px 8px;
         border-radius: 9px;
-        background: var(--nd-chip-bg, rgba(124, 58, 237, 0.08));
-        border: 1px solid var(--nd-line, var(--border-muted));
+        background: var(--pf-chip-bg, rgba(124, 58, 237, 0.08));
+        border: 1px solid var(--pf-line, var(--border-muted));
         color: var(--text-primary);
         text-align: left;
         font: inherit;
         cursor: pointer;
       }
       .pf-cw__shared-patient:hover {
-        border-color: var(--nd-sel-border, #a78bfa);
+        border-color: var(--pf-sel-border, #a78bfa);
         color: var(--violet-text, #7c3aed);
       }
       .pf-cw__shared-patient > span {
@@ -1245,7 +1245,7 @@ import { BusyDirective } from '../../directives/busy.directive';
         border-radius: 9999px;
         background: var(--bg-card-solid, #fff);
         color: var(--text-primary);
-        border: 1px solid var(--nd-line, var(--border-muted));
+        border: 1px solid var(--pf-line, var(--border-muted));
         font-size: 10px;
         font-weight: 600;
         line-height: 1;

@@ -42,8 +42,8 @@ describe('AST table — kit restyle (both themes)', () => {
     const lbl = el.querySelector('.ce-modebar__lbl')!;
     expect(lbl.textContent?.trim()).toBe('Reading method');
     const seg = el.querySelector('.ce-modeseg')!;
-    expect(seg.classList.contains('nd-seg')).toBe(true);
-    const items = seg.querySelectorAll('.nd-seg__item');
+    expect(seg.classList.contains('pf-seg')).toBe(true);
+    const items = seg.querySelectorAll('.pf-seg__item');
     expect(items.length).toBe(2);
     expect(items[0].getAttribute('aria-checked')).toBe('true');
     expect(css()).toMatch(/\.ce-modebar__lbl[^{]*\{[^}]*text-transform:\s*none/);
@@ -64,7 +64,7 @@ describe('AST table — kit restyle (both themes)', () => {
     const x = el.querySelector('.ce-abx__x')!;
     expect(x.getAttribute('aria-label')).toBe('Remove Penicillin');
     expect(x.querySelector('svg')).toBeTruthy();
-    expect(css()).toMatch(/\.ce-abx__zone[^{]*\{[^}]*font-family:\s*inherit[^}]*var\(--nd-line/);
+    expect(css()).toMatch(/\.ce-abx__zone[^{]*\{[^}]*font-family:\s*inherit[^}]*var\(--pf-line/);
   });
 });
 
@@ -95,7 +95,7 @@ describe('AST table — picked result subtle colour, breakpoints neutral (both t
   it('breakpoints / headers / MIC line stay neutral (not theme-scoped)', () => {
     const s = css();
     expect(s).toMatch(/\.ce-abx__col--r[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
-    expect(s).toMatch(/\.ce-abx__bpbox[^{]*\{[^}]*background:\s*var\(--nd-chip-bg\)/);
+    expect(s).toMatch(/\.ce-abx__bpbox[^{]*\{[^}]*background:\s*var\(--pf-chip-bg\)/);
     expect(s).toMatch(/\.ce-abx__mic[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
   });
 

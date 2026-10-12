@@ -72,10 +72,10 @@ describe('CriticalResultsComponent (register)', () => {
     expect(el.querySelector('.pf-cr__main ag-grid-angular')).not.toBeNull();
     expect(el.querySelector('.pf-cr__count')?.textContent).toContain('1 record');
     expect(el.querySelector('.pf-cr__count')?.textContent).toContain('1 not acknowledged');
-    expect(el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary').length).toBe(0);
+    expect(el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary').length).toBe(0);
     // Kit filters: a radiogroup for the status, another for the quick range, two kit dates, no native controls.
     expect(el.querySelectorAll('.pf-cr__side [role="radiogroup"]').length).toBe(2);
-    expect(el.querySelectorAll('.pf-cr__side pf-nd-date').length).toBe(2);
+    expect(el.querySelectorAll('.pf-cr__side pf-date').length).toBe(2);
     expect(el.querySelectorAll('select, datalist, input[type="date"]').length).toBe(0);
     // Single branch → no branch filter.
     expect(el.querySelector('#pf-cr-branch')).toBeNull();

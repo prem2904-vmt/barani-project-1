@@ -19,7 +19,7 @@ describe('Patient ID card', () => {
     const html = readFileSync('apps/lms/src/app/features/frontdesk/patient-profile/patient-profile.component.html', 'utf8');
     const sec = html.slice(html.indexOf('id="pf-pp-sec-idcard"'), html.indexOf('aria-labelledby="pf-pp-sec-abha"'));
     expect(sec).toContain('Patient ID card');
-    expect(sec).toMatch(/class="nd-btn nd-btn--secondary pf-pp-idcard" \(click\)="showIdCard\.set\(true\)"/);
+    expect(sec).toMatch(/class="pf-btn pf-btn--secondary pf-pp-idcard" \(click\)="showIdCard\.set\(true\)"/);
     expect(html.indexOf('pf-pp-sec-idcard')).toBeLessThan(html.indexOf('pf-pp-sec-abha'));
   });
 });

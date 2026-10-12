@@ -61,7 +61,7 @@ describe('Lab settings — consolidated abnormal results sheet', () => {
   it('is an ND switch card under the Report tab, off by default', () => {
     const p = make(TEMPLATE);
     expect(p.sw()).not.toBeNull();
-    expect(p.sw()!.classList.contains('nd-toggle')).toBe(true);
+    expect(p.sw()!.classList.contains('pf-toggle')).toBe(true);
     expect(p.sw()!.getAttribute('aria-checked')).toBe('false');
     expect(p.sw()!.disabled).toBe(false);
     expect(p.el.textContent).toContain('Print a first page listing every');

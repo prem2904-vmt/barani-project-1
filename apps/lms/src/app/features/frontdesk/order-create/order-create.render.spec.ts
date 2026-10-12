@@ -486,9 +486,9 @@ describe('Order & Payments — phone sheet + one-row phone pill', () => {
     const sheet = openSheet(r);
     const cls = document.documentElement.classList;
     expect(cls).not.toContain('pf-sheet-immersive');
-    expect(cls).not.toContain('nd-immersive');
+    expect(cls).not.toContain('pf-immersive');
     expect(cls).not.toContain('pf-collect-immersive');
-    expect(sheet.classList).toContain('pf-cart-drawer--tall');   // bottom: var(--nd-nav-h)
+    expect(sheet.classList).toContain('pf-cart-drawer--tall');   // bottom: var(--pf-nav-h)
     r.c.closeCart();
     r.f.detectChanges();
     expect(cls).not.toContain('pf-sheet-immersive');

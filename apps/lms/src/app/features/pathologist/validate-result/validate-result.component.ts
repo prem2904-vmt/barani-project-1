@@ -125,7 +125,7 @@ interface ValueRow {
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
         @if ((loading() && !selected()) || zoom.holding()) {
           <!-- The cockpit's own shape (identity, values, a card) — the kit
-               skeleton, never the PF logo (ND-PATTERN "Loading feedback"). -->
+               skeleton, never the PF logo (PF-PATTERN "Loading feedback"). -->
           <div class="pf-vr-skel" [pfZoomTarget]="zoomKeys()">
             <pf-skeleton-detail [fields]="6" [sections]="1" label="Loading validation…"></pf-skeleton-detail>
           </div>
@@ -195,9 +195,9 @@ interface ValueRow {
 
                   @if (isCultureFor(st)) {
                     <!-- Culture signs out on the Culture case page (owner). -->
-                    <button type="button" class="nd-row pf-vt__culturelink press" (click)="openCultureBench(st)"
+                    <button type="button" class="pf-row pf-vt__culturelink press" (click)="openCultureBench(st)"
                             [attr.aria-label]="'Review ' + (st.test?.name ?? 'culture') + ' on the culture bench'">
-                      <span class="nd-row__name">Culture: review and sign out on the bench</span>
+                      <span class="pf-row__name">Culture: review and sign out on the bench</span>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   } @else if (valueRowsFor(st).length === 0) {
@@ -371,9 +371,9 @@ interface ValueRow {
               @if (trendEligible().length > 0) {
                 <div class="pf-rail-card">
                   <!-- Kit switch (violet ON), never a native checkbox. -->
-                  <button type="button" class="nd-toggle pf-trendrow" role="switch"
+                  <button type="button" class="pf-toggle pf-trendrow" role="switch"
                           [attr.aria-checked]="trendogramOn()" (click)="toggleTrendogram()">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     <span>Trendogram in the report</span>
                   </button>
                   @if (trendogramOn()) {

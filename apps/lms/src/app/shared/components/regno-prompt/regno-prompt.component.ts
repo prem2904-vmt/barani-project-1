@@ -44,7 +44,7 @@ export function needsRegistrationNumber(
                stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2M15 12h2M7 16h10"/></svg>
         </span>
         <span class="pf-regno__t">{{ text }}</span>
-        <a class="nd-rowact pf-regno__cta" routerLink="/signature" [queryParams]="{ tab: 'registration' }"
+        <a class="pf-rowact pf-regno__cta" routerLink="/signature" [queryParams]="{ tab: 'registration' }"
            aria-label="Add your registration number">Add</a>
       </div>
     }
@@ -53,9 +53,9 @@ export function needsRegistrationNumber(
     :host { display: contents; }
     .pf-regno {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px);
-      border: 1px solid var(--nd-line, rgba(148, 163, 184, .35));
-      background: var(--nd-chip-bg, rgba(148, 163, 184, .12));
+      padding: 10px 12px; border-radius: var(--pf-radius-sm, 10px);
+      border: 1px solid var(--pf-line, rgba(148, 163, 184, .35));
+      background: var(--pf-chip-bg, rgba(148, 163, 184, .12));
       color: var(--text-secondary, #475569); font-size: 12.5px; font-weight: 500; line-height: 1.4;
     }
     .pf-regno__icon { display: inline-flex; flex: none; color: var(--color-primary, #7c3aed); }

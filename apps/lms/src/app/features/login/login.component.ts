@@ -63,7 +63,7 @@ export class LoginComponent implements AfterViewInit {
   protected readonly busy = signal(false);
   /** Signed in, the app's first screen is on its way (lazy chunk + guards):
    *  the button stays busy until the navigation lands, so there is no dead
-   *  "Sign in" button to press again in between (ND-PATTERN "Loading feedback"). */
+   *  "Sign in" button to press again in between (PF-PATTERN "Loading feedback"). */
   protected readonly entering = signal(false);
   /** The submit button's busy look: signing in OR entering the app. */
   protected readonly working = computed(() => this.busy() || this.entering());

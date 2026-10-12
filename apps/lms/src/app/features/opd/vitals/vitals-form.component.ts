@@ -5,7 +5,7 @@ import { VITAL_FIELDS, bmi, bmiBand, parseReading, validateVitals, vitalFlags, t
 /**
  * The ONE vitals entry form (Agent B): the vitals station's capture screen and
  * the front desk's "Take vitals here" step both render it. Kit fields
- * (.nd-field / .nd-input, 44px + 16px text on phones), numeric text boxes with
+ * (.pf-field / .pf-input, 44px + 16px text on phones), numeric text boxes with
  * the unit inside (no spinners), BMI derived as you type, out-of-range flags as
  * neutral chips with a small red mark. Field errors appear once the host asks
  * (`reveal()`), never while typing a first value.
@@ -18,13 +18,13 @@ import { VITAL_FIELDS, bmi, bmiBand, parseReading, validateVitals, vitalFlags, t
     <div class="pf-vf" [class.pf-vf--compact]="compact()">
       <div class="pf-vf__grid">
         @for (f of fields(); track f.key) {
-          <label class="nd-field pf-vf__f">
-            <span class="nd-field__lbl">{{ f.label }}</span>
+          <label class="pf-field pf-vf__f">
+            <span class="pf-field__lbl">{{ f.label }}</span>
             <span class="pf-vf__box">
-              <input class="nd-input nd-num pf-vf__in" type="text" autocomplete="off"
+              <input class="pf-input pf-num pf-vf__in" type="text" autocomplete="off"
                      [attr.inputmode]="f.decimals ? 'decimal' : 'numeric'"
                      [attr.data-vital]="f.key"
-                     [class.nd-input--error]="shown() && !!errors()[f.key]"
+                     [class.pf-input--error]="shown() && !!errors()[f.key]"
                      [attr.aria-invalid]="shown() && !!errors()[f.key]"
                      [attr.aria-describedby]="shown() && errors()[f.key] ? 'pf-vf-err-' + f.key : null"
                      [value]="raw()[f.key] ?? ''"
@@ -41,7 +41,7 @@ import { VITAL_FIELDS, bmi, bmiBand, parseReading, validateVitals, vitalFlags, t
       <div class="pf-vf__bmi" aria-live="polite">
         <div class="pf-vf__bmi-v">
           <span class="pf-vf__bmi-k">BMI · calculated</span>
-          <span class="pf-vf__bmi-n nd-num">{{ bmiValue() ?? '—' }}</span>
+          <span class="pf-vf__bmi-n pf-num">{{ bmiValue() ?? '—' }}</span>
         </div>
         <div class="pf-vf__bmi-t">
           <span class="pf-vf__bmi-band">{{ band() ?? 'Enter weight and height' }}</span>
@@ -56,15 +56,15 @@ import { VITAL_FIELDS, bmi, bmiBand, parseReading, validateVitals, vitalFlags, t
       @if (flags().length) {
         <div class="pf-vf__flags" role="status">
           @for (fl of flags(); track fl.key) {
-            <span class="nd-chip nd-chip--static pf-vf__flag"><span class="pf-vf__flagdot" aria-hidden="true"></span>{{ fl.label }}</span>
+            <span class="pf-chip pf-chip--static pf-vf__flag"><span class="pf-vf__flagdot" aria-hidden="true"></span>{{ fl.label }}</span>
           }
         </div>
       }
 
       @if (withNote()) {
-        <label class="nd-field">
-          <span class="nd-field__lbl">Nurse's note <span class="pf-vf__opt">· optional</span></span>
-          <input class="nd-input" type="text" maxlength="500" [value]="note()" (input)="note.set($any($event.target).value)"
+        <label class="pf-field">
+          <span class="pf-field__lbl">Nurse's note <span class="pf-vf__opt">· optional</span></span>
+          <input class="pf-input" type="text" maxlength="500" [value]="note()" (input)="note.set($any($event.target).value)"
                  placeholder="e.g. Complains of nasal block for 10 days" />
         </label>
       }
@@ -86,7 +86,7 @@ import { VITAL_FIELDS, bmi, bmiBand, parseReading, validateVitals, vitalFlags, t
     .pf-vf__opt { color: var(--text-tertiary); font-weight: 400; }
     .pf-vf__bmi {
       display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 12px 20px;
-      padding: 12px 14px; border: 1px dashed var(--nd-line); border-radius: var(--nd-radius-sm, 10px); background: var(--nd-chip-bg);
+      padding: 12px 14px; border: 1px dashed var(--pf-line); border-radius: var(--pf-radius-sm, 10px); background: var(--pf-chip-bg);
     }
     .pf-vf__bmi-v { display: flex; flex-direction: column; gap: 2px; }
     .pf-vf__bmi-k { font-size: 12px; color: var(--text-secondary); }

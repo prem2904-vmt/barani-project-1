@@ -34,9 +34,9 @@ export interface TubeChoice { key: string; label: string; hex: string; }
        option is the neutral selected state. Tube caps are the functional colour. */
     .pf-tce {
       max-height: 260px; overflow-y: auto; min-width: 200px;
-      padding: 4px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg, #fff);
-      border: 1px solid var(--nd-line);
+      padding: 4px; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg, #fff);
+      border: 1px solid var(--pf-line);
       box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
     }
     .pf-tce__opt {
@@ -44,8 +44,8 @@ export interface TubeChoice { key: string; label: string; hex: string; }
       padding: 7px 9px; border: 0; border-radius: 8px;
       background: transparent; cursor: pointer; text-align: left; font: inherit;
     }
-    .pf-tce__opt:hover { background: var(--nd-chip-bg); }
-    .pf-tce__opt--on { background: var(--nd-sel-bg); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+    .pf-tce__opt:hover { background: var(--pf-chip-bg); }
+    .pf-tce__opt--on { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
     .pf-tce__dot {
       width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto;
       box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2) inset;

@@ -86,7 +86,7 @@ export class ChatService implements OnDestroy {
   readonly conversations = signal<Conversation[]>([]);
   /** The conversation list has answered at least once for this account
    *  (success or failure). Until then the Messages list shows its skeleton,
-   *  never "No conversations yet" (ND-PATTERN "Loading feedback"). */
+   *  never "No conversations yet" (PF-PATTERN "Loading feedback"). */
   readonly conversationsLoaded = signal(false);
   readonly activeConversationId = signal<string | null>(null);
   readonly activeMessages = signal<ChatMessage[]>([]);

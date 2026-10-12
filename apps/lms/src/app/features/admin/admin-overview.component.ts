@@ -82,17 +82,17 @@ interface KpiCard {
             <!-- Date range rides in the search bar (owner) — one control
                strip instead of a separate filter row. -->
             <div class="pf-ov__filter pf-ov__filter--band">
-              <!-- Neutral kit segment (ND-PATTERN §3): the selected range is a
+              <!-- Neutral kit segment (PF-PATTERN §3): the selected range is a
                  raised neutral segment, never the primary gradient. -->
               <span
-                class="nd-seg pf-ov__seg"
+                class="pf-seg pf-ov__seg"
                 role="radiogroup"
                 aria-label="Date range"
               >
                 @for (r of ranges; track r.key) {
                   <button
                     type="button"
-                    class="nd-seg__item pf-ov__range"
+                    class="pf-seg__item pf-ov__range"
                     role="radio"
                     [attr.aria-checked]="range() === r.key"
                     (click)="setRange(r.key)"
@@ -263,9 +263,9 @@ interface KpiCard {
               <a
                 [routerLink]="[r.href]"
                 [queryParams]="r.queryParams ?? null"
-                class="pf-ov__card nd-card press"
+                class="pf-ov__card pf-card press"
               >
-                <span class="nd-card__icon pf-ov__card-ic">
+                <span class="pf-card__icon pf-ov__card-ic">
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 24 24"
@@ -389,8 +389,8 @@ interface KpiCard {
             [class.pf-ov__kpis--loading]="loading() && !metrics()"
           >
             @for (c of cards; track c.key) {
-              <div class="pf-ov__kpi nd-card">
-                <span class="nd-card__icon pf-ov__kpi-ic">
+              <div class="pf-ov__kpi pf-card">
+                <span class="pf-card__icon pf-ov__kpi-ic">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -411,23 +411,23 @@ interface KpiCard {
           <!-- At-a-glance configuration counts. -->
           <p class="pf-ov__section">Configuration</p>
           <div class="pf-ov__stats">
-            <div class="pf-ov__stat nd-card">
+            <div class="pf-ov__stat pf-card">
               <span class="pf-ov__stat-v">{{ branchCount() ?? "—" }}</span
               ><span class="pf-ov__stat-l">Branches</span>
             </div>
-            <div class="pf-ov__stat nd-card">
+            <div class="pf-ov__stat pf-card">
               <span class="pf-ov__stat-v">{{ deptCount() ?? "—" }}</span
               ><span class="pf-ov__stat-l">Departments</span>
             </div>
-            <div class="pf-ov__stat nd-card">
+            <div class="pf-ov__stat pf-card">
               <span class="pf-ov__stat-v">{{ testCount() ?? "—" }}</span
               ><span class="pf-ov__stat-l">Tests</span>
             </div>
-            <div class="pf-ov__stat nd-card">
+            <div class="pf-ov__stat pf-card">
               <span class="pf-ov__stat-v">{{ roleCount() ?? "—" }}</span
               ><span class="pf-ov__stat-l">Roles</span>
             </div>
-            <div class="pf-ov__stat nd-card">
+            <div class="pf-ov__stat pf-card">
               <span class="pf-ov__stat-v">{{
                 summary()?.workflows ?? "—"
               }}</span
@@ -436,7 +436,7 @@ interface KpiCard {
             @if (canOpen("/dashboard")) {
               <a
                 routerLink="/dashboard"
-                class="pf-ov__stat pf-ov__stat--link nd-card press"
+                class="pf-ov__stat pf-ov__stat--link pf-card press"
               >
                 <span class="pf-ov__stat-v">TAT</span
                 ><span class="pf-ov__stat-l">Live turnaround →</span>
@@ -451,9 +451,9 @@ interface KpiCard {
               <a
                 [routerLink]="g.href ? [g.href] : ['/admin/manage']"
                 [queryParams]="g.href ? null : { cat: g.cat }"
-                class="pf-ov__card nd-card press"
+                class="pf-ov__card pf-card press"
               >
-                <span class="nd-card__icon pf-ov__card-ic">
+                <span class="pf-card__icon pf-ov__card-ic">
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 24 24"
@@ -741,7 +741,7 @@ interface KpiCard {
         cursor: pointer;
       }
       .pf-ov__range-opt.is-on {
-        background: var(--nd-sel-bg);
+        background: var(--pf-sel-bg);
         color: var(--text-primary);
       }
 
@@ -758,9 +758,9 @@ interface KpiCard {
         position: relative;
         padding: 16px 16px 15px;
         border-radius: 16px;
-        border: 1px solid var(--nd-line);
-        background: var(--nd-card-bg);
-        box-shadow: var(--nd-shadow-sm);
+        border: 1px solid var(--pf-line);
+        background: var(--pf-card-bg);
+        box-shadow: var(--pf-shadow-sm);
         display: flex;
         flex-direction: column;
         gap: 2px;
@@ -820,14 +820,14 @@ interface KpiCard {
       .pf-ov__stat {
         padding: 14px 16px;
         border-radius: 14px;
-        border: 1px solid var(--nd-line);
-        background: var(--nd-card-bg);
-        box-shadow: var(--nd-shadow-sm);
+        border: 1px solid var(--pf-line);
+        background: var(--pf-card-bg);
+        box-shadow: var(--pf-shadow-sm);
         display: flex;
         flex-direction: column;
       }
       .pf-ov__stat--link:hover {
-        border-color: var(--nd-sel-border);
+        border-color: var(--pf-sel-border);
       }
       .pf-ov__stat-v {
         font-size: 22px;
@@ -864,15 +864,15 @@ interface KpiCard {
         gap: 4px;
         padding: 16px;
         border-radius: 16px;
-        border: 1px solid var(--nd-line);
-        background: var(--nd-card-bg);
-        box-shadow: var(--nd-shadow-sm);
+        border: 1px solid var(--pf-line);
+        background: var(--pf-card-bg);
+        box-shadow: var(--pf-shadow-sm);
         transition:
           border-color 0.15s,
           transform 0.15s;
       }
       .pf-ov__card:hover {
-        border-color: var(--nd-sel-border);
+        border-color: var(--pf-sel-border);
         transform: translateY(-2px);
       }
       .pf-ov__card-ic {
@@ -897,25 +897,25 @@ interface KpiCard {
         color: var(--text-tertiary);
       }
 
-      /* ── New design (ND-PATTERN): palette only — every KPI / card icon is
+      /* ── New design (PF-PATTERN): palette only — every KPI / card icon is
          the violet kit chip on a kit card (no per-metric rainbow, no left
          colour bars); section labels in Noto (no mono); the range is a
-         neutral nd-seg; only .pf-band-body scrolls. ── */
+         neutral pf-seg; only .pf-band-body scrolls. ── */
       :host-context(.design-new) .pf-ov__kpi::before {
         display: none;
       }
-      .pf-ov__kpi.nd-card,
-      .pf-ov__stat.nd-card,
-      .pf-ov__card.nd-card {
+      .pf-ov__kpi.pf-card,
+      .pf-ov__stat.pf-card,
+      .pf-ov__card.pf-card {
         overflow: visible;
       }
-      .pf-ov__kpi-ic.nd-card__icon {
+      .pf-ov__kpi-ic.pf-card__icon {
         width: 34px;
         height: 34px;
         border-radius: 10px;
         margin-bottom: 8px;
       }
-      .pf-ov__card-ic.nd-card__icon {
+      .pf-ov__card-ic.pf-card__icon {
         width: 38px;
         height: 38px;
         border-radius: 11px;
@@ -923,7 +923,7 @@ interface KpiCard {
       .pf-ov__seg {
         flex: none;
       }
-      .pf-ov__seg .nd-seg__item {
+      .pf-ov__seg .pf-seg__item {
         height: 30px;
       }
       :host-context(.design-new) .pf-ov__body {
@@ -950,14 +950,14 @@ interface KpiCard {
       @media (hover: none) {
         .pf-ov__card:hover {
           transform: none;
-          border-color: var(--nd-line);
+          border-color: var(--pf-line);
         }
         .pf-ov__card:active {
           transform: translateY(-1px);
-          border-color: var(--nd-sel-border);
+          border-color: var(--pf-sel-border);
         }
         .pf-ov__stat--link:hover {
-          border-color: var(--nd-line);
+          border-color: var(--pf-line);
         }
       }
       @media (pointer: coarse) {
@@ -1006,7 +1006,7 @@ interface KpiCard {
         }
         .pf-ov__range-ddbtn--icon.is-open {
           color: var(--text-primary);
-          background: var(--nd-sel-bg);
+          background: var(--pf-sel-bg);
         }
         .pf-ov__kpis {
           grid-template-columns: repeat(2, minmax(0, 1fr));

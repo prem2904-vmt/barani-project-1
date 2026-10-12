@@ -13,7 +13,7 @@ import {
 } from '../../../shared/models/critical-result.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { CriticalCommunicationDialogComponent } from '../../../shared/components/critical-communication-dialog/critical-communication-dialog.component';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
@@ -55,7 +55,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
 @Component({
   selector: 'pf-critical-results',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cr pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -83,7 +83,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab" title="Critical results" subtitle="NABL acknowledgement register" parentRoute="/lab/my-work">
         <div actions>
-          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportCsv()">Export CSV</button>
+          <button type="button" class="pf-btn pf-btn--secondary" [disabled]="exporting()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportCsv()">Export CSV</button>
         </div>
       </pf-screen-header>
 
@@ -92,41 +92,41 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
           <!-- FILTERS: the companion comes first (left); a sheet on phones. -->
           @if (narrow()) {
             @if (sheetOpen()) {
-              <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
-              <aside class="nd-card pf-cr__side pf-cr__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
-                <span class="nd-sheet__handle" aria-hidden="true"></span>
+              <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="pf-card pf-cr__side pf-cr__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
+                <span class="pf-sheet__handle" aria-hidden="true"></span>
                 <ng-container *ngTemplateOutlet="filterHead; context: { sheet: true }"></ng-container>
                 <ng-container *ngTemplateOutlet="filterBody"></ng-container>
               </aside>
             }
           } @else {
-            <aside class="nd-card pf-cr__side" aria-label="Filters">
+            <aside class="pf-card pf-cr__side" aria-label="Filters">
               <ng-container *ngTemplateOutlet="filterHead; context: { sheet: false }"></ng-container>
               <ng-container *ngTemplateOutlet="filterBody"></ng-container>
             </aside>
           }
 
           <!-- MAIN: the register -->
-          <section class="nd-card pf-cr__main" aria-label="Critical results register">
-            <header class="nd-card__head pf-cr__head">
-              <span class="nd-card__icon" aria-hidden="true">
+          <section class="pf-card pf-cr__main" aria-label="Critical results register">
+            <header class="pf-card__head pf-cr__head">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27"/></svg>
               </span>
-              <h2 class="nd-card__label">Critical results</h2>
-              <span class="nd-card__note pf-cr__hint">Every critical value with who acknowledged it and who was told — the NABL record.</span>
-              <span class="pf-cr__count nd-num" aria-live="polite">{{ countLabel() }}</span>
+              <h2 class="pf-card__label">Critical results</h2>
+              <span class="pf-card__note pf-cr__hint">Every critical value with who acknowledged it and who was told — the NABL record.</span>
+              <span class="pf-cr__count pf-num" aria-live="polite">{{ countLabel() }}</span>
             </header>
             <div class="pf-cr__grid-wrap">
               @if (listSkeleton()) {
                 <!-- First load / empty refresh: the register's shape, never an empty grid. -->
                 <pf-skeleton-table class="pf-cr__skel" [rows]="8" [cols]="6" label="Loading critical results…"></pf-skeleton-table>
               } @else if (!loading() && visibleRows().length === 0) {
-                <div class="nd-empty nd-empty--compact">
-                  <span class="nd-empty__icon" aria-hidden="true">
+                <div class="pf-empty pf-empty--compact">
+                  <span class="pf-empty__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                   </span>
-                  <p class="nd-empty__title">{{ q().trim() ? 'No critical results match "' + q().trim() + '"' : 'No critical results in this range' }}</p>
-                  <p class="nd-empty__body">{{ q().trim() ? 'Try another name, order or test.' : 'Widen the date range or switch the status filter to All.' }}</p>
+                  <p class="pf-empty__title">{{ q().trim() ? 'No critical results match "' + q().trim() + '"' : 'No critical results in this range' }}</p>
+                  <p class="pf-empty__body">{{ q().trim() ? 'Try another name, order or test.' : 'Widen the date range or switch the status filter to All.' }}</p>
                 </div>
               } @else {
                 <ag-grid-angular class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
@@ -135,7 +135,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
                 </ag-grid-angular>
               }
               @if (truncated()) {
-                <p class="pf-cr__more nd-num">Showing the latest {{ rows().length }} of {{ total() }} — narrow the dates, or Export CSV for every row.</p>
+                <p class="pf-cr__more pf-num">Showing the latest {{ rows().length }} of {{ total() }} — narrow the dates, or Export CSV for every row.</p>
               }
             </div>
           </section>
@@ -144,14 +144,14 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     </section>
 
     <ng-template #filterHead let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
         </span>
-        <h2 class="nd-card__label">Filters</h2>
-        <span class="nd-card__spacer"></span>
+        <h2 class="pf-card__label">Filters</h2>
+        <span class="pf-card__spacer"></span>
         @if (sheet) {
-          <button type="button" class="nd-btn nd-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
+          <button type="button" class="pf-btn pf-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         }
@@ -159,39 +159,39 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     </ng-template>
 
     <ng-template #filterBody>
-      <div class="nd-card__body pf-cr__filters">
-        <div class="nd-field">
-          <span class="nd-field__lbl" id="pf-cr-status-lbl">Status</span>
-          <span class="nd-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-status-lbl">
+      <div class="pf-card__body pf-cr__filters">
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-cr-status-lbl">Status</span>
+          <span class="pf-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-status-lbl">
             @for (o of statusOptions(); track o.value) {
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
-                {{ o.label }}@if (o.count != null) { <span class="nd-num pf-cr__segn">{{ o.count }}</span> }
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
+                {{ o.label }}@if (o.count != null) { <span class="pf-num pf-cr__segn">{{ o.count }}</span> }
               </button>
             }
           </span>
         </div>
-        <div class="nd-field">
-          <span class="nd-field__lbl" id="pf-cr-range-lbl">Detected (IST)</span>
-          <span class="nd-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-range-lbl">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '30d'" (click)="setQuick('30d')">30 days</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'custom'" (click)="setQuick('custom')">Custom</button>
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-cr-range-lbl">Detected (IST)</span>
+          <span class="pf-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-range-lbl">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === '30d'" (click)="setQuick('30d')">30 days</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="quick() === 'custom'" (click)="setQuick('custom')">Custom</button>
           </span>
           <div class="pf-cr__dates">
             <label class="pf-cr__dates-lbl" for="pf-cr-from">From</label>
-            <pf-nd-date label="From" inputId="pf-cr-from" [value]="from()" [max]="to() || today" (valueChange)="setFrom($event)"></pf-nd-date>
+            <pf-date label="From" inputId="pf-cr-from" [value]="from()" [max]="to() || today" (valueChange)="setFrom($event)"></pf-date>
             <label class="pf-cr__dates-lbl" for="pf-cr-to">To</label>
-            <pf-nd-date label="To" inputId="pf-cr-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-nd-date>
+            <pf-date label="To" inputId="pf-cr-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-date>
           </div>
         </div>
         @if (branchOptions().length > 1) {
-          <div class="nd-field">
-            <label class="nd-field__lbl" for="pf-cr-branch">Branch</label>
+          <div class="pf-field">
+            <label class="pf-field__lbl" for="pf-cr-branch">Branch</label>
             <pf-select id="pf-cr-branch" size="sm" [options]="branchOptions()" [value]="branchId()" (valueChange)="setBranch($event)"></pf-select>
           </div>
         }
-        <p class="nd-field__hint">Acknowledge = "I have seen this". Record communication = who was told, how and when. Viewing alone is never recorded.</p>
+        <p class="pf-field__hint">Acknowledge = "I have seen this". Record communication = who was told, how and when. Viewing alone is never recorded.</p>
       </div>
     </ng-template>
 
@@ -207,14 +207,14 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-cr__side { min-height: 0; }
     .pf-cr__side--sheet {
-      position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 80; max-height: 80dvh;
+      position: fixed; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 80; max-height: 80dvh;
       border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-    .pf-cr__side--sheet .nd-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
+    .pf-cr__side--sheet .pf-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     .pf-cr__filters { gap: 16px; }
     .pf-cr__seg { flex-wrap: wrap; }
     .pf-cr__segn { margin-left: 5px; color: var(--text-tertiary); }
-    .nd-seg__item[aria-checked='true'] .pf-cr__segn { color: inherit; }
+    .pf-seg__item[aria-checked='true'] .pf-cr__segn { color: inherit; }
     .pf-cr__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
     .pf-cr__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
     .pf-cr__main { min-width: 0; min-height: 0; }
@@ -225,9 +225,9 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 300px); min-height: 320px; }
     :host-context(.design-new) .pf-cr__grid { height: auto; min-height: 280px; }
     .pf-cr__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
-    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--nd-line); }
-    .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
-    /* Row cells: ONE status word (dot + colour), row actions as kit .nd-rowact. */
+    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--pf-line); }
+    .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
+    /* Row cells: ONE status word (dot + colour), row actions as kit .pf-rowact. */
     .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-cr-tone) 70%, var(--text-primary)); }
     .pf-cr__main ::ng-deep .pf-cr-status[data-tone='red'] { --pf-cr-tone: var(--red-text, #b91c1c); }
     .pf-cr__main ::ng-deep .pf-cr-status[data-tone='amber'] { --pf-cr-tone: var(--amber-text, #b45309); }
@@ -239,7 +239,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; padding: 6px 0; }
     .pf-cr__main ::ng-deep .pf-cr-cell--stack .pf-cr-status { white-space: normal; }
     .pf-cr__main ::ng-deep .ag-cell.pf-cr-actcell { padding-left: 6px; padding-right: 6px; }
-    .pf-cr__main ::ng-deep .pf-cr-acts .nd-rowact--icon { width: 44px; height: 44px; }
+    .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact--icon { width: 44px; height: 44px; }
     .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell:first-child { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
     @media (max-width: 900px) {
       .pf-cr__grid { height: calc(100dvh - 260px); }
@@ -354,9 +354,9 @@ export class CriticalResultsComponent {
       cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const e = p.data; if (!e) return '';
         const btn = (act: string, label: string, path: string) =>
-          `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} — ${esc(e.testName)}" title="${esc(label)}">` +
+          `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} — ${esc(e.testName)}" title="${esc(label)}">` +
           `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>` +
-          `<span class="nd-rowact__t">${esc(label)}</span></button>`;
+          `<span class="pf-rowact__t">${esc(label)}</span></button>`;
         const acts: string[] = [];
         if (needsAckBy(e, me)) acts.push(btn('ack', 'Acknowledge', '<path d="M20 6 9 17l-5-5"/>'));
         if (e.status !== 'communicated') acts.push(btn('comm', web ? 'Communicate' : 'Record communication', '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z"/>'));

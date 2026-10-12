@@ -76,7 +76,7 @@ describe('CriticalAckStripComponent', () => {
     expect(el.querySelectorAll('.pf-cas__comm').length).toBe(2);
     // Kit row actions, no native controls.
     expect(el.querySelectorAll('select').length).toBe(0);
-    el.querySelectorAll('.pf-cas__ack, .pf-cas__comm').forEach(b => expect(b.classList.contains('nd-rowact')).toBe(true));
+    el.querySelectorAll('.pf-cas__ack, .pf-cas__comm').forEach(b => expect(b.classList.contains('pf-rowact')).toBe(true));
   });
 
   it('Acknowledge posts the screen channel and hands the updated record to the host; the button then goes', () => {
@@ -99,7 +99,7 @@ describe('CriticalAckStripComponent', () => {
     expect(el.textContent).toContain('Phone call to Dr Anand (Referring doctor)');
     TestBed.resetTestingModule();
     const noPerm = render([ev()], false);
-    expect(noPerm.el.querySelectorAll('.nd-rowact').length).toBe(0);
+    expect(noPerm.el.querySelectorAll('.pf-rowact').length).toBe(0);
     expect(noPerm.el.querySelector('.pf-cas')).not.toBeNull();
   });
 });

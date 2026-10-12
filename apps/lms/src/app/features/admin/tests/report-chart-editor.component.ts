@@ -26,19 +26,19 @@ import {
     @let s = spec();
     <div class="rce">
       <div class="rce__form">
-        <label class="nd-field rce__title">
-          <span class="nd-field__lbl">Title</span>
-          <input class="nd-input" type="text" maxlength="80" [value]="title()" placeholder="e.g. Glucose curve"
+        <label class="pf-field rce__title">
+          <span class="pf-field__lbl">Title</span>
+          <input class="pf-input" type="text" maxlength="80" [value]="title()" placeholder="e.g. Glucose curve"
                  (change)="titleChange.emit($any($event.target).value)" />
         </label>
 
         <div class="rce__row">
-          <span class="nd-field__lbl">Across</span>
-          <div class="nd-seg" role="radiogroup" aria-label="X axis">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s.x === 'series'"
+          <span class="pf-field__lbl">Across</span>
+          <div class="pf-seg" role="radiogroup" aria-label="X axis">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="s.x === 'series'"
                     [disabled]="!context().series" (click)="setX('series')"
                     [title]="context().series ? 'The timed draws of this series' : 'Turn on Repetitive (timed series) to chart time points'">Time points</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s.x === 'parameters'"
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="s.x === 'parameters'"
                     (click)="setX('parameters')">Chosen values</button>
           </div>
         </div>
@@ -47,7 +47,7 @@ import {
           <span class="rce__sub">Chart type <span class="rce__note">{{ kindLabel() }}</span></span>
           <div class="rce__kinds" role="radiogroup" aria-label="Chart type">
             @for (k of kindCards(); track k.value) {
-              <button type="button" class="nd-tile-sel rce__kind" role="radio" [attr.aria-checked]="s.kind === k.value"
+              <button type="button" class="pf-tile-sel rce__kind" role="radio" [attr.aria-checked]="s.kind === k.value"
                       [attr.aria-disabled]="!k.ok" [class.rce__kind--off]="!k.ok" [disabled]="!k.ok"
                       [attr.aria-label]="k.label + (k.ok ? '' : ' — ' + k.reason)" (click)="setKind(k.value)">
                 <span class="rce__kthumb" aria-hidden="true">
@@ -69,8 +69,8 @@ import {
             <div class="rce__tps">
               @for (tp of context().timepoints; track tp.offsetMin) {
                 <label class="rce__tp">
-                  <span class="rce__tpk nd-num">{{ tp.offsetMin === 0 ? '0' : '+' + tp.offsetMin }} min</span>
-                  <input class="nd-input rce__tpin" type="text" maxlength="30" [value]="tickLabel(tp.offsetMin)"
+                  <span class="rce__tpk pf-num">{{ tp.offsetMin === 0 ? '0' : '+' + tp.offsetMin }} min</span>
+                  <input class="pf-input rce__tpin" type="text" maxlength="30" [value]="tickLabel(tp.offsetMin)"
                          [attr.aria-label]="'Label for ' + tp.offsetMin + ' min'"
                          (change)="setTick(tp.offsetMin, $any($event.target).value)" />
                 </label>
@@ -86,42 +86,42 @@ import {
                   <pf-select size="sm" [options]="unitOptions()" [value]="l.unit || ''"
                              (valueChange)="setLine(li, { unit: $any($event) || null })"></pf-select>
                 </div>
-                <input class="nd-input rce__match" type="text" maxlength="40" [value]="l.match || ''"
+                <input class="pf-input rce__match" type="text" maxlength="40" [value]="l.match || ''"
                        placeholder="only names with…" [attr.aria-label]="'Line ' + (li + 1) + ': only values whose name contains'"
                        (change)="setLine(li, { match: $any($event.target).value || null })" />
                 @if (li > 0) {
-                  <button type="button" class="nd-btn nd-btn--icon rce__x" (click)="removeLine(li)" aria-label="Remove this line" title="Remove">
+                  <button type="button" class="pf-btn pf-btn--icon rce__x" (click)="removeLine(li)" aria-label="Remove this line" title="Remove">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
                 }
               </div>
             }
             @if (droppedLines().length) {
-              <p class="nd-field__hint rce__warn">Not drawn: {{ droppedLines().join(', ') }} — two units at most (one axis on each side).</p>
+              <p class="pf-field__hint rce__warn">Not drawn: {{ droppedLines().join(', ') }} — two units at most (one axis on each side).</p>
             }
             @if ((s.lines?.length ?? 0) < maxLines) {
               <button type="button" class="rce__add" (click)="addLine()">+ Add a line</button>
-              <p class="nd-field__hint">Up to {{ maxLines }} lines. A line in a different unit gets its own axis on the right.</p>
+              <p class="pf-field__hint">Up to {{ maxLines }} lines. A line in a different unit gets its own axis on the right.</p>
             }
           </div>
         } @else {
           <div class="rce__group">
             <span class="rce__sub">{{ s.kind === 'gauge' ? 'Value' : 'Values' }}
-              @if (s.kind !== 'gauge') { <span class="rce__count nd-num">{{ (s.parameters ?? []).length }} / {{ maxParams }}</span> }</span>
+              @if (s.kind !== 'gauge') { <span class="rce__count pf-num">{{ (s.parameters ?? []).length }} / {{ maxParams }}</span> }</span>
             @if (context().params.length === 0) {
-              <p class="nd-field__hint">This test has no numeric values to chart yet.</p>
+              <p class="pf-field__hint">This test has no numeric values to chart yet.</p>
             }
-            @if (s.kind === 'gauge') { <p class="nd-field__hint">A gauge shows one value against its normal range — pick it.</p> }
-            @if (s.kind === 'pie' || s.kind === 'donut') { <p class="nd-field__hint">Parts of a whole: tick values in one unit — % or counts (each slice then shows its share of the total).</p> }
-            @if (s.kind === 'radar') { <p class="nd-field__hint">Pick 3 or more. Each spoke is scaled to its own upper normal limit.</p> }
+            @if (s.kind === 'gauge') { <p class="pf-field__hint">A gauge shows one value against its normal range — pick it.</p> }
+            @if (s.kind === 'pie' || s.kind === 'donut') { <p class="pf-field__hint">Parts of a whole: tick values in one unit — % or counts (each slice then shows its share of the total).</p> }
+            @if (s.kind === 'radar') { <p class="pf-field__hint">Pick 3 or more. Each spoke is scaled to its own upper normal limit.</p> }
             <div class="rce__params">
               @for (p of context().params; track p.name) {
-                <label class="nd-row rce__param" [class.nd-row--in]="isPicked(p.name)" [class.rce__param--off]="!canPick(p)">
+                <label class="pf-row rce__param" [class.pf-row--in]="isPicked(p.name)" [class.rce__param--off]="!canPick(p)">
                   <input [type]="s.kind === 'gauge' ? 'radio' : 'checkbox'" class="rce__srcheck" name="rce-gauge-value"
                          [checked]="isPicked(p.name)" (change)="toggleParam(p.name)" [disabled]="!canPick(p)" />
-                  <span class="nd-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                  <span class="nd-row__name">{{ p.title || pretty(p.name) }}</span>
-                  @if (p.unit) { <span class="nd-row__meta">{{ p.unit }}</span> }
+                  <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                  <span class="pf-row__name">{{ p.title || pretty(p.name) }}</span>
+                  @if (p.unit) { <span class="pf-row__meta">{{ p.unit }}</span> }
                 </label>
               }
             </div>
@@ -130,15 +130,15 @@ import {
             <div class="rce__group">
               <span class="rce__sub">Compare with</span>
               @if ((s.sets ?? []).length === 0) {
-                <p class="nd-field__hint">Add a second set of values to place next to each chosen value (e.g. the absolute counts next to the %).</p>
+                <p class="pf-field__hint">Add a second set of values to place next to each chosen value (e.g. the absolute counts next to the %).</p>
               }
               @for (set of s.sets ?? []; track $index; let si = $index) {
                 <div class="rce__set">
                   <div class="rce__sethead">
                     <span class="rce__swatch rce__swatch--box" [attr.data-i]="si + 1" aria-hidden="true"></span>
-                    <input class="nd-input rce__setname" type="text" maxlength="40" [value]="set.label || ''" placeholder="Set name, e.g. Absolute"
+                    <input class="pf-input rce__setname" type="text" maxlength="40" [value]="set.label || ''" placeholder="Set name, e.g. Absolute"
                            [attr.aria-label]="'Set ' + (si + 2) + ' name'" (change)="setSet(si, { label: $any($event.target).value || null })" />
-                    <button type="button" class="nd-btn nd-btn--icon rce__x" (click)="removeSet(si)" aria-label="Remove this set" title="Remove">
+                    <button type="button" class="pf-btn pf-btn--icon rce__x" (click)="removeSet(si)" aria-label="Remove this set" title="Remove">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </div>
@@ -157,9 +157,9 @@ import {
                 <button type="button" class="rce__add" (click)="addSet()">+ Add a set to compare</button>
               }
               @if ((s.sets ?? []).length) {
-                <label class="nd-field">
-                  <span class="nd-field__lbl">Name of the chosen values (legend)</span>
-                  <input class="nd-input" type="text" maxlength="40" [value]="s.mainLabel || ''" placeholder="e.g. Percent"
+                <label class="pf-field">
+                  <span class="pf-field__lbl">Name of the chosen values (legend)</span>
+                  <input class="pf-input" type="text" maxlength="40" [value]="s.mainLabel || ''" placeholder="e.g. Percent"
                          (change)="patch({ mainLabel: $any($event.target).value || null })" />
                 </label>
               }
@@ -170,21 +170,21 @@ import {
         <div class="rce__group">
           <span class="rce__sub">Reference</span>
           @if (supports().band) {
-            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="s.refBand" (click)="patch({ refBand: !s.refBand })">
-              <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+            <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="s.refBand" (click)="patch({ refBand: !s.refBand })">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
               Shade the normal range (the patient's own band)
             </button>
           } @else {
-            <p class="nd-field__hint">{{ noBandHint() }}</p>
+            <p class="pf-field__hint">{{ noBandHint() }}</p>
           }
           @if (supports().thresholds) {
           @for (t of s.thresholds; track $index; let ti = $index) {
             <div class="rce__thr">
-              <input class="nd-input rce__thrv nd-num" type="text" inputmode="decimal" [value]="t.value"
+              <input class="pf-input rce__thrv pf-num" type="text" inputmode="decimal" [value]="t.value"
                      [attr.aria-label]="'Threshold ' + (ti + 1) + ' value'" (change)="setThreshold(ti, { value: $any($event.target).value })" />
-              <input class="nd-input" type="text" maxlength="60" [value]="t.label || ''" placeholder="Label, e.g. Diabetes ≥ 200 at 2 h"
+              <input class="pf-input" type="text" maxlength="60" [value]="t.label || ''" placeholder="Label, e.g. Diabetes ≥ 200 at 2 h"
                      [attr.aria-label]="'Threshold ' + (ti + 1) + ' label'" (change)="setThreshold(ti, { label: $any($event.target).value })" />
-              <button type="button" class="nd-btn nd-btn--icon rce__x" (click)="removeThreshold(ti)" aria-label="Remove this line" title="Remove">
+              <button type="button" class="pf-btn pf-btn--icon rce__x" (click)="removeThreshold(ti)" aria-label="Remove this line" title="Remove">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
@@ -197,24 +197,24 @@ import {
 
         <div class="rce__group">
           <span class="rce__sub">Look</span>
-          <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="s.showValues" (click)="patch({ showValues: !s.showValues })">
-            <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+          <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="s.showValues" (click)="patch({ showValues: !s.showValues })">
+            <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
             Show the values on the chart
           </button>
           <div class="rce__row">
-            <span class="nd-field__lbl">Size</span>
-            <div class="nd-seg" role="radiogroup" aria-label="Size">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s.size === 'full'" (click)="patch({ size: 'full' })">Full width</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="s.size === 'half'" (click)="patch({ size: 'half' })">Half width</button>
+            <span class="pf-field__lbl">Size</span>
+            <div class="pf-seg" role="radiogroup" aria-label="Size">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="s.size === 'full'" (click)="patch({ size: 'full' })">Full width</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="s.size === 'half'" (click)="patch({ size: 'half' })">Half width</button>
             </div>
           </div>
           @if (supports().axis) {
           <div class="rce__row">
-            <span class="nd-field__lbl">{{ s.kind === 'gauge' ? 'Dial from' : 'Axis from' }}</span>
-            <input class="nd-input rce__ax nd-num" type="text" inputmode="decimal" placeholder="auto" [value]="s.yMin ?? ''"
+            <span class="pf-field__lbl">{{ s.kind === 'gauge' ? 'Dial from' : 'Axis from' }}</span>
+            <input class="pf-input rce__ax pf-num" type="text" inputmode="decimal" placeholder="auto" [value]="s.yMin ?? ''"
                    aria-label="Axis from" (change)="patch({ yMin: $any($event.target).value })" />
-            <span class="nd-field__lbl">to</span>
-            <input class="nd-input rce__ax nd-num" type="text" inputmode="decimal" placeholder="auto" [value]="s.yMax ?? ''"
+            <span class="pf-field__lbl">to</span>
+            <input class="pf-input rce__ax pf-num" type="text" inputmode="decimal" placeholder="auto" [value]="s.yMax ?? ''"
                    aria-label="Axis to" (change)="patch({ yMax: $any($event.target).value })" />
           </div>
           }
@@ -235,8 +235,8 @@ import {
     :host { display: block; container-type: inline-size; }
     .rce__form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .rce__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rce__row .nd-field__lbl { min-width: 52px; }
-    .rce__group { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--nd-line, var(--glass-border)); }
+    .rce__row .pf-field__lbl { min-width: 52px; }
+    .rce__group { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
     .rce__sub { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
     .rce__count, .rce__note { font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 6px; }
     .rce__tps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
@@ -247,12 +247,12 @@ import {
     .rce__line, .rce__thr { display: flex; align-items: center; gap: 8px; }
     .rce__linesel { flex: 0 0 150px; }
     .rce__match { flex: 1 1 auto; min-height: 36px; }
-    .rce__thr .nd-input { min-height: 36px; }
+    .rce__thr .pf-input { min-height: 36px; }
     .rce__thrv { flex: 0 0 84px; }
     .rce__swatch { flex: none; width: 18px; height: 0; border-top: 2px solid var(--color-primary, #7c3aed); }
     .rce__swatch--2 { border-top: 2px dashed var(--text-secondary); }
     .rce__x { flex: none; }
-    .rce .nd-toggle { white-space: normal; text-align: left; line-height: 1.35; min-height: 32px; }
+    .rce .pf-toggle { white-space: normal; text-align: left; line-height: 1.35; min-height: 32px; }
     /* One column: the preview comes first, so the author sees the chart. */
     @container (max-width: 759px) { .rce__preview { order: -1; } }
     .rce__add { align-self: flex-start; background: none; border: none; padding: 4px 0; font: inherit; font-size: 12.5px;
@@ -267,12 +267,12 @@ import {
        disabled with its one-line reason. */
     .rce__kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
     .rce__kind { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-height: 44px; padding: 6px 6px 8px;
-      border: 1px solid var(--nd-line, var(--glass-border)); border-radius: 10px; background: var(--nd-card-bg, transparent);
+      border: 1px solid var(--pf-line, var(--glass-border)); border-radius: 10px; background: var(--pf-card-bg, transparent);
       color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
     .rce__kind { position: relative; }
-    .rce__kind[aria-checked="true"] { border-color: var(--nd-sel-border, var(--text-primary)); box-shadow: inset 0 0 0 1px var(--nd-sel-border, var(--text-primary)); }
+    .rce__kind[aria-checked="true"] { border-color: var(--pf-sel-border, var(--text-primary)); box-shadow: inset 0 0 0 1px var(--pf-sel-border, var(--text-primary)); }
     .rce__kcheck { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center;
-      width: 18px; height: 18px; border-radius: 50%; background: var(--text-primary); color: var(--nd-card-bg, #fff); }
+      width: 18px; height: 18px; border-radius: 50%; background: var(--text-primary); color: var(--pf-card-bg, #fff); }
     .rce__kind:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
     .rce__kthumb { display: block; height: 58px; border-radius: 6px; background: #fff; overflow: hidden;
       border: 1px solid rgba(15, 23, 42, .08); }
@@ -287,7 +287,7 @@ import {
     .rce__kind--off .rce__kname { color: var(--text-secondary); }
     .rce__param--off { opacity: .5; cursor: not-allowed; }
     .rce__warn { color: var(--text-secondary); }
-    .rce__set { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--nd-line, var(--glass-border)); border-radius: 10px; }
+    .rce__set { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--pf-line, var(--glass-border)); border-radius: 10px; }
     .rce__sethead { display: flex; align-items: center; gap: 8px; }
     .rce__setname { flex: 1 1 auto; min-height: 36px; }
     .rce__setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; align-items: center; }
@@ -298,8 +298,8 @@ import {
     .rce__swatch--box[data-i="3"] { background: #94a3b8; }
     @container (min-width: 760px) { .rce__preview { position: sticky; top: 8px; } }
     @media (max-width: 640px) {
-      .rce .nd-input { font-size: 16px; min-height: 44px; }
-      .rce .nd-seg__item { min-height: 40px; }
+      .rce .pf-input { font-size: 16px; min-height: 44px; }
+      .rce .pf-seg__item { min-height: 40px; }
       .rce__linesel { flex-basis: 120px; }
       .rce__kinds { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
       .rce__kthumb { height: 50px; }

@@ -26,7 +26,7 @@ const STAGE_LABELS: Record<string, string> = {
 /**
  * Microbiology / Culture settings — the culture bench's stage soft-lock timeout,
  * the supervisor-takeover switch, and per-stage turnaround targets that drive the
- * overdue alerts. Kit cards (nd-card) with the icon-chip header; slate switch; kit fields.
+ * overdue alerts. Kit cards (pf-card) with the icon-chip header; slate switch; kit fields.
  */
 @Component({
   selector: 'pf-culture-settings',
@@ -73,27 +73,27 @@ const STAGE_LABELS: Record<string, string> = {
       @if (formSkeleton()) {
         <!-- Settings on their way: the card's fields as a skeleton (held
              600ms) — never the defaults dressed up as the saved values. -->
-        <section class="nd-card pf-cs__card">
+        <section class="pf-card pf-cs__card">
           <div class="pf-cs__body"><pf-skeleton-form [fields]="3" [cols]="1" label="Loading culture settings…"></pf-skeleton-form></div>
         </section>
       }
       @if (showSec('lock') && !formSkeleton()) {
-      <section class="nd-card pf-cs__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-          <h3 class="nd-card__label pf-cs__title">Stage lock</h3>
+      <section class="pf-card pf-cs__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <h3 class="pf-card__label pf-cs__title">Stage lock</h3>
         </div>
         <div class="pf-cs__body">
           <p class="pf-cs__hint">When a tech picks up a stage it's locked to them. If it sits idle this long,
             it's auto-released back to the pool so an absent tech never strands a case. Set 0 to never auto-release.</p>
           <div class="pf-cs__row">
             <label class="pf-cs__lbl" for="pf-cs-lock">Auto-release after</label>
-            <input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="nd-input nd-num pf-cs__num" [(ngModel)]="lockTimeoutMinutes" />
+            <input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="pf-input pf-num pf-cs__num" [(ngModel)]="lockTimeoutMinutes" />
             <span class="pf-cs__lbl">minutes idle</span>
           </div>
-          <button type="button" class="nd-toggle pf-cs__check" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
+          <button type="button" class="pf-toggle pf-cs__check" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
                   (click)="allowSupervisorTakeover = !allowSupervisorTakeover">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             <span>Allow a supervisor to force-release a stage another tech holds</span>
           </button>
         </div>
@@ -101,17 +101,17 @@ const STAGE_LABELS: Record<string, string> = {
       }
 
       @if (showSec('tat') && !formSkeleton()) {
-      <section class="nd-card pf-cs__card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <h3 class="nd-card__label pf-cs__title">Turnaround targets</h3>
+      <section class="pf-card pf-cs__card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          <h3 class="pf-card__label pf-cs__title">Turnaround targets</h3>
         </div>
         <div class="pf-cs__body">
           <p class="pf-cs__hint">Each stage raises an "overdue" alert once it runs past its target.</p>
           @for (t of stageTats(); track t.stageKey) {
             <div class="pf-cs__row">
               <label class="pf-cs__lbl pf-cs__lbl--wide" [attr.for]="'pf-cs-tat-' + t.stageKey">{{ label(t.stageKey) }}</label>
-              <input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="nd-input nd-num pf-cs__num"
+              <input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="pf-input pf-num pf-cs__num"
                      [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" />
               <span class="pf-cs__lbl">hours</span>
             </div>
@@ -157,7 +157,7 @@ export class CultureSettingsComponent {
   allowSupervisorTakeover = true;
   readonly stageTats = signal<StageTat[]>([]);
   readonly saving = signal(false);
-  /** First-load skeleton (ND-PATTERN "Loading feedback"). */
+  /** First-load skeleton (PF-PATTERN "Loading feedback"). */
   private readonly loadHold = createLoadHold(true);
   readonly formSkeleton = this.loadHold.active;
 

@@ -7,7 +7,7 @@ import { BOARD, DESK, VISIT, flush, harness, row } from './opd-b.spec-helpers';
 
 /** OPD desk list, visit detail, token queue and the vitals station. */
 afterEach(() => TestBed.resetTestingModule());
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 
 describe('OPD desk (/opd/desk)', () => {
   function render() {

@@ -70,10 +70,10 @@ interface EdModel {
     <div class="pf-mm">
       <div class="pf-mm__bar">
         @if (bandQuery() === null) {
-          <input type="search" class="nd-input pf-mm__search" [placeholder]="'Search ' + label(section()) + '…'" [attr.aria-label]="'Search ' + label(section())"
+          <input type="search" class="pf-input pf-mm__search" [placeholder]="'Search ' + label(section()) + '…'" [attr.aria-label]="'Search ' + label(section())"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
         }
-        <span class="pf-mm__count"><span class="nd-num">{{ shownCount() }}</span> of <span class="nd-num">{{ totalCount() }}</span> {{ label(section()) }}</span>
+        <span class="pf-mm__count"><span class="pf-num">{{ shownCount() }}</span> of <span class="pf-num">{{ totalCount() }}</span> {{ label(section()) }}</span>
         <span class="pf-mm__spacer"></span>
         <span class="pf-mm__hint">Lab edits overlay the standards — used by the Culture bench (MIC200 C&amp;S)</span>
       </div>
@@ -88,7 +88,7 @@ interface EdModel {
                 <button type="button" class="pf-mm__item" [attr.aria-pressed]="section() === s.key"
                         (click)="select(s.key)">
                   <span class="pf-mm__iname">{{ s.title }}<span class="pf-mm__isub">{{ s.sub }}</span></span>
-                  <span class="pf-mm__icount nd-num">{{ countOf(s.key) }}</span>
+                  <span class="pf-mm__icount pf-num">{{ countOf(s.key) }}</span>
                 </button>
               </li>
             }
@@ -99,7 +99,7 @@ interface EdModel {
         <div class="pf-mm__split" [class.pf-mm__split--detail]="editor() || (section() === 'organisms' && selOrg())">
           <div class="pf-mm__grid">
             @if (listSkeleton()) {
-              <!-- First load of the masters: the grid's shape (ND-PATTERN "Loading feedback"). -->
+              <!-- First load of the masters: the grid's shape (PF-PATTERN "Loading feedback"). -->
               <pf-skeleton-table class="pf-mm__gridskel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
             }
             <ag-grid-angular
@@ -116,93 +116,93 @@ interface EdModel {
 
           @if (editor(); as ed) {
             <!-- The master-row EDITOR: side card; a sheet above the navbar on phones. -->
-            <div class="nd-sheet-backdrop" (click)="editor.set(null)" aria-hidden="true"></div>
-            <aside class="nd-card nd-sheet pf-mm__side pf-mm__side--editor" [attr.aria-label]="ed.isNew ? 'New ' + singular(ed.kind) : 'Edit ' + singular(ed.kind)">
-              <span class="nd-sheet__handle" aria-hidden="true"></span>
-              <div class="nd-card__head">
-                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-                <span class="nd-card__label pf-mm__sname">{{ ed.isNew ? 'New ' + singular(ed.kind) : ed.model.name || ed.model.antibiotic }}</span>
-                <span class="nd-card__spacer"></span>
-                <button type="button" class="nd-btn nd-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+            <div class="pf-sheet-backdrop" (click)="editor.set(null)" aria-hidden="true"></div>
+            <aside class="pf-card pf-sheet pf-mm__side pf-mm__side--editor" [attr.aria-label]="ed.isNew ? 'New ' + singular(ed.kind) : 'Edit ' + singular(ed.kind)">
+              <span class="pf-sheet__handle" aria-hidden="true"></span>
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+                <span class="pf-card__label pf-mm__sname">{{ ed.isNew ? 'New ' + singular(ed.kind) : ed.model.name || ed.model.antibiotic }}</span>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
               @if (!ed.isNew) {
                 <div class="pf-mm__smeta">{{ ed.model.tenantId || ed.model.tenant ? 'Lab-authored — editable in place' : 'Standard row — saving creates your lab\u2019s override' }}</div>
               }
 
               @if (ed.kind === 'specimens') {
                 <div class="pf-mm__slabel">Specimen</div>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Name</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Category</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.category" (ngModelChange)="patchEd('category', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Site</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.site" (ngModelChange)="patchEd('site', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Container</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.container" (ngModelChange)="patchEd('container', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Transport</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.transport" (ngModelChange)="patchEd('transport', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Suitable for</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.suitableFor" (ngModelChange)="patchEd('suitableFor', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Name</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Category</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.category" (ngModelChange)="patchEd('category', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Site</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.site" (ngModelChange)="patchEd('site', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Container</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.container" (ngModelChange)="patchEd('container', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Transport</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.transport" (ngModelChange)="patchEd('transport', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Suitable for</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.suitableFor" (ngModelChange)="patchEd('suitableFor', $event)" /></label>
               }
 
               @if (ed.kind === 'antibiotics') {
                 <div class="pf-mm__slabel">Antibiotic</div>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Name</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Short</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Class</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.abxClass" (ngModelChange)="patchEd('abxClass', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Group</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.drugGroup" (ngModelChange)="patchEd('drugGroup', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Name</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Short</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Class</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.abxClass" (ngModelChange)="patchEd('abxClass', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Group</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.drugGroup" (ngModelChange)="patchEd('drugGroup', $event)" /></label>
                 <div class="pf-mm__flags">
-                  <button type="button" class="nd-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.astApplicable" (click)="patchEd('astApplicable', !ed.model.astApplicable)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>AST</button>
-                  <button type="button" class="nd-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.diskDiffusion" (click)="patchEd('diskDiffusion', !ed.model.diskDiffusion)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Disk diffusion</button>
-                  <button type="button" class="nd-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.micTesting" (click)="patchEd('micTesting', !ed.model.micTesting)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>MIC</button>
+                  <button type="button" class="pf-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.astApplicable" (click)="patchEd('astApplicable', !ed.model.astApplicable)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>AST</button>
+                  <button type="button" class="pf-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.diskDiffusion" (click)="patchEd('diskDiffusion', !ed.model.diskDiffusion)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Disk diffusion</button>
+                  <button type="button" class="pf-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.micTesting" (click)="patchEd('micTesting', !ed.model.micTesting)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>MIC</button>
                 </div>
               }
 
               @if (ed.kind === 'organisms') {
                 <div class="pf-mm__slabel">Organism</div>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Name</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Short</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Group</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.group" (ngModelChange)="patchEd('group', $event)" placeholder="e.g. Enterobacterales" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Gram</span>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Name</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.name" (ngModelChange)="patchEd('name', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Short</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.shortName" (ngModelChange)="patchEd('shortName', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Group</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.group" (ngModelChange)="patchEd('group', $event)" placeholder="e.g. Enterobacterales" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Gram</span>
                   <pf-select size="sm" [options]="gramOptions" [value]="ed.model.gram || ''"
                              placeholder="Gram stain…" (valueChange)="patchEd('gram', $event)"></pf-select></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Significance</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.significance" (ngModelChange)="patchEd('significance', $event)" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Significance</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.significance" (ngModelChange)="patchEd('significance', $event)" /></label>
                 <div class="pf-mm__flags">
-                  <button type="button" class="nd-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.astApplicable" (click)="patchEd('astApplicable', !ed.model.astApplicable)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>AST applicable</button>
+                  <button type="button" class="pf-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.astApplicable" (click)="patchEd('astApplicable', !ed.model.astApplicable)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>AST applicable</button>
                 </div>
               }
 
               @if (ed.kind === 'breakpoints') {
                 <div class="pf-mm__slabel">Breakpoint mapping</div>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Organism group</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.organismGroup" (ngModelChange)="patchEd('organismGroup', $event)" placeholder="e.g. Enterobacterales" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Antibiotic</span>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Organism group</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.organismGroup" (ngModelChange)="patchEd('organismGroup', $event)" placeholder="e.g. Enterobacterales" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Antibiotic</span>
                   <pf-select size="sm" [options]="abxNameOptions()" [searchable]="true"
                              [value]="ed.model.antibiotic || ''" placeholder="Pick from the antibiotic master…"
                              (valueChange)="patchEd('antibiotic', $event)"></pf-select></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Short label</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.shortLabel" (ngModelChange)="patchEd('shortLabel', $event)" placeholder="e.g. AZA 30" /></label>
-                <label class="nd-field pf-mm__fld"><span class="nd-field__lbl">Disk</span><input class="nd-input nd-input--sm" [ngModel]="ed.model.diskLabel" (ngModelChange)="patchEd('diskLabel', $event)" placeholder="e.g. 30 μg" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Short label</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.shortLabel" (ngModelChange)="patchEd('shortLabel', $event)" placeholder="e.g. AZA 30" /></label>
+                <label class="pf-field pf-mm__fld"><span class="pf-field__lbl">Disk</span><input class="pf-input pf-input--sm" [ngModel]="ed.model.diskLabel" (ngModelChange)="patchEd('diskLabel', $event)" placeholder="e.g. 30 μg" /></label>
                 <div class="pf-mm__cutrow">
                   <label class="pf-mm__cut"><span class="pf-mm__s">S ≥</span>
-                    <input type="number" class="nd-input nd-num pf-mm__cutin" [ngModel]="ed.model.susceptibleMin" (ngModelChange)="patchEd('susceptibleMin', $event)" placeholder="mm" /></label>
+                    <input type="number" class="pf-input pf-num pf-mm__cutin" [ngModel]="ed.model.susceptibleMin" (ngModelChange)="patchEd('susceptibleMin', $event)" placeholder="mm" /></label>
                   <span class="pf-mm__cut pf-mm__i">I {{ ed.model.susceptibleMin != null && ed.model.resistantMax != null ? iWindow(ed.model.susceptibleMin, ed.model.resistantMax) : '—' }}</span>
                   <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
-                    <input type="number" class="nd-input nd-num pf-mm__cutin" [ngModel]="ed.model.resistantMax" (ngModelChange)="patchEd('resistantMax', $event)" placeholder="mm" /></label>
+                    <input type="number" class="pf-input pf-num pf-mm__cutin" [ngModel]="ed.model.resistantMax" (ngModelChange)="patchEd('resistantMax', $event)" placeholder="mm" /></label>
                 </div>
                 <div class="pf-mm__cutrow">
-                  <label class="pf-mm__cut"><span class="pf-mm__s">MIC S</span><input class="nd-input nd-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micS" (ngModelChange)="patchEd('micS', $event)" placeholder="≤ n" /></label>
-                  <label class="pf-mm__cut"><span class="pf-mm__i">I</span><input class="nd-input nd-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micI" (ngModelChange)="patchEd('micI', $event)" placeholder="n" /></label>
-                  <label class="pf-mm__cut"><span class="pf-mm__r">R</span><input class="nd-input nd-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micR" (ngModelChange)="patchEd('micR', $event)" placeholder="≥ n" /></label>
+                  <label class="pf-mm__cut"><span class="pf-mm__s">MIC S</span><input class="pf-input pf-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micS" (ngModelChange)="patchEd('micS', $event)" placeholder="≤ n" /></label>
+                  <label class="pf-mm__cut"><span class="pf-mm__i">I</span><input class="pf-input pf-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micI" (ngModelChange)="patchEd('micI', $event)" placeholder="n" /></label>
+                  <label class="pf-mm__cut"><span class="pf-mm__r">R</span><input class="pf-input pf-num pf-mm__cutin pf-mm__cutin--i" [ngModel]="ed.model.micR" (ngModelChange)="patchEd('micR', $event)" placeholder="≥ n" /></label>
                 </div>
                 <div class="pf-mm__flags">
-                  <button type="button" class="nd-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.urineOnly" (click)="patchEd('urineOnly', !ed.model.urineOnly)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Urine isolates only</button>
+                  <button type="button" class="pf-toggle pf-mm__flag" role="switch" [attr.aria-checked]="!!ed.model.urineOnly" (click)="patchEd('urineOnly', !ed.model.urineOnly)"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Urine isolates only</button>
                 </div>
               }
 
               </div>
               <div class="pf-mm__actions">
                 @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
-                  <button type="button" class="nd-btn nd-btn--tertiary pf-mm__del press" (click)="deleteEd()"
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-mm__del press" (click)="deleteEd()"
                           [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
                     {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
                   </button>
                 }
                 <span class="pf-mm__spacer"></span>
-                <button type="button" class="nd-btn nd-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
+                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
                   {{ saving() ? 'Saving…' : 'Save' }}
                 </button>
               </div>
@@ -211,15 +211,15 @@ interface EdModel {
             <!-- The organism's AST panel: its mapped antibiotics + cutoffs.
                  Rows come from the breakpoint table (group-resolved); adding
                  one writes a lab (tenant) breakpoint row. -->
-            <aside class="nd-card pf-mm__side" [attr.aria-label]="org.name + ' AST panel'">
-              <div class="nd-card__head">
-                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-                <span class="nd-card__label pf-mm__sname">{{ org.name }}</span>
-                <span class="nd-card__spacer"></span>
-                <button type="button" class="nd-btn nd-btn--secondary pf-mm__hbtn press" (click)="startEdit('organisms', org)">Edit</button>
-                <button type="button" class="nd-btn nd-btn--icon pf-mm__x press" (click)="selOrg.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+            <aside class="pf-card pf-mm__side" [attr.aria-label]="org.name + ' AST panel'">
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+                <span class="pf-card__label pf-mm__sname">{{ org.name }}</span>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--secondary pf-mm__hbtn press" (click)="startEdit('organisms', org)">Edit</button>
+                <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="selOrg.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
               <div class="pf-mm__smeta">{{ org.group || 'No group' }}@if (org.gram) { · {{ org.gram }} }</div>
 
               <div class="pf-mm__slabel">Mapped antibiotics ({{ mappedFor(org).length }})</div>
@@ -227,12 +227,12 @@ interface EdModel {
                 <div class="pf-mm__map" [class.pf-mm__map--off]="b.enabled === false">
                   <!-- On the bench = on this switch: only enabled drugs reach
                        the AST table in result entry. -->
-                  <button type="button" class="nd-toggle pf-mm__sw" role="switch" [attr.aria-checked]="b.enabled !== false"
+                  <button type="button" class="pf-toggle pf-mm__sw" role="switch" [attr.aria-checked]="b.enabled !== false"
                           [attr.aria-label]="'On the AST table: ' + b.antibiotic"
                           [title]="b.enabled === false ? 'Disabled — hidden from the AST table. Tap to enable.' : 'Enabled — shown on the AST table. Tap to disable.'"
                           [disabled]="mapBusy() === b.antibiotic" [attr.aria-busy]="mapBusy() === b.antibiotic ? 'true' : null"
                           (click)="toggleMapping(b)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                   <span class="pf-mm__mapname">{{ b.antibiotic }}
                     @if (b.shortLabel) { <span class="pf-mm__short">{{ b.shortLabel }}</span> }
@@ -271,15 +271,15 @@ interface EdModel {
                          (valueChange)="addAbxName.set($event)"></pf-select>
               <div class="pf-mm__cutrow">
                 <label class="pf-mm__cut"><span class="pf-mm__s">S ≥</span>
-                  <input type="number" class="nd-input nd-num pf-mm__cutin" [ngModel]="addS()" (ngModelChange)="addS.set($event)" placeholder="mm" /></label>
+                  <input type="number" class="pf-input pf-num pf-mm__cutin" [ngModel]="addS()" (ngModelChange)="addS.set($event)" placeholder="mm" /></label>
                 <label class="pf-mm__cut"><span class="pf-mm__i">I</span>
-                  <input type="text" class="nd-input nd-num pf-mm__cutin pf-mm__cutin--i"
+                  <input type="text" class="pf-input pf-num pf-mm__cutin pf-mm__cutin--i"
                          [value]="addS() != null && addR() != null ? iWindow(addS()!, addR()!) : ''"
                          (change)="setAddI($any($event.target).value)"
                          placeholder="a–b" title="Intermediate window (e.g. 14–16) — typing it sets the S and R cutoffs around it" /></label>
                 <label class="pf-mm__cut"><span class="pf-mm__r">R ≤</span>
-                  <input type="number" class="nd-input nd-num pf-mm__cutin" [ngModel]="addR()" (ngModelChange)="addR.set($event)" placeholder="mm" /></label>
-                <button type="button" class="nd-btn nd-btn--secondary pf-mm__add press" [disabled]="!canAdd() || saving()"
+                  <input type="number" class="pf-input pf-num pf-mm__cutin" [ngModel]="addR()" (ngModelChange)="addR.set($event)" placeholder="mm" /></label>
+                <button type="button" class="pf-btn pf-btn--secondary pf-mm__add press" [disabled]="!canAdd() || saving()"
                         [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveMapping(org)">{{ saving() ? 'Saving…' : 'Add' }}</button>
               </div>
               <p class="pf-mm__hint2">The Culture bench builds this organism's panel from these rows — S/I/R auto-interprets from the cutoffs.</p>
@@ -302,15 +302,15 @@ interface EdModel {
     /* Rail left, grid right — the departments-panel language. */
     .pf-mm__cols { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; }
     @media (max-width: 980px) { .pf-mm__cols { grid-template-columns: 1fr; } }
-    .pf-mm__rail { border: 1px solid var(--nd-line); border-radius: var(--nd-radius-card, 16px); background: var(--nd-card-bg); box-shadow: var(--nd-shadow-sm); padding: 10px; }
+    .pf-mm__rail { border: 1px solid var(--pf-line); border-radius: var(--pf-radius-card, 16px); background: var(--pf-card-bg); box-shadow: var(--pf-shadow-sm); padding: 10px; }
     .pf-mm__railhead { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-tertiary); padding: 4px 8px 8px; }
     .pf-mm__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .pf-mm__item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
       padding: 9px 11px; border-radius: 10px; cursor: pointer; text-align: left;
       background: transparent; border: 1px solid transparent; }
-    .pf-mm__item:hover { background: var(--nd-chip-bg); }
-    .pf-mm__item[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+    .pf-mm__item:hover { background: var(--pf-chip-bg); }
+    .pf-mm__item[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pf-mm__iname { display: flex; flex-direction: column; gap: 1px; min-width: 0;
       font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .pf-mm__isub { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
@@ -320,40 +320,40 @@ interface EdModel {
     .pf-mm__split--detail { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); }
     @media (max-width: 1100px) { .pf-mm__split--detail { grid-template-columns: 1fr; } }
     .pf-mm__grid { position: relative; border-radius: 12px; overflow: hidden; min-width: 0; }
-    .pf-mm__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
+    .pf-mm__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
     .pf-mm__side { max-height: 62vh; min-height: 0; }
-    .pf-mm__side .nd-card__body { gap: 6px; }
-    .pf-mm__side:not(.nd-sheet) .nd-sheet__handle { display: none; }
+    .pf-mm__side .pf-card__body { gap: 6px; }
+    .pf-mm__side:not(.pf-sheet) .pf-sheet__handle { display: none; }
     /* The phone-sheet scrim is only a scrim on phones — never a grid cell. */
-    @media (min-width: 641px) { .pf-mm__split > .nd-sheet-backdrop { display: none; } }
+    @media (min-width: 641px) { .pf-mm__split > .pf-sheet-backdrop { display: none; } }
     .pf-mm__x { width: 36px; height: 36px; min-height: 36px; }
     .pf-mm__hbtn { height: 36px; min-height: 36px; }
-    @media (max-width: 640px) { .pf-mm__side.nd-sheet { max-height: none; } }
+    @media (max-width: 640px) { .pf-mm__side.pf-sheet { max-height: none; } }
         .pf-mm__sname { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); }
     .pf-mm__smeta { font-size: 12px; color: var(--text-tertiary); margin: 0 0 4px; }
         .pf-mm__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 4px; }
-    .pf-mm__map { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--nd-radius-sm);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); margin-bottom: 5px; flex-wrap: wrap; }
+    .pf-mm__map { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--pf-radius-sm);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); margin-bottom: 5px; flex-wrap: wrap; }
     .pf-mm__map--off { opacity: .45; }
     .pf-mm__map--off .pf-mm__mapname { text-decoration: line-through; }
-    .pf-mm__sw { flex-shrink: 0; }   /* kit slate switch (.nd-toggle) */
+    .pf-mm__sw { flex-shrink: 0; }   /* kit slate switch (.pf-toggle) */
     .pf-mm__mapname { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; color: var(--text-primary);
       overflow-wrap: anywhere; }
     .pf-mm__mapbp { display: inline-flex; gap: 8px; font-size: 11.5px; font-weight: 600; font-style: normal;
       font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pf-mm__mapbp em { font-style: normal; }
-    /* Breakpoints are NEUTRAL (ND-PATTERN §13): only a PICKED S/I/R result carries colour. */
+    /* Breakpoints are NEUTRAL (PF-PATTERN §13): only a PICKED S/I/R result carries colour. */
     .pf-mm__s, .pf-mm__i, .pf-mm__r { color: var(--text-secondary); }
     .pf-mm__short { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--text-tertiary);
       border: 1px solid var(--border-subtle); border-radius: 6px; padding: 0 5px; font-variant-numeric: tabular-nums; }
     .pf-mm__micnote { font-size: 11px; font-weight: 500; color: var(--text-tertiary); }
-    .pf-mm__lab { font-size: 11px; font-weight: 500; color: var(--text-secondary); background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius-chip, 8px); padding: 1px 7px; }
-    .pf-mm__clsi { font-size: 11px; font-weight: 500; color: var(--text-tertiary); background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius-chip, 8px); padding: 1px 7px; }
+    .pf-mm__lab { font-size: 11px; font-weight: 500; color: var(--text-secondary); background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius-chip, 8px); padding: 1px 7px; }
+    .pf-mm__clsi { font-size: 11px; font-weight: 500; color: var(--text-tertiary); background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius-chip, 8px); padding: 1px 7px; }
     .pf-mm__mapx { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
       border: 1px solid transparent; cursor: pointer; color: var(--text-tertiary); background: transparent; }
-    .pf-mm__mapx:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .pf-mm__mapx:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
     .pf-mm__none { font-size: 12px; color: var(--text-tertiary); margin: 4px 0; }
     .pf-mm__cutrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
     .pf-mm__cut { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
@@ -367,7 +367,7 @@ interface EdModel {
         .pf-mm__flags { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0 4px; }
     .pf-mm__flag { font-size: 12.5px; min-height: 32px; }
     .pf-mm__actions { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 14px;
-      border-top: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+      border-top: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-mm__del { color: var(--red-text, #b91c1c); }
   `],
 })

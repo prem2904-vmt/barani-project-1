@@ -20,7 +20,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 
 /**
- * Reports list on the nd pattern (docs/ND-PATTERN.md → "Reports list"):
+ * Reports list on the nd pattern (docs/PF-PATTERN.md → "Reports list"):
  * ONE status filter in the band pill (no duplicate stats strip, no colour
  * dots), cards with the full name + Noto meta, no primary on the page, and
  * the Partial tab's truthful per-department model (the owner's order:
@@ -171,7 +171,7 @@ const menuItems = () => [...document.body.querySelectorAll('[role=menu] [role=me
 const closeMenus = () => document.querySelectorAll('.pf-am-layer').forEach(n => n.remove());
 
 const primaries = (el: HTMLElement) =>
-  el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary');
+  el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary');
 /** Component CSS with Angular's scoping attributes stripped. */
 const css = () => ((ReportQueueComponent as any).ɵcmp.styles as string[]).join('\n')
   .replace(/\[_ng(content|host)-%COMP%\]/g, '');
@@ -205,7 +205,7 @@ describe('Reports list (nd) — band', () => {
     expect(items.map(i => (i.querySelector('.seg-lbl') || i.querySelector('.pf-rq-seg__lbl'))!.textContent!.trim()))
       .toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Failed']);
     expect(items.map(i => (i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.textContent!.trim())).toEqual(['4', '2', '2', '1', '1']);
-    items.forEach(i => expect((i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.classList).toContain('nd-num'));
+    items.forEach(i => expect((i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.classList).toContain('pf-num'));
     // Default = Completed, raised neutral (aria-checked), never a gradient.
     expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-filter')).toBe('pending');
     // No duplicate strip anywhere, no second filter control.
@@ -241,7 +241,7 @@ describe('Reports list (nd) — band', () => {
     }
     c.toggle(PARTIAL_ORDER.id); f.detectChanges();
     expect(primaries(el).length).toBe(0);
-    expect(el.querySelector('.pf-rq-genpartial')!.classList).toContain('nd-btn--secondary');
+    expect(el.querySelector('.pf-rq-genpartial')!.classList).toContain('pf-btn--secondary');
   });
 });
 
@@ -259,10 +259,10 @@ describe('Reports list (nd) — report cards (Completed / Delivered / Failed / A
     expect(el.textContent).not.toContain('..');
     // ONE status per card (dot + coloured word, no chip) — see the status block below.
     expect(el.querySelector('pf-chip')).toBeNull();
-    // Row actions: kit .nd-rowact (secondary), text on web.
-    const acts = first.querySelectorAll('.nd-rowact');
+    // Row actions: kit .pf-rowact (secondary), text on web.
+    const acts = first.querySelectorAll('.pf-rowact');
     expect(acts.length).toBe(5);
-    expect(first.querySelector('.nd-rowact[aria-label="View"]')!.classList).not.toContain('nd-rowact--icon');
+    expect(first.querySelector('.pf-rowact[aria-label="View"]')!.classList).not.toContain('pf-rowact--icon');
     // List → report view zoom keeps working: every card is a zoom source.
     const zs = f.debugElement.queryAll(By.directive(ZoomSourceDirective));
     expect(zs.length).toBe(4);
@@ -272,24 +272,24 @@ describe('Reports list (nd) — report cards (Completed / Delivered / Failed / A
   it('touch: row actions become 44px icons (label kept for AT)', async () => {
     const { el, tab } = await render({ touch: true });
     tab('all');
-    const view = el.querySelector('.pf-rq-card--report .nd-rowact[aria-label="View"]') as HTMLElement;
-    expect(view.classList).toContain('nd-rowact--icon');
-    expect(view.querySelector('.nd-rowact__t')!.textContent).toBe('View');
+    const view = el.querySelector('.pf-rq-card--report .pf-rowact[aria-label="View"]') as HTMLElement;
+    expect(view.classList).toContain('pf-rowact--icon');
+    expect(view.querySelector('.pf-rowact__t')!.textContent).toBe('View');
   });
 
   it('View opens the report', async () => {
     const { el, tab, router } = await render();
     tab('all');
-    (el.querySelector('.pf-rq-card--report .nd-rowact[aria-label="View"]') as HTMLElement).click();
+    (el.querySelector('.pf-rq-card--report .pf-rowact[aria-label="View"]') as HTMLElement).click();
     expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'r1']);
   });
 
-  it('empty states use .nd-empty', async () => {
+  it('empty states use .pf-empty', async () => {
     const { el, tab } = await render({ queue: [], orders: [] });
     tab('delivered');
-    expect(el.querySelector('.nd-empty .nd-empty__title')!.textContent).toContain('No reports here');
+    expect(el.querySelector('.pf-empty .pf-empty__title')!.textContent).toContain('No reports here');
     tab('partial');
-    expect(el.querySelector('.nd-empty .nd-empty__title')!.textContent).toContain('No partial reports');
+    expect(el.querySelector('.pf-empty .pf-empty__title')!.textContent).toContain('No partial reports');
   });
 });
 
@@ -305,9 +305,9 @@ describe('Reports list (nd) — ONE status per card (dot + coloured word, no chi
       for (const card of cards) {
         const head = card.querySelector('.pf-rq-card__head') as HTMLElement;
         expect(statuses(head).length).toBe(1);
-        expect(head.querySelector('.nd-chip, pf-chip, .pf-rq-type, .pf-rq-unpaid, .pf-rq-chip')).toBeNull();
+        expect(head.querySelector('.pf-chip, pf-chip, .pf-rq-type, .pf-rq-unpaid, .pf-rq-chip')).toBeNull();
         const s = statuses(head)[0];
-        expect(s.classList).not.toContain('nd-chip');
+        expect(s.classList).not.toContain('pf-chip');
         expect(s.querySelector('.pf-rq-status__dot, .pf-rq-status__mark')).not.toBeNull();
       }
     }
@@ -385,7 +385,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     // 2 departments (MIC with 2 tubes, MOL): MIC is partly ready, MOL pending.
     // The count is a meta line under the name, not a chip; the status is ONE
     // amber "Preliminary" word.
-    expect(card.querySelector('.pf-rq-chip, .pf-rq-card__head .nd-chip')).toBeNull();
+    expect(card.querySelector('.pf-rq-chip, .pf-rq-card__head .pf-chip')).toBeNull();
     expect(card.querySelector('.pf-rq-card__count')!.textContent!.trim()).toBe('1 of 2 departments partly ready');
     const st = card.querySelectorAll('.pf-rq-card__head .pf-rq-status');
     expect(st.length).toBe(1);
@@ -398,7 +398,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     const depts = [...card.querySelectorAll<HTMLElement>('.pf-rq-dept')];
     expect(depts.length).toBe(1);                      // MOL has nothing ready → named in "Still pending" only
     const mic = depts[0];
-    expect(mic.querySelector('.pf-rq-dept__code')!.classList).toContain('nd-chip');
+    expect(mic.querySelector('.pf-rq-dept__code')!.classList).toContain('pf-chip');
     expect(mic.querySelector('.pf-rq-dept__name')!.textContent!.trim()).toBe('Microbiology');
     expect(mic.querySelector('.pf-rq-dept__note')!.textContent!.trim()).toBe('1 of 2 tests ready');
     const tests = [...mic.querySelectorAll<HTMLElement>('.pf-rq-test')];
@@ -675,7 +675,7 @@ describe('Reports list — ⋮ report actions', () => {
       const more = el.querySelector('.pf-rq-more') as HTMLButtonElement;
       expect(more.getAttribute('aria-label')).toBe('Report actions');
       expect(more.querySelectorAll('svg path').length).toBe(3);
-      expect(more.classList.contains('nd-rowact--icon')).toBe(touch);
+      expect(more.classList.contains('pf-rowact--icon')).toBe(touch);
       TestBed.resetTestingModule();
     }
   });

@@ -29,7 +29,7 @@ import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.c
 import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
-import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonRowsComponent, SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../shared/utils/min-duration';
@@ -175,7 +175,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
 
 /**
  * Billing counter — for branches in `billing_mode = separate_counter`
- * (ND-PATTERN §17).
+ * (PF-PATTERN §17).
  *
  *   • Band: back · tenant; the pill is ONE unified search (patients AND
  *     orders / invoices, grouped type-ahead) with the scan icon inside. Typing
@@ -197,7 +197,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
   imports: [
     DailyNoComponent,
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
-    HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
+    HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, PfDateComponent,
     InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
     BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, SkeletonTableComponent,
   ],
@@ -695,7 +695,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     const host = this.pill()?.nativeElement;
     if (!host) return;
     // Anchor to the visible pill: the band's pill box (web / tablet) or the
-    // phone field row. The dropdown is the pill's width (ND-PATTERN §7).
+    // phone field row. The dropdown is the pill's width (PF-PATTERN §7).
     const box = (host.closest('.pf-hb__search') as HTMLElement | null) ?? host;
     const anchor = this.phone() ? ((host.closest('.pf-hb__field') as HTMLElement | null) ?? box) : box;
     const r = anchor.getBoundingClientRect?.();
@@ -933,7 +933,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     return mode === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;
   });
   /** Until the panel is complete (e.g. cash received typed) the CTA is a
-   *  disabled secondary; it turns primary when it can go (ND-PATTERN §2). */
+   *  disabled secondary; it turns primary when it can go (PF-PATTERN §2). */
   readonly collectReady = computed(() => {
     const p = this.payPanel();
     return !!p && !p.confirmDisabled() && !this.paying();

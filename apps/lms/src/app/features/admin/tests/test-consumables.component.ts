@@ -35,10 +35,10 @@ interface InvItem { id: string; name: string; uom: string; }
       } @else {
         <div class="pf-tc__list">
           @for (line of lines(); track $index) {
-            <div class="nd-row pf-tc__row">
+            <div class="pf-row pf-tc__row">
               <pf-select class="pf-tc__item" [options]="itemOptions()" [searchable]="true" [value]="line.itemId || null"
                          placeholder="Item…" (valueChange)="setLine($index, 'itemId', $any($event) ?? '')"></pf-select>
-              <input class="nd-input nd-num pf-tc__qty" type="number" min="0" step="0.001" inputmode="decimal"
+              <input class="pf-input pf-num pf-tc__qty" type="number" min="0" step="0.001" inputmode="decimal"
                      [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index, 'qtyPerTest', +$event)"
                      placeholder="qty / test" aria-label="Quantity per test" />
               <button type="button" class="pf-tc__x press" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
@@ -50,9 +50,9 @@ interface InvItem { id: string; name: string; uom: string; }
             <p class="pf-tc__hint">No inventory items yet — add them under Admin → Inventory first.</p>
           }
           <div class="pf-tc__acts">
-            <button type="button" class="nd-btn nd-btn--tertiary press" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
+            <button type="button" class="pf-btn pf-btn--tertiary press" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
             <!-- Secondary: the editor's band owns the ONE primary (Save). -->
-            <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+            <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save consumables' }}
             </button>
           </div>
@@ -69,7 +69,7 @@ interface InvItem { id: string; name: string; uom: string; }
     .pf-tc__qty { width: 120px; flex: none; text-align: right; }
     .pf-tc__x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px;
       border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .pf-tc__x:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .pf-tc__x:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
     .pf-tc__acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 4px; }
     @media (max-width: 640px) { .pf-tc__row { flex-wrap: wrap; } .pf-tc__qty { flex: 1 1 auto; width: auto; } }
   `]

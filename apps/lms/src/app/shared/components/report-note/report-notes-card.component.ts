@@ -17,17 +17,17 @@ interface Row { scope: ReportNoteScope; id: string | null; title: string; hint: 
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (rows().length > 0) {
-      <section class="nd-card pf-rnc" aria-label="Report notes">
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true">
+      <section class="pf-card pf-rnc" aria-label="Report notes">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
           </span>
-          <h2 class="nd-card__label pf-rnc__label">Report notes</h2>
-          <span class="nd-card__note pf-rnc__note">
+          <h2 class="pf-card__label pf-rnc__label">Report notes</h2>
+          <span class="pf-card__note pf-rnc__note">
             {{ store.enabled() ? 'Printed on the final report where each belongs — not on a preliminary.' : 'Technician notes are off in Lab settings — saved notes still print on the final report.' }}
           </span>
         </header>
-        <div class="nd-card__body pf-rnc__body">
+        <div class="pf-card__body pf-rnc__body">
           @for (r of rows(); track r.scope + ':' + r.id) {
             <div class="pf-rnc__row" [attr.data-rnc]="r.scope + ':' + (r.id ?? '')">
               <div class="pf-rnc__head">
@@ -45,7 +45,7 @@ interface Row { scope: ReportNoteScope; id: string | null; title: string; hint: 
     :host { display: block; }
     .pf-rnc__label { margin: 0; font-size: 13px; line-height: 1.3; }
     .pf-rnc__body { gap: 12px; overflow: visible; }
-    .pf-rnc__row { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--nd-line, var(--border-muted)); }
+    .pf-rnc__row { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--pf-line, var(--border-muted)); }
     .pf-rnc__row:last-child { padding-bottom: 0; border-bottom: 0; }
     .pf-rnc__head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .pf-rnc__title { font-size: 14px; font-weight: 500; color: var(--text-primary); }

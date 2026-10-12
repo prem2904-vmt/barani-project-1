@@ -45,11 +45,11 @@ describe('daily patient number — on every lab screen', () => {
   });
 
   it('the chip is the kit class: quiet, rounded, tabular — never violet or monospace', () => {
-    const kit = src('shared/styles/_nd-kit.scss');
-    const body = kit.slice(kit.indexOf('.nd-dayno {'), kit.indexOf('}', kit.indexOf('.nd-dayno {')));
+    const kit = readFileSync('libs/shared/src/lib/styles/_pf-kit.scss', 'utf8');
+    const body = kit.slice(kit.indexOf('.pf-dayno {'), kit.indexOf('}', kit.indexOf('.pf-dayno {')));
     expect(body).toMatch(/border-radius: 999px/);
     expect(body).toMatch(/tabular-nums/);
-    expect(body).toMatch(/var\(--nd-chip-bg\)/);
+    expect(body).toMatch(/var\(--pf-chip-bg\)/);
     expect(body).not.toMatch(/violet|mono/i);
   });
 });

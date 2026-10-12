@@ -68,7 +68,7 @@ describe('Report designer — letterhead editor', () => {
     p.f.detectChanges();
     expect(p.c.selected()).toBe('address');
     expect(p.boxFor('Address').classList.contains('pf-rhe-box--sel')).toBe(true);
-    expect(p.el.querySelector('.pf-rhe-side .nd-card__label')?.textContent).toContain('Address');
+    expect(p.el.querySelector('.pf-rhe-side .pf-card__label')?.textContent).toContain('Address');
     expect(p.el.querySelector('textarea')).not.toBeNull();       // multi-line address
     expect(p.el.textContent).toContain('Under the lab name');
   });
@@ -196,8 +196,8 @@ describe('Report designer — letterhead editor', () => {
     // Its own card has the switch as well (it was suppressed for the band).
     p.c.select('banner');
     p.f.detectChanges();
-    expect(p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]')).not.toBeNull();
-    (p.el.querySelector('.pf-rhe-side .nd-toggle[aria-label="Print Banner"]') as HTMLButtonElement).click();
+    expect(p.el.querySelector('.pf-rhe-side .pf-toggle[aria-label="Print Banner"]')).not.toBeNull();
+    (p.el.querySelector('.pf-rhe-side .pf-toggle[aria-label="Print Banner"]') as HTMLButtonElement).click();
     p.f.detectChanges();
     expect(p.item('banner').hidden).toBeFalsy();
     expect(p.item('name').color).toBe('#ffffff');

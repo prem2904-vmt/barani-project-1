@@ -43,7 +43,7 @@ type Tab = 'mine' | 'all';
 /**
  * /pathologist — the consultant's validation queue.
  *
- * New design (docs/ND-PATTERN.md → "Pathologist queue"): band (search + All ·
+ * New design (docs/PF-PATTERN.md → "Pathologist queue"): band (search + All ·
  * Assigned to me) → QUEUE card (one tile per tube, sample ID first, one
  * status word, Urgent / Normal (order priority) groups, department filter) + SCOPE
  * side card (the consultant's departments, today's numbers, the ONE primary
@@ -77,7 +77,7 @@ type Tab = 'mine' | 'all';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign()) {
-    <!-- ═══ New design (docs/ND-PATTERN.md → "Pathologist queue") ═══
+    <!-- ═══ New design (docs/PF-PATTERN.md → "Pathologist queue") ═══
          Band: search + ONE neutral filter (All · Assigned to me) in the pill,
          Refresh as a quiet band action. Body: the QUEUE card (tiles per tube,
          URGENT / HIGH / ON TIME groups) + the SCOPE side card (the consultant's
@@ -105,27 +105,27 @@ type Tab = 'mine' | 'all';
         </ng-container>
       </pf-hero-band>
 
-      <div class="nd-body nd-body--split pv-body">
+      <div class="pf-body pf-body--split pv-body">
         <!-- ── Main card: the queue ── -->
-        <section class="nd-card pv-queue" aria-label="Pending validation">
-          <header class="nd-card__head pv-queue__head">
-            <span class="nd-card__icon" aria-hidden="true">
+        <section class="pf-card pv-queue" aria-label="Pending validation">
+          <header class="pf-card__head pv-queue__head">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
             </span>
-            <h2 class="nd-card__label">Pending validation</h2>
-            <span class="pv-count nd-num">{{ countLabel() }}</span>
-            <span class="nd-card__spacer"></span>
+            <h2 class="pf-card__label">Pending validation</h2>
+            <span class="pv-count pf-num">{{ countLabel() }}</span>
+            <span class="pf-card__spacer"></span>
             @if (deptFilters().length > 1) {
               <pf-segmented class="pv-depts" [options]="deptSegmentOptions()" [value]="dept()" (valueChange)="dept.set($any($event))" />
             }
           </header>
 
-          <div class="nd-card__body pv-scroll">
+          <div class="pf-card__body pv-scroll">
             @if (loading() && rows().length === 0) {
-              <ul class="pv-grid" ndTileGrid aria-hidden="true">
+              <ul class="pv-grid" pfTileGrid aria-hidden="true">
                 @for (i of [0,1,2]; track i) {
-                  <li><div class="pv-tile pv-tile--skel nd-tile-fill">
+                  <li><div class="pv-tile pv-tile--skel pf-tile-fill">
                     <pf-skeleton variant="line" width="40%" height="16px"></pf-skeleton>
                     <pf-skeleton variant="line" width="70%"></pf-skeleton>
                     <pf-skeleton variant="line" width="55%" height="10px"></pf-skeleton>
@@ -133,12 +133,12 @@ type Tab = 'mine' | 'all';
                 }
               </ul>
             } @else if (visibleTiles().length === 0) {
-              <div class="nd-empty pv-empty">
-                <span class="nd-empty__icon" aria-hidden="true">
+              <div class="pf-empty pv-empty">
+                <span class="pf-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 </span>
-                <p class="nd-empty__title">{{ emptyTitle() }}</p>
-                <p class="nd-empty__body">{{ emptyBody() }}</p>
+                <p class="pf-empty__title">{{ emptyTitle() }}</p>
+                <p class="pf-empty__body">{{ emptyBody() }}</p>
               </div>
             } @else {
               @for (grp of ndGroups(); track grp.priority) {
@@ -146,26 +146,26 @@ type Tab = 'mine' | 'all';
                   <h3 class="pv-group__h">
                     <span class="pv-group__dot" [attr.data-priority]="grp.priority" aria-hidden="true"></span>
                     {{ grp.label }}
-                    <span class="pv-group__n nd-num">{{ grp.tiles.length }}</span>
+                    <span class="pv-group__n pf-num">{{ grp.tiles.length }}</span>
                   </h3>
-                  <ul class="pv-grid" ndTileGrid>
+                  <ul class="pv-grid" pfTileGrid>
                     @for (g of grp.tiles; track g.key) {
                       @let st = status(g);
                       <li>
-                        <div class="pv-tile nd-tile-fill" role="button" tabindex="0"
+                        <div class="pv-tile pf-tile-fill" role="button" tabindex="0"
                              [attr.data-priority]="g.priority" [attr.data-status]="st.key"
                              [class.pv-tile--mine]="g.mine"
                              [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
                              [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
                              (click)="openOrder(g)" (keydown.enter)="openOrder(g)" (keydown.space)="$event.preventDefault(); openOrder(g)">
                           <div class="pv-tile__top">
-                            <span class="pv-tile__id nd-num">{{ g.sampleLabel }}</span>
+                            <span class="pv-tile__id pf-num">{{ g.sampleLabel }}</span>
                             <span class="pv-status" [attr.data-tone]="st.tone">
                               <span class="pv-status__dot" aria-hidden="true"></span>{{ st.label }}
                             </span>
                           </div>
                           <p class="pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
-                          <p class="pv-tile__meta nd-num">{{ tileMeta(g) }}</p>
+                          <p class="pv-tile__meta pf-num">{{ tileMeta(g) }}</p>
                           <p class="pv-tile__tests">{{ g.testNames.join(' · ') }}</p>
                           <div class="pv-tile__foot">
                             @if (g.mine) {
@@ -174,21 +174,21 @@ type Tab = 'mine' | 'all';
                             <span class="pv-tile__spacer"></span>
                             @if (unacknowledged(g)) {
                               <!-- NABL: the explicit acknowledgement of the tile's critical value(s). -->
-                              <button type="button" class="nd-rowact pv-ack" [class.nd-rowact--icon]="!web()"
+                              <button type="button" class="pf-rowact pv-ack" [class.pf-rowact--icon]="!web()"
                                       [disabled]="acking() === g.key"
                                       [attr.aria-label]="'Acknowledge critical result, sample ' + g.sampleLabel" title="Acknowledge critical result"
                                       (click)="$event.stopPropagation(); acknowledge(g)">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                                <span class="nd-rowact__t">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</span>
+                                <span class="pf-rowact__t">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</span>
                               </button>
                             }
-                            <button type="button" class="nd-rowact pv-review" [class.nd-rowact--icon]="!web()"
+                            <button type="button" class="pf-rowact pv-review" [class.pf-rowact--icon]="!web()"
                                     [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
                                     (click)="$event.stopPropagation(); openOrder(g)">
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                              <span class="nd-rowact__t">Review</span>
+                              <span class="pf-rowact__t">Review</span>
                             </button>
                           </div>
                         </div>
@@ -202,24 +202,24 @@ type Tab = 'mine' | 'all';
         </section>
 
         <!-- ── Side card: the consultant's scope + today + the ONE primary ── -->
-        @if (sheetOpen()) { <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
-        <aside class="nd-card pv-side" [class.nd-sheet]="sheetOpen()" [class.pv-side--open]="sheetOpen()"
+        @if (sheetOpen()) { <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
+        <aside class="pf-card pv-side" [class.pf-sheet]="sheetOpen()" [class.pv-side--open]="sheetOpen()"
                aria-label="Your scope" [attr.role]="sheetOpen() ? 'dialog' : null" [attr.aria-modal]="sheetOpen() ? true : null">
-          <span class="nd-sheet__handle" aria-hidden="true"></span>
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true">
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7"/></svg>
             </span>
-            <h2 class="nd-card__label">Your scope</h2>
-            <span class="nd-card__spacer"></span>
+            <h2 class="pf-card__label">Your scope</h2>
+            <span class="pf-card__spacer"></span>
             @if (sheetOpen()) {
-              <button type="button" class="nd-btn nd-btn--icon pv-side__x" aria-label="Close" (click)="sheetOpen.set(false)">
+              <button type="button" class="pf-btn pf-btn--icon pv-side__x" aria-label="Close" (click)="sheetOpen.set(false)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             }
           </header>
-          <div class="nd-card__body pv-side__body">
+          <div class="pf-card__body pv-side__body">
             <!-- Missing registration number: it prints under this
                  consultant's signature — they can add it themselves. -->
             <pf-regno-prompt />
@@ -227,10 +227,10 @@ type Tab = 'mine' | 'all';
             <div class="pv-side__depts">
               @if (scope()?.scoped) {
                 @for (d of scope()!.departments; track d.id) {
-                  <span class="nd-chip nd-chip--static pv-dept">{{ d.name }}</span>
+                  <span class="pf-chip pf-chip--static pv-dept">{{ d.name }}</span>
                 }
               } @else {
-                <span class="nd-chip nd-chip--static pv-dept">All departments</span>
+                <span class="pf-chip pf-chip--static pv-dept">All departments</span>
               }
             </div>
             <p class="pv-side__note">
@@ -245,20 +245,20 @@ type Tab = 'mine' | 'all';
 
             <p class="pv-side__h">Today</p>
             <dl class="pv-stats">
-              <div class="pv-stat"><dt>Pending</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().pending }}}</dd></div>
-              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().overdue }}}</dd></div>
-              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().critical }}}</dd></div>
-              <div class="pv-stat"><dt>Assigned to you</dt><dd class="nd-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().mine }}}</dd></div>
+              <div class="pv-stat"><dt>Pending</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().pending }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().overdue }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().critical }}}</dd></div>
+              <div class="pv-stat"><dt>Assigned to you</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().mine }}}</dd></div>
               @if (scope(); as s) {
-                <div class="pv-stat"><dt>Validated today</dt><dd class="nd-num">{{ s.validatedToday }}</dd></div>
-                <div class="pv-stat"><dt>By you</dt><dd class="nd-num">{{ s.validatedTodayByMe }}</dd></div>
+                <div class="pv-stat"><dt>Validated today</dt><dd class="pf-num">{{ s.validatedToday }}</dd></div>
+                <div class="pv-stat"><dt>By you</dt><dd class="pf-num">{{ s.validatedTodayByMe }}</dd></div>
               }
             </dl>
             <p class="pv-side__note">Open a sample to review every test on the tube, then validate, reject, reassign or send it back for correction.</p>
           </div>
-          <footer class="nd-card__foot">
-            <button type="button" class="nd-btn nd-span pv-next"
-                    [class.nd-btn--primary]="!!next()" [class.nd-btn--secondary]="!next()"
+          <footer class="pf-card__foot">
+            <button type="button" class="pf-btn pf-span pv-next"
+                    [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
                     [disabled]="!next()" (click)="reviewNext()">
               {{ next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review') }}
             </button>
@@ -267,15 +267,15 @@ type Tab = 'mine' | 'all';
       </div>
 
       <!-- Phones: the side card's summary + its primary, above the navbar. -->
-      <div class="nd-bottombar pv-bottombar">
-        <button type="button" class="nd-bottombar__info pv-bottombar__info" (click)="sheetOpen.set(true)"
+      <div class="pf-bottombar pv-bottombar">
+        <button type="button" class="pf-bottombar__info pv-bottombar__info" (click)="sheetOpen.set(true)"
                 aria-label="Show your scope and today's numbers">
-          <span class="nd-num">{{ stats().pending }}</span> pending
-          @if (stats().overdue) { · <span class="pv-bottombar__warn nd-num">{{ stats().overdue }} overdue</span> }
+          <span class="pf-num">{{ stats().pending }}</span> pending
+          @if (stats().overdue) { · <span class="pv-bottombar__warn pf-num">{{ stats().overdue }} overdue</span> }
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
         </button>
-        <button type="button" class="nd-btn pv-next pv-next--bar"
-                [class.nd-btn--primary]="!!next()" [class.nd-btn--secondary]="!next()"
+        <button type="button" class="pf-btn pv-next pv-next--bar"
+                [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
                 [disabled]="!next()" (click)="reviewNext()">Review next</button>
       </div>
     </section>
@@ -530,9 +530,8 @@ type Tab = 'mine' | 'all';
        them and draw the tube tile (lab work lists: sample ID primary). */
     .pv-nd {
       height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
-      padding: 24px 32px 0;
     }
-    .pv-nd .pv-body { padding: 0 0 16px; gap: 16px; }
+    .pv-nd .pv-body { padding: 16px 0 16px; gap: 16px; }
     /* Tablet: the side card stays, narrower. */
     @media (min-width: 641px) and (max-width: 1023px) {
       .pv-nd .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
@@ -559,17 +558,17 @@ type Tab = 'mine' | 'all';
     }
     .pv-group__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
     /* Group = ORDER priority. Dots: Normal neutral; red only for Urgent. */
-    .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nd-toggle-on); }
+    .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-on); }
     .pv-group__dot[data-priority='urgent'] { background: var(--red-text, #dc2626); }
 
     /* The tube tile. Sample ID leads (16.5 / 600, tabular), patient 13 / 500,
        meta 12 muted. Stripe only for an Urgent order (red). */
     .pv-tile {
       position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 132px;
-      padding: 14px 14px 12px 16px; border-radius: var(--nd-radius);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: inherit;
+      padding: 14px 14px 12px 16px; border-radius: var(--pf-radius);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: inherit;
       cursor: pointer; text-align: left; outline: none;
-      transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+      transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
     }
     .pv-tile::before {
       content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
@@ -577,7 +576,7 @@ type Tab = 'mine' | 'all';
     }
     .pv-tile[data-priority='urgent']::before { background: var(--red-text, #dc2626); }
     @media (hover: hover) and (pointer: fine) {
-      .pv-tile:hover { border-color: var(--nd-sel-border); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+      .pv-tile:hover { border-color: var(--pf-sel-border); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
     }
     .pv-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pv-tile--skel { cursor: default; gap: 10px; }
@@ -618,8 +617,8 @@ type Tab = 'mine' | 'all';
     .pv-side__note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
     .pv-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
     .pv-stat {
-      display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--nd-radius-sm);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--pf-radius-sm);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg);
     }
     .pv-stat dt { font-size: 12px; color: var(--text-tertiary); }
     .pv-stat dd { margin: 0; font-size: 18px; font-weight: 500; color: var(--text-primary); }
@@ -633,7 +632,7 @@ type Tab = 'mine' | 'all';
       .pv-nd { padding: 12px 16px 0; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
       .pv-nd .pv-body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
       .pv-side:not(.pv-side--open) { display: none; }
-      .pv-side.nd-sheet { border-radius: 20px 20px 0 0; }
+      .pv-side.pf-sheet { border-radius: 20px 20px 0 0; }
       .pv-refresh__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       .pv-queue__head { row-gap: 8px; }
       .pv-depts { flex: 1 1 100%; }

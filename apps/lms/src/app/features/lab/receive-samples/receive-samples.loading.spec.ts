@@ -13,7 +13,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
 
 /**
- * Receive samples — LOADING FEEDBACK (ND-PATTERN "Loading feedback"). The
+ * Receive samples — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). The
  * intake queue opens on a skeleton of its rows (held 600ms once shown, never
  * a blank list), and a row's Receive shows its busy state while ITS request
  * runs — other rows stay plain-disabled. What is sent is unchanged.

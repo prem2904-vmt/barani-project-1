@@ -5,7 +5,7 @@ import { AdvancedPatientSearchComponent } from './advanced-patient-search.compon
 import { ApiService } from '../../../core/services/api.service';
 
 /**
- * Advanced patient search — LOADING FEEDBACK (ND-PATTERN "Loading
+ * Advanced patient search — LOADING FEEDBACK (PF-PATTERN "Loading
  * feedback"): Search is busy (disabled + aria-busy, dots after 150ms) while
  * the request runs, and the results region draws the table's shape — never
  * a "No patients found" flash before the answer lands.

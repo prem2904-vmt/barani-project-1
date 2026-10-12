@@ -124,7 +124,7 @@ type SigTab = 'signature' | 'registration';
           <p class="pf-sig-regprompt" role="status">{{ regPrompt }}</p>
         }
         <div class="pf-sig-row" style="margin-top: 0;">
-          <input type="text" class="nd-input nd-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
+          <input type="text" class="pf-input pf-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
           <button type="button" class="pf-sig-cta pf-sig-cta--primary pf-classic-only" style="margin-top: 0;"
                   [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()">Save</button>
@@ -143,21 +143,21 @@ type SigTab = 'signature' | 'registration';
   styles: [`
     :host-context(.design-new) .pf-sig-col { max-width: 42rem; margin-inline: auto; width: 100%; }
     :host-context(.design-new) .pf-sig-tile:first-child { margin-top: 0; }
-    .pf-sig-tile { margin-top: 14px; padding: 18px; border-radius: var(--nd-radius-card, 16px);
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: var(--nd-shadow-sm); }
+    .pf-sig-tile { margin-top: 14px; padding: 18px; border-radius: var(--pf-radius-card, 16px);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: var(--pf-shadow-sm); }
     .pf-sig-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-tertiary, #94a3b8); margin-bottom: 10px; }
     .pf-sig-preview { background: #ffffff; border-radius: 12px; padding: 14px; display: flex; align-items: center;
-      justify-content: center; min-height: 110px; border: 1px solid var(--nd-line); }
+      justify-content: center; min-height: 110px; border: 1px solid var(--pf-line); }
     .pf-sig-preview img { max-width: 100%; max-height: 140px; object-fit: contain; }
     .pf-sig-empty { padding: 22px 6px 16px; }
     .pf-sig-empty p { margin: 0; font-size: 14px; color: var(--text-secondary, #cbd5e1); }
     .pf-sig-muted { color: var(--text-tertiary, #94a3b8) !important; font-size: 12.5px !important; margin-top: 4px !important; }
     .pf-sig-saving { display: flex; align-items: center; gap: 8px; }
     .pf-sig-row { display: flex; gap: 10px; margin-top: 14px; }
-    .pf-sig-cta { min-height: 44px; border-radius: var(--nd-radius-sm, 10px); padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-      border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); }
-    .pf-sig-cta:hover:not(:disabled) { background: var(--nd-chip-bg); }
+    .pf-sig-cta { min-height: 44px; border-radius: var(--pf-radius-sm, 10px); padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--pf-line); background: transparent; color: var(--text-secondary); }
+    .pf-sig-cta:hover:not(:disabled) { background: var(--pf-chip-bg); }
     /* The kit primary (gradient) — the ONE in view when the band has none. */
     .pf-sig-cta--primary { margin-top: 16px; background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3)); border-color: transparent; color: #fff; }
     .pf-sig-cta--danger { color: var(--red-text, #b91c1c); border-color: rgba(248,113,113,0.4); }

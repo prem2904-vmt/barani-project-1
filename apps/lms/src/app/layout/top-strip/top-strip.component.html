@@ -379,7 +379,7 @@
             fill="url(#pfAvatarGradient)" />
         </svg>
         <!-- My presence status — small colored dot pinned bottom-right of
-               the avatar (solid / white-dash for DND-grade / hollow for Away). -->
+               the avatar (solid / white-dash for DPF-grade / hollow for Away). -->
         <span class="pf-status-dot pf-avatar-status" [attr.data-presence]="presence.myStatus()"
           aria-hidden="true"></span>
         @if (profileOpen()) { <span class="pf-avatar-ring" aria-hidden="true"></span> }
@@ -406,7 +406,7 @@
         <div class="pf-profile-divider"></div>
 
         <!-- Presence status — current status row; tap to expand the 7
-               presets (Teams-style). DND-grade statuses note that calls +
+               presets (Teams-style). DPF-grade statuses note that calls +
                pushes are silenced while set. -->
         <button type="button" class="pf-profile-item pf-status-row press" (click)="toggleStatusList()"
           [attr.aria-expanded]="statusListOpen()" aria-label="Change status">

@@ -246,8 +246,8 @@ Use these standard library types and **enforce them with module boundary rules**
 - Use HTTPS everywhere; enforce CSP headers in production
 - Configure CORS correctly on the backend; never use wildcard origins for authenticated endpoints
 ## New-design UI pattern (REQUIRED)
-- All new-design screens MUST follow `docs/ND-PATTERN.md` and use the nd-kit
-  (`apps/lms/src/app/shared/styles/_nd-kit.scss` global classes, `_nd-mixins.scss`).
+- All new-design screens MUST follow `docs/PF-PATTERN.md` and use the pf-kit
+  (`apps/lms/src/app/shared/styles/_pf-kit.scss` global classes, `_pf-mixins.scss`).
 - Canonical example: Order & Payments (`apps/lms/src/app/features/frontdesk/order-create/`).
 - Non-negotiables: primary gradient ONLY on the single main CTA; the band is the same on
   every step and its pill is the context bar; band + main card + side card layout; slate

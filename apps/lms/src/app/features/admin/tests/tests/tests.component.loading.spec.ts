@@ -16,7 +16,7 @@ import { TestPricingService } from '../../../../core/services/test-pricing.servi
 import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
- * Test Master LIST — loading feedback (ND-PATTERN "Loading feedback"): the
+ * Test Master LIST — loading feedback (PF-PATTERN "Loading feedback"): the
  * first load draws skeleton rows in the grid's box, "Edit" turns busy the
  * same frame it is pressed (PageOpenService.markSource) and warms the
  * test editor's code on hover / focus so the tap doesn't wait on a download.

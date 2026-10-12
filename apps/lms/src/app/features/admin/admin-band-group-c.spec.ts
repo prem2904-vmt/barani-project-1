@@ -83,7 +83,7 @@ describe('Admin band — Vendors', () => {
     const p = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.tools()!.querySelector('.nd-seg[role="radiogroup"]')).not.toBeNull();
+    expect(p.tools()!.querySelector('.pf-seg[role="radiogroup"]')).not.toBeNull();
     expect(names(p.el).length).toBe(3);
   });
 
@@ -178,7 +178,7 @@ describe('Admin band — Referring network', () => {
     expect(add().classList.contains('pf-hb-btn--primary')).toBe(false);
     expect(add().classList.contains('pf-hb-btn--ghost')).toBe(true);
     expect(add().disabled).toBe(true);
-    const primaries = p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary');
+    const primaries = p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].closest('.pf-rn-modal__ftr')).not.toBeNull();
     p.cmp.closeHospitalEditor();
@@ -282,7 +282,7 @@ describe('Admin band — Inventory', () => {
     expect(p.api.get).toHaveBeenCalledWith('/api/inventory/tests/t1/consumables');
     expect(p.el.querySelectorAll('.bom-line').length).toBe(1);
     expect(text(p.el.querySelector('.bom-line__cover'))).toContain('250 tests');   // 500 on hand / 2 per test
-    const prim = Array.from(p.el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary')).filter(b => !b.closest('.pf-classic-only'));
+    const prim = Array.from(p.el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary')).filter(b => !b.closest('.pf-classic-only'));
     expect(prim.map(b => text(b).trim())).toEqual(['Save consumables']);
     prim[0].dispatchEvent(new Event('click'));
     await p.f.whenStable();

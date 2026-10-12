@@ -103,8 +103,8 @@ describe('User edit — DEPARTMENTS card', () => {
     const { el, f } = render(UserEditComponent, 'u1');
     await f.whenStable(); f.detectChanges();
     const card = el.querySelector('.pf-ue-depts') as HTMLElement;
-    expect(card.classList).toContain('nd-card');
-    expect(card.querySelector('.nd-card__label')!.textContent!.trim()).toBe('Departments');
+    expect(card.classList).toContain('pf-card');
+    expect(card.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Departments');
     expect(card.querySelector('pf-select.pf-ue-deptsel')).not.toBeNull();
     expect(el.querySelector('select, datalist')).toBeNull();
     expect(card.textContent).toContain(DEPARTMENTS_HINT);

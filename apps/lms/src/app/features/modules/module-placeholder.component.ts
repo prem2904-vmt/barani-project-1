@@ -23,18 +23,18 @@ import { MODULE_CATALOG, ModuleDef, moduleDef } from '../../core/modules/module-
           <!-- Same band as every step (owner). Nothing to search: the pill is
                the context bar — which module this is + its status. -->
           <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
-            <div band-search class="nd-ctx pf-phm-ctx">
-              <span class="nd-ctx__primary">{{ m.label }}</span>
-              <span class="nd-ctx__chip"><span class="nd-ctx__k">Status</span>Coming soon</span>
-              <span class="nd-ctx__chip"><span class="nd-ctx__k">Features</span><span class="nd-num">{{ m.features.length }}</span></span>
+            <div band-search class="pf-ctx pf-phm-ctx">
+              <span class="pf-ctx__primary">{{ m.label }}</span>
+              <span class="pf-ctx__chip"><span class="pf-ctx__k">Status</span>Coming soon</span>
+              <span class="pf-ctx__chip"><span class="pf-ctx__k">Features</span><span class="pf-num">{{ m.features.length }}</span></span>
             </div>
           </pf-hero-band>
         }
         <pf-screen-header class="pf-classic-only" [eyebrow]="'Module'" [title]="m.label" [subtitle]="m.blurb"></pf-screen-header>
 
         <div class="pf-band-body">
-        <div class="pf-ph nd-card">
-          <span class="nd-card__icon pf-ph__glyph">
+        <div class="pf-ph pf-card">
+          <span class="pf-card__icon pf-ph__glyph">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path [attr.d]="m.iconPath"></path>
@@ -48,9 +48,9 @@ import { MODULE_CATALOG, ModuleDef, moduleDef } from '../../core/modules/module-
 
           <div class="pf-ph__feats">
             @for (f of m.features; track f.key) {
-              <div class="nd-row pf-ph__feat">
+              <div class="pf-row pf-ph__feat">
                 <span class="pf-ph__dot" aria-hidden="true"></span>
-                <span class="nd-row__name pf-ph__feat-label">{{ f.label }}</span>
+                <span class="pf-row__name pf-ph__feat-label">{{ f.label }}</span>
               </div>
             }
           </div>
@@ -72,7 +72,7 @@ import { MODULE_CATALOG, ModuleDef, moduleDef } from '../../core/modules/module-
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
     .pf-ph__feat { min-height: 44px; text-align: left; }
-    .pf-ph__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--nd-sel-border); flex-shrink: 0; }
+    .pf-ph__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pf-sel-border); flex-shrink: 0; }
   `],
 })
 export class ModulePlaceholderComponent {

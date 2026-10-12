@@ -73,7 +73,7 @@ export type PpDetail =
   | { kind: 'trend'; key: string; testId: string; parameter: string; title: string };
 
 /**
- * Patient profile — CLINICAL-FIRST (docs/ND-PATTERN.md §22). A doctor or tech
+ * Patient profile — CLINICAL-FIRST (docs/PF-PATTERN.md §22). A doctor or tech
  * reads the patient's lab story in five seconds, then acts:
  *  band (context bar + New order) → SNAPSHOT (needs attention · in progress
  *  now · last visit) → CUMULATIVE RESULTS (analyte × visit grid) ‖ the

@@ -98,14 +98,14 @@
   top: 5.5rem;
   /* Never under the docked bottom navbar (new design): the footer used to
    * be cropped because the drawer ran to bottom:0 behind the bar. */
-  bottom: var(--nd-nav-h, 0px);
+  bottom: var(--pf-nav-h, 0px);
   width: min(100%, 460px);
   max-width: 100%;
-  background: var(--nd-card-bg);
+  background: var(--pf-card-bg);
   color: var(--text-primary);
-  border: 1px solid var(--nd-line);
+  border: 1px solid var(--pf-line);
   border-right: 0;
-  border-radius: var(--nd-radius-card) 0 0 var(--nd-radius-card);
+  border-radius: var(--pf-radius-card) 0 0 var(--pf-radius-card);
   box-shadow: -24px 0 60px rgba(15, 23, 42, 0.18);
   z-index: 45;
   display: flex;
@@ -113,7 +113,7 @@
   min-height: 0;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
-  animation: pf-drawer-in 240ms var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+  animation: pf-drawer-in 240ms var(--pf-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
 }
 
 /* New design (bottom navbar): no top strip — the drawer uses the full height
@@ -121,7 +121,7 @@
    emulated encapsulation scopes :root selectors so they never match. */
 :host-context(.nav-bottom) .pf-drawer {
   top: 12px;
-  bottom: calc(var(--nd-nav-h, 0px) + 12px);
+  bottom: calc(var(--pf-nav-h, 0px) + 12px);
 }
 
 /* Below the desktop breakpoint the floating nav pill is visible: keep the
@@ -146,8 +146,8 @@
   align-items: center;
   column-gap: 12px;
   padding: 16px 16px 14px 20px;
-  background: var(--nd-card-bg);
-  border-bottom: 1px solid var(--nd-line);
+  background: var(--pf-card-bg);
+  border-bottom: 1px solid var(--pf-line);
   flex-shrink: 0;
 }
 
@@ -220,7 +220,7 @@
 
 .pf-drawer__status[data-state='idle'] .pf-drawer__status-dot {
   background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--nd-sel-border);
+  box-shadow: inset 0 0 0 1.5px var(--pf-sel-border);
 }
 
 .pf-drawer__status[data-state='stopped'] .pf-drawer__status-dot {
@@ -230,20 +230,20 @@
 .pf-drawer__close {
   width: 36px;
   height: 36px;
-  border-radius: var(--nd-radius-sm);
-  background: var(--nd-card-bg);
-  border: 1px solid var(--nd-line);
+  border-radius: var(--pf-radius-sm);
+  background: var(--pf-card-bg);
+  border: 1px solid var(--pf-line);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
   cursor: pointer;
-  transition: border-color var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 200ms) ease;
+  transition: border-color var(--pf-dur-fast, 200ms) ease, color var(--pf-dur-fast, 200ms) ease;
 }
 
 .pf-drawer__close:hover {
-  border-color: var(--nd-sel-border);
+  border-color: var(--pf-sel-border);
   color: var(--text-primary);
 }
 
@@ -259,7 +259,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 16px 20px 20px;
-  background: var(--nd-card-bg);
+  background: var(--pf-card-bg);
 }
 
 /* ── Drawer footer ────────────────────────────────────── */
@@ -309,8 +309,8 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
-  background: var(--nd-card-bg);
-  border-top: 1px solid var(--nd-line);
+  background: var(--pf-card-bg);
+  border-top: 1px solid var(--pf-line);
 }
 
 .pf-drawer__actions .pf-drawer__act {
@@ -354,9 +354,9 @@
   padding: 0;
 }
 
-.pf-drawer__actions--touch .pf-drawer__act.nd-btn--secondary {
-  border-color: var(--nd-line);
-  background: var(--nd-card-bg);
+.pf-drawer__actions--touch .pf-drawer__act.pf-btn--secondary {
+  border-color: var(--pf-line);
+  background: var(--pf-card-bg);
   color: var(--text-secondary);
 }
 
@@ -374,12 +374,12 @@
 }
 
 /* Destructive last, in the final column (web grid). */
-.pf-drawer__actions:not(.pf-drawer__actions--touch) .pf-drawer__act.nd-btn--danger {
+.pf-drawer__actions:not(.pf-drawer__actions--touch) .pf-drawer__act.pf-btn--danger {
   grid-column: -2;
 }
 
 /* Destructive last: pushed to the far end on touch. */
-.pf-drawer__actions--touch .pf-drawer__act.nd-btn--danger {
+.pf-drawer__actions--touch .pf-drawer__act.pf-btn--danger {
   margin-left: auto;
 }
 
@@ -388,9 +388,9 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 0 20px;
-  background: var(--nd-card-bg);
-  border: 1px solid var(--nd-line);
-  border-radius: var(--nd-radius);
+  background: var(--pf-card-bg);
+  border: 1px solid var(--pf-line);
+  border-radius: var(--pf-radius);
   overflow: hidden;
 }
 
@@ -400,8 +400,8 @@
   gap: 2px;
   min-width: 0;
   padding: 12px 14px;
-  border-right: 1px solid var(--nd-line);
-  border-bottom: 1px solid var(--nd-line);
+  border-right: 1px solid var(--pf-line);
+  border-bottom: 1px solid var(--pf-line);
 }
 
 .pf-drawer__meta>div:nth-child(2n) {
@@ -452,8 +452,8 @@
   margin: 14px 0 18px;
   padding: 14px 16px 4px;
   border-radius: 12px;
-  background: var(--nd-done-tint);
-  border: 1px solid var(--nd-line);
+  background: var(--pf-done-tint);
+  border: 1px solid var(--pf-line);
 }
 
 .pf-prelim__hdr {
@@ -493,8 +493,8 @@
   padding: 10px 12px;
   margin-bottom: 10px;
   border-radius: 10px;
-  background: var(--nd-card-bg);
-  border: 1px solid var(--nd-line);
+  background: var(--pf-card-bg);
+  border: 1px solid var(--pf-line);
 }
 
 .pf-prelim__sample-hdr {
@@ -503,7 +503,7 @@
   gap: 8px;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--nd-line);
+  border-bottom: 1px solid var(--pf-line);
 }
 
 .pf-prelim__sample-dept {
@@ -511,7 +511,7 @@
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 6px;
-  background: var(--nd-chip-bg);
+  background: var(--pf-chip-bg);
   color: var(--text-secondary);
 }
 
@@ -599,8 +599,8 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: var(--nd-radius-chip);
-  background: var(--nd-chip-bg);
+  border-radius: var(--pf-radius-chip);
+  background: var(--pf-chip-bg);
   color: var(--text-secondary);
 }
 
@@ -670,7 +670,7 @@
   bottom: 2px;
   width: 2px;
   border-radius: 2px;
-  background: var(--nd-line);
+  background: var(--pf-line);
 }
 
 .pf-vtl__row[data-state='done']:not(:last-child)::before {
@@ -684,8 +684,8 @@
   width: var(--pf-vtl-marker);
   height: var(--pf-vtl-marker);
   border-radius: 9999px;
-  background: var(--nd-card-bg);
-  border: 1.5px solid var(--nd-sel-border);
+  background: var(--pf-card-bg);
+  border: 1.5px solid var(--pf-sel-border);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -700,7 +700,7 @@
 /* Current step: a violet ring with a violet centre + a soft pulse. */
 .pf-vtl__row[data-state='active'] .pf-vtl__node {
   border: 2px solid var(--color-violet-600, #7c3aed);
-  background: var(--nd-card-bg);
+  background: var(--pf-card-bg);
   animation: pf-tl-pulse 1.8s ease-out infinite;
 }
 
@@ -743,10 +743,10 @@
 .pf-vtl__sample-toggle {
   width: fit-content; max-width: 100%; min-height: 32px; padding: 2px 4px; margin: 0;
   display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px;
-  border: 0; border-radius: var(--nd-radius-sm, 8px);
+  border: 0; border-radius: var(--pf-radius-sm, 8px);
   background: transparent; color: inherit; text-align: left; cursor: pointer;
 }
-.pf-vtl__sample-toggle:hover { background: var(--nd-chip-bg); }
+.pf-vtl__sample-toggle:hover { background: var(--pf-chip-bg); }
 .pf-vtl__sample-toggle:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 .pf-vtl__sample-toggle > svg { width: 18px; height: 18px; transition: transform 150ms ease; }
 .pf-vtl__sample-toggle--open > svg { transform: rotate(180deg); }
@@ -759,9 +759,9 @@
   overflow-y: auto;
   padding: 5px 8px;
   margin: 2px 0 0;
-  border-left: 2px solid color-mix(in srgb, var(--color-violet-600, #7c3aed) 30%, var(--nd-line));
+  border-left: 2px solid color-mix(in srgb, var(--color-violet-600, #7c3aed) 30%, var(--pf-line));
   border-radius: 0 8px 8px 0;
-  background: color-mix(in srgb, var(--nd-chip-bg) 55%, transparent);
+  background: color-mix(in srgb, var(--pf-chip-bg) 55%, transparent);
   list-style: none;
 }
 .pf-vtl__sample {
@@ -771,7 +771,7 @@
   justify-content: space-between;
   gap: 6px;
   padding: 4px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--nd-line) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--pf-line) 70%, transparent);
 }
 .pf-vtl__sample-id {
   min-width: 0;
@@ -849,7 +849,7 @@
   }
 
   :host-context(.nav-bottom) .pf-drawer {
-    bottom: var(--nd-nav-h, 0px);
+    bottom: var(--pf-nav-h, 0px);
   }
 
   /* Name gets the full middle column; the status chip drops under the

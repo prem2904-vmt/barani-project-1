@@ -6,7 +6,7 @@
  */
 
 export type StockLevel = 'ok' | 'low' | 'out';
-/** `.nd-sdot` tones: '' neutral · done violet · warn amber · bad red. */
+/** `.pf-sdot` tones: '' neutral · done violet · warn amber · bad red. */
 export type DotTone = '' | 'done' | 'warn' | 'bad';
 
 export interface StockLike { onHand: number; reorderLevel: number; lowStock?: boolean }
@@ -97,7 +97,7 @@ export function itemCell(name: string, meta: string): HTMLElement {
   wrap.appendChild(n);
   if (meta) {
     const m = document.createElement('span');
-    m.className = 'inv-cell__meta nd-num';
+    m.className = 'inv-cell__meta pf-num';
     m.textContent = meta;
     wrap.appendChild(m);
   }
@@ -107,7 +107,7 @@ export function itemCell(name: string, meta: string): HTMLElement {
 /** A grid status cell: the kit's dot + neutral word. */
 export function dotCell(label: string, tone: DotTone): HTMLElement {
   const s = document.createElement('span');
-  s.className = 'nd-sdot';
+  s.className = 'pf-sdot';
   if (tone) s.setAttribute('data-tone', tone);
   s.textContent = label;
   return s;

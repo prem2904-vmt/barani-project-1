@@ -81,7 +81,7 @@ function render<T>(cmp: Type<T>, api = apiMock(), dialogOk = true) {
   return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog, toast };
 }
 
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 const noNative = (el: HTMLElement) => {
   expect(el.querySelectorAll('select, datalist').length).toBe(0);
   expect(el.innerHTML).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u); // no emoji icons
@@ -95,7 +95,7 @@ describe('Pharmacy screens', () => {
     const f = TestBed.createComponent(PharmacySectionsComponent);
     f.componentRef.setInput('active', 'stock');
     f.detectChanges();
-    const links = (f.nativeElement as HTMLElement).querySelectorAll('a.nd-seg__item');
+    const links = (f.nativeElement as HTMLElement).querySelectorAll('a.pf-seg__item');
     expect(links.length).toBe(PHARMACY_SECTIONS.length);
     const cur = (f.nativeElement as HTMLElement).querySelector('[aria-current="page"]');
     expect(cur?.textContent?.trim()).toBe('Stock');
@@ -173,7 +173,7 @@ describe('Pharmacy screens', () => {
     await flush(); f.detectChanges();
     expect(el.textContent).toContain('still due');
     expect(el.textContent).toContain('Collect ₹224');
-    (el.querySelector('.nd-btn--primary') as HTMLButtonElement).click();
+    (el.querySelector('.pf-btn--primary') as HTMLButtonElement).click();
     await flush(); f.detectChanges();
     expect(api.payDispense).toHaveBeenCalledWith('x1', { mode: 'upi', amount: 224 });
     expect(el.textContent).not.toContain('still due');

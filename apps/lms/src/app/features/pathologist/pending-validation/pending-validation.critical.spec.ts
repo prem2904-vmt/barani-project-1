@@ -102,7 +102,7 @@ describe('Pathologist queue — critical acknowledgement', () => {
     const statuses = [...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical · not acknowledged');
     expect(el.querySelectorAll('.pv-ack').length).toBe(1);
-    expect(el.querySelector('.pv-ack')?.classList.contains('nd-rowact')).toBe(true);
+    expect(el.querySelector('.pv-ack')?.classList.contains('pf-rowact')).toBe(true);
   });
 
   it('Acknowledge posts via the queue channel and the tile settles to a plain "Critical"', async () => {

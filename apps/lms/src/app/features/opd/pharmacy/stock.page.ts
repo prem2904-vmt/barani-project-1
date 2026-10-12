@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ModuleRegistry, type CellValueChangedEvent, type ColDef, type RowClickedEvent } from 'ag-grid-community';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -48,7 +48,7 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
 @Component({
   selector: 'pf-pharmacy-stock',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, NdDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
+  imports: [AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, PharmacyDrugPickerComponent, PharmacySectionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
@@ -73,19 +73,19 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
       </pf-hero-band>
 
       <div class="ph-body">
-        <section class="nd-card" aria-labelledby="ph-s-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-            <span class="nd-card__label" id="ph-s-t">Stock</span>
-            <div class="nd-seg" role="radiogroup" aria-label="Show">
+        <section class="pf-card" aria-labelledby="ph-s-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+            <span class="pf-card__label" id="ph-s-t">Stock</span>
+            <div class="pf-seg" role="radiogroup" aria-label="Show">
               @for (f of filters; track f.v) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="filter() === f.v" (click)="filter.set(f.v)">{{ f.l }} <span class="ph-muted nd-num">{{ count(f.v) }}</span></button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="filter() === f.v" (click)="filter.set(f.v)">{{ f.l }} <span class="ph-muted pf-num">{{ count(f.v) }}</span></button>
               }
             </div>
-            <span class="nd-card__spacer"></span>
+            <span class="pf-card__spacer"></span>
             <span class="ph-sub">Double-click a level to edit</span>
           </header>
-          <div class="nd-card__body ph-card-body--flush" style="position:relative">
+          <div class="pf-card__body ph-card-body--flush" style="position:relative">
             @if (showSkeleton()) { <pf-skeleton-table [rows]="8" [cols]="6"></pf-skeleton-table> }
             <ag-grid-angular class="ph-grid" style="height:100%" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="cols"
                              [getRowId]="rowId" [stopEditingWhenCellsLoseFocus]="true" [animateRows]="true"
@@ -94,40 +94,40 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
           </div>
         </section>
 
-        <aside class="nd-card" aria-labelledby="ph-sd-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
-            <span class="nd-card__label" id="ph-sd-t">{{ side() === 'receive' ? 'Receive stock' : 'Batches' }}</span>
-            <span class="nd-card__spacer"></span>
-            <div class="nd-seg" role="radiogroup" aria-label="Side card">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="side() === 'batches'" (click)="side.set('batches')">Batches</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="side() === 'receive'" (click)="side.set('receive')">Receive</button>
+        <aside class="pf-card" aria-labelledby="ph-sd-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+            <span class="pf-card__label" id="ph-sd-t">{{ side() === 'receive' ? 'Receive stock' : 'Batches' }}</span>
+            <span class="pf-card__spacer"></span>
+            <div class="pf-seg" role="radiogroup" aria-label="Side card">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="side() === 'batches'" (click)="side.set('batches')">Batches</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="side() === 'receive'" (click)="side.set('receive')">Receive</button>
             </div>
           </header>
           @if (side() === 'receive') {
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               @if (rDrug(); as d) {
                 <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ d.name }}</span><span class="ph-row__meta">{{ d.generic }}</span></span>
-                  <button type="button" class="nd-btn nd-btn--tertiary" (click)="rDrug.set(null)">Change</button></div>
+                  <button type="button" class="pf-btn pf-btn--tertiary" (click)="rDrug.set(null)">Change</button></div>
               } @else {
                 <pf-pharmacy-drug-picker [down]="true" placeholder="Which drug? — generic or brand" (picked)="pickReceive($event)"></pf-pharmacy-drug-picker>
               }
               <div class="ph-fields">
-                <div class="nd-field"><label class="nd-field__lbl" for="ph-rb">Batch no.</label><input id="ph-rb" class="nd-input nd-num" [value]="rBatch()" (input)="rBatch.set($any($event.target).value)" /></div>
-                <div class="nd-field"><span class="nd-field__lbl">Expiry</span><pf-nd-date label="Expiry" [value]="rExpiry()" [min]="today" (valueChange)="rExpiry.set($event)"></pf-nd-date></div>
-                <div class="nd-field"><label class="nd-field__lbl" for="ph-rq">Quantity (units)</label><input id="ph-rq" class="nd-input nd-num" type="number" min="1" inputmode="numeric" [value]="rQty() || ''" (input)="rQty.set(+$any($event.target).value)" /></div>
-                <div class="nd-field"><label class="nd-field__lbl" for="ph-rm">MRP per unit (₹)</label><input id="ph-rm" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rMrp() || ''" (input)="rMrp.set(+$any($event.target).value)" /></div>
-                <div class="nd-field"><label class="nd-field__lbl" for="ph-rc">Cost per unit (₹)</label><input id="ph-rc" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rCost() || ''" (input)="rCost.set(+$any($event.target).value)" /></div>
-                <div class="nd-field"><span class="nd-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="rSupplier()" (valueChange)="rSupplier.set($event)" placeholder="Optional" [searchable]="true"></pf-select></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="ph-rb">Batch no.</label><input id="ph-rb" class="pf-input pf-num" [value]="rBatch()" (input)="rBatch.set($any($event.target).value)" /></div>
+                <div class="pf-field"><span class="pf-field__lbl">Expiry</span><pf-date label="Expiry" [value]="rExpiry()" [min]="today" (valueChange)="rExpiry.set($event)"></pf-date></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="ph-rq">Quantity (units)</label><input id="ph-rq" class="pf-input pf-num" type="number" min="1" inputmode="numeric" [value]="rQty() || ''" (input)="rQty.set(+$any($event.target).value)" /></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="ph-rm">MRP per unit (₹)</label><input id="ph-rm" class="pf-input pf-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rMrp() || ''" (input)="rMrp.set(+$any($event.target).value)" /></div>
+                <div class="pf-field"><label class="pf-field__lbl" for="ph-rc">Cost per unit (₹)</label><input id="ph-rc" class="pf-input pf-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rCost() || ''" (input)="rCost.set(+$any($event.target).value)" /></div>
+                <div class="pf-field"><span class="pf-field__lbl">Supplier</span><pf-select [options]="supplierOpts()" [value]="rSupplier()" (valueChange)="rSupplier.set($event)" placeholder="Optional" [searchable]="true"></pf-select></div>
               </div>
-              <p class="nd-field__hint">For opening stock or a delivery without a purchase order. Orders are received from Purchases.</p>
+              <p class="pf-field__hint">For opening stock or a delivery without a purchase order. Orders are received from Purchases.</p>
             </div>
-            <div class="nd-card__foot">
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="clearReceive()">Clear</button>
-              <button type="button" class="nd-btn" [class.nd-btn--primary]="canReceive() && !dirty().size" [class.nd-btn--secondary]="!canReceive() || dirty().size" [disabled]="!canReceive() || busy()" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="receive()">Receive {{ rQty() || '' }}</button>
+            <div class="pf-card__foot">
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="clearReceive()">Clear</button>
+              <button type="button" class="pf-btn" [class.pf-btn--primary]="canReceive() && !dirty().size" [class.pf-btn--secondary]="!canReceive() || dirty().size" [disabled]="!canReceive() || busy()" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="receive()">Receive {{ rQty() || '' }}</button>
             </div>
           } @else {
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               @if (sel(); as s) {
                 <div>
                   <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ s.name }} <span class="ph-sch" [attr.data-rx]="isRx(s.schedule)">{{ schLabel(s.schedule) }}</span></div>
@@ -137,31 +137,31 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
                 @for (b of batches(); track b.id; let i = $index) {
                   <div class="ph-row" style="cursor:default;align-items:flex-start">
                     <span class="ph-row__main">
-                      <span class="ph-row__name nd-num">{{ b.batchNo }}</span>
-                      <span class="ph-row__meta nd-num">exp <span [class]="expChip(b.expiryDate).cls">{{ expChip(b.expiryDate).label }}</span> · {{ inr(b.mrp) }} MRP{{ i === 0 && !b.expired ? ' · sold first' : '' }}</span>
+                      <span class="ph-row__name pf-num">{{ b.batchNo }}</span>
+                      <span class="ph-row__meta pf-num">exp <span [class]="expChip(b.expiryDate).cls">{{ expChip(b.expiryDate).label }}</span> · {{ inr(b.mrp) }} MRP{{ i === 0 && !b.expired ? ' · sold first' : '' }}</span>
                       <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
-                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="adjust(b)">Adjust</button>
-                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="toSupplier(b)" [disabled]="b.qtyOnHand <= 0">Return to supplier</button>
-                        @if (b.expired && b.qtyOnHand > 0) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="writeOff(b)">Write off</button> }
+                        <button type="button" class="pf-btn pf-btn--tertiary" (click)="adjust(b)">Adjust</button>
+                        <button type="button" class="pf-btn pf-btn--tertiary" (click)="toSupplier(b)" [disabled]="b.qtyOnHand <= 0">Return to supplier</button>
+                        @if (b.expired && b.qtyOnHand > 0) { <button type="button" class="pf-btn pf-btn--tertiary" (click)="writeOff(b)">Write off</button> }
                       </span>
                     </span>
-                    <span class="ph-row__end"><span class="nd-num ph-strong">{{ b.qtyOnHand }}</span>
+                    <span class="ph-row__end"><span class="pf-num ph-strong">{{ b.qtyOnHand }}</span>
                       <span class="ph-dot" [attr.data-tone]="dotTone(b)">{{ b.expired ? 'Expired' : band(b) !== 'ok' ? 'Expires ' + exp(b.expiryDate) : 'In date' }}</span></span>
                   </div>
                 } @empty { <p class="ph-sub">No batches in stock.</p> }
                 <p class="ph-title">Ledger</p>
                 @for (m of moves(); track m.id) {
                   <div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px">
-                    <span><span class="ph-strong" style="margin-right:6px">{{ moveWord(m) }}</span><span class="ph-muted nd-num">{{ m.batchNo }} · {{ when(m.at) }}{{ m.byName ? ' · ' + m.byName : '' }}</span>@if (m.note) { <br><span class="ph-muted">{{ m.note }}</span> }</span>
-                    <span class="nd-num" [class.ph-strong]="m.qty > 0">{{ m.qty > 0 ? '+' : '' }}{{ m.qty }}</span>
+                    <span><span class="ph-strong" style="margin-right:6px">{{ moveWord(m) }}</span><span class="ph-muted pf-num">{{ m.batchNo }} · {{ when(m.at) }}{{ m.byName ? ' · ' + m.byName : '' }}</span>@if (m.note) { <br><span class="ph-muted">{{ m.note }}</span> }</span>
+                    <span class="pf-num" [class.ph-strong]="m.qty > 0">{{ m.qty > 0 ? '+' : '' }}{{ m.qty }}</span>
                   </div>
                 } @empty { <p class="ph-sub">No movements yet.</p> }
               } @else {
-                <div class="nd-empty nd-empty--compact"><p class="nd-empty__title">Pick a drug</p><p class="nd-empty__body">Its batches, actions and stock ledger show here.</p></div>
+                <div class="pf-empty pf-empty--compact"><p class="pf-empty__title">Pick a drug</p><p class="pf-empty__body">Its batches, actions and stock ledger show here.</p></div>
               }
             </div>
             @if (sel() && sel()!.expiredQty > 0) {
-              <div class="nd-card__foot"><button type="button" class="nd-btn nd-btn--danger nd-span" (click)="writeOffAll()">Write off all expired stock</button></div>
+              <div class="pf-card__foot"><button type="button" class="pf-btn pf-btn--danger pf-span" (click)="writeOffAll()">Write off all expired stock</button></div>
             }
           }
         </aside>

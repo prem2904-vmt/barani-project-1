@@ -88,7 +88,7 @@ describe('Culture case — band + context bar', () => {
     expect(prim.length).toBe(1);
     expect(prim[0].textContent?.trim()).toBe('Submit all results');
     expect((prim[0] as HTMLButtonElement).disabled).toBe(true);
-    expect(el.querySelector('.pf-cse-tech')?.classList.contains('nd-chip--static')).toBe(true);
+    expect(el.querySelector('.pf-cse-tech')?.classList.contains('pf-chip--static')).toBe(true);
     expect(el.querySelector('.pf-hb__actions .pf-cse-incubbtn')).toBeNull();
   });
 
@@ -106,7 +106,7 @@ describe('Culture case — band + context bar', () => {
     const { el } = render();
     const btn = el.querySelector('.pf-cse-nav .pf-cse-incubgrp .pf-cse-incubbtn')!;
     expect(btn.textContent).toContain('Inoculate & incubate');
-    expect(btn.classList.contains('nd-btn--secondary')).toBe(true);
+    expect(btn.classList.contains('pf-btn--secondary')).toBe(true);
     expect(btn.classList.contains('pf-hb-btn--primary')).toBe(false);
   });
 
@@ -134,9 +134,9 @@ describe('Culture case — stage tabs + rows', () => {
     cards.forEach(c => {
       const sub = c.querySelector('.pf-stg__submit')!;
       expect(sub.textContent?.trim()).toBe('Submit');
-      expect(sub.classList.contains('nd-btn--secondary')).toBe(true);
+      expect(sub.classList.contains('pf-btn--secondary')).toBe(true);
     });
-    expect(el.querySelectorAll('section.pf-stg .nd-btn--primary').length).toBe(0);
+    expect(el.querySelectorAll('section.pf-stg .pf-btn--primary').length).toBe(0);
   });
 
   it('a done stage shows a violet-check "Done" chip in its header', () => {

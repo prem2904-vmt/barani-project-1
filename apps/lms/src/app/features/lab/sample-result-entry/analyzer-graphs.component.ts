@@ -28,21 +28,21 @@ export interface AnalyzerGraph {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="nd-card pf-ag" aria-label="Analyzer graphs">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <section class="pf-card pf-ag" aria-label="Analyzer graphs">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M4 19c3-1 4-12 7-12s3 9 5 9 3-3 4-3"/></svg>
         </span>
-        <span class="nd-card__label">Analyzer graphs</span>
+        <span class="pf-card__label">Analyzer graphs</span>
         @if (source()) {
-          <span class="nd-chip nd-chip--static pf-ag__src nd-num">
+          <span class="pf-chip pf-chip--static pf-ag__src pf-num">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
             {{ source() }}
           </span>
         }
-        <span class="pf-ag__count nd-num">{{ graphs().length }}</span>
+        <span class="pf-ag__count pf-num">{{ graphs().length }}</span>
       </header>
-      <div class="nd-card__body">
+      <div class="pf-card__body">
         <ul class="pf-ag__grid">
           @for (g of graphs(); track g.key; let i = $index) {
             <li class="pf-ag__item" [class.pf-ag__item--off]="!g.show">
@@ -53,7 +53,7 @@ export interface AnalyzerGraph {
               </button>
               <div class="pf-ag__meta">
                 <span class="pf-ag__name">{{ g.label }}</span>
-                <span class="pf-ag__code nd-num">Code {{ g.code }}</span>
+                <span class="pf-ag__code pf-num">Code {{ g.code }}</span>
               </div>
               @if (!readOnly()) {
                 <button type="button" class="pf-ag__eye" [attr.aria-pressed]="g.show"
@@ -78,14 +78,14 @@ export interface AnalyzerGraph {
            tabindex="-1" #lightbox (keydown)="onKey($event)"
            (pointerdown)="onDown($event)" (pointerup)="onUp($event)">
         <div class="pf-ag-lb__bar">
-          <span class="pf-ag-lb__title">{{ g.label }} <span class="pf-ag-lb__sub nd-num">· Code {{ g.code }} · {{ (openIndex() ?? 0) + 1 }} / {{ graphs().length }}</span></span>
-          <button type="button" class="nd-btn nd-btn--icon pf-ag-lb__close" (click)="close()" aria-label="Close">
+          <span class="pf-ag-lb__title">{{ g.label }} <span class="pf-ag-lb__sub pf-num">· Code {{ g.code }} · {{ (openIndex() ?? 0) + 1 }} / {{ graphs().length }}</span></span>
+          <button type="button" class="pf-btn pf-btn--icon pf-ag-lb__close" (click)="close()" aria-label="Close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
         <div class="pf-ag-lb__stage">
           @if (graphs().length > 1) {
-            <button type="button" class="nd-btn nd-btn--icon pf-ag-lb__nav pf-ag-lb__nav--prev" (click)="step(-1)" aria-label="Previous graph">
+            <button type="button" class="pf-btn pf-btn--icon pf-ag-lb__nav pf-ag-lb__nav--prev" (click)="step(-1)" aria-label="Previous graph">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           }
@@ -93,7 +93,7 @@ export interface AnalyzerGraph {
             @if (src(g); as s) { <img [src]="s" [alt]="g.label" draggable="false" /> }
           </div>
           @if (graphs().length > 1) {
-            <button type="button" class="nd-btn nd-btn--icon pf-ag-lb__nav pf-ag-lb__nav--next" (click)="step(1)" aria-label="Next graph">
+            <button type="button" class="pf-btn pf-btn--icon pf-ag-lb__nav pf-ag-lb__nav--next" (click)="step(1)" aria-label="Next graph">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
           }
@@ -110,7 +110,7 @@ export interface AnalyzerGraph {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
     @media (min-width: 900px) { .pf-ag__grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); } }
     .pf-ag__item { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px;
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); background: var(--nd-card-bg); }
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); background: var(--pf-card-bg); }
     .pf-ag__item--off .pf-ag__thumb img { opacity: .45; }
     .pf-ag__thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 156 / 111; padding: 4px;
       border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: zoom-in; overflow: hidden; }
@@ -124,12 +124,12 @@ export interface AnalyzerGraph {
     .pf-ag__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-ag__code { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-ag__eye { position: absolute; right: 6px; bottom: 6px; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
-      border: 1px solid var(--nd-line); border-radius: 999px; background: var(--nd-card-bg); color: var(--text-tertiary); cursor: pointer; }
+      border: 1px solid var(--pf-line); border-radius: 999px; background: var(--pf-card-bg); color: var(--text-tertiary); cursor: pointer; }
     .pf-ag__eye[aria-pressed="true"] { color: var(--color-violet-600, #7c3aed); border-color: color-mix(in srgb, #7c3aed 40%, transparent); }
     @media (pointer: coarse) { .pf-ag__eye { width: 44px; height: 44px; } }
 
     .pf-ag-lb { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; outline: none;
-      background: rgba(15, 23, 42, .86); touch-action: pan-y; animation: pf-ag-in var(--nd-dur, 320ms) var(--nd-spring, ease); }
+      background: rgba(15, 23, 42, .86); touch-action: pan-y; animation: pf-ag-in var(--pf-dur, 320ms) var(--pf-spring, ease); }
     @keyframes pf-ag-in { from { opacity: 0; } }
     .pf-ag-lb__bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); color: #fff; }
     .pf-ag-lb__title { flex: 1 1 auto; font-size: 15px; font-weight: 600; }

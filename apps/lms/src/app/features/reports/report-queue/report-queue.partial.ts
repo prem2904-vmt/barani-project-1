@@ -4,7 +4,7 @@ import { plural } from '../../../shared/utils/plural';
 import { isSignedOrSkipped, NOT_REPORTED } from '../../../shared/utils/line-status';
 
 /**
- * Reports list — the PARTIAL tab's model (docs/ND-PATTERN.md → "Reports list").
+ * Reports list — the PARTIAL tab's model (docs/PF-PATTERN.md → "Reports list").
  *
  * A partial report is built per TUBE: `/api/reports/generate/partial` takes the
  * ids of the samples whose every test is validated. The old card counted those
@@ -267,7 +267,7 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
   return out;
 }
 
-/** The card's ONE status (docs/ND-PATTERN.md → "Reports list"): a dot +
+/** The card's ONE status (docs/PF-PATTERN.md → "Reports list"): a dot +
  *  coloured word in the right-hand status column, never a chip, never two.
  *  Tones are the Frontdesk rows' (`--<tone>-text` tokens). Priority:
  *    Failed (red) › Unpaid (red, only while not yet delivered) ›

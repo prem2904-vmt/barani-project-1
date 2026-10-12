@@ -13,7 +13,7 @@ import { DialogService } from '../../../core/services/dialog.service';
  * with no hospital and linked to one or more hospitals later; a hospital can
  * be created with existing doctors attached. Both lists filter both ways.
  */
-/** Same probes as admin-nd-audit-d.spec (not imported: importing a spec
+/** Same probes as admin-pf-audit-d.spec (not imported: importing a spec
  *  file would re-register its suites here). */
 function hygiene(el: HTMLElement) {
   expect(el.querySelector('select, datalist')).toBeNull();
@@ -21,7 +21,7 @@ function hygiene(el: HTMLElement) {
   expect(/[✕✓✔⠿●↑↓]/.test(el.textContent ?? '')).toBe(false);
 }
 const primaries = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary'))
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
 const HOSPITALS = [

@@ -19,7 +19,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ThemeService } from '../../../core/services/theme.service';
 
 /**
- * Sample collection — LOADING FEEDBACK (ND-PATTERN "Loading feedback").
+ * Sample collection — LOADING FEEDBACK (PF-PATTERN "Loading feedback").
  * The queue never claims "No samples waiting" before it has answered (a
  * skeleton of its rows after 150ms instead), and Dispatch shows its busy
  * state while the dispatch request runs. What is sent is unchanged.

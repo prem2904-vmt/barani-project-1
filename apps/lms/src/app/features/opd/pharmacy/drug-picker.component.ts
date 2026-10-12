@@ -26,7 +26,7 @@ import { needsPrescription, scheduleLabel, unitWords } from './pharmacy-math';
                (keydown.enter)="enter($event)" (keydown.escape)="open.set(false)" />
       </label>
       @if (open()) {
-        <div class="ph-add__list nd-anim-in" [class.ph-add__list--down]="down()" role="listbox" [id]="listId" aria-label="Drugs">
+        <div class="ph-add__list pf-anim-in" [class.ph-add__list--down]="down()" role="listbox" [id]="listId" aria-label="Drugs">
           @for (d of results(); track d.id; let i = $index) {
             <button type="button" class="ph-add__opt" role="option" [attr.aria-selected]="i === hi()"
                     (mouseenter)="hi.set(i)" (mousedown)="$event.preventDefault()" (click)="pick(d)">
@@ -35,7 +35,7 @@ import { needsPrescription, scheduleLabel, unitWords } from './pharmacy-math';
                 <span class="ph-row__meta">{{ d.generic || '—' }}{{ d.strength ? ' · ' + d.strength : '' }}</span>
               </span>
               <span class="ph-row__end">
-                <span class="nd-num" [class.ph-muted]="!(d.onHand ?? 0)">{{ (d.onHand ?? 0) ? stock(d) : 'No stock' }}</span>
+                <span class="pf-num" [class.ph-muted]="!(d.onHand ?? 0)">{{ (d.onHand ?? 0) ? stock(d) : 'No stock' }}</span>
               </span>
             </button>
           } @empty {

@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PatientRegisterComponent } from './patient-register.component';
-import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
+import { PATIENT_REGISTER_ND_STYLES } from './patient-register.pf.styles';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -15,7 +15,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
 /**
- * Patient registration — NEW DESIGN (ND-PATTERN §15: ONE single form, no
+ * Patient registration — NEW DESIGN (PF-PATTERN §15: ONE single form, no
  * tabs, keyboard-first). Band = back · tenant · actions with ONE primary;
  * the pill = the patient's name only; every section is a card on the same
  * screen (3 / 2 / 1 columns); Enter walks the fields and submits on the
@@ -106,7 +106,7 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?:
     f.detectChanges();
   };
   const seg = (field: string, label: string) => {
-    (Array.from(el.querySelectorAll<HTMLButtonElement>(`[data-field="${field}"] .nd-seg__item`)).find(b => b.textContent!.trim() === label))!.click();
+    (Array.from(el.querySelectorAll<HTMLButtonElement>(`[data-field="${field}"] .pf-seg__item`)).find(b => b.textContent!.trim() === label))!.click();
     f.detectChanges();
   };
   const fillAll = () => {
@@ -129,7 +129,7 @@ describe('Patient registration — new design: ONE form', () => {
     const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
     expect(primaries.length).toBe(1);
     expect(txt(primaries[0])).toBe('Register patient');
-    expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, .pf-btn-primary').length).toBe(1);
+    expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, .pf-btn-primary').length).toBe(1);
     const ghosts = Array.from(el.querySelectorAll('pf-hero-band .pf-hb-btn--ghost')).map(b => txt(b));
     expect(ghosts).toEqual(['Cancel', 'Save & Book test', 'Save & Book appointment']);
     expect(el.querySelector('pf-screen-header, h1')).toBeNull();
@@ -140,13 +140,13 @@ describe('Patient registration — new design: ONE form', () => {
 
   it('pill = the name chip ✎ … and the ABHA helpers at its right — no tabs, no fact chips', () => {
     const { el, txt } = render();
-    const ctx = el.querySelector('pf-hero-band .nd-ctx')!;
+    const ctx = el.querySelector('pf-hero-band .pf-ctx')!;
     expect(txt(ctx.querySelector('.pf-reg-ctx__nametext'))).toBe('New patient');
-    expect(Array.from(ctx.children).map(k => k.className.split(' ')[0])).toEqual(['nd-ctx__primary', 'pf-reg-ctx__abha']);
+    expect(Array.from(ctx.children).map(k => k.className.split(' ')[0])).toEqual(['pf-ctx__primary', 'pf-reg-ctx__abha']);
     const abha = Array.from(ctx.querySelectorAll('.pf-reg-ctx__abha button'));
     expect(abha.map(b => b.getAttribute('aria-label'))).toEqual(['Fill from ABHA', 'Create ABHA']);
-    expect(abha.every(b => b.classList.contains('nd-btn--quiet') && !!b.querySelector('svg'))).toBe(true);
-    expect(el.querySelector('[role="tablist"], [role="tab"], .nd-ctx__chip, .pf-reg-next')).toBeNull();
+    expect(abha.every(b => b.classList.contains('pf-btn--quiet') && !!b.querySelector('svg'))).toBe(true);
+    expect(el.querySelector('[role="tablist"], [role="tab"], .pf-ctx__chip, .pf-reg-next')).toBeNull();
   });
 
   it('the pill is the STANDARD band-pill size (not full width): pf-hero-band [standardPill]', () => {
@@ -159,13 +159,13 @@ describe('Patient registration — new design: ONE form', () => {
   it('phones: the ABHA helpers are icons (labels kept for AT)', () => {
     const phone = PATIENT_REGISTER_ND_STYLES.slice(PATIENT_REGISTER_ND_STYLES.indexOf('@media (max-width: 640px)'));
     expect(phone).toMatch(/\.pf-reg-abha__t \{ position: absolute; width: 1px/);
-    expect(phone).toMatch(/\.pf-reg-ctx__abha \.nd-btn--quiet \{ width: 40px/);
+    expect(phone).toMatch(/\.pf-reg-ctx__abha \.pf-btn--quiet \{ width: 40px/);
   });
 
   it('every section renders at once, as its own card with "N required"', () => {
     const { el, txt } = render();
-    const cards = Array.from(el.querySelectorAll('.pf-wr-cards > .pf-wr-card.nd-card'));
-    expect(cards.map(c => txt(c.querySelector('.nd-card__label')))).toEqual(['Patient identity', 'Contact & IDs', 'Additional details']);
+    const cards = Array.from(el.querySelectorAll('.pf-wr-cards > .pf-wr-card.pf-card'));
+    expect(cards.map(c => txt(c.querySelector('.pf-card__label')))).toEqual(['Patient identity', 'Contact & IDs', 'Additional details']);
     expect(cards.map(c => txt(c.querySelector('.pf-wr-card__note')))).toEqual(['3 required', '1 required', 'Optional']);
     for (const f of ['title', 'first_name', 'sex', 'date_of_birth', 'phone', 'abha_id', 'email', 'occupation']) {
       expect(el.querySelector(`[data-field="${f}"]`), f).not.toBeNull();
@@ -224,20 +224,20 @@ describe('Patient registration — new design: ONE form', () => {
     const { el, txt } = render();
     const cards = Array.from(el.querySelectorAll('.pf-reg-form .pf-wr-cards > .pf-wr-card'));
     expect(cards.map(c => c.getAttribute('data-step'))).toEqual(['st1__identity', 'st1__contact', 'st2']);
-    expect(txt(cards[2].querySelector('.nd-card__label'))).toBe('Additional details');
+    expect(txt(cards[2].querySelector('.pf-card__label'))).toBe('Additional details');
     const compiled = ((PatientRegisterComponent as any).ɵcmp.styles as string[]).join('\n');
     expect(compiled).toMatch(/\.pf-reg-form\[[^\]]+\]\s+\.pf-wr-cards\s*>\s*\[data-step\$="?__contact"?\]/);
   });
 
-  it('kit fields: nd-input, the amber required dot, tabular numbers; NO ABHA buttons in the card headers', () => {
+  it('kit fields: pf-input, the amber required dot, tabular numbers; NO ABHA buttons in the card headers', () => {
     const { el } = render();
     const first = el.querySelector('[data-field="first_name"]')!;
-    expect(first.querySelector('input.nd-input')).not.toBeNull();
-    expect(first.querySelector('.nd-field__lbl .nd-dot-unpriced[aria-label="required"]')).not.toBeNull();
-    expect(el.querySelector('[data-field="phone"] input[type="tel"].nd-num')).not.toBeNull();
-    expect(el.querySelector('[data-field="abha_id"] input.nd-input.nd-num')).not.toBeNull();
+    expect(first.querySelector('input.pf-input')).not.toBeNull();
+    expect(first.querySelector('.pf-field__lbl .pf-dot-unpriced[aria-label="required"]')).not.toBeNull();
+    expect(el.querySelector('[data-field="phone"] input[type="tel"].pf-num')).not.toBeNull();
+    expect(el.querySelector('[data-field="abha_id"] input.pf-input.pf-num')).not.toBeNull();
     expect(el.querySelector('.pf-input')).toBeNull();
-    expect(el.querySelector('.pf-wr-card .nd-card__head button')).toBeNull();
+    expect(el.querySelector('.pf-wr-card .pf-card__head button')).toBeNull();
   });
 
   it('Date of birth is EMPTY by default (typed dd/mm/yyyy, no native date box) and no DOB is ever submitted', async () => {
@@ -367,7 +367,7 @@ describe('Patient registration — errors + behaviour kept', () => {
     await flush();
     expect(api.post).not.toHaveBeenCalled();
     const first = el.querySelector('[data-field="first_name"]')!;
-    expect(first.querySelector('input.nd-input--error[aria-invalid="true"]')).not.toBeNull();
+    expect(first.querySelector('input.pf-input--error[aria-invalid="true"]')).not.toBeNull();
     expect(txt(first.querySelector('.pf-di-err'))).toBe('Required');
     expect(el.querySelector('[data-field="sex"] .pf-di-seg--error')).not.toBeNull();
     expect(el.querySelector('[data-field="phone"] .pf-di-phone--err')).not.toBeNull();
@@ -467,9 +467,9 @@ describe('Patient registration — errors + behaviour kept', () => {
     expect(txt(el.querySelector('.pf-reg-ctx__nametext'))).toBe('Mr. Arun Kumar');
     expect(txt(el.querySelector('pf-hero-band .pf-hb-btn--primary'))).toBe('Save changes');
     expect(el.querySelector('.pf-reg-order')).toBeNull();
-    expect(txt(el.querySelector('.nd-savestate'))).toBe('All changes saved');
+    expect(txt(el.querySelector('.pf-savestate'))).toBe('All changes saved');
     type('first_name', 'Arun K');
-    expect(txt(el.querySelector('.nd-savestate'))).toBe('Unsaved changes');
+    expect(txt(el.querySelector('.pf-savestate'))).toBe('Unsaved changes');
   });
 
   it('phone rules: Cancel goes on phones; no tab styles remain', () => {
@@ -503,9 +503,9 @@ const BABY_CONFIG = (() => {
 
 describe('Patient registration — Baby vs Baby of (2026-09-28)', () => {
   const label = (el: HTMLElement, f: string) =>
-    (el.querySelector(`[data-field="${f}"] .nd-field__lbl`)?.textContent ?? '').replace(/\s+/g, ' ').replace('required', '').trim();
+    (el.querySelector(`[data-field="${f}"] .pf-field__lbl`)?.textContent ?? '').replace(/\s+/g, ' ').replace('required', '').trim();
   const pills = (el: HTMLElement) =>
-    Array.from(el.querySelectorAll('[data-field="title"] .nd-seg__item')).map(b => b.textContent!.trim());
+    Array.from(el.querySelectorAll('[data-field="title"] .pf-seg__item')).map(b => b.textContent!.trim());
   const checked = (el: HTMLElement, f: string) =>
     el.querySelector(`[data-field="${f}"] [role="radio"][aria-checked="true"]`)?.textContent?.trim();
   const post = (r: ReturnType<typeof render>) => (r.api.post.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
@@ -567,8 +567,8 @@ describe('Patient registration — Baby vs Baby of (2026-09-28)', () => {
 
   it('title pills: one row on desktop (tight pills), 44px tap targets on touch, rows of 4 in a narrow card', () => {
     const css = PATIENT_REGISTER_ND_STYLES.replace(/\s+/g, ' ');
-    expect(css).toMatch(/\[data-field="title"\] \.pf-di-seg \.nd-seg__item \{ min-width: 44px; padding: 0 10px; white-space: nowrap; \}/);
-    expect(css).toMatch(/@media \(pointer: coarse\) \{ \.pf-reg-form ::ng-deep \[data-field="title"\] \.pf-di-seg \.nd-seg__item \{ min-height: 44px; \}/);
+    expect(css).toMatch(/\[data-field="title"\] \.pf-di-seg \.pf-seg__item \{ min-width: 44px; padding: 0 10px; white-space: nowrap; \}/);
+    expect(css).toMatch(/@media \(pointer: coarse\) \{ \.pf-reg-form ::ng-deep \[data-field="title"\] \.pf-di-seg \.pf-seg__item \{ min-height: 44px; \}/);
     expect(css).toMatch(/\[data-field="title"\] \{ container-type: inline-size; \}/);
     expect(css).toMatch(/@container \(max-width: 460px\) \{ \.pf-reg-form ::ng-deep \[data-field="title"\] \.pf-di-seg:not\(\.pf-di-seg--fill\) \{ display: grid; grid-template-columns: repeat\(4, 1fr\)/);
   });

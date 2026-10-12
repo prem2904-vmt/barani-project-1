@@ -23,7 +23,7 @@ function hygiene(el: HTMLElement) {
   expect(EMOJI.test(el.textContent ?? '')).toBe(false);
 }
 const primaries = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary'))
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
 function printerStub(electron = false) {
@@ -79,9 +79,9 @@ afterEach(() => { vi.restoreAllMocks(); TestBed.resetTestingModule(); });
 describe('Printing (ND) — structure', () => {
   it('band pill is the context bar: Printing · this station · label-printer status (no pill tabs)', () => {
     const p = render();
-    const ctx = p.$('pf-hero-band .nd-ctx')!;
+    const ctx = p.$('pf-hero-band .pf-ctx')!;
     expect(ctx).not.toBeNull();
-    expect(ctx.querySelector('.nd-ctx__primary')!.textContent!.trim()).toBe('Printing');
+    expect(ctx.querySelector('.pf-ctx__primary')!.textContent!.trim()).toBe('Printing');
     expect(ctx.querySelector('.pf-lp-ctx__station')!.textContent).toContain('Web browser');
     const status = ctx.querySelector('.pf-lp-status')!;
     expect(status.getAttribute('data-state')).toBe('web');
@@ -102,12 +102,12 @@ describe('Printing (ND) — structure', () => {
   it('kit cards with the icon-chip header: Label size, Label printer, Code & quality (no document printer on the web)', () => {
     const p = render();
     for (const k of ['label', 'printer', 'quality']) {
-      const card = p.$(`.nd-card[data-card="${k}"]`);
+      const card = p.$(`.pf-card[data-card="${k}"]`);
       expect(card, k).not.toBeNull();
-      expect(card!.querySelector('.nd-card__head .nd-card__icon svg')).not.toBeNull();
+      expect(card!.querySelector('.pf-card__head .pf-card__icon svg')).not.toBeNull();
     }
-    expect(p.$('.nd-card[data-card="docs"]')).toBeNull();
-    expect(p.$('.nd-card[data-card="printer"] .pf-note')!.textContent).toContain('system print dialog');
+    expect(p.$('.pf-card[data-card="docs"]')).toBeNull();
+    expect(p.$('.pf-card[data-card="printer"] .pf-note')!.textContent).toContain('system print dialog');
     // Everything lives inside the one scrolling body.
     expect(p.body()!.querySelector('.pf-lp-grid')).not.toBeNull();
     hygiene(p.el);
@@ -128,7 +128,7 @@ describe('Printing (ND) — every control writes the same station config', () =>
     const p = render();
     const presets = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-lp-preset'));
     expect(presets.map(b => b.textContent!.trim())).toEqual(['50 × 25 mm', '50 × 20 mm', '38 × 25 mm', '2 × 1 in']);
-    expect(presets.every(b => b.classList.contains('nd-chip'))).toBe(true);
+    expect(presets.every(b => b.classList.contains('pf-chip'))).toBe(true);
     expect(presets[1].getAttribute('aria-pressed')).toBe('true'); // default 50 × 20
 
     p.click(presets[0]);
@@ -147,7 +147,7 @@ describe('Printing (ND) — every control writes the same station config', () =>
     const p = render();
     const w = p.$<HTMLInputElement>('input[data-field="width"]')!;
     const h = p.$<HTMLInputElement>('input[data-field="height"]')!;
-    expect(w.classList.contains('nd-input')).toBe(true);
+    expect(w.classList.contains('pf-input')).toBe(true);
     w.value = '38'; w.dispatchEvent(new Event('change')); p.f.detectChanges();
     h.value = '25'; h.dispatchEvent(new Event('change')); p.f.detectChanges();
     expect(p.cfg.config().labelWidthMm).toBe(38);
@@ -164,7 +164,7 @@ describe('Printing (ND) — every control writes the same station config', () =>
     set('density', '12'); set('speed', '4'); set('codeScale', '80');
     const c = p.cfg.config();
     expect([c.density, c.speed, c.codeScalePct]).toEqual([12, 4, 80]);
-    expect(p.$('.nd-card[data-card="quality"]')!.textContent).toContain('12/15');
+    expect(p.$('.pf-card[data-card="quality"]')!.textContent).toContain('12/15');
   });
 
   it('print position: nudge pad, Reset and Rotate code', () => {
@@ -233,7 +233,7 @@ describe('Printing (ND) — desktop app (Electron)', () => {
     expect(status.textContent).toContain('Connected · Detonger DP27');
     expect(p.$('.pf-lp-conn[data-conn="usb"]')!.textContent).toContain('Detonger DP27');
     expect(p.$('.pf-lp-conn[data-conn="ble"]')!.textContent).toContain('None paired');
-    const docs = p.$('.nd-card[data-card="docs"]')!;
+    const docs = p.$('.pf-card[data-card="docs"]')!;
     expect(docs.querySelector('pf-select')).not.toBeNull();
     expect(p.cmp.docPrinterOptions().map((o: { label: string }) => o.label))
       .toEqual(['System dialog (ask each time)', 'HP LaserJet M1136 (default)']);

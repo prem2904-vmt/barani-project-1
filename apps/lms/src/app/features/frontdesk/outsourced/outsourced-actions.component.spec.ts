@@ -53,7 +53,7 @@ function setup(tube: OutsourcedTube, confirm = true) {
 describe('OutsourcedActionsComponent — row actions (shared by the list and the merged work list)', () => {
   it('outsourced, no report: only Upload report', () => {
     const { el } = setup(row());
-    const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
+    const labels = [...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim());
     expect(labels).toEqual(['Upload report']);
   });
 
@@ -62,7 +62,7 @@ describe('OutsourcedActionsComponent — row actions (shared by the list and the
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] });
     const { el } = setup(done);
-    const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
+    const labels = [...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim());
     expect(labels).toEqual(expect.arrayContaining(['View', 'Undo', 'Replace report']));
     expect(labels).not.toContain('Mark completed');
   });
@@ -72,7 +72,7 @@ describe('OutsourcedActionsComponent — row actions (shared by the list and the
       { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'outsourced', completed: false,
         report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf' } }] });
     const { el } = setup(withReport);
-    const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
+    const labels = [...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim());
     expect(labels).toEqual(expect.arrayContaining(['Mark completed', 'Replace report']));
   });
 

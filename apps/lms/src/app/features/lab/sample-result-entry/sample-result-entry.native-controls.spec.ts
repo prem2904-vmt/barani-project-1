@@ -2,7 +2,7 @@ import { SampleResultEntryComponent } from './sample-result-entry.component';
 
 /**
  * The grid's 'date' parameter cell used a native `<input type="date">` —
- * now `pf-nd-date`. Same "prototype.call" approach as the other
+ * now `pf-date`. Same "prototype.call" approach as the other
  * SampleResultEntry specs (methodologyOf, inputKindFor): no full mount.
  */
 const P = SampleResultEntryComponent.prototype as any;
@@ -17,11 +17,11 @@ describe('SampleResultEntry.asDateStr', () => {
 });
 
 describe('SampleResultEntry — Enter-advance includes the kit date field', () => {
-  it('getAllFocusableInputs selects the kit date input (.pf-ndd__in) alongside the others', () => {
+  it('getAllFocusableInputs selects the kit date input (.pf-date__in) alongside the others', () => {
     // Read the private method's own source rather than mounting the whole
     // screen — it is a declarative querySelectorAll() string.
     const src = (P.getAllFocusableInputs as (...a: unknown[]) => unknown).toString();
-    expect(src).toContain('.pf-sre__gdate .pf-ndd__in');
+    expect(src).toContain('.pf-sre__gdate .pf-date__in');
     expect(src).toContain('input.pf-sre__ginput');
     expect(src).toContain('.pf-sre__gselect .pf-dd__trigger');
   });

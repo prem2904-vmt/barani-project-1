@@ -115,6 +115,6 @@ describe('Docked bottom navbar — right cluster + end-of-pages divider (owner 2
     expect(scss).toMatch(/pf-notification-bell ::ng-deep \.pf-bell-btn > svg \{ width: 22px; height: 22px; \}/);
   });
   it('a hairline closes the work-area icons, at every width', () => {
-    expect(scss).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.pf-topnav-center \{\s*padding-right: 8px;\s*border-right: 1px solid var\(--nd-line/);
+    expect(scss).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.pf-topnav-center \{\s*padding-right: 8px;\s*border-right: 1px solid var\(--pf-line/);
   });
 });

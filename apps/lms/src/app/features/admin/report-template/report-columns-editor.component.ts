@@ -336,7 +336,7 @@ export interface ColumnsEditorState {
     .pf-status-pill { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
       padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
     .pf-status-pill--ok { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
-    .pf-status-pill--default { color: var(--text-secondary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-status-pill--default { color: var(--text-secondary); border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-icon-btn { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.3)); background: transparent; color: var(--text-tertiary, #94a3b8); cursor: pointer; }
     .pf-icon-btn--on { color: #fff; background: var(--violet-600, #7c3aed); border-color: transparent; }

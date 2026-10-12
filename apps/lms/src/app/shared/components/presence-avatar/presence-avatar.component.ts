@@ -29,20 +29,20 @@ import { presenceText, presenceTone } from '../../models/presence.model';
       position: absolute; right: -1px; bottom: -1px; z-index: 1;
       width: var(--pf-pdot-size, 11px); height: var(--pf-pdot-size, 11px);
       border-radius: 9999px; box-sizing: border-box;
-      border: 2px solid var(--pf-pdot-ring, var(--nd-card-bg, #fff));
-      background: var(--nd-toggle-on, #aeb8c2);
+      border: 2px solid var(--pf-pdot-ring, var(--pf-card-bg, #fff));
+      background: var(--pf-toggle-on, #aeb8c2);
       pointer-events: none;
     }
     :host([hidden]) { display: none; }
     /* Online = GREEN (owner, 2026-09-27: the universal "available" colour;
        violet read as too much). Light #16a34a, dark #4ade80 — AA on the ring. */
     :host([data-tone='on']) { background: var(--pf-presence-on, #16a34a); }
-    :host([data-tone='busy']) { background: var(--nd-toggle-on, #aeb8c2); }
-    :host([data-tone='away']) { background: var(--nd-sel-border, #9aa4ae); }
-    :host([data-tone='dnd']) { background: var(--nd-toggle-urgent, #d0706f); }
+    :host([data-tone='busy']) { background: var(--pf-toggle-on, #aeb8c2); }
+    :host([data-tone='away']) { background: var(--pf-sel-border, #9aa4ae); }
+    :host([data-tone='dnd']) { background: var(--pf-toggle-urgent, #d0706f); }
     :host([data-tone='off']) {
-      background: var(--pf-pdot-ring, var(--nd-card-bg, #fff));
-      box-shadow: inset 0 0 0 1.5px var(--nd-sel-border, #9aa4ae);
+      background: var(--pf-pdot-ring, var(--pf-card-bg, #fff));
+      box-shadow: inset 0 0 0 1.5px var(--pf-sel-border, #9aa4ae);
     }
     :host-context(.dark), :host-context([data-theme='dark']) { --pf-presence-on: #4ade80; }
   `],
@@ -60,7 +60,7 @@ export class PresenceDotComponent {
 /**
  * Avatar WITH presence — the one shared person avatar for messaging
  * surfaces that don't have their own (navbar Messages popover, chat
- * windows, call tiles, pickers). Neutral initials avatar (nd-kit anatomy)
+ * windows, call tiles, pickers). Neutral initials avatar (pf-kit anatomy)
  * + the presence dot. Groups pass `group` and get the group glyph, no dot.
  */
 @Component({
@@ -97,8 +97,8 @@ export class PresenceDotComponent {
       width: 100%; height: 100%;
       display: inline-flex; align-items: center; justify-content: center;
       border-radius: 9999px; box-sizing: border-box;
-      background: var(--nd-chip-bg, #f3f4f6);
-      border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
+      background: var(--pf-chip-bg, #f3f4f6);
+      border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
       color: var(--text-secondary);
       font-size: var(--pf-pav-font, 13px); font-weight: 600; line-height: 1;
     }

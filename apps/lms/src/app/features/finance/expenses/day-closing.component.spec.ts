@@ -80,7 +80,7 @@ describe('DayClosingComponent', () => {
     expect(el.textContent).toContain('Asha R');
     expect(el.querySelector('.pf-dc__eq')?.textContent).toContain('1,510');
     // One primary, disabled until the counted cash is entered; no native controls.
-    const primary = el.querySelectorAll('.nd-btn--primary');
+    const primary = el.querySelectorAll('.pf-btn--primary');
     expect(primary.length).toBe(1);
     expect((primary[0] as HTMLButtonElement).disabled).toBe(true);
     expect(el.querySelectorAll('select, datalist, input[type="date"]').length).toBe(0);
@@ -95,15 +95,15 @@ describe('DayClosingComponent', () => {
     f.detectChanges();
     expect(c.variance()).toBe(-10);
     expect(el.querySelector('.pf-dc__var')?.textContent).toContain('short');
-    expect((el.querySelector('.nd-btn--primary') as HTMLButtonElement).disabled).toBe(false);
+    expect((el.querySelector('.pf-btn--primary') as HTMLButtonElement).disabled).toBe(false);
     await c.close();
     expect(confirm).toHaveBeenCalled();
     expect(svc['closeClosing']).toHaveBeenCalledWith('2026-09-30', { countedCash: 1500, openingBalance: null, note: '₹10 short' });
     f.detectChanges();
     expect(c.data()!.isClosed).toBe(true);
     expect(el.textContent).toContain('Closed by Cashier');
-    expect(el.querySelector('.nd-btn--primary')).toBeNull();
-    expect(el.querySelector('.nd-btn--secondary')?.textContent).toContain('Reopen day');
+    expect(el.querySelector('.pf-btn--primary')).toBeNull();
+    expect(el.querySelector('.pf-btn--secondary')?.textContent).toContain('Reopen day');
   });
 
   it('a fresh cash box asks for the opening float and derives expected from it', async () => {
@@ -122,7 +122,7 @@ describe('DayClosingComponent', () => {
     const closed = day({ isClosed: true, fromSnapshot: true, countedCash: 1510, variance: 0, canReopen: false, lastClosed: '2026-10-01' });
     const a = render(closed);
     expect(a.el.textContent).toContain('A later day is closed');
-    expect(a.el.querySelector('.nd-btn')).toBeNull();
+    expect(a.el.querySelector('.pf-btn')).toBeNull();
     TestBed.resetTestingModule();
 
     const b = render({ ...closed, canReopen: true, lastClosed: '2026-09-30' });

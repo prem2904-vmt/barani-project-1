@@ -143,7 +143,7 @@ describe('Identification → Measure: organism picked INSIDE the measure', () =>
     expect(pmEl.querySelector('.ce-mo__trigger')).toBeTruthy();   // phones: the sheet trigger
     const ok = pmEl.querySelector<HTMLButtonElement>('.pm-apply')!;
     expect(ok.textContent?.trim()).toBe('OK');
-    expect(ok.classList.contains('nd-btn--primary')).toBe(true);
+    expect(ok.classList.contains('pf-btn--primary')).toBe(true);
     expect(ok.disabled).toBe(true);                                 // no organism yet
     c.setMeasureOrg('Escherichia coli');
     f.detectChanges();

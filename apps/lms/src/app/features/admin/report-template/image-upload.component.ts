@@ -50,16 +50,16 @@ import { spinDelay } from '../../../shared/utils/busy';
   `,
   styles: [`
     .pf-image-drop { display: flex; align-items: center; gap: 12px;
-      padding: 10px; border: 1px dashed var(--nd-line); border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg); }
+      padding: 10px; border: 1px dashed var(--pf-line); border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg); }
     .pf-image-none { font-size: 11px; color: var(--text-tertiary); }
     .pf-image-hint { margin: 4px 0 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-image-thumb { width: 64px; height: 64px; flex-shrink: 0;
-      border-radius: 8px; background: var(--nd-chip-bg);
+      border-radius: 8px; background: var(--pf-chip-bg);
       display: flex; align-items: center; justify-content: center; overflow: hidden; }
     .pf-image-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
     /* Kit secondary (outline) button; Remove = tertiary text in error red. */
-    .pf-file-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--nd-radius-sm, 10px);
+    .pf-file-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--pf-radius-sm, 10px);
       background: transparent; color: var(--violet-text, #6d28d9); cursor: pointer;
       font-size: 13px; font-weight: 600; border: 1px solid var(--color-violet-600, #7c3aed); }
     .pf-remove-link { margin-left: 8px; background: transparent; border: none;

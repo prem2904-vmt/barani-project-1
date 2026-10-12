@@ -11,7 +11,7 @@ import { dailyNoLabel, dailyNoOf, dailyNoTitle } from '../../utils/daily-no';
   selector: 'pf-daily-no',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `@if (label()) {<span class="nd-dayno" [attr.title]="title()" [attr.aria-label]="title()">{{ label() }}</span>}`,
+  template: `@if (label()) {<span class="pf-dayno" [attr.title]="title()" [attr.aria-label]="title()">{{ label() }}</span>}`,
   styles: [':host { display: contents; }'],
 })
 export class DailyNoComponent {

@@ -21,7 +21,7 @@ import { ReportActionsService } from '../../../core/services/report-actions.serv
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 
 /**
- * Report view on the nd pattern (docs/ND-PATTERN.md → "Report view"):
+ * Report view on the nd pattern (docs/PF-PATTERN.md → "Report view"):
  * band (back + tenant + actions, ONE primary) + CONTEXT BAR (patient,
  * order, status, date), PREVIEW main card (skeleton → the painted PDF,
  * one zoom target throughout) + REPORT side card (collapsible strip), the
@@ -120,7 +120,7 @@ async function render(opts: Opts = {}) {
   return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing };
 }
 
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 /** Component CSS with Angular's scoping attributes stripped. */
 const css = () => ((ReportViewerComponent as any).ɵcmp.styles as string[]).join('\n')
   .replace(/\[_ng(content|host)-%COMP%\]/g, '');
@@ -190,7 +190,7 @@ describe('Report view (nd) — actions', () => {
     expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.objectContaining({ via: 'whatsapp' }));
 
     f.detectChanges();
-    const partner = el.querySelector('.pf-rv-partner .nd-rowact') as HTMLButtonElement;
+    const partner = el.querySelector('.pf-rv-partner .pf-rowact') as HTMLButtonElement;
     expect(partner.getAttribute('aria-label')).toContain('Vitamin D');
     partner.click();
     expect(open).toHaveBeenCalledTimes(2);
@@ -299,13 +299,13 @@ describe('Report view (nd) — PREVIEW card, skeleton + zoom', () => {
     expect(el.querySelector('.pf-rv-card')).toBe(card);          // never swapped
   });
 
-  it('errors use the kit .nd-empty with Try again (load + render)', async () => {
+  it('errors use the kit .pf-empty with Try again (load + render)', async () => {
     const a = await render({ fail: true });
-    expect(a.el.querySelector('.pf-rv-preview .nd-empty .nd-empty__title')?.textContent).toContain('Couldn’t load');
+    expect(a.el.querySelector('.pf-rv-preview .pf-empty .pf-empty__title')?.textContent).toContain('Couldn’t load');
     TestBed.resetTestingModule();
     const b = await render();
     b.c._pdfError.set('Could not render the report PDF.'); b.f.detectChanges();
-    const empty = b.el.querySelector('.pf-rv-preview .nd-empty') as HTMLElement;
+    const empty = b.el.querySelector('.pf-rv-preview .pf-empty') as HTMLElement;
     expect(empty.textContent).toContain('Could not render the report PDF.');
     (empty.querySelector('button') as HTMLButtonElement).click();
     expect(b.renderSpy).toHaveBeenCalled();
@@ -316,7 +316,7 @@ describe('Report view (nd) — REPORT side card', () => {
   it('sits on the right with the status line and collapses to a strip (remembered) and back', async () => {
     const { el, f } = await render();
     const side = el.querySelector('.pf-rv-side') as HTMLElement;
-    expect(side.querySelector('.nd-card__label')?.textContent?.trim()).toBe('Report');
+    expect(side.querySelector('.pf-card__label')?.textContent?.trim()).toBe('Report');
     expect(side.querySelector('.pf-rv-state')?.textContent).toContain('Ready to deliver');
     // Side card comes AFTER the preview (an action / summary companion → RIGHT).
     const body = el.querySelector('.pf-rv-body') as HTMLElement;
@@ -373,7 +373,7 @@ describe('Report view (nd) — phones', () => {
     expect(phone).toMatch(/\.pf-rv-band\s+\.pf-rv-act\s*\{/);
     expect(phone).toMatch(/width: 44px/);
     expect(s).toMatch(/\.pf-rv-card\s*\{\s*border-radius: 0/);
-    expect(s).toMatch(/bottom: var\(--nd-nav-h/);
+    expect(s).toMatch(/bottom: var\(--pf-nav-h/);
   });
 });
 
@@ -405,8 +405,8 @@ describe('Report view (nd) — rules', () => {
     expect(s).not.toMatch(/#(b45309|fef3c7|78350f|f59e0b|92400e|10b981|16a34a|22c55e)/i);
     expect(s).not.toMatch(/monospace/);
     const { el } = await render();
-    expect(el.querySelector('.pf-rv-chip--order .nd-num')).not.toBeNull();
-    expect(el.querySelector('.pf-rv-ctx__date')?.classList).toContain('nd-num');
+    expect(el.querySelector('.pf-rv-chip--order .pf-num')).not.toBeNull();
+    expect(el.querySelector('.pf-rv-ctx__date')?.classList).toContain('pf-num');
   });
 });
 

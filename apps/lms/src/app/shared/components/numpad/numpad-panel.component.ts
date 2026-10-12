@@ -132,22 +132,22 @@ const BODY: PadKey[] = [
     .pf-np {
       position: fixed; z-index: 1300; box-sizing: border-box;
       width: 272px; padding: 8px 10px 10px;
-      background: var(--nd-card-bg, #fff);
-      border: 1px solid var(--nd-line, #e5e7eb);
-      border-radius: var(--nd-radius-card, 16px);
+      background: var(--pf-card-bg, #fff);
+      border: 1px solid var(--pf-line, #e5e7eb);
+      border-radius: var(--pf-radius-card, 16px);
       box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
       color: var(--text-primary);
       font-family: inherit;
       touch-action: manipulation;
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
-      animation: pf-np-in var(--nd-dur-fast, 200ms) var(--nd-spring, ease-out) both;
+      animation: pf-np-in var(--pf-dur-fast, 200ms) var(--pf-spring, ease-out) both;
     }
     /* Tablet / wide: docked in a bottom corner, above the navbar, same spot
        for every field (no jumping while techs type → Enter → type). */
     .pf-np--corner {
       right: max(16px, env(safe-area-inset-right, 0px));
-      bottom: calc(max(var(--nd-nav-h, 0px), env(safe-area-inset-bottom, 0px)) + 16px);
+      bottom: calc(max(var(--pf-nav-h, 0px), env(safe-area-inset-bottom, 0px)) + 16px);
       transform-origin: bottom right;
     }
     .pf-np--corner.pf-np--left {
@@ -159,7 +159,7 @@ const BODY: PadKey[] = [
       border-radius: 18px 18px 0 0; border-bottom: 0;
       padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
       box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.16);
-      animation: pf-np-rise var(--nd-dur-sheet, 360ms) var(--nd-spring, ease-out) both;
+      animation: pf-np-rise var(--pf-dur-sheet, 360ms) var(--pf-spring, ease-out) both;
     }
     .pf-np--sheet .pf-np__head, .pf-np--sheet .pf-np__grid { max-width: 520px; margin-left: auto; margin-right: auto; }
 
@@ -178,20 +178,20 @@ const BODY: PadKey[] = [
     .pf-np__flag {
       flex: none; display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
       border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap;
-      background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line);
+      background: var(--pf-chip-bg); color: var(--text-secondary); border: 1px solid var(--pf-line);
     }
     .pf-np__flag[data-tone='low'] { background: rgba(59, 130, 246, 0.14); color: var(--blue-text, #1d4ed8); border-color: rgba(59, 130, 246, 0.35); }
     .pf-np__flag[data-tone='high'] { background: rgba(245, 158, 11, 0.14); color: var(--amber-text, #b45309); border-color: rgba(245, 158, 11, 0.4); }
     .pf-np__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.14); color: var(--red-text, #b91c1c); border-color: rgba(239, 68, 68, 0.4); }
     .pf-np__hide {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
-      width: 44px; height: 44px; margin: -4px -6px -4px 0; border: 0; border-radius: var(--nd-radius, 12px);
+      width: 44px; height: 44px; margin: -4px -6px -4px 0; border: 0; border-radius: var(--pf-radius, 12px);
       background: transparent; color: var(--text-secondary); cursor: pointer;
     }
-    .pf-np__hide:active, .pf-np__grip:active { background: var(--nd-chip-bg); }
+    .pf-np__hide:active, .pf-np__grip:active { background: var(--pf-chip-bg); }
     .pf-np__grip {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
-      width: 44px; height: 44px; margin: -4px 0 -4px -8px; border: 0; border-radius: var(--nd-radius, 12px);
+      width: 44px; height: 44px; margin: -4px 0 -4px -8px; border: 0; border-radius: var(--pf-radius, 12px);
       background: transparent; color: var(--text-muted, #9ca3af); cursor: grab;
     }
 
@@ -203,16 +203,16 @@ const BODY: PadKey[] = [
     .pf-np__key, .pf-np__next {
       display: inline-flex; align-items: center; justify-content: center;
       min-width: 44px; min-height: 44px; padding: 0; border: 0;
-      border-radius: var(--nd-radius, 12px);
+      border-radius: var(--pf-radius, 12px);
       font: inherit; cursor: pointer;
       transition: transform 90ms ease-out, background-color 90ms ease-out, opacity 120ms ease-out;
     }
     .pf-np__key {
-      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary);
+      background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary);
       font-size: 21px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
     .pf-np__key--sym { color: var(--text-secondary); font-size: 19px; }
-    .pf-np__key:active { transform: scale(0.94); background: var(--nd-sel-bg, #eceff2); }
+    .pf-np__key:active { transform: scale(0.94); background: var(--pf-sel-bg, #eceff2); }
     .pf-np__key--off { opacity: 0.38; }
     .pf-np__key, .pf-np__next, .pf-np__hide, .pf-np__grip {
       /* A keypad: no double-tap zoom / pan / pinch on a key (a pinch would

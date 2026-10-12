@@ -39,7 +39,7 @@ function render(opts: {
   f.detectChanges();
   return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as OpdBookVisitPage, ...h };
 }
-const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-oc-btn--primary:not([disabled]), .nd-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-oc-btn--primary:not([disabled]), .pf-btn--primary');
 const cta = (el: HTMLElement) => el.querySelector('[data-cta]') as HTMLButtonElement;
 /** Doctor tiles, each once (a doctor in two departments shows in both groups). */
 const docTiles = (el: HTMLElement) => [...el.querySelectorAll('.pf-ov-grid .pf-ov-doc:not(.pf-ov-anydept)')] as HTMLElement[];

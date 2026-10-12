@@ -21,7 +21,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
  * overlay, but still a real) native date input; the reschedule panel used
  * native `<input type="date">`/`<input type="time">`. All three are now the
  * same hidden-native-overlay / kit pattern the ND calendar already used
- * (`openJump`, `pf-nd-date`, `pf-select` with the slotted time options).
+ * (`openJump`, `pf-date`, `pf-select` with the slotted time options).
  */
 const P1 = { id: 'p1', firstName: 'Paravai', age: 44, sex: 'Female', mrn: 'AA0007', phone: '9000000001' };
 const TODAY = new Date(); TODAY.setHours(12, 0, 0, 0);
@@ -69,14 +69,14 @@ describe('Appointments calendar — classic (no native controls)', () => {
     expect(native.tabIndex).toBe(-1);
   });
 
-  it('reschedule panel: pf-nd-date + pf-select, never native date/time inputs', () => {
+  it('reschedule panel: pf-date + pf-select, never native date/time inputs', () => {
     const { el, c, f } = render();
     c.openAppt(A1);
     c.openReschedule();
     f.detectChanges();
     expect(el.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
     expect(el.querySelector('input[type="time"]:not([aria-hidden="true"])')).toBeNull();
-    expect(el.querySelectorAll('pf-nd-date').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('pf-date').length).toBeGreaterThan(0);
     expect(el.querySelectorAll('pf-select').length).toBeGreaterThan(0);
   });
 

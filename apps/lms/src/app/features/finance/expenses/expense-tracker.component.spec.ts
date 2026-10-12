@@ -13,7 +13,7 @@ import { ExpenseBook, ExpenseEntry, ExpenseFilter } from '../../../shared/models
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { ND_GRID_PARAMS } from '../../../shared/utils/nd-grid-theme';
+import { ND_GRID_PARAMS } from '../../../shared/utils/pf-grid-theme';
 
 /**
  * /expenses (primary nav; /finance/expenses redirects) — tabs My expenses ·
@@ -99,7 +99,7 @@ describe('ExpenseTrackerComponent', () => {
     expect(el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
     expect(el.querySelector('.pf-hb-btn--primary')?.textContent).toContain('Add expense');
     expect(el.querySelectorAll('select, datalist, input[type="date"]').length).toBe(0);
-    expect(el.querySelectorAll('.pf-xt__side pf-nd-date').length).toBe(2);
+    expect(el.querySelectorAll('.pf-xt__side pf-date').length).toBe(2);
     // Range totals: opening · cash in · expenses · closing.
     const stats = [...el.querySelectorAll('.pf-xt__statk')].map(s => s.textContent?.trim());
     expect(stats).toEqual(['Opening', 'Cash in', 'Expenses', 'Closing']);
@@ -131,8 +131,8 @@ describe('ExpenseTrackerComponent', () => {
     expect(result.querySelector('.pf-xt__neg')).not.toBeNull();
     expect(result.querySelector('.pf-xt__stath')?.textContent).toContain('Below zero');
     expect(el.querySelectorAll('.pf-xt__op').length).toBe(3);   // + − =
-    expect(ND_GRID_PARAMS.backgroundColor).toBe('var(--nd-card-bg)');
-    expect(ND_GRID_PARAMS.borderColor).toBe('var(--nd-line)');
+    expect(ND_GRID_PARAMS.backgroundColor).toBe('var(--pf-card-bg)');
+    expect(ND_GRID_PARAMS.borderColor).toBe('var(--pf-line)');
     expect(c.share(250, 1000)).toBe(25);
     expect(c.share(5, 0)).toBe(0);
   });
@@ -146,7 +146,7 @@ describe('ExpenseTrackerComponent', () => {
   it('a viewer gets no Add button and no row edit; a modifier (own scope) sees no balances or day book', () => {
     const v = render({ perms: ['expense_viewer'] });
     expect(v.el.querySelectorAll('.pf-hb-btn--primary').length).toBe(0);
-    expect(v.el.querySelector('.nd-bottombar')).toBeNull();
+    expect(v.el.querySelector('.pf-bottombar')).toBeNull();
     expect(v.el.querySelector('.pf-xt__tabs')).toBeNull();          // one tab: All expenses (read-only)
     expect(v.c.tab()).toBe('all');
     expect(svc['book']).toHaveBeenCalledWith(expect.objectContaining({ mine: false }));
@@ -200,7 +200,7 @@ describe('ExpenseTrackerComponent', () => {
     expect(el.querySelector('pf-day-closing')).not.toBeNull();
     // Day closing: no entry-only band actions and no Add bar.
     expect(el.querySelector('.pf-xt__export')).toBeNull();
-    expect(el.querySelector('.nd-bottombar')).toBeNull();
+    expect(el.querySelector('.pf-bottombar')).toBeNull();
     expect(el.querySelector('.pf-hb-btn--primary')).toBeNull();   // Close day is the tab's one primary
     expect(svc['closeDay']).not.toHaveBeenCalled();
     c.setTab('all');
@@ -264,9 +264,9 @@ describe('ExpenseTrackerComponent', () => {
     c.setTab('all');
     f.detectChanges();
     expect(svc['book']).toHaveBeenLastCalledWith(expect.objectContaining({ mine: false }));
-    // Phone bottom bar (ND .nd-bottombar): info + Snap bill (rear camera) + Add expense.
-    const bar = el.querySelector('.nd-bottombar')!;
-    expect(bar.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    // Phone bottom bar (ND .pf-bottombar): info + Snap bill (rear camera) + Add expense.
+    const bar = el.querySelector('.pf-bottombar')!;
+    expect(bar.querySelectorAll('.pf-btn--primary').length).toBe(1);
     expect(bar.querySelector('input[type="file"]')?.getAttribute('capture')).toBe('environment');
     expect(bar.textContent).toContain('7 days');
     const file = new File(['x'], 'bill.jpg', { type: 'image/jpeg' });

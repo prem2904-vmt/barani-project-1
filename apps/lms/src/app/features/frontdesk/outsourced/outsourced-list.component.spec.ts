@@ -76,7 +76,7 @@ describe('Frontdesk Outsourced tab', () => {
     expect(r.querySelector('.pf-out__partner')?.textContent).toContain('Apollo Diagnostics');
     expect(r.querySelector('.pf-out__date')?.textContent).toContain('Dispatched');
     const chip = r.querySelector('.pf-out__status') as HTMLElement;
-    expect(chip.classList).toContain('nd-chip');
+    expect(chip.classList).toContain('pf-chip');
     expect(chip.textContent?.trim()).toBe('Outsourced');
     expect(chip.querySelector('.pf-out__check')).toBeNull();
   });
@@ -86,7 +86,7 @@ describe('Frontdesk Outsourced tab', () => {
     const r = el.querySelector('.pf-out__row') as HTMLElement;
     expect(r.querySelector('pf-outsourced-actions')).not.toBeNull();
     // The real child renders for this tube's state — Upload report, no report yet.
-    expect([...r.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toEqual(['Upload report']);
+    expect([...r.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim())).toEqual(['Upload report']);
   });
 
   it('Completed = neutral chip with a violet check (no green); the childs buttons for a completed tube', () => {
@@ -97,7 +97,7 @@ describe('Frontdesk Outsourced tab', () => {
     expect(chip.textContent?.trim()).toBe('Completed');
     expect(chip.querySelector('.pf-out__check')).not.toBeNull();
     expect(chip.getAttribute('style') ?? '').not.toMatch(/green|#10b981|#22c55e/i);
-    const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
+    const labels = [...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim());
     expect(labels).toEqual(expect.arrayContaining(['View', 'Undo', 'Replace report']));
   });
 
@@ -112,7 +112,7 @@ describe('Frontdesk Outsourced tab', () => {
     try {
       const { el } = setup([tube()]);
       expect(el.querySelector('[data-testid="out-file-missing"]')?.textContent).toContain('upload it again');
-      expect([...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toContain('Replace report');
+      expect([...el.querySelectorAll('.pf-rowact')].map(b => b.textContent?.trim())).toContain('Replace report');
     } finally {
       spy.mockRestore();
     }

@@ -14,7 +14,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { TenantStateService } from '../../../../core/services/tenant-state.service';
 
 /**
- * Test editor — NEW DESIGN (ND-PATTERN "Editors"). The band is back · tenant
+ * Test editor — NEW DESIGN (PF-PATTERN "Editors"). The band is back · tenant
  * · Save (ONE primary) with a neutral save state; the pill is the CONTEXT
  * BAR (the full test name + neutral chips); the SECTIONS rail is a tabs row;
  * the live preview is the side card, behind "Preview" on small screens.
@@ -83,7 +83,7 @@ describe('Test editor — new design: band + context bar', () => {
     const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].textContent).toContain('Save');
-    expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length).toBe(1);
     expect(el.querySelector('.pf-te2-head')).toBeNull();
     expect(el.querySelector('.pf-te2-crumb')).toBeNull();
     expect(el.querySelector('h1')).toBeNull();
@@ -91,13 +91,13 @@ describe('Test editor — new design: band + context bar', () => {
 
   it('pill = ONLY the full test name (+ tiny origin badge, quiet pencil) and the section tabs — no fact chips', () => {
     const { el, txt } = render();
-    const ctx = el.querySelector('pf-hero-band .nd-ctx')!;
+    const ctx = el.querySelector('pf-hero-band .pf-ctx')!;
     expect(ctx).not.toBeNull();
     expect(txt(ctx.querySelector('.pf-te2-ctx__nametext'))).toBe('Oral Glucose Challenge Test');
-    expect(ctx.querySelector('.nd-ctx__primary .nd-ctx__edit[aria-label="Edit name"]')).not.toBeNull();
+    expect(ctx.querySelector('.pf-ctx__primary .pf-ctx__edit[aria-label="Edit name"]')).not.toBeNull();
     expect(txt(ctx.querySelector('.pf-te2-ctx__origin'))).toBe('Master');
     // Code / Dept / Sample / Price / TAT / Fasting live in the sections, not the pill.
-    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    expect(ctx.querySelectorAll('.pf-ctx__chip').length).toBe(0);
     expect(/BIO005|Biochemistry|Fasting|TAT/.test(txt(ctx))).toBe(false);
     // The tabs ride INSIDE the pill, after the name.
     const tabs = ctx.querySelector('[role="tablist"].pf-te2-tabs')!;
@@ -109,7 +109,7 @@ describe('Test editor — new design: band + context bar', () => {
     const { el, f, c } = render();
     c.jumpToSection('pricing');
     f.detectChanges();
-    (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
+    (el.querySelector('.pf-ctx__edit') as HTMLButtonElement).click();
     f.detectChanges();
     await new Promise(r => setTimeout(r));
     expect(c.section()).toBe('identity');
@@ -118,7 +118,7 @@ describe('Test editor — new design: band + context bar', () => {
 
   it('save state is neutral: a violet check when saved, "Unsaved changes" after an edit (never green/amber)', () => {
     const { el, f, c, txt } = render();
-    const st = () => el.querySelector('pf-hero-band .nd-savestate')!;
+    const st = () => el.querySelector('pf-hero-band .pf-savestate')!;
     expect(txt(st())).toBe('All changes saved');
     expect(st().querySelector('svg')).not.toBeNull();
     c.patch({ methodology: 'Hexokinase' });
@@ -142,34 +142,34 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
     expect(el.querySelector('.pf-te2-nav__dot--ok')).toBeNull();
   });
 
-  it('a tab switches the focused section card (nd-card with the icon-chip header)', () => {
+  it('a tab switches the focused section card (pf-card with the icon-chip header)', () => {
     const { el, f } = render();
     (el.querySelector('[role="tab"][data-sec="pricing"]') as HTMLButtonElement).click();
     f.detectChanges();
     const card = el.querySelector('#sec-pricing')!;
-    expect(card.classList.contains('nd-card')).toBe(true);
-    expect(card.querySelector('.nd-card__head .nd-card__icon svg')).not.toBeNull();
-    expect(card.querySelector('.nd-card__label')!.textContent).toContain('Price');
+    expect(card.classList.contains('pf-card')).toBe(true);
+    expect(card.querySelector('.pf-card__head .pf-card__icon svg')).not.toBeNull();
+    expect(card.querySelector('.pf-card__label')!.textContent).toContain('Price');
     expect(el.querySelector('[role="tab"][data-sec="pricing"]')!.getAttribute('aria-selected')).toBe('true');
   });
 
   it('Basics: kit fields, the read-only code in tabular numbers, Profiles as kit rows with a kit search', () => {
     const { el } = render();
     const code = el.querySelector<HTMLInputElement>('#sec-identity input[readonly]')!;
-    expect(code.classList.contains('nd-input')).toBe(true);
-    expect(code.classList.contains('nd-num')).toBe(true);
+    expect(code.classList.contains('pf-input')).toBe(true);
+    expect(code.classList.contains('pf-num')).toBe(true);
     expect(code.value).toBe('BIO005');
     const row = el.querySelector('.pf-profpanel__item')!;
-    expect(row.classList.contains('nd-row')).toBe(true);
-    expect(row.querySelector('.nd-row__check')).not.toBeNull();
-    expect(row.querySelector('.pf-profpanel__code')!.classList.contains('nd-num')).toBe(true);
+    expect(row.classList.contains('pf-row')).toBe(true);
+    expect(row.querySelector('.pf-row__check')).not.toBeNull();
+    expect(row.querySelector('.pf-profpanel__code')!.classList.contains('pf-num')).toBe(true);
   });
 
   it('toggles are slate switches (role=switch), not violet checkbox pills', () => {
     const { el, f, c } = render({ test: OGTT({ departmentId: 'd1' }) });
     c.jumpToSection('results');
     f.detectChanges();
-    const sw = el.querySelectorAll('#sec-results .nd-toggle[role="switch"]');
+    const sw = el.querySelectorAll('#sec-results .pf-toggle[role="switch"]');
     expect(sw.length).toBeGreaterThan(0);
     expect(el.querySelector('.pf-rep-toggle')).toBeNull();
   });
@@ -177,7 +177,7 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
   it('LIVE PREVIEW is the side card; on small screens it opens behind "Preview" and Esc closes it', () => {
     const { el, f, c } = render();
     const aside = () => el.querySelector('#pf-te2-preview')!;
-    expect(aside().querySelector('.nd-card .nd-card__label')!.textContent).toContain('Live preview');
+    expect(aside().querySelector('.pf-card .pf-card__label')!.textContent).toContain('Live preview');
     const btn = el.querySelector<HTMLButtonElement>('.pf-te2-previewbtn')!;
     expect(btn.getAttribute('aria-expanded')).toBe('false');
     btn.click();
@@ -205,8 +205,8 @@ describe('Test editor — profile / package variants and classic', () => {
     parameters: JSON.stringify({ items: [] }) });
   it('profile: the same band + name-and-tabs pill, "Members" tab', () => {
     const { el, txt } = render({ test: PROFILE, type: 'profile' });
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toContain('Diabetes Panel');
-    expect(el.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    expect(txt(el.querySelector('.pf-ctx__primary'))).toContain('Diabetes Panel');
+    expect(el.querySelectorAll('.pf-ctx__chip').length).toBe(0);
     const tabs = Array.from(el.querySelectorAll('[role="tab"]')).map(t => t.textContent!.trim());
     expect(tabs).toContain('Members');
     expect(el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
@@ -218,7 +218,7 @@ describe('Test editor — profile / package variants and classic', () => {
     expect(Array.from(el.querySelectorAll('[role="tab"]')).map(t => t.textContent!.trim())).toContain('Package members');
     c.jumpToSection('results');
     f.detectChanges();
-    expect(el.querySelector('#sec-results input.pf-picker-search.nd-input')).not.toBeNull();
+    expect(el.querySelector('#sec-results input.pf-picker-search.pf-input')).not.toBeNull();
   });
 
   it('classic design keeps the old header + rail (no band)', () => {

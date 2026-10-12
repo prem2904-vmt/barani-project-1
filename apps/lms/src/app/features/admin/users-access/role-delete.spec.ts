@@ -68,7 +68,7 @@ describe('Users & roles — Delete role', () => {
     const custom = cell(role({}));
     const del = custom.querySelector('.pf-ua-del') as HTMLButtonElement;
     expect(del).not.toBeNull();
-    expect(del.classList.contains('nd-rowact')).toBe(true);
+    expect(del.classList.contains('pf-rowact')).toBe(true);
     expect(del.style.color).toContain('--red-text');
     expect(cell(role({ isPreSeeded: true, name: 'Receptionist', tenantId: undefined })).querySelector('.pf-ua-del')).toBeNull();
     expect(cell(role({ name: 'Receptionist' })).querySelector('.pf-ua-del')).toBeNull();

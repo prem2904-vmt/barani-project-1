@@ -15,7 +15,7 @@ export const PHARMACY_SECTIONS: readonly { key: PharmacySection; label: string; 
 ];
 
 /**
- * The pharmacy section switch — a neutral nd-kit segmented control of links,
+ * The pharmacy section switch — a neutral pf-kit segmented control of links,
  * projected into the band pill's tools slot (ND §1: the pill is the context
  * bar). The current section is the raised neutral segment (aria-current),
  * never violet. Scrolls sideways on narrow screens.
@@ -26,9 +26,9 @@ export const PHARMACY_SECTIONS: readonly { key: PharmacySection; label: string; 
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav class="nd-seg ph-sec" aria-label="Pharmacy sections">
+    <nav class="pf-seg ph-sec" aria-label="Pharmacy sections">
       @for (s of sections; track s.key) {
-        <a class="nd-seg__item ph-sec__item" [routerLink]="s.path"
+        <a class="pf-seg__item ph-sec__item" [routerLink]="s.path"
            [attr.aria-current]="s.key === active() ? 'page' : null"
            [attr.aria-pressed]="s.key === active()">{{ s.label }}</a>
       }

@@ -5,7 +5,7 @@ import { TileGridDirective, tileColumns } from './tile-grid.directive';
 @Component({
   standalone: true,
   imports: [TileGridDirective],
-  template: `<ul [ndTileGrid]="on"><li>a</li><li>b</li><li>c</li></ul>`,
+  template: `<ul [pfTileGrid]="on"><li>a</li><li>b</li><li>c</li></ul>`,
 })
 class Host { on = true; readonly grid = viewChild.required(TileGridDirective); }
 
@@ -19,7 +19,7 @@ describe('tileColumns — by container width, not window', () => {
   });
 });
 
-describe('ndTileGrid — column class at three container widths', () => {
+describe('pfTileGrid — column class at three container widths', () => {
   let observed: ((w: number) => void) | null = null;
   beforeEach(() => {
     observed = null;
@@ -37,37 +37,37 @@ describe('ndTileGrid — column class at three container widths', () => {
     return { f, ul: f.nativeElement.querySelector('ul') as HTMLElement };
   }
 
-  it('wide pane → nd-tilegrid--c3', () => {
+  it('wide pane → pf-tilegrid--c3', () => {
     const { f, ul } = render();
     observed!(1200); f.detectChanges();
-    expect(ul.classList.contains('nd-tilegrid')).toBe(true);
-    expect(ul.classList.contains('nd-tilegrid--c3')).toBe(true);
+    expect(ul.classList.contains('pf-tilegrid')).toBe(true);
+    expect(ul.classList.contains('pf-tilegrid--c3')).toBe(true);
   });
 
-  it('medium pane → nd-tilegrid--c2', () => {
+  it('medium pane → pf-tilegrid--c2', () => {
     const { f, ul } = render();
     observed!(800); f.detectChanges();
-    expect(ul.classList.contains('nd-tilegrid--c2')).toBe(true);
-    expect(ul.classList.contains('nd-tilegrid--c3')).toBe(false);
+    expect(ul.classList.contains('pf-tilegrid--c2')).toBe(true);
+    expect(ul.classList.contains('pf-tilegrid--c3')).toBe(false);
   });
 
-  it('phone-width pane → nd-tilegrid--c1', () => {
+  it('phone-width pane → pf-tilegrid--c1', () => {
     const { f, ul } = render();
     observed!(1200); f.detectChanges();
     observed!(380); f.detectChanges();
-    expect(ul.classList.contains('nd-tilegrid--c1')).toBe(true);
+    expect(ul.classList.contains('pf-tilegrid--c1')).toBe(true);
     expect(ul.getAttribute('data-cols')).toBe('1');
   });
 });
 
-describe('ndTileGrid — off (classic)', () => {
+describe('pfTileGrid — off (classic)', () => {
   it('adds no grid classes when disabled', () => {
     (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
     const f = TestBed.createComponent(Host);
     f.componentInstance.on = false;
     f.detectChanges();
     const ul = f.nativeElement.querySelector('ul') as HTMLElement;
-    expect(ul.classList.contains('nd-tilegrid')).toBe(false);
+    expect(ul.classList.contains('pf-tilegrid')).toBe(false);
     expect(ul.hasAttribute('data-cols')).toBe(false);
   });
 });

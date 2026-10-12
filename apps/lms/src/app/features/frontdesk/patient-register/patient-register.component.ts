@@ -22,7 +22,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
+
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -45,7 +45,7 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign()) {
-    <!-- NEW DESIGN (ND-PATTERN §15): ONE form, no tabs, keyboard-first.
+    <!-- NEW DESIGN (PF-PATTERN §15): ONE form, no tabs, keyboard-first.
          Band = back · tenant · actions (ONE primary); the pill = the
          patient's name only; every section is a card on the same screen
          (3 / 2 / 1 columns). Ctrl/⌘+Enter saves from anywhere. -->
@@ -54,11 +54,11 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
                     [customSearch]="true" [contextBar]="true" [standardPill]="true">
         <ng-container band-actions>
           @if (patientId()) {
-            <span class="nd-savestate pf-reg-savestate" role="status" aria-live="polite"
+            <span class="pf-savestate pf-reg-savestate" role="status" aria-live="polite"
                   [attr.aria-label]="dirty() ? 'Unsaved changes' : 'No unsaved changes'"
                   [title]="dirty() ? 'Unsaved changes — Save changes to keep them' : 'No unsaved changes'">
               @if (dirty()) {
-                <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-reg-savestate__t">Unsaved changes</span>
+                <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-reg-savestate__t">Unsaved changes</span>
               } @else {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-reg-savestate__t">All changes saved</span>
               }
@@ -110,27 +110,27 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
         <!-- The pill (standard band-pill size) = the patient's name ✎ … and,
              at its right, the ABHA helpers as quiet grey buttons (icon +
              label on desktop, icon only on phones). -->
-        <div band-search class="nd-ctx pf-reg-ctx">
-          <span class="nd-ctx__primary pf-reg-ctx__name">
+        <div band-search class="pf-ctx pf-reg-ctx">
+          <span class="pf-ctx__primary pf-reg-ctx__name">
             <span class="pf-reg-ctx__nametext">{{ subjectName() }}</span>
-            <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+            <button type="button" class="pf-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
           </span>
           <span class="pf-reg-ctx__abha">
             @if (!patientId()) {
-              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="openAbhaPrefill('fetch')"
+              <button type="button" class="pf-btn pf-btn--quiet pf-reg-abha" (click)="openAbhaPrefill('fetch')"
                       aria-label="Fill from ABHA" title="Has an ABHA? Scan the card or enter the number to fill the form">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg>
                 <span class="pf-reg-abha__t">Fill from ABHA</span>
               </button>
-              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha-new" (click)="openAbhaPrefill('create')"
+              <button type="button" class="pf-btn pf-btn--quiet pf-reg-abha-new" (click)="openAbhaPrefill('create')"
                       aria-label="Create ABHA" title="No ABHA? Create one with Aadhaar OTP — it fills the form">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v6M9 12h6"/></svg>
                 <span class="pf-reg-abha__t">Create ABHA</span>
               </button>
             } @else {
-              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="abhaWizardOpen.set(true)"
+              <button type="button" class="pf-btn pf-btn--quiet pf-reg-abha" (click)="abhaWizardOpen.set(true)"
                       aria-label="Verify / create ABHA" title="Create a new ABHA or verify an existing one via ABDM OTP">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 <span class="pf-reg-abha__t">Verify / create ABHA</span>
@@ -157,8 +157,8 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
             (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
-          <section class="nd-card pf-reg-loading" aria-busy="true">
-            <div class="nd-card__body">
+          <section class="pf-card pf-reg-loading" aria-busy="true">
+            <div class="pf-card__body">
               <div class="flex justify-center py-10">
                 <pf-skeleton-form [fields]="8" label="Loading the form…"></pf-skeleton-form>
               </div>
@@ -257,24 +257,7 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
     </section>
     }
   `,
-  styles: [
-    PATIENT_REGISTER_ND_STYLES,
-    `
-      /* PHONE (≤640px): the floating bottom-nav pill overlaps the
-         in-flow workflow footer (the "← Back / Next →" / "Register
-         patient" action row rendered by pf-workflow-renderer), so the
-         primary button can't be reached/tapped. Pad the page foot by
-         (action-row height + the pill's reserved height,
-         --tab-nav-total-height) so the form scrolls fully clear and the
-         button sits above the pill. Additive + phone-only: ≥641px is
-         byte-for-byte unchanged. */
-      @media (max-width: 640px) {
-        :host .pf-register-page {
-          padding-bottom: calc(56px + var(--tab-nav-total-height)) !important;
-        }
-      }
-    `
-  ]
+  styleUrl: './patient-register.component.scss'
 })
 export class PatientRegisterComponent implements OnInit {
   private readonly api = inject(ApiService);

@@ -221,7 +221,7 @@ describe('pf-actions-menu — styles', () => {
     expect(css()).toContain('prefers-reduced-motion');
   });
   it('uses theme tokens (light / dark), never a hard-coded dark surface', () => {
-    expect(css()).toContain('var(--nd-card-bg');
+    expect(css()).toContain('var(--pf-card-bg');
     expect(css()).toContain('var(--text-primary)');
   });
 });

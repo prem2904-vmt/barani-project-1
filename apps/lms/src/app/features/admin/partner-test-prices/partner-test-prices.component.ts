@@ -48,7 +48,7 @@ interface PriceRow {
   imports: [HeroBandComponent, SelectComponent, SkeletonTableComponent, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="nd-page px-4 md:px-8 pt-6">
+    <section class="pf-page px-4 md:px-8 pt-6">
       <pf-hero-band [back]="true">
         <ng-container band-tools>
           <pf-select class="ptp-filter" size="sm" [options]="labOptions()" [value]="referralLabId()"
@@ -56,26 +56,26 @@ interface PriceRow {
         </ng-container>
       </pf-hero-band>
 
-      <div class="nd-body">
-        <div class="nd-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true">
+      <div class="pf-body">
+        <div class="pf-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9"/>
               </svg>
             </span>
-            <span class="nd-card__label">Partner prices{{ activeLabName() ? ' — ' + activeLabName() : '' }}</span>
-            <span class="nd-card__spacer"></span>
+            <span class="pf-card__label">Partner prices{{ activeLabName() ? ' — ' + activeLabName() : '' }}</span>
+            <span class="pf-card__spacer"></span>
             @if (!referralLabId()) {
-              <span class="nd-card__note">Pick a referral lab above</span>
+              <span class="pf-card__note">Pick a referral lab above</span>
             } @else {
-              <button type="button" class="nd-btn nd-btn--tertiary" (click)="addRow()">+ Add price</button>
-              <button type="button" class="nd-btn nd-btn--primary" [disabled]="!dirty() || saving()" (click)="save()">
+              <button type="button" class="pf-btn pf-btn--tertiary" (click)="addRow()">+ Add price</button>
+              <button type="button" class="pf-btn pf-btn--primary" [disabled]="!dirty() || saving()" (click)="save()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
             }
           </div>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @if (!referralLabId()) {
               <p style="padding: 16px; color: var(--text-secondary);">
                 Select a referral lab to view or edit what it charges per test. This cost is what Analytics'
@@ -125,7 +125,7 @@ export class PartnerTestPricesComponent {
   private deleteRenderer = (params: ICellRendererParams<PriceRow>): HTMLElement => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'nd-btn nd-btn--tertiary';
+    btn.className = 'pf-btn pf-btn--tertiary';
     btn.style.padding = '4px 10px';
     btn.textContent = 'Delete';
     btn.addEventListener('click', () => void this.deleteRow(params.data!));

@@ -98,12 +98,12 @@ export interface PriceRow {
             (valueChange)="selectedDeptId.set($event)">
           </pf-select>
           @if (bandQuery() === null) {
-            <input type="search" class="nd-input pf-pricing__search" aria-label="Search test name"
+            <input type="search" class="pf-input pf-pricing__search" aria-label="Search test name"
                    placeholder="Search test name…"
                    [ngModel]="search()" (ngModelChange)="search.set($event)" />
           }
           <span class="pf-pricing__count ml-auto">
-            <span class="nd-num">{{ filtered().length }}</span> test{{ filtered().length === 1 ? '' : 's' }}
+            <span class="pf-num">{{ filtered().length }}</span> test{{ filtered().length === 1 ? '' : 's' }}
           </span>
         </div>
 
@@ -111,7 +111,7 @@ export interface PriceRow {
         <div class="pf-pricing__bulk">
           <span class="pf-pricing__bulk-k">Bulk change</span>
           <div class="flex items-center gap-1">
-            <input type="number" class="nd-input nd-num pf-pricing__pct" [ngModel]="pct()" (ngModelChange)="pct.set($any($event))"
+            <input type="number" class="pf-input pf-num pf-pricing__pct" [ngModel]="pct()" (ngModelChange)="pct.set($any($event))"
                    step="1" inputmode="decimal" aria-label="Percentage" />
             <span class="pf-pricing__unit">%</span>
           </div>
@@ -142,10 +142,10 @@ export interface PriceRow {
           </div>
           <ul class="pf-pricing__list">
             @for (r of filtered(); track r.id) {
-              <li class="nd-row pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id) || specimenDirty(r.id)"
+              <li class="pf-row pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id) || specimenDirty(r.id)"
                   [class.pf-pricing__row--off]="!offeredNow(r.id)">
                 <div class="grow min-w-0">
-                  <p class="nd-row__name pf-pricing__name">{{ r.name }}</p>
+                  <p class="pf-row__name pf-pricing__name">{{ r.name }}</p>
                   <p class="pf-pricing__meta">
                     <span>{{ r.isPackage ? 'Package' : (r.deptName || 'No department') }}</span>
                     @if (!offeredNow(r.id)) {
@@ -155,30 +155,30 @@ export interface PriceRow {
                 </div>
                 <div class="pf-pricing__offer">
                   <!-- Kit switch (violet ON). -->
-                  <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="offeredNow(r.id)"
+                  <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="offeredNow(r.id)"
                           (click)="setOffered(r.id, !offeredNow(r.id))" [attr.aria-label]="'Offered here: ' + r.name">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                 </div>
                 <div class="pf-pricing__price">
                   <span class="pf-pricing__unit">₹</span>
-                  <input type="number" class="nd-input nd-num pf-pricing__price-in" [attr.aria-label]="'Price of ' + r.name" min="0" step="0.01" inputmode="decimal"
+                  <input type="number" class="pf-input pf-num pf-pricing__price-in" [attr.aria-label]="'Price of ' + r.name" min="0" step="0.01" inputmode="decimal"
                          [ngModel]="edits()[r.id]" (ngModelChange)="setPrice(r.id, $any($event))" />
                 </div>
               </li>
               <!-- A test with allowed specimens expands into one row per
                    specimen: its own price, or blank = the test's price. -->
               @for (sp of specimenRowsOf(r.id); track sp.code) {
-                <li class="nd-row pf-pricing__row pf-pricing__row--spec" [attr.data-spec]="r.id + '|' + sp.code"
+                <li class="pf-row pf-pricing__row pf-pricing__row--spec" [attr.data-spec]="r.id + '|' + sp.code"
                     [class.pf-pricing__row--dirty]="isSpecimenDirty(r.id, sp.code)">
                   <div class="grow min-w-0 pf-pricing__spec">
-                    <p class="nd-row__name pf-pricing__name">{{ sp.name }}</p>
+                    <p class="pf-row__name pf-pricing__name">{{ sp.name }}</p>
                     <p class="pf-pricing__meta"><span>Specimen of {{ r.name }}</span></p>
                   </div>
                   <div class="pf-pricing__offer"></div>
                   <div class="pf-pricing__price">
                     <span class="pf-pricing__unit">₹</span>
-                    <input type="number" class="nd-input nd-num pf-pricing__price-in" [attr.aria-label]="'Price of ' + r.name + ' on ' + sp.name"
+                    <input type="number" class="pf-input pf-num pf-pricing__price-in" [attr.aria-label]="'Price of ' + r.name + ' on ' + sp.name"
                            min="0" step="0.01" inputmode="decimal" [placeholder]="'base ' + round2(edits()[r.id])"
                            [ngModel]="specimenPriceNow(r.id, sp.code)" (ngModelChange)="setSpecimenPrice(r.id, sp.code, $any($event))" />
                   </div>
@@ -195,12 +195,12 @@ export interface PriceRow {
            (owner): no separate bar. -->
       @if (dirtyCount() > 0 && !bandActions()) {
         <div class="pf-pricing__savebar">
-          <span class="nd-savestate"><span class="nd-savestate__dot" aria-hidden="true"></span>
-            <span class="nd-num">{{ dirtyCount() }}</span> unsaved change{{ dirtyCount() === 1 ? '' : 's' }}
+          <span class="pf-savestate"><span class="pf-savestate__dot" aria-hidden="true"></span>
+            <span class="pf-num">{{ dirtyCount() }}</span> unsaved change{{ dirtyCount() === 1 ? '' : 's' }}
           </span>
           <div class="flex items-center gap-2 ml-auto">
-            <button type="button" class="nd-btn nd-btn--tertiary press" [disabled]="saving()" (click)="discard()">Discard</button>
-            <button type="button" class="nd-btn nd-btn--primary pf-pricing__save press" [disabled]="saving()"
+            <button type="button" class="pf-btn pf-btn--tertiary press" [disabled]="saving()" (click)="discard()">Discard</button>
+            <button type="button" class="pf-btn pf-btn--primary pf-pricing__save press" [disabled]="saving()"
                     [pfBusy]="saving()" pfBusyLabel="Saving prices…" (click)="save()">
               @if (saving()) { Saving… } @else { Save changes }
             </button>
@@ -239,8 +239,8 @@ export interface PriceRow {
     .pf-pricing__bulk {
       display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
       padding: 10px 12px; margin-bottom: 12px;
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius);
-      background: var(--nd-card-bg);
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
+      background: var(--pf-card-bg);
     }
     .pf-pricing__bulk-k { font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--text-primary); }
     .pf-pricing__unit { font-size: 13px; color: var(--text-tertiary); }
@@ -254,7 +254,7 @@ export interface PriceRow {
       display: flex; align-items: center; gap: 12px;
       padding: 0 12px 8px;
       font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--text-tertiary); border-bottom: 1px solid var(--nd-line); margin-bottom: 8px;
+      color: var(--text-tertiary); border-bottom: 1px solid var(--pf-line); margin-bottom: 8px;
     }
     .pf-pricing__head .grow { flex: 1; }
     .pf-pricing__price-h { width: 150px; text-align: right; }
@@ -262,15 +262,15 @@ export interface PriceRow {
     .pf-pricing__list { display: flex; flex-direction: column; gap: 6px; list-style: none; padding: 0; margin: 0; }
     .pf-pricing__row { gap: 12px; }
     /* Edited = the kit's "in" tint (subtle violet) + the neutral selected border. */
-    .pf-pricing__row--dirty { border-color: var(--nd-sel-border); background: var(--nd-in-tint); }
+    .pf-pricing__row--dirty { border-color: var(--pf-sel-border); background: var(--pf-in-tint); }
     .pf-pricing__price { display: flex; align-items: center; gap: 6px; width: 150px; flex: 0 0 auto; }
     .pf-pricing__price-in { width: 120px; text-align: right; }
 
     .pf-pricing__savebar {
       flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
       padding-top: 12px; padding-bottom: 12px; margin-top: 4px;
-      padding-inline: 14px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius);
-      background: var(--nd-card-bg); box-shadow: var(--nd-shadow-sm);
+      padding-inline: 14px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
+      background: var(--pf-card-bg); box-shadow: var(--pf-shadow-sm);
     }
 
     /* Phone (<=640): the page scrolls naturally; the chrome isn't pinned so the

@@ -20,7 +20,7 @@ import { RoleEditorComponent } from './role-editor.component';
 import { UsersAccessComponent } from './users-access.component';
 
 /**
- * Users & access — LOADING FEEDBACK (ND-PATTERN "Loading feedback"). Opening
+ * Users & access — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). Opening
  * a user / role draws the editor's own shape on the FIRST frame (never a
  * blank form, never the "create" form flashing before an existing role),
  * Save is not offered until the record is on screen, Save turns busy while
@@ -91,7 +91,7 @@ describe('Users & access — loading feedback', () => {
     const rec$ = new Subject<unknown>();
     const { el } = render(UserEditComponent, { id: 'u1', slow: { '/api/users/': rec$ } });
     expect(el.querySelector('.pf-ue-loading pf-skeleton-form[aria-busy="true"]')).not.toBeNull();
-    expect(el.querySelector('.pf-band-body input.nd-input')).toBeNull();
+    expect(el.querySelector('.pf-band-body input.pf-input')).toBeNull();
     const save = el.querySelector<HTMLButtonElement>('.pf-uf-primary')!;
     expect(save.disabled).toBe(true);
   });
@@ -106,7 +106,7 @@ describe('Users & access — loading feedback', () => {
     vi.advanceTimersByTime(600);
     f.detectChanges();
     expect(el.querySelector('.pf-ue-loading')).toBeNull();
-    expect(el.querySelector('.pf-band-body input.nd-input')).not.toBeNull();
+    expect(el.querySelector('.pf-band-body input.pf-input')).not.toBeNull();
   });
 
   it('Edit user: Save is disabled + aria-busy the same frame, dots after 150ms', () => {

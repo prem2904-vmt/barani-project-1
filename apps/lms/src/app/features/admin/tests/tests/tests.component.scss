@@ -36,12 +36,12 @@
 
 .pf-tm-tab--active {
   color: var(--text-primary);
-  background: var(--nd-sel-bg);
-  box-shadow: inset 0 0 0 1px var(--nd-sel-border);
+  background: var(--pf-sel-bg);
+  box-shadow: inset 0 0 0 1px var(--pf-sel-border);
 }
 
 
-/* ── Two cards (ND-PATTERN "two jobs on one screen") ─────────────────
+/* ── Two cards (PF-PATTERN "two jobs on one screen") ─────────────────
    LEFT the DEPARTMENTS side card (a FILTER companion: filter first, then
    content) — the BILLING card's anatomy, ~340px; RIGHT the MAIN card (the
    grid). Collapsed it is a slim strip; the column
@@ -52,7 +52,7 @@
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
-  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
+  transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring, ease);
 }
 
 .pf-tm-panels--collapsed {
@@ -102,7 +102,7 @@
      "No Rows To Show" never reads through the first-load skeleton. */
   z-index: 6;
   overflow: hidden;
-  background: var(--nd-card-bg, var(--bg-primary));
+  background: var(--pf-card-bg, var(--bg-primary));
   border-radius: inherit;
 }
 
@@ -124,7 +124,7 @@
   position: sticky;
   top: 12px;
   max-height: calc(100dvh - 180px);
-  animation: pf-tm-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
+  animation: pf-tm-side-in var(--pf-dur, 320ms) var(--pf-spring, ease) both;
 }
 
 @keyframes pf-tm-side-in {
@@ -167,7 +167,7 @@
 }
 
 .pf-tm-strip__btn:hover .pf-tm-strip__expand {
-  border-color: var(--nd-sel-border);
+  border-color: var(--pf-sel-border);
   color: var(--text-primary);
 }
 
@@ -229,11 +229,11 @@
   font: inherit;
   text-align: left;
   color: var(--text-primary);
-  transition: background var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease;
+  transition: background var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease;
 }
 
 .pf-tm-dept:hover {
-  background: var(--nd-chip-bg);
+  background: var(--pf-chip-bg);
 }
 
 .pf-tm-dept:focus-visible {
@@ -242,8 +242,8 @@
 }
 
 .pf-tm-dept[aria-pressed='true'] {
-  background: var(--nd-sel-bg);
-  box-shadow: inset 0 0 0 1px var(--nd-sel-border);
+  background: var(--pf-sel-bg);
+  box-shadow: inset 0 0 0 1px var(--pf-sel-border);
 }
 
 .pf-tm-dept-name {
@@ -268,7 +268,7 @@
   padding: 0 6px;
   border-radius: 6px;
   color: var(--text-secondary);
-  background: var(--nd-chip-bg);
+  background: var(--pf-chip-bg);
 }
 
 .pf-tm-dept-off {
@@ -278,7 +278,7 @@
   padding: 0 6px;
   border-radius: 6px;
   color: var(--text-tertiary);
-  border: 1px solid var(--nd-line);
+  border: 1px solid var(--pf-line);
 }
 
 .pf-tm-dept-count {
@@ -325,10 +325,10 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: var(--nd-nav-h, 0px);
+  bottom: var(--pf-nav-h, 0px);
   z-index: 1001;
   background: rgba(0, 0, 0, 0.45);
-  animation: pf-tm-fade var(--nd-dur-fast, 200ms) ease both;
+  animation: pf-tm-fade var(--pf-dur-fast, 200ms) ease both;
 }
 
 @keyframes pf-tm-fade {
@@ -346,12 +346,12 @@
   top: auto;
   left: 0;
   right: 0;
-  bottom: var(--nd-nav-h, 0px);
+  bottom: var(--pf-nav-h, 0px);
   z-index: 1002;
-  height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+  height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
   max-height: none;
   border-radius: 20px 20px 0 0;
-  animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+  animation: pf-rise var(--pf-dur-sheet, 360ms) var(--pf-spring-bounce, ease) both;
 }
 
 @media (min-width: 641px) {
@@ -368,7 +368,7 @@
   height: 5px;
   margin: 8px auto 2px;
   border-radius: 999px;
-  background: var(--nd-line);
+  background: var(--pf-line);
 }
 
 .pf-tm-deptchip {
@@ -449,15 +449,15 @@
 }
 
 .pf-tm-status-switch:hover {
-  border-color: var(--nd-sel-border);
+  border-color: var(--pf-sel-border);
 }
 
 .pf-tm-status-switch--on {
-  background: var(--nd-switch-on);
-  border-color: var(--nd-switch-on);
+  background: var(--pf-switch-on);
+  border-color: var(--pf-switch-on);
 }
 
-/* violet switch (ND-PATTERN §4), never green */
+/* violet switch (PF-PATTERN §4), never green */
 .pf-tm-status-switch-knob {
   position: absolute;
   top: 1px;
@@ -685,7 +685,7 @@
 
 /* ── Band pill (new design) ─────────────────────────────────────────── */
 
-/* On = the kit's neutral selected state (.nd-chip[aria-pressed='true']). */
+/* On = the kit's neutral selected state (.pf-chip[aria-pressed='true']). */
 .pf-tm-bandseg {
   flex-shrink: 0;
 }
@@ -797,7 +797,7 @@
   height: 100%;
 }
 
-:host ::ng-deep .nd-rowact.nd-rowact--icon.pf-tm-rowact-sm {
+:host ::ng-deep .pf-rowact.pf-rowact--icon.pf-tm-rowact-sm {
   width: 28px;
   min-width: 28px;
   height: 28px;

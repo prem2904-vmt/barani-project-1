@@ -29,7 +29,7 @@ export function opensAsPage(from: string, to: string): boolean {
 }
 
 /** Router `onViewTransitionCreated` hook (runs in an injection context).
- *  Three motions, one rule (docs/ND-PATTERN.md §9):
+ *  Three motions, one rule (docs/PF-PATTERN.md §9):
  *   - step → step SLIDES: tags <html> with the direction for the duration of
  *     the transition so the global ::view-transition CSS can slide;
  *   - list → detail ZOOMS: a tapped [pfZoomSource] morphs into the detail's

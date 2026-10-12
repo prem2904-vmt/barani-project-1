@@ -7,7 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { of, throwError, Subject } from 'rxjs';
 import { DiskReadApi } from './disk-read';
 
-/** Measure-zones modal on the kit (owner): nd-card / phone sheet, BILLING
+/** Measure-zones modal on the kit (owner): pf-card / phone sheet, BILLING
  *  header, neutral stepper, solid-circle reticle, ONE primary per step. */
 
 const css = () => ((PlateMeasureComponent as any).ɵcmp.styles as string[]).join('\n');
@@ -39,9 +39,9 @@ afterEach(() => { document.querySelectorAll('pf-plate-measure').forEach(n => n.r
 describe('Measure zones modal — kit shell', () => {
   it('header: violet icon chip, MEASURE ZONES label, neutral expand + close; calm title', () => {
     const { el } = render();
-    expect(el.querySelector('.pm-head .nd-card__icon svg')).toBeTruthy();
+    expect(el.querySelector('.pm-head .pf-card__icon svg')).toBeTruthy();
     expect(el.querySelector('.pm-head__label')?.textContent?.trim()).toBe('Measure zones');
-    expect(el.querySelector('.pm-head__label')?.classList.contains('nd-card__label')).toBe(true);
+    expect(el.querySelector('.pm-head__label')?.classList.contains('pf-card__label')).toBe(true);
     expect(el.querySelectorAll('.pm-head .pm-icon').length).toBe(2);
     expect(el.querySelector('.pm-x')?.getAttribute('aria-label')).toBe('Close');
     expect(el.querySelector('.pm-title')?.textContent?.trim()).toBe('Measure zones from plate');
@@ -71,10 +71,10 @@ describe('Measure zones modal — kit shell', () => {
 
   it('capture: Capture is the ONE primary; Upload is secondary', () => {
     const { el } = render(true);
-    const prim = el.querySelectorAll('.pm-capture .nd-btn--primary');
+    const prim = el.querySelectorAll('.pm-capture .pf-btn--primary');
     expect(prim.length).toBe(1);
     expect(prim[0].textContent).toContain('Capture');
-    expect(el.querySelector('.pm-capture label.nd-btn--secondary')?.textContent).toContain('Upload a photo instead');
+    expect(el.querySelector('.pm-capture label.pf-btn--secondary')?.textContent).toContain('Upload a photo instead');
   });
 
   it('primaries are the kit gradient: no component rule paints a solid violet button', () => {
@@ -87,18 +87,18 @@ describe('Measure zones modal — kit shell', () => {
     c.imageSrc.set('data:image/png;base64,x');
     c.mode.set('calibrate');
     f.detectChanges();
-    const prim = el.querySelectorAll('.pm-controls .nd-btn--primary');
+    const prim = el.querySelectorAll('.pm-controls .pf-btn--primary');
     expect(prim.length).toBe(1);
     expect(prim[0].textContent?.trim()).toBe('Measure');
   });
 
-  it('phones: a tall sheet above the navbar (kit nd-sheet + handle)', () => {
+  it('phones: a tall sheet above the navbar (kit pf-sheet + handle)', () => {
     const { el } = render();
     const panel = el.querySelector('.pm-panel')!;
-    expect(panel.classList.contains('nd-sheet')).toBe(true);
-    expect(panel.querySelector('.nd-sheet__handle')).toBeTruthy();
+    expect(panel.classList.contains('pf-sheet')).toBe(true);
+    expect(panel.querySelector('.pf-sheet__handle')).toBeTruthy();
     const phone = css().slice(css().lastIndexOf('max-width: 640px'));
-    expect(phone).toMatch(/\.pm-backdrop[^{]*\{[^}]*bottom:\s*var\(--nd-nav-h/);
+    expect(phone).toMatch(/\.pm-backdrop[^{]*\{[^}]*bottom:\s*var\(--pf-nav-h/);
   });
 
   it('light mode: coded rings are neutral white; unassigned = violet accent', () => {

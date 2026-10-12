@@ -28,7 +28,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
  *
  * Clipping fix: "What's included" menu is portalled into a singleton overlay host
  * on <body> (#pf-overlay-host, matching pf-select), preventing any clipping from
- * .nd-card { overflow: hidden } or ancestral transforms.
+ * .pf-card { overflow: hidden } or ancestral transforms.
  * On desktop/tablet, it floats freely to the left of the billing card.
  * On mobile, it opens as an accessible bottom sheet modal with backdrop.
  *
@@ -102,10 +102,10 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
 
           <!-- Action button -->
           @if (s.kind === 'saving') {
-          <button type="button" class="nd-btn nd-btn--secondary pf-psg__act" (click)="apply.emit(s)"
+          <button type="button" class="pf-btn pf-btn--secondary pf-psg__act" (click)="apply.emit(s)"
             [attr.aria-label]="'Apply ' + nameOf()(s.bundle)">Apply</button>
           } @else {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-psg__act" (click)="apply.emit(s)"
+          <button type="button" class="pf-btn pf-btn--tertiary pf-psg__act" (click)="apply.emit(s)"
             [attr.aria-label]="'Upgrade to ' + nameOf()(s.bundle) + ' for ' + (s.extraCost | inr) + ' more'">Upgrade</button>
           }
         </div>
@@ -192,10 +192,10 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
             <span class="pf-psg-menu__total-val">{{ s.bundleAmount | inr }}</span>
           </div>
           @if (s.kind === 'saving') {
-          <button type="button" class="nd-btn nd-btn--secondary pf-psg-menu__act"
+          <button type="button" class="pf-btn pf-btn--secondary pf-psg-menu__act"
             (click)="applySuggestion(s, $event)">Apply</button>
           } @else {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-psg-menu__act"
+          <button type="button" class="pf-btn pf-btn--tertiary pf-psg-menu__act"
             (click)="applySuggestion(s, $event)">Upgrade</button>
           }
         </div>
@@ -225,15 +225,15 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       justify-content: center;
       width: 22px;
       height: 22px;
-      border: 1px solid var(--nd-line);
+      border: 1px solid var(--pf-line);
       border-radius: 6px;
-      background: var(--nd-card-bg);
+      background: var(--pf-card-bg);
       color: var(--text-secondary);
       cursor: pointer;
       padding: 0;
-      transition: background var(--nd-dur-fast, 150ms) ease, color var(--nd-dur-fast, 150ms) ease;
+      transition: background var(--pf-dur-fast, 150ms) ease, color var(--pf-dur-fast, 150ms) ease;
     }
-    .pf-psg-nav button:hover:not(:disabled) { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pf-psg-nav button:hover:not(:disabled) { background: var(--pf-chip-bg); color: var(--text-primary); }
     .pf-psg-nav button:disabled { opacity: .35; cursor: default; }
     .pf-psg-nav button:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
 
@@ -252,17 +252,17 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
     .pf-psg__card {
       flex: 0 0 100%;
       scroll-snap-align: start;
-      border-radius: var(--nd-radius, 10px);
-      border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg);
+      border-radius: var(--pf-radius, 10px);
+      border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg);
       padding: 6px 10px;
       min-width: 0;
       box-sizing: border-box;
-      transition: border-color var(--nd-dur-fast, 150ms) ease;
+      transition: border-color var(--pf-dur-fast, 150ms) ease;
     }
     .pf-psg__card--saving {
-      background: var(--nd-in-tint);
-      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 28%, var(--nd-line));
+      background: var(--pf-in-tint);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 28%, var(--pf-line));
     }
     .pf-psg__main {
       display: flex;
@@ -298,11 +298,11 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       cursor: pointer;
       text-align: left;
       overflow: hidden;
-      transition: background var(--nd-dur-fast, 150ms) ease, border-color var(--nd-dur-fast, 150ms) ease;
+      transition: background var(--pf-dur-fast, 150ms) ease, border-color var(--pf-dur-fast, 150ms) ease;
     }
     .pf-psg__more:hover {
-      background: var(--nd-chip-bg);
-      border-color: var(--nd-line);
+      background: var(--pf-chip-bg);
+      border-color: var(--pf-line);
     }
     .pf-psg__more:focus-visible {
       outline: 2px solid var(--color-violet-600, #7c3aed);
@@ -321,7 +321,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       display: inline-block;
       padding: 1px 5px;
       border-radius: 4px;
-      background: var(--nd-chip-bg);
+      background: var(--pf-chip-bg);
       color: var(--text-secondary);
       font-size: 9.5px;
       font-weight: 600;
@@ -340,7 +340,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
     .pf-psg__chev {
       flex: none;
       color: var(--text-tertiary);
-      transition: transform var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 150ms) ease;
+      transition: transform var(--pf-dur-fast, 200ms) ease, color var(--pf-dur-fast, 150ms) ease;
     }
     .pf-psg__more:hover .pf-psg__chev {
       color: var(--text-primary);
@@ -392,8 +392,8 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       pointer-events: auto;
       display: flex;
       flex-direction: column;
-      background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line);
+      background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line);
       box-shadow: 0 18px 40px -4px rgba(15, 23, 42, 0.25), 0 8px 18px -2px rgba(15, 23, 42, 0.12);
       box-sizing: border-box;
       overflow: hidden;
@@ -404,14 +404,14 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
 
     /* Desktop Wide flyout (left of billing card) */
     .pf-psg-menu--flyout {
-      border-radius: var(--nd-radius, 12px);
+      border-radius: var(--pf-radius, 12px);
       padding: 12px 14px;
       animation: pf-psg-flyout-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     /* Narrow desktop / tablet popover (above suggestion card) */
     .pf-psg-menu--popover {
-      border-radius: var(--nd-radius, 12px);
+      border-radius: var(--pf-radius, 12px);
       padding: 12px 14px;
       animation: pf-psg-popover-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -433,7 +433,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       width: 36px;
       height: 4px;
       border-radius: 2px;
-      background: var(--nd-line);
+      background: var(--pf-line);
       margin: 0 auto 10px;
     }
 
@@ -459,7 +459,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       font-size: 11px;
       font-weight: 600;
       color: var(--text-secondary);
-      background: var(--nd-chip-bg);
+      background: var(--pf-chip-bg);
       padding: 1px 6px;
       border-radius: 6px;
     }
@@ -469,29 +469,29 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       justify-content: center;
       width: 26px;
       height: 26px;
-      border: 1px solid var(--nd-line);
+      border: 1px solid var(--pf-line);
       border-radius: 6px;
       background: transparent;
       color: var(--text-secondary);
       cursor: pointer;
       padding: 0;
-      transition: background var(--nd-dur-fast, 150ms) ease, color var(--nd-dur-fast, 150ms) ease;
+      transition: background var(--pf-dur-fast, 150ms) ease, color var(--pf-dur-fast, 150ms) ease;
     }
     .pf-psg-menu__close:hover {
-      background: var(--nd-chip-bg);
+      background: var(--pf-chip-bg);
       color: var(--text-primary);
     }
 
     .pf-psg-menu__bundle-summary {
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
+      background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line);
       border-radius: 8px;
       padding: 8px 10px;
       margin-bottom: 8px;
     }
     .pf-psg-menu__bundle-summary--saving {
-      background: var(--nd-in-tint);
-      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 28%, var(--nd-line));
+      background: var(--pf-in-tint);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 28%, var(--pf-line));
     }
     .pf-psg-menu__bundle-top {
       display: flex;
@@ -546,7 +546,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      border: 1px solid var(--nd-line);
+      border: 1px solid var(--pf-line);
       color: var(--text-tertiary);
     }
     .pf-psg__m--in .pf-psg__tick {
@@ -559,7 +559,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       flex: none;
       padding: 1px 5px;
       border-radius: 4px;
-      background: var(--nd-chip-bg);
+      background: var(--pf-chip-bg);
       color: var(--text-secondary);
       font-size: 10px;
       font-weight: 600;
@@ -574,7 +574,7 @@ import type { PackageSuggestion, SuggestCatalogItem } from './package-suggest';
       gap: 12px;
       margin-top: 8px;
       padding-top: 8px;
-      border-top: 1px solid var(--nd-line);
+      border-top: 1px solid var(--pf-line);
     }
     .pf-psg-menu__total-box {
       display: flex;
@@ -747,7 +747,7 @@ export class PackageSuggestCardComponent implements OnDestroy {
     const trigger = btn ?? (this.el.nativeElement.querySelector('.pf-psg__more') as HTMLElement | null);
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
-    const sideCard = trigger.closest('.pf-oc-side') ?? trigger.closest('.nd-card') ?? trigger;
+    const sideCard = trigger.closest('.pf-oc-side') ?? trigger.closest('.pf-card') ?? trigger;
     const cardRect = sideCard ? sideCard.getBoundingClientRect() : r;
 
     // Available space to the left of the billing card

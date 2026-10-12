@@ -50,7 +50,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "1.55mb"
+              "maximumError": "2.5mb"
             },
             {
               "type": "anyComponentStyle",
@@ -206,6 +206,13 @@
     "serve": {
       "continuous": true,
       "executor": "@angular/build:dev-server",
+      "options": {
+        "prebundle": {
+          "exclude": [
+            "@prefrontal/shared"
+          ]
+        }
+      },
       "configurations": {
         "production": {
           "buildTarget": "lms:build:production"

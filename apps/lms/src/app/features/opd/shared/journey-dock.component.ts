@@ -25,7 +25,7 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
             </span>
             <b>Patient timeline</b>
-            <span class="jd__sum nd-num">
+            <span class="jd__sum pf-num">
               @if (dock.loading()) { Loading the patient's history… }
               @else { {{ dock.summary().text }}@if (dock.summary().flagged; as f) { · <em>{{ f }}</em> } }
             </span>
@@ -72,7 +72,7 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
   `,
   styles: [`
     :host { display: block; flex: none; min-width: 0; }
-    .jd { position: relative; z-index: 5; background: var(--nd-card-bg); border-top: 1px solid var(--nd-card-border, var(--nd-line)); }
+    .jd { position: relative; z-index: 5; background: var(--pf-card-bg); border-top: 1px solid var(--pf-card-border, var(--pf-line)); }
     .jd__bar { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 16px; }
     .jd__ttl { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
     .jd__ttl:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; border-radius: 8px; }
@@ -84,9 +84,9 @@ import { DockFilter, JourneyDockService } from './journey-dock.service';
     .jd__ctl { flex: none; display: flex; align-items: center; gap: 6px; }
     .jd__pills, .jd__zoom { display: inline-flex; gap: 4px; }
     .jd__pills { margin-right: 4px; }
-    .jd__pill { height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; }
+    .jd__pill { height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--pf-line); background: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; }
     .jd__pill[aria-pressed='true'] { border-color: transparent; color: #fff; font-weight: 600; background: linear-gradient(135deg, #7c3aed, #ec4899); }
-    .jd__ib { height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--nd-line); background: none; color: var(--text-secondary);
+    .jd__ib { height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--pf-line); background: none; color: var(--text-secondary);
       display: inline-grid; place-items: center; cursor: pointer; }
     .jd__ib:hover, .jd__pill:hover { color: var(--text-primary); }
     .jd__ib[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }

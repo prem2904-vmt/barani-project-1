@@ -2,17 +2,17 @@
   <section class="pf-band-page pf-mnd">
     <pf-hero-band [back]="true" [tabsOnly]="true"></pf-hero-band>
     <div class="pf-band-body">
-      <div class="nd-card pf-mnd-locked">
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true">
+      <div class="pf-card pf-mnd-locked">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
           </span>
-          <span class="nd-card__label">Messages</span>
+          <span class="pf-card__label">Messages</span>
         </header>
-        <div class="nd-card__body">
+        <div class="pf-card__body">
           <p class="pf-mnd-locked__title">Messages isn't in your plan</p>
           <p class="pf-mnd-locked__text">Team chat and calls aren't part of your current plan. Contact us to upgrade and switch Messages on for your workspace.</p>
-          <a class="nd-btn nd-btn--secondary pf-mnd-locked__btn" routerLink="/">Back to app</a>
+          <a class="pf-btn pf-btn--secondary pf-mnd-locked__btn" routerLink="/">Back to app</a>
         </div>
       </div>
     </div>
@@ -34,7 +34,7 @@
                [attr.aria-label]="'Search in ' + displayName(conv)"
                (input)="onThreadSearch($any($event.target).value)" />
         @if (searchQuery()) {
-          <span class="pf-mnd-pill__count nd-num">{{ searchResults().length }}</span>
+          <span class="pf-mnd-pill__count pf-num">{{ searchResults().length }}</span>
           <button type="button" class="pf-mnd-pill__clear press" (click)="toggleSearch()" aria-label="Clear search">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
@@ -52,14 +52,14 @@
     </div>
     <ng-container band-tools>
       @if (!(narrow() && pane() === 'thread')) {
-        <div class="nd-seg pf-mnd-filter" role="radiogroup" aria-label="Show" (keydown)="onFilterKey($event)">
+        <div class="pf-seg pf-mnd-filter" role="radiogroup" aria-label="Show" (keydown)="onFilterKey($event)">
           @for (f of filters; track f.key) {
-            <button type="button" class="nd-seg__item" role="radio" [attr.data-filter]="f.key"
+            <button type="button" class="pf-seg__item" role="radio" [attr.data-filter]="f.key"
                     [attr.aria-checked]="filter() === f.key" [attr.tabindex]="filter() === f.key ? 0 : -1"
                     (click)="setFilter(f.key)">
               {{ f.label }}
               @if (f.key === 'unread' && chat.totalUnread() > 0) {
-                <span class="pf-mnd-filter__n nd-num">{{ chat.totalUnread() }}</span>
+                <span class="pf-mnd-filter__n pf-num">{{ chat.totalUnread() }}</span>
               }
               @if (f.key === 'calls' && missedCount() > 0) {
                 <span class="pf-mnd-filter__dot" aria-hidden="true"></span>
@@ -71,7 +71,7 @@
     </ng-container>
     <ng-container band-actions>
       @if (showReconnectBanner()) {
-        <span class="nd-chip nd-chip--static pf-mnd-reconnect" role="status" aria-live="polite">
+        <span class="pf-chip pf-chip--static pf-mnd-reconnect" role="status" aria-live="polite">
           <span class="pf-mnd-reconnect__dot" aria-hidden="true"></span>
           <span class="pf-mnd-reconnect__t">Reconnecting…</span>
         </span>
@@ -99,13 +99,13 @@
 
       <!-- ── LEFT: CONVERSATIONS (a navigation companion → left) ─────── -->
       @if (!narrow() && sideCollapsed()) {
-        <aside class="nd-card pf-mnd-strip" aria-label="Conversations">
+        <aside class="pf-card pf-mnd-strip" aria-label="Conversations">
           <button type="button" class="pf-mnd-strip__btn" (click)="toggleSide()"
                   title="Show conversations" aria-label="Show conversations" aria-expanded="false">
-            <span class="nd-btn nd-btn--icon pf-mnd-strip__expand" aria-hidden="true">
+            <span class="pf-btn pf-btn--icon pf-mnd-strip__expand" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </span>
-            <span class="nd-card__icon" aria-hidden="true">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
             <span class="pf-mnd-strip__label">{{ filter() === 'calls' ? 'Calls' : 'Conversations' }}</span>
@@ -113,37 +113,37 @@
           </button>
         </aside>
       } @else if (!narrow() || pane() === 'list') {
-        <aside class="nd-card pf-mnd-side" [class.pf-mnd-push--back]="narrow() && pushDir() === 'back'"
+        <aside class="pf-card pf-mnd-side" [class.pf-mnd-push--back]="narrow() && pushDir() === 'back'"
                [attr.aria-label]="filter() === 'calls' ? 'Calls' : 'Conversations'">
-          <header class="nd-card__head pf-mnd-side__head">
-            <span class="nd-card__icon" aria-hidden="true">
+          <header class="pf-card__head pf-mnd-side__head">
+            <span class="pf-card__icon" aria-hidden="true">
               @if (filter() === 'calls') {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/></svg>
               } @else {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               }
             </span>
-            <span class="nd-card__label">{{ filter() === 'calls' ? 'Calls' : 'Conversations' }}</span>
-            <span class="nd-card__spacer"></span>
+            <span class="pf-card__label">{{ filter() === 'calls' ? 'Calls' : 'Conversations' }}</span>
+            <span class="pf-card__spacer"></span>
             @if (filter() === 'calls') {
-              <div class="nd-seg pf-mnd-callseg" role="radiogroup" aria-label="Calls">
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="callFilter() === 'all'" (click)="setCallFilter('all')">All</button>
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="callFilter() === 'missed'" (click)="setCallFilter('missed')">
-                  Missed @if (missedCount() > 0) { <span class="nd-num">&nbsp;{{ missedCount() }}</span> }
+              <div class="pf-seg pf-mnd-callseg" role="radiogroup" aria-label="Calls">
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="callFilter() === 'all'" (click)="setCallFilter('all')">All</button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="callFilter() === 'missed'" (click)="setCallFilter('missed')">
+                  Missed @if (missedCount() > 0) { <span class="pf-num">&nbsp;{{ missedCount() }}</span> }
                 </button>
               </div>
             } @else {
-              <span class="pf-mnd-side__count nd-num">{{ listConversations().length }}</span>
+              <span class="pf-mnd-side__count pf-num">{{ listConversations().length }}</span>
             }
             @if (!narrow()) {
-              <button type="button" class="nd-btn nd-btn--icon pf-mnd-side__collapse" (click)="toggleSide()"
+              <button type="button" class="pf-btn pf-btn--icon pf-mnd-side__collapse" (click)="toggleSide()"
                       title="Hide conversations" aria-label="Hide conversations" aria-expanded="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
             }
           </header>
 
-          <div class="nd-card__body pf-mnd-list">
+          <div class="pf-card__body pf-mnd-list">
             @if (filter() !== 'calls') {
               @if (!searchTerm() && filter() === 'all') {
                 <button type="button" class="pf-mnd-row pf-mnd-row--notes" (click)="openNotes()"
@@ -177,7 +177,7 @@
                           @if (c.isMuted) {
                             <svg class="pf-mnd-row__muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Muted" role="img"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="m1 1 22 22"/></svg>
                           }
-                          <time class="pf-mnd-row__time nd-num" [attr.datetime]="c.lastMessageAt">{{ rowTime(c.lastMessageAt) }}</time>
+                          <time class="pf-mnd-row__time pf-num" [attr.datetime]="c.lastMessageAt">{{ rowTime(c.lastMessageAt) }}</time>
                         </span>
                         <span class="pf-mnd-row__bottom">
                           <span class="pf-mnd-row__preview" [class.pf-mnd-row__preview--unread]="c.unreadCount > 0">
@@ -197,7 +197,7 @@
                             <span class="pf-mnd-row__pv">@if (previewMine(c)) {You: }{{ previewText(c) }}</span>
                           </span>
                           @if (c.unreadCount > 0) {
-                            <span class="pf-mnd-unread nd-num" [attr.aria-label]="c.unreadCount + ' unread'">
+                            <span class="pf-mnd-unread pf-num" [attr.aria-label]="c.unreadCount + ' unread'">
                               <span class="pf-mnd-unread__dot" aria-hidden="true"></span>{{ c.unreadCount }}
                             </span>
                           }
@@ -220,7 +220,7 @@
                         No conversations yet.
                       }
                       @if (!searchTerm() && filter() !== 'unread') {
-                        <button type="button" class="nd-btn nd-btn--tertiary" (click)="openNewChatModal()">Start one</button>
+                        <button type="button" class="pf-btn pf-btn--tertiary" (click)="openNewChatModal()">Start one</button>
                       }
                     </li>
                   }
@@ -258,7 +258,7 @@
                     <span class="pf-mnd-row__main">
                       <span class="pf-mnd-row__top">
                         <span class="pf-mnd-row__name">{{ cl.peer.displayName }}</span>
-                        <time class="pf-mnd-row__time nd-num" [attr.datetime]="cl.startedAt">{{ rowTime(cl.startedAt) }}</time>
+                        <time class="pf-mnd-row__time pf-num" [attr.datetime]="cl.startedAt">{{ rowTime(cl.startedAt) }}</time>
                       </span>
                       <span class="pf-mnd-row__preview">
                         @if (cl.direction === 'incoming') {
@@ -297,10 +297,10 @@
 
       <!-- ── RIGHT: the THREAD (main card) ─────────────────────────────── -->
       @if (!narrow() || pane() === 'thread') {
-        <section class="nd-card pf-mnd-thread" [class.pf-mnd-push--forward]="narrow() && pushDir() === 'forward'"
+        <section class="pf-card pf-mnd-thread" [class.pf-mnd-push--forward]="narrow() && pushDir() === 'forward'"
                  aria-label="Conversation">
           @if (chat.activeConversation(); as conv) {
-            <header class="nd-card__head pf-mnd-thread__head">
+            <header class="pf-card__head pf-mnd-thread__head">
               <span class="pf-mnd-av pf-mnd-av--head" [class.pf-mnd-av--group]="conv.isGroup" aria-hidden="true">
                 @if (conv.isGroup) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -313,12 +313,12 @@
                   @if (activeTypingNames().length > 0) {
                     <span class="pf-mnd-thread__typing">typing…</span>
                   } @else if (conv.isGroup) {
-                    <span class="nd-num">{{ conv.participants.length }}</span>&nbsp;members
+                    <span class="pf-num">{{ conv.participants.length }}</span>&nbsp;members
                   } @else if (presenceFor(conv); as p) {
                     {{ presenceText(p) }}
                   }
                   @if (conv.contextType && conv.contextType !== 'self' && conv.contextLabel) {
-                    <a class="nd-chip pf-mnd-ctx" [routerLink]="contextLink(conv)" title="Open record">
+                    <a class="pf-chip pf-mnd-ctx" [routerLink]="contextLink(conv)" title="Open record">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                       <span class="pf-mnd-ctx__k">{{ sharedRecordEyebrow(conv.contextType) }}</span>
                       <span class="pf-mnd-ctx__v">{{ conv.contextLabel }}</span>
@@ -359,7 +359,7 @@
             @if (pinnedMessages().length > 0 && !pinnedStripCollapsed()) {
               <div class="pf-mnd-pinned">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M5 17h14V5L12 2 5 5v12z"/></svg>
-                <span class="pf-mnd-pinned__n nd-num">{{ pinnedMessages().length }} pinned</span>
+                <span class="pf-mnd-pinned__n pf-num">{{ pinnedMessages().length }} pinned</span>
                 <span class="pf-mnd-pinned__t">{{ pinnedMessages()[0].body || pinnedMessages()[0].attachmentName || 'Attachment' }}</span>
                 <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="pinnedStripCollapsed.set(true)" aria-label="Hide pinned">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -373,7 +373,7 @@
                 <input class="pf-mnd-tsearch__input" type="search" [value]="searchQuery()" placeholder="Search in this conversation"
                        aria-label="Search in this conversation" (input)="onSearchInput($any($event.target).value)" autofocus />
                 @if (searchQuery()) {
-                  <span class="pf-mnd-tsearch__n nd-num">{{ searchResults().length }} match{{ searchResults().length === 1 ? '' : 'es' }}</span>
+                  <span class="pf-mnd-tsearch__n pf-num">{{ searchResults().length }} match{{ searchResults().length === 1 ? '' : 'es' }}</span>
                 }
                 <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="toggleSearch()" aria-label="Close search">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -386,14 +386,14 @@
                   <li>
                     <button type="button" class="pf-mnd-tresult" (click)="jumpToSearchResult(r)">
                       <span class="pf-mnd-tresult__b">{{ r.body }}</span>
-                      <span class="pf-mnd-tresult__t nd-num">{{ r.sentAt | date:'short' }}</span>
+                      <span class="pf-mnd-tresult__t pf-num">{{ r.sentAt | date:'short' }}</span>
                     </button>
                   </li>
                 }
               </ul>
             }
 
-            <div #thread class="nd-card__body pf-mnd-scroller" (scroll)="onScrollerScroll()"
+            <div #thread class="pf-card__body pf-mnd-scroller" (scroll)="onScrollerScroll()"
                  (dragover)="onScrollerDragOver($event)" (drop)="onScrollerDrop($event)" aria-live="polite">
               @if (chat.loadingHistory()) {
                 <pf-skeleton-rows [rows]="5" [trailing]="false" label="Loading messages…"></pf-skeleton-rows>
@@ -420,7 +420,7 @@
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/></svg>
                     }
                     <span>{{ m.body }}</span>
-                    <time class="nd-num">{{ m.sentAt | date:'shortTime' }}</time>
+                    <time class="pf-num">{{ m.sentAt | date:'shortTime' }}</time>
                   </div>
                 } @else {
                   <div class="pf-mnd-msg" [class.pf-mnd-msg--mine]="m.fromUserId === me()"
@@ -451,7 +451,7 @@
                           @if (sharedRecord(m); as rec) {
                             <a class="pf-mnd-rec" [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + sharedRecordEyebrow(rec.type)"
                                [pfZoomSource]="rec.type === 'report' ? [rec.id] : null">
-                              <span class="nd-card__icon" aria-hidden="true">
+                              <span class="pf-card__icon" aria-hidden="true">
                                 @switch (rec.type) {
                                   @case ('patient') {
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -474,7 +474,7 @@
                           }
                           @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
                             <span class="pf-mnd-file pf-mnd-file--gone" role="note">
-                              <span class="nd-card__icon" aria-hidden="true">
+                              <span class="pf-card__icon" aria-hidden="true">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 12.5l5 5M14.5 12.5l-5 5"/></svg>
                               </span>
                               <span class="pf-mnd-file__meta">
@@ -502,16 +502,16 @@
                                 <span class="pf-mnd-voice__track" aria-hidden="true">
                                   <span class="pf-mnd-voice__fill" [style.width.%]="voiceProgress(m)"></span>
                                 </span>
-                                <span class="pf-mnd-voice__t nd-num">{{ fmtSecs(audioId() === m.id && audioPos() > 0 ? audioPos() : voiceSecs(m)) }}</span>
+                                <span class="pf-mnd-voice__t pf-num">{{ fmtSecs(audioId() === m.id && audioPos() > 0 ? audioPos() : voiceSecs(m)) }}</span>
                               </div>
                             } @else {
                               <a class="pf-mnd-file" [href]="fileHref(m.attachmentUrl)" (click)="openAttachment($event, m.attachmentUrl)" target="_blank" rel="noopener">
-                                <span class="nd-card__icon" aria-hidden="true">
+                                <span class="pf-card__icon" aria-hidden="true">
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                                 </span>
                                 <span class="pf-mnd-file__meta">
                                   <span class="pf-mnd-file__n">{{ m.attachmentName ?? 'Attachment' }}</span>
-                                  <span class="pf-mnd-file__s nd-num">{{ formatSize(m.attachmentSize) }}</span>
+                                  <span class="pf-mnd-file__s pf-num">{{ formatSize(m.attachmentSize) }}</span>
                                 </span>
                               </a>
                             }
@@ -524,7 +524,7 @@
                               @if (m.isPinned) {
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Pinned" role="img"><path d="M12 17v5"/><path d="M5 17h14V5L12 2 5 5v12z"/></svg>
                               }
-                              <time class="nd-num">{{ m.sentAt | date:'shortTime' }}</time>
+                              <time class="pf-num">{{ m.sentAt | date:'shortTime' }}</time>
                               @if (m.editedAt) { <span>edited</span> }
                               @if (m.fromUserId === me()) {
                                 @if (m.pending) {
@@ -545,7 +545,7 @@
                             <button type="button" class="pf-mnd-react" [attr.aria-pressed]="didIReact(m, r.emoji)"
                                     (click)="addReaction(m.id, r.emoji); $event.stopPropagation()"
                                     [attr.aria-label]="r.userIds.length + ' reacted'">
-                              <span>{{ r.emoji }}</span><span class="nd-num">{{ r.userIds.length }}</span>
+                              <span>{{ r.emoji }}</span><span class="pf-num">{{ r.userIds.length }}</span>
                             </button>
                           }
                         </div>
@@ -623,13 +623,13 @@
                   @if (isImage(att.contentType)) {
                     <img class="pf-mnd-pending__thumb" [src]="resolveAttachmentUrl(att.url)" alt="" />
                   } @else {
-                    <span class="nd-card__icon" aria-hidden="true">
+                    <span class="pf-card__icon" aria-hidden="true">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                     </span>
                   }
                   <span class="pf-mnd-pending__meta">
                     <span class="pf-mnd-pending__n">{{ att.name }}</span>
-                    <span class="pf-mnd-pending__s"><span class="nd-num">{{ formatSize(att.size) }}</span> · ready to send</span>
+                    <span class="pf-mnd-pending__s"><span class="pf-num">{{ formatSize(att.size) }}</span> · ready to send</span>
                   </span>
                   <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="clearAttachment()" aria-label="Remove attachment">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -680,7 +680,7 @@
                      (keydown)="onFieldKey($event)">
                   @if (recording()) {
                     <span class="pf-mnd-field__recdot" aria-hidden="true"></span>
-                    <span class="pf-mnd-field__time nd-num">{{ formatRecordTime() }}</span>
+                    <span class="pf-mnd-field__time pf-num">{{ formatRecordTime() }}</span>
                     <span class="pf-mnd-field__hint">Recording…</span>
                     <button type="button" class="pf-mnd-fbtn" (click)="cancelRecord()" aria-label="Discard recording" title="Discard">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
@@ -702,7 +702,7 @@
                     <span class="pf-mnd-voice__track" aria-hidden="true">
                       <span class="pf-mnd-voice__fill" [style.width.%]="(voicePos() / vd.secs) * 100"></span>
                     </span>
-                    <span class="pf-mnd-field__time nd-num">{{ fmtSecs(voicePlaying() || voicePos() > 0 ? voicePos() : vd.secs) }}</span>
+                    <span class="pf-mnd-field__time pf-num">{{ fmtSecs(voicePlaying() || voicePos() > 0 ? voicePos() : vd.secs) }}</span>
                     <button type="button" class="pf-mnd-fbtn" (click)="discardVoice()" aria-label="Discard voice note" title="Discard">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
                     </button>
@@ -723,7 +723,7 @@
 
                 <!-- (mousedown) keeps focus in the field so a tap-send doesn't
                      drop the phone keyboard. -->
-                <button #sendBtn type="button" class="nd-btn nd-btn--primary pf-mnd-send" [disabled]="!canSend()"
+                <button #sendBtn type="button" class="pf-btn pf-btn--primary pf-mnd-send" [disabled]="!canSend()"
                         (mousedown)="$event.preventDefault()" (click)="sendDraft()" aria-label="Send" title="Send">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                 </button>
@@ -755,16 +755,16 @@
                 <div class="pf-mnd-pop-bd" (click)="closeSharePicker()" aria-hidden="true"></div>
                 <div class="pf-mnd-pop pf-mnd-share" role="dialog" aria-label="Share a patient">
                   <header class="pf-mnd-share__head">
-                    <span class="nd-card__icon" aria-hidden="true">
+                    <span class="pf-card__icon" aria-hidden="true">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     </span>
-                    <span class="nd-card__label">Share a patient</span>
-                    <span class="nd-card__spacer"></span>
+                    <span class="pf-card__label">Share a patient</span>
+                    <span class="pf-card__spacer"></span>
                     <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="closeSharePicker()" aria-label="Close">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </header>
-                  <input class="nd-input pf-mnd-share__search" type="search" placeholder="Search by name, MRN or phone"
+                  <input class="pf-input pf-mnd-share__search" type="search" placeholder="Search by name, MRN or phone"
                          aria-label="Search patients" [value]="sharePatientSearch()"
                          (input)="onSharePatientInput($any($event.target).value)" autofocus />
                   <ul class="pf-mnd-share__list" role="list">
@@ -776,7 +776,7 @@
                         <button type="button" class="pf-mnd-pop__row" (click)="confirmSharePatient(p)">
                           <span class="pf-mnd-pop__meta">
                             <span class="pf-mnd-pop__n">{{ patientName(p) }}</span>
-                            @if (shareSub(p)) { <span class="pf-mnd-pop__s nd-num">{{ shareSub(p) }}</span> }
+                            @if (shareSub(p)) { <span class="pf-mnd-pop__s pf-num">{{ shareSub(p) }}</span> }
                           </span>
                         </button>
                       </li>
@@ -794,7 +794,7 @@
               </span>
               <p class="pf-mnd-placeholder__t">Pick a conversation</p>
               <p class="pf-mnd-placeholder__s">Or start a new one with a colleague or a group.</p>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="openNewChatModal()">New chat</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="openNewChatModal()">New chat</button>
             </div>
           }
         </section>
@@ -806,36 +806,36 @@
 <!-- ── New chat (1 person = direct, 2+ = group) ─────────────────────── -->
 @if (newChatOpen()) {
   <div class="pf-mnd-modal-bd" pfModalPortal (click)="closeNewChatModal()">
-    <div class="nd-card pf-mnd-modal" role="dialog" aria-modal="true" [attr.aria-label]="pickerSelection().size <= 1 ? 'New chat' : 'New group'"
+    <div class="pf-card pf-mnd-modal" role="dialog" aria-modal="true" [attr.aria-label]="pickerSelection().size <= 1 ? 'New chat' : 'New group'"
          (click)="$event.stopPropagation()" (keydown.escape)="closeNewChatModal()">
       <span class="pf-mnd-modal__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9"/><path d="M19 3v6M16 6h6"/></svg>
         </span>
-        <span class="nd-card__label">{{ pickerSelection().size <= 1 ? 'New chat' : 'New group' }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">{{ pickerSelection().size <= 1 ? 'New chat' : 'New group' }}</span>
+        <span class="pf-card__spacer"></span>
         <button type="button" class="pf-mnd-qbtn" (click)="closeNewChatModal()" aria-label="Close">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </header>
       <div class="pf-mnd-modal__fields">
         @if (pickerSelection().size >= 2) {
-          <label class="nd-field">
-            <span class="nd-field__lbl">Group name</span>
-            <input class="nd-input" type="text" placeholder="e.g. Haematology team" [value]="groupNameDraft()"
+          <label class="pf-field">
+            <span class="pf-field__lbl">Group name</span>
+            <input class="pf-input" type="text" placeholder="e.g. Haematology team" [value]="groupNameDraft()"
                    (input)="groupNameDraft.set($any($event.target).value)" />
           </label>
         }
-        <input class="nd-input" type="search" placeholder="Search people" aria-label="Search people" [value]="pickerSearch()"
+        <input class="pf-input" type="search" placeholder="Search people" aria-label="Search people" [value]="pickerSearch()"
                (input)="pickerSearch.set($any($event.target).value)" />
       </div>
-      <ul class="nd-card__body pf-mnd-modal__list" role="list">
+      <ul class="pf-card__body pf-mnd-modal__list" role="list">
         @for (u of filteredPickerUsers(); track u.id) {
           <li>
             <button type="button" class="pf-mnd-row" role="checkbox" [attr.aria-checked]="pickerSelection().has(u.id)"
                     [attr.aria-pressed]="pickerSelection().has(u.id)" (click)="togglePick(u.id)">
-              <span class="nd-row__check pf-mnd-check" aria-hidden="true">
+              <span class="pf-row__check pf-mnd-check" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </span>
               <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}<pf-presence-dot [userId]="u.id" /></span>
@@ -849,14 +849,14 @@
           <li class="pf-mnd-empty">No people found.</li>
         }
       </ul>
-      <footer class="nd-card__foot pf-mnd-modal__foot">
-        <p class="pf-mnd-modal__note nd-span">
+      <footer class="pf-card__foot pf-mnd-modal__foot">
+        <p class="pf-mnd-modal__note pf-span">
           @if (pickerSelection().size === 0) { Pick at least one person }
           @else if (pickerSelection().size === 1) { 1 person — a direct chat }
-          @else { <span class="nd-num">{{ pickerSelection().size }}</span>&nbsp;people — a group chat }
+          @else { <span class="pf-num">{{ pickerSelection().size }}</span>&nbsp;people — a group chat }
         </p>
-        <button type="button" class="nd-btn nd-btn--secondary" (click)="closeNewChatModal()">Cancel</button>
-        <button type="button" class="nd-btn nd-btn--primary"
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="closeNewChatModal()">Cancel</button>
+        <button type="button" class="pf-btn pf-btn--primary"
                 [disabled]="pickerSelection().size === 0 || (pickerSelection().size >= 2 && !groupNameDraft().trim())"
                 (click)="confirmPicker()">{{ pickerSelection().size <= 1 ? 'Open chat' : 'Create group' }}</button>
       </footer>
@@ -867,29 +867,29 @@
 <!-- ── Group members ────────────────────────────────────────────────── -->
 @if (membersOpen() && chat.activeConversation(); as conv) {
   <div class="pf-mnd-modal-bd" pfModalPortal (click)="closeMembers()">
-    <div class="nd-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Group members"
+    <div class="pf-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Group members"
          (click)="$event.stopPropagation()" (keydown.escape)="closeMembers()">
       <span class="pf-mnd-modal__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </span>
-        <span class="nd-card__label">Members</span>
-        <span class="pf-mnd-modal__count nd-num">{{ conv.participants.length }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">Members</span>
+        <span class="pf-mnd-modal__count pf-num">{{ conv.participants.length }}</span>
+        <span class="pf-card__spacer"></span>
         <button type="button" class="pf-mnd-qbtn" (click)="closeMembers()" aria-label="Close">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </header>
-      <ul class="nd-card__body pf-mnd-modal__list" role="list">
+      <ul class="pf-card__body pf-mnd-modal__list" role="list">
         @for (p of conv.participants; track p.userId) {
           <li class="pf-mnd-member">
             <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(p.displayName) }}<pf-presence-dot [userId]="p.userId" /></span>
             <span class="pf-mnd-row__main">
               <span class="pf-mnd-row__name">
                 {{ p.displayName }}
-                @if (p.userId === me()) { <span class="nd-chip nd-chip--static pf-mnd-tag">You</span> }
-                @if (p.userId === conv.createdById) { <span class="nd-chip nd-chip--static pf-mnd-tag">Owner</span> }
+                @if (p.userId === me()) { <span class="pf-chip pf-chip--static pf-mnd-tag">You</span> }
+                @if (p.userId === conv.createdById) { <span class="pf-chip pf-chip--static pf-mnd-tag">Owner</span> }
               </span>
               <span class="pf-mnd-row__preview"><span class="pf-mnd-row__pv">{{ p.email }}</span></span>
             </span>
@@ -901,10 +901,10 @@
           </li>
         }
       </ul>
-      <footer class="nd-card__foot pf-mnd-modal__foot">
-        <button type="button" class="nd-btn nd-btn--secondary" [class.nd-span]="!canManageMembers()" (click)="leaveGroup()">Leave group</button>
+      <footer class="pf-card__foot pf-mnd-modal__foot">
+        <button type="button" class="pf-btn pf-btn--secondary" [class.pf-span]="!canManageMembers()" (click)="leaveGroup()">Leave group</button>
         @if (canManageMembers()) {
-          <button type="button" class="nd-btn nd-btn--primary" (click)="openAddMember()">Add member</button>
+          <button type="button" class="pf-btn pf-btn--primary" (click)="openAddMember()">Add member</button>
         }
       </footer>
     </div>
@@ -914,24 +914,24 @@
 <!-- ── Add member ───────────────────────────────────────────────────── -->
 @if (addMemberOpen()) {
   <div class="pf-mnd-modal-bd" pfModalPortal (click)="closeAddMember()">
-    <div class="nd-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Add member"
+    <div class="pf-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Add member"
          (click)="$event.stopPropagation()" (keydown.escape)="closeAddMember()">
       <span class="pf-mnd-modal__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>
         </span>
-        <span class="nd-card__label">Add member</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">Add member</span>
+        <span class="pf-card__spacer"></span>
         <button type="button" class="pf-mnd-qbtn" (click)="closeAddMember()" aria-label="Close">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </header>
       <div class="pf-mnd-modal__fields">
-        <input class="nd-input" type="search" placeholder="Search people" aria-label="Search people" [value]="addMemberSearch()"
+        <input class="pf-input" type="search" placeholder="Search people" aria-label="Search people" [value]="addMemberSearch()"
                (input)="addMemberSearch.set($any($event.target).value)" />
       </div>
-      <ul class="nd-card__body pf-mnd-modal__list" role="list">
+      <ul class="pf-card__body pf-mnd-modal__list" role="list">
         @for (u of addMemberCandidates(); track u.id) {
           <li>
             <button type="button" class="pf-mnd-row" [disabled]="addMemberBusy()" [pfBusy]="addingMemberId() === u.id" pfBusyLabel="Adding…" (click)="addMember(u.id)">
@@ -953,25 +953,25 @@
 <!-- ── Forward ──────────────────────────────────────────────────────── -->
 @if (forwardingMessage(); as fwd) {
   <div class="pf-mnd-modal-bd" pfModalPortal (click)="cancelForward()">
-    <div class="nd-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Forward"
+    <div class="pf-card pf-mnd-modal" role="dialog" aria-modal="true" aria-label="Forward"
          (click)="$event.stopPropagation()" (keydown.escape)="cancelForward()">
       <span class="pf-mnd-modal__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
         </span>
-        <span class="nd-card__label">Forward</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">Forward</span>
+        <span class="pf-card__spacer"></span>
         <button type="button" class="pf-mnd-qbtn" (click)="cancelForward()" aria-label="Close">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </header>
       <div class="pf-mnd-modal__fields">
         <p class="pf-mnd-fwd">{{ fwd.body || fwd.attachmentName || 'Attachment' }}</p>
-        <input class="nd-input" type="search" placeholder="Search a conversation" aria-label="Search a conversation"
+        <input class="pf-input" type="search" placeholder="Search a conversation" aria-label="Search a conversation"
                [value]="forwardSearch()" (input)="forwardSearch.set($any($event.target).value)" />
       </div>
-      <ul class="nd-card__body pf-mnd-modal__list" role="list">
+      <ul class="pf-card__body pf-mnd-modal__list" role="list">
         @for (c of forwardCandidates(); track c.id) {
           <li>
             <button type="button" class="pf-mnd-row" (click)="confirmForward(c)">

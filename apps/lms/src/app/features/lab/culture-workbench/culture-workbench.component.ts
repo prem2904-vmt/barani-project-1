@@ -52,7 +52,7 @@ interface StageField { name: string; title: string; type: string; options: strin
       <pf-hero-band class="pf-cse-band" [customSearch]="true" [back]="true" [backAction]="backFn">
         <ng-container band-actions>
           @if (view(); as cc) {
-            <span class="nd-chip nd-chip--static pf-cse-tech" [title]="techName() || 'Technician'"
+            <span class="pf-chip pf-chip--static pf-cse-tech" [title]="techName() || 'Technician'"
                   [attr.aria-label]="'Technician ' + (techName() || '')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span class="pf-cse-tech__name">{{ techName() || 'Technician' }}</span>
@@ -72,7 +72,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                 <span class="pf-cse-act__t">Validate &amp; sign out</span>
               </button>
             } @else if (cc.caseState === 'awaiting_signout') {
-              <span class="nd-chip nd-chip--static pf-cse-await">Awaiting sign-out</span>
+              <span class="pf-chip pf-chip--static pf-cse-await">Awaiting sign-out</span>
             } @else {
               <!-- THE page primary: submit (or validate) the whole case —
                    the existing sign-out actions, enabled once every stage is done. -->
@@ -91,15 +91,15 @@ interface StageField { name: string; title: string; type: string; options: strin
         <!-- CONTEXT BAR: the case as read-only chips — case ID leads. -->
         <div band-search class="pf-cse-ctx">
           @if (view(); as cc) {
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--id" title="Case / sample ID">
-              <span class="nd-num">{{ cc.barcode || cc.sampleId || 'Culture case' }}</span>
+            <span class="pf-chip pf-chip--static pf-cse-chip pf-cse-chip--id" title="Case / sample ID">
+              <span class="pf-num">{{ cc.barcode || cc.sampleId || 'Culture case' }}</span>
             </span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient"><pf-daily-no [of]="cc" />{{ cc.patientName || 'Patient' }}</span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--test" title="Test">{{ cc.testName || 'Culture' }}</span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--day"><span class="nd-num">Day {{ dayNo() }}</span></span>
+            <span class="pf-chip pf-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient"><pf-daily-no [of]="cc" />{{ cc.patientName || 'Patient' }}</span>
+            <span class="pf-chip pf-chip--static pf-cse-chip pf-cse-chip--test" title="Test">{{ cc.testName || 'Culture' }}</span>
+            <span class="pf-chip pf-chip--static pf-cse-chip pf-cse-chip--day"><span class="pf-num">Day {{ dayNo() }}</span></span>
             <span class="pf-cse-ctx__grow"></span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--progress" aria-live="polite">
-              <span class="nd-num">{{ doneCount() }}/{{ cc.stages.length }}</span> stages
+            <span class="pf-chip pf-chip--static pf-cse-chip pf-cse-chip--progress" aria-live="polite">
+              <span class="pf-num">{{ doneCount() }}/{{ cc.stages.length }}</span> stages
             </span>
           } @else {
             <span class="pf-cse-skel" aria-hidden="true"></span>
@@ -110,14 +110,14 @@ interface StageField { name: string; title: string; type: string; options: strin
       @if (loading() || zoom.holding()) {
         <!-- Skeleton stage card: the list tile zooms into it (held through
              the morph so the target never swaps mid-animation). -->
-        <section class="nd-card pf-stg pf-cse-skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
-          <header class="nd-card__head pf-stg__hdr">
-            <span class="nd-card__icon" aria-hidden="true">
+        <section class="pf-card pf-stg pf-cse-skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
+          <header class="pf-card__head pf-stg__hdr">
+            <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg>
             </span>
-            <span class="nd-card__label">Culture</span>
+            <span class="pf-card__label">Culture</span>
           </header>
-          <div class="nd-card__body pf-cse-skel__body">
+          <div class="pf-card__body pf-cse-skel__body">
             <span class="pf-cse-skel__bar" style="width: 55%"></span>
             <span class="pf-cse-skel__bar"></span>
             <span class="pf-cse-skel__bar" style="width: 75%"></span>
@@ -135,15 +135,15 @@ interface StageField { name: string; title: string; type: string; options: strin
                          [options]="specimenOpts()" [value]="specimenValue()"
                          placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
             </label>
-            <span class="nd-seg pf-cse-branches" role="group" aria-label="Culture branch">
-              <button type="button" class="nd-seg__item pf-cse-branch" [attr.aria-pressed]="!selCaseId()" (click)="selectCase(null)">Primary</button>
+            <span class="pf-seg pf-cse-branches" role="group" aria-label="Culture branch">
+              <button type="button" class="pf-seg__item pf-cse-branch" [attr.aria-pressed]="!selCaseId()" (click)="selectCase(null)">Primary</button>
               @for (b of branches(); track b.id) {
-                <button type="button" class="nd-seg__item pf-cse-branch" [attr.aria-pressed]="selCaseId() === b.id" (click)="selectCase(b.id!)">{{ b.label || 'Subculture' }}</button>
+                <button type="button" class="pf-seg__item pf-cse-branch" [attr.aria-pressed]="selCaseId() === b.id" (click)="selectCase(b.id!)">{{ b.label || 'Subculture' }}</button>
               }
             </span>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn press" [disabled]="busy()" [pfBusy]="busyOn('subculture')" pfBusyLabel="Creating…" (click)="newSubculture()">+ Subculture</button>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-cse-navbtn press" [disabled]="busy()" [pfBusy]="busyOn('subculture')" pfBusyLabel="Creating…" (click)="newSubculture()">+ Subculture</button>
             @if (selCaseId()) {
-              <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn pf-cse-navbtn--muted press" [disabled]="busy()" [pfBusy]="busyOn('deleteBranch')" pfBusyLabel="Deleting…"
+              <button type="button" class="pf-btn pf-btn--tertiary pf-cse-navbtn pf-cse-navbtn--muted press" [disabled]="busy()" [pfBusy]="busyOn('deleteBranch')" pfBusyLabel="Deleting…"
                       (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
             }
             <!-- Incubation lives in the nav row (the band holds the page
@@ -151,17 +151,17 @@ interface StageField { name: string; title: string; type: string; options: strin
             @if (cc.caseState !== 'awaiting_signout') {
             <span class="pf-cse-incubgrp">
               @if (cc.incubateUntil) {
-                <span class="nd-chip nd-chip--static pf-cse-incub" [class.pf-cse-incub--done]="incubDone()" aria-live="polite">
+                <span class="pf-chip pf-chip--static pf-cse-incub" [class.pf-cse-incub--done]="incubDone()" aria-live="polite">
                   @if (incubDone()) {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                   } @else {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                   }
-                  <span class="nd-num">{{ incubDone() ? 'Incubation complete' : ('Ready in ' + incubReadyIn()) }}</span>
+                  <span class="pf-num">{{ incubDone() ? 'Incubation complete' : ('Ready in ' + incubReadyIn()) }}</span>
                 </span>
               }
               <span class="pf-cse__incubwrap">
-                <button type="button" class="nd-btn nd-btn--secondary pf-cse-incubbtn press"
+                <button type="button" class="pf-btn pf-btn--secondary pf-cse-incubbtn press"
                         [disabled]="busy()" [pfBusy]="busyOn('incub')" pfBusyLabel="Saving…" (click)="incubOpen.set(!incubOpen())"
                         [attr.aria-label]="cc.incubateUntil ? 'Add incubation hours' : 'Inoculate and incubate'"
                         [title]="cc.incubateUntil ? 'Add hours to the incubation timer' : 'Start the incubation reference timer'">
@@ -173,18 +173,18 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <p class="pf-cse__incublbl">{{ cc.incubateUntil && !incubDone() ? 'Extend incubation by' : 'Incubate for' }}</p>
                     <div class="pf-cse__incubchips">
                       @for (h of incubPresets; track h) {
-                        <button type="button" class="nd-chip pf-cse__incubchip press" (click)="applyIncubation(h)"><span class="nd-num">+{{ h }}h</span></button>
+                        <button type="button" class="pf-chip pf-cse__incubchip press" (click)="applyIncubation(h)"><span class="pf-num">+{{ h }}h</span></button>
                       }
                     </div>
                     <div class="pf-cse__incubcustom">
                       <input type="number" class="pf-cse__incubinp" min="1" max="336" placeholder="Hours" aria-label="Custom hours"
                              [ngModel]="incubCustom()" (ngModelChange)="incubCustom.set($event)"
                              (keydown.enter)="incubCustom() && applyIncubation(incubCustom()!)" />
-                      <button type="button" class="nd-btn nd-btn--secondary pf-cse__incubgo press" [disabled]="!incubCustom()"
+                      <button type="button" class="pf-btn pf-btn--secondary pf-cse__incubgo press" [disabled]="!incubCustom()"
                               (click)="applyIncubation(incubCustom()!)">Set</button>
                     </div>
                     @if (cc.incubateUntil) {
-                      <button type="button" class="nd-btn nd-btn--tertiary pf-cse__incubstop press" [disabled]="busy()" [pfBusy]="busyOn('stopIncub')" pfBusyLabel="Stopping…"
+                      <button type="button" class="pf-btn pf-btn--tertiary pf-cse__incubstop press" [disabled]="busy()" [pfBusy]="busyOn('stopIncub')" pfBusyLabel="Stopping…"
                               (click)="stopIncubation()">Stop incubation</button>
                     }
                   </div>
@@ -195,18 +195,18 @@ interface StageField { name: string; title: string; type: string; options: strin
           </div>
 
           @for (s of cc.stages; track s.key; let si = $index) {
-            <section class="nd-card pf-stg" [pfZoomTarget]="si === 0 ? zoomKeys() : null"
+            <section class="pf-card pf-stg" [pfZoomTarget]="si === 0 ? zoomKeys() : null"
                      [class.pf-stg--done]="s.state === 'done'"
                      [class.pf-stg--locked]="lockedByOther(s)"
                      [class.pf-stg--mine]="isMine(s)"
                      [class.pf-stg--flash]="s.key === 'ast' && astFlash()"
                      [attr.data-stage]="s.key"
                      [attr.aria-label]="s.label">
-              <header class="nd-card__head pf-stg__hdr">
-                <span class="nd-card__icon" aria-hidden="true">
+              <header class="pf-card__head pf-stg__hdr">
+                <span class="pf-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg>
                 </span>
-                <h3 class="nd-card__label pf-stg__name">{{ s.label }}</h3>
+                <h3 class="pf-card__label pf-stg__name">{{ s.label }}</h3>
                 @if (s.state === 'done') {
                   <span class="pf-stg__state pf-stg__state--done">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -217,12 +217,12 @@ interface StageField { name: string; title: string; type: string; options: strin
                 } @else if (lockedByOther(s)) {
                   <span class="pf-stg__state">{{ s.holderName || 'In progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span>
                 }
-                <span class="nd-card__spacer"></span>
+                <span class="pf-card__spacer"></span>
                 <span class="pf-stg__acts">
                   @if (s.key === 'identification' && canMeasure()) {
                     <!-- THE path to the AST (owner): measure the plate, pick the
                          organism inside the measure, OK fills AST below. -->
-                    <button type="button" class="nd-btn pf-cse-measure press" [disabled]="busy()" (click)="startMeasure()"
+                    <button type="button" class="pf-btn pf-cse-measure press" [disabled]="busy()" (click)="startMeasure()"
                             aria-label="Measure the AST plate" title="Measure the AST plate — PF Sense reads the disks, pick the organism, S / I / R fill in below">
                       <span class="pf-cse-measure__pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
                       <span>Measure</span>
@@ -234,19 +234,19 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   </button>
                   @if (isMine(s) && s.state !== 'done') {
-                    <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('drop:' + s.key)" pfBusyLabel="Dropping…" (click)="drop(s)">Drop</button>
-                    <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn pf-stg__submit press" [disabled]="busy()" [pfBusy]="busyOn('submit:' + s.key)" pfBusyLabel="Submitting…" (click)="submit(s)"
+                    <button type="button" class="pf-btn pf-btn--tertiary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('drop:' + s.key)" pfBusyLabel="Dropping…" (click)="drop(s)">Drop</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pf-stg__btn pf-stg__submit press" [disabled]="busy()" [pfBusy]="busyOn('submit:' + s.key)" pfBusyLabel="Submitting…" (click)="submit(s)"
                             [attr.aria-label]="'Submit ' + s.label">Submit</button>
                   }
                   @if (s.state === 'done' && cc.caseState === 'active') {
                     <!-- Submitted ≠ sealed: editable until the case leaves for sign-out. -->
-                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('reopen:' + s.key)" pfBusyLabel="Opening…" (click)="reopen(s)">Edit</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pf-stg__btn press" [disabled]="busy()" [pfBusy]="busyOn('reopen:' + s.key)" pfBusyLabel="Opening…" (click)="reopen(s)">Edit</button>
                   }
                 </span>
               </header>
 
-              <div class="nd-card__body pf-stg__body">
+              <div class="pf-card__body pf-stg__body">
                 @if (noteOpen(sk(s.key)) || commentsFor(sk(s.key)).length > 0) {
                   <div class="pf-stg__thread">
                     <pf-comment-thread [comments]="commentsFor(sk(s.key))" currentRole="tech" [autoCompose]="true"
@@ -269,7 +269,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                   <p class="pf-stg__lockmsg">{{ s.holderName || 'Another tech' }} is working this stage.</p>
                 } @else {
                   @if (s.key === 'ast') {
-                    <button type="button" class="nd-btn pf-cse__astbtn press" [class.nd-btn--tertiary]="astOpen()" [class.nd-btn--secondary]="!astOpen()" (click)="ensurePicked(s); astOpen.set(!astOpen())"
+                    <button type="button" class="pf-btn pf-cse__astbtn press" [class.pf-btn--tertiary]="astOpen()" [class.pf-btn--secondary]="!astOpen()" (click)="ensurePicked(s); astOpen.set(!astOpen())"
                             [attr.aria-expanded]="astOpen()">
                       {{ astOpen() ? 'Hide organism / sensitivity' : (astSummary() || 'Enter organism + sensitivity') }}
                     </button>
@@ -304,10 +304,10 @@ interface StageField { name: string; title: string; type: string; options: strin
                             <span class="pf-cse-row__ctl">
                               @if (g.kind === 'matrix' || f.options.length) {
                                 @let opts = f.options.length ? f.options : g.options;
-                                <span class="nd-seg pf-cse-opts pf-cse-opts--fill" role="radiogroup" [attr.aria-label]="f.title"
+                                <span class="pf-seg pf-cse-opts pf-cse-opts--fill" role="radiogroup" [attr.aria-label]="f.title"
                                       [class.pf-cse-opts--many]="opts.length > 4" [style.--n]="opts.length">
                                   @for (o of opts; track o) {
-                                    <button type="button" class="nd-seg__item pf-cse-opt press" role="radio"
+                                    <button type="button" class="pf-seg__item pf-cse-opt press" role="radio"
                                             [attr.aria-checked]="fieldValue(s.key, f.name) === o"
                                             (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
                                   }
@@ -352,14 +352,14 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <div class="pf-cse__tpl">
                       <span class="pf-cse__tpl-lbl">Templates</span>
                       @for (t of templatesFor(s.key); track t.id) {
-                        <span class="nd-chip pf-cse__tplchip">
+                        <span class="pf-chip pf-cse__tplchip">
                           <button type="button" class="pf-cse__tplname" [title]="t.body" (click)="applyTemplate(s.key, t)">{{ t.name }}</button>
                           <button type="button" class="pf-cse__tplx" (click)="deleteTemplate(t, $event)" [attr.aria-label]="'Delete template ' + t.name">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                           </button>
                         </span>
                       }
-                      <button type="button" class="nd-btn nd-btn--tertiary pf-cse__tplsave" [disabled]="!(drafts()[s.key] || '').trim()"
+                      <button type="button" class="pf-btn pf-btn--tertiary pf-cse__tplsave" [disabled]="!(drafts()[s.key] || '').trim()"
                               (click)="saveTemplate(s.key)">+ Save as template</button>
                     </div>
                     <textarea class="pf-cse-field pf-cse-field--ta pf-cse-field--findings" rows="3" [ngModel]="drafts()[s.key] || ''"
@@ -380,16 +380,16 @@ interface StageField { name: string; title: string; type: string; options: strin
     }
   `,
   styles: [`
-    /* Culture case on the nd pattern (docs/ND-PATTERN.md § Culture case):
+    /* Culture case on the nd pattern (docs/PF-PATTERN.md § Culture case):
        band + context bar, one nav row (specimen · branch · stage tabs), the
-       selected stage as an nd-card with calm rows. Palette: violet + neutrals;
+       selected stage as an pf-card with calm rows. Palette: violet + neutrals;
        one font (Noto Sans, tabular numbers). */
     :host { display: block; height: 100%; min-height: 0; }
     .pf-cse { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
       padding: 0 20px; --pf-hb-bleed: 20px; }
     .pf-cse-skel { margin: 16px; }
     .pf-cse-skel__body { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
-    .pf-cse-skel__bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg, rgba(127,127,127,0.12)); }
+    .pf-cse-skel__bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--pf-chip-bg, rgba(127,127,127,0.12)); }
     .pf-cse__note { padding: 48px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
     .pf-cse__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0 24px;
       display: flex; flex-direction: column; gap: 14px; }
@@ -398,18 +398,18 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
     .pf-cse-ctx__grow { flex: 1 1 auto; }
     .pf-cse-chip { height: 32px; font-size: 13px; white-space: normal; }
-    .pf-cse-chip--id { font-size: 15px; font-weight: 600; color: var(--text-primary); background: var(--nd-card-bg); }
+    .pf-cse-chip--id { font-size: 15px; font-weight: 600; color: var(--text-primary); background: var(--pf-card-bg); }
     .pf-cse-chip--patient { font-weight: 500; color: var(--text-primary); }
     .pf-cse-chip--progress { color: var(--text-secondary); gap: 4px; }
-    .pf-cse-chip--progress .nd-num { font-weight: 600; color: var(--text-primary); }
-    .pf-cse-skel { display: inline-block; width: 240px; height: 14px; border-radius: 6px; background: var(--nd-chip-bg); }
+    .pf-cse-chip--progress .pf-num { font-weight: 600; color: var(--text-primary); }
+    .pf-cse-skel { display: inline-block; width: 240px; height: 14px; border-radius: 6px; background: var(--pf-chip-bg); }
 
     /* ── Band actions ── */
     .pf-cse-tech { height: 34px; gap: 6px; font-size: 13px; color: var(--text-secondary); }
     .pf-cse-tech svg { color: var(--text-tertiary); }
     .pf-cse-tech__name { font-weight: 500; color: var(--text-primary); }
     .pf-cse-techavatar { display: none; align-items: center; justify-content: center; flex: none;
-      width: 36px; height: 36px; border-radius: 999px; background: var(--nd-chip-bg);
+      width: 36px; height: 36px; border-radius: 999px; background: var(--pf-chip-bg);
       color: var(--text-secondary); font-size: 12px; font-weight: 600; }
     .pf-cse-incub { height: 34px; gap: 6px; font-size: 13px; color: var(--text-secondary); }
     .pf-cse-incub svg { color: var(--text-tertiary); }
@@ -419,15 +419,15 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-act__i { display: none; flex: none; }
     .pf-cse__incubwrap { position: relative; display: inline-flex; }
     .pf-cse__incubpop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 240px;
-      padding: 12px; border-radius: var(--nd-radius, 12px); background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line); box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+      padding: 12px; border-radius: var(--pf-radius, 12px); background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line); box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
       display: flex; flex-direction: column; gap: 10px; }
     .pf-cse__incublbl { margin: 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-cse__incubchips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-cse__incubcustom { display: flex; gap: 6px; }
-    .pf-cse__incubinp { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: var(--nd-radius-sm, 10px);
+    .pf-cse__incubinp { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: var(--pf-radius-sm, 10px);
       font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text-primary);
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); outline: none;
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); outline: none;
       -moz-appearance: textfield; appearance: textfield; }
     .pf-cse__incubinp::-webkit-inner-spin-button, .pf-cse__incubinp::-webkit-outer-spin-button { display: none; }
     .pf-cse__incubinp:focus, .pf-cse-field:focus {
@@ -450,8 +450,8 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-stg { flex: none; }
     .pf-stg__hdr { flex-wrap: wrap; }
     .pf-stg__name { margin: 0; }
-    .pf-stg__state { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: var(--nd-radius-chip, 8px);
-      background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .pf-stg__state { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: var(--pf-radius-chip, 8px);
+      background: var(--pf-chip-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; }
     .pf-stg__state--done svg { color: var(--color-violet-600, #7c3aed); }
     .pf-stg__acts { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .pf-stg__btn { height: 32px; min-height: 32px; font-size: 13px; }
@@ -469,15 +469,15 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-incubbtn { height: 36px; min-height: 36px; font-size: 13px; }
     .pf-cse-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); flex: none; }
     .pf-cse-note { display: inline-flex; align-items: center; justify-content: center; flex: none;
-      width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px); cursor: pointer;
-      color: var(--text-tertiary); background: transparent; border: 1px solid var(--nd-line); }
-    .pf-cse-note:hover { color: var(--text-primary); border-color: var(--nd-sel-border); }
+      width: 32px; height: 32px; border-radius: var(--pf-radius-sm, 10px); cursor: pointer;
+      color: var(--text-tertiary); background: transparent; border: 1px solid var(--pf-line); }
+    .pf-cse-note:hover { color: var(--text-primary); border-color: var(--pf-sel-border); }
     .pf-cse-note--has { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, transparent); }
 
     /* ── Rows: [tick] name · compact options · pencil ── */
     .pf-cse-rows { display: flex; flex-direction: column; }
     .pf-cse-row { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
-      align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--nd-line); }
+      align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); }
     .pf-cse-rows > .pf-cse-row:last-of-type { border-bottom: 0; }
     .pf-cse-row__name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
     .pf-cse-row__title { font-size: 14px; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
@@ -494,7 +494,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-orgs { width: 100%; }
     /* Kit fields: a comfortable width (~60%), not the whole row. */
     .pf-cse-field { width: 100%; min-width: 0; min-height: 40px; padding: 8px 12px; box-sizing: border-box;
-      border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       font: inherit; font-size: 14px; color: var(--text-primary); outline: none; }
     .pf-cse-field::placeholder { color: var(--text-muted); }
     .pf-cse-field--ta { resize: vertical; line-height: 1.45; }
@@ -502,10 +502,10 @@ interface StageField { name: string; title: string; type: string; options: strin
 
     /* Report tick: kit checkbox (drawn, not the native look). */
     .pf-rh { appearance: none; -webkit-appearance: none; flex: none; margin: 0; cursor: pointer;
-      width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--nd-sel-border); background: var(--nd-card-bg);
+      width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--pf-sel-border); background: var(--pf-card-bg);
       display: inline-grid; place-content: center; }
     .pf-rh::after { content: ''; width: 9px; height: 5px; margin-top: -2px; border: 2px solid #fff; border-top: 0; border-right: 0;
-      transform: rotate(-45deg) scale(0); transition: transform var(--nd-dur-fast, 200ms) ease; }
+      transform: rotate(-45deg) scale(0); transition: transform var(--pf-dur-fast, 200ms) ease; }
     .pf-rh:checked { background: var(--color-violet-600, #7c3aed); border-color: transparent; }
     .pf-rh:checked::after { transform: rotate(-45deg) scale(1); }
     .pf-rh:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
@@ -517,7 +517,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__tplname { border: 0; background: none; padding: 0; font: inherit; color: var(--text-primary); cursor: pointer; }
     .pf-cse__tplx { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
       border: 0; border-radius: 6px; background: none; color: var(--text-tertiary); cursor: pointer; }
-    .pf-cse__tplx:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+    .pf-cse__tplx:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-cse__tplsave { height: 30px; min-height: 30px; font-size: 13px; }
     .pf-cse__astbtn { margin-top: 8px; align-self: flex-start; height: 40px; }
     .pf-cse__astwrap { margin-top: 14px; }
@@ -525,9 +525,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     /* Identification header → Measure: a QUIET neutral button (not violet-
        filled), the PF mark as its icon. */
     .pf-cse-measure { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-height: 32px; padding: 0 12px 0 8px;
-      font-size: 13px; font-weight: 500; color: var(--text-primary); background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); box-shadow: none; }
-    .pf-cse-measure:hover:not(:disabled) { border-color: var(--nd-sel-border); background: var(--nd-chip-bg); }
+      font-size: 13px; font-weight: 500; color: var(--text-primary); background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); box-shadow: none; }
+    .pf-cse-measure:hover:not(:disabled) { border-color: var(--pf-sel-border); background: var(--pf-chip-bg); }
     .pf-cse-measure:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-cse-measure__pf { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
       color: var(--color-violet-600, #7c3aed); }

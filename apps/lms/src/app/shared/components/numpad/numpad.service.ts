@@ -98,7 +98,7 @@ export const LONG_PRESS_MS = 500;
 
 /**
  * The ONE result numpad: a single overlay shared by every numeric result
- * field on touch devices (see docs/ND-PATTERN.md → 8. Touch → "Result numpad").
+ * field on touch devices (see docs/PF-PATTERN.md → 8. Touch → "Result numpad").
  *
  * - iPad / wide touch: a compact pad DOCKED in a bottom corner (right by
  *   default; the grip moves it left, remembered per user). It never moves

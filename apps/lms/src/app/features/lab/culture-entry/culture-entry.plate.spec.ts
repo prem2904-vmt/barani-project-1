@@ -106,7 +106,7 @@ describe('Plate before organism — measure first', () => {
     const block = el.querySelector('.ce-plate')!;
     expect(block).toBeTruthy();
     const btn = block.querySelector<HTMLButtonElement>('.ce-plate__btn')!;
-    expect(btn.classList.contains('nd-btn--secondary')).toBe(true);
+    expect(btn.classList.contains('pf-btn--secondary')).toBe(true);
     expect(btn.textContent?.trim()).toBe('Measure plate');
     expect(block.textContent).toContain('before the organism is known');
   });

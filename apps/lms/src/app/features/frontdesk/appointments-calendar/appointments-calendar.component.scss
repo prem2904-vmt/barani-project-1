@@ -1,0 +1,841 @@
+@use '../../../shared/styles/device-tier' as dt;
+
+
+  /* ── Pill: search field + the view switch + date navigation ── */
+  .pf-apc-search { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; height: 100%; cursor: text; }
+  .pf-apc-search__glass { flex: none; color: var(--text-tertiary); }
+  .pf-apc-search__input {
+    flex: 1 1 auto; min-width: 0; height: 40px; border: 0; outline: 0; background: transparent;
+    font: inherit; font-size: 15px; color: var(--text-primary);
+  }
+  .pf-apc-search__input::placeholder { color: var(--text-muted); }
+  .pf-apc-search__clear {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer;
+  }
+  .pf-apc-search__clear:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .pf-apc-tools { display: flex; align-items: center; gap: 10px; flex: none; }
+  .pf-apc-views .pf-seg__item { height: 32px; min-width: 64px; font-size: 13px; }
+  .pf-apc-views .pf-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-apc-nav { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+  .pf-apc-nav__btn, .pf-apc-nav__today {
+    display: inline-flex; align-items: center; justify-content: center; height: 34px; min-width: 34px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary);
+    font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: background var(--pf-dur-fast) ease, color var(--pf-dur-fast) ease;
+  }
+  .pf-apc-nav__today { padding: 0 10px; border: 1px solid var(--pf-line); margin: 0 2px; }
+  .pf-apc-nav__btn:hover, .pf-apc-nav__today:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .pf-apc-nav__btn:focus-visible, .pf-apc-nav__today:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-apc-jump__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+
+  /* ── Body: CALENDAR (main) + DAY (the right companion, 400px) ── */
+  .pf-apc-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+  .pf-apc-panels {
+    flex: 1 1 auto; min-height: 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
+    transition: grid-template-columns var(--pf-dur) var(--pf-spring);
+  }
+  .pf-apc-panels--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+  @media (max-width: 1280px) { .pf-apc-panels { grid-template-columns: minmax(0, 1fr) 360px; } .pf-apc-panels--collapsed { grid-template-columns: minmax(0, 1fr) 52px; } }
+  .pf-apc-panels--narrow, .pf-apc-panels--narrow.pf-apc-panels--collapsed { grid-template-columns: minmax(0, 1fr); }
+  .pf-apc-main, .pf-apc-side, .pf-apc-strip { min-height: 0; }
+  .pf-apc-side, .pf-apc-strip { animation: pf-apc-side-in var(--pf-dur) var(--pf-spring) both; }
+  @keyframes pf-apc-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  .pf-apc-range { font-size: 13px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .pf-apc-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+  .pf-apc-collapse { width: 32px !important; height: 32px; min-height: 32px; }
+  .pf-apc-canvas { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+  /* Collapsed DAY: a slim strip on the RIGHT edge, one expand target. */
+  .pf-apc-strip__btn {
+    flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
+  }
+  .pf-apc-strip__btn:hover .pf-apc-strip__expand { border-color: var(--pf-sel-border); color: var(--text-primary); }
+  .pf-apc-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  .pf-apc-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
+  .pf-apc-strip__label { writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+  .pf-apc-strip__n { font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+
+  /* ── Day / Week grid: one scroller; day headers + the hour rail stick ── */
+  .pf-apc-time {
+    --rail: 60px;
+    flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; position: relative;
+    display: grid; grid-template-columns: var(--rail) repeat(var(--cols, 7), minmax(0, 1fr));
+    grid-template-rows: auto calc(var(--hour) * 24);
+  }
+  .pf-apc-time__corner, .pf-apc-dayhdr { position: sticky; top: 0; z-index: 4; background: var(--pf-card-bg); border-bottom: 1px solid var(--pf-line); }
+  .pf-apc-time__corner { left: 0; z-index: 5; }
+  .pf-apc-dayhdr {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
+    border: 0; border-left: 1px solid var(--pf-line); border-bottom: 1px solid var(--pf-line);
+    font: inherit; color: var(--text-secondary); cursor: pointer;
+  }
+  .pf-apc-dayhdr:hover .pf-apc-dayhdr__n { background: var(--pf-chip-bg); }
+  .pf-apc-dayhdr:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  .pf-apc-dayhdr__dow { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
+  .pf-apc-dayhdr__n {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 4px;
+    border-radius: 999px; font-size: 15px; font-weight: 600; color: var(--text-primary);
+  }
+  /* Today, subtly: violet text on a light violet disc — never a gradient. */
+  .pf-apc-dayhdr--today .pf-apc-dayhdr__dow { color: var(--violet-text, #7c3aed); }
+  .pf-apc-dayhdr--today .pf-apc-dayhdr__n { color: var(--violet-text, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent); }
+  .pf-apc-dayhdr--past .pf-apc-dayhdr__n { color: var(--text-tertiary); }
+  .pf-apc-rail { position: sticky; left: 0; z-index: 3; background: var(--pf-card-bg); border-right: 1px solid var(--pf-line); }
+  .pf-apc-rail__h { position: absolute; right: 8px; transform: translateY(-50%); font-size: 11px; color: var(--text-tertiary); }
+  .pf-apc-rail__h:first-child { transform: none; top: 4px !important; }
+  .pf-apc-col { position: relative; border-left: 1px solid var(--pf-line); }
+  .pf-apc-col--today { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
+  .pf-apc-slot {
+    position: absolute; left: 0; right: 0; height: calc(var(--hour) / 2); padding: 0 8px;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+    border: 0; border-top: 1px solid var(--pf-line); background: transparent; cursor: pointer; font: inherit;
+  }
+  .pf-apc-slot--half { border-top-style: dashed; border-top-color: color-mix(in srgb, var(--pf-line) 70%, transparent); }
+  .pf-apc-slot__hint { margin-top: 6px; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); opacity: 0; transition: opacity var(--pf-dur-fast) ease; }
+  .pf-apc-slot:hover { background: var(--pf-chip-bg); }
+  .pf-apc-slot:hover .pf-apc-slot__hint, .pf-apc-slot:focus-visible .pf-apc-slot__hint { opacity: 1; }
+  .pf-apc-slot:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  .pf-apc-slot[aria-disabled='true'] { cursor: not-allowed; background: color-mix(in srgb, var(--text-primary) 2.5%, transparent); }
+  .pf-apc-slot[aria-disabled='true']:hover { background: color-mix(in srgb, var(--text-primary) 2.5%, transparent); }
+  .pf-apc-slot[aria-disabled='true'] .pf-apc-slot__hint { display: none; }
+
+  /* The appointment card: neutral, the FULL name, a quiet meta, the status. */
+  .pf-apc-ev {
+    position: absolute; z-index: 2; box-sizing: border-box; min-height: calc(var(--hour) / 2 - 4px);
+    margin-top: 2px; padding: 6px 8px 7px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+    border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); box-shadow: var(--pf-shadow-sm);
+    font: inherit; color: var(--text-primary); cursor: pointer;
+    transition: border-color var(--pf-dur-fast) ease, box-shadow var(--pf-dur-fast) ease;
+  }
+  .pf-apc-ev:hover { z-index: 3; border-color: var(--pf-sel-border); }
+  .pf-apc-ev:focus-visible { z-index: 3; outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-apc-ev[aria-pressed='true'] { z-index: 3; border-color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg)); }
+  .pf-apc-ev__name { font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: break-word; max-width: 100%; }
+  .pf-apc-ev__meta { font-size: 11.5px; line-height: 1.35; color: var(--text-tertiary); overflow-wrap: break-word; max-width: 100%; }
+  /* Week + a shared start: the lane is narrow — the FULL name (wrapping by
+     word) and the status dot; the meta and the word ride in the label /
+     tooltip and the DAY list. */
+  .pf-apc-ev--tight { padding: 5px 6px; }
+  .pf-apc-ev--tight .pf-apc-ev__meta, .pf-apc-ev--tight .pf-apc-status__w { display: none; }
+  .pf-apc-ev--tight .pf-apc-ev__name { font-size: 12px; }
+  .pf-apc-ev .pf-apc-status { font-size: 11.5px; }
+
+  /* Now: a thin violet line + time chip on today's column. */
+  .pf-apc-now { position: absolute; left: 0; right: 0; z-index: 2; height: 0; border-top: 1.5px solid var(--color-violet-600, #7c3aed); pointer-events: none; }
+  .pf-apc-now::before { content: ''; position: absolute; left: -4px; top: -4.5px; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+  .pf-apc-now__t {
+    position: absolute; right: 4px; top: -10px; padding: 1px 6px; border-radius: 6px;
+    background: var(--pf-card-bg); border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 40%, transparent);
+    font-size: 10.5px; font-weight: 600; color: var(--violet-text, #7c3aed);
+  }
+
+  /* ── Month ── */
+  .pf-apc-month { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pf-apc-month__dows { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--pf-line); }
+  .pf-apc-month__dows span { padding: 8px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+  .pf-apc-month__grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(92px, 1fr); }
+  .pf-apc-mcell {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; min-width: 0;
+    border-right: 1px solid var(--pf-line); border-bottom: 1px solid var(--pf-line); cursor: pointer;
+    transition: background var(--pf-dur-fast) ease;
+  }
+  .pf-apc-mcell:nth-child(7n) { border-right: 0; }
+  .pf-apc-mcell:hover { background: var(--pf-chip-bg); }
+  .pf-apc-mcell:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  .pf-apc-mcell__n {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 4px;
+    border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-primary);
+  }
+  .pf-apc-mcell--out .pf-apc-mcell__n { color: var(--text-muted); font-weight: 500; }
+  .pf-apc-mcell--past { background: color-mix(in srgb, var(--text-primary) 2%, transparent); cursor: not-allowed; }
+  .pf-apc-mcell--past .pf-apc-mcell__n { color: var(--text-tertiary); }
+  .pf-apc-mcell--today .pf-apc-mcell__n { color: var(--violet-text, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent); }
+  .pf-apc-mcell__chip { height: 28px; max-width: 100%; }
+  .pf-apc-mcell__chip .pf-num { font-weight: 600; color: var(--text-primary); }
+
+  /* ── DAY card: week strip + one row per appointment ── */
+  .pf-apc-strip7 { flex: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--pf-line); }
+  .pf-apc-strip7__day {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 48px; padding: 6px 0;
+    border-radius: 10px; border: 1px solid transparent; background: transparent; font: inherit; color: var(--text-secondary); cursor: pointer;
+  }
+  .pf-apc-strip7__day:hover { background: var(--pf-chip-bg); }
+  .pf-apc-strip7__day:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-apc-strip7__day[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); color: var(--text-primary); }
+  .pf-apc-strip7__dow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
+  .pf-apc-strip7__n { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .pf-apc-strip7__day--past .pf-apc-strip7__n { color: var(--text-tertiary); }
+  .pf-apc-strip7__day--today .pf-apc-strip7__dow, .pf-apc-strip7__day--today .pf-apc-strip7__n { color: var(--violet-text, #7c3aed); }
+  .pf-apc-list { gap: 8px; }
+  .pf-apc-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 12px; box-sizing: border-box;
+    border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
+    animation: pf-fade-scale var(--pf-dur) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 18ms);
+  }
+  .pf-apc-row:hover { border-color: var(--pf-sel-border); }
+  .pf-apc-row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+  .pf-apc-row__who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .pf-apc-row__name { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+  .pf-apc-row__meta { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
+  .pf-apc-empty { flex: 1 1 auto; }
+
+  /* Status = a 7px dot + a coloured word; no chip, border or background. */
+  .pf-apc-status {
+    --pf-tone: var(--violet-text, #7c3aed);
+    flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-size: 12.5px; font-weight: 500; line-height: 16px;
+    color: color-mix(in srgb, var(--pf-tone) 70%, var(--text-primary));
+  }
+  .pf-apc-status[data-tone='green'] { --pf-tone: var(--green-text); }
+  .pf-apc-status[data-tone='amber'] { --pf-tone: var(--amber-text); }
+  .pf-apc-status[data-tone='red'] { --pf-tone: var(--red-text); }
+  .pf-apc-status[data-tone='neutral'] { --pf-tone: var(--text-tertiary); }
+  .pf-apc-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pf-tone); }
+
+  /* ── Detail (side card / sheet) ── */
+  .pf-apc-dbody { gap: 14px; }
+  .pf-apc-subject { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--pf-line); }
+  .pf-apc-subject__name { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+  .pf-apc-subject__meta { margin: 0; font-size: 13px; color: var(--text-secondary); }
+  .pf-apc-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  .pf-apc-facts > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+  .pf-apc-facts dt { font-size: 12px; color: var(--text-tertiary); }
+  .pf-apc-facts dd { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; white-space: pre-line; }
+  .pf-apc-resched { display: flex; flex-direction: column; gap: 14px; }
+  .pf-apc-resched pf-date { display: block; }
+  .pf-apc-acts .pf-btn { height: 40px; min-height: 40px; }
+  /* Step → step: Reschedule slides in from the right, Back from the left. */
+  .pf-apc-step--fwd { animation: pf-apc-slide-fwd var(--pf-dur) var(--pf-spring) both; }
+  .pf-apc-step--back { animation: pf-apc-slide-back var(--pf-dur) var(--pf-spring) both; }
+  @keyframes pf-apc-slide-fwd { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  @keyframes pf-apc-slide-back { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+
+  /* ≤900px (tablet): the detail is a side sheet from the right edge. */
+  @media (min-width: 641px) and (max-width: 900px) {
+    .pf-apc-scrim { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: var(--pf-nav-h); z-index: 79; background: rgba(0, 0, 0, 0.35); }
+    .pf-apc-sheet {
+      position: fixed; top: 12px; right: 12px; bottom: calc(var(--pf-nav-h) + 12px); z-index: 80; width: min(420px, calc(100vw - 24px));
+      animation: pf-apc-side-in var(--pf-dur-sheet) var(--pf-spring) both;
+    }
+  }
+
+  /* ── Phones (≤640px): day list first, 44px targets, 16px inputs ── */
+  @media (max-width: 640px) {
+    .pf-apc-search__input { font-size: 16px; }
+    /* Two calm rows under the search: the switch, then ‹ Today › · jump. */
+    .pf-apc-tools { flex: 1 1 100%; width: 100%; min-width: 0; flex-wrap: wrap; gap: 6px; }
+    .pf-apc-views { flex: 1 1 100%; }
+    .pf-apc-views .pf-seg__item { flex: 1 1 0; min-width: 0; height: 40px; }
+    .pf-apc-nav { flex: 1 1 100%; justify-content: space-between; gap: 6px; }
+    .pf-apc-nav__today { flex: 1 1 auto; }
+    .pf-apc-nav__btn, .pf-apc-nav__today, .pf-apc-search__clear { height: 44px; min-width: 44px; }
+    .pf-apc-dayhdr { height: auto !important; min-height: 58px; }
+    .pf-apc-body { padding-bottom: 8px; }
+    .pf-apc-strip7 { padding: 8px 10px; gap: 2px; }
+    .pf-apc-strip7__day { min-height: 52px; }
+    .pf-apc-range { font-size: 12.5px; }
+    .pf-apc-time { --rail: 44px; grid-template-columns: var(--rail) repeat(var(--cols, 7), minmax(150px, 1fr)); }
+    .pf-apc-rail__h { right: 4px; font-size: 10.5px; }
+    .pf-apc-month__grid { grid-auto-rows: minmax(64px, 1fr); }
+    .pf-apc-mcell { padding: 4px; gap: 4px; }
+    .pf-apc-mcell__word { display: none; }
+    .pf-apc-mcell__chip { height: 26px; padding: 0 8px; }
+    .pf-apc-collapse, .pf-apc-acts .pf-btn { width: auto; min-height: 44px; height: 44px; }
+    .pf-apc-collapse { width: 44px !important; }
+    .pf-apc-foot .pf-btn { height: 48px; min-height: 48px; font-size: 15px; }
+    .pf-apc-sheet { border-radius: 20px 20px 0 0; }
+  }
+  @media (pointer: coarse) {
+    .pf-apc-row { min-height: 64px; }
+    .pf-apc-strip7__day { min-height: 52px; }
+    .pf-apc-ev { min-height: 44px; }
+    .pf-apc-mcell__chip { min-height: 32px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pf-apc-side, .pf-apc-strip, .pf-apc-row, .pf-apc-step--fwd, .pf-apc-step--back, .pf-apc-sheet { animation: none !important; }
+    .pf-apc-panels, .pf-apc-slot__hint, .pf-apc-ev, .pf-apc-row, .pf-apc-mcell, .pf-apc-nav__btn, .pf-apc-nav__today { transition: none !important; }
+  }
+
+:host {
+      display: block;
+      /* WORK page: fill the shell's main area exactly so the PAGE itself
+       * never scrolls — scrolling happens inside the calendar grid. */
+      height: 100%;
+      /* Theme-aware grid line. Dark mode: faint white. Light mode (set
+       * via :host-context below): a soft slate so lines stay visible on
+       * the light lavender background. */
+      --pf-cal-grid: rgba(255, 255, 255, 0.10);
+      --pf-cal-grid-strong: rgba(255, 255, 255, 0.18);
+    }
+    :host-context(html[data-theme="light"]) {
+      --pf-cal-grid: rgba(15, 23, 42, 0.10);
+      --pf-cal-grid-strong: rgba(15, 23, 42, 0.18);
+    }
+    .pf-cal-page {
+      padding: 20px clamp(16px, 3vw, 32px);
+      display: flex; flex-direction: column; gap: 16px;
+      /* Non-scroll app screen: fill the host and clip — the only scroll
+       * lives inside the calendar grid (.pf-cal-time__body). position
+       * anchors the floating loading badge. */
+      height: 100%; min-height: 0; overflow: hidden; position: relative;
+    }
+    .pf-cal-hdr {
+      display: flex; align-items: center; justify-content: flex-start;
+      gap: 16px; flex-wrap: wrap;
+      flex: 0 0 auto;
+    }
+    .pf-cal-hdr__l { flex: 1; min-width: 0; }
+    .pf-cal-hdr__l h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-cal-hdr__l p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
+    .pf-cal-hdr__r { flex-shrink: 0; }
+
+    /* Back button — returns to /frontdesk (or browser history if it's
+     * the same origin). Sits at the very left of the calendar header. */
+    .pf-cal-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px 7px 12px;
+      font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em;
+      border-radius: 9999px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.06s ease;
+      flex-shrink: 0;
+    }
+    .pf-cal-back:hover {
+      background: var(--glass-bg-hover);
+      border-color: rgba(168, 85, 247, 0.45);
+      color: var(--text-primary);
+    }
+    .pf-cal-back:active { transform: translateY(1px); }
+    .pf-cal-back svg { color: var(--text-muted); }
+    .pf-cal-back:hover svg { color: var(--violet-text); }
+
+    /* Standard back chevron (sits before the title). Shown at ALL widths as
+     * the single, consistent back affordance. */
+    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
+    /* Legacy back pill fully retired at every width so only the chevron shows. */
+    .pf-cal-back { display: none; }
+
+    .pf-cal-book {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 0.55rem 1rem; font-size: 12.5px; font-weight: 600;
+      border-radius: 9999px; border: 1px solid transparent;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white; cursor: pointer; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.32);
+    }
+    .pf-cal-book:hover { filter: brightness(1.08); }
+
+    /* ── Toolbar ─────────────────────────────────────────────── */
+    .pf-cal-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      flex: 0 0 auto;
+    }
+    .pf-cal-views {
+      display: inline-flex; padding: 3px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 10px;
+    }
+    .pf-cal-views button {
+      padding: 6px 14px; background: transparent; border: 0;
+      border-radius: 7px; font-size: 12.5px; font-weight: 600;
+      color: var(--text-secondary); cursor: pointer; letter-spacing: 0.02em;
+    }
+    .pf-cal-views button:hover { color: var(--text-primary); }
+    .pf-cal-views .pf-cal-view--on {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
+    }
+    .pf-cal-nav { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-cal-nav__btn {
+      width: 30px; height: 30px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 8px; color: var(--text-primary); cursor: pointer;
+      font-size: 16px; line-height: 1; display: inline-flex;
+      align-items: center; justify-content: center;
+    }
+    .pf-cal-nav__btn:hover { background: var(--bg-hover); }
+    .pf-cal-nav__today { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; }
+    .pf-cal-nav__jump {
+      position: relative;
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 30px; padding: 0 12px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 8px; color: var(--text-primary);
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .pf-cal-nav__jump:hover {
+      background: var(--bg-hover);
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+    .pf-cal-nav__jump-input {
+      /* Hidden native picker trigger (never visible — showPicker() only). */
+      position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+      opacity: 0; pointer-events: none; border: 0; padding: 0;
+    }
+    .pf-cal-nav__title {
+      margin-left: 12px; font-size: 14px; font-weight: 600;
+      color: var(--text-primary); letter-spacing: -0.01em;
+    }
+
+    /* ── Frame ───────────────────────────────────────────────── */
+    .pf-cal-frame {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 16px; backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      overflow: hidden; display: flex; flex-direction: column;
+      /* Non-scroll: the frame takes the remaining height of the page and
+       * lets its inner grid scroll. min-height:0 is required so the flex
+       * child can shrink below its content size. */
+      flex: 1 1 auto; min-height: 0;
+    }
+    .pf-cal-loading {
+      /* Float over the frame instead of taking flow space, so the
+       * non-scroll page height stays exact while loading. */
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+      padding: 8px 14px; border-radius: 999px; font-size: 12.5px; color: var(--text-secondary);
+      background: var(--glass-bg-hover, var(--glass-bg)); border: 1px solid var(--glass-border);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+      pointer-events: none; z-index: 4;
+      animation: pf-cal-pill 320ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
+    }
+    @keyframes pf-cal-pill { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .pf-cal-loading { animation: none; } }
+    .pf-cal-past { opacity: 0.5; filter: saturate(0.6); }
+
+    /* ── Time grid (Day / Week) ──────────────────────────────── */
+    .pf-cal-time {
+      display: flex; flex-direction: column; flex: 1; min-height: 0;
+    }
+    .pf-cal-time__head {
+      display: grid;
+      grid-template-columns: 64px repeat(var(--col-count, 7), 1fr);
+      border-bottom: 1px solid var(--pf-cal-grid-strong);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+    }
+    /* day view: head uses --col-count from body inline style; force it 1 */
+    .pf-cal-time__head .pf-cal-time__col-hdr--day { grid-column: 2 / -1; }
+    .pf-cal-time__col-hdr {
+      padding: 12px 10px; display: flex; flex-direction: column;
+      align-items: center; gap: 2px; cursor: pointer;
+      border-left: 1px solid var(--pf-cal-grid);
+    }
+    .pf-cal-time__col-hdr:first-child { border-left: 0; cursor: default; }
+    .pf-cal-time__weekday {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-cal-time__daynum {
+      font-size: 16px; font-weight: 700; color: var(--text-primary);
+    }
+    .pf-cal-time__col-hdr.pf-cal-today .pf-cal-time__daynum {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+
+    .pf-cal-time__body {
+      display: grid;
+      grid-template-columns: 64px repeat(var(--col-count, 7), 1fr);
+      flex: 1; min-height: 0; overflow-y: auto;
+      position: relative; /* anchor for the .pf-cal-time__overlay */
+    }
+    .pf-cal-time__rail {
+      position: relative;
+      border-right: 1px solid var(--pf-cal-grid-strong);
+    }
+    .pf-cal-time__hour {
+      height: 44px; position: relative;
+      border-bottom: 1px dashed var(--pf-cal-grid);
+    }
+    .pf-cal-time__hour > span {
+      position: absolute; top: -7px; right: 8px;
+      font-size: 10.5px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    .pf-cal-time__col {
+      position: relative;
+      border-left: 1px solid var(--pf-cal-grid);
+    }
+    .pf-cal-time__slot {
+      position: absolute; left: 0; right: 0;
+      background: transparent; border: 0; cursor: pointer;
+      /* Hour mark (:00) gets a solid line; half-hour (:30) gets a
+       * lighter dashed line. Both use the calendar grid colour so they
+       * adapt to light/dark mode. */
+      border-bottom: 1px solid var(--pf-cal-grid-strong);
+    }
+    .pf-cal-time__slot--half {
+      border-bottom-style: dashed;
+      border-bottom-color: var(--pf-cal-grid);
+    }
+    .pf-cal-time__slot:hover {
+      background: rgba(168, 85, 247, 0.08);
+    }
+    .pf-cal-past .pf-cal-time__slot { cursor: not-allowed; }
+    .pf-cal-past .pf-cal-time__slot:hover { background: transparent; }
+
+    /* ── Event chip (Day / Week) ─────────────────────────────── */
+    .pf-cal-event {
+      position: absolute;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid;
+      border-left-width: 3px;
+      border-radius: 6px;
+      cursor: pointer;
+      /* horizontal layout: monospace time on the left, name on the right */
+      display: flex; align-items: center; gap: 6px;
+      overflow: hidden; text-align: left;
+      font-size: 11.5px; line-height: 1.2;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    }
+    .pf-cal-event:hover { filter: brightness(1.15); z-index: 2; }
+    .pf-cal-event__time {
+      flex: 0 0 auto;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10.5px; font-weight: 600; opacity: 0.85;
+      letter-spacing: 0.01em;
+    }
+    .pf-cal-event__title {
+      flex: 1 1 auto; min-width: 0;
+      font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Status palettes — dark mode (default). Light mode overrides below. */
+    .pf-cal-event--booked,
+    .pf-cal-month__event.pf-cal-event--booked {
+      background: rgba(139, 92, 246, 0.22); border-color: #8b5cf6; color: var(--violet-text);
+    }
+    .pf-cal-event--checked-in,
+    .pf-cal-month__event.pf-cal-event--checked-in {
+      background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: var(--green-text);
+    }
+    .pf-cal-event--completed,
+    .pf-cal-month__event.pf-cal-event--completed {
+      background: rgba(59, 130, 246, 0.22); border-color: #3b82f6; color: #bfdbfe;
+    }
+    .pf-cal-event--cancelled,
+    .pf-cal-month__event.pf-cal-event--cancelled {
+      background: rgba(156, 163, 175, 0.22); border-color: #9ca3af; color: #e5e7eb;
+    }
+    .pf-cal-event--no-show,
+    .pf-cal-month__event.pf-cal-event--no-show {
+      background: rgba(244, 63, 94, 0.22); border-color: #f43f5e; color: #fecdd3;
+    }
+
+    /* Light-mode palettes — solid darker text on the same tinted bg.
+     * :host-context lets the per-component styles see the html
+     * data-theme attribute set by the global theme switcher. */
+    :host-context(html[data-theme="light"]) .pf-cal-event--booked,
+    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--booked {
+      background: rgba(139, 92, 246, 0.16); border-color: #7c3aed; color: #4c1d95;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-event--checked-in,
+    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--checked-in {
+      background: rgba(16, 185, 129, 0.18); border-color: #059669; color: #064e3b;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-event--completed,
+    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--completed {
+      background: rgba(59, 130, 246, 0.16); border-color: #2563eb; color: #1e3a8a;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-event--cancelled,
+    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--cancelled {
+      background: rgba(156, 163, 175, 0.20); border-color: #6b7280; color: #1f2937;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-event--no-show,
+    :host-context(html[data-theme="light"]) .pf-cal-month__event.pf-cal-event--no-show {
+      background: rgba(244, 63, 94, 0.16); border-color: #e11d48; color: #881337;
+    }
+
+    /* ── "Now" indicator overlay ─────────────────────────────── */
+    /* Absolutely positioned over the day-column area so the line is
+     * one continuous stroke across every day. Sits OUTSIDE the grid
+     * flow (position: absolute) so it doesn't claim a grid cell and
+     * push the day columns down. Pointer-events disabled so clicks
+     * fall through to the slot/event buttons below. */
+    .pf-cal-time__overlay {
+      position: absolute;
+      top: 0; bottom: 0; left: 64px; right: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .pf-cal-now {
+      position: absolute; left: 0; right: 0;
+      height: 0;
+      border-top: 2px solid #ec4899;
+      box-shadow: 0 0 8px rgba(236, 72, 153, 0.55);
+      transform: translateY(-1px);
+    }
+    /* Dot anchored to today's column. --today-col is the 0-based index
+     * of today within the visible week (0..6 in week view, 0 in day
+     * view); --col-count is the total columns. left = (today / cols)
+     * × 100% gives the column's left edge, then we nudge the dot to
+     * straddle it. */
+    .pf-cal-now::before {
+      content: ''; position: absolute;
+      left: calc((var(--today-col, 0) / var(--col-count, 1)) * 100% - 5px);
+      top: -6px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #ec4899;
+      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
+    }
+    .pf-cal-now__label {
+      position: absolute;
+      left: calc((var(--today-col, 0) / var(--col-count, 1)) * 100% + 8px);
+      top: -16px;
+      padding: 1px 6px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: white; border-radius: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 9.5px; font-weight: 700;
+      letter-spacing: 0.04em;
+      box-shadow: 0 2px 6px rgba(236, 72, 153, 0.35);
+    }
+
+    /* ── Month grid ──────────────────────────────────────────── */
+    .pf-cal-month { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .pf-cal-month__dows {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      padding: 10px 12px; border-bottom: 1px solid var(--pf-cal-grid-strong);
+    }
+    .pf-cal-month__dows span {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-tertiary); text-align: center;
+    }
+    .pf-cal-month__grid {
+      flex: 1; min-height: 0;
+      display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr;
+      /* Non-scroll page: if the 6 rows can't all fit the frame height
+       * (short viewports / iPad split), scroll INSIDE the grid rather
+       * than pushing the page. min-height:0 above lets this shrink. */
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .pf-cal-month__cell {
+      border-right: 1px solid var(--pf-cal-grid);
+      border-bottom: 1px solid var(--pf-cal-grid);
+      padding: 6px 6px 4px;
+      display: flex; flex-direction: column; gap: 4px; min-height: 90px;
+      cursor: pointer;
+      position: relative;
+    }
+    .pf-cal-month__cell:hover { background: rgba(168, 85, 247, 0.05); }
+    .pf-cal-month__cell:nth-child(7n) { border-right: 0; }
+    .pf-cal-month__cell--out { background: rgba(255,255,255,0.015); }
+    .pf-cal-month__cell--out .pf-cal-month__day { color: var(--text-muted); opacity: 0.55; }
+    .pf-cal-month__day {
+      font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+      align-self: flex-end;
+    }
+    .pf-cal-month__cell--today .pf-cal-month__day {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11.5px;
+    }
+    .pf-cal-month__summary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding-bottom: 4px;
+    }
+    .pf-cal-month__pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      color: var(--violet-text);
+      font-size: 11px;
+      font-weight: 600;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-month__pill {
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(124, 58, 237, 0.22);
+      color: #6d28d9;
+    }
+    .pf-cal-month__badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    :host-context(html[data-theme="light"]) .pf-cal-month__badge {
+      background: #7c3aed;
+    }
+    .pf-cal-month__label {
+      white-space: nowrap;
+    }
+    .pf-appt-overlay {
+      position: fixed; inset: 0; z-index: 60;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .pf-appt-card {
+      width: 100%; max-width: 360px;
+      background: var(--surface-1, #1b1b25);
+      border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    .pf-appt-x {
+      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+      color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;
+    }
+    .pf-appt-x:hover { background: var(--surface-2, rgba(255,255,255,0.06)); }
+    .pf-appt-btn {
+      font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 9px;
+      border: 1px solid var(--border-subtle); background: var(--surface-2, rgba(255,255,255,0.04));
+      color: var(--text-secondary); cursor: pointer;
+    }
+    .pf-appt-btn:hover { filter: brightness(1.15); }
+    .pf-appt-btn--primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .pf-appt-btn--danger { color: var(--red-text); border-color: rgba(244,63,94,0.4); }
+
+    /* ═══════════════════════════════════════════════════════════
+     * CROSS-PLATFORM OVERRIDES (additive only)
+     * Desktop-web (>=1280px) is untouched: every rule below is
+     * gated by a max-width / pointer / platform query so it can
+     * never reach the desktop layout.
+     * ═══════════════════════════════════════════════════════════ */
+
+    /* (Non-scroll layout: the frame is now flex:1 and fills the page's
+     * remaining height on every size, so no explicit min-height is
+     * needed — that also removes the old 60vh mobile-chrome clip.) */
+
+    /* ── Touch affordances: only enable hover tint where a real hover
+     * pointer exists; on touch these were causing sticky highlights. */
+    @media (hover: none) {
+      .pf-cal-back:hover,
+      .pf-cal-book:hover,
+      .pf-cal-views button:hover,
+      .pf-cal-nav__btn:hover,
+      .pf-cal-nav__jump:hover,
+      .pf-cal-time__slot:hover,
+      .pf-cal-event:hover,
+      .pf-cal-month__cell:hover,
+      .pf-cal-month__pill:hover,
+      .pf-appt-btn:hover,
+      .pf-appt-x:hover { filter: none; }
+      .pf-cal-time__slot:hover { background: transparent; }
+      .pf-cal-event:hover { filter: none; z-index: auto; }
+      .pf-cal-month__cell:hover { background: transparent; }
+    }
+
+    /* ── Coarse pointer: bump small tap targets to >=44px without
+     * changing their visual box on desktop. */
+    @media (pointer: coarse) {
+      .pf-cal-back { min-height: 44px; }
+      .pf-cal-book { min-height: 44px; }
+      .pf-cal-nav__btn { width: 44px; height: 44px; }
+      .pf-cal-nav__today { width: auto; min-width: 44px; height: 44px; }
+      .pf-cal-nav__jump { height: 44px; }
+      .pf-cal-views button { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
+      .pf-cal-month__pill { min-height: 32px; padding-top: 7px; padding-bottom: 7px; }
+      .pf-appt-x { width: 44px; height: 44px; }
+      .pf-appt-btn { min-height: 44px; }
+    }
+
+    /* ── iPad band (641–1279): the time grid stays comfortable, but
+     * keep week columns from collapsing too far; month cells a touch
+     * shorter so the grid fits the viewport height. */
+    @include dt.tablet-band {
+      .pf-cal-time__head,
+      .pf-cal-time__body { min-width: 0; }
+      .pf-cal-month__cell { min-height: 76px; }
+    }
+
+    /* ── Phone (<=640): single-column, no horizontal overflow,
+     * full-width bottom sheet for the action card. */
+    @media (max-width: 640px) {
+      .pf-cal-page { padding: 14px 12px; gap: 12px; }
+
+      /* Header: keep the back/title/book on a compact wrapping row. */
+      .pf-cal-hdr { gap: 10px; }
+      .pf-cal-hdr__l h1 { font-size: 19px; }
+      .pf-cal-hdr__l p { font-size: 12px; }
+      .pf-cal-book { width: 100%; justify-content: center; padding: 11px 1rem; }
+      .pf-cal-hdr__r { width: 100%; }
+
+      /* Toolbar stacks: view switcher full width, nav row below. */
+      .pf-cal-toolbar { gap: 8px; }
+      .pf-cal-views { width: 100%; justify-content: space-between; }
+      .pf-cal-views button { flex: 1; text-align: center; }
+      .pf-cal-nav { width: 100%; flex-wrap: wrap; }
+      .pf-cal-nav__title {
+        margin-left: 0; width: 100%; order: 5;
+        font-size: 13px; text-align: center;
+      }
+      /* iOS: hidden jump-to-date input is focused on tap before its
+       * native picker opens — keep it >=16px so WKWebView doesn't zoom. */
+      .pf-cal-nav__jump-input { font-size: 16px; }
+
+      /* Day / Week grid: narrower time rail + allow the 7-day week to
+       * scroll horizontally instead of crushing columns to nothing.
+       * Each day column gets a sensible min so events stay readable. */
+      /* The FRAME scrolls, not the body: with the body as the scroller the
+         day headers stayed frozen while columns slid beneath them — you
+         could book against the wrong day. One scroller moves head, body and
+         the now-line overlay as a unit. */
+      .pf-cal-frame { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pf-cal-time__body { overflow-x: visible; }
+      .pf-cal-time__head,
+      .pf-cal-time__body {
+        grid-template-columns: 44px repeat(var(--col-count, 7), minmax(64px, 1fr));
+        min-width: calc(44px + var(--col-count, 7) * 64px);
+      }
+      .pf-cal-time__overlay { left: 44px; }
+      .pf-cal-time__hour > span { right: 5px; font-size: 9.5px; }
+      .pf-cal-time__col-hdr { padding: 10px 6px; }
+
+      /* Event chips: stack time over name so short columns still read. */
+      .pf-cal-event { font-size: 11px; padding: 3px 6px; }
+      .pf-cal-event__time { font-size: 10px; }
+
+      /* Month grid: trim cell padding/height so all 6 rows fit. */
+      .pf-cal-month__dows { padding: 8px 6px; }
+      .pf-cal-month__cell { padding: 5px 4px 3px; min-height: 56px; }
+      .pf-cal-month__pill { padding: 3px 7px; font-size: 10px; gap: 4px; }
+      .pf-cal-month__label { display: none; }
+
+      /* Action card → bottom sheet that clears the bottom-nav pill and
+       * the home-indicator safe area on notched phones. */
+      .pf-appt-overlay { align-items: flex-end; padding: 0; }
+      .pf-appt-card {
+        max-width: 100%;
+        border-radius: 18px 18px 0 0;
+        padding-bottom: calc(16px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
+        max-height: 85dvh; overflow-y: auto;
+      }
+      /* iOS: 16px+ inputs to stop auto-zoom on focus. */
+      .pf-appt-card .pf-input { font-size: 16px; }
+      .pf-appt-btn { padding: 9px 14px; }
+    }
+  

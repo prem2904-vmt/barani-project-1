@@ -18,7 +18,7 @@ describe('Process builder — ND audit', () => {
 
   it('one primary, in the band', () => {
     const p = make();
-    expect(p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length).toBe(1);
+    expect(p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length).toBe(1);
     expect(p.el.querySelector('pf-hero-band .pf-hb__actions .pf-hb-btn--primary')).not.toBeNull();
   });
 
@@ -29,7 +29,7 @@ describe('Process builder — ND audit', () => {
     expect(html).not.toMatch(/#0ea5e9|#10b981|#6ee7b7|rgb\(14, 165, 233\)/i);
     const active = p.el.querySelector('.pb-active');
     if (active) {
-      expect(active.classList.contains('nd-chip')).toBe(true);
+      expect(active.classList.contains('pf-chip')).toBe(true);
       expect(active.querySelector('svg')).not.toBeNull();
     }
   });
@@ -39,7 +39,7 @@ describe('Process builder — ND audit', () => {
     p.f.detectChanges();
     const body = p.el.querySelector('.pf-band-body')!;
     body.querySelectorAll('.pb-toggle').forEach(t => {
-      expect(t.classList.contains('nd-toggle')).toBe(true);
+      expect(t.classList.contains('pf-toggle')).toBe(true);
       expect(t.getAttribute('role')).toBe('switch');
     });
     expect(/[⠿‹›×＋●]/.test(body.textContent ?? '')).toBe(false);

@@ -176,7 +176,7 @@ interface GstRow {
         @if (configSkeleton()) {
           <!-- First load: the form's shape until the saved config lands
                (never the defaults flashing before the lab's own values). -->
-          <section class="nd-card"><div class="nd-card__body">
+          <section class="pf-card"><div class="pf-card__body">
             <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
           </div></section>
         } @else {
@@ -211,14 +211,14 @@ interface GstRow {
               </div>
               <button
                 type="button"
-                class="nd-toggle pf-bc-sw"
+                class="pf-toggle pf-bc-sw"
                 role="switch"
                 [attr.aria-checked]="!!config().gstEnabled"
                 aria-label="Enable GST"
                 (click)="patch({ gstEnabled: !config().gstEnabled })"
               >
-                <span class="nd-toggle__track" aria-hidden="true"
-                  ><span class="nd-toggle__knob"></span
+                <span class="pf-toggle__track" aria-hidden="true"
+                  ><span class="pf-toggle__knob"></span
                 ></span>
               </button>
             </div>
@@ -283,7 +283,7 @@ interface GstRow {
                       <div class="lg:col-span-4 min-w-0">
                         <p class="pf-bc-bname">{{ b.name }}</p>
                         <p
-                          class="text-[11px] nd-num"
+                          class="text-[11px] pf-num"
                           style="color: var(--text-muted);"
                         >
                           {{ b.code }}
@@ -292,7 +292,7 @@ interface GstRow {
                       <div class="lg:col-span-4">
                         <input
                           type="text"
-                          class="nd-input w-full"
+                          class="pf-input w-full"
                           placeholder="GSTIN"
                           [ngModel]="gstinFor(b.id)"
                           (ngModelChange)="setGstin(b.id, $event)"
@@ -302,7 +302,7 @@ interface GstRow {
                         <input
                           type="text"
                           inputmode="numeric"
-                          class="nd-input w-full"
+                          class="pf-input w-full"
                           placeholder="State code"
                           [ngModel]="stateCodeFor(b.id)"
                           (ngModelChange)="setStateCode(b.id, $event)"
@@ -349,14 +349,14 @@ interface GstRow {
               </div>
               <button
                 type="button"
-                class="nd-toggle pf-bc-sw"
+                class="pf-toggle pf-bc-sw"
                 role="switch"
                 [attr.aria-checked]="!!config().allowDiscounts"
                 aria-label="Allow discounts"
                 (click)="patch({ allowDiscounts: !config().allowDiscounts })"
               >
-                <span class="nd-toggle__track" aria-hidden="true"
-                  ><span class="nd-toggle__knob"></span
+                <span class="pf-toggle__track" aria-hidden="true"
+                  ><span class="pf-toggle__knob"></span
                 ></span>
               </button>
             </div>
@@ -420,7 +420,7 @@ interface GstRow {
                     <label class="pf-label">Invoice prefix</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="config().invoicePrefix"
                       (ngModelChange)="patch({ invoicePrefix: $event })"
                     />
@@ -441,7 +441,7 @@ interface GstRow {
                 <div class="pf-invoice-preview">
                   <p class="pf-bc-sub">Next invoice</p>
                   <p
-                    class="nd-num text-[16px] font-semibold"
+                    class="pf-num text-[16px] font-semibold"
                     style="color: var(--text-primary);"
                   >
                     {{ invoicePreview() }}
@@ -471,7 +471,7 @@ interface GstRow {
                   </div>
                   <button
                     type="button"
-                    class="nd-toggle pf-bc-sw"
+                    class="pf-toggle pf-bc-sw"
                     role="switch"
                     [attr.aria-checked]="
                       !!(config().invoiceOnFullPaymentOnly ?? false)
@@ -485,8 +485,8 @@ interface GstRow {
                       })
                     "
                   >
-                    <span class="nd-toggle__track" aria-hidden="true"
-                      ><span class="nd-toggle__knob"></span
+                    <span class="pf-toggle__track" aria-hidden="true"
+                      ><span class="pf-toggle__knob"></span
                     ></span>
                   </button>
                 </div>
@@ -511,7 +511,7 @@ interface GstRow {
                     <label class="pf-label">UPI address (VPA)</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="clinic@axis"
                       autocapitalize="none"
                       spellcheck="false"
@@ -523,7 +523,7 @@ interface GstRow {
                     <label class="pf-label">Payee name</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="Prefrontal Lab"
                       [ngModel]="config().upiPayeeName || ''"
                       (ngModelChange)="patch({ upiPayeeName: $event })"
@@ -550,7 +550,7 @@ interface GstRow {
                     <label class="pf-label">Account holder name</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="Prefrontal Diagnostics Pvt Ltd"
                       [ngModel]="config().bankAccountName || ''"
                       (ngModelChange)="patch({ bankAccountName: $event })"
@@ -561,7 +561,7 @@ interface GstRow {
                     <input
                       type="text"
                       inputmode="numeric"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="0123456789"
                       autocapitalize="none"
                       spellcheck="false"
@@ -573,7 +573,7 @@ interface GstRow {
                     <label class="pf-label">IFSC</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="HDFC0001234"
                       autocapitalize="characters"
                       spellcheck="false"
@@ -585,7 +585,7 @@ interface GstRow {
                     <label class="pf-label">Bank name</label>
                     <input
                       type="text"
-                      class="nd-input"
+                      class="pf-input"
                       placeholder="HDFC Bank"
                       [ngModel]="config().bankName || ''"
                       (ngModelChange)="patch({ bankName: $event })"
@@ -648,7 +648,7 @@ interface GstRow {
                   <div>
                     <label class="pf-label">Lab name</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().labName"
                       (ngModelChange)="patchTpl({ labName: $event })"
                       placeholder="Prefrontal Lab"
@@ -663,7 +663,7 @@ interface GstRow {
                     } @else {
                       @for (g of branchGstins(); track g.branchId) {
                         <p class="pf-bc-gstin-ro">
-                          <span class="nd-num">{{ g.gstin }}</span>
+                          <span class="pf-num">{{ g.gstin }}</span>
                           @if (branchGstins().length > 1) { <span class="pf-bc-gstin-br">· {{ g.branchName }}</span> }
                         </p>
                       }
@@ -675,7 +675,7 @@ interface GstRow {
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Address</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().address"
                       (ngModelChange)="patchTpl({ address: $event })"
                     />
@@ -684,7 +684,7 @@ interface GstRow {
                     <label class="pf-label">Phone</label
                     ><input
                       type="tel"
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().phone"
                       (ngModelChange)="patchTpl({ phone: $event })"
                     />
@@ -694,7 +694,7 @@ interface GstRow {
                     ><input
                       type="email"
                       autocapitalize="none"
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().email"
                       (ngModelChange)="patchTpl({ email: $event })"
                     />
@@ -710,7 +710,7 @@ interface GstRow {
                   <div>
                     <label class="pf-label">Accent colour</label
                     ><input
-                      class="nd-input pf-bc-color"
+                      class="pf-input pf-bc-color"
                       type="color"
                       [ngModel]="tpl().accentColor || '#1B3A6B'"
                       (ngModelChange)="patchTpl({ accentColor: $event })"
@@ -719,7 +719,7 @@ interface GstRow {
                   <div>
                     <label class="pf-label">Signatory label</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().signatureLabel"
                       (ngModelChange)="patchTpl({ signatureLabel: $event })"
                       placeholder="Authorised Signatory"
@@ -732,7 +732,7 @@ interface GstRow {
                       (urlChange)="patchTpl({ logoUrl: $event })"
                     ></pf-image-upload>
                     <input
-                      class="nd-input mt-2"
+                      class="pf-input mt-2"
                       [ngModel]="tpl().logoUrl"
                       (ngModelChange)="patchTpl({ logoUrl: $event })"
                       placeholder="https://…/logo.png  (or upload above)"
@@ -741,7 +741,7 @@ interface GstRow {
                   <div>
                     <label class="pf-label">Jurisdiction</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().jurisdiction"
                       (ngModelChange)="patchTpl({ jurisdiction: $event })"
                       placeholder="e.g. Chennai"
@@ -750,7 +750,7 @@ interface GstRow {
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Bank details</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().bankDetails"
                       (ngModelChange)="patchTpl({ bankDetails: $event })"
                       placeholder="A/c · IFSC · Bank"
@@ -759,7 +759,7 @@ interface GstRow {
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Declaration</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().declaration"
                       (ngModelChange)="patchTpl({ declaration: $event })"
                       placeholder="Certified that the particulars given above are true and correct."
@@ -768,7 +768,7 @@ interface GstRow {
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Footer / terms</label
                     ><input
-                      class="nd-input"
+                      class="pf-input"
                       [ngModel]="tpl().footerText"
                       (ngModelChange)="patchTpl({ footerText: $event })"
                     />
@@ -777,29 +777,29 @@ interface GstRow {
                 <div class="flex flex-wrap gap-5 mt-3">
                   <button
                     type="button"
-                    class="nd-toggle pf-bc-sw"
+                    class="pf-toggle pf-bc-sw"
                     role="switch"
                     [attr.aria-checked]="tpl().showLogo !== false"
                     (click)="patchTpl({ showLogo: tpl().showLogo === false })"
                   >
-                    <span class="nd-toggle__track" aria-hidden="true"
-                      ><span class="nd-toggle__knob"></span></span
+                    <span class="pf-toggle__track" aria-hidden="true"
+                      ><span class="pf-toggle__knob"></span></span
                     >Show logo
                   </button>
                   <button
                     type="button"
-                    class="nd-toggle pf-bc-sw"
+                    class="pf-toggle pf-bc-sw"
                     role="switch"
                     [attr.aria-checked]="tpl().showGstin !== false"
                     (click)="patchTpl({ showGstin: tpl().showGstin === false })"
                   >
-                    <span class="nd-toggle__track" aria-hidden="true"
-                      ><span class="nd-toggle__knob"></span></span
+                    <span class="pf-toggle__track" aria-hidden="true"
+                      ><span class="pf-toggle__knob"></span></span
                     >Show GSTIN
                   </button>
                   <button
                     type="button"
-                    class="nd-toggle pf-bc-sw"
+                    class="pf-toggle pf-bc-sw"
                     role="switch"
                     [attr.aria-checked]="tpl().showTrackingQr !== false"
                     (click)="
@@ -808,15 +808,15 @@ interface GstRow {
                       })
                     "
                   >
-                    <span class="nd-toggle__track" aria-hidden="true"
-                      ><span class="nd-toggle__knob"></span></span
+                    <span class="pf-toggle__track" aria-hidden="true"
+                      ><span class="pf-toggle__knob"></span></span
                     >Show result-tracking QR
                   </button>
                 </div>
                 <!-- Secondary: the band's Save (billing config) is the ONE primary. -->
                 <button
                   type="button"
-                  class="nd-btn nd-btn--secondary pf-save-letterhead mt-4 press"
+                  class="pf-btn pf-btn--secondary pf-save-letterhead mt-4 press"
                   [disabled]="savingTpl()"
                   [pfBusy]="savingTpl()"
                   pfBusyLabel="Saving…"
@@ -893,9 +893,9 @@ interface GstRow {
         flex-direction: column;
         align-items: flex-start;
         padding: 12px 14px;
-        border-radius: var(--nd-radius, 12px);
-        background: var(--nd-card-bg);
-        border: 1px solid var(--nd-line);
+        border-radius: var(--pf-radius, 12px);
+        background: var(--pf-card-bg);
+        border: 1px solid var(--pf-line);
         color: var(--text-secondary);
         cursor: pointer;
         text-align: left;
@@ -911,40 +911,40 @@ interface GstRow {
         border-color: var(--card-hover-border);
       }
       .pf-scope-card[aria-pressed="true"] {
-        background: var(--nd-sel-bg);
-        border-color: var(--nd-sel-border);
+        background: var(--pf-sel-bg);
+        border-color: var(--pf-sel-border);
         color: var(--text-primary);
       }
 
       .pf-gst-row {
         padding: 10px 12px;
-        border-radius: var(--nd-radius-sm, 10px);
-        background: var(--nd-card-bg);
-        border: 1px solid var(--nd-line);
+        border-radius: var(--pf-radius-sm, 10px);
+        background: var(--pf-card-bg);
+        border: 1px solid var(--pf-line);
       }
 
       .pf-invoice-preview {
         padding: 14px 18px;
         border-radius: 14px;
-        background: var(--nd-chip-bg);
-        border: 1px solid var(--nd-line);
+        background: var(--pf-chip-bg);
+        border: 1px solid var(--pf-line);
       }
       /* Kit chips: the selected one is the NEUTRAL selected state (never a gradient). */
       .pf-tpl-chip {
         height: 34px;
         padding: 0 12px;
-        border-radius: var(--nd-radius-chip, 8px);
+        border-radius: var(--pf-radius-chip, 8px);
         font: inherit;
         font-size: 12.5px;
         font-weight: 500;
         cursor: pointer;
-        border: 1px solid var(--nd-line);
-        background: var(--nd-card-bg);
+        border: 1px solid var(--pf-line);
+        background: var(--pf-card-bg);
         color: var(--text-secondary);
       }
       .pf-tpl-chip[aria-pressed="true"] {
-        background: var(--nd-sel-bg);
-        border-color: var(--nd-sel-border);
+        background: var(--pf-sel-bg);
+        border-color: var(--pf-sel-border);
         color: var(--text-primary);
         font-weight: 600;
       }
@@ -953,10 +953,10 @@ interface GstRow {
       .pf-bc-card {
         display: block;
         padding: 18px;
-        border-radius: var(--nd-radius-card, 16px);
-        background: var(--nd-card-bg);
-        border: 1px solid var(--nd-line);
-        box-shadow: var(--nd-shadow-sm);
+        border-radius: var(--pf-radius-card, 16px);
+        background: var(--pf-card-bg);
+        border: 1px solid var(--pf-line);
+        box-shadow: var(--pf-shadow-sm);
       }
       .pf-bc-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
       .pf-bc-gstin-ro { margin: 6px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }

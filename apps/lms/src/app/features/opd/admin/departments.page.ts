@@ -30,7 +30,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
 
 /**
  * OPD Master (/admin/opd/departments, Agent A) — Test Master's two-card layout
- * (ND-PATTERN "two jobs on one screen"): DEPARTMENTS (a filter companion, LEFT)
+ * (PF-PATTERN "two jobs on one screen"): DEPARTMENTS (a filter companion, LEFT)
  * with each department's consultation form (pick from the ONE shared library,
  * Edit, + New form), and the SERVICES grid (AG-Grid like Test Master: edit
  * cells, one batch Save). A service's form is the department's unless it
@@ -52,7 +52,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
             @if (narrow()) {
-              <button type="button" class="nd-chip press" (click)="sheetOpen.set(true)" aria-haspopup="dialog"
+              <button type="button" class="pf-chip press" (click)="sheetOpen.set(true)" aria-haspopup="dialog"
                       [attr.aria-expanded]="sheetOpen()" [attr.aria-pressed]="!!dept()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
                 {{ dept()?.name || 'Departments' }}
@@ -74,33 +74,33 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
           @if (narrow()) {
             @if (sheetOpen()) {
               <div class="oa-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
-              <aside class="nd-card oa-side oa-side--sheet" role="dialog" aria-modal="true" aria-label="Departments" (keydown.escape)="sheetOpen.set(false)">
-                <span class="nd-sheet__handle" aria-hidden="true"></span>
+              <aside class="pf-card oa-side oa-side--sheet" role="dialog" aria-modal="true" aria-label="Departments" (keydown.escape)="sheetOpen.set(false)">
+                <span class="pf-sheet__handle" aria-hidden="true"></span>
                 <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
                 <ng-container *ngTemplateOutlet="deptBody"></ng-container>
               </aside>
             }
           } @else if (collapsed()) {
-            <aside class="nd-card oa-strip" aria-label="Departments">
+            <aside class="pf-card oa-strip" aria-label="Departments">
               <button type="button" class="oa-strip__btn" (click)="toggleCollapsed()" aria-label="Show departments" aria-expanded="false">
-                <span class="nd-btn nd-btn--icon oa-side__collapse" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+                <span class="pf-btn pf-btn--icon oa-side__collapse" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
                 <span class="oa-strip__label">Departments</span>
               </button>
             </aside>
           } @else {
-            <aside class="nd-card oa-side" aria-label="Departments">
+            <aside class="pf-card oa-side" aria-label="Departments">
               <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
               <ng-container *ngTemplateOutlet="deptBody"></ng-container>
             </aside>
           }
 
-          <section class="nd-card oa-main" aria-label="Services">
-            <header class="nd-card__head oa-main__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
-              <span class="nd-card__label">Services</span>
-              <span class="nd-card__note oa-hint">Form = the department's unless a service overrides it · double-click a cell to edit</span>
+          <section class="pf-card oa-main" aria-label="Services">
+            <header class="pf-card__head oa-main__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="pf-card__label">Services</span>
+              <span class="pf-card__note oa-hint">Form = the department's unless a service overrides it · double-click a cell to edit</span>
               <pf-segmented size="sm" [options]="catOptions()" [value]="cat()" (valueChange)="cat.set($event)" aria-label="Category"></pf-segmented>
-              <span class="oa-count nd-num">{{ countLabel() }}</span>
+              <span class="oa-count pf-num">{{ countLabel() }}</span>
             </header>
             <div class="oa-main__body">
               @if (listSkeleton()) {
@@ -139,17 +139,17 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
     </ng-template>
 
     <ng-template #deptHead let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-        <span class="nd-card__label">Departments</span>
-        <span class="nd-card__spacer"></span>
-        <button type="button" class="nd-btn nd-btn--tertiary press" (click)="addDepartment()" [disabled]="deptBusy()">+ Add</button>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="pf-card__label">Departments</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--tertiary press" (click)="addDepartment()" [disabled]="deptBusy()">+ Add</button>
         @if (sheet) {
-          <button type="button" class="nd-btn nd-btn--icon oa-side__collapse" (click)="sheetOpen.set(false)" aria-label="Close departments">
+          <button type="button" class="pf-btn pf-btn--icon oa-side__collapse" (click)="sheetOpen.set(false)" aria-label="Close departments">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         } @else {
-          <button type="button" class="nd-btn nd-btn--icon oa-side__collapse" (click)="toggleCollapsed()" aria-label="Hide departments" aria-expanded="true">
+          <button type="button" class="pf-btn pf-btn--icon oa-side__collapse" (click)="toggleCollapsed()" aria-label="Hide departments" aria-expanded="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
         }
@@ -157,7 +157,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
     </ng-template>
 
     <ng-template #deptBody>
-      <div class="nd-card__body">
+      <div class="pf-card__body">
         @if (listSkeleton()) {
           <pf-skeleton-rows [rows]="5" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
         } @else {
@@ -166,7 +166,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
               <button type="button" class="oa-li__btn" [attr.aria-pressed]="!deptId()" (click)="pickDept(null)">
                 <span class="oa-li__text"><span class="oa-li__name">All departments</span>
                   <span class="oa-li__meta">{{ plural(forms().length, 'form') }} in the shared library</span></span>
-                <span class="oa-li__n nd-num">{{ services().length }}</span>
+                <span class="oa-li__n pf-num">{{ services().length }}</span>
               </button>
               <span class="oa-li__gap" aria-hidden="true"></span>
             </li>
@@ -177,11 +177,11 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
                     <span class="oa-li__name">{{ d.name }}@if (!d.isActive) {<span class="oa-li__off">Off</span>}</span>
                     <span class="oa-li__meta">Form · {{ formName(d.defaultFormId) }}</span>
                   </span>
-                  <span class="oa-li__n nd-num">{{ countIn(d.id) }}</span>
+                  <span class="oa-li__n pf-num">{{ countIn(d.id) }}</span>
                 </button>
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="d.isActive" (click)="toggleDept(d)"
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="d.isActive" (click)="toggleDept(d)"
                         [attr.aria-label]="'Department ' + d.name + ' on'" [disabled]="deptBusy()">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </li>
             } @empty {
@@ -194,11 +194,11 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
                        placeholder="Pick a form" (valueChange)="setDeptForm(d, $event)"></pf-select>
             <span class="oa-li__meta">{{ formMeta(d.defaultFormId) }}</span>
             <div class="oa-actions">
-              <button type="button" class="nd-btn nd-btn--secondary oa-btn press" [disabled]="!d.defaultFormId" (click)="editForm(d.defaultFormId)">
+              <button type="button" class="pf-btn pf-btn--secondary oa-btn press" [disabled]="!d.defaultFormId" (click)="editForm(d.defaultFormId)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                 Edit
               </button>
-              <button type="button" class="nd-btn nd-btn--tertiary oa-btn press" (click)="newForm(d)">+ New form</button>
+              <button type="button" class="pf-btn pf-btn--tertiary oa-btn press" (click)="newForm(d)">+ New form</button>
             </div>
             <p class="oa-note">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
@@ -271,7 +271,7 @@ export class OpdDepartmentsPage {
     const forms = this.forms();
     const all = !this.deptId();
     return [
-      { field: 'code', headerName: 'Code', editable: true, width: 100, flex: 0, cellClass: 'nd-num',
+      { field: 'code', headerName: 'Code', editable: true, width: 100, flex: 0, cellClass: 'pf-num',
         valueParser: (p) => String(p.newValue ?? '').trim().toUpperCase().slice(0, 32) || p.oldValue },
       { field: 'name', headerName: 'Service', editable: true, flex: 1.4, minWidth: 150,
         valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 160) || p.oldValue },
@@ -291,7 +291,7 @@ export class OpdDepartmentsPage {
         cellEditor: 'agSelectCellEditor', cellEditorParams: { values: ['common', 'per_doctor'] },
         valueFormatter: (p) => (p.value === 'per_doctor' ? 'Per doctor' : 'Common'),
         cellRenderer: (p: ICellRendererParams<SvcRow>) => this.modeCell(p.data) },
-      { colId: 'price', headerName: 'Price', width: 118, flex: 0, type: 'rightAligned', cellClass: 'nd-num',
+      { colId: 'price', headerName: 'Price', width: 118, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
         editable: (p) => p.data?.priceMode !== 'per_doctor',
         valueGetter: (p) => (p.data?.priceMode === 'per_doctor' ? priceText(p.data) : p.data?.commonPrice ?? 0),
         valueFormatter: (p) => (typeof p.value === 'number' ? inr(p.value) : String(p.value ?? '')),
@@ -364,7 +364,7 @@ export class OpdDepartmentsPage {
   private editButton(s: SvcRow | undefined): HTMLElement {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'nd-rowact';
+    b.className = 'pf-rowact';
     b.textContent = 'Edit';
     b.setAttribute('aria-label', `Edit ${s?.name ?? 'service'}`);
     b.addEventListener('click', () => s && this.openEditor(s));

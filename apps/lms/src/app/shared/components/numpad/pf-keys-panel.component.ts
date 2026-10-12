@@ -28,7 +28,7 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
  * Focus never leaves the field: pointerdown on the surface is cancelled (and
  * kept from page-level outside-click listeners); keys are tabindex=-1
  * buttons with aria-labels (screen readers still reach and activate them).
- * Primary colour ONLY on the Enter key (ND-PATTERN §2); when the field says
+ * Primary colour ONLY on the Enter key (PF-PATTERN §2); when the field says
  * its Enter REMOVES (order create: the highlighted test is already in the
  * order) the key reads "Remove ↵" in the neutral key colour with a muted-red
  * outline (ND danger: never a filled red, never the violet gradient).
@@ -210,14 +210,14 @@ type PfKeysCommit = 'enter' | 'layout' | 'prefix' | 'hide' | 'system';
       position: fixed; z-index: 1300; left: 0; right: 0; bottom: 0; box-sizing: border-box;
       padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
       background: var(--k-tray);
-      border-top: 1px solid var(--nd-line, #e5e7eb);
+      border-top: 1px solid var(--pf-line, #e5e7eb);
       box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.10);
       color: var(--k-text);
       font-family: inherit;
       touch-action: manipulation;
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
-      animation: pf-k-rise var(--nd-dur-sheet, 360ms) var(--nd-spring, ease-out) both;
+      animation: pf-k-rise var(--pf-dur-sheet, 360ms) var(--pf-spring, ease-out) both;
     }
     :host-context(.dark) .pf-k, :host-context([data-theme='dark']) .pf-k {
       --k-tray: #14161c;
@@ -234,7 +234,7 @@ type PfKeysCommit = 'enter' | 'layout' | 'prefix' | 'hide' | 'system';
     .pf-k__key, .pf-k__enter {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       min-width: 0; min-height: 44px; height: 100%; padding: 0; border: 0;
-      border-radius: var(--nd-radius-sm, 10px);
+      border-radius: var(--pf-radius-sm, 10px);
       font: inherit; cursor: pointer; color: var(--k-text);
       transition: transform 90ms ease-out, background-color 90ms ease-out;
       /* A keyboard: no double-tap zoom / pan / pinch on a key — a pinch

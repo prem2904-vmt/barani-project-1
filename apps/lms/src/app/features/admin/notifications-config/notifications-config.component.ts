@@ -75,7 +75,7 @@ const MODULE_LABELS: Record<string, string> = {
            watches) except critical result alerts; the per-alert choices below
            are kept untouched and come back exactly when it's switched on. -->
       @if (!loading()) {
-        <div class="nd-card pf-nc-master mb-5" [class.pf-nc-master--off]="!masterOn()">
+        <div class="pf-card pf-nc-master mb-5" [class.pf-nc-master--off]="!masterOn()">
           <div class="pf-nc-master__row">
             <div class="pf-nc-master__icon" aria-hidden="true">
               @if (masterOn()) {
@@ -109,11 +109,11 @@ const MODULE_LABELS: Record<string, string> = {
                 Critical result alerts always send.
               </p>
             </div>
-            <button type="button" class="nd-toggle pf-nc-switch pf-nc-master__switch" role="switch"
+            <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
                     [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
                     [attr.aria-label]="'All notifications — ' + (masterOn() ? 'on' : 'off')"
                     (click)="toggleMaster()">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           </div>
         </div>
@@ -144,11 +144,11 @@ const MODULE_LABELS: Record<string, string> = {
         <div class="mb-6" [class.pf-nc-paused]="!masterOn()">
           <div class="pf-nc-section">
             <h3 class="pf-nc-section__title">{{ moduleLabel(m) }}</h3>
-            <span class="pf-nc-section__meta nd-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
+            <span class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
           </div>
           <div class="space-y-2">
             @for (r of rowsFor(m); track r.key) {
-              <div class="nd-card pf-nc-card" [class.pf-nc-card--live]="r.critical">
+              <div class="pf-card pf-nc-card" [class.pf-nc-card--live]="r.critical">
                 <div class="pf-nc-row">
                   <div class="pf-nc-row__icon" [class.pf-nc-row__icon--overdue]="r.kind === 'overdue'"
                        [class.pf-nc-row__icon--off]="!r.enabled">
@@ -171,10 +171,10 @@ const MODULE_LABELS: Record<string, string> = {
                     <div class="flex items-center gap-2 flex-wrap">
                       <p class="font-semibold text-[14.5px]" style="color: var(--text-primary);">{{ r.label }}</p>
                       @if (r.kind === 'overdue') {
-                        <span class="nd-chip nd-chip--static pf-nc-badge">Overdue watch</span>
+                        <span class="pf-chip pf-chip--static pf-nc-badge">Overdue watch</span>
                       }
                       @if (r.critical && !masterOn()) {
-                        <span class="nd-chip nd-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span>
+                        <span class="pf-chip pf-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span>
                       }
                     </div>
                     <p class="text-[12.5px] mt-0.5 leading-snug" style="color: var(--text-secondary);">{{ r.firesWhen }}</p>
@@ -194,9 +194,9 @@ const MODULE_LABELS: Record<string, string> = {
                     }
                   </div>
 
-                  <button type="button" class="nd-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
+                  <button type="button" class="pf-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
                           [attr.aria-label]="r.label + (r.enabled ? ' — on' : ' — off')" (click)="setEnabled(r, !r.enabled)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                 </div>
               </div>
@@ -222,7 +222,7 @@ const MODULE_LABELS: Record<string, string> = {
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
       color: var(--violet-text, #7c3aed);
     }
-    .pf-nc-master--off .pf-nc-master__icon { background: var(--nd-chip-bg); color: var(--text-muted); }
+    .pf-nc-master--off .pf-nc-master__icon { background: var(--pf-chip-bg); color: var(--text-muted); }
     .pf-nc-master__title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-nc-master__sub { font-size: 12.5px; line-height: 1.4; margin-top: 2px; color: var(--text-secondary); }
     .pf-nc-master__note {
@@ -259,8 +259,8 @@ const MODULE_LABELS: Record<string, string> = {
     .pf-nc-chip:hover { color: var(--text-primary); }
     .pf-nc-chip[aria-pressed='true'] {
       color: var(--text-primary);
-      border-color: var(--nd-sel-border);
-      background: var(--nd-sel-bg);
+      border-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg);
     }
     .pf-nc-chip__count {
       font-size: 10.5px;
@@ -309,7 +309,7 @@ const MODULE_LABELS: Record<string, string> = {
     /* Overdue watches: the same violet chip — the clock glyph + "Overdue
        watch" chip say it; no orange (palette only). */
     .pf-nc-row__icon--off {
-      background: var(--nd-chip-bg);
+      background: var(--pf-chip-bg);
       color: var(--text-muted);
     }
 
