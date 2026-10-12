@@ -70,7 +70,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
     }
     .pf-key:hover:not(:disabled) {
       background: var(--glass-bg-hover);
-      border-color: var(--glass-border-hover);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
     .pf-key:active:not(:disabled) {
       transform: scale(0.96);

@@ -576,7 +576,7 @@ type Tab = 'mine' | 'all';
     }
     .pv-tile[data-priority='urgent']::before { background: var(--red-text, #dc2626); }
     @media (hover: hover) and (pointer: fine) {
-      .pv-tile:hover { border-color: var(--pf-sel-border); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
+      .pv-tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
     }
     .pv-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pv-tile--skel { cursor: default; gap: 10px; }

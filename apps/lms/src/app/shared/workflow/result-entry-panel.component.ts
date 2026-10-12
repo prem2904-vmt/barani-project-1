@@ -40,7 +40,7 @@ import { lineStatusLabel } from '../utils/line-status';
     .rp__row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px;
                padding: 9px 11px; border-radius: 9px; background: var(--bg-card-solid, rgba(255,255,255,0.04));
                border: 1px solid var(--glass-border); cursor: pointer; }
-    .rp__row:hover { border-color: #7c3aed; }
+    .rp__row:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .rp__test { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rp__pt { font-size: 11.5px; color: var(--text-tertiary); }
     .rp__status { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;

@@ -84,7 +84,7 @@ export type PfNumberSize = 'sm' | 'md';
     }
     .root[data-size='sm'] { height: 34px; border-radius: 8px; }
     .root:not(.is-disabled):hover {
-      border-color: var(--input-border-focus);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
     .root.is-focused {
       border-color: var(--input-border-focus);

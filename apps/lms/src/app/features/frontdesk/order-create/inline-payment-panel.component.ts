@@ -292,12 +292,17 @@ interface MethodDef {
         border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary);
         transition: background 0.15s, border-color 0.15s, color 0.15s;
       }
-      .pf-ipp__method:hover:not([aria-checked="true"]) { border-color: var(--card-hover-border, var(--glass-border-hover)); color: var(--text-primary); }
-      /* Neutral selected tile: stronger border + light tint, normal text. */
+      .pf-ipp__method:hover:not([aria-checked="true"]) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
+      /* Brand violet selected tile: violet border + light violet tint, violet text & icons. */
       .pf-ipp__method[aria-checked="true"] {
-        border: 1.5px solid color-mix(in srgb, var(--text-primary) 55%, transparent);
-        background: color-mix(in srgb, var(--text-primary) 6%, transparent);
-        color: var(--text-primary);
+        border: 1.5px solid var(--color-primary, #7c3aed);
+        background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--pf-card-bg, #ffffff));
+        color: var(--color-primary, #7c3aed);
+        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
+        font-weight: 600;
+      }
+      .pf-ipp__method[aria-checked="true"] svg {
+        color: var(--color-primary, #7c3aed);
       }
 
       /* The selected method's detail panel. */
@@ -334,7 +339,7 @@ interface MethodDef {
         height: 26px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 12px;
         border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary);
       }
-      .pf-ipp__quick button:hover { border-color: var(--card-hover-border, var(--glass-border-hover)); color: var(--text-primary); }
+      .pf-ipp__quick button:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
       .pf-ipp__change { margin: 0; font-size: 12px; color: var(--text-tertiary); display: flex; justify-content: space-between; gap: 8px; }
       .pf-ipp__change strong { font-size: 14px; font-variant-numeric: tabular-nums; }
       .pf-ipp__change[data-kind='change'], .pf-ipp__change[data-kind='exact'] { color: var(--violet-text, #6d28d9); }

@@ -1932,6 +1932,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   newConsult() {
     void this.orderEntry.startConsult();
   }
+  bookAppointment() {
+    this.router.navigate(['/frontdesk/appointments/new']);
+  }
   bookAppointmentFor(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
   }

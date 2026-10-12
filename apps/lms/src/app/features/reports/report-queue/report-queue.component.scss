@@ -205,7 +205,7 @@
 }
 .pf-rq-row:hover {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(168, 85, 247, 0.35);
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
 }
 .pf-rq-row__accent {
   position: absolute;

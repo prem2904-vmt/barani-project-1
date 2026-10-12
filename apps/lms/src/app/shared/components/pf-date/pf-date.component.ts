@@ -1,1 +1,1 @@
-export { PfDateComponent } from '@prefrontal/shared';
+export { PfDateComponent, PfCalendarComponent } from '@prefrontal/shared';

@@ -161,6 +161,17 @@
          cart and scan ride as tools at the search bar's right edge. -->
     <pf-hero-band class="pf-fd-band" [customSearch]="true">
       <ng-container band-actions>
+        @if (showAppt()) {
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="bookAppointment()"
+          aria-label="Appointment" title="Book appointment">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          Appointment
+        </button>
+        }
         @if (showRegister()) {
         <!-- Phones show just the +; the CSS zeroes the label's font-size and
              the sized <svg> carries the button (owner). -->

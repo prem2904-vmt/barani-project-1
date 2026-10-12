@@ -781,7 +781,7 @@ export { isContactNumberField };
     }
     .pf-bsel__item:hover {
       background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
-      border-color: var(--text-secondary, rgba(255, 255, 255, 0.24));
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
     .pf-bsel__item--on {
       background: var(--color-primary, #a855f7);
@@ -909,7 +909,7 @@ export { isContactNumberField };
       cursor: pointer;
       transition: border-color 160ms ease, background 160ms ease;
     }
-    .pf-radio:hover { border-color: var(--text-secondary, #cbd5e1); }
+    .pf-radio:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-radio:checked {
       border-color: #a855f7;
       background: radial-gradient(circle, #a855f7 45%, transparent 47%);
@@ -970,7 +970,7 @@ export { isContactNumberField };
       background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
       transition: border-color var(--pf-dur-fast) ease, box-shadow var(--pf-dur-fast) ease;
     }
-    .pf-di-phone:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
+    .pf-di-phone:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-di-phone:focus-within {
       border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);

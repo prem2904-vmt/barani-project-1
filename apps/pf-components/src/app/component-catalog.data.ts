@@ -366,6 +366,24 @@ export const CATALOG_COMPONENTS: ComponentDoc[] = [
     ],
   },
   {
+    id: 'calendar',
+    name: 'Calendar View',
+    selector: 'pf-calendar',
+    category: 'Data Entry',
+    summary: 'Full month calendar view with day grid, month navigation, today indicator, and keyboard roving.',
+    importStatement: "import { PfCalendarComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-calendar [value]="dateStr" (valueChange)="dateStr = $event" />`,
+    inputs: [
+      { name: 'value', type: 'string | null', required: false, description: 'Selected date in YYYY-MM-DD format.' },
+      { name: 'min', type: 'string', required: false, description: 'Minimum selectable date (YYYY-MM-DD).' },
+      { name: 'max', type: 'string', required: false, description: 'Maximum selectable date (YYYY-MM-DD).' },
+      { name: 'compact', type: 'boolean', required: false, default: 'false', description: 'Enables compact padding mode.' },
+    ],
+    outputs: [
+      { name: 'valueChange', type: 'output<string>()', description: 'Emits selected date in YYYY-MM-DD format.' },
+    ],
+  },
+  {
     id: 'time',
     name: 'Time Picker',
     selector: 'pf-time',

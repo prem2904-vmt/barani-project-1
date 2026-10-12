@@ -93,6 +93,12 @@
     background: #ffffff; border: 1px solid transparent; border-radius: 12px;
     min-width: 73px; height: 40px;
     box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .pf-daystrip__day:hover:not(.pf-daystrip__day--on) {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, #ffffff);
+    color: var(--text-primary);
   }
   .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #9ca3af; }
   .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #6b7280; }
@@ -104,8 +110,13 @@
      carries a plain 20px select circle, no avatar. */
   .pf-card {
     background: #fbf9fe;
-    border: none; border-radius: 12px;
+    border: 1px solid transparent; border-radius: 12px;
     box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pf-card:hover {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
   }
   .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
   .pf-card__meta { font-size: 12px; color: #6b7280; }

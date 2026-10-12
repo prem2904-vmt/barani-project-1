@@ -152,7 +152,7 @@
   flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
   padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
 }
-.pf-rv-strip__btn:hover .pf-rv-strip__expand { border-color: var(--pf-sel-border); color: var(--text-primary); }
+.pf-rv-strip__btn:hover .pf-rv-strip__expand { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
 .pf-rv-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
 .pf-rv-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
 .pf-rv-strip__label { writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }

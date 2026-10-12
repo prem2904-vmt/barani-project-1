@@ -347,6 +347,11 @@
                         <pf-date label="Collection Date" [value]="dateValue" (valueChange)="dateValue = $event; logEvent('Date picked: ' + $event)" />
                       </div>
                     }
+                    @case ('calendar') {
+                      <div class="w-full max-w-sm rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4 shadow-sm">
+                        <pf-calendar [value]="dateValue" (valueChange)="dateValue = $event; logEvent('Calendar date picked: ' + $event)" />
+                      </div>
+                    }
                     @case ('time') {
                       <div class="w-full max-w-xs">
                         <pf-time label="Collection Time" [value]="timeValue" (valueChange)="timeValue = $event; logEvent('Time picked: ' + $event)" />

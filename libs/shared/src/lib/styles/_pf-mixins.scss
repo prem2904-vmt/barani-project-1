@@ -32,7 +32,11 @@
 @mixin neutral-selected {
   background: var(--pf-sel-bg);
   border-color: var(--pf-sel-border);
-  color: var(--text-primary);
+}
+
+/// Standard application interactive border hover
+@mixin border-hover {
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
 }
 
 /// Wrap, never truncate, when there is room.

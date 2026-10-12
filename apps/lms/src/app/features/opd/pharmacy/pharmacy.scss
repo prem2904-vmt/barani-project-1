@@ -62,7 +62,7 @@
   border: 1px solid var(--pf-line); border-radius: 12px; background: var(--pf-card-bg);
   text-align: left; font: inherit; color: inherit; cursor: pointer;
 }
-.ph-row:hover { border-color: var(--pf-sel-border); }
+.ph-row:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
 .ph-row[aria-pressed='true'], .ph-row[aria-current='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
 .ph-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ph-row__name { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }

@@ -39,8 +39,8 @@ export type ToggleSize = 'sm' | 'md';
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
     }
     /* New design: ON is the flat brand violet (PF-PATTERN §4). */
-    :host-context(.design-new) button { background: var(--pf-toggle-off); border-color: transparent; }
-    :host-context(.design-new) button.on { background: var(--pf-switch-on); box-shadow: none; }
+    :host-context(.design-new) button { background: var(--pf-toggle-off, #cbd5e1); border-color: var(--pf-toggle-border, #94a3b8); }
+    :host-context(.design-new) button.on { background: var(--pf-switch-on, #7c3aed); border-color: var(--pf-switch-on, #7c3aed); box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25); }
     @media (prefers-reduced-motion: reduce) { button, .knob { transition: none; } }
 
     .knob {

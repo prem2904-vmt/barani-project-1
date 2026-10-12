@@ -174,7 +174,7 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
 
   /* ── Date: typed kit date + a full month grid that fills the card ── */
   .pf-bka-date pf-date { display: block; }
-  .pf-bka-date .pf-card__body { min-height: 0; }
+  .pf-bka-date .pf-card__body { min-height: 0; overflow-y: auto; }
   .pf-bka-cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
   .pf-bka-cal__head { flex: none; display: flex; align-items: center; gap: 4px; }
   .pf-bka-cal__title { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 14px; font-weight: 600; color: var(--text-primary); }
@@ -183,10 +183,10 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
     border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer;
     transition: background var(--pf-dur-fast) ease, color var(--pf-dur-fast) ease;
   }
-  .pf-bka-cal__nav:hover:not(:disabled) { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .pf-bka-cal__nav:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, #ffffff)); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
   .pf-bka-cal__nav:disabled { opacity: 0.35; cursor: default; }
   .pf-bka-cal__nav:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
-  .pf-bka-cal__grid { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .pf-bka-cal__grid { flex: 1 1 auto; min-height: max-content; display: flex; flex-direction: column; gap: 4px; overflow: visible; }
   .pf-bka-cal__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
   .pf-bka-cal__dow { padding: 2px 0 4px; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
   .pf-bka-cal__weeks { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: repeat(6, minmax(40px, 1fr)); gap: 4px; }
@@ -205,7 +205,7 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
     display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 4px;
     border-radius: 999px; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums;
   }
-  .pf-bka-cal__day:hover:not([aria-disabled='true']) { border-color: var(--pf-line); background: var(--pf-chip-bg); }
+  .pf-bka-cal__day:hover:not([aria-disabled='true']) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, #ffffff)); }
   .pf-bka-cal__day:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
   .pf-bka-cal__day--out { color: var(--text-muted, var(--text-tertiary)); }
   .pf-bka-cal__day--out .pf-bka-cal__n { font-weight: 400; }
@@ -238,7 +238,7 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
     font: inherit; color: var(--text-primary); cursor: pointer;
     transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
   }
-  .pf-bka-chip:hover:not([aria-disabled='true']) { border-color: var(--pf-sel-border); background: var(--pf-chip-bg); }
+  .pf-bka-chip:hover:not([aria-disabled='true']) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, #ffffff)); }
   .pf-bka-chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
   .pf-bka-chip__t { font-size: 14px; font-weight: 500; }
   .pf-bka-chip[aria-checked='true'] {

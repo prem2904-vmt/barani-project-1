@@ -156,7 +156,7 @@ a.pr-cta { display: inline-flex; }
   border-radius: var(--pf-radius, 12px); border: 1px solid var(--pf-line);
   color: var(--text-primary); text-decoration: none;
 }
-.pr-partner:hover { border-color: var(--pf-sel-border); }
+.pr-partner:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
 .pr-partner > svg { flex: none; color: var(--text-tertiary); }
 .pr-partner__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .pr-partner__name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }

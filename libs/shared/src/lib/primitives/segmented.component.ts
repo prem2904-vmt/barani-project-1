@@ -123,6 +123,8 @@ export type SegmentedDisplayMode = 'auto' | 'both' | 'text' | 'icon' | 'icon-tex
 
     .seg-item:hover:not(:disabled):not(.is-selected) {
       color: var(--text-primary, #0f172a);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+      box-shadow: inset 0 0 0 1px var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
     .seg-item:focus-visible {
       outline: 2px solid var(--color-violet-600, #7c3aed);

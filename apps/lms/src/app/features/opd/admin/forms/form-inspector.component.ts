@@ -185,7 +185,7 @@ export type InspectorMode = 'form' | 'question' | 'print' | 'try';
     .fi-lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .fi-type { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px; text-align: left; border-radius: 12px;
       border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); font: inherit; cursor: pointer; }
-    .fi-type:hover { border-color: var(--pf-sel-border); }
+    .fi-type:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .fi-type__t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; font-size: 13px; }
     .fi-type__t small { font-size: 12px; color: var(--text-tertiary); }
     .fi-type__c { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }

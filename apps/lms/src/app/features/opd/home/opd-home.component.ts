@@ -54,7 +54,7 @@ import { opdAreasFor, orderOpdAreas } from '../shared/opd-nav';
     .pf-opdh { display: grid; gap: 14px; margin-top: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
     .pf-opdh__tile { gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
       transition: border-color var(--pf-dur-fast) ease, transform 100ms ease; }
-    .pf-opdh__tile:hover { border-color: var(--pf-sel-border); }
+    .pf-opdh__tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-opdh__tile:active { transform: scale(.99); }
     .pf-opdh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .pf-opdh__tile { transition: none; } .pf-opdh__tile:active { transform: none; } }

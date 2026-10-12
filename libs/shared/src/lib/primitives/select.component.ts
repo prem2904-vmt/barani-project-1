@@ -200,7 +200,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     pf-select .pf-dd--sm .pf-dd__trigger {
       height: 34px; padding: 0 10px; font-size: 13px; border-radius: 8px; gap: 4px;
     }
-    pf-select .pf-dd__trigger:hover:not(:disabled) { border-color: var(--input-border-focus); }
+    pf-select .pf-dd__trigger:hover:not(:disabled) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     pf-select .pf-dd__trigger:focus,
     pf-select .pf-dd--open .pf-dd__trigger {
       border-color: var(--input-border-focus);

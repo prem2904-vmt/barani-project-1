@@ -74,7 +74,7 @@ interface OpdTile {
       gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
       transition: border-color var(--pf-dur-fast) ease, transform 100ms ease;
     }
-    .pf-lsh__tile:hover { border-color: var(--pf-sel-border); }
+    .pf-lsh__tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-lsh__tile:active { transform: scale(.99); }
     .pf-lsh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .pf-lsh__tile { transition: none; } .pf-lsh__tile:active { transform: none; } }

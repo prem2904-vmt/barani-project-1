@@ -76,7 +76,7 @@ export type TouchBtnVariant =
     }
     .v-secondary:hover:not(:disabled) {
       background: var(--glass-bg-hover);
-      border-color: var(--glass-border-hover);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
 
     .v-ghost {

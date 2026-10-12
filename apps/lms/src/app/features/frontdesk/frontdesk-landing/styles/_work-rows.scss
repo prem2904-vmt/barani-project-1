@@ -36,7 +36,7 @@
   grid-template-areas: 'check body status' 'check body acts';
   padding-left: 12px;
 }
-.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--pf-sel-border); box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
+.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14)); }
 .pf-wrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
 /* Selected: a subtle violet tint + a 1px violet border. No gradient. */

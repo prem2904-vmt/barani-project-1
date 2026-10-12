@@ -82,7 +82,7 @@ export type StarterPick = { kind: 'starter'; key: string } | { kind: 'copy'; for
     .fg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
     .fg-grid--types { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
     .fg-card, .fg-type, .fg-li { text-align: left; font: inherit; cursor: pointer; border-radius: 12px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); }
-    .fg-card:hover, .fg-type:hover, .fg-li:hover { border-color: var(--pf-sel-border); }
+    .fg-card:hover, .fg-type:hover, .fg-li:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .fg-card:focus-visible, .fg-type:focus-visible, .fg-li:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .fg-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
     .fg-card__h { display: flex; flex-direction: column; gap: 2px; }

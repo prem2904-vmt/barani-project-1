@@ -205,6 +205,8 @@
   --glass-bg: rgba(246, 244, 252, 0.55);
   --glass-bg-hover: rgba(248, 246, 253, 0.62);
   --glass-border: rgba(124, 58, 237, 0.15);
+  --glass-border-hover: rgba(124, 58, 237, 0.3);
+  --pf-hover-border: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
 }
 
 /* =============================================================
@@ -360,6 +362,12 @@ pf-shell main > router-outlet + * {
  * keeps scroll cheap and lets the ambient layer paint without a second
  * gradient fighting it.
  */
+:root.dark,
+:root:not(.light) {
+  --glass-border-hover: rgba(167, 139, 250, 0.45);
+  --pf-hover-border: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+}
+
 :root.dark body,
 :root:not(.light) body {
   background: var(--bg-primary);

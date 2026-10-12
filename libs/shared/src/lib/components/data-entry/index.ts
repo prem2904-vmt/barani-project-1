@@ -1,5 +1,6 @@
 export * from './image-crop.js';
 export * from './image-editor.component.js';
+export * from './pf-calendar.component.js';
 export * from './pf-date.component.js';
 export * from './pf-datetime.component.js';
 export * from './pf-time.component.js';

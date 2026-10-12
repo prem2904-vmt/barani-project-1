@@ -291,7 +291,7 @@ import { CommentThread, OrderTestComment, groupIntoThreads } from '../../models/
       font-size: 12px; font-weight: 500;
       cursor: pointer;
     }
-    .pf-ct__add:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+    .pf-ct__add:hover { color: var(--text-primary); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
 
     /* Phones (<640px): drop role pill + time from the meta line so
        author + type fit on one line without wrapping. Bigger tap
