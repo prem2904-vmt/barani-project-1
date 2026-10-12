@@ -227,9 +227,18 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     :host-context([data-theme='dark']) .pf-hb__input { color: var(--text-primary, #e5e7eb); }
     .pf-hb__input::placeholder { color: #9ca3af; }
 
-    /* Search-feeding icons: inside the field, no divider of their own. */
+    /* Search-feeding / inline quick actions: subtle divider separating from search input */
     .pf-hb__inline { display: flex; align-items: center; flex-shrink: 0; }
-    .pf-hb__inline:not(:empty) { gap: 4px; margin-right: 2px; }
+    .pf-hb__inline:not(:empty) {
+      gap: 6px;
+      margin-left: 6px;
+      padding-left: 8px;
+      border-left: 1px solid var(--pf-line, #e2e8f0);
+    }
+    :host-context(.dark) .pf-hb__inline:not(:empty),
+    :host-context([data-theme='dark']) .pf-hb__inline:not(:empty) {
+      border-left-color: var(--glass-border, rgba(255, 255, 255, 0.12));
+    }
     .pf-hb__tools { display: flex; align-items: center; flex-shrink: 0; }
     /* Tool buttons (projected): divider before the group when present. */
     .pf-hb__tools:not(:empty) { border-left: 1px solid #e5e7eb; margin-left: 4px; padding-left: 8px; gap: 6px; }

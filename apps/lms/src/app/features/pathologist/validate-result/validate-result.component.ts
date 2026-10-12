@@ -580,24 +580,25 @@ interface ValueRow {
 
     /* ── Test section ────────────────────────────────────────── */
     .pf-vt__culturelink { margin: 4px 16px 16px; width: calc(100% - 32px); cursor: pointer; }
-    .pf-vt { border-radius: 16px; border: 1px solid var(--glass-border); background: var(--glass-bg); overflow: hidden; }
-    .pf-vt[data-outcome='validated'] { border-color: rgba(168, 85, 247, 0.35); }
-    .pf-vt[data-outcome='rejected']  { border-color: rgba(239, 68, 68, 0.32); }
+    .pf-vt { border-radius: 16px; border: 1px solid var(--pf-line, var(--glass-border)); background: var(--pf-card-bg, #ffffff); box-shadow: var(--pf-shadow-sm); overflow: hidden; }
+    :root.dark .pf-vt, [data-theme='dark'] .pf-vt { background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-vt[data-outcome='validated'] { border-color: rgba(168, 85, 247, 0.45); }
+    .pf-vt[data-outcome='rejected']  { border-color: rgba(239, 68, 68, 0.4); }
     .pf-vt__hdr { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; flex-wrap: wrap; }
     .pf-vt__id { min-width: 0; }
     .pf-vt__name { margin: 0; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
-    .pf-vt__meta { margin: 3px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .pf-flagtag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 9999px; font-size: 10px; font-weight: 700; border: 1px solid transparent; }
-    .pf-flagtag[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--glass-border); }
-    .pf-flagtag[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
-    .pf-flagtag[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
+    .pf-vt__meta { margin: 3px 0 0; font-size: 11.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pf-flagtag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid transparent; font-family: inherit; font-variant-numeric: tabular-nums; }
+    .pf-flagtag[data-flag='normal']   { color: var(--text-secondary); background: var(--pf-chip-bg, #f3f4f6); border-color: var(--pf-line, #e2e8f0); }
+    .pf-flagtag[data-flag='abnormal'] { color: #d97706; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.28); }
+    .pf-flagtag[data-flag='critical'] { color: #dc2626; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.32); }
     :root.dark .pf-flagtag[data-flag='abnormal'] { color: #fbbf24; }
     :root.dark .pf-flagtag[data-flag='critical'] { color: #fca5a5; }
 
-    .pf-vt__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-family: 'JetBrains Mono', ui-monospace, monospace; border: 1px solid transparent; }
+    .pf-vt__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-family: inherit; font-variant-numeric: tabular-nums; border: 1px solid transparent; }
     .pf-vt__badge[data-outcome='validated']  { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.35); background: rgba(168, 85, 247, 0.08); }
     .pf-vt__badge[data-outcome='rejected']   { color: #dc2626; border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); }
-    .pf-vt__badge[data-outcome='validating'] { color: var(--text-tertiary); border-color: var(--glass-border); }
+    .pf-vt__badge[data-outcome='validating'] { color: var(--text-tertiary); border-color: var(--pf-line, var(--glass-border)); }
     :root.dark .pf-vt__badge[data-outcome='rejected']  { color: #fca5a5; }
 
     .pf-vt__act { height: 30px; padding: 0 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: transparent; transition: background .15s, color .15s, border-color .15s; }
@@ -605,7 +606,7 @@ interface ValueRow {
     .pf-vt__act--approve { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.45); }
     .pf-vt__act--reject  { color: var(--text-tertiary); }
     @media (hover: hover) {
-      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(168, 85, 247, 0.14); }
+      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(168, 85, 247, 0.14); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35)); }
       .pf-vt__act--reject:hover:not(:disabled)  { background: rgba(239, 68, 68, 0.1); color: var(--red-text, #f87171); }
     }
 
@@ -630,20 +631,21 @@ interface ValueRow {
       grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(110px, 1.1fr) minmax(0, 1fr) 96px 36px;
       gap: 12px; align-items: center; padding: 10px 16px;
     }
-    .pf-plist__head { padding: 9px 16px; background: rgba(0, 0, 0, 0.1); border-bottom: 1px solid var(--border-muted); }
-    .pf-plist__head > span { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
-    .pf-prow + .pf-prow { border-top: 1px solid var(--border-muted); }
+    .pf-plist__head { padding: 9px 16px; background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg, #ffffff)); border-bottom: 1px solid var(--pf-line, var(--border-muted)); }
+    :root.dark .pf-plist__head, [data-theme='dark'] .pf-plist__head { background: rgba(255, 255, 255, 0.04); border-bottom-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-plist__head > span { font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+    .pf-prow + .pf-prow { border-top: 1px solid var(--pf-line, var(--border-muted)); }
     .pf-prow__row { cursor: pointer; transition: background .15s; color: var(--text-primary); font-size: 13px; }
     .pf-prow__row--static { cursor: default; }
     .pf-prow__row:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.6); outline-offset: -2px; border-radius: 8px; }
-    @media (hover: hover) { .pf-prow__row:not(.pf-prow__row--static):hover { background: var(--glass-bg-hover); } }
+    @media (hover: hover) { .pf-prow__row:not(.pf-prow__row--static):hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); } }
     .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
     .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
     .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
     .pf-prow__val--bold { font-weight: 800; }
     .pf-prow__boldmark { display: inline-flex; align-items: center; justify-content: center; align-self: center; width: 18px; height: 18px; border-radius: 5px;
       color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent); }
-    .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+    .pf-prow__ref { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
     .pf-prow__dash { color: var(--text-muted); }
     .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
       font-variant-numeric: tabular-nums; background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
@@ -655,20 +657,20 @@ interface ValueRow {
     .pf-prow__cbtn--live { color: var(--violet-text, #c4b5fd); }
     .pf-prow__cbtn--live::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 9999px; background: #a855f7; }
 
-    .pf-prow__thread { padding: 12px 16px 14px 32px; background: rgba(96, 165, 250, 0.04); border-top: 1px solid var(--glass-border); }
+    .pf-prow__thread { padding: 12px 16px 14px 32px; background: rgba(96, 165, 250, 0.04); border-top: 1px solid var(--pf-line, var(--glass-border)); }
 
     .pf-plist__more { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;
-      border: none; border-top: 1px solid var(--border-muted); background: transparent; color: var(--text-tertiary);
+      border: none; border-top: 1px solid var(--pf-line, var(--border-muted)); background: transparent; color: var(--text-tertiary);
       font-size: 12px; font-weight: 600; cursor: pointer; transition: color .15s, background .15s; }
-    @media (hover: hover) { .pf-plist__more:hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
+    @media (hover: hover) { .pf-plist__more:hover { color: var(--text-primary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); } }
 
     /* ── Flag chips (shared with drawer) ─────────────────────── */
-    .pf-vcard__chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700;
+    .pf-vcard__chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; font-size: 11px;
+      font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700;
       background: transparent; border: 1px solid transparent; }
-    .pf-vcard__chip--lg { font-size: 11px; padding: 5px 12px; }
+    .pf-vcard__chip--lg { font-size: 11.5px; padding: 5px 12px; }
     .pf-vcard__chip-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
-    .pf-vcard__chip[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--glass-border); }
+    .pf-vcard__chip[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--pf-line, var(--glass-border)); }
     .pf-vcard__chip[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
     .pf-vcard__chip[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
     :root.dark .pf-vcard__chip[data-flag='abnormal'] { color: #fbbf24; }
@@ -693,29 +695,30 @@ interface ValueRow {
     .pf-rangebar--lg .pf-rangebar__pin   { width: 20px; height: 20px; top: 16px; }
     .pf-rangebar--lg .pf-rangebar__pin::before { border-width: 3px; }
     .pf-rangebar__labels { position: relative; margin-top: 10px; height: 14px; }
-    .pf-rangebar__tick { position: absolute; transform: translateX(-50%); font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
+    .pf-rangebar__tick { position: absolute; transform: translateX(-50%); font-size: 10.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
     /* ── Context rail ────────────────────────────────────────── */
-    .pf-rail-card { padding: 13px 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-rail-lbl { display: block; margin: 0 0 8px; font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+    .pf-rail-card { padding: 13px 14px; border-radius: 14px; background: var(--pf-card-bg, #ffffff); border: 1px solid var(--pf-line, #e2e8f0); box-shadow: var(--pf-shadow-sm); }
+    :root.dark .pf-rail-card, [data-theme='dark'] .pf-rail-card { background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-rail-lbl { display: block; margin: 0 0 8px; font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
     .pf-railpat { display: flex; align-items: center; gap: 12px; }
     .pf-railpat__id { min-width: 0; flex: 1; }
     .pf-railpat__name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-railpat__meta { margin: 2px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); }
+    .pf-railpat__meta { margin: 2px 0 0; font-size: 11.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
     .pf-railpat__entered { margin: 10px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
 
     .pf-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .pf-checklist__item { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px;
       padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer;
       text-align: left; color: var(--text-secondary); font-size: 13px; transition: background .15s, border-color .15s, color .15s; }
-    @media (hover: hover) { .pf-checklist__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); } }
+    @media (hover: hover) { .pf-checklist__item:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); color: var(--text-primary); } }
     .pf-checklist__item--focus { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.07); color: var(--text-primary); }
     .pf-checklist__ic { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
     .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: var(--violet-text, #c4b5fd); }
     .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #dc2626; }
     :root.dark .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #fca5a5; }
     .pf-checklist__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-    .pf-checklist__hint { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
+    .pf-checklist__hint { font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
     .pf-comment__input { width: 100%; min-height: 76px; padding: 10px 12px; border-radius: 10px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 13px; outline: none; resize: vertical; font-family: inherit; }
@@ -729,8 +732,11 @@ interface ValueRow {
     .pf-stickybar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 0 16px; pointer-events: none; }
     @include dt.desktop-only { .pf-stickybar { bottom: 1rem; } }
     .pf-stickybar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
-      background: var(--bg-card-solid); border: 1px solid var(--glass-border); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      background: var(--pf-card-bg, #ffffff); border: 1px solid var(--pf-line, #e2e8f0); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
       backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
+    :root.dark .pf-stickybar__inner, [data-theme='dark'] .pf-stickybar__inner {
+      background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
     @media (max-width: 640px) { .pf-stickybar__inner { flex-wrap: wrap; } }
     .pf-stickybar__meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
     .pf-stickybar__dot { width: 7px; height: 7px; border-radius: 9999px; }

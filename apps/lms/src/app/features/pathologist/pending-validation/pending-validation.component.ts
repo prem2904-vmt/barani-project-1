@@ -83,29 +83,31 @@ type Tab = 'mine' | 'all';
          URGENT / HIGH / ON TIME groups) + the SCOPE side card (the consultant's
          departments, today's numbers, the ONE primary: Review next). Phones:
          the side card is a sheet; its summary + primary ride the bottom bar. -->
-    <section class="pv-nd">
-      <pf-hero-band
-        placeholder="Search patient · MRN · sample ID · test…"
-        [value]="query()"
-        (valueChange)="query.set($event)">
-        <ng-container band-tools>
-          <pf-segmented class="pv-seg" [options]="ndTabs()" [value]="tab()" (valueChange)="setTab($any($event))" />
-        </ng-container>
-        <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
-                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
-                  aria-label="Refresh" title="Refresh">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
-            </svg>
-            <span class="pv-refresh__t">Refresh</span>
-          </button>
-        </ng-container>
-      </pf-hero-band>
+    <section class="pf-page pv-page">
+      <header class="pf-page__header px-4 md:px-8 lg:px-10">
+        <pf-hero-band
+          placeholder="Search patient · MRN · sample ID · test…"
+          [value]="query()"
+          (valueChange)="query.set($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pv-seg" [options]="ndTabs()" [value]="tab()" (valueChange)="setTab($any($event))" />
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
+                    [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
+                    aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              <span class="pv-refresh__t">Refresh</span>
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      </header>
 
-      <div class="pf-body pf-body--split pv-body">
+      <div class="pf-page__body pf-body pf-body--split pv-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
         <!-- ── Main card: the queue ── -->
         <section class="pf-card pv-queue" aria-label="Pending validation">
           <header class="pf-card__head pv-queue__head">
@@ -420,7 +422,7 @@ type Tab = 'mine' | 'all';
 
     .pv-grp-count {
       font-size: 10.5px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-family: inherit; font-variant-numeric: tabular-nums;
       letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.14);
@@ -528,14 +530,13 @@ type Tab = 'mine' | 'all';
        Band + QUEUE card + SCOPE side card. No page scroll: only the card
        bodies scroll. Kit classes carry the look; the rules below place
        them and draw the tube tile (lab work lists: sample ID primary). */
-    .pv-nd {
+    .pv-page {
       height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
     }
-    .pv-nd .pv-body { padding: 16px 0 16px; gap: 16px; }
+    .pv-body { gap: 16px; }
     /* Tablet: the side card stays, narrower. */
     @media (min-width: 641px) and (max-width: 1023px) {
-      .pv-nd .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
-      .pv-nd { padding: 20px 20px 0; }
+      .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
     }
 
     /* Band filter: neutral segmented, plain tabular counts. */
@@ -629,8 +630,7 @@ type Tab = 'mine' | 'all';
     /* Phones: one column; the side card becomes a sheet (above the navbar),
        its summary + primary ride the bottom bar. */
     @media (max-width: 640px) {
-      .pv-nd { padding: 12px 16px 0; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
-      .pv-nd .pv-body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+      .pv-body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
       .pv-side:not(.pv-side--open) { display: none; }
       .pv-side.pf-sheet { border-radius: 20px 20px 0 0; }
       .pv-refresh__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
