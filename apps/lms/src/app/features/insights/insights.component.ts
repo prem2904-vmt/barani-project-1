@@ -11,7 +11,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ANALYTICS_PERMS, FINANCIAL_ANALYTICS_PERMS, PATIENT_DATA_EXPORT_PERMS } from '../../core/auth/route-access';
 import { ThemeService } from '../../core/services/theme.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, PfSelectOption } from '../../shared/primitives/select.component';
 import { SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
@@ -78,7 +78,7 @@ function writeStore(key: string, value: unknown): void {
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, NdDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent],
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.scss',

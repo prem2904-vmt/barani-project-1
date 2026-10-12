@@ -5,7 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { TatBoardComponent } from './tat-board.component';
 
 /**
- * TAT board — LOADING FEEDBACK (ND-PATTERN "Loading feedback"): the first
+ * TAT board — LOADING FEEDBACK (PF-PATTERN "Loading feedback"): the first
  * load draws the board's rows as a skeleton (never "No active tests right
  * now" before the answer), and the band's Refresh is busy while the board
  * reloads. The silent 30s poll never touches the button.

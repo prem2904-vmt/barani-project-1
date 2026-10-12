@@ -416,9 +416,9 @@ function deptTube(s: OrderSample): TubeSpec {
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.04em;
-      background: var(--nd-chip-bg, rgba(100, 116, 139, 0.12));
+      background: var(--pf-chip-bg, rgba(100, 116, 139, 0.12));
       color: var(--text-secondary);
-      border: 1px solid var(--nd-line, var(--border-primary));
+      border: 1px solid var(--pf-line, var(--border-primary));
       white-space: nowrap;
     }
 

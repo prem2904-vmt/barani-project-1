@@ -18,23 +18,23 @@ import { ThemeService } from '../../../core/services/theme.service';
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
-          <div band-search class="nd-ctx">
-            <span class="nd-ctx__primary">{{ title() }}</span>
-            <span class="nd-ctx__chip"><span class="nd-ctx__k">OPD</span>Being built</span>
+          <div band-search class="pf-ctx">
+            <span class="pf-ctx__primary">{{ title() }}</span>
+            <span class="pf-ctx__chip"><span class="pf-ctx__k">OPD</span>Being built</span>
           </div>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="OPD" [title]="title()" [subtitle]="subtitle()"></pf-screen-header>
       <div class="pf-band-body">
-        <div class="pf-opd-stub nd-card">
+        <div class="pf-opd-stub pf-card">
           <h2 class="pf-opd-stub__t">{{ title() }}</h2>
           <p class="pf-opd-stub__s">{{ subtitle() }}</p>
           @if (plan().length) {
             <div class="pf-opd-stub__plan">
               @for (p of plan(); track p) {
-                <div class="nd-row pf-opd-stub__row">
+                <div class="pf-row pf-opd-stub__row">
                   <span class="pf-opd-stub__dot" aria-hidden="true"></span>
-                  <span class="nd-row__name">{{ p }}</span>
+                  <span class="pf-row__name">{{ p }}</span>
                 </div>
               }
             </div>
@@ -49,7 +49,7 @@ import { ThemeService } from '../../../core/services/theme.service';
     .pf-opd-stub__s { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
     .pf-opd-stub__plan { margin-top: 10px; display: grid; gap: 8px; }
     .pf-opd-stub__row { min-height: 44px; }
-    .pf-opd-stub__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--nd-sel-border); flex-shrink: 0; }
+    .pf-opd-stub__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pf-sel-border); flex-shrink: 0; }
   `],
 })
 export class OpdStubPageComponent {

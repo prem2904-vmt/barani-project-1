@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { NdDateComponent } from '../../../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../../../shared/components/pf-date/pf-date.component';
 import { PfSelectOption, SelectComponent } from '../../../../../shared/primitives/select.component';
 import { AuthedMediaDirective } from '../../../shared/authed-media.directive';
 import {
@@ -42,7 +42,7 @@ const SHAPES: Record<string, string[]> = {
 @Component({
   selector: 'pf-opd-form-renderer',
   standalone: true,
-  imports: [NgTemplateOutlet, NdDateComponent, SelectComponent, AuthedMediaDirective],
+  imports: [NgTemplateOutlet, PfDateComponent, SelectComponent, AuthedMediaDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (mode() === 'print') {
@@ -57,7 +57,7 @@ const SHAPES: Record<string, string[]> = {
                     <table class="ofr-pt__t">
                       <tr><th>{{ r.table.unit || '' }}</th>@for (c of r.table.cols; track $index) { <th>{{ c }}</th> }</tr>
                       @for (row of r.table.rows; track $index; let ri = $index) {
-                        <tr><th>{{ row }}</th>@for (c of r.table.cols; track $index; let ci = $index) { <td class="nd-num">{{ r.table.cells[ri][ci] || '—' }}</td> }</tr>
+                        <tr><th>{{ row }}</th>@for (c of r.table.cols; track $index; let ci = $index) { <td class="pf-num">{{ r.table.cells[ri][ci] || '—' }}</td> }</tr>
                       }
                     </table>
                   } @else if (r.sides) {
@@ -144,26 +144,26 @@ const SHAPES: Record<string, string[]> = {
     <ng-template #ctl let-q="q" let-v="v" let-side="side">
       @switch (q.type) {
         @case ('short') {
-          <input class="nd-input" [value]="v ?? ''" placeholder="Type here" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
+          <input class="pf-input" [value]="v ?? ''" placeholder="Type here" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
                  [attr.aria-label]="aria(q, side)" (input)="set(q, side, $any($event.target).value)">
         }
         @case ('long') {
-          <textarea class="nd-input ofr-ta" rows="3" placeholder="Type here" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
+          <textarea class="pf-input ofr-ta" rows="3" placeholder="Type here" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
                     [attr.aria-label]="aria(q, side)" [value]="v ?? ''" (input)="set(q, side, $any($event.target).value)"></textarea>
         }
         @case ('num') {
-          <span class="ofr-unit"><input class="nd-input nd-num" inputmode="decimal" [value]="v ?? ''" placeholder="—" [readOnly]="!live()"
+          <span class="ofr-unit"><input class="pf-input pf-num" inputmode="decimal" [value]="v ?? ''" placeholder="—" [readOnly]="!live()"
                  [attr.tabindex]="design() ? -1 : null" [attr.aria-label]="aria(q, side)" (input)="set(q, side, $any($event.target).value)">
             @if (q.unit) { <span class="ofr-unit__u">{{ q.unit }}</span> }</span>
         }
         @case ('date') {
-          @if (live()) { <pf-nd-date [value]="v ?? null" [label]="aria(q, side)" (valueChange)="set(q, side, $event)"></pf-nd-date> }
-          @else { <span class="nd-input ofr-static nd-num">{{ v ? dateText(v) : 'Pick a date' }}</span> }
+          @if (live()) { <pf-date [value]="v ?? null" [label]="aria(q, side)" (valueChange)="set(q, side, $event)"></pf-date> }
+          @else { <span class="pf-input ofr-static pf-num">{{ v ? dateText(v) : 'Pick a date' }}</span> }
         }
         @case ('yn') {
-          <span class="nd-seg ofr-seg" role="group" [attr.aria-label]="aria(q, side)">
+          <span class="pf-seg ofr-seg" role="group" [attr.aria-label]="aria(q, side)">
             @for (o of yn; track o) {
-              <button type="button" class="nd-seg__item" [attr.aria-pressed]="v === o" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
+              <button type="button" class="pf-seg__item" [attr.aria-pressed]="v === o" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
                       (click)="live() && set(q, side, v === o ? null : o)">{{ o }}</button>
             }
           </span>
@@ -172,11 +172,11 @@ const SHAPES: Record<string, string[]> = {
           @if ((q.choices?.length ?? 0) > 5) {
             @if (live()) {
               <pf-select [options]="opts(q)" [value]="v ?? ''" [searchable]="(q.choices?.length ?? 0) > 8" placeholder="Choose…" (valueChange)="set(q, side, $event || null)"></pf-select>
-            } @else { <span class="nd-input ofr-static">{{ v || 'Choose…' }}</span> }
+            } @else { <span class="pf-input ofr-static">{{ v || 'Choose…' }}</span> }
           } @else {
             <span class="ofr-chips" role="group" [attr.aria-label]="aria(q, side)">
               @for (o of q.choices ?? []; track o) {
-                <button type="button" class="nd-chip ofr-chip" [attr.aria-pressed]="v === o" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
+                <button type="button" class="pf-chip ofr-chip" [attr.aria-pressed]="v === o" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
                         (click)="live() && set(q, side, v === o ? null : o)">{{ o }}</button>
               }
             </span>
@@ -185,7 +185,7 @@ const SHAPES: Record<string, string[]> = {
         @case ('many') {
           <span class="ofr-chips" role="group" [attr.aria-label]="aria(q, side)">
             @for (o of q.choices ?? []; track o) {
-              <button type="button" class="nd-chip ofr-chip" [attr.aria-pressed]="has(v, o)" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
+              <button type="button" class="pf-chip ofr-chip" [attr.aria-pressed]="has(v, o)" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
                       (click)="live() && set(q, side, toggle(v, o))">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   @if (has(v, o)) { <path d="M20 6 9 17l-5-5"/> } @else { <path d="M12 5v14M5 12h14"/> }
@@ -196,7 +196,7 @@ const SHAPES: Record<string, string[]> = {
         @case ('scale') {
           <span class="ofr-scale" role="group" [attr.aria-label]="aria(q, side)">
             @for (k of steps(q); track k) {
-              <button type="button" class="nd-num" [attr.aria-pressed]="v === k" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
+              <button type="button" class="pf-num" [attr.aria-pressed]="v === k" [disabled]="!live() && !design()" [attr.tabindex]="design() ? -1 : null"
                       (click)="live() && set(q, side, v === k ? null : k)">{{ k }}</button>
             }
           </span>
@@ -235,9 +235,9 @@ const SHAPES: Record<string, string[]> = {
             </svg>
             <span class="ofr-dia__k">
               @for (p of marksOf(v); track $index) {
-                <span class="ofr-dia__row"><b class="nd-num">{{ $index + 1 }}</b>
+                <span class="ofr-dia__row"><b class="pf-num">{{ $index + 1 }}</b>
                   @if (live()) {
-                    <input class="nd-input ofr-dia__in" [value]="p.note" placeholder="What is here?" [attr.aria-label]="'Note for mark ' + ($index + 1)"
+                    <input class="pf-input ofr-dia__in" [value]="p.note" placeholder="What is here?" [attr.aria-label]="'Note for mark ' + ($index + 1)"
                            (input)="set(q, side, noteAt(v, $index, $any($event.target).value))">
                     <button type="button" class="ofr-shot__x" (click)="set(q, side, removeAt(v, $index))" [attr.aria-label]="'Remove mark ' + ($index + 1)">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -250,12 +250,12 @@ const SHAPES: Record<string, string[]> = {
         }
         @case ('table') {
           <span class="ofr-tab"><table>
-            <thead><tr><th>{{ q.unit || '' }}</th>@for (c of q.cols ?? []; track $index) { <th class="nd-num">{{ c }}</th> }</tr></thead>
+            <thead><tr><th>{{ q.unit || '' }}</th>@for (c of q.cols ?? []; track $index) { <th class="pf-num">{{ c }}</th> }</tr></thead>
             <tbody>
               @for (r of q.rows ?? []; track $index; let ri = $index) {
                 <tr><th>{{ r }}</th>
                   @for (c of q.cols ?? []; track $index; let ci = $index) {
-                    <td><input class="ofr-tab__in nd-num" [value]="cell(v, ri, ci)" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
+                    <td><input class="ofr-tab__in pf-num" [value]="cell(v, ri, ci)" [readOnly]="!live()" [attr.tabindex]="design() ? -1 : null"
                                [attr.aria-label]="r + ' ' + c" (input)="set(q, side, setCell(q, v, ri, ci, $any($event.target).value))"></td>
                   }
                 </tr>
@@ -264,7 +264,7 @@ const SHAPES: Record<string, string[]> = {
           </table></span>
         }
         @case ('calc') {
-          <span class="nd-input ofr-static nd-num ofr-calc" [attr.aria-label]="aria(q, side) + ', calculated'">{{ calcValue(q) || '—' }}</span>
+          <span class="pf-input ofr-static pf-num ofr-calc" [attr.aria-label]="aria(q, side) + ', calculated'">{{ calcValue(q) || '—' }}</span>
         }
       }
     </ng-template>
@@ -276,61 +276,61 @@ const SHAPES: Record<string, string[]> = {
     @media (max-width: 720px) { .ofr { grid-template-columns: minmax(0, 1fr); } }
     .ofr-sec-head { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 4px 2px 0; margin: 0; border: 0; background: transparent; cursor: pointer;
       font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
-    .ofr-sec-head:not(:first-child) { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--nd-line); }
+    .ofr-sec-head:not(:first-child) { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--pf-line); }
     .ofr-sec-head:hover { color: var(--text-secondary); }
-    .ofr-sec-head__c { flex: none; transition: transform var(--nd-dur-fast, 120ms) ease; }
+    .ofr-sec-head__c { flex: none; transition: transform var(--pf-dur-fast, 120ms) ease; }
     .ofr-sec-head[aria-expanded='true'] .ofr-sec-head__c { transform: rotate(90deg); }
     @media (prefers-reduced-motion: reduce) { .ofr-sec-head__c { transition: none; } }
-    .ofr-q { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--nd-radius, 12px); border: 1px solid transparent; }
+    .ofr-q { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--pf-radius, 12px); border: 1px solid transparent; }
     .ofr-q--wide { grid-column: 1 / -1; }
-    .ofr--design .ofr-q { cursor: pointer; transition: border-color var(--nd-dur-fast, 120ms) ease, background var(--nd-dur-fast, 120ms) ease; }
-    .ofr--design .ofr-q:hover { border-color: var(--nd-line); background: color-mix(in srgb, var(--text-primary) 2%, transparent); }
+    .ofr--design .ofr-q { cursor: pointer; transition: border-color var(--pf-dur-fast, 120ms) ease, background var(--pf-dur-fast, 120ms) ease; }
+    .ofr--design .ofr-q:hover { border-color: var(--pf-line); background: color-mix(in srgb, var(--text-primary) 2%, transparent); }
     .ofr--design .ofr-q:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .ofr-q.is-sel { border-color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 5%, transparent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .ofr-q.is-cond { opacity: .62; }
-    .ofr-q.is-addon { border-style: dashed; border-color: var(--nd-line); }
+    .ofr-q.is-addon { border-style: dashed; border-color: var(--pf-line); }
     .ofr-q__lbl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
     .ofr-q__q { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
-    .ofr-last { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 999px; border: 1px dashed var(--nd-line); background: none; font: inherit; font-size: 11.5px;
+    .ofr-last { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 999px; border: 1px dashed var(--pf-line); background: none; font: inherit; font-size: 11.5px;
       color: var(--text-tertiary); white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; }
-    .ofr-last:hover:not(:disabled) { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--nd-line)); }
+    .ofr-last:hover:not(:disabled) { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--pf-line)); }
     .ofr-last:disabled { cursor: default; }
     .ofr-q__req { color: var(--red-text, #dc2626); margin-left: 2px; }
     .ofr-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
-      color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
+      color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     .ofr-tag--off { color: var(--text-tertiary); }
     .ofr-q__body { min-width: 0; }
     .ofr-lr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .ofr--phone .ofr-lr { grid-template-columns: minmax(0, 1fr); }
     @media (max-width: 720px) { .ofr-lr { grid-template-columns: minmax(0, 1fr); } }
-    .ofr-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--nd-radius-sm, 10px); background: color-mix(in srgb, var(--text-primary) 3%, transparent); border: 1px solid var(--nd-line); }
+    .ofr-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--pf-radius-sm, 10px); background: color-mix(in srgb, var(--text-primary) 3%, transparent); border: 1px solid var(--pf-line); }
     .ofr-side__k { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--violet-text, #6d28d9); }
     .ofr-ta { resize: vertical; min-height: 72px; font: inherit; }
     .ofr-static { display: flex; align-items: center; color: var(--text-secondary); }
     .ofr-unit { display: flex; align-items: center; gap: 8px; max-width: 220px; }
     .ofr-unit__u { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
     .ofr-seg { flex-wrap: wrap; }
-    .ofr-seg .nd-seg__item { height: 36px; }
+    .ofr-seg .pf-seg__item { height: 36px; }
     .ofr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .ofr-chip { height: 36px; padding: 0 12px; font-size: 12.5px; }
-    .ofr-chip[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); font-weight: 600; }
-    .ofr-chip:disabled, .ofr-seg .nd-seg__item:disabled, .ofr-scale button:disabled { cursor: default; opacity: 1; }
-    .ofr--design .ofr-chip, .ofr--design .nd-seg__item, .ofr--design .ofr-scale button { pointer-events: none; }
+    .ofr-chip[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); color: var(--text-primary); font-weight: 600; }
+    .ofr-chip:disabled, .ofr-seg .pf-seg__item:disabled, .ofr-scale button:disabled { cursor: default; opacity: 1; }
+    .ofr--design .ofr-chip, .ofr--design .pf-seg__item, .ofr--design .ofr-scale button { pointer-events: none; }
     .ofr-scale { display: flex; flex-wrap: wrap; gap: 6px; }
-    .ofr-scale button { min-width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
-    .ofr-scale button[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); font-weight: 700; }
+    .ofr-scale button { min-width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
+    .ofr-scale button[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); font-weight: 700; }
     .ofr-media { display: flex; flex-wrap: wrap; gap: 8px; }
     .ofr-shot { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 112px; height: 84px;
-      border-radius: 10px; border: 1px solid var(--nd-line); background: color-mix(in srgb, var(--text-primary) 5%, var(--nd-card-bg)); overflow: hidden; font-size: 11px; color: var(--text-secondary); }
+      border-radius: 10px; border: 1px solid var(--pf-line); background: color-mix(in srgb, var(--text-primary) 5%, var(--pf-card-bg)); overflow: hidden; font-size: 11px; color: var(--text-secondary); }
     .ofr-shot img, .ofr-shot video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .ofr-shot__n { position: relative; padding: 0 6px; text-align: center; }
     .ofr-shot--add { border-style: dashed; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--violet-text, #6d28d9); }
-    .ofr-shot__x { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-tertiary); cursor: pointer; flex: none; }
+    .ofr-shot__x { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-tertiary); cursor: pointer; flex: none; }
     .ofr-shot .ofr-shot__x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; }
     .ofr-dia { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-    .ofr-dia__svg { width: 150px; height: 150px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--text-primary) 3%, transparent); border: 1px solid var(--nd-line); }
+    .ofr-dia__svg { width: 150px; height: 150px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--text-primary) 3%, transparent); border: 1px solid var(--pf-line); }
     .ofr-dia__svg.is-live { cursor: crosshair; }
     .ofr-dia__o { fill: none; stroke: var(--text-tertiary); stroke-width: 1.4; }
     .ofr-dia__m circle { fill: var(--color-violet-600, #7c3aed); }
@@ -344,28 +344,28 @@ const SHAPES: Record<string, string[]> = {
     .ofr-tab th { padding: 4px 8px; font-weight: 600; color: var(--text-secondary); text-align: center; white-space: nowrap; }
     .ofr-tab tbody th { text-align: left; }
     .ofr-tab td { padding: 2px; }
-    .ofr-tab__in { width: 56px; height: 36px; text-align: center; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; }
+    .ofr-tab__in { width: 56px; height: 36px; text-align: center; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; }
     .ofr-muted { font-size: 12.5px; color: var(--text-tertiary); }
     .ofr-ins { position: absolute; left: 50%; top: -10px; transform: translateX(-50%); display: none; align-items: center; justify-content: center; width: 22px; height: 22px;
-      border-radius: 999px; border: 1px solid var(--nd-sel-border); background: var(--nd-card-bg); color: var(--violet-text, #6d28d9); cursor: pointer; z-index: 2; }
+      border-radius: 999px; border: 1px solid var(--pf-sel-border); background: var(--pf-card-bg); color: var(--violet-text, #6d28d9); cursor: pointer; z-index: 2; }
     .ofr--design .ofr-q:hover .ofr-ins, .ofr--design .ofr-q.is-sel .ofr-ins { display: inline-flex; }
     .ofr-bar { position: absolute; right: 8px; top: -18px; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 10px; z-index: 3;
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 6px 18px rgba(15, 23, 42, .12); }
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 6px 18px rgba(15, 23, 42, .12); }
     .ofr-bar button { display: inline-flex; align-items: center; gap: 4px; height: 30px; min-width: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
-    .ofr-bar button:hover:not(:disabled) { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .ofr-bar button:hover:not(:disabled) { background: var(--pf-chip-bg); color: var(--text-primary); }
     .ofr-bar button:disabled { opacity: .4; cursor: default; }
     .ofr-bar__req[aria-pressed='true'] { color: var(--violet-text, #6d28d9); font-weight: 600; }
     .ofr-bar__del:hover { color: var(--red-text, #dc2626) !important; }
-    .ofr-bar__sep { width: 1px; height: 18px; background: var(--nd-line); }
+    .ofr-bar__sep { width: 1px; height: 18px; background: var(--pf-line); }
     /* Print */
     .ofr-pt { width: 100%; border-collapse: collapse; font-size: 12px; }
     .ofr-pt > tr > th, .ofr-pt > tbody > tr > th { width: 34%; padding: 5px 10px 5px 0; text-align: left; font-weight: 600; color: var(--text-secondary); vertical-align: top; }
-    .ofr-pt > tr > td, .ofr-pt > tbody > tr > td { padding: 5px 0; color: var(--text-primary); border-bottom: 1px solid var(--nd-line); }
+    .ofr-pt > tr > td, .ofr-pt > tbody > tr > td { padding: 5px 0; color: var(--text-primary); border-bottom: 1px solid var(--pf-line); }
     .ofr-pt__t { border-collapse: collapse; font-size: 11px; }
-    .ofr-pt__t th, .ofr-pt__t td { padding: 2px 6px; border: 1px solid var(--nd-line); text-align: center; }
+    .ofr-pt__t th, .ofr-pt__t td { padding: 2px 6px; border: 1px solid var(--pf-line); text-align: center; }
     .ofr-pt__blank { display: inline-block; width: 140px; border-bottom: 1px dotted var(--text-tertiary); }
     .ofr-pt__none { margin: 0; font-size: 12px; color: var(--text-tertiary); }
-    @media (max-width: 640px) { .nd-input, .ofr-tab__in { font-size: 16px; } }
+    @media (max-width: 640px) { .pf-input, .ofr-tab__in { font-size: 16px; } }
     @media (prefers-reduced-motion: reduce) { .ofr-q { transition: none !important; } }
   `],
 })

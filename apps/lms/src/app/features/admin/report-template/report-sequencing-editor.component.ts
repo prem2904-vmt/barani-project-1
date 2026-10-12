@@ -45,7 +45,7 @@ type OverrideMode = 'inherit' | DeptSequenceMode;
         @if (deptMode() === 'custom') {
           <div class="pf-seq__listhead">
             <span class="pf-seq__hint">Drag, or use the arrows. Alt + ↑ / ↓ moves the focused row. Departments added later print at the end.</span>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-seq__reset press" (click)="setDeptMode('default')">Reset to default</button>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-seq__reset press" (click)="setDeptMode('default')">Reset to default</button>
           </div>
           <ul class="pf-seq__list" cdkDropList (cdkDropListDropped)="dropDept($event)" aria-label="Department print order" data-list="dept">
             @for (d of deptList(); track d.id; let i = $index; let first = $first; let last = $last) {
@@ -98,7 +98,7 @@ type OverrideMode = 'inherit' | DeptSequenceMode;
           } @else {
             <div class="pf-seq__listhead">
               <span class="pf-seq__hint">{{ focusItems().length }} {{ focusItems().length === 1 ? 'item' : 'items' }} · tests added later print after this list.</span>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-seq__reset press" (click)="resetItems()">Reset list</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-seq__reset press" (click)="resetItems()">Reset list</button>
             </div>
             @if (focusItems().length === 0) {
               <p class="pf-seq__empty">No active tests or profiles in this department yet.</p>

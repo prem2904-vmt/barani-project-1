@@ -42,27 +42,27 @@ describe('webPointerSignal', () => {
 
 @Component({
   standalone: true,
-  template: `<button class="nd-rowact" [class.nd-rowact--icon]="!web()" aria-label="Delegate 26124">
-    <svg></svg><span class="nd-rowact__t">Delegate</span></button>`,
+  template: `<button class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="Delegate 26124">
+    <svg></svg><span class="pf-rowact__t">Delegate</span></button>`,
 })
 class RowActHost { readonly web = webPointerSignal(); }
 
-describe('nd-rowact pattern (row actions: text on web, icon on touch)', () => {
+describe('pf-rowact pattern (row actions: text on web, icon on touch)', () => {
   it('web renders the text button (no icon modifier)', () => {
     stub(true);
     const f = TestBed.createComponent(RowActHost);
     f.detectChanges();
-    const b = f.nativeElement.querySelector('button.nd-rowact') as HTMLElement;
-    expect(b.classList.contains('nd-rowact--icon')).toBe(false);
-    expect(b.querySelector('.nd-rowact__t')?.textContent).toBe('Delegate');
+    const b = f.nativeElement.querySelector('button.pf-rowact') as HTMLElement;
+    expect(b.classList.contains('pf-rowact--icon')).toBe(false);
+    expect(b.querySelector('.pf-rowact__t')?.textContent).toBe('Delegate');
   });
 
   it('touch renders the icon button, still labelled for AT', () => {
     stub(false);
     const f = TestBed.createComponent(RowActHost);
     f.detectChanges();
-    const b = f.nativeElement.querySelector('button.nd-rowact') as HTMLElement;
-    expect(b.classList.contains('nd-rowact--icon')).toBe(true);
+    const b = f.nativeElement.querySelector('button.pf-rowact') as HTMLElement;
+    expect(b.classList.contains('pf-rowact--icon')).toBe(true);
     expect(b.getAttribute('aria-label')).toBe('Delegate 26124');
   });
 });

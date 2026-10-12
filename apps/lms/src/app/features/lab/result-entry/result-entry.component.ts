@@ -39,9 +39,9 @@ import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patie
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
-import { NdTimeComponent } from '../../../shared/components/nd-time/nd-time.component';
-import { NdDateTimeComponent } from '../../../shared/components/nd-date/nd-datetime.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
+import { PfDateTimeComponent } from '../../../shared/components/pf-date/pf-datetime.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -107,9 +107,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     BusyDirective,
     SkeletonCardComponent,
     ReportNotesCardComponent,
-    NdDateComponent,
-    NdTimeComponent,
-    NdDateTimeComponent,
+    PfDateComponent,
+    PfTimeComponent,
+    PfDateTimeComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -136,7 +136,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           <h1 class="pf-head__title">{{ orderTest()?.test?.name ?? 'Result entry' }}</h1>
           @if (specimenLabel(); as sp) {
             <!-- Specimen chosen at the order desk (non-culture; culture shows it on the bench). -->
-            <span class="nd-chip nd-chip--static pf-head__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+            <span class="pf-chip pf-chip--static pf-head__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
           }
 
           @if (autoSavedAgo(); as t) {
@@ -252,9 +252,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               </header>
               <div class="pf-col-scrolls__body px-1 pt-2">
                 <!-- Culture is worked on the Culture case page (one screen). -->
-                <button type="button" class="nd-row pf-re-culturelink press" (click)="openCultureBench()"
+                <button type="button" class="pf-row pf-re-culturelink press" (click)="openCultureBench()"
                         aria-label="Open this culture on the culture bench">
-                  <span class="nd-row__name">Culture: open on the bench</span>
+                  <span class="pf-row__name">Culture: open on the bench</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 </button>
               </div>
@@ -410,12 +410,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                             placeholder="—"></textarea>
                                 }
                                 @case ('date') {
-                                  <pf-nd-date class="pf-rg__date" [label]="p.title || p.name"
+                                  <pf-date class="pf-rg__date" [label]="p.title || p.name"
                                               [value]="valueOf(p.name) || null"
                                               [attr.data-param]="p.name"
                                               (focusin)="setActive(p.name)"
                                               (valueChange)="setValue(p.name, $event ?? '')"
-                                              (keydown.enter)="advanceFrom(p.name)"></pf-nd-date>
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-date>
                                 }
                                 @case ('phone') {
                                   <input type="tel" inputmode="tel" class="pf-rg__input"
@@ -436,20 +436,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          placeholder="—"/>
                                 }
                                 @case ('time') {
-                                  <pf-nd-time class="pf-rg__date" [label]="p.title || p.name"
+                                  <pf-time class="pf-rg__date" [label]="p.title || p.name"
                                               [value]="valueOf(p.name) || null"
                                               [attr.data-param]="p.name"
                                               (focusin)="setActive(p.name)"
                                               (valueChange)="setValue(p.name, $event ?? '')"
-                                              (keydown.enter)="advanceFrom(p.name)"></pf-nd-time>
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-time>
                                 }
                                 @case ('datetime') {
-                                  <pf-nd-datetime class="pf-rg__date" [label]="p.title || p.name"
+                                  <pf-datetime class="pf-rg__date" [label]="p.title || p.name"
                                                   [value]="valueOf(p.name) || null"
                                                   [attr.data-param]="p.name"
                                                   (focusin)="setActive(p.name)"
                                                   (valueChange)="setValue(p.name, $event ?? '')"
-                                                  (keydown.enter)="advanceFrom(p.name)"></pf-nd-datetime>
+                                                  (keydown.enter)="advanceFrom(p.name)"></pf-datetime>
                                 }
                                 @default {
                                   <input type="text" class="pf-rg__input"
@@ -563,12 +563,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           </label>
                         }
                         @case ('date') {
-                          <pf-nd-date class="pf-param__date" [label]="p.title || p.name"
+                          <pf-date class="pf-param__date" [label]="p.title || p.name"
                                       [value]="valueOf(p.name) || null"
                                       [attr.data-param]="p.name"
                                       (focusin)="setActive(p.name)"
                                       (valueChange)="setValue(p.name, $event ?? '')"
-                                      (keydown.enter)="advanceFrom(p.name)"></pf-nd-date>
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-date>
                         }
                         @case ('section-header') {
                           <h4 class="pf-section-heading">{{ p.title }}</h4>
@@ -623,20 +623,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  placeholder="name@example.com"/>
                         }
                         @case ('time') {
-                          <pf-nd-time class="pf-param__date" [label]="p.title || p.name"
+                          <pf-time class="pf-param__date" [label]="p.title || p.name"
                                       [value]="valueOf(p.name) || null"
                                       [attr.data-param]="p.name"
                                       (focusin)="setActive(p.name)"
                                       (valueChange)="setValue(p.name, $event ?? '')"
-                                      (keydown.enter)="advanceFrom(p.name)"></pf-nd-time>
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-time>
                         }
                         @case ('datetime') {
-                          <pf-nd-datetime class="pf-param__date" [label]="p.title || p.name"
+                          <pf-datetime class="pf-param__date" [label]="p.title || p.name"
                                           [value]="valueOf(p.name) || null"
                                           [attr.data-param]="p.name"
                                           (focusin)="setActive(p.name)"
                                           (valueChange)="setValue(p.name, $event ?? '')"
-                                          (keydown.enter)="advanceFrom(p.name)"></pf-nd-datetime>
+                                          (keydown.enter)="advanceFrom(p.name)"></pf-datetime>
                         }
                         @case ('duration') {
                           <div class="pf-param__duration">
@@ -1520,19 +1520,19 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     .pf-param__date { cursor: pointer; }
 
     /* ── Kit date/time hosts (grid .pf-rg__date, card .pf-param__date) ──
-       pf-nd-date / pf-nd-time / pf-nd-datetime are generic kit components
+       pf-date / pf-time / pf-datetime are generic kit components
        (own box styling elsewhere in the app); here they sit beside a
        pf-select dropdown (grid: 'dropdown'/'radio'/'yesno'; card:
        'dropdown') and must look like ONE of that row's fields — same
        border, height, radius and padding as the pf-select trigger
        (select.component.ts), never their own separate box. Scoped to
-       THESE two host classes only — pf-nd-date/time elsewhere (vendors,
+       THESE two host classes only — pf-date/time elsewhere (vendors,
        audit log, dynamic-input, …) are untouched. */
     .pf-rg__date, .pf-param__date { display: block; width: 100%; }
-    .pf-rg__date ::ng-deep .pf-ndd__in,
-    .pf-rg__date ::ng-deep .pf-ndt__in,
-    .pf-param__date ::ng-deep .pf-ndd__in,
-    .pf-param__date ::ng-deep .pf-ndt__in {
+    .pf-rg__date ::ng-deep .pf-date__in,
+    .pf-rg__date ::ng-deep .pf-time__in,
+    .pf-param__date ::ng-deep .pf-date__in,
+    .pf-param__date ::ng-deep .pf-time__in {
       height: 38px;
       padding: 0 40px 0 12px;
       background: var(--input-bg);
@@ -1542,25 +1542,25 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       font-size: 13.5px;
       font-weight: 500;
     }
-    .pf-param--active .pf-param__date ::ng-deep .pf-ndd__in,
-    .pf-param--active .pf-param__date ::ng-deep .pf-ndt__in {
+    .pf-param--active .pf-param__date ::ng-deep .pf-date__in,
+    .pf-param--active .pf-param__date ::ng-deep .pf-time__in {
       background: rgba(255, 255, 255, 0.05);
       border-color: rgba(168, 85, 247, 0.45);
     }
-    /* An invalid typed date/time (nd-date/nd-time's own validation) must
+    /* An invalid typed date/time (pf-date/pf-time's own validation) must
        still show red — our higher-specificity border override above would
-       otherwise beat the kit's plain .nd-input--error rule. */
-    .pf-rg__date ::ng-deep .pf-ndd__in.nd-input--error,
-    .pf-rg__date ::ng-deep .pf-ndt__in.nd-input--error,
-    .pf-param__date ::ng-deep .pf-ndd__in.nd-input--error,
-    .pf-param__date ::ng-deep .pf-ndt__in.nd-input--error {
+       otherwise beat the kit's plain .pf-input--error rule. */
+    .pf-rg__date ::ng-deep .pf-date__in.pf-input--error,
+    .pf-rg__date ::ng-deep .pf-time__in.pf-input--error,
+    .pf-param__date ::ng-deep .pf-date__in.pf-input--error,
+    .pf-param__date ::ng-deep .pf-time__in.pf-input--error {
       border-color: var(--red-border, #ef4444);
     }
-    /* pf-nd-datetime pairs a date + a time box side by side — each inner
+    /* pf-datetime pairs a date + a time box side by side — each inner
        box still matches the single-field dimensions above; just let the
        pair share the row width evenly. */
-    .pf-rg__date ::ng-deep .pf-nddt, .pf-param__date ::ng-deep .pf-nddt { width: 100%; }
-    .pf-rg__date ::ng-deep .pf-nddt > *, .pf-param__date ::ng-deep .pf-nddt > * { flex: 1 1 0; }
+    .pf-rg__date ::ng-deep .pf-datet, .pf-param__date ::ng-deep .pf-datet { width: 100%; }
+    .pf-rg__date ::ng-deep .pf-datet > *, .pf-param__date ::ng-deep .pf-datet > * { flex: 1 1 0; }
 
     /* ── Button-select pills (type: buttonSelect) ────────────── */
     .pf-param__btnsel { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2821,10 +2821,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       /* The kit date/time boxes aren't .pf-rg__input/.pf-param__input any
          more (one border, matched to pf-select — see the rule above), so
          they need their own zoom-guard bump here. */
-      .pf-rg__date ::ng-deep .pf-ndd__in,
-      .pf-rg__date ::ng-deep .pf-ndt__in,
-      .pf-param__date ::ng-deep .pf-ndd__in,
-      .pf-param__date ::ng-deep .pf-ndt__in { font-size: 16px; }
+      .pf-rg__date ::ng-deep .pf-date__in,
+      .pf-rg__date ::ng-deep .pf-time__in,
+      .pf-param__date ::ng-deep .pf-date__in,
+      .pf-param__date ::ng-deep .pf-time__in { font-size: 16px; }
     }
 
     /* Touch sizing: on coarse pointers the header pills + the back button
@@ -2938,7 +2938,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly _ot = signal<OrderTest | null>(null);
   /** The line's tube (carries its order's daily patient number). */
   readonly dailyNoSrc = computed(() => this._ot()?.subOrder ?? null);
-  /** First-load skeleton for the result (ND-PATTERN "Loading feedback"). */
+  /** First-load skeleton for the result (PF-PATTERN "Loading feedback"). */
   private readonly recordHold = createLoadHold(true);
   readonly recordSkeleton = this.recordHold.active;
   /** Reject-sample request in flight (after the reason prompt). */

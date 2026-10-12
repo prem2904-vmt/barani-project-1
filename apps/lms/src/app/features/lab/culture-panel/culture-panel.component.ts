@@ -97,7 +97,7 @@ export interface CultureCaseView {
         </p>
       </pf-tile>
     } @else {
-      <ul class="flex flex-col gap-3 list-none p-0 m-0" [ndTileGrid]="theme.isNewDesign()">
+      <ul class="flex flex-col gap-3 list-none p-0 m-0" [pfTileGrid]="theme.isNewDesign()">
         @for (c of cases(); track c.orderTestId) {
           @let inc = incubatingStage(c);
           <li class="pf-cc" [pfZoomSource]="[c.orderTestId, c.sampleId]" [class.pf-cc--incub]="!!inc" [class.pf-cc--nd]="theme.isNewDesign()">
@@ -178,10 +178,10 @@ export interface CultureCaseView {
        No stripe; sample ID is the primary line; patient + test secondary;
        the next step is a neutral chip whose small violet dot is the one
        accent; Day N a neutral chip top-right; a quiet chevron. */
-    .pf-cc--nd { border-radius: var(--nd-radius-sm, 10px); background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+    .pf-cc--nd { border-radius: var(--pf-radius-sm, 10px); background: var(--pf-card-bg); border: 1px solid var(--pf-line);
       height: 100%; }
-    .pf-cc--nd:hover { border-color: var(--nd-sel-border); }
-    .pf-cc--nd.pf-cc--incub { border-color: var(--nd-line); }
+    .pf-cc--nd:hover { border-color: var(--pf-sel-border); }
+    .pf-cc--pf.pf-cc--incub { border-color: var(--pf-line); }
     .pf-cc--nd .pf-cc__hdr { padding: 12px 12px 12px 14px; align-items: flex-start; height: 100%; }
     .pf-cc--nd .pf-cc__main { gap: 3px; }
     .pf-cc--nd .pf-cc__id { font-family: inherit; font-size: 16.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-primary); }
@@ -191,14 +191,14 @@ export interface CultureCaseView {
     .pf-cc--nd .pf-cc__tag,
     .pf-cc--nd .pf-cc__tag--warn {
       font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none;
-      padding: 2px 8px; border-radius: var(--nd-radius-chip, 8px);
-      background: var(--nd-chip-bg); color: var(--text-secondary); font-variant-numeric: tabular-nums;
+      padding: 2px 8px; border-radius: var(--pf-radius-chip, 8px);
+      background: var(--pf-chip-bg); color: var(--text-secondary); font-variant-numeric: tabular-nums;
     }
     .pf-cc--nd .pf-cc__now,
     .pf-cc--nd .pf-cc__incub {
       align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
-      padding: 3px 9px; border-radius: var(--nd-radius-chip, 8px);
-      background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500;
+      padding: 3px 9px; border-radius: var(--pf-radius-chip, 8px);
+      background: var(--pf-chip-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500;
     }
     .pf-cc--nd .pf-cc__now::before {
       content: ''; width: 6px; height: 6px; border-radius: 999px; flex: none;

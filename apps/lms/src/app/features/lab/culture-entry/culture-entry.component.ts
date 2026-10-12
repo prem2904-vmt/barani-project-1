@@ -69,10 +69,10 @@ interface Breakpoint {
             <div class="ce-plate__head">
               <span class="ce-plate__ttl">Plate</span>
               @if (plate(); as p) {
-                <span class="ce-plate__meta nd-num">{{ p.disks.length }} {{ p.disks.length === 1 ? 'antibiotic' : 'antibiotics' }} measured</span>
+                <span class="ce-plate__meta pf-num">{{ p.disks.length }} {{ p.disks.length === 1 ? 'antibiotic' : 'antibiotics' }} measured</span>
               }
               <span class="ce-plate__grow"></span>
-              <button type="button" class="nd-btn nd-btn--secondary ce-plate__btn" (click)="openPlateMeasure()">
+              <button type="button" class="pf-btn pf-btn--secondary ce-plate__btn" (click)="openPlateMeasure()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
                 {{ plate() ? 'Re-measure plate' : 'Measure plate' }}
               </button>
@@ -80,7 +80,7 @@ interface Breakpoint {
             @if (plate(); as p) {
               <ul class="ce-plate__chips" aria-label="Antibiotics on the plate">
                 @for (d of p.disks; track d.drug) {
-                  <li class="nd-chip nd-chip--static ce-plate__chip" [title]="d.drug"><span class="nd-num">{{ d.code || d.drug }}</span><span class="ce-plate__mm nd-num">{{ d.mm }} mm</span></li>
+                  <li class="pf-chip pf-chip--static ce-plate__chip" [title]="d.drug"><span class="pf-num">{{ d.code || d.drug }}</span><span class="ce-plate__mm pf-num">{{ d.mm }} mm</span></li>
                 }
               </ul>
               <div class="ce-plate__assign">
@@ -111,10 +111,10 @@ interface Breakpoint {
             <!-- UNIVERSAL entry mode: every organism's table reads in it. -->
             <div class="ce-modebar">
               <span class="ce-modebar__lbl" id="ce-mode-lbl">Reading method</span>
-              <span class="nd-seg ce-modeseg" role="radiogroup" aria-labelledby="ce-mode-lbl">
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'zone'"
+              <span class="pf-seg ce-modeseg" role="radiogroup" aria-labelledby="ce-mode-lbl">
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="mode() === 'zone'"
                         (click)="setMode('zone')">Zone (mm)</button>
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'mic'"
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="mode() === 'mic'"
                         (click)="setMode('mic')">MIC (µg/mL)</button>
               </span>
             </div>
@@ -278,9 +278,9 @@ interface Breakpoint {
 
                   <!-- Wide: separate S/I/R result buttons -->
                   <span class="ce-abx__sirbtns">
-                    <span class="nd-seg ce-sirseg" role="radiogroup" [attr.aria-label]="ab.name + ' result'">
+                    <span class="pf-seg ce-sirseg" role="radiogroup" [attr.aria-label]="ab.name + ' result'">
                     @for (v of ['S','I','R']; track v) {
-                      <button type="button" class="nd-seg__item ce-abx__sirbtn" role="radio"
+                      <button type="button" class="pf-seg__item ce-abx__sirbtn" role="radio"
                         [attr.data-v]="v"
                         [class.ce-sir-picked]="ab.interpretation === v"
                         [class.ce-sir--s]="ab.interpretation === v && v === 'S'"
@@ -474,11 +474,11 @@ interface Breakpoint {
                       <span class="ce-mo__bp">
                         <span class="ce-mo__bpnote">No CLSI breakpoint for {{ mOrg() }} — enter S ≥ and R ≤</span>
                         <label class="ce-mo__bpf">S ≥
-                          <input type="text" inputmode="numeric" class="ce-mo__bpin nd-num" [value]="r.s ?? ''"
+                          <input type="text" inputmode="numeric" class="ce-mo__bpin pf-num" [value]="r.s ?? ''"
                                  [attr.aria-label]="r.name + ' susceptible at or above (mm)'"
                                  (change)="setMeasureBp(r.name, 's', $any($event.target).value)" /></label>
                         <label class="ce-mo__bpf">R ≤
-                          <input type="text" inputmode="numeric" class="ce-mo__bpin nd-num" [value]="r.r ?? ''"
+                          <input type="text" inputmode="numeric" class="ce-mo__bpin pf-num" [value]="r.r ?? ''"
                                  [attr.aria-label]="r.name + ' resistant at or below (mm)'"
                                  (change)="setMeasureBp(r.name, 'r', $any($event.target).value)" /></label>
                         @if (canSaveBreakpoints()) {
@@ -491,7 +491,7 @@ interface Breakpoint {
                       </span>
                     }
                   </span>
-                  <span class="ce-mo__mm nd-num">{{ r.mm != null ? r.mm + ' mm' : '—' }}</span>
+                  <span class="ce-mo__mm pf-num">{{ r.mm != null ? r.mm + ' mm' : '—' }}</span>
                   <span class="ce-mo__sir" [class.ce-sir-picked]="!!r.sir"
                         [class.ce-sir--s]="r.sir === 'S'" [class.ce-sir--i]="r.sir === 'I'" [class.ce-sir--r]="r.sir === 'R'"
                         [attr.aria-label]="r.sir ? 'Result ' + r.sir : 'No result'">{{ r.sir || '–' }}</span>
@@ -666,21 +666,21 @@ interface Breakpoint {
     /* ══ Kit restyle (both themes; colour-independent) ══ */
     :host { font-family: inherit; }
     .ce-modebar__lbl { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-tertiary); }
-    .ce-modeseg .nd-seg__item { height: 32px; font-size: 13px; }
+    .ce-modeseg .pf-seg__item { height: 32px; font-size: 13px; }
     .ce-abx__head { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
     .ce-abx__auto { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
     .ce-sirseg { gap: 2px; }
     .ce-abx__sirbtn { width: 36px; height: 32px; border: 0; border-radius: 8px; padding: 0;
       font: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary); background: transparent; }
-    .ce-abx__zone { font-family: inherit; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg, var(--input-bg)); border: 1px solid var(--nd-line, var(--input-border)); color: var(--text-primary); }
+    .ce-abx__zone { font-family: inherit; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg, var(--input-bg)); border: 1px solid var(--pf-line, var(--input-border)); color: var(--text-primary); }
     .ce-abx__zone:focus { border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-    .ce-abx__bpbox { font-family: inherit; border-radius: var(--nd-radius-chip, 8px); }
+    .ce-abx__bpbox { font-family: inherit; border-radius: var(--pf-radius-chip, 8px); }
     .ce-abx__unit { font-weight: 500; }
-    .ce-abx__x { width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px); display: inline-flex;
+    .ce-abx__x { width: 32px; height: 32px; border-radius: var(--pf-radius-sm, 10px); display: inline-flex;
       align-items: center; justify-content: center; color: var(--text-tertiary); }
-    .ce-abx__x:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+    .ce-abx__x:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     @media (pointer: coarse) { .ce-abx__x { width: 44px; height: 44px; } }
 
     /* ══ AST (owner, both themes): breakpoints / headers / MIC line NEUTRAL;
@@ -690,7 +690,7 @@ interface Breakpoint {
     .ce-abx__col--i,
     .ce-abx__col--r { color: var(--text-tertiary); }
     .ce-abx__bpwide .ce-abx__bpbox { color: var(--text-primary);
-      background: var(--nd-chip-bg); border-color: transparent; }
+      background: var(--pf-chip-bg); border-color: transparent; }
     .ce-abx__bpin { color: var(--text-primary); }
     .ce-abx__mic,
     .ce-abx__mic em { color: var(--text-tertiary); font-weight: 400; }
@@ -711,20 +711,20 @@ interface Breakpoint {
     .ce-abx__cell--on .ce-abx__celllbl,
     .ce-abx__cell--on .ce-abx__cellunit,
     .ce-abx__cell--on .ce-abx__bpin { color: inherit; }
-    .ce-org__prog--done { color: var(--violet-text, #6d28d9); border-color: var(--nd-sel-border); }
+    .ce-org__prog--done { color: var(--violet-text, #6d28d9); border-color: var(--pf-sel-border); }
 
     /* ══ Row surface — every antimicrobial row is its own subtle card in
        BOTH themes: 10px radius, a small gap, a slightly stronger hover. ══ */
     .ce-abx { gap: 6px; }
     .ce-abx__row { border-radius: 10px; }
     :host-context(.dark) .ce-abx__row { background: var(--glass-bg); }
-    :host-context(.dark) .ce-abx__row:hover { background: rgba(255,255,255,0.07); border-color: var(--nd-line); }
+    :host-context(.dark) .ce-abx__row:hover { background: rgba(255,255,255,0.07); border-color: var(--pf-line); }
     :host-context(.light) .ce-abx__row { background: #f6f7f9; border-color: transparent; }
     :host-context(.light) .ce-abx__row:hover { background: #eef0f3; border-color: transparent; }
     /* On the light row the breakpoint chips / zone field sit on white. */
-    :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { background: var(--nd-card-bg, #fff); border-color: var(--nd-line); }
+    :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { background: var(--pf-card-bg, #fff); border-color: var(--pf-line); }
     /* ── The plate, measured before the organism ── */
-    .ce-plate { border: 1px solid var(--nd-line, var(--border-subtle)); border-radius: 14px; padding: 12px 14px; background: var(--nd-card-bg); }
+    .ce-plate { border: 1px solid var(--pf-line, var(--border-subtle)); border-radius: 14px; padding: 12px 14px; background: var(--pf-card-bg); }
     .ce-plate__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .ce-plate__ttl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
     .ce-plate__meta { font-size: 12.5px; color: var(--text-secondary); }
@@ -748,17 +748,17 @@ interface Breakpoint {
     .ce-mo__lbl { font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .ce-mo__sel { flex: 1 1 200px; min-width: 0; }
     .ce-mo__trigger { display: none; flex: 1 1 auto; align-items: center; justify-content: space-between; gap: 8px;
-      min-height: 44px; padding: 0 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; cursor: pointer; text-align: left; }
+      min-height: 44px; padding: 0 12px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; cursor: pointer; text-align: left; }
     .ce-mo__trigger svg { color: var(--text-tertiary); flex: none; }
     .ce-mo__trigtxt--ph { color: var(--text-tertiary); }
     .ce-mo__note { margin: 0; font-size: 12.5px; color: var(--text-tertiary); text-wrap: pretty; }
-    .ce-mo__warn { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); font-size: 12.5px; color: var(--text-primary); cursor: pointer; }
+    .ce-mo__warn { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12.5px; color: var(--text-primary); cursor: pointer; }
     .ce-mo__warnbox { margin-top: 1px; }
     /* Kit checkbox (drawn, never the native look). */
     .ce-mo-chk { appearance: none; -webkit-appearance: none; flex: none; margin: 0; cursor: pointer;
-      width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--nd-sel-border, #9aa4ae); background: var(--nd-card-bg);
+      width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--pf-sel-border, #9aa4ae); background: var(--pf-card-bg);
       display: inline-grid; place-content: center; }
     .ce-mo-chk::after { content: ''; width: 9px; height: 5px; margin-top: -2px; border: 2px solid #fff; border-top: 0; border-right: 0;
       transform: rotate(-45deg) scale(0); }
@@ -775,20 +775,20 @@ interface Breakpoint {
     ::ng-deep html.dark .ce-mo__row { background: rgba(255,255,255,0.05); }
     .ce-mo__row--off { opacity: 0.62; }
     .ce-mo__tick { width: 16px; height: 16px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center;
-      border: 1.5px solid var(--nd-sel-border, #9aa4ae); color: #fff; }
+      border: 1.5px solid var(--pf-sel-border, #9aa4ae); color: #fff; }
     .ce-mo__tick--on { background: var(--color-violet-600, #7c3aed); border-color: transparent; }
     .ce-mo__namewrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
     .ce-mo__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
     .ce-mo__bp { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--text-tertiary); }
     .ce-mo__bpnote { flex-basis: 100%; }
     .ce-mo__bpf { display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); }
-    .ce-mo__bpin { width: 44px; height: 30px; text-align: center; border-radius: 8px; border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; outline: none; }
+    .ce-mo__bpin { width: 44px; height: 30px; text-align: center; border-radius: 8px; border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; outline: none; }
     .ce-mo__bpin:focus { border-color: var(--color-violet-600, #7c3aed); }
     .ce-mo__save { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); cursor: pointer; }
     .ce-mo__mm { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
     .ce-mo__sir { width: 32px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; color: var(--text-tertiary); border: 1px solid var(--nd-line); }
+      font-size: 13px; font-weight: 600; color: var(--text-tertiary); border: 1px solid var(--pf-line); }
     .ce-mo__sir.ce-sir-picked { border-color: transparent; }
     ::ng-deep html.light .ce-mo__sir.ce-sir--s { background: rgba(16,185,129,0.13); color: #065f46; }
     ::ng-deep html.light .ce-mo__sir.ce-sir--i { background: rgba(245,158,11,0.14); color: #92400e; }
@@ -799,25 +799,25 @@ interface Breakpoint {
     .ce-mo__empty { font-size: 13px; color: var(--text-tertiary); padding: 8px 2px; }
     /* Phone organism sheet (inside the full-screen measure). */
     .ce-mo-sheetbd { position: fixed; inset: 0; z-index: 1010; background: rgba(0, 0, 0, 0.45); }
-    .ce-mo-sheet { position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1011;
-      max-height: min(80dvh, calc(100dvh - var(--nd-nav-h, 0px) - 24px)); display: flex; flex-direction: column; gap: 8px;
+    .ce-mo-sheet { position: fixed; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 1011;
+      max-height: min(80dvh, calc(100dvh - var(--pf-nav-h, 0px) - 24px)); display: flex; flex-direction: column; gap: 8px;
       padding: 0 12px max(12px, env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0;
-      background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line); border-bottom: 0;
-      animation: ce-mo-rise var(--nd-dur-sheet, 320ms) var(--nd-spring, ease) both; }
+      background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line); border-bottom: 0;
+      animation: ce-mo-rise var(--pf-dur-sheet, 320ms) var(--pf-spring, ease) both; }
     @keyframes ce-mo-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
     .ce-mo-sheet__handle { display: block; flex: 0 0 5px; align-self: center; width: 40px; max-width: 40px; height: 5px; min-height: 0;
-      padding: 0; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
+      padding: 0; margin: 8px auto 2px; border-radius: 999px; background: var(--pf-line); }
     .ce-mo-sheet__head { display: flex; align-items: center; justify-content: space-between; }
     .ce-mo-sheet__ttl { font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .ce-mo-sheet__x { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0;
       border-radius: 10px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .ce-mo-sheet__q { height: 44px; padding: 0 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; outline: none; }
+    .ce-mo-sheet__q { height: 44px; padding: 0 12px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; outline: none; }
     .ce-mo-sheet__q:focus { border-color: var(--color-violet-600, #7c3aed); }
     .ce-mo-sheet__list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
     .ce-mo-sheet__opt { width: 100%; min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent;
       color: var(--text-primary); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
-    .ce-mo-sheet__opt:hover, .ce-mo-sheet__opt[aria-pressed='true'] { background: var(--nd-sel-bg); }
+    .ce-mo-sheet__opt:hover, .ce-mo-sheet__opt[aria-pressed='true'] { background: var(--pf-sel-bg); }
     @media (max-width: 640px) {
       .ce-mo__sel { display: none; }
       .ce-mo__trigger { display: inline-flex; }

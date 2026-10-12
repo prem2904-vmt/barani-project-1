@@ -26,7 +26,7 @@ type StoredReport = { id: string; orderId?: string; qrToken?: string; data?: str
 interface ResultRow { title: string; value: string; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; /** mw code — a critical badges CL / CH (legacy C). */ code?: string; }
 
 /**
- * Lab orders — the patient's orders as ND list rows (docs/ND-PATTERN.md →
+ * Lab orders — the patient's orders as ND list rows (docs/PF-PATTERN.md →
  * "Patient profile"): the tests as the primary line, a quiet tabular meta
  * line, the status as a dot + coloured word and the row action (Repeat)
  * stacked under it. A row ZOOMS into the order in the same card
@@ -46,13 +46,13 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
       <section class="pf-lo-detail" [pfZoomTarget]="[o.id]" aria-label="Order details"
                (keydown.escape)="close(); $event.preventDefault()">
         <header class="pf-lo-detail__head">
-          <button type="button" class="nd-btn nd-btn--icon pf-lo-detail__back" (click)="close()"
+          <button type="button" class="pf-btn pf-btn--icon pf-lo-detail__back" (click)="close()"
                   [attr.aria-label]="detailId() ? 'Back' : 'Back to orders'" [title]="detailId() ? 'Back' : 'Back to orders'">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <div class="pf-lo-detail__who">
             <p class="pf-lo-detail__title">{{ title(o) }}</p>
-            <p class="pf-lo-row__meta nd-num">
+            <p class="pf-lo-row__meta pf-num">
               @if (o.orderNumber) { <span class="pf-lo-mi">{{ o.orderNumber }}</span> }
               <span class="pf-lo-mi">{{ o.createdAt | date:'d MMM y, h:mm a' }}</span>
               <span class="pf-lo-mi">{{ o.refDoctorName || 'Self referral' }}</span>
@@ -63,11 +63,11 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
         </header>
 
         <div class="pf-lo-detail__acts">
-          <button type="button" class="nd-btn nd-btn--secondary pf-lo-act pf-lo-act--repeat" (click)="repeat(o)">
+          <button type="button" class="pf-btn pf-btn--secondary pf-lo-act pf-lo-act--repeat" (click)="repeat(o)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
             Repeat order
           </button>
-          <button type="button" class="nd-btn nd-btn--secondary pf-lo-act pf-lo-act--report" (click)="toggleReport(o)"
+          <button type="button" class="pf-btn pf-btn--secondary pf-lo-act pf-lo-act--report" (click)="toggleReport(o)"
                   [attr.aria-expanded]="!!showReport()[o.id]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
             {{ showReport()[o.id] ? 'Hide report' : 'View report' }}
@@ -77,7 +77,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
           @if (detailActions().length) {
             <pf-actions-menu class="pf-lo-kebab" [actions]="detailActions()" label="Report actions" [heading]="title(o)"
                              (opened)="onMenuOpened(o)" (action)="runDetailAction(o, $event)">
-              <button pfActionsTrigger type="button" class="nd-btn nd-btn--secondary pf-lo-act pf-lo-act--more"
+              <button pfActionsTrigger type="button" class="pf-btn pf-btn--secondary pf-lo-act pf-lo-act--more"
                       [class.pf-lo-act--icon]="!web()" aria-label="Report actions" title="Report actions">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
                 <span class="pf-lo-act__t">More</span>
@@ -92,7 +92,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             <li class="pf-lo-test">
               <div class="pf-lo-test__head">
                 <span class="pf-lo-test__name">{{ t.name || 'Test' }}
-                  @if (t.test?.code) { <span class="pf-lo-test__code nd-num">{{ t.test?.code }}</span> }
+                  @if (t.test?.code) { <span class="pf-lo-test__code pf-num">{{ t.test?.code }}</span> }
                 </span>
                 <span class="pf-lo-status" [attr.data-tone]="testTone(t.status)"><span class="pf-lo-dot" aria-hidden="true"></span>{{ testLabel(t.status) }}</span>
               </div>
@@ -105,7 +105,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                     @for (r of rows; track r.title) {
                       <div class="pf-lo-res__row" role="row" [attr.data-flag]="r.flag">
                         <span class="pf-lo-res__name" role="cell">{{ r.title }}</span>
-                        <span class="pf-lo-res__val nd-num" role="cell">{{ r.value }}@if (r.unit) {<span class="pf-lo-res__unit">{{ r.unit }}</span>}
+                        <span class="pf-lo-res__val pf-num" role="cell">{{ r.value }}@if (r.unit) {<span class="pf-lo-res__unit">{{ r.unit }}</span>}
                           @if (r.flag !== 'normal') {
                             <span class="pf-lo-res__flag">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg>
@@ -113,7 +113,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                             </span>
                           }
                         </span>
-                        <span class="pf-lo-res__ref nd-num" role="cell">{{ r.range || '—' }}</span>
+                        <span class="pf-lo-res__ref pf-num" role="cell">{{ r.range || '—' }}</span>
                       </div>
                     }
                   </div>
@@ -136,16 +136,16 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             } @else if (reportUrl()[o.id]; as u) {
               <pf-pdf-canvas [src]="u"></pf-pdf-canvas>
             } @else if (reportFailed()[o.id]) {
-              <div class="nd-empty nd-empty--compact" role="alert">
-                <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg></span>
-                <p class="nd-empty__title">Couldn’t render this report</p>
-                <p class="nd-empty__body">The lab’s report design couldn’t be loaded. Close and open the report again in a moment.</p>
+              <div class="pf-empty pf-empty--compact" role="alert">
+                <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg></span>
+                <p class="pf-empty__title">Couldn’t render this report</p>
+                <p class="pf-empty__body">The lab’s report design couldn’t be loaded. Close and open the report again in a moment.</p>
               </div>
             } @else {
-              <div class="nd-empty nd-empty--compact">
-                <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-                <p class="nd-empty__title">No report yet</p>
-                <p class="nd-empty__body">No report has been generated for this order yet.</p>
+              <div class="pf-empty pf-empty--compact">
+                <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                <p class="pf-empty__title">No report yet</p>
+                <p class="pf-empty__body">No report has been generated for this order yet.</p>
               </div>
             }
           </div>
@@ -153,17 +153,17 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
       </section>
     } @else if (filtered().length === 0) {
       @if ((orders() ?? []).length === 0) {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/><path d="M7 14h10"/></svg></span>
-          <p class="nd-empty__title">No orders yet</p>
-          <p class="nd-empty__body">This patient's lab orders, results and reports show up here.</p>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/><path d="M7 14h10"/></svg></span>
+          <p class="pf-empty__title">No orders yet</p>
+          <p class="pf-empty__body">This patient's lab orders, results and reports show up here.</p>
         </div>
       } @else {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
-          <p class="nd-empty__title">No orders match</p>
-          <p class="nd-empty__body">Try another test name or a wider date range.</p>
-          <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="clearFilters.emit()">Clear filters</button>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+          <p class="pf-empty__title">No orders match</p>
+          <p class="pf-empty__body">Try another test name or a wider date range.</p>
+          <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="clearFilters.emit()">Clear filters</button>
         </div>
       }
     } @else {
@@ -176,7 +176,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                  (click)="open(o)" (keydown)="onRowKey($event, o)">
               <div class="pf-lo-row__body">
                 <p class="pf-lo-row__name">{{ title(o) }}</p>
-                <p class="pf-lo-row__meta nd-num">
+                <p class="pf-lo-row__meta pf-num">
                   @if (o.orderNumber) { <span class="pf-lo-mi">{{ o.orderNumber }}</span> }
                   <span class="pf-lo-mi">{{ o.createdAt | date:'d MMM y, h:mm a' }}</span>
                   <span class="pf-lo-mi">{{ countLabel(o) }}</span>
@@ -186,10 +186,10 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
               </div>
               <span class="pf-lo-status" [attr.data-tone]="tone(o.status)"><span class="pf-lo-dot" aria-hidden="true"></span>{{ statusLabel(o.status) }}</span>
               <div class="pf-lo-row__acts" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
-                <button type="button" class="nd-rowact pf-lo-repeat" [class.nd-rowact--icon]="!web()"
+                <button type="button" class="pf-rowact pf-lo-repeat" [class.pf-rowact--icon]="!web()"
                         (click)="repeat(o)" aria-label="Repeat order" title="Repeat order">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
-                  <span class="nd-rowact__t">Repeat</span>
+                  <span class="pf-rowact__t">Repeat</span>
                 </button>
               </div>
             </div>
@@ -203,19 +203,19 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
 
     /* ── Rows: the Frontdesk list-row language (ND §6 "List rows") ── */
     .pf-lo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .pf-lo-li { animation: pf-lo-in var(--nd-dur, 320ms) var(--nd-spring) both; animation-delay: calc(var(--i, 0) * 18ms); }
+    .pf-lo-li { animation: pf-lo-in var(--pf-dur, 320ms) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 18ms); }
     @keyframes pf-lo-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     .pf-lo-row {
       display: grid; grid-template-columns: minmax(0, 1fr) auto;
       grid-template-areas: 'body status' 'body acts';
       align-items: center; column-gap: 12px; row-gap: 6px;
       min-height: 64px; padding: 10px 12px 10px 14px;
-      border-radius: var(--nd-radius, 12px); border: 1px solid var(--glass-border); background: var(--glass-bg);
+      border-radius: var(--pf-radius, 12px); border: 1px solid var(--glass-border); background: var(--glass-bg);
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       color: var(--text-primary); cursor: pointer;
-      transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+      transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
     }
-    .pf-lo-row:hover { border-color: var(--nd-sel-border); }
+    .pf-lo-row:hover { border-color: var(--pf-sel-border); }
     .pf-lo-row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-lo-row__body { grid-area: body; min-width: 0; }
     .pf-lo-row__name { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; }
@@ -242,11 +242,11 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
       .pf-lo-row { grid-template-areas: 'body body' 'status acts'; }
       .pf-lo-row .pf-lo-status { justify-self: start; align-self: center; font-size: 13px; }
       .pf-lo-row__acts { align-self: center; }
-      .pf-lo-row__acts .nd-rowact { min-height: 44px; }
+      .pf-lo-row__acts .pf-rowact { min-height: 44px; }
     }
 
     /* ── Order detail (zoomed in) ─────────────────────────────────── */
-    .pf-lo-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; border-radius: var(--nd-radius, 12px); background: var(--nd-card-bg); }
+    .pf-lo-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; border-radius: var(--pf-radius, 12px); background: var(--pf-card-bg); }
     .pf-lo-detail__head { display: flex; align-items: flex-start; gap: 10px; }
     .pf-lo-detail__back { width: 36px !important; height: 36px; min-height: 36px; flex: none; }
     .pf-lo-detail__who { flex: 1 1 auto; min-width: 0; }
@@ -260,17 +260,17 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo-sec { margin: 6px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
 
     .pf-lo-tests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .pf-lo-test { padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pf-lo-test { padding: 10px 12px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-lo-test__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .pf-lo-test__name { min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-lo-test__code { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
     .pf-lo-test .pf-lo-status { align-self: auto; }
     .pf-lo-pending { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
 
-    .pf-lo-res { border: 1px solid var(--nd-line); border-radius: 10px; overflow: hidden; }
+    .pf-lo-res { border: 1px solid var(--pf-line); border-radius: 10px; overflow: hidden; }
     .pf-lo-res__row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; padding: 7px 12px; font-size: 13px; align-items: center; }
-    .pf-lo-res__row + .pf-lo-res__row { border-top: 1px solid var(--nd-line); }
-    .pf-lo-res__row--head { background: var(--nd-chip-bg); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-lo-res__row + .pf-lo-res__row { border-top: 1px solid var(--pf-line); }
+    .pf-lo-res__row--head { background: var(--pf-chip-bg); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-lo-res__name { color: var(--text-secondary); overflow-wrap: anywhere; }
     .pf-lo-res__val { font-weight: 600; color: var(--text-primary); display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
     .pf-lo-res__unit { font-weight: 400; font-size: 12px; color: var(--text-tertiary); margin-left: 4px; }
@@ -280,10 +280,10 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo-res__row[data-flag='abnormal'] .pf-lo-res__val { color: color-mix(in srgb, var(--amber-text) 75%, var(--text-primary)); }
     .pf-lo-res__row[data-flag='critical'] .pf-lo-res__val { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); }
 
-    .pf-lo-report { padding: 10px; border: 1px solid var(--nd-line); border-radius: 12px; background: color-mix(in srgb, var(--text-primary) 3%, var(--nd-card-bg)); display: flex; justify-content: center; }
+    .pf-lo-report { padding: 10px; border: 1px solid var(--pf-line); border-radius: 12px; background: color-mix(in srgb, var(--text-primary) 3%, var(--pf-card-bg)); display: flex; justify-content: center; }
     .pf-lo-report pf-pdf-canvas { width: 100%; max-width: 820px; }
-    .pf-lo-report__skel { width: 100%; max-width: 820px; aspect-ratio: 1 / 1.1; display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 8px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
-    .pf-lo-skel { display: block; height: 10px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg); }
+    .pf-lo-report__skel { width: 100%; max-width: 820px; aspect-ratio: 1 / 1.1; display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 8px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); }
+    .pf-lo-skel { display: block; height: 10px; width: 100%; border-radius: 6px; background: var(--pf-chip-bg); }
 
     @media (max-width: 640px) {
       .pf-lo-res__row { grid-template-columns: 1.3fr 1fr; }

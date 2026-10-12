@@ -102,7 +102,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
             <button type="button" class="cw__iconbtn" (click)="back()" aria-label="Back to my patients">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
-            <span class="cw__avatar nd-num" aria-hidden="true">{{ initials(w.patient.name) }}</span>
+            <span class="cw__avatar pf-num" aria-hidden="true">{{ initials(w.patient.name) }}</span>
             <div class="cw__who">
               <div class="cw__nameline">
                 <h1 class="cw__name"><button type="button" class="cw__namebtn" (click)="togglePatient()" [attr.aria-expanded]="rightDocked() || rightOverlay()" data-patient
@@ -115,15 +115,15 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                   {{ statusLabel(w.visit.status) }}
                 </span>
               </div>
-              <div class="cw__meta nd-num">@for (m of metaBits(); track $index) { <span>{{ m }}</span> }</div>
+              <div class="cw__meta pf-num">@for (m of metaBits(); track $index) { <span>{{ m }}</span> }</div>
             </div>
             <pf-consult-vitals class="cw__vitals" [vitals]="w.vitals" [history]="w.vitalsHistory" [scroll]="compact()"></pf-consult-vitals>
             <div class="cw__acts">
               @if (editable()) {
-                <span class="nd-savestate cw__save" aria-live="polite">
+                <span class="pf-savestate cw__save" aria-live="polite">
                   @switch (saveState()) {
-                    @case ('saving') { <span class="nd-savestate__dot"></span> Saving… }
-                    @case ('dirty') { <span class="nd-savestate__dot"></span> Unsaved }
+                    @case ('saving') { <span class="pf-savestate__dot"></span> Saving… }
+                    @case ('dirty') { <span class="pf-savestate__dot"></span> Unsaved }
                     @case ('error') { <span class="cw__saveerr">Not saved — retrying</span> }
                     @default { @if (savedAt()) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Saved {{ savedAt() | date:'h:mm' }} } }
                   }
@@ -137,7 +137,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 <button type="button" class="cw__split-main" (click)="toggleCompareMode()" [attr.aria-pressed]="compareMode()" data-compare
                         title="Compare visits side by side" aria-label="Compare visits side by side">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
-                  @if (compareItems().length) { <span class="cw__ct nd-num">{{ compareItems().length }}</span> }
+                  @if (compareItems().length) { <span class="cw__ct pf-num">{{ compareItems().length }}</span> }
                 </button>
                 <button type="button" class="cw__split-more" (click)="presetsOpen.set(!presetsOpen())" [attr.aria-expanded]="presetsOpen()" aria-haspopup="menu"
                         title="Compare presets" aria-label="Compare presets" data-compare-presets>
@@ -149,17 +149,17 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                     <span class="cw__pmh">Compare</span>
                     @for (p of presets(); track p.id) {
                       <button type="button" class="cw__pmi" role="menuitem" [disabled]="!p.count" [attr.aria-checked]="activePreset()?.id === p.id" [attr.data-preset]="p.id" (click)="applyPreset(p)">
-                        <span>{{ p.label }}</span><span class="nd-num cw__pmc">{{ p.count }}</span>
+                        <span>{{ p.label }}</span><span class="pf-num cw__pmc">{{ p.count }}</span>
                       </button>
                     }
                   </span>
                 }
               </span>
               @if (editable()) {
-                <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
+                <button type="button" class="pf-btn pf-btn--primary cw__cta" (click)="openComplete()" data-complete>Complete consult</button>
               } @else if (w.visit.status === 'completed') {
-                <button type="button" class="nd-btn nd-btn--secondary cw__cmp" (click)="share()">Share</button>
-                <button type="button" class="nd-btn nd-btn--primary cw__cta" (click)="print()">Print prescription</button>
+                <button type="button" class="pf-btn pf-btn--secondary cw__cmp" (click)="share()">Share</button>
+                <button type="button" class="pf-btn pf-btn--primary cw__cta" (click)="print()">Print prescription</button>
               }
             </div>
           </div>
@@ -168,20 +168,20 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
         <div #body class="cw__body" [class.cw__body--docked]="rightDocked()">
 
           <!-- ── Centre ── -->
-          <main class="nd-card cw__centre" [class.cw__centre--viewing]="viewing()">
+          <main class="pf-card cw__centre" [class.cw__centre--viewing]="viewing()">
             @if (viewing()) {
-              <header class="nd-card__head cw__vbar">
+              <header class="pf-card__head cw__vbar">
                 <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="closeViewer()" aria-label="Back to the consult">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                 </button>
                 @if (compareOn()) {
                   <span class="cw__vt"><b>{{ activePreset() ? presetTitle(activePreset()!.label) : 'Compare' }} · {{ compareItems().length }} picked</b><span class="cw__hide-sm">Tap dates on the timeline or records on the right to add or remove</span></span>
                 } @else if (viewItem(); as it) {
-                  <span class="cw__vt"><b>{{ it.title }}</b><span class="nd-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span></span>
+                  <span class="cw__vt"><b>{{ it.title }}</b><span class="pf-num">{{ it.date + 'T00:00:00' | date:'d MMM y' }}</span></span>
                 }
-                <span class="nd-card__spacer"></span>
-                @if (compareOn() && compareItems().length) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearCompare()">Clear</button> }
-                <button type="button" class="nd-btn nd-btn--secondary cw__back" (click)="closeViewer()" data-back>{{ compareOn() ? 'Back to consult' : 'Back to the consult' }}</button>
+                <span class="pf-card__spacer"></span>
+                @if (compareOn() && compareItems().length) { <button type="button" class="pf-btn pf-btn--tertiary" (click)="clearCompare()">Clear</button> }
+                <button type="button" class="pf-btn pf-btn--secondary cw__back" (click)="closeViewer()" data-back>{{ compareOn() ? 'Back to consult' : 'Back to the consult' }}</button>
               </header>
               <div class="cw__viewer" [class.cw__viewer--none]="fileView() && !compareOn()">
                 @if (compareOn()) {
@@ -193,7 +193,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         <span class="cmx__lbl" role="columnheader"></span>
                         @for (c of compareCols(); track c.id; let i = $index) {
                           <span class="cmx__col" role="columnheader">
-                            <span class="cmx__ord nd-num">{{ orderOf('consult:' + c.id) }}</span>
+                            <span class="cmx__ord pf-num">{{ orderOf('consult:' + c.id) }}</span>
                             <b>{{ c.label }}</b><small>{{ c.sub }}</small>
                             <button type="button" class="cmx__x" (click)="unpick('consult:' + c.id)" [attr.aria-label]="'Remove ' + c.label + ' from compare'">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -216,7 +216,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                       <div class="cmx__sec" role="row"><span role="cell">Prescription</span></div>
                       @for (r of m.rx; track r.key) {
                         <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
-                          @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell nd-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
+                          @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell pf-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
                         </div>
                       } @empty { <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">—</span>@for (c of compareCols(); track c.id) { <span class="cmx__cell" role="cell">No medicines</span> }</div> }
                       @if (showSec('tests')) {
@@ -231,11 +231,11 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                     <div class="cw__cmpgrid">
                       @for (g of resultGroups(); track g.title) {
                         <div class="cw__cp">
-                          <b>{{ g.title }} @for (it of g.items; track it.id) { <span class="cmx__ord nd-num">{{ orderOf(it.id) }}</span> }</b>
-                          <span class="cw__big nd-num" [class.cw__big--h]="g.last.high">{{ g.last.result!.value }} <small>{{ g.last.result!.unit }} · {{ g.last.date + 'T00:00:00' | date:'d MMM y' }}</small></span>
+                          <b>{{ g.title }} @for (it of g.items; track it.id) { <span class="cmx__ord pf-num">{{ orderOf(it.id) }}</span> }</b>
+                          <span class="cw__big pf-num" [class.cw__big--h]="g.last.high">{{ g.last.result!.value }} <small>{{ g.last.result!.unit }} · {{ g.last.date + 'T00:00:00' | date:'d MMM y' }}</small></span>
                           @if (spark(g.last.result!.points); as p) { <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg> }
-                          <p class="cw__muted nd-num">@for (pt of g.last.result!.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
-                          <button type="button" class="nd-btn nd-btn--tertiary" (click)="unpickAll(g.items)">Remove</button>
+                          <p class="cw__muted pf-num">@for (pt of g.last.result!.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
+                          <button type="button" class="pf-btn pf-btn--tertiary" (click)="unpickAll(g.items)">Remove</button>
                         </div>
                       }
                     </div>
@@ -245,14 +245,14 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                     @case ('flow') {
                       <div class="cw__flow">
                         @for (s of it.steps ?? []; track $index; let last = $last) {
-                          <div class="cw__fs" [class.cw__fs--now]="last"><span class="nd-num">{{ s.at }}</span><b>{{ s.what }}</b></div>
+                          <div class="cw__fs" [class.cw__fs--now]="last"><span class="pf-num">{{ s.at }}</span><b>{{ s.what }}</b></div>
                         } @empty { <p class="cw__muted">No steps recorded for this visit.</p> }
                       </div>
                     }
                     @case ('vit') {
                       <div class="cw__cp cw__cp--wide">
                         @for (v of vitalRows(); track v.label) {
-                          <div class="cw__kv" [class.cw__kv--warn]="v.warn"><span>{{ v.label }}</span><b class="nd-num">{{ v.value }}</b></div>
+                          <div class="cw__kv" [class.cw__kv--warn]="v.warn"><span>{{ v.label }}</span><b class="pf-num">{{ v.value }}</b></div>
                         }
                         <p class="cw__muted">{{ w.vitals?.recordedByName || 'Recorded' }}@if (w.vitals?.recordedAt) { · {{ w.vitals?.recordedAt | date:'h:mm a' }} }</p>
                       </div>
@@ -261,25 +261,25 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                       <div class="cw__cp cw__cp--wide">
                         @if (it.id === 'today:desk') { <p class="cw__p">Complaint: {{ it.text }}</p> }
                         @else { @for (p of intakePrefills(); track p.id) { <div class="cw__kv"><span>{{ p.label }}</span><b>{{ p.value }}</b></div> } }
-                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="closeViewer(); openFindings()">Review in Findings</button></div> }
+                        @if (editable()) { <div><button type="button" class="pf-btn pf-btn--secondary" (click)="closeViewer(); openFindings()">Review in Findings</button></div> }
                       </div>
                     }
                     @case ('res') {
                       @if (it.result; as r) {
                         <div class="cw__cp cw__cp--wide">
-                          <span class="cw__big nd-num" [class.cw__big--h]="it.high">{{ r.value }} <small>{{ r.unit }}@if (r.range) { · normal {{ r.range }}}</small></span>
+                          <span class="cw__big pf-num" [class.cw__big--h]="it.high">{{ r.value }} <small>{{ r.unit }}@if (r.range) { · normal {{ r.range }}}</small></span>
                           @if (spark(r.points); as p) {
                             <span class="cw__k">Trend</span>
                             <svg class="cw__spark" viewBox="0 0 240 64" preserveAspectRatio="none" aria-hidden="true"><polyline [attr.points]="p" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-                            <p class="cw__muted nd-num">@for (pt of r.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
+                            <p class="cw__muted pf-num">@for (pt of r.points; track $index; let last = $last) { {{ pt.date | date:'d MMM' }}: {{ pt.value }}@if (!last) { · } }</p>
                           }
                         </div>
                       }
                     }
                     @case ('rx') {
                       <div class="cw__cp cw__cp--wide">
-                        @for (d of it.rx ?? []; track $index; let i = $index) { <div class="cw__rxl"><span class="nd-num">{{ i + 1 }}</span><span>{{ rxText(d) }}</span></div> }
-                        @if (editable()) { <div><button type="button" class="nd-btn nd-btn--secondary" (click)="repeatRx(it)" data-repeat>Repeat this prescription today</button></div> }
+                        @for (d of it.rx ?? []; track $index; let i = $index) { <div class="cw__rxl"><span class="pf-num">{{ i + 1 }}</span><span>{{ rxText(d) }}</span></div> }
+                        @if (editable()) { <div><button type="button" class="pf-btn pf-btn--secondary" (click)="repeatRx(it)" data-repeat>Repeat this prescription today</button></div> }
                       </div>
                     }
                   }
@@ -322,7 +322,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         <div class="pchips">
                           @for (d of st().diagnoses; track d.label; let i = $index) {
                             @if (editDx() === i) {
-                              <input class="nd-input pchip-edit" type="text" [value]="d.label" (keydown.enter)="renameDx(i, $any($event.target).value)" (blur)="renameDx(i, $any($event.target).value)"
+                              <input class="pf-input pchip-edit" type="text" [value]="d.label" (keydown.enter)="renameDx(i, $any($event.target).value)" (blur)="renameDx(i, $any($event.target).value)"
                                      (keydown.escape)="editDx.set(null)" aria-label="Edit the diagnosis" />
                             } @else {
                               <span class="pchip" [class.pchip--main]="i === 0">
@@ -366,7 +366,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         @if (usualApplied()) {
                           <div rx-quick class="cw__banner">
                             <span>Your usual for <b>{{ usualApplied()!.dx }}</b> is in.</span>
-                            <button type="button" class="nd-btn nd-btn--tertiary" (click)="undoUsualSet()">Undo</button>
+                            <button type="button" class="pf-btn pf-btn--tertiary" (click)="undoUsualSet()">Undo</button>
                           </div>
                         }
                       </pf-rx-editor>
@@ -405,7 +405,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         <div class="pchips">
                           @for (t of st().tests; track t.testId) {
                             <span class="pchip">
-                              <span class="pchip__t">{{ t.name }}@if (t.price) { <small class="nd-num">₹{{ t.price }}</small> }</span>
+                              <span class="pchip__t">{{ t.name }}@if (t.price) { <small class="pf-num">₹{{ t.price }}</small> }</span>
                               @if (editable() || t.specimen) {
                                 <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)" [readonly]="!editable()"
                                                         (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
@@ -437,7 +437,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                         <div class="pchips">
                           @for (a of advice(); track $index; let i = $index) {
                             @if (editAdv() === i) {
-                              <input class="nd-input pchip-edit" type="text" [value]="a" (keydown.enter)="renameAdvice(i, $any($event.target).value)" (blur)="renameAdvice(i, $any($event.target).value)"
+                              <input class="pf-input pchip-edit" type="text" [value]="a" (keydown.enter)="renameAdvice(i, $any($event.target).value)" (blur)="renameAdvice(i, $any($event.target).value)"
                                      (keydown.escape)="editAdv.set(null)" aria-label="Edit the advice" />
                             } @else {
                               <span class="pchip">
@@ -483,7 +483,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                     @if (isColl('note')) { <p class="psum">{{ st().privateNotes ? 'Written · only you see it' : 'None' }}</p> }
                     @else if (w.consult?.privateNotesHidden) { <p class="psum">The consulting doctor's private notes are not visible to you.</p> }
                     @else {
-                      <textarea class="nd-input pnote" rows="1" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })"
+                      <textarea class="pf-input pnote" rows="1" [value]="st().privateNotes" [disabled]="!editable()" (input)="patch({ privateNotes: $any($event.target).value })"
                                 placeholder="Only you see this. Never printed or sent." [attr.aria-label]="'Private note. ' + visibilityText()"></textarea>
                     }
                   </div>
@@ -494,7 +494,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
 
           <!-- ── Right: the patient card (Always strip + the visit's records) ── -->
           @if (rightOverlay()) { <div class="cw__scrim" (click)="closeRight()" aria-hidden="true"></div> }
-          <aside class="nd-card cw__right" [class.cw__right--float]="!rightDocked() || phone()" [class.cw__right--open]="rightOverlay()" aria-label="Patient records">
+          <aside class="pf-card cw__right" [class.cw__right--float]="!rightDocked() || phone()" [class.cw__right--open]="rightOverlay()" aria-label="Patient records">
             <pf-consult-visit-card [items]="items()" [dayKey]="dayKey()" [isToday]="dayKey() === todayKey()" [loading]="dock.loading()"
                                    [selectedId]="viewItem()?.id ?? null" [compareIds]="compareIdList()" [compareMode]="compareMode()" [closable]="!rightDocked() || phone()" [pinned]="rightPinned()" [autoCollapsed]="rightPinned() && !rightDocked()" [pinnable]="!phone()"
                                    [allergies]="allergies()" [pregnancy]="w.pregnancy ?? null" [conditions]="w.conditions" [medicines]="w.currentMedicines"
@@ -507,10 +507,10 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           <!-- ── A procedure's sessions side by side (Sessions / the "readings" preset) ── -->
           @if (sessionsView(); as sv) {
             <div class="cw__scrim" (click)="sessionsFor.set(null)" aria-hidden="true"></div>
-            <aside class="nd-card cw__drawer cw__drawer--wide" role="dialog" [attr.aria-label]="sv.name + ' sessions'">
-              <header class="nd-card__head">
-                <span class="nd-card__label">{{ sv.name }} · sessions</span>
-                <span class="nd-card__spacer"></span>
+            <aside class="pf-card cw__drawer cw__drawer--wide" role="dialog" [attr.aria-label]="sv.name + ' sessions'">
+              <header class="pf-card__head">
+                <span class="pf-card__label">{{ sv.name }} · sessions</span>
+                <span class="pf-card__spacer"></span>
                 <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="sessionsFor.set(null)" aria-label="Close the sessions">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
@@ -523,12 +523,12 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                     <div class="cmx__row cmx__row--head" role="row">
                       <span class="cmx__lbl" role="columnheader"></span>
                       @for (d of sv.table.dates; track $index; let i = $index; let last = $last) {
-                        <span class="cmx__col" role="columnheader"><b class="nd-num">Session {{ i + 1 }}</b><small class="nd-num">{{ last && sv.today ? 'Today' : (d + 'T00:00:00' | date:'d MMM y') }}</small></span>
+                        <span class="cmx__col" role="columnheader"><b class="pf-num">Session {{ i + 1 }}</b><small class="pf-num">{{ last && sv.today ? 'Today' : (d + 'T00:00:00' | date:'d MMM y') }}</small></span>
                       }
                     </div>
                     @for (r of sv.table.rows; track r.key) {
                       <div class="cmx__row" role="row"><span class="cmx__lbl" role="rowheader">{{ r.label }}</span>
-                        @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell nd-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
+                        @for (c of r.cells; track $index; let i = $index) { <span class="cmx__cell pf-num" role="cell" [class.cmx__cell--chg]="r.changed[i]">{{ c || '—' }}</span> }
                       </div>
                     }
                   </div>
@@ -540,10 +540,10 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
           <!-- ── The Findings drawer (C/O): prefill review + the consult form ── -->
           @if (findingsOpen()) {
             <div class="cw__scrim" (click)="findingsOpen.set(false)" aria-hidden="true"></div>
-            <aside class="nd-card cw__drawer" role="dialog" aria-label="Complaint and findings">
-              <header class="nd-card__head">
-                <span class="nd-card__label">Complaint &amp; findings</span>
-                <span class="nd-card__spacer"></span>
+            <aside class="pf-card cw__drawer" role="dialog" aria-label="Complaint and findings">
+              <header class="pf-card__head">
+                <span class="pf-card__label">Complaint &amp; findings</span>
+                <span class="pf-card__spacer"></span>
                 <button type="button" class="cw__iconbtn cw__iconbtn--sm" (click)="findingsOpen.set(false)" aria-label="Close the findings">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
@@ -552,13 +552,13 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 @if (editable() && pending().length) {
                   <div class="cw__review" data-review>
                     <div class="cw__rh"><span>Check what was filled in before the consult · {{ pending().length }}</span>
-                      <button type="button" class="nd-btn nd-btn--secondary cw__xs" (click)="confirmAll()">Confirm all</button></div>
+                      <button type="button" class="pf-btn pf-btn--secondary cw__xs" (click)="confirmAll()">Confirm all</button></div>
                     @for (p of pending(); track p.id) {
                       <div class="cw__pf" [class.cw__pf--w]="p.warn" [attr.data-prefill]="p.id">
                         <div class="cw__pfm"><span class="cw__pfv">{{ p.label }}: {{ p.value }}</span><span class="cw__pfs">{{ p.src }}</span></div>
                         <div class="cw__pfa">
-                          <button type="button" class="nd-btn nd-btn--tertiary cw__xs" (click)="editPrefill(p)">Edit</button>
-                          <button type="button" class="nd-btn nd-btn--secondary cw__xs" (click)="confirm(p.id)">Confirm</button>
+                          <button type="button" class="pf-btn pf-btn--tertiary cw__xs" (click)="editPrefill(p)">Edit</button>
+                          <button type="button" class="pf-btn pf-btn--secondary cw__xs" (click)="confirm(p.id)">Confirm</button>
                         </div>
                       </div>
                     }
@@ -566,7 +566,7 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
                 }
                 <label class="cw__f" [class.cw__f--pre]="isPending('complaint')">
                   <span>Complaint @if (isPending('complaint')) { <em class="cw__ptag">From the front desk</em> }</span>
-                  <input id="cw-complaint" class="nd-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
+                  <input id="cw-complaint" class="pf-input cw__in" type="text" [value]="st().chiefComplaint" [disabled]="!editable()" aria-label="Chief complaints"
                          (input)="onComplaint($any($event.target).value)" placeholder="What brings the patient in" />
                 </label>
                 @if (w.form) {
@@ -599,9 +599,9 @@ export const prefillKey = (visitId: string) => `pf.opd.prefill.${visitId}`;
       <div class="cw cw--loading"><div class="cw__skel" aria-label="Opening the consult"><span></span><span></span><span></span></div></div>
     } @else {
       <div class="cw cw--loading">
-        <div class="nd-empty">
-          <p class="nd-empty__title">{{ loadError() || 'Visit not found' }}</p>
-          <button type="button" class="nd-btn nd-btn--secondary" (click)="back()">Back to my patients</button>
+        <div class="pf-empty">
+          <p class="pf-empty__title">{{ loadError() || 'Visit not found' }}</p>
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="back()">Back to my patients</button>
         </div>
       </div>
     }

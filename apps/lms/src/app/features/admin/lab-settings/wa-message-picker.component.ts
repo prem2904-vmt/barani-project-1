@@ -29,21 +29,21 @@ import { spinDelay } from '../../../shared/utils/busy';
     <div class="pf-wmp" data-testid="wa-message-picker" [attr.data-kind]="kind()">
       <div class="pf-wmp__fields">
         <label class="pf-wmp__field">
-          <span class="nd-field__lbl">Message</span>
+          <span class="pf-field__lbl">Message</span>
           @if (options().length) {
             <pf-select data-testid="wmp-message" [options]="options()" [value]="code()" [disabled]="!canEdit() || busy()"
                        placeholder="Choose a message" (valueChange)="pick($event)"></pf-select>
           } @else {
-            <span class="nd-chip nd-chip--static pf-wmp__chip" data-testid="wmp-none">No approved message yet</span>
+            <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-none">No approved message yet</span>
           }
         </label>
         <label class="pf-wmp__field pf-wmp__field--lang">
-          <span class="nd-field__lbl">Language</span>
+          <span class="pf-field__lbl">Language</span>
           @if (languages().length > 1) {
             <pf-select data-testid="wmp-language" [options]="languageOptions()" [value]="language()" [disabled]="!canEdit() || busy()"
                        (valueChange)="pickLanguage($event)"></pf-select>
           } @else {
-            <span class="nd-chip nd-chip--static pf-wmp__chip" data-testid="wmp-language-chip">{{ languages()[0]?.label || 'English' }}</span>
+            <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-language-chip">{{ languages()[0]?.label || 'English' }}</span>
           }
         </label>
       </div>

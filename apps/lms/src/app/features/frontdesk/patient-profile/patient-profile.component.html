@@ -1,10 +1,10 @@
-<!-- Patient profile, CLINICAL-FIRST (docs/ND-PATTERN.md §22): band (back +
+<!-- Patient profile, CLINICAL-FIRST (docs/PF-PATTERN.md §22): band (back +
      tenant + actions, ONE primary: New order) whose pill is the CONTEXT BAR
      → main column: SNAPSHOT (needs attention · in progress now · last visit)
      over CUMULATIVE RESULTS (analyte × visit grid) ‖ the PATIENT companion
      (quick actions, timeline, details), collapsible to a strip. ≤900px: one
      stacked column; ≤640px: results as cards, New order in the bottom bar. -->
-<section class="pf-pp nd-page" (keydown.escape)="onEsc($event)">
+<section class="pf-pp pf-page" (keydown.escape)="onEsc($event)">
   <pf-hero-band class="pf-pp-band" [back]="true" [backAction]="goBack" [customSearch]="true" [contextBar]="true">
     <ng-container band-actions>
       @if (patient(); as p) {
@@ -44,12 +44,12 @@
     </ng-container>
 
     <!-- CONTEXT BAR: the patient as read-only chips. -->
-    <div band-search class="nd-ctx pf-pp-ctx">
+    <div band-search class="pf-ctx pf-pp-ctx">
       @if (patient(); as p) {
         <span class="pf-pp-who pf-pp-in" style="--i: 0">
-          <span class="nd-ctx__primary pf-pp-name">{{ displayName() }}</span>
+          <span class="pf-ctx__primary pf-pp-name">{{ displayName() }}</span>
           <span class="pf-pp-identity">
-            <span class="pf-pp-meta nd-num">{{ metaLine() }}</span>
+            <span class="pf-pp-meta pf-num">{{ metaLine() }}</span>
             @if (p.mrn) {
               <button type="button" class="pf-pp-copy-id" (click)="copyToClipboard(p.mrn)"
                       [attr.aria-label]="copied() ? 'Patient ID copied' : 'Copy patient ID'"
@@ -64,16 +64,16 @@
           </span>
         </span>
         @if (p.abhaId) {
-          <span class="nd-ctx__chip pf-pp-abha pf-pp-in" style="--i: 1"
+          <span class="pf-ctx__chip pf-pp-abha pf-pp-in" style="--i: 1"
                 [title]="p.abhaVerified ? 'ABHA verified' : 'ABHA linked, not verified'">
-            <span class="nd-ctx__k">ABHA</span><span class="nd-num">{{ abhaFormatted() }}</span>
+            <span class="pf-ctx__k">ABHA</span><span class="pf-num">{{ abhaFormatted() }}</span>
             @if (p.abhaVerified) {
               <svg class="pf-pp-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Verified"><path d="M20 6 9 17l-5-5"/></svg>
             }
           </span>
         }
         @for (f of flags(); track f.key) {
-          <span class="nd-ctx__chip pf-pp-flag pf-pp-in" style="--i: 2" [attr.data-tone]="f.tone" [attr.data-flag]="f.key" [title]="f.title">
+          <span class="pf-ctx__chip pf-pp-flag pf-pp-in" style="--i: 2" [attr.data-tone]="f.tone" [attr.data-flag]="f.key" [title]="f.title">
             <span class="pf-pp-flag__dot" aria-hidden="true"></span>{{ f.label }}
           </span>
         }
@@ -83,17 +83,17 @@
     </div>
   </pf-hero-band>
 
-  <div class="nd-body pf-pp-body" [class.pf-pp-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-pp-body--narrow]="narrow()"
+  <div class="pf-body pf-pp-body" [class.pf-pp-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-pp-body--narrow]="narrow()"
        [class.pf-pp-body--bar]="phone() && !!patient()">
     <!-- ─── MAIN COLUMN — the ONE route zoom target, skeleton to content ── -->
     <div class="pf-pp-main" [pfZoomTarget]="zoomKeys()" [attr.aria-busy]="showSkeleton()">
       @if (showSkeleton()) {
-        <div class="nd-card pf-pp-snap pf-pp-snap--skel" aria-hidden="true">
+        <div class="pf-card pf-pp-snap pf-pp-snap--skel" aria-hidden="true">
           @for (i of [1, 2, 3]; track i) {
             <div class="pf-pp-pane"><span class="pf-pp-skel" style="width: 40%"></span><span class="pf-pp-skel"></span><span class="pf-pp-skel" style="width: 70%"></span></div>
           }
         </div>
-        <div class="nd-card pf-pp-gridskel" aria-hidden="true">
+        <div class="pf-card pf-pp-gridskel" aria-hidden="true">
           <div class="pf-pp-skelrows">
             @for (i of [1, 2, 3, 4, 5]; track i) {
               <div class="pf-pp-skelrow"><span class="pf-pp-skel" style="width: 55%"></span><span class="pf-pp-skel pf-pp-skel--sm" style="width: 35%"></span></div>
@@ -101,30 +101,30 @@
           </div>
         </div>
       } @else if (!patient()) {
-        <div class="nd-card pf-pp-missing">
-          <div class="nd-empty">
-            <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
-            <p class="nd-empty__title">Patient not found</p>
-            <p class="nd-empty__body">This record may have been merged or removed.</p>
-            <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="goBack()">Back</button>
+        <div class="pf-card pf-pp-missing">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
+            <p class="pf-empty__title">Patient not found</p>
+            <p class="pf-empty__body">This record may have been merged or removed.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="goBack()">Back</button>
           </div>
         </div>
       } @else if (detail(); as d) {
         <!-- ─── DETAIL (zoomed in from a grid row / cell / timeline row) ─── -->
-        <section class="nd-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : 'Trend'">
+        <section class="pf-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : 'Trend'">
           @if (d.kind === 'trend') {
-            <header class="nd-card__head pf-pp-detail__head">
-              <button type="button" class="nd-btn nd-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to results" title="Back to results">
+            <header class="pf-card__head pf-pp-detail__head">
+              <button type="button" class="pf-btn pf-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to results" title="Back to results">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
               </button>
-              <span class="nd-card__label">Trend</span>
+              <span class="pf-card__label">Trend</span>
               <span class="pf-pp-detail__t">{{ d.title }}</span>
             </header>
-            <div class="nd-card__body pf-pp-detail__body pf-pp-detail__body--trend">
+            <div class="pf-card__body pf-pp-detail__body pf-pp-detail__body--trend">
               <pf-lab-trends [patientId]="patient()!.id" [fit]="false" [focus]="{ testId: d.testId, parameter: d.parameter }"></pf-lab-trends>
             </div>
           } @else {
-            <div class="nd-card__body pf-pp-detail__body">
+            <div class="pf-card__body pf-pp-detail__body">
               <pf-lab-orders [orders]="history()" [patientId]="patient()!.id" [detailId]="d.id" [autoReport]="d.report"
                              (detailChange)="$event === null && closeDetail()"></pf-lab-orders>
             </div>
@@ -132,11 +132,11 @@
         </section>
       } @else {
         <!-- ─── SNAPSHOT ─────────────────────────────────────────────── -->
-        <section class="nd-card pf-pp-snap" aria-label="Clinical snapshot">
+        <section class="pf-card pf-pp-snap" aria-label="Clinical snapshot">
           <!-- Needs attention: flagged values from the latest visits. -->
           <div class="pf-pp-pane pf-pp-pane--attn">
             <h3 class="pf-pp-pane__t">Needs attention
-              @if (attention().length) { <span class="pf-pp-pane__n nd-num">{{ attention().length }}</span> }
+              @if (attention().length) { <span class="pf-pp-pane__n pf-num">{{ attention().length }}</span> }
             </h3>
             @if (!canResults()) {
               <p class="pf-pp-quiet">Results need report access.</p>
@@ -159,12 +159,12 @@
                         <span class="pf-pp-attn__dot" aria-hidden="true"></span>{{ a.title }}
                         @if (a.testName !== a.title) { <span class="pf-pp-attn__test">{{ a.testName }}</span> }
                       </span>
-                      <span class="pf-pp-attn__val nd-num">
+                      <span class="pf-pp-attn__val pf-num">
                         @if (a.dir === 'up') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> }
                         @if (a.dir === 'down') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> }
                         {{ a.value }}@if (a.unit) {<span class="pf-pp-attn__unit">{{ a.unit }}</span>}
                       </span>
-                      <span class="pf-pp-attn__meta nd-num">
+                      <span class="pf-pp-attn__meta pf-num">
                         @if (a.range) { <span class="pf-pp-mi">Ref {{ a.range }}</span> }
                         <span class="pf-pp-mi">{{ a.dateLabel }}@if (!a.final) { · prelim }</span>
                         @if (a.delta; as dl) {
@@ -176,7 +176,7 @@
                 }
               </ul>
               @if (attention().length > attentionMax()) {
-                <button type="button" class="nd-btn nd-btn--tertiary pf-pp-pane__more" (click)="abnormalSeed.set(abnormalSeed() + 1)">
+                <button type="button" class="pf-btn pf-btn--tertiary pf-pp-pane__more" (click)="abnormalSeed.set(abnormalSeed() + 1)">
                   Show all {{ attention().length }} in results
                 </button>
               }
@@ -186,7 +186,7 @@
           <!-- In progress now: live stage + expected TAT. -->
           <div class="pf-pp-pane pf-pp-pane--prog">
             <h3 class="pf-pp-pane__t">In progress now
-              @if (active().length) { <span class="pf-pp-pane__n nd-num">{{ active().length }}</span> }
+              @if (active().length) { <span class="pf-pp-pane__n pf-num">{{ active().length }}</span> }
             </h3>
             @if (!active().length) {
               <p class="pf-pp-quiet">Nothing in progress.</p>
@@ -202,7 +202,7 @@
                           <span class="pf-pp-steps__seg" [class.pf-pp-steps__seg--on]="a.stage >= i + 1" [class.pf-pp-steps__seg--now]="a.stage === i + 1"></span>
                         }
                       </span>
-                      <span class="pf-pp-prog__meta nd-num">
+                      <span class="pf-pp-prog__meta pf-num">
                         <span class="pf-pp-status" [attr.data-tone]="a.stage === 3 ? 'amber' : a.stage === 1 ? 'blue' : a.stage === 0 ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ a.stageLabel }}</span>
                         @if (a.dueLabel) { <span class="pf-pp-prog__due" [class.pf-pp-prog__due--late]="a.overdue">{{ a.dueLabel }}</span> }
                       </span>
@@ -210,7 +210,7 @@
                   </li>
                 }
               </ul>
-              @if (active().length > 3) { <p class="pf-pp-quiet nd-num">+{{ active().length - 3 }} more in the timeline</p> }
+              @if (active().length > 3) { <p class="pf-pp-quiet pf-num">+{{ active().length - 3 }} more in the timeline</p> }
             }
           </div>
 
@@ -218,12 +218,12 @@
           <div class="pf-pp-pane pf-pp-pane--last">
             <h3 class="pf-pp-pane__t">Last visit</h3>
             @if (lastVisit(); as lv) {
-              <p class="pf-pp-last__date nd-num">{{ lv.date | date:'d MMM y' }}</p>
+              <p class="pf-pp-last__date pf-num">{{ lv.date | date:'d MMM y' }}</p>
               <p class="pf-pp-last__tests">{{ lv.title }}</p>
               <p class="pf-pp-last__doc">{{ lv.doctor }}</p>
               <div class="pf-pp-last__foot">
                 <span class="pf-pp-status" [attr.data-tone]="lv.report === 'ready' ? 'green' : lv.report === 'none' ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ lv.reportLabel }}</span>
-                <button type="button" class="nd-btn nd-btn--secondary pf-pp-last__view" [pfZoomSource]="[lv.order.id]" (click)="openOrder(lv.order.id, !!lv.order.report)">
+                <button type="button" class="pf-btn pf-btn--secondary pf-pp-last__view" [pfZoomSource]="[lv.order.id]" (click)="openOrder(lv.order.id, !!lv.order.report)">
                   {{ lv.order.report ? 'View report' : 'View' }}
                 </button>
               </div>
@@ -240,23 +240,23 @@
 
         @if (narrow()) {
           <!-- Stacked: the companion's content follows the results. -->
-          <section class="nd-card pf-pp-stack" aria-label="Timeline">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="timelineIcon"></ng-container></span>
-              <span class="nd-card__label">Timeline</span>
-              <span class="nd-card__note nd-num">{{ timeline().length }}</span>
+          <section class="pf-card pf-pp-stack" aria-label="Timeline">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="timelineIcon"></ng-container></span>
+              <span class="pf-card__label">Timeline</span>
+              <span class="pf-card__note pf-num">{{ timeline().length }}</span>
             </header>
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
               <ng-container *ngTemplateOutlet="timelineTpl"></ng-container>
             </div>
           </section>
-          <section class="nd-card pf-pp-stack" aria-label="Patient details">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
-              <span class="nd-card__label">Details</span>
+          <section class="pf-card pf-pp-stack" aria-label="Patient details">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+              <span class="pf-card__label">Details</span>
             </header>
-            <div class="nd-card__body"><ng-container *ngTemplateOutlet="detailsTpl"></ng-container></div>
+            <div class="pf-card__body"><ng-container *ngTemplateOutlet="detailsTpl"></ng-container></div>
           </section>
         }
       }
@@ -265,36 +265,36 @@
     <!-- ─── PATIENT companion (right; quick actions · timeline · details) ── -->
     @if (!narrow()) {
       @if (sideCollapsed()) {
-        <aside class="nd-card pf-pp-strip" aria-label="Patient">
+        <aside class="pf-card pf-pp-strip" aria-label="Patient">
           <button type="button" class="pf-pp-strip__btn" (click)="toggleSide()"
                   title="Show timeline and details" aria-label="Show timeline and details" aria-expanded="false">
-            <span class="nd-btn nd-btn--icon pf-pp-strip__expand" aria-hidden="true">
+            <span class="pf-btn pf-btn--icon pf-pp-strip__expand" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </span>
-            <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
             <span class="pf-pp-strip__label">Patient</span>
           </button>
         </aside>
       } @else {
-        <aside class="nd-card pf-pp-side" aria-label="Patient">
-          <header class="nd-card__head pf-pp-side__head">
-            <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
-            <span class="nd-card__label">Patient</span>
-            <span class="nd-card__spacer"></span>
-            <div class="nd-seg pf-pp-seg" role="radiogroup" aria-label="Show" (keydown)="onSideSegKey($event)">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="sideView() === 'timeline'"
+        <aside class="pf-card pf-pp-side" aria-label="Patient">
+          <header class="pf-card__head pf-pp-side__head">
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+            <span class="pf-card__label">Patient</span>
+            <span class="pf-card__spacer"></span>
+            <div class="pf-seg pf-pp-seg" role="radiogroup" aria-label="Show" (keydown)="onSideSegKey($event)">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sideView() === 'timeline'"
                       [attr.tabindex]="sideView() === 'timeline' ? 0 : -1" (click)="sideView.set('timeline')">
-                Timeline <span class="pf-pp-seg__n nd-num">{{ timeline().length }}</span>
+                Timeline <span class="pf-pp-seg__n pf-num">{{ timeline().length }}</span>
               </button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="sideView() === 'details'"
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sideView() === 'details'"
                       [attr.tabindex]="sideView() === 'details' ? 0 : -1" (click)="sideView.set('details')">Details</button>
             </div>
-            <button type="button" class="nd-btn nd-btn--icon pf-pp-collapse" (click)="toggleSide()"
+            <button type="button" class="pf-btn pf-btn--icon pf-pp-collapse" (click)="toggleSide()"
                     title="Hide the patient card" aria-label="Hide the patient card" aria-expanded="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
           </header>
-          <div class="nd-card__body pf-pp-sidebody">
+          <div class="pf-card__body pf-pp-sidebody">
             @if (patient()) {
               <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
               @if (sideView() === 'timeline') {
@@ -315,15 +315,15 @@
 
   <!-- Phones: THE primary, full width above the navbar. -->
   @if (phone() && canNewOrder() && patient(); as p) {
-    <div class="nd-bottombar pf-pp-bottombar">
+    <div class="pf-bottombar pf-pp-bottombar">
       @if (opdGate.visible()) {
-        <button type="button" class="nd-btn nd-btn--secondary pf-pp-bottombar__consult" aria-label="New consultation" title="New consultation" (click)="startConsult(p)">
+        <button type="button" class="pf-btn pf-btn--secondary pf-pp-bottombar__consult" aria-label="New consultation" title="New consultation" (click)="startConsult(p)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/>
           </svg>
         </button>
       }
-      <button type="button" class="nd-btn nd-btn--primary pf-pp-bottombar__new" (click)="startOrder(p)">
+      <button type="button" class="pf-btn pf-btn--primary pf-pp-bottombar__new" (click)="startOrder(p)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
         New order
       </button>
@@ -342,7 +342,7 @@
   <!-- More: a menu under the band on web, a sheet on phones. -->
   @if (moreOpen() && patient(); as p) {
     <div class="pf-pp-scrim pf-pp-scrim--menu" (click)="closeMore()" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--more" role="menu" aria-label="More actions">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--more" role="menu" aria-label="More actions">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
       <ul class="pf-pp-menu" role="none">
         @if (features.appointmentsEnabled()) {
@@ -396,7 +396,7 @@
         }
       </ul>
       <div class="pf-pp-sheet__foot">
-        <button type="button" class="nd-btn nd-btn--secondary pf-pp-sheet__cancel" (click)="closeMore()">Cancel</button>
+        <button type="button" class="pf-btn pf-btn--secondary pf-pp-sheet__cancel" (click)="closeMore()">Cancel</button>
       </div>
     </div>
   }
@@ -404,7 +404,7 @@
   <!-- QR (scan to open the profile). -->
   @if (qrOpen()) {
     <div class="pf-pp-scrim" (click)="qrOpen.set(false)" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--qr" role="dialog" aria-modal="true" aria-label="Profile QR code">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--qr" role="dialog" aria-modal="true" aria-label="Profile QR code">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
       <ng-container *ngTemplateOutlet="modalHead; context: { label: 'Scan profile', close: closeQr }"></ng-container>
       <div class="pf-pp-qr">
@@ -417,7 +417,7 @@
   <!-- Patient ID card (print). -->
   @if (showIdCard() && patient(); as p) {
     <div class="pf-pp-scrim" (click)="showIdCard.set(false)" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--modal" role="dialog" aria-modal="true" aria-label="Patient ID card">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal" role="dialog" aria-modal="true" aria-label="Patient ID card">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
       <ng-container *ngTemplateOutlet="modalHead; context: { label: 'Patient ID card', close: closeIdCard }"></ng-container>
       <div class="pf-pp-modalbody"><pf-patient-id-card [patient]="p"></pf-patient-id-card></div>
@@ -427,7 +427,7 @@
   <!-- ABHA health card (the official card look). -->
   @if (abhaCardOpen() && patient(); as p) {
     <div class="pf-pp-scrim" (click)="abhaCardOpen.set(false)" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--abha" role="dialog" aria-modal="true" aria-label="ABHA health card">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--abha" role="dialog" aria-modal="true" aria-label="ABHA health card">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
       <ng-container *ngTemplateOutlet="modalHead; context: { label: 'ABHA health card', close: closeAbhaCard }"></ng-container>
       <div class="pf-pp-modalbody">
@@ -437,7 +437,7 @@
             @if (k.address) { <div><dt>Address</dt><dd>{{ k.address }}</dd></div> }
             @if (k.district) { <div><dt>District</dt><dd>{{ k.district }}</dd></div> }
             @if (k.state) { <div><dt>State</dt><dd>{{ k.state }}</dd></div> }
-            @if (k.pincode) { <div><dt>Pincode</dt><dd class="nd-num">{{ k.pincode }}</dd></div> }
+            @if (k.pincode) { <div><dt>Pincode</dt><dd class="pf-num">{{ k.pincode }}</dd></div> }
           </dl>
           <p class="pf-pp-explain">Captured from ABHA KYC.</p>
         }
@@ -452,20 +452,20 @@
   <!-- Send to a colleague. -->
   @if (chatPickerOpen()) {
     <div class="pf-pp-scrim" (click)="closeChatPicker()" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-chat-t">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-chat-t">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-        <span class="nd-card__label" id="pf-pp-chat-t">Send to a colleague</span>
-        <span class="nd-card__spacer"></span>
-        <button type="button" class="nd-btn nd-btn--icon pf-pp-close" (click)="closeChatPicker()" aria-label="Close">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="pf-card__label" id="pf-pp-chat-t">Send to a colleague</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="closeChatPicker()" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </header>
       <p class="pf-pp-pick__lead">{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
       <div class="pf-pp-pick__search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="text" class="nd-input" placeholder="Search by name or email" aria-label="Search colleagues"
+        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
                [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
       </div>
       <ul class="pf-pp-pick__list">
@@ -481,7 +481,7 @@
             </button>
           </li>
         } @empty {
-          <li class="nd-empty nd-empty--compact"><p class="nd-empty__title">No colleagues match</p></li>
+          <li class="pf-empty pf-empty--compact"><p class="pf-empty__title">No colleagues match</p></li>
         }
       </ul>
     </div>
@@ -490,20 +490,20 @@
   <!-- Merge a duplicate into this record. -->
   @if (mergeOpen()) {
     <div class="pf-pp-scrim" (click)="closeMerge()" aria-hidden="true"></div>
-    <div class="nd-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-merge-t">
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-merge-t">
       <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.17 2.87L4 22"/><path d="m20 22-5-5"/></svg></span>
-        <span class="nd-card__label" id="pf-pp-merge-t">Merge a duplicate</span>
-        <span class="nd-card__spacer"></span>
-        <button type="button" class="nd-btn nd-btn--icon pf-pp-close" (click)="closeMerge()" aria-label="Close">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.17 2.87L4 22"/><path d="m20 22-5-5"/></svg></span>
+        <span class="pf-card__label" id="pf-pp-merge-t">Merge a duplicate</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="closeMerge()" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </header>
       <p class="pf-pp-pick__lead">Pick the duplicate record: its orders, bills and appointments move into {{ displayName() }}, then it is deactivated.</p>
       <div class="pf-pp-pick__search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="text" class="nd-input" placeholder="Search patients by name, MRN or phone" aria-label="Search patients"
+        <input type="text" class="pf-input" placeholder="Search patients by name, MRN or phone" aria-label="Search patients"
                [value]="mergeSearch()" (input)="onMergeSearch($any($event.target).value)" autofocus>
       </div>
       <ul class="pf-pp-pick__list">
@@ -514,13 +514,13 @@
               <span class="pf-pp-pick__avatar" aria-hidden="true">{{ (displayOf(dup).charAt(0) + (displayOf(dup).split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</span>
               <span class="pf-pp-pick__meta">
                 <span class="pf-pp-pick__name">{{ displayOf(dup) }}</span>
-                <span class="pf-pp-pick__sub nd-num">{{ dup.mrn || '—' }}@if (dup.phone) { · {{ dup.phone }}}@if (dup.sex) { · {{ dup.sex }}} · {{ ageLabel(dup) }}</span>
+                <span class="pf-pp-pick__sub pf-num">{{ dup.mrn || '—' }}@if (dup.phone) { · {{ dup.phone }}}@if (dup.sex) { · {{ dup.sex }}} · {{ ageLabel(dup) }}</span>
               </span>
             </button>
           </li>
         } @empty {
-          <li class="nd-empty nd-empty--compact">
-            <p class="nd-empty__title">@if (mergeSearch().trim()) { No other patients match } @else { Search for the duplicate record }</p>
+          <li class="pf-empty pf-empty--compact">
+            <p class="pf-empty__title">@if (mergeSearch().trim()) { No other patients match } @else { Search for the duplicate record }</p>
           </li>
         }
       </ul>
@@ -540,7 +540,7 @@
     @if (sideQuick().length) {
       <div class="pf-pp-quick" role="group" aria-label="Quick actions">
         @for (q of sideQuick(); track q.key) {
-          <button type="button" class="nd-btn nd-btn--secondary pf-pp-quick__btn" [attr.data-q]="q.key"
+          <button type="button" class="pf-btn pf-btn--secondary pf-pp-quick__btn" [attr.data-q]="q.key"
                   [disabled]="q.key === 'labels' && reprintLoading()"
                   [pfBusy]="q.key === 'labels' && reprintLoading()" pfBusyLabel="Printing labels…" (click)="runQuick(q)">
             @switch (q.key) {
@@ -558,10 +558,10 @@
   <!-- Timeline: the patient's REAL history, one feed (no made-up records). -->
   <ng-template #timelineTpl>
     @if (!timeline().length) {
-      <div class="nd-empty nd-empty--compact">
-        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-        <p class="nd-empty__title">No history yet</p>
-        <p class="nd-empty__body">Orders, reports and appointments appear here as they happen.</p>
+      <div class="pf-empty pf-empty--compact">
+        <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        <p class="pf-empty__title">No history yet</p>
+        <p class="pf-empty__body">Orders, reports and appointments appear here as they happen.</p>
       </div>
     } @else {
       <ol class="pf-tl" aria-label="Timeline">
@@ -581,9 +581,9 @@
                  [attr.aria-expanded]="e.orderId ? null : !!expanded()[e.id]"
                  [attr.aria-label]="(e.orderId ? 'Open ' : '') + e.title + ', ' + e.status"
                  [pfZoomSource]="e.orderId ? [e.orderId] : []" (click)="onEvent(e)" (keydown)="onEventKey($event, e)">
-              <span class="pf-tl__date nd-num">{{ e.date | date:'d MMM y' }}@if (e.kind !== 'appointment' && e.kind !== 'home') { · {{ e.date | date:'h:mm a' }} }</span>
+              <span class="pf-tl__date pf-num">{{ e.date | date:'d MMM y' }}@if (e.kind !== 'appointment' && e.kind !== 'home') { · {{ e.date | date:'h:mm a' }} }</span>
               <span class="pf-tl__title">{{ e.title }}</span>
-              <span class="pf-tl__meta nd-num">
+              <span class="pf-tl__meta pf-num">
                 @for (m of e.meta; track $index) { <span class="pf-pp-mi">{{ m }}</span> }
               </span>
               <span class="pf-pp-status pf-tl__status" [attr.data-tone]="e.tone"><span class="pf-pp-dot" aria-hidden="true"></span>{{ e.status }}</span>
@@ -592,7 +592,7 @@
               <div class="pf-pp-tlx" [class.pf-pp-tlx--open]="!!expanded()[e.id]" [attr.inert]="expanded()[e.id] ? null : ''">
                 <div class="pf-pp-tlx__in">
                   <dl class="pf-pp-facts">
-                    <div><dt>When</dt><dd class="nd-num">{{ ap.appointmentDate | date:'d MMM y' }}@if (ap.slotTime) { · {{ ap.slotTime }} }</dd></div>
+                    <div><dt>When</dt><dd class="pf-num">{{ ap.appointmentDate | date:'d MMM y' }}@if (ap.slotTime) { · {{ ap.slotTime }} }</dd></div>
                     <div><dt>Type</dt><dd>{{ e.kind === 'home' ? 'Home collection' : 'Visit' }}</dd></div>
                     @if (ap.refDoctorName) { <div><dt>Doctor</dt><dd>{{ ap.refDoctorName }}</dd></div> }
                     @if (ap.notes) { <div><dt>Notes</dt><dd>{{ ap.notes }}</dd></div> }
@@ -603,7 +603,7 @@
           </li>
         }
       </ol>
-      <button type="button" class="nd-btn nd-btn--tertiary pf-pp-fulltl" (click)="openFullTimeline()">Open the full timeline</button>
+      <button type="button" class="pf-btn pf-btn--tertiary pf-pp-fulltl" (click)="openFullTimeline()">Open the full timeline</button>
     }
   </ng-template>
 
@@ -613,15 +613,15 @@
       <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-who">
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-who">Patient</h3>
         <dl class="pf-pp-facts">
-          <div><dt>Age · sex</dt><dd class="nd-num">{{ ageSex() }}</dd></div>
-          @if (p.dateOfBirth) { <div><dt>Date of birth</dt><dd class="nd-num">{{ p.dateOfBirth | date:'d MMM y' }}</dd></div> }
+          <div><dt>Age · sex</dt><dd class="pf-num">{{ ageSex() }}</dd></div>
+          @if (p.dateOfBirth) { <div><dt>Date of birth</dt><dd class="pf-num">{{ p.dateOfBirth | date:'d MMM y' }}</dd></div> }
           <div><dt>Blood group</dt><dd>{{ p.bloodGroup || 'Not recorded' }}</dd></div>
           <div>
             <dt>Patient ID</dt>
             <dd class="pf-pp-idrow">
-              <span class="nd-num">{{ p.mrn || '—' }}</span>
+              <span class="pf-num">{{ p.mrn || '—' }}</span>
               @if (p.mrn) {
-                <button type="button" class="nd-btn nd-btn--icon pf-pp-copy" (click)="copyToClipboard(p.mrn)"
+                <button type="button" class="pf-btn pf-btn--icon pf-pp-copy" (click)="copyToClipboard(p.mrn)"
                         [attr.aria-label]="copied() ? 'Copied' : 'Copy patient ID'" [title]="copied() ? 'Copied' : 'Copy patient ID'">
                   @if (copied()) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -632,7 +632,7 @@
               }
             </dd>
           </div>
-          @if (p.createdAt) { <div><dt>Registered</dt><dd class="nd-num">{{ p.createdAt | date:'d MMM y' }}</dd></div> }
+          @if (p.createdAt) { <div><dt>Registered</dt><dd class="pf-num">{{ p.createdAt | date:'d MMM y' }}</dd></div> }
         </dl>
       </section>
 
@@ -647,18 +647,18 @@
       <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-contact">
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-contact">Contact</h3>
         <dl class="pf-pp-facts">
-          <div><dt>Phone</dt><dd>@if (p.phone) { <a class="pf-pp-link nd-num" [href]="'tel:' + p.phone">{{ p.phone }}</a> } @else { Not recorded }</dd></div>
+          <div><dt>Phone</dt><dd>@if (p.phone) { <a class="pf-pp-link pf-num" [href]="'tel:' + p.phone">{{ p.phone }}</a> } @else { Not recorded }</dd></div>
           @if (p.email) { <div><dt>Email</dt><dd class="pf-pp-wrap">{{ p.email }}</dd></div> }
           @if (p.guardianName) {
             <div><dt>Guardian</dt>
               <dd>{{ p.guardianName }} <span class="pf-pp-sub">({{ p.guardianRelationship ?? 'Guardian' }})</span>
-                @if (p.guardianPhone) { <a class="pf-pp-link pf-pp-block nd-num" [href]="'tel:' + p.guardianPhone">{{ p.guardianPhone }}</a> }
+                @if (p.guardianPhone) { <a class="pf-pp-link pf-pp-block pf-num" [href]="'tel:' + p.guardianPhone">{{ p.guardianPhone }}</a> }
               </dd>
             </div>
           }
           @if (kyc(); as k) {
             @if (k.address || k.district || k.state || k.pincode) {
-              <div><dt>Address</dt><dd>{{ kycAddress(k) }}@if (k.pincode) { <span class="nd-num"> {{ k.pincode }}</span> }</dd></div>
+              <div><dt>Address</dt><dd>{{ kycAddress(k) }}@if (k.pincode) { <span class="pf-num"> {{ k.pincode }}</span> }</dd></div>
             }
           }
         </dl>
@@ -668,14 +668,14 @@
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-idcard">Patient ID card</h3>
         <p class="pf-pp-none">Name, MRN and a QR that opens this profile when scanned.</p>
         <div class="pf-pp-sec__acts">
-          <button type="button" class="nd-btn nd-btn--secondary pf-pp-idcard" (click)="showIdCard.set(true)">View card</button>
+          <button type="button" class="pf-btn pf-btn--secondary pf-pp-idcard" (click)="showIdCard.set(true)">View card</button>
         </div>
       </section>
 
       <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-abha">
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-abha">ABHA</h3>
         @if (p.abhaId) {
-          <span class="nd-chip nd-chip--static pf-pp-state">
+          <span class="pf-chip pf-chip--static pf-pp-state">
             @if (p.abhaVerified) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
               Linked · KYC verified
@@ -685,19 +685,19 @@
             }
           </span>
           <dl class="pf-pp-facts">
-            <div><dt>ABHA number</dt><dd class="nd-num">{{ abhaFormatted() }}</dd></div>
+            <div><dt>ABHA number</dt><dd class="pf-num">{{ abhaFormatted() }}</dd></div>
             @if (cardAbhaAddress()) { <div><dt>ABHA address</dt><dd class="pf-pp-wrap">{{ cardAbhaAddress() }}</dd></div> }
           </dl>
           <div class="pf-pp-sec__acts">
-            <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-card" (click)="abhaCardOpen.set(true)">View card</button>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">
+            <button type="button" class="pf-btn pf-btn--secondary pf-pp-abha-card" (click)="abhaCardOpen.set(true)">View card</button>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">
               {{ p.abhaVerified ? 'Refresh from ABHA' : 'Verify ABHA' }}
             </button>
           </div>
         } @else {
           <p class="pf-pp-none">No ABHA linked yet.</p>
           <div class="pf-pp-sec__acts">
-            <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">Link ABHA</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">Link ABHA</button>
           </div>
         }
       </section>
@@ -705,10 +705,10 @@
       <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-bill">
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-bill">Billing</h3>
         <dl class="pf-pp-stats">
-          <div><dt>Outstanding</dt><dd class="nd-num" [class.pf-pp-owed]="outstanding() > 0">{{ outstanding() | inr }}</dd></div>
-          <div><dt>Total billed</dt><dd class="nd-num">{{ realTotalSpent() | inr }}</dd></div>
-          <div><dt>Lab visits</dt><dd class="nd-num">{{ realVisits() }}</dd></div>
-          <div><dt>Tests ordered</dt><dd class="nd-num">{{ realTestsDone() }}</dd></div>
+          <div><dt>Outstanding</dt><dd class="pf-num" [class.pf-pp-owed]="outstanding() > 0">{{ outstanding() | inr }}</dd></div>
+          <div><dt>Total billed</dt><dd class="pf-num">{{ realTotalSpent() | inr }}</dd></div>
+          <div><dt>Lab visits</dt><dd class="pf-num">{{ realVisits() }}</dd></div>
+          <div><dt>Tests ordered</dt><dd class="pf-num">{{ realTestsDone() }}</dd></div>
         </dl>
         @if (unpaidOrders()) {
           <p class="pf-pp-due"><span class="pf-pp-dot" aria-hidden="true"></span>Payment due on {{ unpaidOrders() }} {{ unpaidOrders() === 1 ? 'order' : 'orders' }}</p>
@@ -718,10 +718,10 @@
   </ng-template>
 
   <ng-template #modalHead let-label="label" let-close="close">
-    <header class="nd-card__head">
-      <span class="nd-card__label">{{ label }}</span>
-      <span class="nd-card__spacer"></span>
-      <button type="button" class="nd-btn nd-btn--icon pf-pp-close" (click)="close()" aria-label="Close">
+    <header class="pf-card__head">
+      <span class="pf-card__label">{{ label }}</span>
+      <span class="pf-card__spacer"></span>
+      <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="close()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
     </header>
@@ -765,12 +765,12 @@
           </div>
           <div class="flex-1 min-w-0">
             <span class="abc__mut block text-[10px] font-semibold uppercase tracking-wider">ABHA number</span>
-            <span class="abc__brand block nd-num font-bold text-base tracking-wide">{{ abhaFormatted() }}</span>
+            <span class="abc__brand block pf-num font-bold text-base tracking-wide">{{ abhaFormatted() }}</span>
             <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
               <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Name</span><span class="block text-[12px] font-semibold pf-pp-wrap">{{ displayName() }}</span></div>
-              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Date of birth</span><span class="block text-[12px] font-semibold nd-num">{{ (p.dateOfBirth | date:'dd-MM-yyyy') || '—' }}</span></div>
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Date of birth</span><span class="block text-[12px] font-semibold pf-num">{{ (p.dateOfBirth | date:'dd-MM-yyyy') || '—' }}</span></div>
               <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Gender</span><span class="block text-[12px] font-semibold">{{ p.sex || '—' }}</span></div>
-              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Mobile</span><span class="block text-[12px] font-semibold nd-num">{{ p.phone || '—' }}</span></div>
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Mobile</span><span class="block text-[12px] font-semibold pf-num">{{ p.phone || '—' }}</span></div>
             </div>
           </div>
           <div class="abc__qr shrink-0 self-start p-1 rounded">

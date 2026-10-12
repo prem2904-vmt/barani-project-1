@@ -46,7 +46,7 @@ afterEach(() => { document.body.classList.remove('pf-scanner-open'); });
 describe('Barcode scanner — new-design shell', () => {
   it('renders the BILLING header: icon chip, SCAN SAMPLE label, calm title, close button', async () => {
     const { el } = await make({ expected: '26123' });
-    expect(el.querySelector('.pf-sc__head .nd-card__icon svg')).toBeTruthy();
+    expect(el.querySelector('.pf-sc__head .pf-card__icon svg')).toBeTruthy();
     expect(el.querySelector('.pf-sc__label')?.textContent?.trim()).toBe('Scan sample');
     expect(el.querySelector('.pf-sc__title')?.textContent?.trim()).toBe('Scan vial to claim');
     expect(el.querySelector('.pf-sc__close')?.getAttribute('aria-label')).toBe('Close');
@@ -67,21 +67,21 @@ describe('Barcode scanner — new-design shell', () => {
     expect(css).not.toMatch(/dashed/);
   });
 
-  it('is the kit phone sheet (nd-sheet) with a handle', async () => {
+  it('is the kit phone sheet (pf-sheet) with a handle', async () => {
     const { el } = await make({ expected: '26123' });
     const card = el.querySelector('.pf-sc__card');
-    expect(card?.classList.contains('nd-sheet')).toBe(true);
-    expect(card?.querySelector('.nd-sheet__handle')).toBeTruthy();
+    expect(card?.classList.contains('pf-sheet')).toBe(true);
+    expect(card?.querySelector('.pf-sheet__handle')).toBeTruthy();
   });
 
   it('footer is secondary "Enter manually" + tertiary "Cancel", never a primary', async () => {
     const { el } = await make({ expected: '26123' });
     const foot = el.querySelector('.pf-sc__foot')!;
     const toggle = foot.querySelector('.pf-sc__manual-toggle')!;
-    expect(toggle.classList.contains('nd-btn--secondary')).toBe(true);
+    expect(toggle.classList.contains('pf-btn--secondary')).toBe(true);
     expect(toggle.textContent?.trim()).toBe('Enter manually');
-    expect(foot.querySelector('.pf-sc__cancel')?.classList.contains('nd-btn--tertiary')).toBe(true);
-    expect(foot.querySelector('.nd-btn--primary')).toBeNull();
+    expect(foot.querySelector('.pf-sc__cancel')?.classList.contains('pf-btn--tertiary')).toBe(true);
+    expect(foot.querySelector('.pf-btn--primary')).toBeNull();
     // No HID placeholder dash before any read arrives.
     expect(el.querySelector('.pf-sc__hid')).toBeNull();
   });
@@ -93,7 +93,7 @@ describe('Barcode scanner — behaviour survives the redesign', () => {
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(el.querySelector('.pf-sc__label')?.textContent?.trim()).toBe('Enter sample');
     expect(el.querySelector('.pf-sc__free-input')).toBeTruthy();
-    expect(el.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('.pf-btn--primary').length).toBe(1);
     // Manual-only tenants have no "Use camera" toggle.
     expect(el.querySelector('.pf-sc__manual-toggle')).toBeNull();
   });
@@ -102,7 +102,7 @@ describe('Barcode scanner — behaviour survives the redesign', () => {
     const { el } = await make({ expected: '26123', cameraFail: new Error('Permission denied') });
     const fb = el.querySelector('.pf-sc__fallback')!;
     expect(fb.textContent).toContain('Camera permission denied');
-    const btn = fb.querySelector('button.nd-btn--secondary');
+    const btn = fb.querySelector('button.pf-btn--secondary');
     expect(btn?.textContent?.trim()).toBe('Enter manually');
   });
 

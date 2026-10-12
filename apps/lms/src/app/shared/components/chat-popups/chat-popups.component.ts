@@ -71,12 +71,12 @@ import { ThemeService } from '../../../core/services/theme.service';
     .pf-cpop__card {
       position: relative;
       display: flex; align-items: stretch;
-      background: var(--nd-card-bg, var(--bg-card-solid, #fff));
-      border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
-      border-radius: var(--nd-radius, 12px);
-      box-shadow: var(--nd-shadow-sm), 0 12px 32px rgba(15, 23, 42, 0.10);
+      background: var(--pf-card-bg, var(--bg-card-solid, #fff));
+      border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
+      border-radius: var(--pf-radius, 12px);
+      box-shadow: var(--pf-shadow-sm), 0 12px 32px rgba(15, 23, 42, 0.10);
       overflow: hidden;
-      animation: pf-cpop-in var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+      animation: pf-cpop-in var(--pf-dur, 320ms) var(--pf-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
     @keyframes pf-cpop-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
@@ -88,7 +88,7 @@ import { ThemeService } from '../../../core/services/theme.service';
       color: var(--text-primary);
       min-height: 64px;
     }
-    .pf-cpop__card:hover { background: color-mix(in srgb, var(--nd-sel-bg, #eceff2) 55%, var(--nd-card-bg, #fff)); }
+    .pf-cpop__card:hover { background: color-mix(in srgb, var(--pf-sel-bg, #eceff2) 55%, var(--pf-card-bg, #fff)); }
     .pf-cpop__main:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
 
     /* The app's neutral initials avatar (Messages / chat windows anatomy). */
@@ -96,8 +96,8 @@ import { ThemeService } from '../../../core/services/theme.service';
       flex: none;
       display: inline-flex; align-items: center; justify-content: center;
       width: 36px; height: 36px; border-radius: 9999px;
-      background: var(--nd-chip-bg, #f3f4f6);
-      border: 1px solid var(--nd-line, var(--border-muted));
+      background: var(--pf-chip-bg, #f3f4f6);
+      border: 1px solid var(--pf-line, var(--border-muted));
       color: var(--text-secondary);
       font-size: 13px; font-weight: 600;
     }
@@ -111,8 +111,8 @@ import { ThemeService } from '../../../core/services/theme.service';
     .pf-cpop__group { font-size: 12px; color: var(--text-muted); }
     .pf-cpop__count {
       display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-      padding: 1px 8px; border-radius: var(--nd-radius-chip, 8px);
-      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-secondary);
+      padding: 1px 8px; border-radius: var(--pf-radius-chip, 8px);
+      background: var(--pf-chip-bg, #f3f4f6); color: var(--text-secondary);
       font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
     .pf-cpop__dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--color-primary, #7c3aed); }
@@ -126,7 +126,7 @@ import { ThemeService } from '../../../core/services/theme.service';
       width: 32px; height: 32px; margin: 8px 8px 0 0; border-radius: 9999px;
       background: transparent; border: 0; color: var(--text-muted); cursor: pointer;
     }
-    .pf-cpop__close:hover { background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); }
+    .pf-cpop__close:hover { background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary); }
     .pf-cpop__close:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
 
     /* Phones: top of the screen, full width inside the gutters. */

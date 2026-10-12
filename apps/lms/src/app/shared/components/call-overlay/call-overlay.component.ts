@@ -19,7 +19,7 @@ interface DirectoryUser {
 }
 
 /**
- * Global call overlay — mounted once in the shell. New design (ND-PATTERN,
+ * Global call overlay — mounted once in the shell. New design (PF-PATTERN,
  * owner 2026-09-27): neutral cards + neutral initials avatars, a violet dot
  * on a neutral status chip, violet only for Answer / Send, solid danger red
  * only for Decline / Cancel / End (no glows), Noto tabular numbers.
@@ -406,7 +406,7 @@ interface DirectoryUser {
     }
   `,
   styles: [`
-    /* Call overlay — NEW DESIGN (docs/ND-PATTERN.md; owner 2026-09-27).
+    /* Call overlay — NEW DESIGN (docs/PF-PATTERN.md; owner 2026-09-27).
        Palette only: neutral cards, the app's neutral initials avatar, a
        violet dot on the status chip, violet primary ONLY for Answer / Send,
        and the kit's danger red ONLY for Decline / Cancel / End (solid — the
@@ -433,8 +433,8 @@ interface DirectoryUser {
     .pf-call-avatar {
       display: inline-flex; align-items: center; justify-content: center; flex: none;
       border-radius: 9999px;
-      background: var(--nd-chip-bg, #f3f4f6);
-      border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
+      background: var(--pf-chip-bg, #f3f4f6);
+      border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
       color: var(--text-secondary);
       font-family: var(--call-font); font-weight: 600; letter-spacing: 0;
     }
@@ -445,7 +445,7 @@ interface DirectoryUser {
     .pf-call-chip {
       display: inline-flex; align-items: center; gap: 6px;
       height: 28px; padding: 0 10px; border-radius: 9999px;
-      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary);
+      background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary);
       font-family: var(--call-font); font-size: 13px; font-weight: 500; white-space: nowrap;
     }
     .pf-call-chip--quiet { color: var(--text-secondary); font-weight: 500; }
@@ -460,13 +460,13 @@ interface DirectoryUser {
       display: inline-flex; align-items: center; justify-content: center; flex: none;
       width: 40px; height: 40px; border-radius: 9999px;
       background: transparent; border: 1px solid transparent; color: var(--text-secondary);
-      cursor: pointer; transition: background-color var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 200ms) ease;
+      cursor: pointer; transition: background-color var(--pf-dur-fast, 200ms) ease, color var(--pf-dur-fast, 200ms) ease;
     }
-    .pf-call-icon:hover { background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); }
+    .pf-call-icon:hover { background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary); }
     /* ON (muted mic / open panel): the same filled neutral dark chip as the
        56px controls. */
     .pf-call-icon[aria-pressed='true'] {
-      background: var(--text-primary, #111827); border-color: var(--text-primary, #111827); color: var(--nd-card-bg, #fff);
+      background: var(--text-primary, #111827); border-color: var(--text-primary, #111827); color: var(--pf-card-bg, #fff);
     }
     .pf-call-icon--sm { width: 32px; height: 32px; }
 
@@ -474,18 +474,18 @@ interface DirectoryUser {
     .pf-call-round {
       display: inline-flex; align-items: center; justify-content: center; flex: none;
       width: 56px; height: 56px; border-radius: 9999px;
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
       color: var(--text-primary); cursor: pointer;
-      box-shadow: var(--nd-shadow-sm);
-      transition: background-color var(--nd-dur-fast, 200ms) ease, transform 120ms ease;
+      box-shadow: var(--pf-shadow-sm);
+      transition: background-color var(--pf-dur-fast, 200ms) ease, transform 120ms ease;
     }
-    .pf-call-round:hover:not(:disabled) { background: var(--nd-chip-bg, #f3f4f6); }
+    .pf-call-round:hover:not(:disabled) { background: var(--pf-chip-bg, #f3f4f6); }
     .pf-call-round:active:not(:disabled) { transform: scale(0.96); }
     .pf-call-round:disabled { opacity: 0.45; cursor: not-allowed; }
     /* ON state (muted mic, open panel): a filled neutral dark chip. */
     .pf-call-round[aria-pressed='true'] {
       background: var(--text-primary, #111827); border-color: var(--text-primary, #111827);
-      color: var(--nd-card-bg, #fff);
+      color: var(--pf-card-bg, #fff);
     }
     .pf-call-round--lg { width: 64px; height: 64px; }
     .pf-call-round--sm { width: 40px; height: 40px; box-shadow: none; }
@@ -496,7 +496,7 @@ interface DirectoryUser {
     /* Circular focus ring on the round button itself. */
     .pf-call-round:focus-visible, .pf-call-icon:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px var(--nd-card-bg, #fff), 0 0 0 5px var(--call-violet);
+      box-shadow: 0 0 0 3px var(--pf-card-bg, #fff), 0 0 0 5px var(--call-violet);
     }
 
     .pf-call-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 64px; }
@@ -517,24 +517,24 @@ interface DirectoryUser {
       position: relative; width: min(360px, 100%);
       display: flex; flex-direction: column; align-items: center; text-align: center;
       padding: 28px 24px 28px;
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
-      border-radius: var(--nd-radius-card, 16px);
-      box-shadow: var(--nd-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
-      animation: pf-call-rise var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
+      border-radius: var(--pf-radius-card, 16px);
+      box-shadow: var(--pf-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
+      animation: pf-call-rise var(--pf-dur, 320ms) var(--pf-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
     @keyframes pf-call-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     .pf-call-ring__eyebrow { margin: 0 0 20px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
     .pf-call-ring__avatar-wrap {
       position: relative; width: 88px; height: 88px; margin-bottom: 18px;
       display: flex; align-items: center; justify-content: center;
-      --pf-pdot-size: 18px; --pf-pdot-ring: var(--nd-card-bg, #fff);
+      --pf-pdot-size: 18px; --pf-pdot-ring: var(--pf-card-bg, #fff);
     }
     .pf-call-ring__avatar-wrap pf-presence-dot { right: 3px; bottom: 3px; z-index: 2; }
     /* Gentle pulse ring (violet hairline) — no glow. */
     .pf-call-ring__pulse {
       position: absolute; inset: 0; border-radius: 9999px;
       border: 2px solid color-mix(in srgb, var(--call-violet) 45%, transparent);
-      animation: pf-call-pulse 2.4s var(--nd-spring, ease-out) infinite;
+      animation: pf-call-pulse 2.4s var(--pf-spring, ease-out) infinite;
     }
     .pf-call-ring__pulse--late { animation-delay: 1.2s; }
     @keyframes pf-call-pulse { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.45); } }
@@ -554,21 +554,21 @@ interface DirectoryUser {
     .pf-call-screen__card {
       position: relative; width: min(560px, 100%); max-height: calc(100dvh - 32px);
       display: flex; flex-direction: column;
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
-      border-radius: var(--nd-radius-card, 16px);
-      box-shadow: var(--nd-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
-      animation: pf-call-rise var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
+      border-radius: var(--pf-radius-card, 16px);
+      box-shadow: var(--pf-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
+      animation: pf-call-rise var(--pf-dur, 320ms) var(--pf-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
     .pf-call-screen__card--with-chat { width: min(900px, 100%); }
     .pf-call-screen__hdr {
       display: flex; align-items: center; gap: 8px;
-      padding: 12px 12px 12px 12px; border-bottom: 1px solid var(--nd-line, #e5e7eb);
+      padding: 12px 12px 12px 12px; border-bottom: 1px solid var(--pf-line, #e5e7eb);
     }
     .pf-call-screen__hdr-info { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
     .pf-call-screen__error {
       display: flex; align-items: center; gap: 8px; margin: 12px 16px 0;
-      padding: 8px 12px; border-radius: var(--nd-radius-sm, 10px);
-      background: color-mix(in srgb, var(--call-danger) 8%, var(--nd-card-bg, #fff));
+      padding: 8px 12px; border-radius: var(--pf-radius-sm, 10px);
+      background: color-mix(in srgb, var(--call-danger) 8%, var(--pf-card-bg, #fff));
       color: var(--call-danger); font-size: 13px;
     }
     .pf-call-screen__body { flex: 1; min-height: 0; display: flex; }
@@ -579,25 +579,25 @@ interface DirectoryUser {
       align-content: center;
     }
     .pf-call-tile {
-      --pf-pdot-ring: var(--nd-chip-bg, #f3f4f6);
+      --pf-pdot-ring: var(--pf-chip-bg, #f3f4f6);
       display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
-      padding: 22px 14px 18px; border-radius: var(--nd-radius, 12px);
-      background: var(--nd-chip-bg, #f3f4f6);
+      padding: 22px 14px 18px; border-radius: var(--pf-radius, 12px);
+      background: var(--pf-chip-bg, #f3f4f6);
     }
     .pf-call-tile__name { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-call-tile__meta { margin: 0; display: flex; align-items: center; gap: 6px; min-height: 22px; }
     .pf-call-tile__you, .pf-call-tile__quiet { font-size: 12.5px; color: var(--text-muted); }
-    .pf-call-tile .pf-call-chip--sm { background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb); }
+    .pf-call-tile .pf-call-chip--sm { background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb); }
 
     .pf-call-screen__ctrls {
       display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
-      padding: 16px 16px 20px; border-top: 1px solid var(--nd-line, #e5e7eb);
+      padding: 16px 16px 20px; border-top: 1px solid var(--pf-line, #e5e7eb);
     }
 
     /* In-call chat (right column). */
     .pf-call-chat {
       width: 320px; flex: none; display: flex; flex-direction: column; min-height: 320px;
-      border-left: 1px solid var(--nd-line, #e5e7eb);
+      border-left: 1px solid var(--pf-line, #e5e7eb);
     }
     .pf-call-chat__hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 10px 14px; }
     .pf-call-chat__title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -607,16 +607,16 @@ interface DirectoryUser {
     .pf-call-chat__row--mine { justify-content: flex-end; }
     .pf-call-chat__bubble {
       max-width: 85%; padding: 7px 10px; border-radius: 12px;
-      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); font-size: 13px;
+      background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary); font-size: 13px;
     }
-    .pf-call-chat__bubble--mine { background: var(--nd-in-tint, #f5f3ff); }
+    .pf-call-chat__bubble--mine { background: var(--pf-in-tint, #f5f3ff); }
     .pf-call-chat__body { white-space: pre-wrap; overflow-wrap: anywhere; }
     .pf-call-chat__time { margin-top: 2px; font-size: 11px; color: var(--text-muted); text-align: right; }
-    .pf-call-chat__composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--nd-line, #e5e7eb); }
+    .pf-call-chat__composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--pf-line, #e5e7eb); }
     .pf-call-chat__input {
       flex: 1; min-width: 0; height: 40px; padding: 0 12px;
-      border: 1px solid var(--nd-line, #e5e7eb); border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg, #fff); color: var(--text-primary); font: inherit; font-size: 14px;
+      border: 1px solid var(--pf-line, #e5e7eb); border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg, #fff); color: var(--text-primary); font: inherit; font-size: 14px;
     }
     .pf-call-chat__input:focus-visible { outline: 2px solid var(--call-violet); outline-offset: 0; }
 
@@ -624,22 +624,22 @@ interface DirectoryUser {
     .pf-call-invite {
       position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 2;
       width: 280px; max-height: 320px; display: flex; flex-direction: column;
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
-      border-radius: var(--nd-radius, 12px); box-shadow: var(--nd-shadow-sm), 0 16px 40px rgba(15, 23, 42, 0.16);
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
+      border-radius: var(--pf-radius, 12px); box-shadow: var(--pf-shadow-sm), 0 16px 40px rgba(15, 23, 42, 0.16);
       overflow: hidden;
     }
     .pf-call-invite--screen { left: 50%; right: auto; transform: translateX(-50%); bottom: 96px; }
-    .pf-call-invite__hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--nd-line, #e5e7eb); }
+    .pf-call-invite__hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--pf-line, #e5e7eb); }
     .pf-call-invite__title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-call-invite__count { font-size: 12px; color: var(--text-muted); }
     .pf-call-invite__empty { margin: 0; padding: 16px 14px; font-size: 13px; color: var(--text-muted); }
     .pf-call-invite__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
     .pf-call-invite__item {
       width: 100%; display: flex; align-items: center; gap: 10px; min-height: 48px;
-      padding: 6px 8px; border: 0; border-radius: var(--nd-radius-sm, 10px);
+      padding: 6px 8px; border: 0; border-radius: var(--pf-radius-sm, 10px);
       background: transparent; color: var(--text-secondary); cursor: pointer; text-align: left; font: inherit;
     }
-    .pf-call-invite__item:hover { background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); }
+    .pf-call-invite__item:hover { background: var(--pf-chip-bg, #f3f4f6); color: var(--text-primary); }
     .pf-call-invite__item:focus-visible { outline: 2px solid var(--call-violet); outline-offset: -2px; }
     .pf-call-invite__name { flex: 1; min-width: 0; font-size: 14px; color: var(--text-primary); overflow-wrap: anywhere; }
 
@@ -649,8 +649,8 @@ interface DirectoryUser {
       right: 16px; bottom: calc(var(--pf-botbar-h, 0px) + 16px + env(safe-area-inset-bottom, 0px));
       display: flex; align-items: center; gap: 6px;
       padding: 6px 6px 6px 8px; border-radius: 9999px;
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
-      box-shadow: var(--nd-shadow-sm), 0 12px 32px rgba(15, 23, 42, 0.14);
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
+      box-shadow: var(--pf-shadow-sm), 0 12px 32px rgba(15, 23, 42, 0.14);
       font-family: var(--call-font);
     }
     .pf-call-pill__meta { display: flex; flex-direction: column; min-width: 0; max-width: 180px; margin: 0 6px 0 4px; }
@@ -670,7 +670,7 @@ interface DirectoryUser {
       .pf-call-icon { width: 44px; height: 44px; }
       .pf-call-screen__participants { grid-template-columns: 1fr 1fr; padding: 16px; }
       .pf-call-screen__body { flex-direction: column; }
-      .pf-call-chat { width: auto; border-left: 0; border-top: 1px solid var(--nd-line, #e5e7eb); flex: 1; }
+      .pf-call-chat { width: auto; border-left: 0; border-top: 1px solid var(--pf-line, #e5e7eb); flex: 1; }
       .pf-call-screen__card--with-chat .pf-call-screen__participants { display: none; }
       .pf-call-screen__ctrls { gap: 14px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
       .pf-call-pill { left: 12px; right: 12px; }

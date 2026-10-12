@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   Sign in — new design (nd-kit tokens, light + dark, ambient world).
+   Sign in — new design (pf-kit tokens, light + dark, ambient world).
    Phone / iPad first. The page is its OWN scroller (html/body never
    scroll): with the soft keyboard up the focused field is scrolled into
    the visible viewport, the content keeps its pre-keyboard height
@@ -10,15 +10,15 @@
 :host {
   display: block;
   height: 100%;
-  --lg-card-bg: color-mix(in srgb, var(--nd-card-bg, #fff) 94%, transparent);
-  --lg-field-bg: color-mix(in srgb, var(--text-primary) 3%, var(--nd-card-bg, #fff));
+  --lg-card-bg: color-mix(in srgb, var(--pf-card-bg, #fff) 94%, transparent);
+  --lg-field-bg: color-mix(in srgb, var(--text-primary) 3%, var(--pf-card-bg, #fff));
   --lg-field-line: color-mix(in srgb, var(--text-primary) 18%, transparent);
   --lg-violet: var(--color-primary, #7c3aed);
   --lg-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 :host-context(:root.dark) {
-  --lg-card-bg: color-mix(in srgb, var(--nd-card-bg, #14141f) 88%, transparent);
-  --lg-field-bg: color-mix(in srgb, #fff 4%, var(--nd-card-bg, #14141f));
+  --lg-card-bg: color-mix(in srgb, var(--pf-card-bg, #14141f) 88%, transparent);
+  --lg-field-bg: color-mix(in srgb, #fff 4%, var(--pf-card-bg, #14141f));
   --lg-field-line: rgba(255, 255, 255, 0.16);
   --lg-violet: #a78bfa;
 }
@@ -93,7 +93,7 @@
   width: 100%;
   padding: 24px 20px 20px;
   border-radius: 20px;
-  border: 1px solid var(--nd-line, #e5e7eb);
+  border: 1px solid var(--pf-line, #e5e7eb);
   background: var(--lg-card-bg);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   backdrop-filter: blur(10px) saturate(140%);
@@ -138,7 +138,7 @@
   padding: 11px 12px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--lg-violet) 24%, transparent);
-  background: color-mix(in srgb, var(--lg-violet) 8%, var(--nd-card-bg, #fff));
+  background: color-mix(in srgb, var(--lg-violet) 8%, var(--pf-card-bg, #fff));
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.45;
@@ -178,7 +178,7 @@
 }
 .lg-field__box--locked {
   border-style: dashed;
-  background: var(--nd-chip-bg, #f3f4f6);
+  background: var(--pf-chip-bg, #f3f4f6);
 }
 .lg-field__icon {
   flex: none;
@@ -233,7 +233,7 @@
   cursor: pointer;
   transition: color 150ms ease, background-color 150ms ease;
 }
-.lg-field__eye:hover { color: var(--text-primary); background: var(--nd-chip-bg, #f3f4f6); }
+.lg-field__eye:hover { color: var(--text-primary); background: var(--pf-chip-bg, #f3f4f6); }
 .lg-field__eye:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: -2px; }
 
 /* Remembered organizations — tap to use (never a native datalist). */
@@ -245,8 +245,8 @@
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid var(--nd-line, #e5e7eb);
-  background: var(--nd-chip-bg, #f3f4f6);
+  border: 1px solid var(--pf-line, #e5e7eb);
+  background: var(--pf-chip-bg, #f3f4f6);
   color: var(--text-secondary);
   font: inherit;
   font-size: 13px;
@@ -254,7 +254,7 @@
   cursor: pointer;
   transition: border-color 150ms ease, color 150ms ease;
 }
-.lg-chip:hover { border-color: var(--nd-sel-border, #9aa4ae); color: var(--text-primary); }
+.lg-chip:hover { border-color: var(--pf-sel-border, #9aa4ae); color: var(--text-primary); }
 .lg-chip:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 2px; }
 :host-context(html.device-touch) .lg-chip { min-height: 44px; }
 
@@ -267,7 +267,7 @@
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--red-border, #ef4444) 34%, transparent);
-  background: color-mix(in srgb, var(--red-border, #ef4444) 8%, var(--nd-card-bg, #fff));
+  background: color-mix(in srgb, var(--red-border, #ef4444) 8%, var(--pf-card-bg, #fff));
   color: var(--red-text, #dc2626);
   font-size: 14px;
   line-height: 1.45;
@@ -280,7 +280,7 @@
 }
 
 /* The one primary call to action (kit gradient). */
-.nd-btn.lg__submit {
+.pf-btn.lg__submit {
   width: 100%;
   height: 50px;
   min-height: 50px;
@@ -292,11 +292,11 @@
   box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--lg-violet) 70%, transparent);
   transition: filter 150ms ease, transform 150ms var(--lg-ease), box-shadow 150ms ease;
 }
-.nd-btn.lg__submit:hover:not(:disabled) { filter: brightness(1.06); }
-.nd-btn.lg__submit:active:not(:disabled) { transform: scale(0.985); }
-.nd-btn.lg__submit:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 3px; }
-.nd-btn.lg__submit:disabled { opacity: 0.85; cursor: progress; }
-.nd-btn.lg__cancel { width: 100%; height: 44px; font-size: 15px; }
+.pf-btn.lg__submit:hover:not(:disabled) { filter: brightness(1.06); }
+.pf-btn.lg__submit:active:not(:disabled) { transform: scale(0.985); }
+.pf-btn.lg__submit:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 3px; }
+.pf-btn.lg__submit:disabled { opacity: 0.85; cursor: progress; }
+.pf-btn.lg__cancel { width: 100%; height: 44px; font-size: 15px; }
 
 .lg__hint {
   margin: 18px 0 0;
@@ -363,5 +363,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lg__card, .lg__error { animation: none; }
-  .nd-btn.lg__submit, .lg-field__box, .lg-field__icon { transition: none; }
+  .pf-btn.lg__submit, .lg-field__box, .lg-field__icon { transition: none; }
 }

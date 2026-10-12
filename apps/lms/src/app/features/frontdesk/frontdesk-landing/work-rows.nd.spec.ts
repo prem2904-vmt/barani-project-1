@@ -13,7 +13,7 @@ const DIR = 'apps/lms/src/app/features/frontdesk/frontdesk-landing';
 const html = readFileSync(`${DIR}/frontdesk-landing.component.html`, 'utf8');
 const css = readFileSync(`${DIR}/styles/_work-rows.scss`, 'utf8').replace(/\r\n/g, '\n')
   .replace(/\/\*[\s\S]*?\*\//g, '');
-const kit = readFileSync('apps/lms/src/app/shared/styles/_nd-kit.scss', 'utf8');
+const kit = readFileSync('libs/shared/src/lib/styles/_pf-kit.scss', 'utf8');
 
 const between = (s: string, from: string, to: string) => {
   const a = s.indexOf(from);
@@ -64,7 +64,7 @@ describe('Frontdesk work rows — anatomy', () => {
   it('meta is one quiet tabular line with no "|" joins', () => {
     for (const r of rows()) {
       const meta = r.querySelector('.pf-wrow__meta')!;
-      expect(meta.classList).toContain('nd-num');
+      expect(meta.classList).toContain('pf-num');
       const literal = meta.textContent!.replace(/\{\{[\s\S]*?\}\}|@if \([^)]*\)/g, '');
       expect(literal).not.toMatch(/\|/);
     }
@@ -74,8 +74,8 @@ describe('Frontdesk work rows — anatomy', () => {
   it('status is a dot + coloured word — no chip, border or background (owner)', () => {
     for (const r of rows()) {
       const st = r.querySelector('.pf-wrow__status')!;
-      expect(st.classList).not.toContain('nd-chip');
-      expect(st.classList).not.toContain('nd-chip--static');
+      expect(st.classList).not.toContain('pf-chip');
+      expect(st.classList).not.toContain('pf-chip--static');
       expect(st.getAttribute('data-tone') ?? st.getAttribute('[attr.data-tone]')).toBeTruthy();
       expect(st.querySelector('.pf-wrow__dot')).not.toBeNull();
     }
@@ -100,18 +100,18 @@ describe('Frontdesk work rows — anatomy', () => {
   });
 
   it('the order drawer keeps its own neutral chip (not the row status)', () => {
-    expect(html).toMatch(/nd-chip nd-chip--static pf-drawer__status/);
+    expect(html).toMatch(/pf-chip pf-chip--static pf-drawer__status/);
   });
 
-  it('row actions are the kit secondary .nd-rowact (text on web, icon + label on touch)', () => {
+  it('row actions are the kit secondary .pf-rowact (text on web, icon + label on touch)', () => {
     const acts = [...root.querySelectorAll<HTMLElement>('.pf-wrow__acts > button, .pf-wrow__acts .pf-share-wrapper > button')];
     expect(acts.length).toBeGreaterThan(5);
     for (const b of acts) {
-      expect(b.classList).toContain('nd-rowact');
-      expect(b.getAttribute('[class.nd-rowact--icon]')).toBe('!webPointer()');
+      expect(b.classList).toContain('pf-rowact');
+      expect(b.getAttribute('[class.pf-rowact--icon]')).toBe('!webPointer()');
       expect(b.getAttribute('aria-label')).toBeTruthy();
       expect(b.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
-      expect(b.querySelector('.nd-rowact__t')).not.toBeNull();
+      expect(b.querySelector('.pf-rowact__t')).not.toBeNull();
     }
     expect(work).not.toMatch(/pf-ghostbtn/);
     expect(rule('.pf-wrow__acts')).toMatch(/justify-content: flex-end/);
@@ -122,20 +122,20 @@ describe('Frontdesk work rows — selection', () => {
   const ip = () => root.querySelector<HTMLElement>('ul[data-list="ip"] .pf-wrow')!;
 
   it('the checkbox is an accessible ND checkbox: role, aria-checked, "Select <name>"', () => {
-    const cb = ip().querySelector<HTMLElement>('button.nd-check')!;
+    const cb = ip().querySelector<HTMLElement>('button.pf-check')!;
     expect(cb.getAttribute('role')).toBe('checkbox');
     expect(cb.getAttribute('type')).toBe('button'); // Space / Enter toggle natively
     expect(cb.getAttribute('[attr.aria-checked]')).toBe('workSel.isSelected(o.id)');
     expect(cb.getAttribute('[attr.aria-label]')).toBe("'Select ' + drawerName(o.patient)");
-    expect(kit).toMatch(/\.nd-check\[aria-checked='true'\] \.nd-check__box \{ background: var\(--color-violet-600/);
-    expect(kit).toMatch(/\.nd-check:focus-visible \.nd-check__box \{ outline: 2px solid/);
+    expect(kit).toMatch(/\.pf-check\[aria-checked='true'\] \.pf-check__box \{ background: var\(--color-violet-600/);
+    expect(kit).toMatch(/\.pf-check:focus-visible \.pf-check__box \{ outline: 2px solid/);
   });
 
   it('the checkbox is ROUND: a 20px circle (border-radius 50%), 44px hit area on touch', () => {
-    const box = kit.match(/\.nd-check__box \{([^}]*)\}/)![1];
+    const box = kit.match(/\.pf-check__box \{([^}]*)\}/)![1];
     expect(box).toMatch(/width: 20px; height: 20px; border-radius: 50%;/);
-    expect(kit.match(/\.nd-check \{([^}]*)\}/)![1]).toMatch(/border-radius: 50%/);
-    expect(kit).toMatch(/pointer: coarse\) \{ \.nd-check \{ width: 44px; height: 44px;/);
+    expect(kit.match(/\.pf-check \{([^}]*)\}/)![1]).toMatch(/border-radius: 50%/);
+    expect(kit).toMatch(/pointer: coarse\) \{ \.pf-check \{ width: 44px; height: 44px;/);
   });
 
   it('highlight, checkbox and bar count all read the SAME model (the count bug)', () => {
@@ -147,11 +147,11 @@ describe('Frontdesk work rows — selection', () => {
   });
 
   it('checkboxes only on the In progress list, only on rows that can take the bulk actions', () => {
-    const boxes = [...root.querySelectorAll('.nd-check')];
+    const boxes = [...root.querySelectorAll('.pf-check')];
     expect(boxes).toHaveLength(1);
     expect(boxes[0].closest('ul')!.getAttribute('data-list')).toBe('ip');
     expect(work).toMatch(/@if \(workSel\.isSelectable\(o\.id\)\)/);
-    expect(root.querySelector('ul[data-list="done"] .nd-check, ul[data-list="due"] .nd-check')).toBeNull();
+    expect(root.querySelector('ul[data-list="done"] .pf-check, ul[data-list="due"] .pf-check')).toBeNull();
   });
 
   it('selected tint is a subtle violet + 1px violet border, no gradient', () => {
@@ -163,10 +163,10 @@ describe('Frontdesk work rows — selection', () => {
 
   it('the bar has at most ONE primary, "N selected" in plain Noto, and a labelled ×', () => {
     const bar = root.querySelector('.pf-selbar')!;
-    expect(bar.querySelectorAll('.nd-btn--primary')).toHaveLength(1);
-    expect(bar.querySelector('.nd-btn--primary')!.textContent).toMatch(/Bundle as package · QR/);
-    const mark = [...bar.querySelectorAll('.nd-btn')].find(b => /Mark dispatched/.test(b.textContent!))!;
-    expect(mark.classList).toContain('nd-btn--secondary');
+    expect(bar.querySelectorAll('.pf-btn--primary')).toHaveLength(1);
+    expect(bar.querySelector('.pf-btn--primary')!.textContent).toMatch(/Bundle as package · QR/);
+    const mark = [...bar.querySelectorAll('.pf-btn')].find(b => /Mark dispatched/.test(b.textContent!))!;
+    expect(mark.classList).toContain('pf-btn--secondary');
     expect(bar.querySelector('.pf-selbar__x')!.getAttribute('aria-label')).toBe('Clear selection');
     const count = rule('.pf-selbar__count');
     expect(count).not.toMatch(/uppercase|letter-spacing/);

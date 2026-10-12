@@ -29,7 +29,7 @@ const OPTIONS: PfSelectOption<string>[] = [
     </div>
   `,
   styles: [`
-    .pf-pre { min-width: 190px; padding: 3px; background: var(--nd-card-bg, #fff); border-radius: var(--nd-radius-sm, 10px); box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18); }
+    .pf-pre { min-width: 190px; padding: 3px; background: var(--pf-card-bg, #fff); border-radius: var(--pf-radius-sm, 10px); box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18); }
   `],
 })
 export class PregnancyRiskEditorComponent implements ICellEditorAngularComp {

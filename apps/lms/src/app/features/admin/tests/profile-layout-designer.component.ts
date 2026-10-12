@@ -73,25 +73,25 @@ interface DragState {
   template: `
   <div class="pld" [class.pld--guides]="guides()">
     <!-- ══ MAIN CARD: the page ══ -->
-    <section class="nd-card pld-main" aria-label="Custom layout">
-      <div class="nd-card__head pld-main__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <section class="pf-card pld-main" aria-label="Custom layout">
+      <div class="pf-card__head pld-main__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>
         </span>
-        <span class="nd-card__label">Custom layout</span>
+        <span class="pf-card__label">Custom layout</span>
         <div class="pld-tools">
-          <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="!canUndo()" (click)="undo()" aria-label="Undo" title="Undo (Ctrl+Z)">
+          <button type="button" class="pf-btn pf-btn--icon pld-tool" [disabled]="!canUndo()" (click)="undo()" aria-label="Undo" title="Undo (Ctrl+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
           </button>
-          <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="!canRedo()" (click)="redo()" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+          <button type="button" class="pf-btn pf-btn--icon pld-tool" [disabled]="!canRedo()" (click)="redo()" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
           </button>
-          <div class="nd-seg pld-zoom" role="radiogroup" aria-label="Zoom">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="zoom() === 1" (click)="zoom.set(1)">Fit</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="zoom() === 1.5" (click)="zoom.set(1.5)">150%</button>
+          <div class="pf-seg pld-zoom" role="radiogroup" aria-label="Zoom">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="zoom() === 1" (click)="zoom.set(1)">Fit</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="zoom() === 1.5" (click)="zoom.set(1.5)">150%</button>
           </div>
-          <button type="button" class="nd-toggle pld-guides" role="switch" [attr.aria-checked]="guides()" (click)="guides.set(!guides())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Guides
+          <button type="button" class="pf-toggle pld-guides" role="switch" [attr.aria-checked]="guides()" (click)="guides.set(!guides())">
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Guides
           </button>
         </div>
       </div>
@@ -101,12 +101,12 @@ interface DragState {
           <p class="pld-onrow__t">Print this profile with its custom layout</p>
           <p class="pld-onrow__s">{{ enabled() ? 'On — reports print these pages.' : 'Off — reports print the normal results table. Arrange the pages, then switch it on.' }}</p>
         </div>
-        <button type="button" class="nd-btn nd-btn--tertiary" (click)="restoreDefault()" [disabled]="restoring()">
+        <button type="button" class="pf-btn pf-btn--tertiary" (click)="restoreDefault()" [disabled]="restoring()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           {{ restoring() ? 'Restoring…' : 'Restore to default' }}
         </button>
-        <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="enabled()" aria-label="Print this profile with its custom layout" (click)="setEnabled(!enabled())">
-          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+        <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="enabled()" aria-label="Print this profile with its custom layout" (click)="setEnabled(!enabled())">
+          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
         </button>
       </div>
 
@@ -115,21 +115,21 @@ interface DragState {
           <button type="button" role="tab" class="pld-pagetab" [attr.aria-selected]="activePage() === i" (click)="goPage(i)"
                   (dragover)="$event.preventDefault()" (drop)="onRowDropOnPage($event, i)">
             Page {{ i + 1 }}
-            @if (pageRowsLabel(i); as rl) { <span class="pld-pagetab__meta nd-num">{{ rl }}</span> }
+            @if (pageRowsLabel(i); as rl) { <span class="pld-pagetab__meta pf-num">{{ rl }}</span> }
           </button>
         }
-        <button type="button" class="nd-btn nd-btn--tertiary pld-addpage" (click)="addPage()">
+        <button type="button" class="pf-btn pf-btn--tertiary pld-addpage" (click)="addPage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           Add page
         </button>
         <span class="pld-pages__grow"></span>
-        <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="activePage() === 0" (click)="movePage(-1)" aria-label="Move this page earlier" title="Move this page earlier">
+        <button type="button" class="pf-btn pf-btn--icon pld-tool" [disabled]="activePage() === 0" (click)="movePage(-1)" aria-label="Move this page earlier" title="Move this page earlier">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <button type="button" class="nd-btn nd-btn--icon pld-tool" [disabled]="activePage() === pages().length - 1" (click)="movePage(1)" aria-label="Move this page later" title="Move this page later">
+        <button type="button" class="pf-btn pf-btn--icon pld-tool" [disabled]="activePage() === pages().length - 1" (click)="movePage(1)" aria-label="Move this page later" title="Move this page later">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
-        <button type="button" class="nd-btn nd-btn--tertiary pld-delpage" [disabled]="pages().length === 1" (click)="removePage()"
+        <button type="button" class="pf-btn pf-btn--tertiary pld-delpage" [disabled]="pages().length === 1" (click)="removePage()"
                 [attr.title]="pages().length === 1 ? 'A layout keeps at least one page' : 'Delete page ' + (activePage() + 1)">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
           Delete page
@@ -207,7 +207,7 @@ interface DragState {
                 {{ labelFor(b) }}
               </span>
               @if (drag()?.id === b.id) {
-                <span class="pld-box__live nd-num">{{ readout(b) }}</span>
+                <span class="pld-box__live pf-num">{{ readout(b) }}</span>
               }
               @if (selected() === b.id) {
                 @for (h of handles; track h) {
@@ -232,22 +232,22 @@ interface DragState {
     </section>
 
     <!-- ══ SIDE CARD: selected box, or the palette ══ -->
-    <aside class="nd-card pld-side" aria-label="Layout settings">
-      <div class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <aside class="pf-card pld-side" aria-label="Layout settings">
+      <div class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
         </span>
-        <span class="nd-card__label">{{ selectedBox() ? labelFor(selectedBox()!) : 'Add to the page' }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">{{ selectedBox() ? labelFor(selectedBox()!) : 'Add to the page' }}</span>
+        <span class="pf-card__spacer"></span>
         @if (selectedBox()) {
-          <button type="button" class="nd-btn nd-btn--quiet" (click)="select(null)" aria-label="Back to the palette">
+          <button type="button" class="pf-btn pf-btn--quiet" (click)="select(null)" aria-label="Back to the palette">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             All
           </button>
         }
       </div>
 
-      <div class="nd-card__body pld-side__body">
+      <div class="pf-card__body pld-side__body">
         @if (selectedBox(); as b) {
           @if (issuesFor(b.id).length) {
             <ul class="pld-issues" role="status">
@@ -260,74 +260,74 @@ interface DragState {
           @if (b.kind !== 'table') {
             <div class="pld-row">
               <div><p class="pld-row__t">Print this box</p><p class="pld-row__s">{{ b.hidden ? 'Hidden — kept here, not printed' : 'Printed on the report' }}</p></div>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!b.hidden" aria-label="Print this box" (click)="toggleHidden(b)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!b.hidden" aria-label="Print this box" (click)="toggleHidden(b)">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               </button>
             </div>
           } @else {
-            <p class="nd-field__hint">The results table always prints — move and size it, choose its columns and type size.</p>
+            <p class="pf-field__hint">The results table always prints — move and size it, choose its columns and type size.</p>
           }
 
           <section class="pld-sec" aria-label="Position and size">
             <h4 class="pld-sec__h">Position &amp; size · mm</h4>
             <div class="pld-nudge">
               <div class="pld-pad" role="group" aria-label="Move box">
-                <button type="button" class="nd-btn nd-btn--icon pld-pad__up" (click)="nudge(0, -step())" aria-label="Move up"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pld-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pld-pad__right" (click)="nudge(step(), 0)" aria-label="Move right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pld-pad__down" (click)="nudge(0, step())" aria-label="Move down"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <button type="button" class="pf-btn pf-btn--icon pld-pad__up" (click)="nudge(0, -step())" aria-label="Move up"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+                <button type="button" class="pf-btn pf-btn--icon pld-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                <button type="button" class="pf-btn pf-btn--icon pld-pad__right" (click)="nudge(step(), 0)" aria-label="Move right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button type="button" class="pf-btn pf-btn--icon pld-pad__down" (click)="nudge(0, step())" aria-label="Move down"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
               </div>
               <div class="pld-step">
-                <span class="nd-field__lbl">Step (mm)</span>
-                <div class="nd-seg" role="radiogroup" aria-label="Step size">
+                <span class="pf-field__lbl">Step (mm)</span>
+                <div class="pf-seg" role="radiogroup" aria-label="Step size">
                   @for (st of steps; track st) {
-                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }}</button>
+                    <button type="button" class="pf-seg__item pf-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }}</button>
                   }
                 </div>
               </div>
             </div>
             <div class="pld-grid2">
-              <label class="nd-field"><span class="nd-field__lbl">Left</span>
-                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(b.x)" (change)="setGeom('x', $any($event.target).value)" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">Top</span>
-                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(b.y)" (change)="setGeom('y', $any($event.target).value)" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">Width</span>
-                <input class="nd-input nd-num" type="number" step="0.5" min="10" [ngModel]="round(b.w)" (change)="setGeom('w', $any($event.target).value)" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">Height</span>
-                <input class="nd-input nd-num" type="number" step="0.5" min="8" [ngModel]="round(b.h)" (change)="setGeom('h', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Left</span>
+                <input class="pf-input pf-num" type="number" step="0.5" [ngModel]="round(b.x)" (change)="setGeom('x', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Top</span>
+                <input class="pf-input pf-num" type="number" step="0.5" [ngModel]="round(b.y)" (change)="setGeom('y', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Width</span>
+                <input class="pf-input pf-num" type="number" step="0.5" min="10" [ngModel]="round(b.w)" (change)="setGeom('w', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Height</span>
+                <input class="pf-input pf-num" type="number" step="0.5" min="8" [ngModel]="round(b.h)" (change)="setGeom('h', $any($event.target).value)" /></label>
             </div>
           </section>
 
           @switch (b.kind) {
             @case ('table') {
               <section class="pld-sec" aria-label="Table">
-                <p class="nd-field__hint">The table prints in your report theme — fonts, header, rules and flags come from the Report template. Here you choose where it sits and which columns print.</p>
+                <p class="pf-field__hint">The table prints in your report theme — fonts, header, rules and flags come from the Report template. Here you choose where it sits and which columns print.</p>
                 @if (!fitsBox() && measuredFor(b) != null && !continuesFrom(b)) {
-                  <button type="button" class="nd-btn nd-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
+                  <button type="button" class="pf-btn pf-btn--secondary" (click)="fitTableBox()">Make the box fit the table ({{ round(measuredFor(b)!) }} mm)</button>
                 }
                 <h4 class="pld-sec__h">Rows in this box</h4>
-                <div class="nd-seg" role="radiogroup" aria-label="Rows in this box">
+                <div class="pf-seg" role="radiogroup" aria-label="Rows in this box">
                   @for (m of vAligns; track m.value) {
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(b.vAlign ?? 'top') === m.value" (click)="setVAlign(m.value)">{{ m.label }}</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="(b.vAlign ?? 'top') === m.value" (click)="setVAlign(m.value)">{{ m.label }}</button>
                   }
                 </div>
-                <p class="nd-field__hint">{{ vAlignHint(b) }}</p>
+                <p class="pf-field__hint">{{ vAlignHint(b) }}</p>
                 <h4 class="pld-sec__h">Row spacing</h4>
-                <div class="nd-seg" role="radiogroup" aria-label="Row spacing">
+                <div class="pf-seg" role="radiogroup" aria-label="Row spacing">
                   @for (m of rowSpacings; track m.value) {
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(b.rowSpacing ?? 'normal') === m.value" (click)="setRowSpacing(m.value)">{{ m.label }}</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="(b.rowSpacing ?? 'normal') === m.value" (click)="setRowSpacing(m.value)">{{ m.label }}</button>
                   }
                 </div>
-                <p class="nd-field__hint">Space between the result rows — the report prints the same.</p>
+                <p class="pf-field__hint">Space between the result rows — the report prints the same.</p>
                 <h4 class="pld-sec__h">Rows across table boxes</h4>
-                <div class="nd-seg" role="radiogroup" aria-label="Rows across table boxes">
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'auto'" (click)="changeTableMode('auto')">Continue automatically</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'manual'" (click)="changeTableMode('manual')">Choose rows</button>
+                <div class="pf-seg" role="radiogroup" aria-label="Rows across table boxes">
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'auto'" (click)="changeTableMode('auto')">Continue automatically</button>
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="tableMode() === 'manual'" (click)="changeTableMode('manual')">Choose rows</button>
                 </div>
                 @if (tableMode() === 'auto') {
-                  <p class="nd-field__hint">{{ autoHint(b) }}</p>
+                  <p class="pf-field__hint">{{ autoHint(b) }}</p>
                 } @else {
-                  <p class="nd-field__hint">Switch a row on to print it in this box (it leaves any other box), or drag a row onto a table box or a page tab.</p>
+                  <p class="pf-field__hint">Switch a row on to print it in this box (it leaves any other box), or drag a row onto a table box or a page tab.</p>
                   @if (rowIssues().length) {
                     <ul class="pld-issues" role="status">
                       @for (iss of rowIssues(); track iss.kind) { <li><span>{{ iss.message }}{{ iss.kind === 'missing' || iss.kind === 'duplicate' ? ' (' + rowTitles(iss.rows) + ')' : '.' }}</span></li> }
@@ -342,9 +342,9 @@ interface DragState {
                         <span class="pld-rowitem__t">{{ r.title }}
                           @if (rowHome(r.key, b.id); as home) { <small>{{ home }}</small> }
                         </span>
-                        <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="(b.rows ?? []).includes(r.key)"
+                        <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="(b.rows ?? []).includes(r.key)"
                                 [attr.aria-label]="'Print ' + r.title + ' in this table box'" (click)="toggleRow(r.key, b.id)">
-                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                         </button>
                       </li>
                     }
@@ -355,9 +355,9 @@ interface DragState {
                   @for (c of tableColumns(); track c.name) {
                     <li>
                       <span>{{ c.label }}</span>
-                      <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="colVisible(b, c.name)" [attr.aria-label]="'Print the ' + c.label + ' column'"
+                      <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="colVisible(b, c.name)" [attr.aria-label]="'Print the ' + c.label + ' column'"
                               (click)="toggleColumn(c.name, !colVisible(b, c.name))">
-                        <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                       </button>
                     </li>
                   }
@@ -368,24 +368,24 @@ interface DragState {
               <section class="pld-sec" aria-label="Analyzer graph">
                 <div class="pld-thumbrow">
                   <span class="pld-thumb pld-thumb--lg"><img [src]="sampleAsset(b.ref ?? '')" alt="" /></span>
-                  <p class="nd-field__hint">The analyzer's own graph prints here. When a run hasn't sent it, the box is left out and the table takes the room — never an empty frame.</p>
+                  <p class="pf-field__hint">The analyzer's own graph prints here. When a run hasn't sent it, the box is left out and the table takes the room — never an empty frame.</p>
                 </div>
-                <label class="nd-field"><span class="nd-field__lbl">Graph</span>
+                <label class="pf-field"><span class="pf-field__lbl">Graph</span>
                   <pf-select size="sm" [options]="imageOptions()" [value]="b.ref ?? ''" (valueChange)="setRef($event)" /></label>
-                <label class="nd-field"><span class="nd-field__lbl">Caption</span>
-                  <input class="nd-input" [ngModel]="b.label ?? ''" (change)="setLabel($any($event.target).value)" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Caption</span>
+                  <input class="pf-input" [ngModel]="b.label ?? ''" (change)="setLabel($any($event.target).value)" /></label>
               </section>
             }
             @case ('chart') {
               <section class="pld-sec" aria-label="Chart">
-                <label class="nd-field"><span class="nd-field__lbl">Chart block</span>
+                <label class="pf-field"><span class="pf-field__lbl">Chart block</span>
                   <pf-select size="sm" [options]="chartOptions()" [value]="b.ref ?? ''" (valueChange)="setRef($event)" /></label>
-                <p class="nd-field__hint">Edit what the chart shows in its block in the print order below.</p>
+                <p class="pf-field__hint">Edit what the chart shows in its block in the print order below.</p>
               </section>
             }
             @case ('signatures') {
               <section class="pld-sec" aria-label="Signatures">
-                <p class="nd-field__hint">The department's real sign-off. It prints only when this profile is the department's LAST test in the report — if more tests of the department follow, the sign-off moves after them (as on every report) and this space is left out.</p>
+                <p class="pf-field__hint">The department's real sign-off. It prints only when this profile is the department's LAST test in the report — if more tests of the department follow, the sign-off moves after them (as on every report) and this space is left out.</p>
                 @if (sigBeforeTable()) {
                   <ul class="pld-issues" role="status"><li><span>Results continue on a later page, so the sign-off prints after them instead of here. Move this box to the last page with the table.</span></li></ul>
                 }
@@ -393,8 +393,8 @@ interface DragState {
             }
             @case ('notes') {
               <section class="pld-sec" aria-label="Text">
-                <label class="nd-field"><span class="nd-field__lbl">Text that prints</span>
-                  <textarea class="nd-input pld-ta" rows="3" [ngModel]="b.text ?? b.label ?? ''" (ngModelChange)="setText($event)"
+                <label class="pf-field"><span class="pf-field__lbl">Text that prints</span>
+                  <textarea class="pf-input pld-ta" rows="3" [ngModel]="b.text ?? b.label ?? ''" (ngModelChange)="setText($event)"
                             placeholder="e.g. Kindly correlate clinically."></textarea></label>
               </section>
             }
@@ -402,7 +402,7 @@ interface DragState {
 
           @if (b.kind !== 'table') {
             <div class="pld-selfoot">
-              <button type="button" class="nd-btn nd-btn--danger" (click)="remove(b.id)">Remove from the page</button>
+              <button type="button" class="pf-btn pf-btn--danger" (click)="remove(b.id)">Remove from the page</button>
             </div>
           }
         } @else {
@@ -438,7 +438,7 @@ interface DragState {
                 <span><b>{{ c.label }}</b><small>{{ c.onPage ? 'On the page — select it' : "This profile's chart block" }}</small></span>
               </button>
             }
-            <button type="button" class="nd-btn nd-btn--secondary pld-wide" (click)="createChart()">
+            <button type="button" class="pf-btn pf-btn--secondary pld-wide" (click)="createChart()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               New chart
             </button>
@@ -454,7 +454,7 @@ interface DragState {
                           [attr.aria-label]="'Add ' + img.label + ' (' + img.code + ')'">
                     <span class="pld-thumb"><img [src]="sampleAsset(img.code)" alt="" loading="lazy" /></span>
                     <span class="pld-img__t">{{ img.label }}</span>
-                    <span class="pld-img__s nd-num">{{ img.detail }}</span>
+                    <span class="pld-img__s pf-num">{{ img.detail }}</span>
                     @if (img.onPage && !img.hidden) {
                       <span class="pld-img__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
                     }
@@ -462,14 +462,14 @@ interface DragState {
                 }
               </div>
             }
-            <button type="button" class="nd-btn nd-btn--tertiary pld-adv" [attr.aria-expanded]="advancedOpen()" (click)="advancedOpen.set(!advancedOpen())">
+            <button type="button" class="pf-btn pf-btn--tertiary pld-adv" [attr.aria-expanded]="advancedOpen()" (click)="advancedOpen.set(!advancedOpen())">
               {{ advancedOpen() ? 'Hide' : 'Advanced:' }} add by image code
             </button>
             @if (advancedOpen()) {
               <div class="pld-manual">
-                <input class="nd-input nd-num" type="text" inputmode="numeric" placeholder="Image code, e.g. 12003" aria-label="Analyzer image code"
+                <input class="pf-input pf-num" type="text" inputmode="numeric" placeholder="Image code, e.g. 12003" aria-label="Analyzer image code"
                        [ngModel]="manualCode()" (ngModelChange)="manualCode.set($event)" (keydown.enter)="addManual()" />
-                <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!manualCode().trim()" (click)="addManual()">Add</button>
+                <button type="button" class="pf-btn pf-btn--secondary" [disabled]="!manualCode().trim()" (click)="addManual()">Add</button>
               </div>
             }
           </section>
@@ -481,11 +481,11 @@ interface DragState {
                 <li class="pld-li" [class.pld-li--off]="b.hidden">
                   <button type="button" class="pld-li__main" (click)="select(b.id)">
                     <span class="pld-li__name">{{ labelFor(b) }}</span>
-                    <span class="pld-li__val nd-num">{{ round(b.w) }} × {{ round(b.h) }} mm · at {{ round(b.x) }}, {{ round(b.y) }}{{ b.hidden ? ' · hidden' : '' }}</span>
+                    <span class="pld-li__val pf-num">{{ round(b.w) }} × {{ round(b.h) }} mm · at {{ round(b.x) }}, {{ round(b.y) }}{{ b.hidden ? ' · hidden' : '' }}</span>
                   </button>
                   @if (b.kind !== 'table') {
-                    <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!b.hidden" [attr.aria-label]="'Print ' + labelFor(b)" (click)="toggleHidden(b)">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!b.hidden" [attr.aria-label]="'Print ' + labelFor(b)" (click)="toggleHidden(b)">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   }
                 </li>
@@ -520,13 +520,13 @@ interface DragState {
     .pld-main__head { row-gap: 8px; flex-wrap: wrap; }
     .pld-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
     .pld-tool { width: 36px; min-height: 36px; height: 36px; }
-    @media (pointer: coarse) { .pld-tool { width: 44px; min-height: 44px; height: 44px; } .nd-seg__item { min-height: 40px; } }
-    .nd-toggle { min-height: 44px; }
+    @media (pointer: coarse) { .pld-tool { width: 44px; min-height: 44px; height: 44px; } .pf-seg__item { min-height: 40px; } }
+    .pf-toggle { min-height: 44px; }
 
-    .pld-pages { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--nd-line); flex-wrap: wrap; }
+    .pld-pages { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-top: 1px solid var(--pf-line); flex-wrap: wrap; }
     .pld-pagetab { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
-      color: var(--text-secondary); background: transparent; border: 1px solid var(--nd-line); }
-    .pld-pagetab[aria-selected="true"] { color: var(--text-primary); background: var(--nd-card-bg); border-color: var(--nd-sel-border, rgba(124, 58, 237, .55)); box-shadow: 0 1px 2px rgba(15, 23, 42, .08); font-weight: 600; }
+      color: var(--text-secondary); background: transparent; border: 1px solid var(--pf-line); }
+    .pld-pagetab[aria-selected="true"] { color: var(--text-primary); background: var(--pf-card-bg); border-color: var(--pf-sel-border, rgba(124, 58, 237, .55)); box-shadow: 0 1px 2px rgba(15, 23, 42, .08); font-weight: 600; }
     .pld-pagetab__meta { font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
     .pld-addpage { display: inline-flex; align-items: center; gap: 4px; }
     .pld-pages__grow { flex: 1 1 auto; }
@@ -535,19 +535,19 @@ interface DragState {
     .pld-delpage:disabled { color: var(--text-tertiary); }
     :host-context(.dark) .pld-delpage:not(:disabled), :host-context([data-theme="dark"]) .pld-delpage:not(:disabled) { color: #fca5a5; }
     .pld-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
-    .pld-rowitem { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 6px; border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); cursor: grab; }
+    .pld-rowitem { display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 6px; border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg); cursor: grab; }
     .pld-rowitem__grip { color: var(--text-tertiary); display: inline-flex; }
     .pld-rowitem__t { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--text-primary); display: flex; flex-direction: column; }
     .pld-rowitem__t small { font-size: 11px; color: var(--text-tertiary); }
     .pld-box--droptarget { border: 2px dashed #7c3aed !important; background: rgba(124, 58, 237, .08) !important; }
-    .pld-onrow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--nd-line); flex-wrap: wrap; }
+    .pld-onrow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--pf-line); flex-wrap: wrap; }
     .pld-onrow__txt { flex: 1 1 220px; min-width: 0; }
     .pld-onrow__t { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pld-onrow__s { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); }
-    .pld-onrow .nd-btn--tertiary { display: inline-flex; align-items: center; gap: 6px; }
+    .pld-onrow .pf-btn--tertiary { display: inline-flex; align-items: center; gap: 6px; }
 
     .pld-viewport { overflow: auto; padding: 16px; max-height: 1180px;
-      background: color-mix(in srgb, var(--text-primary) 5%, var(--nd-card-bg)); overscroll-behavior: contain; }
+      background: color-mix(in srgb, var(--text-primary) 5%, var(--pf-card-bg)); overscroll-behavior: contain; }
     .pld-page { position: relative; margin: 0 auto; background: #fff; border-radius: 4px; outline: none; user-select: none;
       box-shadow: 0 1px 3px rgba(15, 23, 42, .18), 0 10px 28px rgba(15, 23, 42, .12); touch-action: pan-y pinch-zoom; }
     .pld-page:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 40%, transparent), 0 10px 28px rgba(15, 23, 42, .12); }
@@ -564,12 +564,12 @@ interface DragState {
     .pld-fixed--top { top: 0; border-bottom: 1px dashed rgba(100, 116, 139, .45); }
     .pld-fixed--bottom { bottom: 0; border-top: 1px dashed rgba(100, 116, 139, .45); }
     .pld-fixed span { position: absolute; right: 6px; bottom: 3px; padding: 1px 6px; border-radius: 6px; font-size: 10px; font-weight: 500;
-      color: #475569; background: rgba(255, 255, 255, .9); opacity: 0; transition: opacity var(--nd-dur-fast, 200ms) ease; }
+      color: #475569; background: rgba(255, 255, 255, .9); opacity: 0; transition: opacity var(--pf-dur-fast, 200ms) ease; }
     .pld-fixed--bottom span { top: 3px; bottom: auto; }
     .pld-page:hover .pld-fixed span, .pld--guides .pld-fixed span { opacity: 1; }
     .pld-body { position: absolute; z-index: 1; pointer-events: none; outline: 1px dashed rgba(124, 58, 237, .38); }
     .pld-body__tag { position: absolute; left: 0; top: -17px; padding: 1px 6px; border-radius: 6px; white-space: nowrap; font-size: 10px; font-weight: 600;
-      color: #5b21b6; background: rgba(245, 243, 255, .95); opacity: 0; transition: opacity var(--nd-dur-fast, 200ms) ease; font-variant-numeric: tabular-nums; }
+      color: #5b21b6; background: rgba(245, 243, 255, .95); opacity: 0; transition: opacity var(--pf-dur-fast, 200ms) ease; font-variant-numeric: tabular-nums; }
     .pld--guides .pld-body__tag, .pld-page:hover .pld-body__tag { opacity: 1; }
     .pld-body__centre { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px dotted rgba(124, 58, 237, .4); }
     .pld-guide { position: absolute; z-index: 4; pointer-events: none; }
@@ -579,7 +579,7 @@ interface DragState {
 
     .pld-box { position: absolute; z-index: 3; box-sizing: border-box; cursor: grab; touch-action: none; outline: none;
       border: 1px dashed rgba(124, 58, 237, .32); border-radius: 2px; background: transparent;
-      transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease; }
+      transition: border-color var(--pf-dur-fast, 200ms) ease, background var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease; }
     .pld-box:hover, .pld-box:focus-visible { border-color: rgba(124, 58, 237, .75); background: rgba(124, 58, 237, .04); }
     .pld-box--sel, .pld-box--sel:hover { z-index: 4; border: 1.5px solid #7c3aed; background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 3px rgba(124, 58, 237, .14); }
     .pld-box--drag { cursor: grabbing; transition: none; z-index: 5; box-shadow: 0 8px 24px rgba(15, 23, 42, .22), 0 0 0 1.5px #7c3aed; }
@@ -605,23 +605,23 @@ interface DragState {
     .pld-handle--se { left: 100%; top: 100%; cursor: nwse-resize; } .pld-handle--s { left: 50%; top: 100%; cursor: ns-resize; }
     .pld-handle--sw { left: 0; top: 100%; cursor: nesw-resize; } .pld-handle--w { left: 0; top: 50%; cursor: ew-resize; }
 
-    .pld-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 8px 14px 10px; border-top: 1px solid var(--nd-line); font-size: 12.5px; }
+    .pld-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 8px 14px 10px; border-top: 1px solid var(--pf-line); font-size: 12.5px; }
     .pld-fit { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); font-weight: 500; }
     .pld-fit svg { color: var(--color-violet-600, #7c3aed); }
     .pld-fit--bad svg { color: #b45309; }
     .pld-foot__note { color: var(--text-tertiary); font-size: 12px; }
 
     .pld-side__body { display: flex; flex-direction: column; gap: 14px; }
-    .nd-card__spacer { flex: 1 1 auto; }
-    .pld-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-card__spacer { flex: 1 1 auto; }
+    .pld-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
     .pld-sec__h { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
     .pld-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; min-height: 44px;
-      border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+      border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pld-row__t { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .pld-row__s { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); }
     .pld-nudge { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
     .pld-pad { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 2px; flex: none; }
-    .pld-pad .nd-btn--icon { width: 44px; height: 44px; }
+    .pld-pad .pf-btn--icon { width: 44px; height: 44px; }
     .pld-pad__up { grid-column: 2; grid-row: 1; } .pld-pad__left { grid-column: 1; grid-row: 2; }
     .pld-pad__right { grid-column: 3; grid-row: 2; } .pld-pad__down { grid-column: 2; grid-row: 3; }
     .pld-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 140px; }
@@ -629,31 +629,31 @@ interface DragState {
     .pld-cols { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .pld-cols li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text-primary); }
     .pld-ta { min-height: 72px; resize: vertical; }
-    .pld-selfoot { display: flex; justify-content: flex-start; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pld-selfoot { display: flex; justify-content: flex-start; padding-top: 12px; border-top: 1px solid var(--pf-line); }
     .pld-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pld-issues li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--nd-radius-sm);
+    .pld-issues li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--pf-radius-sm);
       font-size: 12.5px; line-height: 1.4; color: var(--text-primary);
-      background: color-mix(in srgb, #d97706 10%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, #d97706 35%, transparent); }
+      background: color-mix(in srgb, #d97706 10%, var(--pf-card-bg)); border: 1px solid color-mix(in srgb, #d97706 35%, transparent); }
     .pld-issues li svg { flex: none; margin-top: 2px; color: #b45309; }
 
     .pld-pal { display: flex; flex-direction: column; gap: 6px; }
     .pld-pal__item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 12px; text-align: left; font: inherit; cursor: pointer;
-      color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm);
-      transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease; }
-    .pld-pal__item:hover:not(:disabled) { border-color: var(--nd-sel-border, rgba(124, 58, 237, .45)); }
+      color: var(--text-primary); background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm);
+      transition: border-color var(--pf-dur-fast, 200ms) ease, background var(--pf-dur-fast, 200ms) ease; }
+    .pld-pal__item:hover:not(:disabled) { border-color: var(--pf-sel-border, rgba(124, 58, 237, .45)); }
     .pld-pal__item:disabled { opacity: .55; cursor: default; }
     .pld-pal__item b { display: block; font-size: 13px; font-weight: 600; }
     .pld-pal__item small { display: block; font-size: 12px; color: var(--text-tertiary); line-height: 1.35; }
     .pld-pal__ico { flex: none; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;
-      color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, #7c3aed 10%, var(--nd-card-bg)); }
+      color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, #7c3aed 10%, var(--pf-card-bg)); }
     .pld-pal__src { margin: -4px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); }
     .pld-wide { width: 100%; justify-content: center; display: inline-flex; align-items: center; gap: 6px; }
     .pld-imgs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .pld-img { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; text-align: left; font: inherit; cursor: pointer;
-      color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm);
-      transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease; }
-    .pld-img:hover { border-color: var(--nd-sel-border, rgba(124, 58, 237, .45)); }
-    .pld-img[aria-pressed="true"] { border-color: var(--nd-sel-border, rgba(124, 58, 237, .55)); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 6%, var(--nd-card-bg))); }
+      color: var(--text-primary); background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm);
+      transition: border-color var(--pf-dur-fast, 200ms) ease, background var(--pf-dur-fast, 200ms) ease; }
+    .pld-img:hover { border-color: var(--pf-sel-border, rgba(124, 58, 237, .45)); }
+    .pld-img[aria-pressed="true"] { border-color: var(--pf-sel-border, rgba(124, 58, 237, .55)); background: var(--pf-done-tint, color-mix(in srgb, #7c3aed 6%, var(--pf-card-bg))); }
     .pld-thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 156 / 111; border-radius: 4px; background: #fff; border: 1px solid #e2e8f0; overflow: hidden; }
     .pld-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .pld-thumb--lg { width: 120px; flex: none; }
@@ -664,13 +664,13 @@ interface DragState {
     .pld-thumbrow { display: flex; gap: 10px; align-items: flex-start; }
     .pld-adv { align-self: flex-start; }
     .pld-manual { display: flex; gap: 6px; }
-    .pld-manual .nd-input { flex: 1 1 auto; min-width: 0; }
+    .pld-manual .pf-input { flex: 1 1 auto; min-width: 0; }
     .pld-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pld-li { display: flex; align-items: center; gap: 8px; padding-right: 10px; border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
-    .pld-li:hover { border-color: var(--nd-sel-border, rgba(124, 58, 237, .45)); }
+    .pld-li { display: flex; align-items: center; gap: 8px; padding-right: 10px; border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+    .pld-li:hover { border-color: var(--pf-sel-border, rgba(124, 58, 237, .45)); }
     .pld-li--off .pld-li__name { color: var(--text-tertiary); }
     .pld-li__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; min-height: 48px; justify-content: center;
-      padding: 6px 12px; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; color: inherit; border-radius: var(--nd-radius-sm); }
+      padding: 6px 12px; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; color: inherit; border-radius: var(--pf-radius-sm); }
     .pld-li__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pld-li__val { font-size: 12px; color: var(--text-tertiary); }
 

@@ -7,9 +7,9 @@ import { ConditionBuilderComponent } from './condition-builder.component';
 import { TestBed } from '@angular/core/testing';
 
 /**
- * Workflow editors — ND-PATTERN "Editors (single-record pages)": the band is
+ * Workflow editors — PF-PATTERN "Editors (single-record pages)": the band is
  * back · tenant · ONE primary; the pill is the CONTEXT BAR (record name +
- * neutral chips); the steps rail is a tabs row; stacked nd-cards; slate
+ * neutral chips); the steps rail is a tabs row; stacked pf-cards; slate
  * switches; no mono / green / native controls / glyph icons.
  */
 const cfg = {
@@ -48,21 +48,21 @@ describe('Workflow screen editor — new design', () => {
   it('band: ONE primary (Publish), Save draft secondary; old header classic-only', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
-    const prim = p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary');
+    const prim = p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary');
     expect(prim.length).toBe(1);
     expect(txt(prim[0])).toContain('Publish');
     expect(p.el.querySelector('pf-hero-band .pf-wfe-draft.pf-hb-btn--ghost')).not.toBeNull();
     expect(p.el.querySelector('.pf-builder-hdr')?.classList.contains('pf-classic-only')).toBe(true);
-    expect(p.el.querySelector('pf-hero-band .nd-savestate')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band .pf-savestate')).not.toBeNull();
   });
 
   it('pill = title ✎ + a tiny "Published v4" badge | step tabs — no fact chips', () => {
     const p = make();
-    const ctx = p.el.querySelector('pf-hero-band .nd-ctx')!;
+    const ctx = p.el.querySelector('pf-hero-band .pf-ctx')!;
     expect(txt(ctx.querySelector('.pf-wfe-ctx__nametext'))).toBe('Patient registration');
     expect(txt(ctx.querySelector('.pf-wfe-ctx__badge'))).toBe('Published v4');
-    expect(ctx.querySelector('.nd-ctx__edit[aria-label="Edit workflow title"]')).not.toBeNull();
-    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    expect(ctx.querySelector('.pf-ctx__edit[aria-label="Edit workflow title"]')).not.toBeNull();
+    expect(ctx.querySelectorAll('.pf-ctx__chip').length).toBe(0);
     const tabs = ctx.querySelectorAll('[role="tablist"].pf-wfe-tabs [role="tab"]');
     expect(tabs.length).toBe(2);
     expect(ctx.querySelector('.pf-wfe-tabs__ind')).not.toBeNull();
@@ -70,7 +70,7 @@ describe('Workflow screen editor — new design', () => {
 
   it('the pencil edits the title inline (Enter commits, marks dirty)', async () => {
     const p = make();
-    (p.el.querySelector('.nd-ctx__edit[aria-label="Edit workflow title"]') as HTMLButtonElement).click();
+    (p.el.querySelector('.pf-ctx__edit[aria-label="Edit workflow title"]') as HTMLButtonElement).click();
     p.f.detectChanges();
     const input = p.el.querySelector<HTMLInputElement>('.pf-wfe-titlein')!;
     input.value = 'Registration v2';
@@ -90,7 +90,7 @@ describe('Workflow screen editor — new design', () => {
     p.f.detectChanges();
     expect(p.el.querySelector('[role="tab"][data-step="s2"]')!.getAttribute('aria-selected')).toBe('true');
     await p.f.whenStable();
-    expect(p.el.querySelector<HTMLInputElement>('.pf-wfe-detail input.nd-input')!.value).toBe('Contact');
+    expect(p.el.querySelector<HTMLInputElement>('.pf-wfe-detail input.pf-input')!.value).toBe('Contact');
   });
 
   it('steps reorder from the Step card (Move earlier / later)', () => {
@@ -104,15 +104,15 @@ describe('Workflow screen editor — new design', () => {
 
   it('step cards: slate switches, fields as kit rows with text row actions on web / icons on touch', () => {
     const p = make();
-    expect(p.el.querySelectorAll('.pf-wfe-detail .nd-card').length).toBe(4);
-    const sw = p.el.querySelectorAll('.pf-wfe-detail .nd-toggle[role="switch"]');
+    expect(p.el.querySelectorAll('.pf-wfe-detail .pf-card').length).toBe(4);
+    const sw = p.el.querySelectorAll('.pf-wfe-detail .pf-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     expect(sw[0].getAttribute('aria-checked')).toBe('true');
-    const rows = p.el.querySelectorAll('.pf-field-item.nd-row');
+    const rows = p.el.querySelectorAll('.pf-field-item.pf-row');
     expect(rows.length).toBe(2);
-    expect(rows[1].querySelector('.nd-num')?.textContent).toBe('metadata.blood_group');
+    expect(rows[1].querySelector('.pf-num')?.textContent).toBe('metadata.blood_group');
     // The spec harness has no fine pointer → touch → icon row actions.
-    expect(rows[0].querySelector('.nd-rowact.nd-rowact--icon')).not.toBeNull();
+    expect(rows[0].querySelector('.pf-rowact.pf-rowact--icon')).not.toBeNull();
     hygiene(p.el);
   });
 
@@ -135,10 +135,10 @@ describe('Workflow list — current rules', () => {
       getFor: (u) => (u === '/api/workflows/' ? [record, { ...record, screenName: 'order_create', status: 'draft' }] : []),
     });
     expect(p.el.querySelectorAll('.pf-hb-btn--primary, pf-touch-btn .v-primary').length).toBe(0);
-    const chips = p.el.querySelectorAll('.pf-wf-status.nd-chip');
+    const chips = p.el.querySelectorAll('.pf-wf-status.pf-chip');
     expect(chips.length).toBe(2);
     expect(chips[0].querySelector('svg')).not.toBeNull();
-    expect(p.el.querySelectorAll('.pf-wf-edit.nd-rowact').length).toBe(2);
+    expect(p.el.querySelectorAll('.pf-wf-edit.pf-rowact').length).toBe(2);
     hygiene(p.el);
   });
 });
@@ -152,24 +152,24 @@ describe('Field editor — new design', () => {
 
   it('edit: band with ONE primary "Save changes"; pill = field label + a tiny Type badge only', () => {
     const p = make({ screen: 'patient_register', stepId: 's1', fieldId: 'f2' });
-    const prim = p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary');
+    const prim = p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary');
     expect(prim.length).toBe(1);
     expect(txt(prim[0])).toBe('Save changes');
-    const ctx = p.el.querySelector('pf-hero-band .nd-ctx')!;
+    const ctx = p.el.querySelector('pf-hero-band .pf-ctx')!;
     expect(txt(ctx.querySelector('.pf-fe-ctx__name'))).toBe('Blood group');
     expect(txt(ctx.querySelector('.pf-fe-ctx__badge'))).toBe('Dropdown');
-    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    expect(ctx.querySelectorAll('.pf-ctx__chip').length).toBe(0);
     // Where the field lives moved into the form (Basics card note).
-    expect(txt(p.el.querySelector('.pf-fe-card .nd-card__note'))).toContain('Identity');
+    expect(txt(p.el.querySelector('.pf-fe-card .pf-card__note'))).toContain('Identity');
     expect(p.el.querySelector('pf-screen-header')?.classList.contains('pf-classic-only')).toBe(true);
   });
 
-  it('new: "New field" + "Add field"; nd-cards, kit fields, slate switches, no native controls', () => {
+  it('new: "New field" + "Add field"; pf-cards, kit fields, slate switches, no native controls', () => {
     const p = make({ screen: 'patient_register', stepId: 's1' });
     expect(txt(p.el.querySelector('.pf-fe-ctx__name'))).toBe('New field');
     expect(txt(p.el.querySelector('.pf-hb-btn--primary'))).toBe('Add field');
-    expect(p.el.querySelectorAll('.pf-fe-card.nd-card').length).toBeGreaterThanOrEqual(2);
-    const sw = p.el.querySelectorAll('.nd-toggle[role="switch"]');
+    expect(p.el.querySelectorAll('.pf-fe-card.pf-card').length).toBeGreaterThanOrEqual(2);
+    const sw = p.el.querySelectorAll('.pf-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     (sw[0] as HTMLButtonElement).click();
     p.f.detectChanges();
@@ -179,7 +179,7 @@ describe('Field editor — new design', () => {
 });
 
 describe('Condition builder — kit controls', () => {
-  it('AND / OR is a neutral nd-seg; remove is an SVG icon button', () => {
+  it('AND / OR is a neutral pf-seg; remove is an SVG icon button', () => {
     TestBed.configureTestingModule({ imports: [ConditionBuilderComponent] });
     const f = TestBed.createComponent(ConditionBuilderComponent);
     f.componentRef.setInput('rules', [
@@ -189,10 +189,10 @@ describe('Condition builder — kit controls', () => {
     f.componentRef.setInput('fields', []);
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;
-    const seg = el.querySelector('.nd-seg[role="radiogroup"]')!;
+    const seg = el.querySelector('.pf-seg[role="radiogroup"]')!;
     expect(seg.querySelectorAll('[role="radio"]').length).toBe(2);
     expect(el.querySelector('.cb-remove svg')).not.toBeNull();
-    expect(el.querySelector('input.nd-input')).not.toBeNull();
+    expect(el.querySelector('input.pf-input')).not.toBeNull();
     expect(/✕/.test(el.textContent ?? '')).toBe(false);
   });
 });

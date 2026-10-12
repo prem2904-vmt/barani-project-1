@@ -55,7 +55,7 @@ describe('Lab settings — WhatsApp auto-send', () => {
   it('is an ND switch card under the Report tab, OFF by default, shared sender; the number card follows it', () => {
     const p = make(SETTINGS());
     expect(p.card()).not.toBeNull();
-    expect(p.main().classList.contains('nd-toggle')).toBe(true);
+    expect(p.main().classList.contains('pf-toggle')).toBe(true);
     expect(p.main().getAttribute('aria-checked')).toBe('false');
     expect(p.card()!.querySelector('[data-testid="ls-wa-sender"]')!.textContent).toContain('Prefrontal (shared)');
     // Embedded Signup off → the number card shows the shared number and NO Connect button.
@@ -108,7 +108,7 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(text).toContain('report PDF');
     expect(text).toContain('Partial reports are never sent');
     const regen = p.card()!.querySelector<HTMLButtonElement>('[data-testid="ls-wa-resend-regen"]')!;
-    expect(regen.classList.contains('nd-toggle')).toBe(true);
+    expect(regen.classList.contains('pf-toggle')).toBe(true);
     expect(regen.getAttribute('role')).toBe('switch');
     expect(regen.getAttribute('aria-checked')).toBe('false');
     expect(regen.textContent).toContain('regenerated');

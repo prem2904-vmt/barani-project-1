@@ -27,7 +27,7 @@ export function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): bo
 export function readFlag(key: string): boolean { try { return localStorage.getItem(key) === '1'; } catch { return false; } }
 export function writeFlag(key: string, on: boolean): void { try { localStorage.setItem(key, on ? '1' : '0'); } catch { /* private mode */ } }
 
-/** "₹1,500" — just the price (ND-PATTERN §2). */
+/** "₹1,500" — just the price (PF-PATTERN §2). */
 export function inr(n: number | null | undefined): string {
   const v = Number(n ?? 0);
   return '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: Number.isInteger(v) ? 0 : 2 });

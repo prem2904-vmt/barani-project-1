@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { DynamicInputComponent } from './dynamic-input.component';
 
-/** [nd] (ND-PATTERN §14 fields): kit markup; OFF by default, so every
+/** [nd] (PF-PATTERN §14 fields): kit markup; OFF by default, so every
  *  other host (result entry, workflow preview) keeps the classic look. */
 describe('DynamicInputComponent — new-design markup', () => {
   beforeEach(() => TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] }));
@@ -21,23 +21,23 @@ describe('DynamicInputComponent — new-design markup', () => {
     const { el } = create({ name: 'first_name', title: 'First name', type: 'text', required: true }, false);
     expect(el.querySelector('input.pf-input')).not.toBeNull();
     expect(el.querySelector('label.pf-label')).not.toBeNull();
-    expect(el.querySelector('.nd-input, .nd-field')).toBeNull();
+    expect(el.querySelector('.pf-input, .pf-field')).toBeNull();
   });
 
   it('text: a kit field; the label points at the input; required = the amber dot (not a red *)', () => {
     const { el } = create({ name: 'first_name', title: 'First name', type: 'text', required: true });
-    const input = el.querySelector<HTMLInputElement>('input.nd-input')!;
-    const label = el.querySelector('label.nd-field__lbl')!;
+    const input = el.querySelector<HTMLInputElement>('input.pf-input')!;
+    const label = el.querySelector('label.pf-field__lbl')!;
     expect(label.getAttribute('for')).toBe(input.id);
-    expect(label.querySelector('.nd-dot-unpriced[aria-label="required"]')).not.toBeNull();
+    expect(label.querySelector('.pf-dot-unpriced[aria-label="required"]')).not.toBeNull();
     expect(el.querySelector('.text-red-500')).toBeNull();
   });
 
   it('2–4 options (Sex) → an equal-width neutral radio group, aria-checked, no --on class', () => {
     const { el, f } = create({ name: 'sex', title: 'Sex', type: 'select', options: ['Male', 'Female', 'Other'] });
-    const seg = el.querySelector('[role="radiogroup"].nd-seg.pf-di-seg--fill')!;
+    const seg = el.querySelector('[role="radiogroup"].pf-seg.pf-di-seg--fill')!;
     expect(seg).not.toBeNull();
-    const items = seg.querySelectorAll<HTMLButtonElement>('.nd-seg__item[role="radio"]');
+    const items = seg.querySelectorAll<HTMLButtonElement>('.pf-seg__item[role="radio"]');
     expect(items.length).toBe(3);
     items[1].click();
     f.detectChanges();
@@ -67,7 +67,7 @@ describe('DynamicInputComponent — new-design markup', () => {
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;
     const input = el.querySelector('input')!;
-    expect(input.classList.contains('nd-input--error')).toBe(true);
+    expect(input.classList.contains('pf-input--error')).toBe(true);
     expect(input.getAttribute('aria-invalid')).toBe('true');
     const msg = el.querySelector('.pf-di-err')!;
     expect(msg.textContent!.trim()).toBe('Required');
@@ -95,19 +95,19 @@ describe('DynamicInputComponent — new-design markup', () => {
 
   it('phone: one kit shell, tabular number, country codes WITHOUT flag emoji', () => {
     const { el, c } = create({ name: 'phone', title: 'Phone', type: 'phone' });
-    expect(el.querySelector('.pf-di-phone input[type="tel"].nd-num')).not.toBeNull();
+    expect(el.querySelector('.pf-di-phone input[type="tel"].pf-num')).not.toBeNull();
     expect(c.countrySelectOptionsNd.every(o => !/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(o.label))).toBe(true);
     expect(c.countrySelectOptionsNd[0]).toMatchObject({ value: '+91', label: '+91', hint: 'India' });
   });
 
   it('DOB keeps the date ⇄ age logic: typed dd/mm/yyyy + numeric-text age + a neutral Yrs / Mo / Days segment', () => {
     const { el, c } = create({ name: 'date_of_birth', title: 'Date of birth', type: 'date' });
-    const dob = el.querySelector<HTMLInputElement>('input.pf-di-date__in.nd-input.nd-num')!;
+    const dob = el.querySelector<HTMLInputElement>('input.pf-di-date__in.pf-input.pf-num')!;
     expect(dob.value).toBe('');
     expect(dob.placeholder).toBe('dd/mm/yyyy');
     expect(el.querySelector('input.pf-di-dob__age[type="text"][inputmode="numeric"]')).not.toBeNull();
     expect(el.querySelector('input[type="number"]')).toBeNull();
-    const unit = el.querySelectorAll('.pf-di-seg--unit .nd-seg__item');
+    const unit = el.querySelectorAll('.pf-di-seg--unit .pf-seg__item');
     expect(Array.from(unit).map(b => b.textContent!.trim())).toEqual(['Yrs', 'Mo', 'Days']);
     expect(unit[0].getAttribute('aria-checked')).toBe('true');
     let out: unknown;
@@ -141,14 +141,14 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(out).toBe('+919876543210');
     // A real number field keeps its input (spinner hidden by the kit).
     const n = create({ name: 'weight', title: 'Weight', type: 'number' });
-    expect(n.el.querySelector('input[type="number"].nd-input')).not.toBeNull();
+    expect(n.el.querySelector('input[type="number"].pf-input')).not.toBeNull();
   });
 
   it('identity numbers (ABHA) are grouped in tabular numbers; checkbox → slate switch', () => {
     const a = create({ name: 'abha_id', title: 'ABHA ID', type: 'text' }, true, '12345678901234');
-    expect(a.el.querySelector('input.nd-input.nd-num')).not.toBeNull();
+    expect(a.el.querySelector('input.pf-input.pf-num')).not.toBeNull();
     const t = create({ name: 'consent', title: 'Consent', type: 'checkbox' });
-    const sw = t.el.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    const sw = t.el.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('false');
     sw.click();
     t.f.detectChanges();

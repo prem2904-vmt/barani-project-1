@@ -4,7 +4,7 @@ import { AppointmentsConfigComponent } from './appointments-config.component';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { renderBandPage } from '../admin-band.spec-helpers';
 
-/** Start / End time used a native `<input type="time">` — now `pf-nd-time`
+/** Start / End time used a native `<input type="time">` — now `pf-time`
  *  (typed hh:mm, 24h HH:mm in/out, same value the native control emitted). */
 describe('Appointments config — Start/End time (kit, no native time input)', () => {
   const cfg = {
@@ -17,12 +17,12 @@ describe('Appointments config — Start/End time (kit, no native time input)', (
     providers: [{ provide: AppointmentQueueService, useValue: { getConfig: vi.fn(() => of(cfg)), saveConfig: vi.fn((c: unknown) => of(c)) } }],
   });
 
-  it('renders pf-nd-time for Start/End, never a visible native time input', () => {
+  it('renders pf-time for Start/End, never a visible native time input', () => {
     const p = render();
     (p.cmp as any).tab.set('slots');
     p.f.detectChanges();
-    const card = p.el.querySelector('.pf-ap-card.nd-card')!;
-    expect(card.querySelectorAll('pf-nd-time').length).toBe(2);
+    const card = p.el.querySelector('.pf-ap-card.pf-card')!;
+    expect(card.querySelectorAll('pf-time').length).toBe(2);
     expect(card.querySelector('input[type="time"]:not([aria-hidden="true"])')).toBeNull();
   });
 
@@ -30,7 +30,7 @@ describe('Appointments config — Start/End time (kit, no native time input)', (
     const p = render();
     (p.cmp as any).tab.set('slots');
     p.f.detectChanges();
-    const txt = p.el.querySelectorAll<HTMLInputElement>('.pf-ap-card pf-nd-time input[type="text"]')[0];
+    const txt = p.el.querySelectorAll<HTMLInputElement>('.pf-ap-card pf-time input[type="text"]')[0];
     txt.value = '0730';
     txt.dispatchEvent(new Event('input'));
     p.f.detectChanges();

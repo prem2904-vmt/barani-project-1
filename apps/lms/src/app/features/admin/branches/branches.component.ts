@@ -76,24 +76,24 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 
       <div class="pf-band-body">
       @if (newBranchOpen()) {
-        <section class="nd-card nd-anim-in pf-br-new" aria-label="New branch">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
-            <h3 class="nd-card__label">New branch</h3>
+        <section class="pf-card pf-anim-in pf-br-new" aria-label="New branch">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+            <h3 class="pf-card__label">New branch</h3>
           </div>
           <div class="grid grid-cols-2 gap-3 pf-branch-grid pf-br-new__body">
-            <label class="nd-field"><span class="nd-field__lbl">Name</span>
-              <input type="text" class="nd-input" [ngModel]="newBranch().name" (ngModelChange)="patchNewBranch({ name: $event })" /></label>
-            <label class="nd-field"><span class="nd-field__lbl">Code</span>
-              <input type="text" class="nd-input nd-num uppercase" [ngModel]="newBranch().code" (ngModelChange)="patchNewBranch({ code: $event.toUpperCase() })" /></label>
-            <label class="nd-field"><span class="nd-field__lbl">City</span>
-              <input type="text" class="nd-input" [ngModel]="newBranch().city" (ngModelChange)="patchNewBranch({ city: $event })" /></label>
-            <label class="nd-field"><span class="nd-field__lbl">State</span>
-              <input type="text" class="nd-input" [ngModel]="newBranch().state" (ngModelChange)="patchNewBranch({ state: $event })" /></label>
+            <label class="pf-field"><span class="pf-field__lbl">Name</span>
+              <input type="text" class="pf-input" [ngModel]="newBranch().name" (ngModelChange)="patchNewBranch({ name: $event })" /></label>
+            <label class="pf-field"><span class="pf-field__lbl">Code</span>
+              <input type="text" class="pf-input pf-num uppercase" [ngModel]="newBranch().code" (ngModelChange)="patchNewBranch({ code: $event.toUpperCase() })" /></label>
+            <label class="pf-field"><span class="pf-field__lbl">City</span>
+              <input type="text" class="pf-input" [ngModel]="newBranch().city" (ngModelChange)="patchNewBranch({ city: $event })" /></label>
+            <label class="pf-field"><span class="pf-field__lbl">State</span>
+              <input type="text" class="pf-input" [ngModel]="newBranch().state" (ngModelChange)="patchNewBranch({ state: $event })" /></label>
           </div>
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleNewBranch()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleNewBranch()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
           </div>
         </section>
       }
@@ -108,7 +108,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       } @else {
         <div class="space-y-2.5">
           @for (b of visibleBranches(); track b.id) {
-            <div class="nd-card pf-br-card">
+            <div class="pf-card pf-br-card">
               <button type="button"
                       class="pf-branch-toggle"
                       [attr.aria-expanded]="isOpen(b.id)"
@@ -117,14 +117,14 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   <span class="pf-branch-badge">{{ codeInitials(b.code) }}</span>
                   <div class="pf-branch-titlecol">
                     <p class="pf-br-name">{{ b.name }}</p>
-                    <p class="pf-br-meta">{{ b.city ?? '—' }} · <span class="nd-num">{{ b.code }}</span></p>
+                    <p class="pf-br-meta">{{ b.city ?? '—' }} · <span class="pf-num">{{ b.code }}</span></p>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
                   @if (b.hasPfBox) {
-                    <span class="nd-chip nd-chip--static pf-br-chip">PF Box</span>
+                    <span class="pf-chip pf-chip--static pf-br-chip">PF Box</span>
                   }
-                  <span class="pf-br-count"><span class="nd-num">{{ allDeptsFor(b.id).length }}</span> depts</span>
+                  <span class="pf-br-count"><span class="pf-num">{{ allDeptsFor(b.id).length }}</span> depts</span>
                   <span class="pf-chevron" [class.pf-chevron-open]="isOpen(b.id)" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="m6 9 6 6 6-6"/>
@@ -252,9 +252,9 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-br-chip { height: 24px; font-size: 11.5px; }
     .pf-br-sec { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
     .pf-br-hint { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
-    .pf-br-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--nd-radius-sm); font-size: 12px; line-height: 1.5;
-      color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
-    .pf-sample-input.nd-input { min-height: 30px; }
+    .pf-br-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--pf-radius-sm); font-size: 12px; line-height: 1.5;
+      color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
+    .pf-sample-input.pf-input { min-height: 30px; }
 
     .pf-branch-toggle {
       width: 100%;
@@ -291,7 +291,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 
     .pf-branch-body {
       padding: 16px 18px 18px;
-      border-top: 1px solid var(--nd-line);
+      border-top: 1px solid var(--pf-line);
     }
 
 
@@ -411,7 +411,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-lane-code-input::placeholder { color: var(--text-muted); font-weight: 600; letter-spacing: 0.1em; }
     .pf-lane-code-input:focus { border-color: var(--violet-text); }
     /* No code yet → tint the field so admins notice it prefixes the sample ID. */
-    .pf-lane-code-input--missing { border-color: var(--nd-sel-border); }
+    .pf-lane-code-input--missing { border-color: var(--pf-sel-border); }
     .pf-add-space-lane {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
       min-height: 90px; border: 1.5px dashed var(--glass-border, rgba(255,255,255,0.2)); border-radius: 12px;
@@ -537,7 +537,7 @@ export class BranchesComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
   /** Band pill search. A branch shows when it — or a department on its
@@ -580,7 +580,7 @@ export class BranchesComponent implements OnInit {
     this._sampleCodeError.update(m => { const { [deptId]: _drop, ...rest } = m; return rest; });
   }
 
-  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   private readonly listHold = createLoadHold(true);
   /** First load: skeleton cards until the branches land (held, no flash). */
   readonly listSkeleton = this.listHold.active;

@@ -41,7 +41,7 @@ import { Appointment } from '../models/appointment.model';
     .ap__row { display: grid; grid-template-columns: 64px 1fr auto auto; align-items: center; gap: 10px;
                padding: 9px 11px; border-radius: 9px; background: var(--bg-card-solid, rgba(255,255,255,0.04));
                border: 1px solid var(--glass-border); cursor: pointer; }
-    .ap__row:hover { border-color: #7c3aed; }
+    .ap__row:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .ap__time { font-size: 12px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
     .ap__name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ap__meta { font-size: 11px; color: var(--text-tertiary); }

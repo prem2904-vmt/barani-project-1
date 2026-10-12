@@ -46,7 +46,7 @@ import { ReportNoteViewComponent } from './report-note-view.component';
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5h1.5v4"/><path d="M3.8 13.2c.4-.6 1.2-.8 1.8-.4.6.4.6 1.2 0 1.8L4 16.5h2.2"/></svg>
         </button>
         <span class="pf-rne__grow"></span>
-        <span class="pf-rne__count nd-num" [class.pf-rne__count--over]="over()" aria-live="polite">{{ length() }} / {{ max() }}</span>
+        <span class="pf-rne__count pf-num" [class.pf-rne__count--over]="over()" aria-live="polite">{{ length() }} / {{ max() }}</span>
       </div>
       <textarea #ta class="pf-rne__ta" rows="3"
                 [attr.aria-label]="label()"
@@ -65,12 +65,12 @@ import { ReportNoteViewComponent } from './report-note-view.component';
         </div>
       }
       <div class="pf-rne__actions">
-        <button type="button" class="nd-btn nd-btn--tertiary pf-rne__btn" (click)="cancelled.emit()">Cancel</button>
+        <button type="button" class="pf-btn pf-btn--tertiary pf-rne__btn" (click)="cancelled.emit()">Cancel</button>
         @if (initial()) {
-          <button type="button" class="nd-btn nd-btn--tertiary pf-rne__btn pf-rne__remove" [disabled]="busy()"
+          <button type="button" class="pf-btn pf-btn--tertiary pf-rne__btn pf-rne__remove" [disabled]="busy()"
                   (click)="saved.emit('')">Remove note</button>
         }
-        <button type="button" class="nd-btn nd-btn--secondary pf-rne__btn pf-rne__save"
+        <button type="button" class="pf-btn pf-btn--secondary pf-rne__btn pf-rne__save"
                 [disabled]="busy() || over() || cleaned() === cleanedInitial()"
                 (click)="save()">{{ busy() ? 'Saving…' : 'Save note' }}</button>
       </div>
@@ -78,22 +78,22 @@ import { ReportNoteViewComponent } from './report-note-view.component';
   `,
   styles: [`
     :host { display: block; }
-    .pf-rne { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--nd-line, var(--border-muted)); border-radius: 12px; background: var(--nd-card-bg, var(--surface-elevated)); }
+    .pf-rne { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--pf-line, var(--border-muted)); border-radius: 12px; background: var(--pf-card-bg, var(--surface-elevated)); }
     .pf-rne__bar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
     .pf-rne__tool { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: 8px;
       background: transparent; color: var(--text-secondary); cursor: pointer; }
-    .pf-rne__tool:hover { background: var(--nd-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
+    .pf-rne__tool:hover { background: var(--pf-chip-bg, rgba(0,0,0,.05)); color: var(--text-primary); }
     .pf-rne__tool:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
-    .pf-rne__sep { width: 1px; height: 18px; margin: 0 4px; background: var(--nd-line, var(--border-muted)); }
+    .pf-rne__sep { width: 1px; height: 18px; margin: 0 4px; background: var(--pf-line, var(--border-muted)); }
     .pf-rne__grow { flex: 1 1 auto; }
     .pf-rne__count { font-size: 12px; color: var(--text-tertiary); }
     .pf-rne__count--over { color: var(--red-text, #dc2626); font-weight: 600; }
-    .pf-rne__ta { width: 100%; min-height: 76px; resize: vertical; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-input, var(--nd-line));
+    .pf-rne__ta { width: 100%; min-height: 76px; resize: vertical; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-input, var(--pf-line));
       background: var(--surface-elevated, transparent); color: var(--text-primary); font: inherit; font-size: 14px; line-height: 1.45; box-sizing: border-box; }
     .pf-rne__ta:focus { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 0; border-color: transparent; }
     .pf-rne--over .pf-rne__ta { border-color: var(--red-text, #dc2626); }
     .pf-rne__err { margin: 0; font-size: 12px; color: var(--red-text, #dc2626); }
-    .pf-rne__preview { padding: 8px 10px; border-radius: 10px; background: var(--nd-chip-bg, rgba(0,0,0,.04)); }
+    .pf-rne__preview { padding: 8px 10px; border-radius: 10px; background: var(--pf-chip-bg, rgba(0,0,0,.04)); }
     .pf-rne__preview-t { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-rne__actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
     .pf-rne__btn { min-height: 36px; }

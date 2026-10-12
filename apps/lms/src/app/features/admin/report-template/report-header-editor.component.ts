@@ -65,28 +65,28 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
   template: `
   <div class="pf-rhe" [class.pf-rhe--footer]="region() === 'footer'" [class.pf-rhe--guides]="guides()">
     <!-- ══ MAIN CARD: the page ══ -->
-    <section class="nd-card pf-rhe-main" aria-label="Report page">
-      <div class="nd-card__head pf-rhe-main__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <section class="pf-card pf-rhe-main" aria-label="Report page">
+      <div class="pf-card__head pf-rhe-main__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
         </span>
-        <span class="nd-card__label">{{ region() === 'footer' ? 'Footer' : 'Letterhead' }}</span>
-        <span class="nd-card__note">Click anything on the page to edit it. Drag, or use the arrow keys, to move it.</span>
+        <span class="pf-card__label">{{ region() === 'footer' ? 'Footer' : 'Letterhead' }}</span>
+        <span class="pf-card__note">Click anything on the page to edit it. Drag, or use the arrow keys, to move it.</span>
         <div class="pf-rhe-tools">
-          <button type="button" class="nd-btn nd-btn--icon pf-rhe-tool" [disabled]="!canUndo()" (click)="undo.emit()"
+          <button type="button" class="pf-btn pf-btn--icon pf-rhe-tool" [disabled]="!canUndo()" (click)="undo.emit()"
                   aria-label="Undo" title="Undo (Ctrl+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
           </button>
-          <button type="button" class="nd-btn nd-btn--icon pf-rhe-tool" [disabled]="!canRedo()" (click)="redo.emit()"
+          <button type="button" class="pf-btn pf-btn--icon pf-rhe-tool" [disabled]="!canRedo()" (click)="redo.emit()"
                   aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
           </button>
-          <div class="nd-seg pf-rhe-zoom" role="radiogroup" aria-label="Zoom">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="zoom() === 1" (click)="setZoom(1)">Whole page</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="zoom() === 2" (click)="setZoom(2)">Zoom 200%</button>
+          <div class="pf-seg pf-rhe-zoom" role="radiogroup" aria-label="Zoom">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="zoom() === 1" (click)="setZoom(1)">Whole page</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="zoom() === 2" (click)="setZoom(2)">Zoom 200%</button>
           </div>
-          <button type="button" class="nd-toggle pf-rhe-guides" role="switch" [attr.aria-checked]="guides()" (click)="guides.set(!guides())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Guides
+          <button type="button" class="pf-toggle pf-rhe-guides" role="switch" [attr.aria-checked]="guides()" (click)="guides.set(!guides())">
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Guides
           </button>
         </div>
       </div>
@@ -133,7 +133,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                     (pointerdown)="onBgPointerDown($event, bg)" (click)="$event.stopPropagation()"
                     (focus)="focusSelect('bg:' + bg.id)">
               <span class="pf-rhe-box__tag">{{ bg.label }}@if (bg.hidden) { · hidden }</span>
-              @if (drag()?.id === 'bg:' + bg.id) { <span class="pf-rhe-box__live nd-num">{{ dragReadoutBg(bg) }}</span> }
+              @if (drag()?.id === 'bg:' + bg.id) { <span class="pf-rhe-box__live pf-num">{{ dragReadoutBg(bg) }}</span> }
             </button>
           }
 
@@ -161,7 +161,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                 }
               </span>
               @if (drag()?.id === it.id) {
-                <span class="pf-rhe-box__live nd-num">{{ dragReadout() }}</span>
+                <span class="pf-rhe-box__live pf-num">{{ dragReadout() }}</span>
               }
             </button>
           }
@@ -173,22 +173,22 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     </section>
 
     <!-- ══ SIDE CARD: the selected element, or every element + page settings ══ -->
-    <aside class="nd-card pf-rhe-side" aria-label="Element settings">
-      <div class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <aside class="pf-card pf-rhe-side" aria-label="Element settings">
+      <div class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
         </span>
-        <span class="nd-card__label">{{ selBg() ? selBg()!.label : sel() ? sel()!.label : (region() === 'footer' ? 'Footer elements' : 'Letterhead elements') }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label">{{ selBg() ? selBg()!.label : sel() ? sel()!.label : (region() === 'footer' ? 'Footer elements' : 'Letterhead elements') }}</span>
+        <span class="pf-card__spacer"></span>
         @if (sel() || selBg()) {
-          <button type="button" class="nd-btn nd-btn--quiet" (click)="select(null)" aria-label="Back to all elements">
+          <button type="button" class="pf-btn pf-btn--quiet" (click)="select(null)" aria-label="Back to all elements">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             All elements
           </button>
         }
       </div>
 
-      <div class="nd-card__body pf-rhe-side__body" #sideBody>
+      <div class="pf-card__body pf-rhe-side__body" #sideBody>
         @if (selBg(); as b) {
           <!-- ── Selected background image ── -->
           <div class="pf-rhe-bgthumb">
@@ -196,44 +196,44 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               @if (imageCache()[b.url]; as src) { <img [src]="src" alt="" /> } @else { <span>Loading…</span> }
             </span>
             <div class="pf-rhe-bgthumb__act">
-              <label class="nd-btn nd-btn--secondary pf-rhe-file" [class.pf-rhe-file--busy]="bgBusy()">
+              <label class="pf-btn pf-btn--secondary pf-rhe-file" [class.pf-rhe-file--busy]="bgBusy()">
                 <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="onBgPick($event, b.id)" [disabled]="bgBusy()" />
                 {{ bgBusy() ? 'Uploading…' : 'Replace image' }}
               </label>
-              <button type="button" class="nd-btn nd-btn--danger" (click)="removeBg(b.id)">Remove</button>
+              <button type="button" class="pf-btn pf-btn--danger" (click)="removeBg(b.id)">Remove</button>
             </div>
           </div>
           @if (bgError()) { <p class="pf-rhe-err" role="alert">{{ bgError() }}</p> }
-          <p class="nd-field__hint">Backgrounds always print behind the text, logo and results — never over them.</p>
+          <p class="pf-field__hint">Backgrounds always print behind the text, logo and results — never over them.</p>
 
           <div class="pf-rhe-row">
             <div><p class="pf-rhe-row__t">Print this</p><p class="pf-rhe-row__s">{{ b.hidden ? 'Hidden — not printed' : 'Printed' }}</p></div>
-            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!b.hidden" aria-label="Print this background"
+            <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!b.hidden" aria-label="Print this background"
                     (click)="patchBg(b.id, { hidden: b.hidden ? undefined : true })">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           </div>
 
           <section class="pf-rhe-sec" aria-label="Where">
             <h4 class="pf-rhe-sec__h">Fills</h4>
-            <div class="nd-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Area">
+            <div class="pf-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Area">
               @for (a of bgAreas; track a.value) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.area === a.value"
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="b.area === a.value"
                         (click)="patchBg(b.id, { area: a.value, x: undefined, y: undefined })">{{ a.label }}</button>
               }
             </div>
             <h4 class="pf-rhe-sec__h">Fit</h4>
-            <div class="nd-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Fit">
+            <div class="pf-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Fit">
               @for (f of bgFits; track f.value) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.fit === f.value"
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="b.fit === f.value"
                         (click)="patchBg(b.id, { fit: f.value, x: undefined, y: undefined })">{{ f.label }}</button>
               }
             </div>
-            <p class="nd-field__hint">{{ fitHint(b.fit) }}</p>
+            <p class="pf-field__hint">{{ fitHint(b.fit) }}</p>
             <h4 class="pf-rhe-sec__h">Size</h4>
             <div class="pf-rhe-slider">
               <input type="range" min="10" max="300" step="1" [ngModel]="b.scale" (ngModelChange)="setBgScale(b.id, +$event)" aria-label="Background size in percent" />
-              <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="10" max="300" [ngModel]="b.scale"
+              <label class="pf-rhe-num"><input class="pf-input pf-num" type="number" min="10" max="300" [ngModel]="b.scale"
                      (change)="setBgScale(b.id, +$any($event.target).value)" aria-label="Background size value" /><span>%</span></label>
             </div>
           </section>
@@ -242,58 +242,58 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             <h4 class="pf-rhe-sec__h">Opacity</h4>
             <div class="pf-rhe-slider">
               <input type="range" min="5" max="100" step="1" [ngModel]="round(b.opacity * 100)" (ngModelChange)="setBgOpacity(b.id, +$event)" aria-label="Opacity in percent" />
-              <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="5" max="100" [ngModel]="round(b.opacity * 100)"
+              <label class="pf-rhe-num"><input class="pf-input pf-num" type="number" min="5" max="100" [ngModel]="round(b.opacity * 100)"
                      (change)="setBgOpacity(b.id, +$any($event.target).value)" aria-label="Opacity value" /><span>%</span></label>
             </div>
-            <p class="nd-field__hint">Lower it for a faint watermark (15–25% reads well behind results).</p>
+            <p class="pf-field__hint">Lower it for a faint watermark (15–25% reads well behind results).</p>
           </section>
 
           <section class="pf-rhe-sec" aria-label="Pages">
             <h4 class="pf-rhe-sec__h">Pages</h4>
-            <div class="nd-seg" role="radiogroup" aria-label="Pages">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.pages === 'first'" (click)="patchBg(b.id, { pages: 'first' })">First page only</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.pages === 'all'" (click)="patchBg(b.id, { pages: 'all' })">Every page</button>
+            <div class="pf-seg" role="radiogroup" aria-label="Pages">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="b.pages === 'first'" (click)="patchBg(b.id, { pages: 'first' })">First page only</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="b.pages === 'all'" (click)="patchBg(b.id, { pages: 'all' })">Every page</button>
             </div>
             <div class="pf-rhe-row pf-rhe-row--flat">
               <div><p class="pf-rhe-row__t">Also print on letterhead paper</p>
                 <p class="pf-rhe-row__s">Off: left out when you print on your pre-printed paper (it already has the design). Plain-paper prints, downloads, WhatsApp, the QR link and archived PDFs always include it.</p></div>
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="b.onLetterhead" aria-label="Also print on letterhead paper"
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="b.onLetterhead" aria-label="Also print on letterhead paper"
                       (click)="patchBg(b.id, { onLetterhead: b.onLetterhead ? undefined : true })">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               </button>
             </div>
           </section>
 
           <section class="pf-rhe-sec" aria-label="Position">
             <h4 class="pf-rhe-sec__h">Position</h4>
-            <p class="pf-rhe-readout nd-num">{{ b.moved ? 'Moved by you' : 'Centred in its area' }} · top-left {{ mm(b.rect.x) }} mm, {{ mm(b.rect.y) }} mm</p>
+            <p class="pf-rhe-readout pf-num">{{ b.moved ? 'Moved by you' : 'Centred in its area' }} · top-left {{ mm(b.rect.x) }} mm, {{ mm(b.rect.y) }} mm</p>
             <div class="pf-rhe-nudge">
               <div class="pf-rhe-pad" role="group" aria-label="Move background">
-                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__up" (click)="nudge(0, -step())" aria-label="Move up">
+                <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__up" (click)="nudge(0, -step())" aria-label="Move up">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left">
+                <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__right" (click)="nudge(step(), 0)" aria-label="Move right">
+                <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__right" (click)="nudge(step(), 0)" aria-label="Move right">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__down" (click)="nudge(0, step())" aria-label="Move down">
+                <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__down" (click)="nudge(0, step())" aria-label="Move down">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
               </div>
               <div class="pf-rhe-step">
-                <span class="nd-field__lbl">Step</span>
-                <div class="nd-seg" role="radiogroup" aria-label="Step size">
+                <span class="pf-field__lbl">Step</span>
+                <div class="pf-seg" role="radiogroup" aria-label="Step size">
                   @for (st of steps; track st) {
-                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
+                    <button type="button" class="pf-seg__item pf-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
                   }
                 </div>
               </div>
             </div>
             <div class="pf-rhe-grid2">
-              <label class="nd-field"><span class="nd-field__lbl">From left edge (mm)</span>
-                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.x))" (change)="setBgPos(b.id, 'x', $any($event.target).value)" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">From top edge (mm)</span>
-                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.y))" (change)="setBgPos(b.id, 'y', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">From left edge (mm)</span>
+                <input class="pf-input pf-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.x))" (change)="setBgPos(b.id, 'x', $any($event.target).value)" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">From top edge (mm)</span>
+                <input class="pf-input pf-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.y))" (change)="setBgPos(b.id, 'y', $any($event.target).value)" /></label>
             </div>
-            <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="!b.moved && b.scale === 100" (click)="patchBg(b.id, { x: undefined, y: undefined, scale: undefined })">Centre it again at 100%</button>
+            <button type="button" class="pf-btn pf-btn--tertiary" [disabled]="!b.moved && b.scale === 100" (click)="patchBg(b.id, { x: undefined, y: undefined, scale: undefined })">Centre it again at 100%</button>
           </section>
         } @else if (sel(); as s) {
           <!-- ── Selected element ── -->
@@ -307,10 +307,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   </svg>
                   <span>{{ iss.message }}
                     @if (iss.kind === 'overflow' && s.item?.kind === 'text') {
-                      <button type="button" class="nd-btn nd-btn--quiet pf-rhe-fix" (click)="fitInside(s.id)">Fit it inside the page</button>
+                      <button type="button" class="pf-btn pf-btn--quiet pf-rhe-fix" (click)="fitInside(s.id)">Fit it inside the page</button>
                     }
                     @if (iss.kind === 'body') {
-                      <button type="button" class="nd-btn nd-btn--quiet pf-rhe-fix" (click)="setBodyTop(null)">Start the patient details below it</button>
+                      <button type="button" class="pf-btn pf-btn--quiet pf-rhe-fix" (click)="setBodyTop(null)">Start the patient details below it</button>
                     }
                   </span>
                 </li>
@@ -320,58 +320,58 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 
           <!-- Content -->
           @if (fieldKey(s.id); as key) {
-            <label class="nd-field">
-              <span class="nd-field__lbl">{{ s.id === 'address' ? 'Address — press Enter for a new line' : 'Text' }}</span>
+            <label class="pf-field">
+              <span class="pf-field__lbl">{{ s.id === 'address' ? 'Address — press Enter for a new line' : 'Text' }}</span>
               @if (multiline(s.id)) {
-                <textarea class="nd-input pf-rhe-ta" rows="3" [ngModel]="$any(template())[key] ?? ''"
+                <textarea class="pf-input pf-rhe-ta" rows="3" [ngModel]="$any(template())[key] ?? ''"
                           (ngModelChange)="setText(key, $event)"></textarea>
               } @else {
-                <input class="nd-input" [ngModel]="$any(template())[key] ?? ''" (ngModelChange)="setText(key, $event)" />
+                <input class="pf-input" [ngModel]="$any(template())[key] ?? ''" (ngModelChange)="setText(key, $event)" />
               }
-              @if (s.id === 'tagline') { <span class="nd-field__hint">A "|" prints as an accent-coloured divider in Classic and Centered.</span> }
-              @if (s.state === 'empty') { <span class="nd-field__hint">Empty — type it to print it on the letterhead.</span> }
+              @if (s.id === 'tagline') { <span class="pf-field__hint">A "|" prints as an accent-coloured divider in Classic and Centered.</span> }
+              @if (s.state === 'empty') { <span class="pf-field__hint">Empty — type it to print it on the letterhead.</span> }
             </label>
           }
           @if (s.id.startsWith('line:')) {
-            <label class="nd-field">
-              <span class="nd-field__lbl">Text (registration no., GSTIN, timings…)</span>
-              <textarea class="nd-input pf-rhe-ta" rows="2" [ngModel]="lineText(s.id)" (ngModelChange)="setLineText(s.id, $event)"></textarea>
+            <label class="pf-field">
+              <span class="pf-field__lbl">Text (registration no., GSTIN, timings…)</span>
+              <textarea class="pf-input pf-rhe-ta" rows="2" [ngModel]="lineText(s.id)" (ngModelChange)="setLineText(s.id, $event)"></textarea>
             </label>
           }
           @if (s.state === 'joined') {
             <div class="pf-rhe-row">
               <p class="pf-rhe-row__s">Printed inside the {{ label(s.joinedIn ?? 'contact').toLowerCase() }}. Give it its own line to move, align or size it by itself.</p>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="moveToOwnLine($any(s.id))">Own line</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="moveToOwnLine($any(s.id))">Own line</button>
             </div>
           }
           @if (s.id === 'contact' && s.item) {
-            <div class="nd-field">
-              <span class="nd-field__lbl">This line prints</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">This line prints</span>
               <ul class="pf-rhe-fields">
                 @for (f of s.item.fields ?? []; track f) {
                   <li>
                     <span class="pf-rhe-fields__name">{{ label(f) }}</span>
                     <span class="pf-rhe-fields__val">{{ fieldValue(f) || 'empty' }}</span>
-                    <button type="button" class="nd-btn nd-btn--quiet" (click)="moveToOwnLine(f)">Own line</button>
-                    <button type="button" class="nd-btn nd-btn--quiet" (click)="removeFromJoined(f)" [attr.aria-label]="'Remove ' + label(f) + ' from this line'">Remove</button>
+                    <button type="button" class="pf-btn pf-btn--quiet" (click)="moveToOwnLine(f)">Own line</button>
+                    <button type="button" class="pf-btn pf-btn--quiet" (click)="removeFromJoined(f)" [attr.aria-label]="'Remove ' + label(f) + ' from this line'">Remove</button>
                   </li>
                 }
               </ul>
-              <span class="nd-field__hint">"Own line" lets you place and size that field by itself.</span>
+              <span class="pf-field__hint">"Own line" lets you place and size that field by itself.</span>
             </div>
           }
           @if (s.id === 'logo') {
-            <div class="nd-field">
-              <span class="nd-field__lbl">Logo image</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Logo image</span>
               <pf-image-upload [url]="template().logoUrl" (urlChange)="emitPatch({ logoUrl: $event })"></pf-image-upload>
-              @if (!template().logoUrl) { <span class="nd-field__hint">No logo uploaded — a placeholder circle prints. Upload one, or switch the logo off.</span> }
+              @if (!template().logoUrl) { <span class="pf-field__hint">No logo uploaded — a placeholder circle prints. Upload one, or switch the logo off.</span> }
             </div>
           }
           @if (s.id === 'nabl') {
             <div class="pf-rhe-grid2">
-              <label class="nd-field"><span class="nd-field__lbl">NABL number</span>
-                <input class="nd-input nd-num" [ngModel]="template().nablNumber ?? ''" (ngModelChange)="emitPatch({ nablNumber: $event })" /></label>
-              <div class="nd-field"><span class="nd-field__lbl">Badge image</span>
+              <label class="pf-field"><span class="pf-field__lbl">NABL number</span>
+                <input class="pf-input pf-num" [ngModel]="template().nablNumber ?? ''" (ngModelChange)="emitPatch({ nablNumber: $event })" /></label>
+              <div class="pf-field"><span class="pf-field__lbl">Badge image</span>
                 <pf-image-upload [url]="template().nablLogoUrl" (urlChange)="emitPatch({ nablLogoUrl: $event })"></pf-image-upload></div>
             </div>
           }
@@ -382,9 +382,9 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               <p class="pf-rhe-row__t">Print this</p>
               <p class="pf-rhe-row__s">{{ stateText(s) }}</p>
             </div>
-            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
+            <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="isOn(s)" [disabled]="s.state === 'empty'"
                     [attr.aria-label]="'Print ' + s.label" (click)="toggleEntry(s)">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           </div>
 
@@ -394,11 +394,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             @if (movable(it)) {
               <section class="pf-rhe-sec" aria-label="Position">
                 <h4 class="pf-rhe-sec__h">Position</h4>
-                <p class="pf-rhe-readout nd-num">{{ readout(it).h }}<br>{{ readout(it).v }}</p>
+                <p class="pf-rhe-readout pf-num">{{ readout(it).h }}<br>{{ readout(it).v }}</p>
                 @if (it.kind !== 'bar') {
-                  <div class="nd-seg pf-rhe-align" role="radiogroup" aria-label="Alignment">
+                  <div class="pf-seg pf-rhe-align" role="radiogroup" aria-label="Alignment">
                     @for (a of aligns; track a.value) {
-                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="it.align === a.value"
+                      <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="it.align === a.value"
                               (click)="setAlign(a.value)" [attr.aria-label]="'Align ' + a.label">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path [attr.d]="a.icon"/></svg>
                         {{ a.label }}
@@ -408,38 +408,38 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                 }
                 <div class="pf-rhe-nudge">
                   <div class="pf-rhe-pad" role="group" aria-label="Move">
-                    <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__up" (click)="nudge(0, -step())" aria-label="Move up">
+                    <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__up" (click)="nudge(0, -step())" aria-label="Move up">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
                     @if (it.kind !== 'bar') {
-                      <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left">
+                      <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-                      <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__right" (click)="nudge(step(), 0)" aria-label="Move right">
+                      <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__right" (click)="nudge(step(), 0)" aria-label="Move right">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
                     }
-                    <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__down" (click)="nudge(0, step())" aria-label="Move down">
+                    <button type="button" class="pf-btn pf-btn--icon pf-rhe-pad__down" (click)="nudge(0, step())" aria-label="Move down">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                   </div>
                   <div class="pf-rhe-step">
-                    <span class="nd-field__lbl">Step</span>
-                    <div class="nd-seg" role="radiogroup" aria-label="Step size">
+                    <span class="pf-field__lbl">Step</span>
+                    <div class="pf-seg" role="radiogroup" aria-label="Step size">
                       @for (st of steps; track st) {
-                        <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
+                        <button type="button" class="pf-seg__item pf-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
                       }
                     </div>
-                    <span class="nd-field__hint">Keyboard: arrows move {{ step() }} mm, Shift + arrows 5 mm.</span>
+                    <span class="pf-field__hint">Keyboard: arrows move {{ step() }} mm, Shift + arrows 5 mm.</span>
                   </div>
                 </div>
                 <div class="pf-rhe-grid2">
                   @if (it.kind !== 'bar') {
-                    <label class="nd-field">
-                      <span class="nd-field__lbl">{{ it.align === 'center' ? 'Off centre (mm, + = right)' : it.align === 'right' ? 'From right margin (mm)' : 'From left margin (mm)' }}</span>
-                      <input class="nd-input nd-num" type="number" step="0.5" inputmode="decimal"
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">{{ it.align === 'center' ? 'Off centre (mm, + = right)' : it.align === 'right' ? 'From right margin (mm)' : 'From left margin (mm)' }}</span>
+                      <input class="pf-input pf-num" type="number" step="0.5" inputmode="decimal"
                              [ngModel]="hValue(it)" (change)="setH($any($event.target).value)" />
                     </label>
                   }
-                  <label class="nd-field">
-                    <span class="nd-field__lbl">From top of page (mm)</span>
-                    <input class="nd-input nd-num" type="number" step="0.5" inputmode="decimal"
+                  <label class="pf-field">
+                    <span class="pf-field__lbl">From top of page (mm)</span>
+                    <input class="pf-input pf-num" type="number" step="0.5" inputmode="decimal"
                            [ngModel]="vValue(it)" (change)="setV($any($event.target).value)" />
                   </label>
                 </div>
@@ -454,15 +454,15 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   <input type="range" [min]="sz.min" [max]="sz.max" [step]="sz.step" [ngModel]="it.sizeValue"
                          (ngModelChange)="setSize(+$event)" [attr.aria-label]="sz.title" />
                   <label class="pf-rhe-num">
-                    <input class="nd-input nd-num" type="number" [min]="sz.min" [max]="sz.max" [step]="sz.step"
+                    <input class="pf-input pf-num" type="number" [min]="sz.min" [max]="sz.max" [step]="sz.step"
                            [ngModel]="round(it.sizeValue)" (change)="setSize(+$any($event.target).value)" [attr.aria-label]="sz.title + ' value'" />
                     <span>{{ sz.unit }}</span>
                   </label>
                 </div>
                 @if (it.kind === 'logo') {
-                  <div class="nd-seg" role="radiogroup" aria-label="Logo proportions">
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="(it.fit ?? 'square') === 'square'" (click)="setOverride({ fit: undefined })">Square (as before)</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="it.fit === 'natural'" (click)="setOverride({ fit: 'natural' })">Keep proportions</button>
+                  <div class="pf-seg" role="radiogroup" aria-label="Logo proportions">
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="(it.fit ?? 'square') === 'square'" (click)="setOverride({ fit: undefined })">Square (as before)</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="it.fit === 'natural'" (click)="setOverride({ fit: 'natural' })">Keep proportions</button>
                   </div>
                 }
               </section>
@@ -473,26 +473,26 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               <section class="pf-rhe-sec" aria-label="Text">
                 <div class="pf-rhe-row pf-rhe-row--flat">
                   <p class="pf-rhe-row__t">Bold</p>
-                  <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="it.style === 'bold'" aria-label="Bold"
+                  <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="it.style === 'bold'" aria-label="Bold"
                           (click)="setOverride({ bold: it.style !== 'bold' })">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                 </div>
                 @if (it.tone === 'plain') {
                   <h4 class="pf-rhe-sec__h">Line width</h4>
-                  <div class="nd-seg" role="radiogroup" aria-label="Line width">
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'auto'" (click)="setOverride({ wrap: undefined })">Fit the page</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'set'" (click)="setOverride({ wrap: round(ptToMm(it.box.w)) || 60 })">Set width</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'never'" (click)="setOverride({ wrap: 0 })">One line</button>
+                  <div class="pf-seg" role="radiogroup" aria-label="Line width">
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'auto'" (click)="setOverride({ wrap: undefined })">Fit the page</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'set'" (click)="setOverride({ wrap: round(ptToMm(it.box.w)) || 60 })">Set width</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="wrapMode(it) === 'never'" (click)="setOverride({ wrap: 0 })">One line</button>
                   </div>
                   @if (wrapMode(it) === 'set') {
                     <div class="pf-rhe-slider">
                       <input type="range" min="20" max="180" step="1" [ngModel]="override(it.id).wrap" (ngModelChange)="setOverride({ wrap: +$event })" aria-label="Line width in mm" />
-                      <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="20" max="180" [ngModel]="override(it.id).wrap"
+                      <label class="pf-rhe-num"><input class="pf-input pf-num" type="number" min="20" max="180" [ngModel]="override(it.id).wrap"
                              (change)="setOverride({ wrap: +$any($event.target).value })" aria-label="Line width value" /><span>mm</span></label>
                     </div>
                   }
-                  <p class="nd-field__hint">{{ wrapHint(it) }}</p>
+                  <p class="pf-field__hint">{{ wrapHint(it) }}</p>
                 }
               </section>
             }
@@ -503,7 +503,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                 <h4 class="pf-rhe-sec__h">Put the address…</h4>
                 <div class="pf-rhe-quick">
                   @for (p of placements(); track p.key) {
-                    <button type="button" class="nd-btn nd-btn--secondary pf-rhe-quick__b" (click)="place(p.key)">{{ p.label }}</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pf-rhe-quick__b" (click)="place(p.key)">{{ p.label }}</button>
                   }
                 </div>
               </section>
@@ -511,11 +511,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           }
 
           <div class="pf-rhe-sel-foot">
-            <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="!s.item?.customized" (click)="resetSelected()">
+            <button type="button" class="pf-btn pf-btn--tertiary" [disabled]="!s.item?.customized" (click)="resetSelected()">
               Reset {{ s.label.toLowerCase() }} to the style's default
             </button>
             @if (s.id.startsWith('line:')) {
-              <button type="button" class="nd-btn nd-btn--danger" (click)="deleteLine(s.id)">Delete this line</button>
+              <button type="button" class="pf-btn pf-btn--danger" (click)="deleteLine(s.id)">Delete this line</button>
             }
           </div>
         } @else {
@@ -531,9 +531,9 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   </span>
                   <span class="pf-rhe-li__val">{{ e.value || stateText(e) }}</span>
                 </button>
-                <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
+                <button type="button" class="pf-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="isOn(e)" [disabled]="e.state === 'empty'"
                         [attr.aria-label]="'Print ' + e.label" (click)="toggleEntry(e)">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </li>
             }
@@ -550,28 +550,28 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                       <span><span class="pf-rhe-li__name">{{ bg.label }}</span>
                       <span class="pf-rhe-li__val">{{ bgSummary(bg) }}</span></span>
                     </button>
-                    <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="!bg.hidden" [attr.aria-label]="'Print ' + bg.label"
+                    <button type="button" class="pf-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="!bg.hidden" [attr.aria-label]="'Print ' + bg.label"
                             (click)="patchBg(bg.id, { hidden: bg.hidden ? undefined : true })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </li>
                 }
               </ul>
             } @else {
-              <p class="nd-field__hint">Put your letterhead artwork or a faint watermark behind the report. It always prints under the text.</p>
+              <p class="pf-field__hint">Put your letterhead artwork or a faint watermark behind the report. It always prints under the text.</p>
             }
             @if (bgError()) { <p class="pf-rhe-err" role="alert">{{ bgError() }}</p> }
-            <label class="nd-btn nd-btn--secondary pf-rhe-add pf-rhe-file" [class.pf-rhe-file--off]="layout().backgrounds.length >= maxBgs || bgBusy()">
+            <label class="pf-btn pf-btn--secondary pf-rhe-add pf-rhe-file" [class.pf-rhe-file--off]="layout().backgrounds.length >= maxBgs || bgBusy()">
               <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="onBgPick($event)"
                      [disabled]="layout().backgrounds.length >= maxBgs || bgBusy()" />
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
               {{ bgBusy() ? 'Uploading…' : layout().backgrounds.length >= maxBgs ? 'Up to ' + maxBgs + ' backgrounds' : 'Add a background image' }}
             </label>
-            <p class="nd-field__hint">PNG, JPG or WebP, up to 15 MB. Large images are shrunk to print size (A4 at 300 dpi).</p>
+            <p class="pf-field__hint">PNG, JPG or WebP, up to 15 MB. Large images are shrunk to print size (A4 at 300 dpi).</p>
           </section>
 
           @if (region() === 'header') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-rhe-add" (click)="addLine()">
+            <button type="button" class="pf-btn pf-btn--secondary pf-rhe-add" (click)="addLine()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               Add a text line (GSTIN, registration no.…)
             </button>
@@ -580,7 +580,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               <h4 class="pf-rhe-sec__h">Header style</h4>
               <div class="pf-rhe-presets" role="radiogroup" aria-label="Header style">
                 @for (p of presets; track p.value) {
-                  <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="presetOf(template()) === p.value"
+                  <button type="button" class="pf-rhe-preset pf-tile-sel" role="radio" [attr.aria-checked]="presetOf(template()) === p.value"
                           (click)="setPreset(p.value)">
                     <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value + (p.value === 'banner' && bannerHidden() ? ' pf-rhe-thumb--nobanner' : '')" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
                     {{ p.label }}
@@ -592,71 +592,71 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             <section class="pf-rhe-sec">
               <h4 class="pf-rhe-sec__h">Brand colours</h4>
               <div class="pf-rhe-grid2">
-                <label class="nd-field"><span class="nd-field__lbl">Lab name</span>
+                <label class="pf-field"><span class="pf-field__lbl">Lab name</span>
                   <span class="pf-rhe-color"><input type="color" [ngModel]="template().primaryColor || '#1B3A6B'" (ngModelChange)="emitPatch({ primaryColor: $event })" aria-label="Lab name colour" />
-                  <span class="nd-num">{{ template().primaryColor || '#1B3A6B' }}</span></span></label>
-                <label class="nd-field"><span class="nd-field__lbl">Accent</span>
+                  <span class="pf-num">{{ template().primaryColor || '#1B3A6B' }}</span></span></label>
+                <label class="pf-field"><span class="pf-field__lbl">Accent</span>
                   <span class="pf-rhe-color"><input type="color" [ngModel]="template().accentColor || '#0066CC'" (ngModelChange)="emitPatch({ accentColor: $event })" aria-label="Accent colour" />
-                  <span class="nd-num">{{ template().accentColor || '#0066CC' }}</span></span></label>
+                  <span class="pf-num">{{ template().accentColor || '#0066CC' }}</span></span></label>
               </div>
             </section>
 
             <section class="pf-rhe-sec">
               <h4 class="pf-rhe-sec__h">Patient details start</h4>
-              <div class="nd-seg" role="radiogroup" aria-label="Patient details start">
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="layout().bodyTopAuto" (click)="setBodyTop(null)">Below the letterhead</button>
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="!layout().bodyTopAuto" (click)="setBodyTop(round(ptToMm(layout().bodyTop)))">At a set height</button>
+              <div class="pf-seg" role="radiogroup" aria-label="Patient details start">
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="layout().bodyTopAuto" (click)="setBodyTop(null)">Below the letterhead</button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="!layout().bodyTopAuto" (click)="setBodyTop(round(ptToMm(layout().bodyTop)))">At a set height</button>
               </div>
               @if (!layout().bodyTopAuto) {
                 <div class="pf-rhe-slider">
                   <input type="range" min="15" max="120" step="0.5" [ngModel]="cfg()?.bodyTop" (ngModelChange)="setBodyTop(+$event)" aria-label="Patient details start, mm from top" />
-                  <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="15" max="120" step="0.5" [ngModel]="cfg()?.bodyTop"
+                  <label class="pf-rhe-num"><input class="pf-input pf-num" type="number" min="15" max="120" step="0.5" [ngModel]="cfg()?.bodyTop"
                          (change)="setBodyTop(+$any($event.target).value)" aria-label="Patient details start value" /><span>mm</span></label>
                 </div>
               }
-              <p class="nd-field__hint">{{ layout().active ? 'Automatic keeps a small gap under the lowest letterhead element.' : 'Untouched letterheads keep their original 34.6 mm.' }}</p>
+              <p class="pf-field__hint">{{ layout().active ? 'Automatic keeps a small gap under the lowest letterhead element.' : 'Untouched letterheads keep their original 34.6 mm.' }}</p>
             </section>
 
             <section class="pf-rhe-sec">
               <div class="pf-rhe-row pf-rhe-row--flat">
                 <div><p class="pf-rhe-row__t">NABL accredited</p><p class="pf-rhe-row__s">Prints the NABL badge and number.</p></div>
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!template().nablAccredited" aria-label="NABL accredited"
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!!template().nablAccredited" aria-label="NABL accredited"
                         (click)="emitPatch({ nablAccredited: !template().nablAccredited })">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </div>
               <div class="pf-rhe-row pf-rhe-row--flat">
                 <div><p class="pf-rhe-row__t">Pre-printed letterhead paper</p>
                   <p class="pf-rhe-row__s">Printing asks whether to use your letterhead paper (header and footer left blank). Shared and downloaded reports always include them.</p></div>
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!template().letterpadMode" aria-label="Pre-printed letterhead paper"
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="!!template().letterpadMode" aria-label="Pre-printed letterhead paper"
                         (click)="emitPatch({ letterpadMode: !template().letterpadMode })">
-                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </div>
               @if (template().letterpadMode) {
                 <div class="pf-rhe-grid2">
-                  <label class="nd-field"><span class="nd-field__lbl">Blank at the top (mm)</span>
-                    <input class="nd-input nd-num" type="number" min="0" max="120" [ngModel]="template().letterpadHeaderMm ?? 45" (ngModelChange)="emitPatch({ letterpadHeaderMm: +$event })" /></label>
-                  <label class="nd-field"><span class="nd-field__lbl">Blank at the bottom (mm)</span>
-                    <input class="nd-input nd-num" type="number" min="0" max="120" [ngModel]="template().letterpadFooterMm ?? 30" (ngModelChange)="emitPatch({ letterpadFooterMm: +$event })" /></label>
+                  <label class="pf-field"><span class="pf-field__lbl">Blank at the top (mm)</span>
+                    <input class="pf-input pf-num" type="number" min="0" max="120" [ngModel]="template().letterpadHeaderMm ?? 45" (ngModelChange)="emitPatch({ letterpadHeaderMm: +$event })" /></label>
+                  <label class="pf-field"><span class="pf-field__lbl">Blank at the bottom (mm)</span>
+                    <input class="pf-input pf-num" type="number" min="0" max="120" [ngModel]="template().letterpadFooterMm ?? 30" (ngModelChange)="emitPatch({ letterpadFooterMm: +$event })" /></label>
                 </div>
               }
             </section>
 
-            <button type="button" class="nd-btn nd-btn--danger pf-rhe-resetall" [disabled]="!layout().active" (click)="resetAll()">
+            <button type="button" class="pf-btn pf-btn--danger pf-rhe-resetall" [disabled]="!layout().active" (click)="resetAll()">
               Reset the whole letterhead layout
             </button>
           } @else {
             <section class="pf-rhe-sec">
-              <label class="nd-field"><span class="nd-field__lbl">"End of report" marker</span>
-                <input class="nd-input" placeholder="****End of Report****" [ngModel]="template().endOfReportText ?? ''" (ngModelChange)="emitPatch({ endOfReportText: $event })" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">Watermark text (page 1)</span>
-                <input class="nd-input" placeholder="e.g. DRAFT, COPY" [ngModel]="template().watermarkText ?? ''" (ngModelChange)="emitPatch({ watermarkText: $event })" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">"End of report" marker</span>
+                <input class="pf-input" placeholder="****End of Report****" [ngModel]="template().endOfReportText ?? ''" (ngModelChange)="emitPatch({ endOfReportText: $event })" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Watermark text (page 1)</span>
+                <input class="pf-input" placeholder="e.g. DRAFT, COPY" [ngModel]="template().watermarkText ?? ''" (ngModelChange)="emitPatch({ watermarkText: $event })" /></label>
               @if (template().watermarkText) {
-                <div class="nd-field"><span class="nd-field__lbl">Watermark strength</span>
+                <div class="pf-field"><span class="pf-field__lbl">Watermark strength</span>
                   <div class="pf-rhe-slider">
                     <input type="range" min="0.02" max="0.4" step="0.02" [ngModel]="template().watermarkOpacity ?? 0.08" (ngModelChange)="emitPatch({ watermarkOpacity: +$event })" aria-label="Watermark strength" />
-                    <span class="pf-rhe-num pf-rhe-num--ro nd-num">{{ round((template().watermarkOpacity ?? 0.08) * 100) }}%</span>
+                    <span class="pf-rhe-num pf-rhe-num--ro pf-num">{{ round((template().watermarkOpacity ?? 0.08) * 100) }}%</span>
                   </div></div>
               }
             </section>
@@ -665,9 +665,9 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               @for (x of footerExtras; track x.key) {
                 <div class="pf-rhe-row pf-rhe-row--flat">
                   <div><p class="pf-rhe-row__t">{{ x.label }}</p>@if (x.hint) { <p class="pf-rhe-row__s">{{ x.hint }}</p> }</div>
-                  <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="extraOn(x.key, x.dflt)" [attr.aria-label]="x.label"
+                  <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="extraOn(x.key, x.dflt)" [attr.aria-label]="x.label"
                           (click)="toggleExtra(x.key, x.dflt)">
-                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                   </button>
                 </div>
               }
@@ -688,11 +688,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-main__head { row-gap: 8px; }
     .pf-rhe-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
     .pf-rhe-tool { width: 36px; min-height: 36px; height: 36px; }
-    @media (pointer: coarse) { .pf-rhe-tool { width: 44px; min-height: 44px; height: 44px; } .nd-seg__item { min-height: 40px; } }
+    @media (pointer: coarse) { .pf-rhe-tool { width: 44px; min-height: 44px; height: 44px; } .pf-seg__item { min-height: 40px; } }
     .pf-rhe-guides { margin-left: 4px; }
 
     .pf-rhe-viewport { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px;
-      background: color-mix(in srgb, var(--text-primary) 5%, var(--nd-card-bg)); overscroll-behavior: contain; }
+      background: color-mix(in srgb, var(--text-primary) 5%, var(--pf-card-bg)); overscroll-behavior: contain; }
     @media (max-width: 900px) { .pf-rhe-viewport { max-height: 72dvh; padding: 10px; } }
     .pf-rhe-page { position: relative; margin: 0 auto; background: #fff; border-radius: 4px; outline: none;
       box-shadow: 0 1px 3px rgba(15, 23, 42, .18), 0 10px 28px rgba(15, 23, 42, .12); touch-action: pan-y pinch-zoom; }
@@ -714,7 +714,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 
     .pf-rhe-box { position: absolute; z-index: 2; padding: 0; margin: 0; background: transparent; cursor: pointer;
       border: 1px dashed transparent; border-radius: 3px; touch-action: none;
-      transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease; }
+      transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease; }
     .pf-rhe-box--bg { z-index: 1; }
     /* Background images: under the element outlines; outlined only on hover / when selected. */
     .pf-rhe-box.pf-rhe-box--bgimg { z-index: 1; border-color: transparent !important; background: transparent; }
@@ -737,61 +737,61 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe--footer .pf-rhe-box__tag { bottom: auto; top: calc(100% + 2px); }
     .pf-rhe-box__live { position: absolute; left: 0; top: calc(100% + 4px); padding: 2px 7px; border-radius: 6px; white-space: nowrap;
       font-size: 11px; color: #fff; background: #0f172a; pointer-events: none; }
-    .pf-rhe-foot-note { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
+    .pf-rhe-foot-note { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
 
     .pf-rhe-side__body { gap: 14px; }
     .pf-rhe-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pf-rhe-issues li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--nd-radius-sm);
+    .pf-rhe-issues li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--pf-radius-sm);
       font-size: 12.5px; line-height: 1.4; color: var(--text-primary);
-      background: color-mix(in srgb, #d97706 10%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, #d97706 35%, transparent); }
+      background: color-mix(in srgb, #d97706 10%, var(--pf-card-bg)); border: 1px solid color-mix(in srgb, #d97706 35%, transparent); }
     .pf-rhe-issues li svg { flex: none; margin-top: 2px; color: #b45309; }
-    .pf-rhe-issues li.pf-rhe-issue--info { background: var(--nd-chip-bg); border-color: var(--nd-line); }
+    .pf-rhe-issues li.pf-rhe-issue--info { background: var(--pf-chip-bg); border-color: var(--pf-line); }
     .pf-rhe-issues li.pf-rhe-issue--info svg { color: var(--text-tertiary); }
     .pf-rhe-ta { min-height: 64px; }
     .pf-rhe-fix { display: flex; margin-top: 6px; }
 
-    .pf-rhe-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-rhe-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
     .pf-rhe-sec__h { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-rhe-readout { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-rhe-align { align-self: flex-start; }
-    .pf-rhe-align .nd-seg__item { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-rhe-align .pf-seg__item { display: inline-flex; align-items: center; gap: 6px; }
     .pf-rhe-nudge { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
     .pf-rhe-pad { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 2px; flex: none; }
-    .pf-rhe-pad .nd-btn--icon { width: 44px; height: 44px; }
+    .pf-rhe-pad .pf-btn--icon { width: 44px; height: 44px; }
     .pf-rhe-pad__up { grid-column: 2; grid-row: 1; } .pf-rhe-pad__left { grid-column: 1; grid-row: 2; }
     .pf-rhe-pad__right { grid-column: 3; grid-row: 2; } .pf-rhe-pad__down { grid-column: 2; grid-row: 3; }
     .pf-rhe-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 150px; }
     .pf-rhe-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     @media (max-width: 420px) { .pf-rhe-grid2 { grid-template-columns: 1fr; } }
     .pf-rhe-slider { display: flex; align-items: center; gap: 10px; }
-    .pf-rhe-slider input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--nd-switch-on); height: 28px; }
+    .pf-rhe-slider input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--pf-switch-on); height: 28px; }
     .pf-rhe-num { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 12px; color: var(--text-tertiary); }
-    .pf-rhe-num .nd-input { width: 84px; }
+    .pf-rhe-num .pf-input { width: 84px; }
     .pf-rhe-num--ro { min-width: 48px; justify-content: flex-end; font-size: 13px; color: var(--text-primary); }
 
     .pf-rhe-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; min-height: 44px;
-      border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+      border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-rhe-row--flat { padding: 4px 0; border: 0; background: transparent; }
     .pf-rhe-row__t { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .pf-rhe-row__s { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); }
-    .nd-toggle { min-height: 44px; }
+    .pf-toggle { min-height: 44px; }
 
     .pf-rhe-fields { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pf-rhe-fields li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); }
+    .pf-rhe-fields li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); }
     .pf-rhe-fields__name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
     .pf-rhe-fields__val { flex: 1 1 120px; min-width: 0; font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
     .pf-rhe-quick { display: flex; flex-wrap: wrap; gap: 8px; }
     .pf-rhe-quick__b { flex: 1 1 140px; white-space: normal; height: auto; min-height: 44px; line-height: 1.25; padding: 8px 12px; }
-    .pf-rhe-sel-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--nd-line); }
-    .pf-rhe-sel-foot .nd-btn--tertiary { white-space: normal; height: auto; min-height: 44px; text-align: left; }
+    .pf-rhe-sel-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--pf-line); }
+    .pf-rhe-sel-foot .pf-btn--tertiary { white-space: normal; height: auto; min-height: 44px; text-align: left; }
 
     .pf-rhe-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .pf-rhe-li { display: flex; align-items: center; gap: 8px; padding-right: 10px; border-radius: var(--nd-radius-sm);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
-    .pf-rhe-li:hover { border-color: var(--nd-sel-border); }
+    .pf-rhe-li { display: flex; align-items: center; gap: 8px; padding-right: 10px; border-radius: var(--pf-radius-sm);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+    .pf-rhe-li:hover { border-color: var(--pf-sel-border); }
     .pf-rhe-li--off .pf-rhe-li__name { color: var(--text-tertiary); }
     .pf-rhe-li__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; min-height: 52px; justify-content: center;
-      padding: 8px 12px; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; color: inherit; border-radius: var(--nd-radius-sm); }
+      padding: 8px 12px; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; color: inherit; border-radius: var(--pf-radius-sm); }
     .pf-rhe-li__main:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
     .pf-rhe-li__name { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-rhe-li__warn { color: #b45309; }
@@ -800,25 +800,25 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-file { cursor: pointer; }
     .pf-rhe-file--off { opacity: .5; cursor: not-allowed; }
     .pf-rhe-file--busy { opacity: .7; }
-    .pf-rhe-err { margin: 0; padding: 8px 10px; border-radius: var(--nd-radius-sm); font-size: 12.5px; line-height: 1.4;
-      color: var(--red-text, #b91c1c); background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg));
+    .pf-rhe-err { margin: 0; padding: 8px 10px; border-radius: var(--pf-radius-sm); font-size: 12.5px; line-height: 1.4;
+      color: var(--red-text, #b91c1c); background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--pf-card-bg));
       border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); }
     .pf-rhe-bgthumb { display: flex; gap: 12px; align-items: center; }
-    .pf-rhe-bgthumb__img { flex: none; width: 84px; height: 112px; border-radius: 6px; border: 1px solid var(--nd-line); background: #fff;
+    .pf-rhe-bgthumb__img { flex: none; width: 84px; height: 112px; border-radius: 6px; border: 1px solid var(--pf-line); background: #fff;
       display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 11px; color: #64748b; }
     .pf-rhe-bgthumb__img img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .pf-rhe-bgthumb__act { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-width: 0; }
     .pf-rhe-wrapseg { flex-wrap: wrap; align-self: flex-start; }
     .pf-rhe-li__main--bg { flex-direction: row; align-items: center; gap: 10px; }
     .pf-rhe-li__main--bg > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .pf-rhe-li__thumb { flex: none; width: 34px; height: 44px; border-radius: 4px; border: 1px solid var(--nd-line); background: #fff; overflow: hidden;
+    .pf-rhe-li__thumb { flex: none; width: 34px; height: 44px; border-radius: 4px; border: 1px solid var(--pf-line); background: #fff; overflow: hidden;
       display: flex; align-items: center; justify-content: center; }
     .pf-rhe-li__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
     .pf-rhe-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     @media (max-width: 420px) { .pf-rhe-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .pf-rhe-preset { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; min-height: 44px;
-      border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       font: inherit; font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; }
     .pf-rhe-thumb { position: relative; width: 100%; max-width: 72px; aspect-ratio: 72 / 40; border-radius: 4px; background: #fff; border: 1px solid #e2e8f0; overflow: hidden; }
     .pf-rhe-thumb i { position: absolute; left: 7%; top: 16%; width: 16%; aspect-ratio: 1; border-radius: 50%; background: #94a3b8; }
@@ -833,7 +833,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner i { background: #94a3b8; }
     .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b { background: #64748b; }
     .pf-rhe-thumb--banner.pf-rhe-thumb--nobanner b + b { background: #cbd5e1; }
-    .pf-rhe-color { display: flex; align-items: center; gap: 8px; height: 40px; padding-right: 10px; border-radius: var(--nd-radius-sm);
+    .pf-rhe-color { display: flex; align-items: center; gap: 8px; height: 40px; padding-right: 10px; border-radius: var(--pf-radius-sm);
       border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); overflow: hidden; font-size: 12px; color: var(--text-secondary); }
     .pf-rhe-color input { width: 44px; height: 48px; margin: -4px 0 -4px -4px; border: 0; padding: 0; background: transparent; cursor: pointer; }
     .pf-rhe-resetall { width: 100%; }
@@ -846,10 +846,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
       .pf-rhe-main, .pf-rhe-side { height: 100%; }
     }
     @media (max-width: 640px) {
-      .nd-card__note { display: none; }
+      .pf-card__note { display: none; }
       .pf-rhe-guide__tag { font-size: 9px; padding: 0 4px; }
       .pf-rhe-tools { margin-left: 0; width: 100%; }
-      .nd-input { font-size: 16px; }
+      .pf-input { font-size: 16px; }
     }
     @media (prefers-reduced-motion: reduce) { .pf-rhe-box { transition: none; } }
   `],

@@ -434,7 +434,7 @@ describe('pfNumpad — docked corner (tablet) vs sheet (phone)', () => {
   it('corner CSS respects the safe area and sits above the navbar', () => {
     const css = ((NumpadPanelComponent as any).ɵcmp.styles as string[]).join('\n');
     expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*safe-area-inset-right/);
-    expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*--nd-nav-h/);
+    expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*--pf-nav-h/);
     expect(css).toMatch(/\.pf-np--left[^{]*\{[^}]*safe-area-inset-left/);
   });
 });

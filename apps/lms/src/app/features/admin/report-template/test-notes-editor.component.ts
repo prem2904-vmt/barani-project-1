@@ -53,7 +53,7 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
              knows the test (Test Master); the status pill stays useful. -->
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4" [hidden]="slim()">
           <div class="flex items-center gap-3 pf-test-pick" [hidden]="!!fixedTestId()">
-            <label class="text-[11px] nd-num uppercase tracking-[0.16em]"
+            <label class="text-[11px] pf-num uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Test</label>
             <pf-select
               style="width: 260px"
@@ -347,7 +347,7 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
       @if (!hidePreview()) {
       <aside class="xl:sticky xl:top-4 h-fit">
         <div class="flex items-center justify-between mb-2">
-          <p class="text-[11px] nd-num uppercase tracking-[0.16em]"
+          <p class="text-[11px] pf-num uppercase tracking-[0.16em]"
              style="color: var(--text-muted);">Live preview</p>
           <button type="button" class="pf-link-btn" [disabled]="!selectedTestId()"
                   (click)="refreshPreview()">Refresh</button>
@@ -392,7 +392,7 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
     .pf-tl-profile-note strong { color: var(--text-primary); font-weight: 600; }
     .pf-tl-savestate { min-height: 16px; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
     .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: var(--text-secondary);
-      border-left: 2px solid var(--nd-sel-border); }
+      border-left: 2px solid var(--pf-sel-border); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
       background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
@@ -420,7 +420,7 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
       border: 1px solid var(--glass-border);
     }
     .pf-status-pill--ok { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
-    .pf-status-pill--default { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-secondary); }
+    .pf-status-pill--default { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); color: var(--text-secondary); }
 
     .pf-sec-list { display: flex; flex-direction: column; gap: 12px; list-style: none; padding: 0; margin: 0; }
     .pf-sec-card { border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass-bg); overflow: hidden; }

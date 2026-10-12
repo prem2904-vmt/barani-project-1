@@ -11,7 +11,7 @@ const ENTER_ARIA: Record<PfKeysKind, string> = { test: 'Add selected test', pati
 
 /**
  * `pfKeys` — PF Keys, the LMS's own keypad for SEARCH fields on TABLETS
- * (docs/ND-PATTERN.md → 8. Touch → "PF Keys").
+ * (docs/PF-PATTERN.md → 8. Touch → "PF Keys").
  *
  *   <input pfKeys="test" pfKeysEnter="Add" [pfKeysArrows]="true" …>
  *   <input pfKeys="patient">        (number pad: phone / MRN)

@@ -24,7 +24,7 @@ import { PadOption, entryAction, padSuggest } from './pad';
           @for (o of hits(); track o.id; let i = $index) {
             <button type="button" role="option" class="pa__sg" [class.act]="i === active()" [attr.aria-selected]="i === active()"
                     (mousedown)="$event.preventDefault()" (mouseenter)="active.set(i)" (click)="choose(o)">
-              <b>{{ o.label }}</b>@if (o.meta) { <span class="nd-num">{{ o.meta }}</span> }
+              <b>{{ o.label }}</b>@if (o.meta) { <span class="pf-num">{{ o.meta }}</span> }
             </button>
           }
           @if (allowFree() && q().trim() && !exact()) {
@@ -37,7 +37,7 @@ import { PadOption, entryAction, padSuggest } from './pad';
       @if (quick().length) {
         <div class="pa__quick" role="group" [attr.aria-label]="quickLabel()">
           @for (o of quick(); track o.id) {
-            <button type="button" class="pa__chip" (click)="choose(o)">+ {{ o.label }}@if (o.meta) { <small class="nd-num">{{ o.meta }}</small> }</button>
+            <button type="button" class="pa__chip" (click)="choose(o)">+ {{ o.label }}@if (o.meta) { <small class="pf-num">{{ o.meta }}</small> }</button>
           }
         </div>
       }
@@ -47,21 +47,21 @@ import { PadOption, entryAction, padSuggest } from './pad';
     :host { display: block; }
     .pa { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .pa__in { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text-tertiary);
-      border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
+      border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line)); background: var(--pf-in-tint); }
     .pa__in:focus-within { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .pa__in input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--text-primary); }
     .pa__in input::placeholder { color: var(--text-tertiary); }
     .pa__sug { position: absolute; left: 0; right: 0; top: 48px; z-index: 25; display: grid; padding: 8px; max-height: 320px; overflow-y: auto;
-      border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+      border-radius: 12px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
     :host-context(html.dark) .pa__sug { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
     .pa__sg { display: flex; align-items: baseline; gap: 12px; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 8px; background: none;
       color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
     .pa__sg b { font-weight: 600; }
     .pa__sg span { font-size: 12.5px; color: var(--violet-text, #6d28d9); }
-    .pa__sg.act, .pa__sg:hover { background: var(--nd-chip-bg); }
+    .pa__sg.act, .pa__sg:hover { background: var(--pf-chip-bg); }
     /* The one-tap chips sit on the field's line when they fit, else wrap below. */
     .pa__quick { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: 8px; }
-    .pa__chip { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--nd-line); background: none;
+    .pa__chip { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--pf-line); background: none;
       font: inherit; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
     .pa__chip small { font-size: 11.5px; color: var(--text-tertiary); }
     .pa__chip:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }

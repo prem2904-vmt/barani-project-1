@@ -4,6 +4,6 @@
     "outDir": "../../dist/out-tsc",
     "types": ["web-bluetooth"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts", "src/**/*.spec-helpers.ts"]
+  "include": ["src/**/*.ts", "../../libs/shared/src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts", "src/**/*.spec-helpers.ts", "../../libs/shared/src/**/*.spec.ts", "../../libs/shared/src/**/*.test.ts"]
 }

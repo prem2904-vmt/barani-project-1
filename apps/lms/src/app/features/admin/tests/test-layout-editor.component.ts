@@ -253,7 +253,7 @@ const OPERATORS = [
                               </pf-select>
                               @if (condCount(r) > 0) {
                                 <span class="pf-le-sheet__cond-pill" [title]="condCount(r) + ' condition(s)'">
-                                  <span class="nd-num">{{ condCount(r) }}</span> if
+                                  <span class="pf-num">{{ condCount(r) }}</span> if
                                 </span>
                               }
                             </td>
@@ -866,7 +866,7 @@ const OPERATORS = [
       color: var(--violet-text);
     }
     .pf-le-stab__type[data-type='paragraph'] { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; }
-    .pf-le-stab__type[data-type='chart']     { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-secondary); }
+    .pf-le-stab__type[data-type='chart']     { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); color: var(--text-secondary); }
     .pf-le-stab__type[data-type='image']     { background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
     .pf-le-stab__label {
       font-weight: 600;
@@ -911,7 +911,7 @@ const OPERATORS = [
     .pf-le-addmenu button:hover { color: var(--text-primary); background: var(--bg-hover); }
     .pf-le-addmenu button[data-type='grid']:hover      { color: var(--violet-text); background: rgba(168, 85, 247, 0.1); }
     .pf-le-addmenu button[data-type='paragraph']:hover { color: #93c5fd; background: rgba(59, 130, 246, 0.1); }
-    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--text-secondary); background: var(--nd-sel-bg); }
+    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--text-secondary); background: var(--pf-sel-bg); }
     .pf-le-addmenu button[data-type='image']:hover     { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
 
     /* ───── Section meta row ───── */
@@ -1004,7 +1004,7 @@ const OPERATORS = [
       background: rgba(168, 85, 247, 0.1) !important;
     }
     .pf-le-sheet__row--merged td {
-      background: var(--nd-sel-bg) !important;
+      background: var(--pf-sel-bg) !important;
     }
 
     /* Parameter cell */
@@ -1018,8 +1018,8 @@ const OPERATORS = [
       font-size: 10px; font-weight: 700;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      background: var(--nd-sel-bg);
-      border: 1px solid var(--nd-sel-border);
+      background: var(--pf-sel-bg);
+      border: 1px solid var(--pf-sel-border);
       color: var(--text-secondary);
       flex-shrink: 0;
     }
@@ -1035,7 +1035,7 @@ const OPERATORS = [
       color: var(--text-tertiary, #94a3b8); white-space: nowrap;
     }
     .pf-le-sheet__c--locked {
-      background: var(--nd-sel-bg) !important;
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
       color: var(--text-secondary);
@@ -1072,9 +1072,9 @@ const OPERATORS = [
       box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
     }
     .pf-le-sheet__c--locked .pf-input--cell:focus {
-      background: var(--nd-sel-bg);
-      border-color: var(--nd-sel-border);
-      box-shadow: 0 0 0 2px var(--nd-sel-bg);
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
+      box-shadow: 0 0 0 2px var(--pf-sel-bg);
     }
 
     /* Right-aligned icon stack inside each cell. */
@@ -1124,22 +1124,22 @@ const OPERATORS = [
     .pf-le-sheet__lock--on {
       opacity: 1 !important;
       color: var(--text-secondary) !important;
-      background: var(--nd-sel-bg);
+      background: var(--pf-sel-bg);
     }
     .pf-le-sheet__lock--on:hover {
-      background: var(--nd-sel-border);
+      background: var(--pf-sel-border);
     }
 
     /* Locked cell — clear amber theme so admins can't mistake it for a
        hovered/unlocked one. Cell background, input border, and text are
        all amber-tinted. */
     .pf-le-sheet__c--locked {
-      background: var(--nd-sel-bg) !important;
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
       color: var(--text-secondary);
       font-weight: 600;
-      border-color: var(--nd-sel-border);
+      border-color: var(--pf-sel-border);
     }
 
     /* Suggestion popup — anchored to .pf-le-sheet__c-inner. */
@@ -1224,7 +1224,7 @@ const OPERATORS = [
       font-weight: 700 !important;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      border: 1px dashed var(--nd-sel-border) !important;
+      border: 1px dashed var(--pf-sel-border) !important;
       color: var(--text-muted) !important;
       opacity: 0.6;
       transition: opacity 0.12s, color 0.12s, border-color 0.12s;
@@ -1232,7 +1232,7 @@ const OPERATORS = [
     .pf-le-sheet__row:hover .pf-merged-rule__add {
       opacity: 1;
       color: var(--text-secondary) !important;
-      border-color: var(--nd-sel-border) !important;
+      border-color: var(--pf-sel-border) !important;
     }
 
     /* Actions cell */
@@ -1270,9 +1270,9 @@ const OPERATORS = [
       overflow: hidden;
     }
     .pf-le-detail-card--merged {
-      border-color: var(--nd-sel-border);
-      border-left-color: var(--nd-sel-border);
-      background: var(--nd-sel-bg);
+      border-color: var(--pf-sel-border);
+      border-left-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg);
     }
 
     .pf-le-sheet__detail-row td {
@@ -1282,8 +1282,8 @@ const OPERATORS = [
       border-left: 4px solid rgba(168, 85, 247, 0.7) !important;
     }
     .pf-le-sheet__detail-row--merged td {
-      background: var(--nd-sel-bg) !important;
-      border-left-color: var(--nd-sel-border) !important;
+      background: var(--pf-sel-bg) !important;
+      border-left-color: var(--pf-sel-border) !important;
     }
 
     /* Banner sits at the top of the detail panel and names the row
@@ -1305,12 +1305,12 @@ const OPERATORS = [
     /* Merged rows get the amber accent end-to-end (left bar + banner). */
     .pf-le-sheet__row--merged.pf-le-sheet__row--open + .pf-le-sheet__detail-row td,
     .pf-le-detail-banner--merged + * .pf-le-sheet__detail-row td {
-      border-left-color: var(--nd-sel-border);
-      background: var(--nd-sel-bg) !important;
+      border-left-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-detail-banner--merged {
-      background: var(--nd-sel-bg);
-      border-bottom-color: var(--nd-sel-border);
+      background: var(--pf-sel-bg);
+      border-bottom-color: var(--pf-sel-border);
     }
 
     .pf-le-detail {
@@ -1389,7 +1389,7 @@ const OPERATORS = [
       background: rgba(168, 85, 247, 0.14);
       color: var(--violet-text);
     }
-    .pf-row__badge--merged { background: var(--nd-sel-bg); color: var(--text-secondary); }
+    .pf-row__badge--merged { background: var(--pf-sel-bg); color: var(--text-secondary); }
 
     /* ───── Conditions ───── */
     .pf-cond {
@@ -1432,16 +1432,16 @@ const OPERATORS = [
     }
     /* ELSE branches read amber so admins can scan IF vs ELSE quickly. */
     .pf-cond--else .pf-cond__mode {
-      background: var(--nd-sel-bg);
-      border-color: var(--nd-sel-border);
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
       color: var(--text-secondary);
     }
     .pf-cond--else .pf-cond__mode:hover {
-      background: var(--nd-sel-border);
-      border-color: var(--nd-sel-border);
+      background: var(--pf-sel-border);
+      border-color: var(--pf-sel-border);
     }
     .pf-cond--else {
-      border-left: 3px solid var(--nd-sel-border);
+      border-left: 3px solid var(--pf-sel-border);
     }
     /* Highlight an IF branch whose predicate has no parameter — that
        condition will never match, which usually means admin forgot to

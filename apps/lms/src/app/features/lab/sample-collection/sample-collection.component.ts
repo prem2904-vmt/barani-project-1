@@ -594,7 +594,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     effect(() => {
       const hasDrawer = !!this.activeGroup();
       // The bottom navbar stays visible (owner rule): the drawer is an
-      // .nd-fullscreen view that ends ABOVE it.
+      // .pf-fullscreen view that ends ABOVE it.
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -602,7 +602,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       // NEW design: no teleport. The drawer stays in the page (under the
       // shell's stacking context) at a z-index BELOW the docked app bar, so
       // the bar's own menus (avatar / branch / bell) open above it instead
-      // of behind it. The drawer already ends above the bar (.nd-fullscreen).
+      // of behind it. The drawer already ends above the bar (.pf-fullscreen).
       if (this.theme.isNewDesign()) return;
       // Wait a frame for @if to render the element before reparenting.
       queueMicrotask(() => {
@@ -657,7 +657,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  then the list region is a skeleton of its rows — never the "No samples
    *  waiting" empty state for a queue that simply hasn't arrived yet. The
    *  skeleton only appears when the first answer is slower than 150ms (no
-   *  flash for a fast answer) and, once shown, holds 300ms (ND-PATTERN
+   *  flash for a fast answer) and, once shown, holds 300ms (PF-PATTERN
    *  "Loading feedback"). */
   protected readonly queueLoaded = signal(false);
   protected readonly queueSkeleton = spinDelay(computed(() => !this.queueLoaded()));

@@ -74,13 +74,13 @@ interface BrandingDraft {
 
       <div class="pf-band-body">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-2">
-        <section class="nd-card lg:col-span-2 pf-sw-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7" cy="6.5" r=".5"/></svg></span>
-            <h2 class="nd-card__label pf-sw-h">Top-navigation branding</h2>
-            <span class="nd-card__note">What appears in the header pill next to your user avatar. All fields are optional.</span>
+        <section class="pf-card lg:col-span-2 pf-sw-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7" cy="6.5" r=".5"/></svg></span>
+            <h2 class="pf-card__label pf-sw-h">Top-navigation branding</h2>
+            <span class="pf-card__note">What appears in the header pill next to your user avatar. All fields are optional.</span>
           </div>
-          <div class="nd-card__body pf-sw-body">
+          <div class="pf-card__body pf-sw-body">
 
           <div class="mt-5 pf-classic-only">
             <label class="pf-label">What to show</label>
@@ -103,8 +103,8 @@ interface BrandingDraft {
                 @if (branding().logoUrl) {
                   <img [src]="logoSrc() ?? ''" alt="Logo preview" class="brand-upload__preview" />
                   <div class="brand-upload__actions">
-                    <button type="button" class="nd-btn nd-btn--secondary brand-upload__btn press" (click)="openLogoPicker()">Replace</button>
-                    <button type="button" class="nd-btn nd-btn--tertiary brand-upload__btn brand-upload__btn--danger press" (click)="clearLogo()">Remove</button>
+                    <button type="button" class="pf-btn pf-btn--secondary brand-upload__btn press" (click)="openLogoPicker()">Replace</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary brand-upload__btn brand-upload__btn--danger press" (click)="clearLogo()">Remove</button>
                   </div>
                 } @else {
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="brand-upload__icon">
@@ -133,12 +133,12 @@ interface BrandingDraft {
             <div class="mt-5">
               <label class="pf-label">
                 Short name
-                <span class="pf-sw-count nd-num ml-2">
+                <span class="pf-sw-count pf-num ml-2">
                   {{ branding().brandingName.length }}/{{ nameMax }}
                 </span>
               </label>
               <input #nameIn type="text"
-                     class="nd-input"
+                     class="pf-input"
                      [attr.value]="branding().brandingName"
                      [attr.maxlength]="nameMax"
                      placeholder="e.g. APOLLO"
@@ -154,13 +154,13 @@ interface BrandingDraft {
           </div>
         </section>
 
-        <section class="nd-card pf-sw-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
-            <h3 class="nd-card__label pf-sw-h">Preview</h3>
-            <span class="nd-card__note">How your brand appears in the top strip.</span>
+        <section class="pf-card pf-sw-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <h3 class="pf-card__label pf-sw-h">Preview</h3>
+            <span class="pf-card__note">How your brand appears in the top strip.</span>
           </div>
-          <div class="nd-card__body pf-sw-body">
+          <div class="pf-card__body pf-sw-body">
 
           <div class="brand-preview">
             <div class="brand-preview__slot"
@@ -210,14 +210,14 @@ interface BrandingDraft {
       gap: 8px;
       padding: 22px;
       border-radius: 14px;
-      border: 2px dashed var(--nd-line);
-      background: var(--nd-chip-bg);
+      border: 2px dashed var(--pf-line);
+      background: var(--pf-chip-bg);
       min-height: 140px;
       transition: background 0.15s ease, border-color 0.15s ease;
     }
     .brand-upload--dragging {
-      background: var(--nd-sel-bg);
-      border-color: var(--nd-sel-border);
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
     }
     .brand-upload__icon { color: var(--text-muted); }
     .brand-upload__hint { font-size: 13px; color: var(--text-secondary); margin: 0; }

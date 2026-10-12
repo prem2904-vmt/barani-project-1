@@ -13,7 +13,7 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { LabSettingsComponent } from './lab-settings.component';
 
 /**
- * Lab settings — LOADING FEEDBACK (ND-PATTERN "Loading feedback"). The page
+ * Lab settings — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). The page
  * autosaves every change, so there is no Save button to turn busy: the
  * band's save state reads "Saving…" (kit dots) while a change is on its way,
  * after 150ms so a fast answer never flickers. The first load draws the

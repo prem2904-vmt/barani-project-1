@@ -18,7 +18,7 @@ export type Hit = 'primary' | 'control' | null;
  *  opt-in `data-pf-cta` for anything new. Covering one of these is never OK. */
 export const PRIMARY_SELECTOR = [
   '[data-pf-cta]',
-  '.nd-btn--primary', '.pf-hb-btn--primary', '.nd-ctx__primary',
+  '.pf-btn--primary', '.pf-hb-btn--primary', '.pf-ctx__primary',
   '.pf-oc-btn--primary', '.pf-btn-primary', '.btn-primary', '.pf-bc-primary',
   '.pf-mbar__btn--primary', '.pf-sc-bar__cta', '.pf-pp-act', '.pf-cartbar__inner',
   'button[type="submit"]',

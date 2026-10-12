@@ -72,7 +72,7 @@ describe('User edit — registration number (admin)', () => {
     await f.whenStable(); f.detectChanges();
     const input = el.querySelector('input.pf-ue-regno') as HTMLInputElement;
     expect(input).not.toBeNull();
-    expect(input.classList).toContain('nd-input');
+    expect(input.classList).toContain('pf-input');
     expect(input.value).toBe('TN-100');
     expect(el.textContent).toContain('prints under their signature');
     expect(el.querySelector('select, datalist')).toBeNull();

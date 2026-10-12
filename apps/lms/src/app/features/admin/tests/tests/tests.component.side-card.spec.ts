@@ -15,7 +15,7 @@ import { TestPricingService } from '../../../../core/services/test-pricing.servi
 import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
- * Test Master LIST — two cards (ND-PATTERN "two jobs on one screen"):
+ * Test Master LIST — two cards (PF-PATTERN "two jobs on one screen"):
  * DEPARTMENTS is the SIDE card on the LEFT (a filter companion: filter
  * first, then content; the BILLING anatomy), the grid the MAIN card (right). Rows filter the grid, the slate switch asks before
  * turning a department OFF, the card collapses to a strip (remembered per
@@ -96,22 +96,22 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
   it('side card (LEFT, the filter) comes first; the main card (right) holds the grid with the count + the muted hint', () => {
     const { el } = render();
     const panels = el.querySelector('.pf-tm-panels')!;
-    const main = panels.querySelector(':scope > section.nd-card.pf-tm-main')!;
-    const side = panels.querySelector(':scope > aside.nd-card.pf-tm-side')!;
+    const main = panels.querySelector(':scope > section.pf-card.pf-tm-main')!;
+    const side = panels.querySelector(':scope > aside.pf-card.pf-tm-side')!;
     expect(main).toBeTruthy();
     expect(side).toBeTruthy();
     expect(side.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panels.firstElementChild).toBe(side);
     expect(main.querySelector('ag-grid-angular')).toBeTruthy();
     expect(main.querySelector('.pf-tm-count')!.textContent).toContain('3 tests');
-    expect(main.querySelector('.nd-card__note')!.textContent).toContain('Double-click a cell to edit');
+    expect(main.querySelector('.pf-card__note')!.textContent).toContain('Double-click a cell to edit');
   });
 
   it('the side card is the BILLING header: violet icon chip + DEPARTMENTS + a collapse button', () => {
     const { el } = render();
-    const head = el.querySelector('.pf-tm-side .nd-card__head')!;
-    expect(head.querySelector('.nd-card__icon svg')).toBeTruthy();
-    expect(head.querySelector('.nd-card__label')!.textContent!.trim()).toBe('Departments');
+    const head = el.querySelector('.pf-tm-side .pf-card__head')!;
+    expect(head.querySelector('.pf-card__icon svg')).toBeTruthy();
+    expect(head.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Departments');
     const collapse = head.querySelector('button.pf-tm-side__collapse[aria-label="Hide departments"]')!;
     expect(collapse).toBeTruthy();
     expect(collapse.querySelector('path')!.getAttribute('d')).toBe('M15 18l-6-6 6-6');   // collapse points LEFT
@@ -124,9 +124,9 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     expect(r[0].querySelector('.pf-tm-dept-name')!.textContent!.trim()).toBe('All');
     expect(r[0].querySelector('.pf-tm-dept-count')!.textContent!.trim()).toBe('3');
     const haem = r.find(x => x.textContent!.includes('Haematology'))!;
-    expect(haem.querySelector('.pf-tm-dept-code.nd-num')!.textContent!.trim()).toBe('HEM');
+    expect(haem.querySelector('.pf-tm-dept-code.pf-num')!.textContent!.trim()).toBe('HEM');
     expect(haem.querySelector('.pf-tm-dept-count')!.textContent!.trim()).toBe('2');
-    const sw = haem.querySelector('.nd-toggle[role="switch"]')!;
+    const sw = haem.querySelector('.pf-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     // The switch is its own target, not inside the filter button.
     expect(haem.querySelector('.pf-tm-dept')!.contains(sw)).toBe(false);
@@ -184,7 +184,7 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     rerender();
     expect(el.querySelector('.pf-tm-side')).toBeNull();
     const strip = el.querySelector('.pf-tm-strip')!;
-    expect(strip.querySelector('.nd-card__icon')).toBeTruthy();
+    expect(strip.querySelector('.pf-card__icon')).toBeTruthy();
     expect(strip.querySelector('.pf-tm-strip__label')!.textContent!.trim()).toBe('Departments');
     expect(el.querySelector('.pf-tm-panels')!.classList.contains('pf-tm-panels--collapsed')).toBe(true);
     expect(el.querySelector('.pf-tm-panels')!.firstElementChild).toBe(strip);                       // strip on the LEFT edge
@@ -220,8 +220,8 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     rerender();
     const sheet = el.querySelector('.pf-tm-side.pf-tm-side--sheet[role="dialog"]')!;
     expect(sheet).toBeTruthy();
-    expect(sheet.querySelector('.nd-sheet__handle')).toBeTruthy();
-    expect(el.querySelector('.nd-sheet-backdrop')).toBeTruthy();
+    expect(sheet.querySelector('.pf-sheet__handle')).toBeTruthy();
+    expect(el.querySelector('.pf-sheet-backdrop')).toBeTruthy();
     expect(sheet.querySelector('button[aria-label="Close departments"]')).toBeTruthy();
     rows(el).find(x => x.textContent!.includes('Haematology'))!.querySelector<HTMLButtonElement>('.pf-tm-dept')!.click();
     rerender();
@@ -233,7 +233,7 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     const { el, rerender } = render({ narrow: true });
     el.querySelector<HTMLButtonElement>('.pf-tm-deptchip')!.click();
     rerender();
-    el.querySelector<HTMLElement>('.nd-sheet-backdrop')!.click();
+    el.querySelector<HTMLElement>('.pf-sheet-backdrop')!.click();
     rerender();
     expect(el.querySelector('.pf-tm-side--sheet')).toBeNull();
   });

@@ -39,13 +39,13 @@ let seq = 0;
           <button type="button" role="listitem" class="pr__line" [attr.data-row]="p.serviceId" (click)="openKey.set(p.key)" [attr.aria-label]="'Edit ' + p.name">
             <b>{{ p.name }}</b>
             @if (schemaOf(p)) {
-              <span class="pr__sess nd-num">Session {{ sessionNo(p) }}</span>
-              @for (r of readings(p); track $index) { <span class="pr__read nd-num">{{ r }}</span> }
+              <span class="pr__sess pf-num">Session {{ sessionNo(p) }}</span>
+              @for (r of readings(p); track $index) { <span class="pr__read pf-num">{{ r }}</span> }
             }
             <span class="pr__tag" [class.pr__tag--now]="p.when !== 'later'">{{ p.when === 'later' ? 'Book for later · ' + ((p.preferredWithin || 'Within 2 weeks') | lowercase) : 'Do now' }}</span>
-            @if (fileCount(p) || p.record) { <span class="pr__att nd-num">@if (fileCount(p)) { {{ fileCount(p) }} file{{ fileCount(p) === 1 ? '' : 's' }} }@if (fileCount(p) && p.record) { · }@if (p.record) { record }</span> }
+            @if (fileCount(p) || p.record) { <span class="pr__att pf-num">@if (fileCount(p)) { {{ fileCount(p) }} file{{ fileCount(p) === 1 ? '' : 's' }} }@if (fileCount(p) && p.record) { · }@if (p.record) { record }</span> }
             @if (needsReason(p)) { <span class="pr__warn">reason needed</span> }
-            <span class="pr__price nd-num">{{ p.price * p.qty | inr }}@if (p.price !== p.rulePrice) { <small>preset {{ p.rulePrice | inr }}</small> }</span>
+            <span class="pr__price pf-num">{{ p.price * p.qty | inr }}@if (p.price !== p.rulePrice) { <small>preset {{ p.rulePrice | inr }}</small> }</span>
           </button>
         } @else {
           <div class="pr__detail" role="listitem" [attr.data-row]="p.serviceId">
@@ -59,7 +59,7 @@ let seq = 0;
                   }
                 </span>
               }
-              <button type="button" class="nd-btn nd-btn--secondary pr__done" (click)="openKey.set(null)">Done</button>
+              <button type="button" class="pf-btn pf-btn--secondary pr__done" (click)="openKey.set(null)">Done</button>
               @if (!locked) {
                 <button type="button" class="pr__x" (click)="remove(p.key)" [attr.aria-label]="'Remove ' + p.name">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -71,23 +71,23 @@ let seq = 0;
               @if (canChange() && !locked) {
                 <label class="pr__amt" [class.pr__amt--chg]="p.price !== p.rulePrice" [class.pr__amt--err]="!!errs()[p.key]">
                   <span aria-hidden="true">₹</span>
-                  <input class="nd-num pr__pin" type="text" inputmode="decimal" [value]="priceText(p)" (input)="onPrice(p, $any($event.target).value)" (blur)="settlePrice(p.key)"
+                  <input class="pf-num pr__pin" type="text" inputmode="decimal" [value]="priceText(p)" (input)="onPrice(p, $any($event.target).value)" (blur)="settlePrice(p.key)"
                          [attr.aria-label]="'Price for ' + p.name" [attr.aria-invalid]="!!errs()[p.key]" />
                 </label>
               } @else {
-                <span class="pr__amt pr__amt--locked nd-num" data-locked>
+                <span class="pr__amt pr__amt--locked pf-num" data-locked>
                   @if (!canChange() && !readonly()) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Locked price"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
                   }
                   {{ p.price | inr }}
                 </span>
               }
-              <span class="pr__hint nd-num" [class.pr__hint--bad]="!!errs()[p.key]" data-hint>{{ errs()[p.key] || hint(p) }}</span>
+              <span class="pr__hint pf-num" [class.pr__hint--bad]="!!errs()[p.key]" data-hint>{{ errs()[p.key] || hint(p) }}</span>
               <span class="pr__qty">
                 <button type="button" class="pr__step" [disabled]="locked || p.qty <= 1" (click)="patch(p.key, { qty: p.qty - 1 })" [attr.aria-label]="'Fewer ' + p.name">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>
                 </button>
-                <span class="pr__n nd-num" aria-live="polite">× {{ p.qty }}</span>
+                <span class="pr__n pf-num" aria-live="polite">× {{ p.qty }}</span>
                 <button type="button" class="pr__step" [disabled]="locked || p.qty >= maxQty" (click)="patch(p.key, { qty: p.qty + 1 })" [attr.aria-label]="'More ' + p.name">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
                 </button>
@@ -95,7 +95,7 @@ let seq = 0;
             </div>
             @if (p.price !== p.rulePrice && p.priceSetByName && locked) { <span class="pr__muted">Set by {{ p.priceSetByName }}</span> }
             @if (p.price !== p.rulePrice && canChange() && !locked) {
-              <input class="nd-input pr__field" type="text" [class.nd-input--error]="needsReason(p) && showReasonErr()" [value]="p.priceReason ?? ''"
+              <input class="pf-input pr__field" type="text" [class.pf-input--error]="needsReason(p) && showReasonErr()" [value]="p.priceReason ?? ''"
                      (input)="patch(p.key, { priceReason: $any($event.target).value })" placeholder="Reason for the price change — the front desk sees it"
                      aria-label="Reason for the price change" maxlength="300" data-reason />
               @if (needsReason(p) && showReasonErr()) { <span class="pr__err" role="alert">Give a reason for the price change.</span> }
@@ -105,7 +105,7 @@ let seq = 0;
             @if (p.when !== 'later' && schemaOf(p); as sch) {
               <div class="pr__form" data-proc-form>
                 <div class="pr__fh">
-                  <b class="nd-num">Session {{ sessionNo(p) }}</b>
+                  <b class="pf-num">Session {{ sessionNo(p) }}</b>
                   @if (formNameOf(p); as fn) { <span class="pr__fhs">{{ fn }}</span> }
                   <span class="pr__grow"></span>
                   @if (!locked) {
@@ -132,12 +132,12 @@ let seq = 0;
                   <button type="button" class="pr__o" role="radio" [attr.aria-checked]="p.preferredWithin === w" [disabled]="locked" (click)="patch(p.key, { preferredWithin: w })">{{ w }}</button>
                 }
               </span>
-              <input class="nd-input pr__field" type="text" [value]="p.prepNote ?? ''" [disabled]="locked" (input)="patch(p.key, { prepNote: $any($event.target).value })"
+              <input class="pf-input pr__field" type="text" [value]="p.prepNote ?? ''" [disabled]="locked" (input)="patch(p.key, { prepNote: $any($event.target).value })"
                      placeholder="Preparation for the patient (printed on the slip) — e.g. nothing to eat for 8 hours" aria-label="Preparation note" maxlength="300" data-prep />
               <span class="pr__badge pr__badge--later">Front desk books the date · paid on the procedure day</span>
             } @else {
               @if (recordEnabled()) {
-                <textarea class="nd-input pr__rec" rows="3" [value]="p.record ?? ''" [disabled]="locked" (input)="patch(p.key, { record: $any($event.target).value })"
+                <textarea class="pf-input pr__rec" rows="3" [value]="p.record ?? ''" [disabled]="locked" (input)="patch(p.key, { record: $any($event.target).value })"
                           placeholder="Procedure record — findings, what was done, any complications" aria-label="Procedure record" data-record></textarea>
                 @if (files()[p.key]?.length) {
                   <div class="pr__files">
@@ -156,10 +156,10 @@ let seq = 0;
                 }
                 @if (!locked) {
                   <div class="pr__up">
-                    <button type="button" class="nd-btn nd-btn--secondary pr__upb" [disabled]="!p.id || uploading()[p.key]" (click)="upIn.click()" data-upload>
+                    <button type="button" class="pf-btn pf-btn--secondary pr__upb" [disabled]="!p.id || uploading()[p.key]" (click)="upIn.click()" data-upload>
                       {{ uploading()[p.key] ? 'Uploading…' : 'Upload' }}
                     </button>
-                    <button type="button" class="nd-btn nd-btn--secondary pr__upb" [disabled]="!p.id || uploading()[p.key]" (click)="camIn.click()" data-photo>Take photo</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pr__upb" [disabled]="!p.id || uploading()[p.key]" (click)="camIn.click()" data-photo>Take photo</button>
                     <input #upIn class="pr__file-in" type="file" multiple accept="image/*,video/*,application/pdf" tabindex="-1" aria-hidden="true" (change)="pickFiles(p, upIn)" />
                     <input #camIn class="pr__file-in" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" (change)="pickFiles(p, camIn)" />
                     <span class="pr__muted">{{ p.id ? 'Photos, video or the device report attach to this visit.' : 'Saving… you can attach files in a moment.' }}</span>
@@ -169,7 +169,7 @@ let seq = 0;
               <span class="pr__badge">{{ p.status === 'billed' ? 'Billed to the front desk' : payAfter() ? 'Added to the consultation bill on Complete' : 'Billed to the front desk when you complete the consult' }}</span>
             }
             @if (!locked) {
-              <input class="nd-input pr__field" type="text" [value]="p.note ?? ''" (change)="patch(p.key, { note: $any($event.target).value })"
+              <input class="pf-input pr__field" type="text" [value]="p.note ?? ''" (change)="patch(p.key, { note: $any($event.target).value })"
                      placeholder="Note (optional)" [attr.aria-label]="'Note for ' + p.name" maxlength="500" />
             } @else if (p.note) { <p class="pr__muted">{{ p.note }}</p> }
           </div>
@@ -188,9 +188,9 @@ let seq = 0;
     :host { display: flex; flex-direction: column; gap: 8px; }
     .pr__lines { display: grid; gap: 8px; }
     .pr__lines:empty { display: none; }
-    .pr__line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-    .pr__line:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); }
+    .pr__line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .pr__line:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line)); }
     .pr__line:focus-visible, .pr__o:focus-visible, .pr__step:focus-visible, .pr__x:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pr__line b { font-weight: 600; overflow-wrap: anywhere; }
     .pr__tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--blue-text, #1d4ed8); background: color-mix(in srgb, #60a5fa 14%, transparent); }
@@ -199,32 +199,32 @@ let seq = 0;
     .pr__warn { font-size: 12px; font-weight: 600; color: var(--amber-text, #b45309); }
     .pr__price { margin-left: auto; font-weight: 700; }
     .pr__price small { margin-left: 8px; font-weight: 500; color: var(--text-tertiary); }
-    .pr__detail { display: grid; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line));
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+    .pr__detail { display: grid; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line));
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
     .pr__top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .pr__name { flex: 1; min-width: 160px; font-size: 14.5px; font-weight: 600; }
     .pr__name em { margin-left: 8px; font-style: normal; font-weight: 400; font-size: 12px; color: var(--text-tertiary); }
     .pr__done { height: 32px; min-height: 32px; }
     .pr__x { width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
-    .pr__x:hover { color: var(--red-text, #dc2626); background: var(--nd-chip-bg); }
+    .pr__x:hover { color: var(--red-text, #dc2626); background: var(--pf-chip-bg); }
     .pr__opts { display: flex; flex-wrap: wrap; gap: 8px; }
-    .pr__o { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
+    .pr__o { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--pf-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
       color: var(--text-secondary); cursor: pointer; }
     .pr__o[aria-checked='true'] { color: var(--violet-text, #6d28d9); font-weight: 600; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .pr__o:disabled { cursor: default; }
     .pr__pricerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-    .pr__amt { display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--nd-line);
-      background: var(--nd-in-tint); font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .pr__amt { display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--pf-line);
+      background: var(--pf-in-tint); font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .pr__amt:focus-within { border-color: var(--color-violet-600, #7c3aed); }
-    .pr__amt--chg { border-color: color-mix(in srgb, #f59e0b 45%, transparent); background: color-mix(in srgb, #f59e0b 10%, var(--nd-card-bg)); }
+    .pr__amt--chg { border-color: color-mix(in srgb, #f59e0b 45%, transparent); background: color-mix(in srgb, #f59e0b 10%, var(--pf-card-bg)); }
     .pr__amt--err { border-color: var(--red-text, #dc2626); }
     .pr__amt--locked { background: transparent; color: var(--text-secondary); gap: 8px; }
     .pr__pin { width: 96px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
     .pr__hint { font-size: 12.5px; color: var(--text-tertiary); }
     .pr__hint--bad { color: var(--red-text, #dc2626); font-weight: 600; }
     .pr__qty { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
-    .pr__step { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); display: grid; place-items: center; cursor: pointer; }
+    .pr__step { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); display: grid; place-items: center; cursor: pointer; }
     .pr__step:disabled { opacity: .45; cursor: default; }
     .pr__n { min-width: 32px; text-align: center; font-size: 14px; font-weight: 600; }
     .pr__field { width: 100%; min-height: 40px; font-size: 14px; }
@@ -232,9 +232,9 @@ let seq = 0;
     .pr__err { font-size: 12.5px; color: var(--red-text, #dc2626); }
     .pr__files { display: flex; flex-wrap: wrap; gap: 8px; }
     .pr__fx { width: 22px; height: 22px; margin-right: -8px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
-    .pr__fx:hover { color: var(--red-text, #dc2626); background: var(--nd-chip-bg); }
+    .pr__fx:hover { color: var(--red-text, #dc2626); background: var(--pf-chip-bg); }
     .pr__fx:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .pr__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line);
+    .pr__file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--pf-line);
       font-size: 12.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
     .pr__up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .pr__upb { height: 36px; min-height: 36px; }
@@ -246,7 +246,7 @@ let seq = 0;
     .pr__sess { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
     .pr__read { font-size: 12.5px; color: var(--text-secondary); }
     .pr__read::before { content: '· '; color: var(--text-tertiary); }
-    .pr__form { display: grid; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pr__form { display: grid; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pr__fh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
     .pr__fh b { font-size: 13.5px; }
     .pr__fhs { font-size: 12.5px; color: var(--text-tertiary); }
@@ -257,7 +257,7 @@ let seq = 0;
     .pr__form ::ng-deep .ofr { gap: 12px 24px; }
     .pr__form ::ng-deep .ofr-q { padding: 0; }
     .pr__form ::ng-deep .ofr-q__q { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
-    .pr__form ::ng-deep .ofr-chip, .pr__form ::ng-deep .ofr-seg .nd-seg__item, .pr__form ::ng-deep .ofr-scale button { height: 32px; }
+    .pr__form ::ng-deep .ofr-chip, .pr__form ::ng-deep .ofr-seg .pf-seg__item, .pr__form ::ng-deep .ofr-scale button { height: 32px; }
     .pr__muted { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
     @media (max-width: 760px) { .pr__field, .pr__rec { font-size: 16px; } .pr__qty { margin-left: 0; } }
   `],

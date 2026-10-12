@@ -1,13 +1,13 @@
 // ═════════════════════════════════════════════════════════════════════════
-// Report view (/reports/view/:id) on the nd pattern — docs/ND-PATTERN.md →
+// Report view (/reports/view/:id) on the nd pattern — docs/PF-PATTERN.md →
 // "Report view". Band (back + tenant + actions, ONE primary) whose pill is
 // the CONTEXT BAR → PREVIEW (main card, the exact PDF) + REPORT (right
 // summary card, collapsible to a strip; a sheet at ≤900px). Global kit
-// classes (.nd-*) do the heavy lifting; this file holds what is specific to
+// classes (.pf-*) do the heavy lifting; this file holds what is specific to
 // the preview, the context bar and the sheets. Palette only: violet +
 // neutrals / slate. The PDF pages are never restyled.
 // ═════════════════════════════════════════════════════════════════════════
-@use '../../../shared/styles/nd-mixins' as nd;
+@use '../../../shared/styles/pf-mixins' as pf;
 
 /* WORK page: the host fills the shell; only the preview (and the side
    card's body) scroll. */
@@ -16,7 +16,7 @@
 .pf-rv-band { flex: none; }
 
 /* ── First render: the pill chips + actions fade in, gently staggered ── */
-.pf-rv-in { animation: pf-rv-in var(--nd-dur, 320ms) var(--nd-spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.pf-rv-in { animation: pf-rv-in var(--pf-dur, 320ms) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
 @keyframes pf-rv-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* ── CONTEXT BAR (the band's pill) ─────────────────────────────────── */
@@ -55,13 +55,13 @@
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 /* Brief success state (Printing ✓ / Sent ✓): a quick pop, then back. */
-.pf-rv-act--done { animation: nd-pop 230ms var(--nd-spring-bounce) both; }
+.pf-rv-act--done { animation: pf-pop 230ms var(--pf-spring-bounce) both; }
 
 /* ── Body: PREVIEW + REPORT ────────────────────────────────────────── */
 .pf-rv-body {
   display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
   padding-top: 4px;
-  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring);
+  transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring);
 }
 .pf-rv-body--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
 @media (max-width: 1280px) {
@@ -76,7 +76,7 @@
 /* The preview: a calm desk the white pages sit on; the ONLY page scroll. */
 .pf-rv-preview {
   padding: 16px; gap: 14px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-  background: color-mix(in srgb, var(--text-primary) 3%, var(--nd-card-bg));
+  background: color-mix(in srgb, var(--text-primary) 3%, var(--pf-card-bg));
 }
 .pf-rv-pages {
   display: flex; flex-direction: column; gap: 14px; flex: none;
@@ -87,13 +87,13 @@
 }
 .pf-rv-pages--in {
   height: auto; overflow: visible; opacity: 1;
-  animation: pf-rv-rise var(--nd-dur, 320ms) var(--nd-spring) both;
+  animation: pf-rv-rise var(--pf-dur, 320ms) var(--pf-spring) both;
 }
 @keyframes pf-rv-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* The canvases are created in code (no encapsulation attribute). */
 .pf-rv-pages ::ng-deep canvas.pf-rv-pdfpage {
   width: 100%; height: auto; display: block; background: #fff;
-  border-radius: 8px; border: 1px solid var(--nd-line);
+  border-radius: 8px; border: 1px solid var(--pf-line);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 :host-context(.dark) .pf-rv-pages ::ng-deep canvas.pf-rv-pdfpage,
@@ -105,15 +105,15 @@
 .pf-rv-skel { flex: none; width: 100%; max-width: 900px; margin: 0 auto; }
 .pf-rv-skel__page {
   aspect-ratio: 1 / 1.414; display: flex; flex-direction: column; gap: 14px;
-  padding: 6% 6.5%; border-radius: 8px; border: 1px solid var(--nd-line);
-  background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  padding: 6% 6.5%; border-radius: 8px; border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
-.pf-rv-skel__head { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--nd-line); }
-.pf-rv-skel__logo { flex: none; width: 44px; height: 44px; border-radius: 10px; background: var(--nd-chip-bg); }
+.pf-rv-skel__head { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--pf-line); }
+.pf-rv-skel__logo { flex: none; width: 44px; height: 44px; border-radius: 10px; background: var(--pf-chip-bg); }
 .pf-rv-skel__col { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
-.pf-rv-skel__meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; padding-bottom: 12px; border-bottom: 1px solid var(--nd-line); }
+.pf-rv-skel__meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; padding-bottom: 12px; border-bottom: 1px solid var(--pf-line); }
 .pf-rv-skel__row { display: grid; grid-template-columns: 2fr 1fr 1.4fr; gap: 18px; }
-.pf-rv-skel__bar { display: block; height: 10px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg); }
+.pf-rv-skel__bar { display: block; height: 10px; width: 100%; border-radius: 6px; background: var(--pf-chip-bg); }
 .pf-rv-skel__bar--th { height: 14px; }
 .pf-rv-skel__bar--pill { width: 260px; max-width: 60%; height: 12px; }
 
@@ -121,15 +121,15 @@
 .pf-rv-notice {
   flex: none; display: flex; align-items: flex-start; gap: 10px;
   width: 100%; max-width: 900px; margin: 0 auto; box-sizing: border-box;
-  padding: 10px 14px; border-radius: var(--nd-radius-sm);
-  border: 1px solid var(--nd-sel-border); background: var(--nd-card-bg);
+  padding: 10px 14px; border-radius: var(--pf-radius-sm);
+  border: 1px solid var(--pf-sel-border); background: var(--pf-card-bg);
 }
 .pf-rv-notice__i { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
 .pf-rv-notice__title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
 .pf-rv-notice__sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); text-wrap: pretty; }
 
 /* ── REPORT side card ──────────────────────────────────────────────── */
-.pf-rv-side, .pf-rv-strip { min-height: 0; animation: pf-rv-side-in var(--nd-dur, 320ms) var(--nd-spring) both; }
+.pf-rv-side, .pf-rv-strip { min-height: 0; animation: pf-rv-side-in var(--pf-dur, 320ms) var(--pf-spring) both; }
 @keyframes pf-rv-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 .pf-rv-collapse, .pf-rv-close { width: 32px !important; height: 32px; min-height: 32px; }
 .pf-rv-sidebody { gap: 14px; }
@@ -138,11 +138,11 @@
 .pf-rv-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .pf-rv-facts > div { display: flex; flex-direction: column; gap: 2px; }
 .pf-rv-facts dt { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
-.pf-rv-facts dd { margin: 0; font-size: 13px; color: var(--text-primary); @include nd.no-truncate; }
+.pf-rv-facts dd { margin: 0; font-size: 13px; color: var(--text-primary); @include pf.no-truncate; }
 .pf-rv-sec { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
-.pf-rv-partner { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+.pf-rv-partner { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
 .pf-rv-partner__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px; min-height: 44px; }
-.pf-rv-partner__name { flex: 1 1 12rem; font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; @include nd.no-truncate; }
+.pf-rv-partner__name { flex: 1 1 12rem; font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; @include pf.no-truncate; }
 .pf-rv-partner__lab { display: block; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
 .pf-rv-partner__lab--warn { color: var(--red-text, #dc2626); }  // a real warning: the patient's PDF lacks it
 .pf-rv-explain { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
@@ -152,50 +152,50 @@
   flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
   padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
 }
-.pf-rv-strip__btn:hover .pf-rv-strip__expand { border-color: var(--nd-sel-border); color: var(--text-primary); }
+.pf-rv-strip__btn:hover .pf-rv-strip__expand { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
 .pf-rv-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
 .pf-rv-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
 .pf-rv-strip__label { writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
 
 /* ── Overlays: scrim + sheets (above the navbar, never over it) ──────── */
 .pf-rv-scrim {
-  position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 120;
+  position: fixed; top: 0; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 120;
   background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px);
-  animation: pf-rv-fade var(--nd-dur-fast, 200ms) var(--nd-spring) both;
+  animation: pf-rv-fade var(--pf-dur-fast, 200ms) var(--pf-spring) both;
 }
 :host-context(.dark) .pf-rv-scrim, :host-context([data-theme='dark']) .pf-rv-scrim { background: rgba(0, 0, 0, 0.55); }
 @keyframes pf-rv-fade { from { opacity: 0; } to { opacity: 1; } }
 .pf-rv-sheet { position: fixed; z-index: 121; box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22); }
 .pf-rv-sheet__handle { display: none; }
-/* Web: the share picker is a centred nd-card modal. */
+/* Web: the share picker is a centred pf-card modal. */
 .pf-rv-sheet--share {
   top: 50%; left: 50%; width: min(440px, calc(100vw - 32px)); max-height: min(80dvh, 560px);
   transform: translate(-50%, -50%);
-  animation: pf-rv-modal-in var(--nd-dur, 320ms) var(--nd-spring) both;
+  animation: pf-rv-modal-in var(--pf-dur, 320ms) var(--pf-spring) both;
 }
 @keyframes pf-rv-modal-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 /* Tablets (641–900): the REPORT card slides in from the right edge. */
 .pf-rv-sheet--details {
-  top: 12px; right: 12px; bottom: calc(var(--nd-nav-h, 0px) + 12px); width: min(400px, calc(100vw - 24px));
-  animation: pf-rv-side-sheet var(--nd-dur-sheet, 360ms) var(--nd-spring) both;
+  top: 12px; right: 12px; bottom: calc(var(--pf-nav-h, 0px) + 12px); width: min(400px, calc(100vw - 24px));
+  animation: pf-rv-side-sheet var(--pf-dur-sheet, 360ms) var(--pf-spring) both;
 }
 @keyframes pf-rv-side-sheet { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 
 .pf-rv-share__lead { margin: 0; padding: 10px 14px 0; font-size: 12.5px; color: var(--text-tertiary); }
-.pf-rv-share__search { position: relative; flex: none; padding: 10px 14px; border-bottom: 1px solid var(--nd-line); }
+.pf-rv-share__search { position: relative; flex: none; padding: 10px 14px; border-bottom: 1px solid var(--pf-line); }
 .pf-rv-share__search > svg { position: absolute; left: 26px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
-.pf-rv-share__search .nd-input { width: 100%; padding-left: 36px; }
+.pf-rv-share__search .pf-input { width: 100%; padding-left: 36px; }
 .pf-rv-share__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .pf-rv-share__row {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 10px;
-  border: 0; border-radius: var(--nd-radius-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  border: 0; border-radius: var(--pf-radius-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.pf-rv-share__row:hover:not(:disabled) { background: var(--nd-chip-bg); }
+.pf-rv-share__row:hover:not(:disabled) { background: var(--pf-chip-bg); }
 .pf-rv-share__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
 .pf-rv-share__row:disabled { opacity: 0.55; cursor: progress; }
 .pf-rv-share__avatar {
   flex: none; width: 34px; height: 34px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--nd-chip-bg); border: 1px solid var(--nd-line); color: var(--text-secondary); font-size: 12px; font-weight: 600;
+  background: var(--pf-chip-bg); border: 1px solid var(--pf-line); color: var(--text-secondary); font-size: 12px; font-weight: 600;
 }
 .pf-rv-share__meta { display: flex; flex-direction: column; min-width: 0; }
 .pf-rv-share__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
@@ -238,14 +238,14 @@
 
   /* Sheets rise from the bottom, above the navbar. */
   .pf-rv-sheet--share, .pf-rv-sheet--details {
-    top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); width: auto; transform: none;
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 16px);
+    top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); width: auto; transform: none;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 16px);
     border-radius: 20px 20px 0 0;
-    animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce) both;
+    animation: pf-rise var(--pf-dur-sheet, 360ms) var(--pf-spring-bounce) both;
   }
-  .pf-rv-sheet--share { height: min(86dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 16px)); }
-  .pf-rv-sheet__handle { display: block; flex: none; width: 40px; height: 5px; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
-  .pf-rv-share__search .nd-input { font-size: 16px; min-height: 44px; }
+  .pf-rv-sheet--share { height: min(86dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 16px)); }
+  .pf-rv-sheet__handle { display: block; flex: none; width: 40px; height: 5px; margin: 8px auto 2px; border-radius: 999px; background: var(--pf-line); }
+  .pf-rv-share__search .pf-input { font-size: 16px; min-height: 44px; }
   .pf-rv-close, .pf-rv-collapse { width: 44px !important; height: 44px; min-height: 44px; }
 }
 @media (hover: none) and (pointer: coarse) {

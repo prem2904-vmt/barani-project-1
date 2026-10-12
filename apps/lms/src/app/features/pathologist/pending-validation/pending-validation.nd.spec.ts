@@ -18,7 +18,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { OrderTest } from '../../../shared/models/order.model';
 
 /**
- * /pathologist on the nd pattern (docs/ND-PATTERN.md → "Pathologist queue"):
+ * /pathologist on the nd pattern (docs/PF-PATTERN.md → "Pathologist queue"):
  * band (search + ONE neutral filter), QUEUE card (tube tiles, sample ID first,
  * ONE status word, department filter), SCOPE side card (the consultant's
  * departments + the ONE primary "Review next"), no native controls, no
@@ -120,22 +120,22 @@ const ndCss = () => css().slice(css().indexOf('.pv-nd'));
 /** Primaries on the page proper — the phone bottom bar mirrors the side
  *  card's primary (display:none above 640px), so it's counted separately. */
 const primaries = (root: Element) =>
-  [...root.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary')]
-    .filter(b => !b.closest('.nd-bottombar'));
+  [...root.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary')]
+    .filter(b => !b.closest('.pf-bottombar'));
 
 describe('Pathologist queue (nd) — layout', () => {
   it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the side card', async () => {
     const { el } = await render();
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
-    expect(el.querySelector('.nd-body.nd-body--split')).not.toBeNull();
-    const cards = [...el.querySelectorAll('.nd-body > .nd-card')];
-    expect(cards.map(c => c.querySelector('.nd-card__label')?.textContent?.trim())).toEqual(['Pending validation', 'Your scope']);
+    expect(el.querySelector('.pf-body.pf-body--split')).not.toBeNull();
+    const cards = [...el.querySelectorAll('.pf-body > .pf-card')];
+    expect(cards.map(c => c.querySelector('.pf-card__label')?.textContent?.trim())).toEqual(['Pending validation', 'Your scope']);
     const p = primaries(el);
     expect(p.length).toBe(1);
     expect(p[0].closest('.pv-side')).not.toBeNull();
     expect(p[0].textContent).toContain('Review next');
     // The bottom bar carries at most the same one action.
-    expect(el.querySelectorAll('.nd-bottombar .nd-btn--primary').length).toBeLessThanOrEqual(1);
+    expect(el.querySelectorAll('.pf-bottombar .pf-btn--primary').length).toBeLessThanOrEqual(1);
     // Refresh is a quiet ghost on the band.
     expect(el.querySelector('.pv-refresh')!.classList).toContain('pf-hb-btn--ghost');
   });
@@ -144,7 +144,7 @@ describe('Pathologist queue (nd) — layout', () => {
     const { el } = await render();
     expect(el.querySelector('select, datalist, input[type=checkbox], input[type=radio]')).toBeNull();
     expect(el.textContent ?? '').not.toMatch(/\p{Extended_Pictographic}/u);
-    const seg = el.querySelector('pf-hero-band .nd-seg') as HTMLElement;
+    const seg = el.querySelector('pf-hero-band .pf-seg') as HTMLElement;
     expect(seg.getAttribute('role')).toBe('radiogroup');
     const tabs = [...seg.querySelectorAll('[role=radio]')];
     expect(tabs.map(words)).toEqual(['All 3', 'Assigned to me 1']);
@@ -165,7 +165,7 @@ describe('Pathologist queue (nd) — tiles', () => {
     const tiles = [...el.querySelectorAll<HTMLElement>('.pv-tile')];
     expect(tiles.length).toBe(3);
     const hae = tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
-    expect(hae.querySelector('.pv-tile__id')!.classList).toContain('nd-num');
+    expect(hae.querySelector('.pv-tile__id')!.classList).toContain('pf-num');
     expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
     expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
     expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
@@ -174,7 +174,7 @@ describe('Pathologist queue (nd) — tiles', () => {
     for (const t of tiles) {
       expect(t.querySelectorAll('.pv-status').length).toBe(1);
       expect(t.querySelector('.pv-status .pv-status__dot')).not.toBeNull();
-      expect(t.querySelector('.nd-chip, pf-chip')).toBeNull();
+      expect(t.querySelector('.pf-chip, pf-chip')).toBeNull();
     }
     const word = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
       .querySelector('.pv-status')!.textContent!.trim();
@@ -190,17 +190,17 @@ describe('Pathologist queue (nd) — tiles', () => {
     const heads = [...el.querySelectorAll<HTMLElement>('.pv-group__h')].map(h => h.textContent!.replace(/\d+/g, '').trim());
     expect(heads).toEqual(['Urgent', 'Normal']);
     expect(el.textContent).not.toMatch(/\bHigh\b/);
-    expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--nd-toggle-on\)/);
+    expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--pf-toggle-on\)/);
   });
 
   it('row action is text on web, a 44px icon on touch; the whole tile opens the review', async () => {
     const web = await render();
     const btn = web.el.querySelector('.pv-review') as HTMLElement;
-    expect(btn.classList).toContain('nd-rowact');
-    expect(btn.classList).not.toContain('nd-rowact--icon');
+    expect(btn.classList).toContain('pf-rowact');
+    expect(btn.classList).not.toContain('pf-rowact--icon');
     TestBed.resetTestingModule();
     const touch = await render({ touch: true });
-    expect(touch.el.querySelector('.pv-review')!.classList).toContain('nd-rowact--icon');
+    expect(touch.el.querySelector('.pv-review')!.classList).toContain('pf-rowact--icon');
     expect(touch.el.querySelector('.pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
     // Tap a tube → the same sample screen the tech used, in validate mode.
     const tile = [...touch.el.querySelectorAll<HTMLElement>('.pv-tile')]
@@ -248,11 +248,11 @@ describe('Pathologist queue (nd) — tiles', () => {
 
   it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {
     const { el } = await render({ queue: [] });
-    expect(el.querySelector('.nd-empty')).not.toBeNull();
-    expect(el.querySelector('.nd-empty__title')!.textContent).toContain('Nothing to validate');
+    expect(el.querySelector('.pf-empty')).not.toBeNull();
+    expect(el.querySelector('.pf-empty__title')!.textContent).toContain('Nothing to validate');
     const next = el.querySelector('.pv-side .pv-next') as HTMLButtonElement;
     expect(next.disabled).toBe(true);
-    expect(next.classList).not.toContain('nd-btn--primary');
+    expect(next.classList).not.toContain('pf-btn--primary');
     expect(primaries(el).length).toBe(0);
   });
 });

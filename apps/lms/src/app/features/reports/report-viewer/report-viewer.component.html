@@ -1,9 +1,9 @@
-<!-- Report view on the nd pattern (docs/ND-PATTERN.md → "Report view"):
+<!-- Report view on the nd pattern (docs/PF-PATTERN.md → "Report view"):
      band (back + tenant + actions) whose pill is the CONTEXT BAR (patient,
      order, report status, date) → the PREVIEW (main card: the exact PDF)
      + REPORT (right action / summary card: delivery, partner reports),
      collapsible to a strip; a sheet at ≤900px. ONE primary: Send WhatsApp. -->
-<section class="pf-rv nd-page">
+<section class="pf-rv pf-page">
   <pf-hero-band class="pf-rv-band" [customSearch]="true" [contextBar]="true" [back]="true" backTo="/reports">
     <!-- Actions, top-right. Web: text buttons. Touch: 44px icons (label
          kept for AT). Phones: the primary + a "More" sheet. -->
@@ -85,25 +85,25 @@
     <!-- CONTEXT BAR: the subject as read-only chips. -->
     <div band-search class="pf-rv-ctx">
       @if (report()) {
-        <span class="nd-chip nd-chip--static pf-rv-chip pf-rv-chip--patient pf-rv-in" style="--i: 0"
+        <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--patient pf-rv-in" style="--i: 0"
               [title]="patientName() + (patientMeta() ? ' · ' + patientMeta() : '')">
           <span class="pf-rv-chip__name">{{ patientName() }}</span>
-          @if (patientMeta()) { <span class="pf-rv-chip__meta nd-num">{{ patientMeta() }}</span> }
+          @if (patientMeta()) { <span class="pf-rv-chip__meta pf-num">{{ patientMeta() }}</span> }
         </span>
         @if (orderLabel()) {
-          <span class="nd-chip nd-chip--static pf-rv-chip pf-rv-chip--order pf-rv-in" style="--i: 1" title="Order ID">
-            <span class="pf-rv-chip__k">Order</span><span class="nd-num pf-rv-chip__val">{{ orderLabel() }}</span>
+          <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--order pf-rv-in" style="--i: 1" title="Order ID">
+            <span class="pf-rv-chip__k">Order</span><span class="pf-num pf-rv-chip__val">{{ orderLabel() }}</span>
           </span>
         }
-        <span class="nd-chip nd-chip--static pf-rv-chip pf-rv-chip--status pf-rv-in" style="--i: 2"
+        <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--status pf-rv-in" style="--i: 2"
               [title]="kindLabel() + ' report · ' + deliveryLabel()">
           <span class="pf-rv-dot" [class.pf-rv-dot--ring]="isPartial()" aria-hidden="true"></span>
           <span>{{ kindLabel() }}</span><span class="pf-rv-chip__meta">· {{ deliveryLabel() }}</span>
         </span>
         <span class="pf-rv-ctx__grow"></span>
-        <span class="pf-rv-ctx__date nd-num pf-rv-in" style="--i: 3" title="Generated">{{ generatedLabel() }}</span>
+        <span class="pf-rv-ctx__date pf-num pf-rv-in" style="--i: 3" title="Generated">{{ generatedLabel() }}</span>
         @if (narrow()) {
-          <button type="button" class="nd-btn nd-btn--quiet pf-rv-ctx__details" (click)="detailsOpen.set(true)"
+          <button type="button" class="pf-btn pf-btn--quiet pf-rv-ctx__details" (click)="detailsOpen.set(true)"
                   aria-haspopup="dialog" [attr.aria-expanded]="detailsOpen()" aria-label="Report details" title="Report details">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
             <span class="pf-rv-ctx__details-t">Details</span>
@@ -124,41 +124,41 @@
     </pf-edit-result-dialog>
   }
 
-  <div class="nd-body pf-rv-body" [class.pf-rv-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-rv-body--narrow]="narrow()">
+  <div class="pf-body pf-rv-body" [class.pf-rv-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-rv-body--narrow]="narrow()">
     <!-- ─── PREVIEW: the main work card (the exact PDF) ─────────────── -->
     <!-- ONE element from skeleton to pages: it is the zoom target the
          Results row morphs into, so nothing is ever swapped mid-morph. -->
-    <section class="nd-card pf-rv-card" aria-label="Report preview" [pfZoomTarget]="zoomKeys()"
+    <section class="pf-card pf-rv-card" aria-label="Report preview" [pfZoomTarget]="zoomKeys()"
              [attr.aria-busy]="showSkeleton()">
-      <header class="nd-card__head pf-rv-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head pf-rv-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
         </span>
-        <span class="nd-card__label">Preview</span>
-        <span class="nd-card__spacer"></span>
-        <span class="pf-rv-card__count nd-num" aria-live="polite">
+        <span class="pf-card__label">Preview</span>
+        <span class="pf-card__spacer"></span>
+        <span class="pf-rv-card__count pf-num" aria-live="polite">
           @if (pdfReady()) { {{ pageCountLabel() }} } @else if (loadError() || pdfError()) { } @else { Rendering… }
         </span>
       </header>
 
-      <div class="nd-card__body pf-rv-preview">
+      <div class="pf-card__body pf-rv-preview">
         @if (loadError()) {
-          <div class="nd-empty">
-            <span class="nd-empty__icon" aria-hidden="true">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 12.5l5 5"/><path d="M14.5 12.5l-5 5"/></svg>
             </span>
-            <p class="nd-empty__title">Couldn’t load this report</p>
-            <p class="nd-empty__body">Check the connection and try again, or go back to the reports list.</p>
-            <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="load()">Try again</button>
+            <p class="pf-empty__title">Couldn’t load this report</p>
+            <p class="pf-empty__body">Check the connection and try again, or go back to the reports list.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="load()">Try again</button>
           </div>
         } @else if (pdfError()) {
-          <div class="nd-empty">
-            <span class="nd-empty__icon" aria-hidden="true">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg>
             </span>
-            <p class="nd-empty__title">{{ pdfError() }}</p>
-            <p class="nd-empty__body">The report itself is safe — only the on-screen preview failed.</p>
-            <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="renderPdfView()">Try again</button>
+            <p class="pf-empty__title">{{ pdfError() }}</p>
+            <p class="pf-empty__body">The report itself is safe — only the on-screen preview failed.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="renderPdfView()">Try again</button>
           </div>
         } @else {
           @if (report() && isPartial()) {
@@ -212,18 +212,18 @@
     <!-- ─── REPORT: right action / summary card (billing-style) ─────── -->
     @if (!narrow()) {
       @if (sideCollapsed()) {
-        <aside class="nd-card pf-rv-strip" aria-label="Report details">
+        <aside class="pf-card pf-rv-strip" aria-label="Report details">
           <button type="button" class="pf-rv-strip__btn" (click)="toggleSide()"
                   title="Show report details" aria-label="Show report details" aria-expanded="false">
-            <span class="nd-btn nd-btn--icon pf-rv-strip__expand" aria-hidden="true">
+            <span class="pf-btn pf-btn--icon pf-rv-strip__expand" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </span>
-            <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
             <span class="pf-rv-strip__label">Report</span>
           </button>
         </aside>
       } @else {
-        <aside class="nd-card pf-rv-side" aria-label="Report details">
+        <aside class="pf-card pf-rv-side" aria-label="Report details">
           <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: true }"></ng-container>
           <ng-container *ngTemplateOutlet="sideBody"></ng-container>
         </aside>
@@ -234,7 +234,7 @@
   <!-- ≤900px: the REPORT card opens as a sheet from the pill's Details. -->
   @if (narrow() && detailsOpen()) {
     <div class="pf-rv-scrim" (click)="detailsOpen.set(false)" aria-hidden="true"></div>
-    <aside class="nd-card pf-rv-sheet pf-rv-sheet--details" role="dialog" aria-modal="true" aria-label="Report details"
+    <aside class="pf-card pf-rv-sheet pf-rv-sheet--details" role="dialog" aria-modal="true" aria-label="Report details"
            (keydown.escape)="detailsOpen.set(false)">
       <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
       <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: false }"></ng-container>
@@ -242,26 +242,26 @@
     </aside>
   }
 
-  <!-- Share with a colleague: nd-card modal on web, a sheet on phones. -->
+  <!-- Share with a colleague: pf-card modal on web, a sheet on phones. -->
   @if (chatPickerOpen()) {
     <div class="pf-rv-scrim" (click)="closeSharePicker()" aria-hidden="true"></div>
-    <div class="nd-card pf-rv-sheet pf-rv-sheet--share" role="dialog" aria-modal="true" aria-labelledby="pf-rv-share-t"
+    <div class="pf-card pf-rv-sheet pf-rv-sheet--share" role="dialog" aria-modal="true" aria-labelledby="pf-rv-share-t"
          (keydown.escape)="closeSharePicker()">
       <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </span>
-        <span class="nd-card__label" id="pf-rv-share-t">Share this report</span>
-        <span class="nd-card__spacer"></span>
-        <button type="button" class="nd-btn nd-btn--icon pf-rv-close" (click)="closeSharePicker()" aria-label="Close">
+        <span class="pf-card__label" id="pf-rv-share-t">Share this report</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="closeSharePicker()" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </header>
       <p class="pf-rv-share__lead">The colleague will receive a tap-to-open report card in their chat.</p>
       <div class="pf-rv-share__search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <input type="text" class="nd-input" placeholder="Search by name or email" aria-label="Search colleagues"
+        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
                [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
       </div>
       <ul class="pf-rv-share__list">
@@ -280,8 +280,8 @@
             </button>
           </li>
         } @empty {
-          <li class="nd-empty nd-empty--compact">
-            <p class="nd-empty__title">No colleagues match</p>
+          <li class="pf-empty pf-empty--compact">
+            <p class="pf-empty__title">No colleagues match</p>
           </li>
         }
         }
@@ -294,17 +294,17 @@
   </ng-template>
 
   <ng-template #sideHead let-collapsible="collapsible">
-    <header class="nd-card__head">
-      <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
-      <span class="nd-card__label">Report</span>
-      <span class="nd-card__spacer"></span>
+    <header class="pf-card__head">
+      <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
+      <span class="pf-card__label">Report</span>
+      <span class="pf-card__spacer"></span>
       @if (collapsible) {
-        <button type="button" class="nd-btn nd-btn--icon pf-rv-collapse" (click)="toggleSide()"
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-collapse" (click)="toggleSide()"
                 title="Hide report details" aria-label="Hide report details" aria-expanded="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       } @else {
-        <button type="button" class="nd-btn nd-btn--icon pf-rv-close" (click)="detailsOpen.set(false)" aria-label="Close">
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="detailsOpen.set(false)" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       }
@@ -312,10 +312,10 @@
   </ng-template>
 
   <ng-template #sideBody>
-    <div class="nd-card__body pf-rv-sidebody">
+    <div class="pf-card__body pf-rv-sidebody">
       @if (report(); as r) {
         <!-- One status line: a neutral chip with the violet mark. -->
-        <span class="nd-chip nd-chip--static pf-rv-state">
+        <span class="pf-chip pf-chip--static pf-rv-state">
           @if (r.deliveryStatus === 'delivered') {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
           } @else {
@@ -329,9 +329,9 @@
           @if (isPartial() && data()?.pendingDepts?.length) {
             <div><dt>Still pending</dt><dd>{{ data()?.pendingDepts?.join(', ') }}</dd></div>
           }
-          <div><dt>Generated</dt><dd class="nd-num">{{ generatedLabel() }}</dd></div>
+          <div><dt>Generated</dt><dd class="pf-num">{{ generatedLabel() }}</dd></div>
           @if (r.qrExpiresAt) {
-            <div><dt>Patient link valid until</dt><dd class="nd-num">{{ formatStamp(r.qrExpiresAt) }}</dd></div>
+            <div><dt>Patient link valid until</dt><dd class="pf-num">{{ formatStamp(r.qrExpiresAt) }}</dd></div>
           }
           @if (r.deliveryNote) {
             <div><dt>Delivery note</dt><dd>{{ r.deliveryNote }}</dd></div>
@@ -354,17 +354,17 @@
                     <span class="pf-rv-partner__lab pf-rv-partner__lab--warn" data-testid="rv-partner-missing" role="status">File no longer available — upload it again from the Outsourced tab</span>
                   }
                 </span>
-                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openPartnerReport(p)"
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openPartnerReport(p)"
                         [attr.aria-label]="'Open partner report for ' + p.testName">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                  <span class="nd-rowact__t">Open · print</span>
+                  <span class="pf-rowact__t">Open · print</span>
                 </button>
                 @if (w.canAttach && canAttachPartner()) {
-                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" data-testid="rv-partner-attach"
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" data-testid="rv-partner-attach"
                           [disabled]="!!attachingUrl()" [pfBusy]="attachingUrl() === p.url" pfBusyLabel="Attaching…"
                           (click)="attachPartner(p)" [attr.aria-label]="'Attach the partner report for ' + p.testName + ' to our report'">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
-                    <span class="nd-rowact__t">Attach to report</span>
+                    <span class="pf-rowact__t">Attach to report</span>
                   </button>
                 }
               </div>

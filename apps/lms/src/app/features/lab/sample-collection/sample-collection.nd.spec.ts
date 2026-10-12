@@ -103,7 +103,7 @@ describe('Collect sample — the bottom navbar stays visible', () => {
     TestBed.tick();
     const cls = document.documentElement.classList;
     expect(cls).not.toContain('pf-collect-immersive');
-    expect(cls).not.toContain('nd-immersive');
+    expect(cls).not.toContain('pf-immersive');
   });
 });
 
@@ -113,17 +113,17 @@ describe('Collect sample — rendered on the nd pattern', () => {
     document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove());
   });
 
-  it('band + two-card layout from the kit (nd-page, nd-body--split, VIALS + COLLECTION cards)', async () => {
+  it('band + two-card layout from the kit (pf-page, pf-body--split, VIALS + COLLECTION cards)', async () => {
     const { drawer } = await renderDrawer([S('a'), S('b')]);
     expect(drawer.classList).toContain('pf-drawer--nd');
     expect(drawer.querySelector('pf-hero-band')).not.toBeNull();
-    expect(drawer.querySelector('.nd-page')).not.toBeNull();
-    const body = drawer.querySelector('.nd-body.nd-body--split') as HTMLElement;
-    const cards = [...body.querySelectorAll(':scope > .nd-card')];
+    expect(drawer.querySelector('.pf-page')).not.toBeNull();
+    const body = drawer.querySelector('.pf-body.pf-body--split') as HTMLElement;
+    const cards = [...body.querySelectorAll(':scope > .pf-card')];
     expect(cards.length).toBe(2);
-    expect(cards[0].querySelector('.nd-card__label')?.textContent?.trim()).toBe('Vials');
-    expect(cards[1].querySelector('.nd-card__label')?.textContent?.trim()).toBe('Collection');
-    expect(cards[1].querySelector('.nd-card__foot')).not.toBeNull();
+    expect(cards[0].querySelector('.pf-card__label')?.textContent?.trim()).toBe('Vials');
+    expect(cards[1].querySelector('.pf-card__label')?.textContent?.trim()).toBe('Collection');
+    expect(cards[1].querySelector('.pf-card__foot')).not.toBeNull();
     // the old page header is gone
     expect(drawer.querySelector('.pf-drawer__head, .pf-drawer__hint')).toBeNull();
   });
@@ -137,7 +137,7 @@ describe('Collect sample — rendered on the nd pattern', () => {
     expect(name.className).not.toMatch(/truncate/);
     expect(ctx.querySelector('.pf-sc-chip--order')?.textContent).toContain('LAB-2609-000085');
     expect(ctx.querySelector('.pf-sc-chip--samples')?.textContent).toContain('B-a');
-    expect(ctx.querySelector('.nd-seg, [role="radiogroup"], .pf-sc-ctx__filters')).toBeNull();
+    expect(ctx.querySelector('.pf-seg, [role="radiogroup"], .pf-sc-ctx__filters')).toBeNull();
     expect(drawer.querySelector('.pf-sc-vials__filters')).toBeNull();
     expect(ctx.querySelector('.pf-sc-ctx__count')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0/1 drawn');
   });
@@ -180,25 +180,25 @@ describe('Collect sample — rendered on the nd pattern', () => {
     const { drawer } = await renderDrawer([S('a'), S('b')]);
     const foot = drawer.querySelector('.pf-sc-foot') as HTMLElement;
     const cant = foot.querySelector('[aria-label="Can\'t collect"]') as HTMLElement;
-    expect(cant.classList).toContain('nd-btn--secondary');
-    expect(cant.classList).not.toContain('nd-btn--primary');
+    expect(cant.classList).toContain('pf-btn--secondary');
+    expect(cant.classList).not.toContain('pf-btn--primary');
     const finish = foot.querySelector('.pf-drawer__finish') as HTMLButtonElement;
     expect(finish.disabled).toBe(true);
-    expect(finish.classList).not.toContain('nd-btn--primary');
-    expect(foot.querySelectorAll('.nd-btn--primary, .pf-btn-primary').length).toBe(0);
+    expect(finish.classList).not.toContain('pf-btn--primary');
+    expect(foot.querySelectorAll('.pf-btn--primary, .pf-btn-primary').length).toBe(0);
   });
 
   it('when every vial is drawn, finish is the ONE primary in the footer', async () => {
     const { drawer } = await renderDrawer([S('a', 'collected')]);
-    const primaries = drawer.querySelectorAll('.pf-sc-foot .nd-btn--primary');
+    const primaries = drawer.querySelectorAll('.pf-sc-foot .pf-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].classList).toContain('pf-drawer__finish');
   });
 
   it('phone: COLLECTION as a sticky bottom bar; "More" opens it as a sheet', async () => {
     const { drawer, f, c } = await renderDrawer([S('a')]);
-    const bar = drawer.querySelector('.nd-bottombar.pf-sc-bar') as HTMLElement;
-    expect(bar.querySelector('.nd-bottombar__info')?.textContent?.trim()).toBe('0/1 drawn');
+    const bar = drawer.querySelector('.pf-bottombar.pf-sc-bar') as HTMLElement;
+    expect(bar.querySelector('.pf-bottombar__info')?.textContent?.trim()).toBe('0/1 drawn');
     expect(bar.querySelector('.pf-sc-bar__cta')?.textContent?.trim()).toBe('Collect all to finish');
     (bar.querySelector('[aria-label="More collection actions"]') as HTMLButtonElement).click();
     f.detectChanges();
@@ -212,16 +212,16 @@ describe('Collect sample — rendered on the nd pattern', () => {
   });
 });
 
-describe('nd-kit — the Collect screen is built from the kit classes', () => {
+describe('pf-kit — the Collect screen is built from the kit classes', () => {
   afterEach(() => {
     document.documentElement.classList.remove('pf-collect-immersive');
     document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove());
   });
   it('every kit building block is present in the rendered drawer', async () => {
     const { drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
-    for (const cls of ['nd-page', 'nd-body', 'nd-body--split', 'nd-card', 'nd-card__head', 'nd-card__icon',
-      'nd-card__label', 'nd-card__body', 'nd-card__foot', 'nd-btn', 'nd-btn--secondary', 'nd-btn--icon',
-      'nd-chip', 'nd-chip--static', 'nd-band-chip', 'nd-num', 'nd-bottombar']) {
+    for (const cls of ['pf-page', 'pf-body', 'pf-body--split', 'pf-card', 'pf-card__head', 'pf-card__icon',
+      'pf-card__label', 'pf-card__body', 'pf-card__foot', 'pf-btn', 'pf-btn--secondary', 'pf-btn--icon',
+      'pf-chip', 'pf-chip--static', 'pf-band-chip', 'pf-num', 'pf-bottombar']) {
       expect(drawer.querySelector('.' + cls), cls).not.toBeNull();
     }
   });
@@ -230,9 +230,9 @@ describe('nd-kit — the Collect screen is built from the kit classes', () => {
 describe('Collect sample — layout above the nav, External row, adaptive tiles', () => {
   afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
 
-  it('the drawer is an .nd-fullscreen view (ends above the navbar via --nd-nav-h)', async () => {
+  it('the drawer is an .pf-fullscreen view (ends above the navbar via --pf-nav-h)', async () => {
     const { drawer } = await renderDrawer([S('a')]);
-    expect(drawer.classList).toContain('nd-fullscreen');
+    expect(drawer.classList).toContain('pf-fullscreen');
   });
 
   it('tile size class by vial count: 1 → xl, 3 → lg, 6 → md, 9 → sm', () => {
@@ -284,10 +284,10 @@ describe('Collect sample — palette + one font family', () => {
 
   it('IDs and times use the tabular-number class, never a monospace class', async () => {
     const { drawer } = await renderDrawer([S('a', 'collected')]);
-    expect(drawer.querySelector('.font-mono, .nd-mono, [font-family*="monospace"]')).toBeNull();
-    expect(drawer.querySelector('.pf-sc-chip--order .nd-num')?.textContent).toBe('LAB-2609-000085');
-    expect(drawer.querySelector('.pf-sc-tile .pf-tube__code .nd-num')?.textContent).toBe('B-a');
-    expect(drawer.querySelector('.pf-sc-tile .pf-tube__stamp.nd-num')).not.toBeNull();
+    expect(drawer.querySelector('.font-mono, .pf-mono, [font-family*="monospace"]')).toBeNull();
+    expect(drawer.querySelector('.pf-sc-chip--order .pf-num')?.textContent).toBe('LAB-2609-000085');
+    expect(drawer.querySelector('.pf-sc-tile .pf-tube__code .pf-num')?.textContent).toBe('B-a');
+    expect(drawer.querySelector('.pf-sc-tile .pf-tube__stamp.pf-num')).not.toBeNull();
   });
 });
 
@@ -402,7 +402,7 @@ describe('Collect sample — layering + seamless arrival', () => {
     const skel = el.querySelector('.pf-sc-skel') as HTMLElement;
     expect(skel).not.toBeNull();
     expect(skel.querySelector('pf-hero-band')).not.toBeNull();
-    expect(skel.querySelectorAll('.nd-card').length).toBe(2);
+    expect(skel.querySelectorAll('.pf-card').length).toBe(2);
     expect(el.querySelector('pf-loading-logo')).toBeNull();
   });
 });
@@ -420,7 +420,7 @@ describe('Collect sample — an outsourced tube is just a tube with a small mark
     const marks = tiles.map(t => t.querySelector('.pf-tube__out'));
     expect(marks[0]).toBeNull();
     expect(marks[1]?.textContent?.trim()).toBe('Outsourced');
-    expect(marks[1]?.classList).toContain('nd-chip');
+    expect(marks[1]?.classList).toContain('pf-chip');
     // Same tube illustration + tap-to-draw state as the in-house tile.
     expect(tiles[1].querySelector('.pf-sc-illo')).not.toBeNull();
     expect(tiles[1].querySelector('.pf-tube__stamp--pending')?.textContent?.trim())

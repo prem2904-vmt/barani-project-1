@@ -144,9 +144,9 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
           <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
           <div class="cs__c">
             <span class="cs__k">Follow-up</span>
-            <div class="nd-seg cs__seg" role="radiogroup" aria-label="Follow-up">
+            <div class="pf-seg cs__seg" role="radiogroup" aria-label="Follow-up">
               @for (p of picks; track p.label) {
-                <button type="button" role="radio" class="nd-chip cs__pick" [class.on]="p.days === followUpDays()" [attr.aria-checked]="p.days === followUpDays()"
+                <button type="button" role="radio" class="pf-chip cs__pick" [class.on]="p.days === followUpDays()" [attr.aria-checked]="p.days === followUpDays()"
                         (click)="followUpDaysChange.emit(p.days)">{{ p.label }}</button>
               }
             </div>
@@ -158,8 +158,8 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
       </div>
 
       <footer class="cs__foot">
-        <button type="button" class="nd-btn nd-btn--secondary" (click)="cancel.emit()">Keep editing</button>
-        <button type="button" class="nd-btn nd-btn--primary" [disabled]="busy() || unresolved() > 0 || pregnancyUnresolved() > 0 || missingRequired().length > 0" (click)="confirm.emit()">
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="cancel.emit()">Keep editing</button>
+        <button type="button" class="pf-btn pf-btn--primary" [disabled]="busy() || unresolved() > 0 || pregnancyUnresolved() > 0 || missingRequired().length > 0" (click)="confirm.emit()">
           {{ busy() ? 'Sending…' : 'Complete & send' }}
         </button>
       </footer>
@@ -169,21 +169,21 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
     :host { position: fixed; inset: 0; z-index: 1100; }
     .cs-back { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.32); animation: cs-fade 200ms ease both; }
     .cs { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(440px, calc(100vw - 24px)); display: flex; flex-direction: column;
-      border-radius: 18px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
-      animation: cs-in 240ms var(--nd-spring, ease) both; }
+      border-radius: 18px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+      animation: cs-in 240ms var(--pf-spring, ease) both; }
     :host-context(html.dark) .cs { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
     @keyframes cs-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
     @keyframes cs-fade { from { opacity: 0; } to { opacity: 1; } }
     .cs__handle { display: none; }
-    .cs__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid var(--nd-line); }
+    .cs__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid var(--pf-line); }
     .cs__t { margin: 0; font-size: 17px; font-weight: 600; color: var(--text-primary); }
     .cs__s { margin: 2px 0 0; font-size: 13px; color: var(--text-tertiary); }
     .cs__x { width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .cs__body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px; }
     .cs__warn { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 4px; padding: 12px; border-radius: 12px; font-size: 13px; line-height: 1.45;
-      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); color: var(--text-primary); }
+      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--pf-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); color: var(--text-primary); }
     .cs__warn svg { color: var(--red-text, #dc2626); flex: none; }
-    .cs__row { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--nd-line); }
+    .cs__row { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--pf-line); }
     .cs__row:last-child { border-bottom: 0; }
     .cs__row--later { opacity: 0.75; }
     .cs__ico { flex: none; width: 32px; height: 32px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
@@ -198,13 +198,13 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
     .cs__ovr { font-style: normal; color: var(--amber-text, #b45309); }
     .cs__seg { display: flex; width: 100%; margin: 4px 0 2px; }
     .cs__pick { flex: 1; justify-content: center; min-height: 40px; border: 0; background: transparent; }
-    .cs__pick.on { background: var(--nd-card-bg); box-shadow: var(--nd-shadow-sm); font-weight: 600; color: var(--text-primary); }
-    .cs__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--nd-line); }
+    .cs__pick.on { background: var(--pf-card-bg); box-shadow: var(--pf-shadow-sm); font-weight: 600; color: var(--text-primary); }
+    .cs__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--pf-line); }
     @media (max-width: 640px) {
       .cs { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 92dvh; border-radius: 20px 20px 0 0;
         animation-name: cs-up; padding-bottom: env(safe-area-inset-bottom); }
       @keyframes cs-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-      .cs__handle { display: block; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
+      .cs__handle { display: block; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     }
     @media (prefers-reduced-motion: reduce) { .cs, .cs-back { animation: none; } }
   `],

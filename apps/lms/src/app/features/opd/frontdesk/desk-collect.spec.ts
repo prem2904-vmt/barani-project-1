@@ -84,7 +84,7 @@ describe('Visit detail → Collect', () => {
     const { el } = render();
     expect(el.textContent).toContain('Ear wax removal — set by Dr Ananya Rao (rule ₹400)');
     expect(el.textContent).toContain('2 × ');
-    const p = el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+    const p = el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
     expect(p.length).toBe(1);
     expect(p[0].textContent).toContain('Collect');
     expect(p[0].textContent).toContain('2,600');

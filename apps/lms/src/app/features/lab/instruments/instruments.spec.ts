@@ -14,7 +14,7 @@ import { LabSettingsHubComponent } from '../lab-settings-hub/lab-settings-hub.co
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
 
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
-const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length;
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length;
 
 function instrument(extra: Partial<InstrumentDto> = {}): InstrumentDto {
   const f = emptyInstrumentForm();
@@ -71,8 +71,8 @@ describe('Instruments list', () => {
     await flush(); p.f.detectChanges();
     expect(p.bandInput()).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('.pf-inl__side .nd-btn--primary')!.textContent).toContain('Add instrument');
-    expect(p.el.querySelector('.pf-inl__main.nd-card .nd-card__icon svg')).not.toBeNull();
+    expect(p.el.querySelector('.pf-inl__side .pf-btn--primary')!.textContent).toContain('Add instrument');
+    expect(p.el.querySelector('.pf-inl__main.pf-card .pf-card__icon svg')).not.toBeNull();
     expect(p.cmp.statusCounts().find((s: { label: string }) => s.label === 'Online').n).toBe(1);
     expect(p.cmp.unmatchedTotal()).toBe(2);
   });
@@ -113,9 +113,9 @@ describe('Instrument editor — web vs Electron', () => {
     await flush(); p.f.detectChanges();
     expect(primaries(p.el)).toBe(1);
     expect(p.el.querySelector('.pf-ie-save')!.textContent).toContain('Create instrument');
-    const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .nd-tabs__item')).map((b) => b.textContent!.trim());
+    const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-tabs__item')).map((b) => b.textContent!.trim());
     expect(tabs).toEqual(['Basics', 'Connection', 'Protocol', 'Listen', 'Code mapping', 'Device']);
-    expect(p.el.querySelector('pf-hero-band .nd-ctx__primary')!.textContent).toContain('New instrument');
+    expect(p.el.querySelector('pf-hero-band .pf-ctx__primary')!.textContent).toContain('New instrument');
   });
 
   it('web: Listen explains it runs on the paired desktop app; no Start button', async () => {

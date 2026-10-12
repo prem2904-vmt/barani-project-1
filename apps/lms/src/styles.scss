@@ -1,4 +1,5 @@
 @import url('tailwindcss');
+@source "../../../libs/shared/src";
 
 @import url('flatpickr/dist/flatpickr.css');
 
@@ -19,240 +20,6 @@
 /* Class-based dark/light mode (Tailwind v4). */
 @variant dark (&:where(.dark, .dark *));
 
-/* =============================================================
-   COLOR PALETTE (static)
-   ============================================================= */
-:root {
-  --color-violet-50: #f5f3ff;
-  --color-violet-100: #ede9fe;
-  --color-violet-200: #ddd6fe;
-  --color-violet-300: #c4b5fd;
-  --color-violet-400: #a78bfa;
-  --color-violet-500: #8b5cf6;
-  --color-violet-600: #7c3aed;
-  --color-violet-700: #6d28d9;
-  --color-violet-800: #5b21b6;
-  --color-violet-900: #4c1d95;
-
-  --color-pink-400: #f472b6;
-  --color-pink-500: #ec4899;
-  --color-pink-600: #db2777;
-  --color-fuchsia-400: #e879f9;
-  --color-fuchsia-500: #d946ef;
-  --color-fuchsia-600: #c026d3;
-
-  --gradient-primary: linear-gradient(135deg, #7c3aed, #ec4899);
-  --gradient-secondary: linear-gradient(135deg, #8b5cf6, #d946ef);
-  --gradient-glow: linear-gradient(135deg, #a78bfa, #f472b6);
-
-  /* legacy tokens kept so current screens re-skin through our utilities */
-  --color-primary: #7c3aed;
-  --color-accent: #ec4899;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-urgent: #ef4444;
-  --color-high: #f59e0b;
-  --color-normal: #10b981;
-}
-
-/* =============================================================
-   DARK THEME (default)
-   ============================================================= */
-:root,
-:root.dark {
-  --bg-primary: #0a0a15;
-  --bg-secondary: #0f0f1a;
-  --bg-tertiary: #141422;
-  --bg-card: rgba(20, 20, 35, 0.8);
-  --bg-card-solid: #14141f;
-  --bg-input: rgba(30, 30, 50, 0.8);
-  --bg-hover: rgba(139, 92, 246, 0.1);
-  --bg-active: rgba(139, 92, 246, 0.2);
-
-  --surface-1: #1a1a2e;
-  --surface-2: #16162a;
-  --surface-3: #1e1e36;
-  --surface-elevated: rgba(25, 25, 45, 0.95);
-
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-tertiary: rgba(255, 255, 255, 0.55);
-  --text-muted: rgba(255, 255, 255, 0.4);
-  --text-inverse: #0a0a15;
-
-  --border-primary: rgba(139, 92, 246, 0.22);
-  --border-secondary: rgba(139, 92, 246, 0.12);
-  --border-muted: rgba(255, 255, 255, 0.1);
-  --border-input: rgba(139, 92, 246, 0.3);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
-
-  --input-bg: rgba(20, 20, 40, 0.9);
-  --input-border: rgba(139, 92, 246, 0.3);
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #ffffff;
-  --input-placeholder: rgba(255, 255, 255, 0.4);
-
-  --card-bg: rgba(20, 20, 35, 0.6);
-  --card-border: rgba(139, 92, 246, 0.15);
-  --card-hover-border: rgba(139, 92, 246, 0.3);
-
-  --header-bg: rgba(10, 10, 21, 0.85);
-  --header-border: rgba(139, 92, 246, 0.12);
-
-  --scrollbar-track: rgba(139, 92, 246, 0.10);
-  --scrollbar-thumb: rgba(139, 92, 246, 0.55);
-  --scrollbar-thumb-hover: rgba(168, 85, 247, 0.85);
-
-  --success-bg: rgba(16, 185, 129, 0.15);
-  --success-text: #10b981;
-  --success-border: rgba(16, 185, 129, 0.3);
-  --error-bg: rgba(239, 68, 68, 0.15);
-  --error-text: #ef4444;
-  --error-border: rgba(239, 68, 68, 0.3);
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  --warning-text: #f59e0b;
-  --warning-border: rgba(245, 158, 11, 0.3);
-  --info-bg: rgba(59, 130, 246, 0.15);
-  --info-text: #3b82f6;
-  --info-border: rgba(59, 130, 246, 0.3);
-
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-bg-hover: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --glass-glow: 0 0 40px rgba(139, 92, 246, 0.15);
-  --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.25);
-  --glass-highlight: rgba(255, 255, 255, 0.08);
-
-  /* Accent text/icon colours — bright shades read great on the dark surfaces. */
-  --amber-text: #fbbf24;
-  --red-text: #fca5a5;
-  --green-text: #34d399;
-  --violet-text: #c4b5fd;
-  --blue-text: #93c5fd;
-  --teal-text: #5eead4;
-  --cyan-text: #67e8f9;
-  --sky-text: #7dd3fc;
-  --pink-text: #f9a8d4;
-  --rose-text: #fda4af;
-  /* Segmented/pill TRACK background (the container behind tab pills). */
-  --seg-track: rgba(0, 0, 0, 0.18);
-}
-
-/* =============================================================
-   LIGHT THEME
-   ============================================================= */
-:root.light {
-  /* Designer light world (Figma "Prefrontal LMS — Design System", 446-113):
-     whisper-lavender page, PURE WHITE cards, neutral gray text ramp
-     (#111928 → #9CA3AF) and #E5E7EB hairlines. The violet identity comes
-     from the hero band, primaries, and states — not from tinted surfaces. */
-  --bg-primary: #f3f1f8;
-  --bg-secondary: #f6f4fa;
-  --bg-tertiary: #f8f7fc;
-  --bg-card: rgba(255, 255, 255, 0.86);
-  --bg-card-solid: #ffffff;
-  --bg-input: #ffffff;
-  --bg-hover: rgba(124, 58, 237, 0.06);
-  --bg-active: rgba(124, 58, 237, 0.11);
-
-  --surface-1: rgba(255, 255, 255, 0.72);
-  --surface-2: rgba(255, 255, 255, 0.85);
-  --surface-3: #f0f1f3;
-  --surface-elevated: #ffffff;
-
-  --text-primary: #111928;
-  --text-secondary: #374151;
-  --text-tertiary: #6b7280;
-  --text-muted: #9ca3af;
-  --text-inverse: #ffffff;
-
-  --border-primary: rgba(124, 58, 237, 0.18);
-  --border-secondary: rgba(17, 25, 40, 0.07);
-  --border-muted: #e5e7eb;
-  --border-input: #d1d5db;
-
-  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
-  --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.08);
-  --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.11);
-  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.14);
-
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #111928;
-  --input-placeholder: #9ca3af;
-
-  --card-bg: rgba(255, 255, 255, 0.88);
-  --card-border: #e5e7eb;
-  --card-hover-border: rgba(124, 58, 237, 0.38);
-
-  --header-bg: rgba(255, 255, 255, 0.92);
-  --header-border: #e5e7eb;
-
-  --scrollbar-track: #eceef2;
-  --scrollbar-thumb: #cdd2da;
-  --scrollbar-thumb-hover: #aab1bd;
-
-  --success-bg: rgba(16, 185, 129, 0.1);
-  --success-text: #059669;
-  --success-border: rgba(16, 185, 129, 0.28);
-  --error-bg: rgba(239, 68, 68, 0.1);
-  --error-text: #dc2626;
-  --error-border: rgba(239, 68, 68, 0.28);
-  --warning-bg: rgba(245, 158, 11, 0.1);
-  --warning-text: #d97706;
-  --warning-border: rgba(245, 158, 11, 0.28);
-  --info-bg: rgba(59, 130, 246, 0.1);
-  --info-text: #2563eb;
-  --info-border: rgba(59, 130, 246, 0.28);
-
-  /* Glass panels: near-white lavender-tinged lift with a soft lavender hairline
-     edge — not the glary near-opaque white of before. */
-  /* Glass base is a soft lavender off-white (not pure white) so frosted panels
-     read calm, not glary. */
-  --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-hover: rgba(255, 255, 255, 0.8);
-  --glass-border: #e5e7eb;
-  --glass-border-hover: rgba(124, 58, 237, 0.26);
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 28px rgba(76, 29, 149, 0.08);
-  --glass-shadow-hover: 0 16px 44px rgba(76, 29, 149, 0.12);
-  --glass-glow: 0 0 40px rgba(124, 58, 237, 0.08);
-  --glass-glow-hover: 0 0 60px rgba(124, 58, 237, 0.12);
-  /* Top-edge sheen — softened so it doesn't add a hard white line. */
-  --glass-highlight: rgba(255, 255, 255, 0.5);
-
-  /* Accent text/icon colours — WCAG-AA darker shades (600-700) so amber/red/
-     green/violet foregrounds stay legible on the light surfaces (bright dark-mode
-     shades like #fbbf24 fail contrast on light, ~1.2:1). */
-  --amber-text: #b45309;
-  --red-text: #dc2626;
-  --green-text: #059669;
-  --violet-text: #6d28d9;
-  --blue-text: #2563eb;
-  --teal-text: #0d9488;
-  --cyan-text: #0891b2;
-  --sky-text: #0284c7;
-  --pink-text: #db2777;
-  --rose-text: #e11d48;
-  /* Segmented track — subtle lavender tint instead of a heavy grey/black blob. */
-  --seg-track: rgba(124, 58, 237, 0.08);
-}
-
-/* NEW design, light: TOGGLES wear the designer's quiet anatomy — the
-   primary gradient belongs to the ONE primary button per screen (band).
-   Active toggle = white pill + #ecd8ff ring + violet text, exactly like
-   the frontdesk section tabs; counts go mono-on-soft-violet. !important
-   beats the component-scoped gradient styles. */
 :root.light.design-new .pf-mw-tab--on {
   background: #ffffff !important;
   color: #8749ee !important;
@@ -336,7 +103,8 @@
    shell's height, the band stays put and only the body scrolls — no
    page-level scroll. The gutter IS the band bleed, so the band always
    reaches edge to edge whatever padding utilities the page carried. */
-:root.design-new .shell-main > :has(> .pf-band-page) {
+:root.design-new .shell-main > :has(> .pf-band-page),
+:root.design-new .shell-main > :has(> .pf-page) {
   display: block;
   height: 100%;
   min-height: 0;
@@ -438,6 +206,8 @@
   --glass-bg: rgba(246, 244, 252, 0.55);
   --glass-bg-hover: rgba(248, 246, 253, 0.62);
   --glass-border: rgba(124, 58, 237, 0.15);
+  --glass-border-hover: rgba(124, 58, 237, 0.3);
+  --pf-hover-border: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
 }
 
 /* =============================================================
@@ -593,6 +363,12 @@ pf-shell main > router-outlet + * {
  * keeps scroll cheap and lets the ambient layer paint without a second
  * gradient fighting it.
  */
+:root.dark,
+:root:not(.light) {
+  --glass-border-hover: rgba(167, 139, 250, 0.45);
+  --pf-hover-border: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+}
+
 :root.dark body,
 :root:not(.light) body {
   background: var(--bg-primary);
@@ -1035,7 +811,6 @@ button {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--card-border);
   border-radius: 20px;
-  padding: 1.25rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -1100,14 +875,40 @@ button {
    projected content can't be styled from the band component itself. */
 .pf-hb-tool {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px; border-radius: 9999px;
-  color: #5c7185; background: transparent; border: none; cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
+  width: 34px; height: 34px; border-radius: 9px;
+  color: var(--text-secondary, #64748b);
+  background: var(--pf-chip-bg, #f3f4f6);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 180ms cubic-bezier(0.32, 0.72, 0, 1);
+  flex-shrink: 0;
 }
-.pf-hb-tool:hover { background: #f0f1f3; color: #111928; }
-.dark .pf-hb-tool, [data-theme='dark'] .pf-hb-tool { color: var(--text-secondary); }
+.pf-hb-tool:hover {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--pf-card-bg, #ffffff));
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35));
+  color: var(--color-primary, #7c3aed);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
+  transform: translateY(-1px);
+}
+.pf-hb-tool:active {
+  transform: scale(0.94);
+}
+.pf-hb-tool:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 1px;
+}
+.dark .pf-hb-tool, [data-theme='dark'] .pf-hb-tool {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
 .dark .pf-hb-tool:hover, [data-theme='dark'] .pf-hb-tool:hover {
-  background: rgba(255, 255, 255, 0.08); color: var(--text-primary);
+  background: rgba(124, 58, 237, 0.16);
+  border-color: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+  color: var(--violet-text, #c4b5fd);
+  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.25);
+  transform: translateY(-1px);
 }
 
 .pf-hb-btn {
@@ -1115,25 +916,31 @@ button {
   height: 34px; padding: 0 18px; border-radius: 8px;
   font-size: 14px; font-weight: 600; font-family: inherit;
   cursor: pointer; border: 1px solid transparent; text-decoration: none;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, filter 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, filter 160ms ease, transform 160ms ease;
 }
 .pf-hb-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 .pf-hb-btn--primary {
   background: linear-gradient(163.93deg, #7c3aed 0%, #ec4899 100%);
   color: #fff;
 }
-.pf-hb-btn--primary:hover { filter: brightness(1.06); }
+.pf-hb-btn--primary:hover { filter: brightness(1.06); transform: translateY(-0.5px); }
 .pf-hb-btn--ghost {
-  background: rgba(255, 255, 255, 0.65); color: #111928;
-  border-color: rgba(17, 25, 40, 0.14);
+  background: rgba(255, 255, 255, 0.75); color: #1f2937;
+  border-color: var(--pf-line, #e2e8f0);
 }
-.pf-hb-btn--ghost:hover { background: #ffffff; }
+.pf-hb-btn--ghost:hover {
+  background: #ffffff;
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35));
+  color: var(--color-primary, #7c3aed);
+}
 .dark .pf-hb-btn--ghost, [data-theme='dark'] .pf-hb-btn--ghost {
   background: rgba(255, 255, 255, 0.08); color: var(--text-primary);
   border-color: var(--glass-border, rgba(255, 255, 255, 0.16));
 }
 .dark .pf-hb-btn--ghost:hover, [data-theme='dark'] .pf-hb-btn--ghost:hover {
   background: rgba(255, 255, 255, 0.14);
+  border-color: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+  color: var(--violet-text, #c4b5fd);
 }
 
 .pf-input {
@@ -1619,7 +1426,7 @@ html[data-theme="light"] .pf-vial__outline {
   .pf-msgs__react-pill, .pf-msgs__tab-pill, .pf-msgs__edited-tag,
   .pf-msgs__sys-body, .pf-msgs__pinned-tag-icon,
   .chip, [class*='__chip'],
-  .seg-item, .nd-seg__item, pf-segmented button {
+  .seg-item, .pf-seg__item, pf-segmented button {
     min-width: auto;
     min-height: auto;
   }
@@ -2445,52 +2252,52 @@ html.pf-design-mode {
 }
 /* New design: segmented controls follow Figma spec (32px capsule, white raised pill, violet active text/icon) */
 :root.design-new pf-segmented .seg-item.is-selected,
-:root.design-new .nd-seg .nd-seg__item[aria-checked='true'],
-:root.design-new .nd-seg .nd-seg__item[aria-selected='true'],
-:root.design-new .nd-seg .nd-seg__item[role='tab'][aria-selected='true'],
-:root.design-new .nd-seg .nd-seg__item.is-selected {
-  background: var(--nd-card-bg) !important;
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'],
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'],
+:root.design-new .pf-seg .pf-seg__item[role='tab'][aria-selected='true'],
+:root.design-new .pf-seg .pf-seg__item.is-selected {
+  background: var(--pf-card-bg) !important;
   color: var(--color-violet-600, #7c3aed) !important;
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 :root.dark.design-new pf-segmented .seg-item.is-selected,
-:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'],
-:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'],
-:root.dark.design-new .nd-seg .nd-seg__item[role='tab'][aria-selected='true'],
-:root.dark.design-new .nd-seg .nd-seg__item.is-selected {
-  background: var(--nd-card-bg) !important;
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'],
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'],
+:root.dark.design-new .pf-seg .pf-seg__item[role='tab'][aria-selected='true'],
+:root.dark.design-new .pf-seg .pf-seg__item.is-selected {
+  background: var(--pf-card-bg) !important;
   color: var(--color-violet-400, #c4b5fd) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
 }
 :root.design-new pf-segmented .seg-item.is-selected .seg-ico,
 :root.design-new pf-segmented .seg-item.is-selected svg,
-:root.design-new .nd-seg .nd-seg__item[aria-checked='true'] svg,
-:root.design-new .nd-seg .nd-seg__item[aria-selected='true'] svg {
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'] svg,
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'] svg {
   color: var(--color-violet-600, #7c3aed) !important;
 }
 :root.dark.design-new pf-segmented .seg-item.is-selected .seg-ico,
 :root.dark.design-new pf-segmented .seg-item.is-selected svg,
-:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'] svg,
-:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'] svg {
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'] svg,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'] svg {
   color: var(--color-violet-400, #c4b5fd) !important;
 }
-:root.design-new pf-segmented .seg-item.is-selected .nd-num,
-:root.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
-:root.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
+:root.design-new pf-segmented .seg-item.is-selected .pf-num,
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'] .pf-num,
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'] .pf-num {
   color: var(--color-violet-600, #7c3aed) !important;
   opacity: 0.9;
 }
-:root.dark.design-new pf-segmented .seg-item.is-selected .nd-num,
-:root.dark.design-new .nd-seg .nd-seg__item[aria-checked='true'] .nd-num,
-:root.dark.design-new .nd-seg .nd-seg__item[aria-selected='true'] .nd-num {
+:root.dark.design-new pf-segmented .seg-item.is-selected .pf-num,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'] .pf-num,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'] .pf-num {
   color: var(--color-violet-400, #c4b5fd) !important;
   opacity: 0.9;
 }
 :root.design-new pf-segmented .bar,
-:root.design-new .nd-seg {
-  background: var(--nd-chip-bg) !important;
-  border-color: var(--nd-line) !important;
+:root.design-new .pf-seg {
+  background: var(--pf-chip-bg) !important;
+  border-color: var(--pf-line) !important;
   border-radius: 9999px !important;
 }
 :root.dark.design-new .pf-mw-scan__btn,
@@ -2771,7 +2578,7 @@ html.pf-design-mode {
   button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
   button[class*="--active"]:not(.pf-topnav-active),
   button[class*="is-active"],
-  button[class*="is-selected"]:not(.seg-item):not(.nd-seg__item),
+  button[class*="is-selected"]:not(.seg-item):not(.pf-seg__item),
   a[class*="--on"],
   a[class*="--active"]:not(.pf-topnav-link--on),
   label[class*="--on"] {
@@ -2787,7 +2594,7 @@ html.pf-design-mode {
   button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
   button[class*="--active"]:not(.pf-topnav-active),
   button[class*="is-active"],
-  button[class*="is-selected"]:not(.seg-item):not(.nd-seg__item),
+  button[class*="is-selected"]:not(.seg-item):not(.pf-seg__item),
   a[class*="--on"],
   a[class*="--active"]:not(.pf-topnav-link--on),
   label[class*="--on"] {
@@ -2860,16 +2667,16 @@ html.pf-design-mode {
   box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.24);
 }
 /* New design: palette only (violet + neutrals) — Branch / Own origins are
-   neutral chips, never sky / teal (ND-PATTERN §2). */
+   neutral chips, never sky / teal (PF-PATTERN §2). */
 :root.design-new .pf-origin-badge--branch,
 :root.design-new .pf-origin-badge--local {
   color: var(--text-secondary);
-  background: var(--nd-chip-bg);
-  box-shadow: inset 0 0 0 1px var(--nd-line);
+  background: var(--pf-chip-bg);
+  box-shadow: inset 0 0 0 1px var(--pf-line);
 }
 
-/* ═══ nd-kit: the new-design pattern (docs/ND-PATTERN.md) ═══ */
-@import './app/shared/styles/nd-kit';
+/* ═══ pf-kit: the new-design pattern (docs/PF-PATTERN.md) ═══ */
+@import '@prefrontal/shared/styles';
 
 /* ═══ Step-to-step slide (router view transitions, core/navigation) ═══
    Forward: this screen exits LEFT, the next enters from the right; back

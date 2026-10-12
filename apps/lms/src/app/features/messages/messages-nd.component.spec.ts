@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
-import { MessagesNdComponent } from './messages-nd.component';
+import { MessagesNdComponent } from './messages-pf.component';
 import { MessagesRouteComponent } from './messages-route.component';
 import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
@@ -24,7 +24,7 @@ import { UploadsService } from '../../core/services/uploads.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 
 /**
- * MESSAGES — new design (ND-PATTERN §17). The page's own template renders
+ * MESSAGES — new design (PF-PATTERN §17). The page's own template renders
  * (the hero band is an unknown element, so its projected pill + actions
  * stay in the DOM where the spec can reach them). Services are fakes with
  * the same signal surface the page reads.
@@ -189,7 +189,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Messages — new design (ND-PATTERN §17)', () => {
+describe('Messages — new design (PF-PATTERN §17)', () => {
   it('first open (cold): the conversation list is a skeleton, never "No conversations yet"', async () => {
     const { f, el, answer } = setup({ cold: true });
     await settle(f);
@@ -227,7 +227,7 @@ describe('Messages — new design (ND-PATTERN §17)', () => {
     radios[2].click(); await settle(f);
     expect(rows(el).map(r => r.querySelector('.pf-mnd-row__name')!.textContent!.trim())).toEqual(['Haematology bench']);
     radios[3].click(); await settle(f);
-    expect(q(el, '.pf-mnd-side .nd-card__label')!.textContent!.trim()).toBe('Calls');
+    expect(q(el, '.pf-mnd-side .pf-card__label')!.textContent!.trim()).toBe('Calls');
   });
 
   it('pill search matches conversations by participant AND lists people to message', async () => {
@@ -249,11 +249,11 @@ describe('Messages — new design (ND-PATTERN §17)', () => {
     await settle(f);
     const panels = q(el, '.pf-mnd-panels')!;
     const kids = Array.from(panels.children);
-    expect(kids[0].matches('aside.nd-card.pf-mnd-side')).toBe(true);
-    expect(kids[1].matches('section.nd-card.pf-mnd-thread')).toBe(true);
-    const head = q(kids[0], '.nd-card__head')!;
-    expect(q(head, '.nd-card__icon svg')).toBeTruthy();
-    expect(q(head, '.nd-card__label')!.textContent!.trim()).toBe('Conversations');
+    expect(kids[0].matches('aside.pf-card.pf-mnd-side')).toBe(true);
+    expect(kids[1].matches('section.pf-card.pf-mnd-thread')).toBe(true);
+    const head = q(kids[0], '.pf-card__head')!;
+    expect(q(head, '.pf-card__icon svg')).toBeTruthy();
+    expect(q(head, '.pf-card__label')!.textContent!.trim()).toBe('Conversations');
     (q<HTMLButtonElement>(head, 'button[aria-label="Hide conversations"]')!).click();
     await settle(f);
     expect(q(el, '.pf-mnd-side')).toBeNull();
@@ -269,7 +269,7 @@ describe('Messages — new design (ND-PATTERN §17)', () => {
     await settle(f);
     const [r1, r2] = rows(el);
     expect(r1.querySelector('.pf-mnd-row__name')!.textContent!.trim()).toBe('Dr. Meenakshi Sundaravadivelu Ramanathan');
-    expect(r1.querySelector('time.pf-mnd-row__time.nd-num')).toBeTruthy();
+    expect(r1.querySelector('time.pf-mnd-row__time.pf-num')).toBeTruthy();
     expect(r1.querySelector('.pf-mnd-row__kind')!.tagName.toLowerCase()).toBe('svg');
     expect(r1.querySelector('.pf-mnd-row__pv')!.textContent!.trim()).toBe('Attachment');
     const unread = r1.querySelector('.pf-mnd-unread')!;
@@ -325,8 +325,8 @@ describe('Messages — new design (ND-PATTERN §17)', () => {
     expect(q(field, 'textarea')).toBeTruthy();
     expect(q(field, 'button[aria-label="Record a voice message"]')).toBeTruthy();
     expect(q(composer, '.pf-mnd-attach button[aria-label="Attach"]')!.className).toContain('pf-mnd-qbtn');
-    expect(qa(el, '.nd-btn--primary, .pf-hb-btn--primary').length).toBe(1);
-    const send = q<HTMLButtonElement>(composer, 'button.nd-btn--primary[aria-label="Send"]')!;
+    expect(qa(el, '.pf-btn--primary, .pf-hb-btn--primary').length).toBe(1);
+    const send = q<HTMLButtonElement>(composer, 'button.pf-btn--primary[aria-label="Send"]')!;
     expect(send).toBeTruthy();
     expect(send.disabled).toBe(true);
     const ta = q<HTMLTextAreaElement>(field, 'textarea')!;

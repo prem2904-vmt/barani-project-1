@@ -4,7 +4,7 @@ import { SampleSearchPresetService } from '../../core/services/sample-search-pre
 /**
  * `pfSamplePreset` — pre-types the current sample-ID head into a sample
  * search box (e.g. "2609", or "HEM26" for a one-department user) so the tech
- * types only the tail number. docs/ND-PATTERN.md → "Sample search preset".
+ * types only the tail number. docs/PF-PATTERN.md → "Sample search preset".
  *
  *   <input pfKeys="sample" pfSamplePreset …>
  *   <input [pfSamplePreset]="isSampleField">      (false = off)

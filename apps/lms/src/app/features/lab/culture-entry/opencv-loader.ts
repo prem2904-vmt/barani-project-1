@@ -1,7 +1,7 @@
 /**
  * Lazy OpenCV.js loader for the plate-measure modal.
  *
- * Choice (owner, documented in ND-PATTERN §13): OpenCV.js 4.10 is BUNDLED
+ * Choice (owner, documented in PF-PATTERN §13): OpenCV.js 4.10 is BUNDLED
  * with the app as a static asset — the unmodified single-file build of
  * @techstark/opencv-js@4.10.0-release.1, vendored at
  * apps/lms/public/assets/vendor/opencv/opencv.js and served same-origin as

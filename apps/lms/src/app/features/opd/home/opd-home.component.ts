@@ -28,8 +28,8 @@ import { opdAreasFor, orderOpdAreas } from '../shared/opd-nav';
       <div class="pf-band-body">
         <div class="pf-opdh">
           @for (t of tiles(); track t.id) {
-            <a [routerLink]="t.href" class="pf-opdh__tile nd-card press">
-              <span class="nd-card__icon pf-opdh__ic">
+            <a [routerLink]="t.href" class="pf-opdh__tile pf-card press">
+              <span class="pf-card__icon pf-opdh__ic">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path [attr.d]="t.iconPath"></path>
@@ -53,8 +53,8 @@ import { opdAreasFor, orderOpdAreas } from '../shared/opd-nav';
   styles: [`
     .pf-opdh { display: grid; gap: 14px; margin-top: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
     .pf-opdh__tile { gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
-      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease; }
-    .pf-opdh__tile:hover { border-color: var(--nd-sel-border); }
+      transition: border-color var(--pf-dur-fast) ease, transform 100ms ease; }
+    .pf-opdh__tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-opdh__tile:active { transform: scale(.99); }
     .pf-opdh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .pf-opdh__tile { transition: none; } .pf-opdh__tile:active { transform: none; } }

@@ -55,25 +55,25 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 
       <div class="pf-band-body pf-band-body--fill pf-inl__body">
         <div class="pf-inl__panels">
-          <section class="nd-card pf-inl__main" aria-label="Instruments">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true">
+          <section class="pf-card pf-inl__main" aria-label="Instruments">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg>
               </span>
-              <h2 class="nd-card__label">Instruments</h2>
-              <span class="nd-card__spacer"></span>
-              <span class="pf-inl__count nd-num" aria-live="polite">{{ countLabel() }}</span>
+              <h2 class="pf-card__label">Instruments</h2>
+              <span class="pf-card__spacer"></span>
+              <span class="pf-inl__count pf-num" aria-live="polite">{{ countLabel() }}</span>
             </header>
             <div class="pf-inl__grid-wrap">
               @if (listSkeleton()) {
                 <pf-skeleton-table [rows]="5" [cols]="5" label="Loading instruments…"></pf-skeleton-table>
               } @else if (!loading() && visibleRows().length === 0) {
-                <div class="nd-empty">
-                  <span class="nd-empty__icon" aria-hidden="true">
+                <div class="pf-empty">
+                  <span class="pf-empty__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4"/></svg>
                   </span>
-                  <p class="nd-empty__title">{{ q().trim() ? 'No instruments match "' + q().trim() + '"' : 'No instruments yet' }}</p>
-                  <p class="nd-empty__body">{{ q().trim() ? 'Try another name or port.' : 'Add your first analyzer — the CBC counter is a good start.' }}</p>
+                  <p class="pf-empty__title">{{ q().trim() ? 'No instruments match "' + q().trim() + '"' : 'No instruments yet' }}</p>
+                  <p class="pf-empty__body">{{ q().trim() ? 'Try another name or port.' : 'Add your first analyzer — the CBC counter is a good start.' }}</p>
                 </div>
               } @else {
                 <ag-grid-angular class="pf-inl__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
@@ -83,33 +83,33 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
             </div>
           </section>
 
-          <aside class="nd-card pf-inl__side" aria-label="Instrument actions">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true">
+          <aside class="pf-card pf-inl__side" aria-label="Instrument actions">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               </span>
-              <h2 class="nd-card__label">Connect</h2>
+              <h2 class="pf-card__label">Connect</h2>
             </header>
-            <div class="nd-card__body pf-inl__sidebody">
+            <div class="pf-card__body pf-inl__sidebody">
               <p class="pf-inl__lead">Results flow from the analyzer into result entry as a <strong>prefill</strong> — the technician still checks and submits every value.</p>
               <dl class="pf-inl__stats">
                 @for (s of statusCounts(); track s.label) {
                   <div class="pf-inl__stat">
                     <dt><span class="pf-inl-status" [attr.data-tone]="s.tone"><span class="pf-inl-status__dot" aria-hidden="true"></span>{{ s.label }}</span></dt>
-                    <dd class="nd-num">{{ s.n }}</dd>
+                    <dd class="pf-num">{{ s.n }}</dd>
                   </div>
                 }
               </dl>
               @if (unmatchedTotal() > 0) {
-                <a routerLink="/lab/analyzer-results" class="nd-btn nd-btn--quiet pf-inl__link">
+                <a routerLink="/lab/analyzer-results" class="pf-btn pf-btn--quiet pf-inl__link">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
                   {{ plural(unmatchedTotal(), 'unmatched result') }} to attach
                 </a>
               }
-              <p class="nd-field__hint">Setup: basics → connection → protocol → listen to a real run → map the analyzer's codes → pair the lab PC.</p>
+              <p class="pf-field__hint">Setup: basics → connection → protocol → listen to a real run → map the analyzer's codes → pair the lab PC.</p>
             </div>
-            <div class="nd-card__foot">
-              <button type="button" class="nd-btn nd-btn--primary nd-span press" (click)="add()">
+            <div class="pf-card__foot">
+              <button type="button" class="pf-btn pf-btn--primary pf-span press" (click)="add()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add instrument
               </button>
@@ -143,7 +143,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
     .pf-inl__sidebody { gap: 14px; }
     .pf-inl__lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
     .pf-inl__stats { margin: 0; display: grid; gap: 6px; }
-    .pf-inl__stat { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 2px; border-bottom: 1px solid var(--nd-line); }
+    .pf-inl__stat { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 2px; border-bottom: 1px solid var(--pf-line); }
     .pf-inl__stat dd { margin: 0; font-size: 13px; color: var(--text-primary); }
     .pf-inl__stat dt { font-size: 12.5px; }
     .pf-inl__link { align-self: flex-start; text-decoration: none; }
@@ -194,12 +194,12 @@ export class InstrumentsListComponent {
         cellRenderer: (p: { data?: InstrumentDto }) => status(p.data) },
       { colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
         valueGetter: (p) => p.data?.unmatchedCount ?? 0,
-        cellRenderer: (p: { data?: InstrumentDto }) => `<span class="nd-num">${esc(p.data?.unmatchedCount ?? 0)}</span>` },
+        cellRenderer: (p: { data?: InstrumentDto }) => `<span class="pf-num">${esc(p.data?.unmatchedCount ?? 0)}</span>` },
       { colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 96 : 64, minWidth: web ? 96 : 64, flex: 0, cellClass: 'pf-inl-actcell',
         cellRenderer: (p: { data?: InstrumentDto }) =>
-          `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="open" aria-label="Open ${esc(p.data?.name)}" title="Open">` +
+          `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="open" aria-label="Open ${esc(p.data?.name)}" title="Open">` +
           `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>` +
-          `<span class="nd-rowact__t">Open</span></button>` },
+          `<span class="pf-rowact__t">Open</span></button>` },
     ];
     if (this.isPhone) return cols.filter((c) => c.colId !== 'connection' && c.colId !== 'unmatched');
     return cols;

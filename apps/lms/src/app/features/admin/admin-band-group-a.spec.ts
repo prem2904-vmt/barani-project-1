@@ -106,7 +106,7 @@ describe('Admin band — Test Master', () => {
     expect(p.el.querySelector('.pf-tm-pricesave')).toBeNull();
     table.setPrice('t1', 175);
     p.f.detectChanges();
-    const primaries = Array.from(p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary'));
+    const primaries = Array.from(p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary'));
     expect(primaries.length).toBe(1);
     expect(primaries[0].classList.contains('pf-tm-pricesave')).toBe(true);
     expect(p.el.querySelector('pf-hero-band .pf-tm-pricediscard')).not.toBeNull();
@@ -183,7 +183,7 @@ describe('Admin band — Test Master', () => {
 
   it('ND hygiene: slate department switches, neutral selected rail, no green / mono', () => {
     const p = renderTm();
-    const sw = p.el.querySelector('.pf-tm-side .nd-toggle[role="switch"]');
+    const sw = p.el.querySelector('.pf-tm-side .pf-toggle[role="switch"]');
     expect(sw).not.toBeNull();
     expect(p.el.querySelector('.pf-tm-dept[aria-pressed="true"]')).not.toBeNull();
     expect(p.el.querySelector('.pf-tm-dept--active, .pf-tm-dept-switch--on, .pf-tm-inactive-chip--on, .font-mono, select')).toBeNull();

@@ -15,7 +15,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 
 /**
- * Result entry on the nd pattern (docs/ND-PATTERN.md → "Result entry"):
+ * Result entry on the nd pattern (docs/PF-PATTERN.md → "Result entry"):
  * band (back + tenant + Save draft / Submit) + CONTEXT BAR, full-width
  * RESULTS cards (grid only, no side panel), tube tabs in a FIXED order, and
  * the zoom name shared with the queue tile.
@@ -151,7 +151,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     const { el } = await render();
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     const chip = actions.querySelector('.pf-sre-techchip') as HTMLElement;
-    expect(chip.classList).toContain('nd-chip');
+    expect(chip.classList).toContain('pf-chip');
     expect(chip.textContent).toContain('Admin User');
     expect(chip.textContent).toContain('123434');
     const kids = Array.from(actions.querySelectorAll('.pf-sre-techchip, .pf-sre-draft, .pf-sre-submit'));
@@ -184,7 +184,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(submit.textContent!.trim()).toBe('Submit results');
     expect(submit.classList).toContain('pf-hb-btn--primary');
     expect(submit.disabled).toBe(false);
-    expect(actions.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length).toBe(1);
+    expect(actions.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length).toBe(1);
     // The old huge gradient bar is gone.
     expect(el.querySelector('.pf-sre__footer')).toBeNull();
   });
@@ -200,7 +200,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
 
   it('phones: Save draft + Submit are 44px ICON buttons in the band (Submit primary); no bottom bar', async () => {
     const { el } = await render({ single: true });
-    expect(el.querySelector('.nd-bottombar')).toBeNull();
+    expect(el.querySelector('.pf-bottombar')).toBeNull();
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     const draft = actions.querySelector('.pf-sre-draft') as HTMLElement;
     const submit = actions.querySelector('.pf-sre-submit') as HTMLElement;
@@ -230,7 +230,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
   it('sample tabs: this tube + siblings as a neutral segmented control; draft values = violet dot, all filled = check', async () => {
     const { f, el, c } = await render();
     const tabs = el.querySelector('pf-hero-band .pf-sre-tabs') as HTMLElement;
-    expect(tabs.classList).toContain('nd-seg');
+    expect(tabs.classList).toContain('pf-seg');
     const items = tabs.querySelectorAll('[role="tab"]');
     expect(items.length).toBe(2);
     expect(items[0].getAttribute('aria-selected')).toBe('true');
@@ -271,7 +271,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(selected()).toBe('smp-2');                     // only the indicator moved
     expect(el.querySelector('.pf-sre-tabs [data-tube="smp-1"]')).toBe(firstBtn);   // same DOM node
     // The indicator slides on the nd spring; off under reduced motion.
-    expect(css()).toMatch(/\.pf-sre-tabs--anim\s+\.pf-sre-tabs__ind\s*\{[^}]*transition:\s*transform[^;]*var\(--nd-spring\)/);
+    expect(css()).toMatch(/\.pf-sre-tabs--anim\s+\.pf-sre-tabs__ind\s*\{[^}]*transition:\s*transform[^;]*var\(--pf-spring\)/);
     expect(css()).toMatch(/prefers-reduced-motion[\s\S]*\.pf-sre-tabs__ind[^{]*\{[^}]*transition:\s*none/);
   });
 
@@ -316,17 +316,17 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
 });
 
 describe('Result entry (nd) — RESULTS cards', () => {
-  it('one nd-card per test: violet icon chip, the test name as the label, "+ Note" secondary', async () => {
+  it('one pf-card per test: violet icon chip, the test name as the label, "+ Note" secondary', async () => {
     const { el } = await render();
-    const cards = el.querySelectorAll('.pf-sre-main .nd-card.pf-sre-card');
+    const cards = el.querySelectorAll('.pf-sre-main .pf-card.pf-sre-card');
     expect(cards.length).toBe(1);
-    const head = cards[0].querySelector('.nd-card__head') as HTMLElement;
-    expect(head.querySelector('.nd-card__icon svg')).not.toBeNull();
-    expect(head.querySelector('.nd-card__label')!.textContent!.trim()).toBe('Bacterial PCR Detection');
+    const head = cards[0].querySelector('.pf-card__head') as HTMLElement;
+    expect(head.querySelector('.pf-card__icon svg')).not.toBeNull();
+    expect(head.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Bacterial PCR Detection');
     const note = head.querySelector('.pf-sre__note-btn') as HTMLElement;
     expect(note.textContent!.trim()).toBe('+ Note');
-    expect(note.classList).toContain('nd-btn--secondary');
-    expect(note.classList).not.toContain('nd-btn--primary');
+    expect(note.classList).toContain('pf-btn--secondary');
+    expect(note.classList).not.toContain('pf-btn--primary');
   });
 
   it('the parameter table: 5 columns, one row per value, pf-select results, pencil = SVG icon button', async () => {
@@ -348,7 +348,7 @@ describe('Result entry (nd) — RESULTS cards', () => {
   });
 
   it('row style: 1px lines, name weight 500, range/unit/method muted, one font (no monospace)', () => {
-    expect(css()).toMatch(/\.pf-sre__grow\s+td\s*\{[^}]*border-bottom:\s*1px solid var\(--nd-line\)/);
+    expect(css()).toMatch(/\.pf-sre__grow\s+td\s*\{[^}]*border-bottom:\s*1px solid var\(--pf-line\)/);
     expect(css()).toMatch(/\.pf-sre__gname\s*\{[^}]*font-weight:\s*500/);
     expect(css()).toMatch(/\.pf-sre__gc-unit,\s*\.pf-sre__gc-range,\s*\.pf-sre__gc-method\s*\{[^}]*color:\s*var\(--text-tertiary\)/);
     expect(css()).not.toMatch(/monospace/);
@@ -361,8 +361,8 @@ describe('Result entry (nd) — no side panel', () => {
     const { el } = await render({ rich: true });
     expect(el.querySelector('aside')).toBeNull();
     expect(el.querySelector('.pf-sre-side')).toBeNull();
-    expect(el.querySelector('.nd-body--split')).toBeNull();
-    expect(el.querySelector('.nd-sheet, .nd-sheet-backdrop')).toBeNull();
+    expect(el.querySelector('.pf-body--split')).toBeNull();
+    expect(el.querySelector('.pf-sheet, .pf-sheet-backdrop')).toBeNull();
     expect(el.querySelector('.pf-sre-body .pf-sre-main')).not.toBeNull();
     expect(el.textContent).not.toContain('parameters entered');
   });
@@ -372,7 +372,7 @@ describe('Result entry (nd) — no side panel', () => {
     expect(el.querySelector('.pf-sre-strip')).toBeNull();
     c.trendEligible.set([{ testId: 't1', testName: 'X', count: 2, parameters: [] }]);
     f.detectChanges();
-    const t = el.querySelector('.pf-sre-strip .nd-toggle[role="switch"]') as HTMLElement;
+    const t = el.querySelector('.pf-sre-strip .pf-toggle[role="switch"]') as HTMLElement;
     expect(t.textContent).toContain('Include Trendogram');
     expect(t.getAttribute('aria-checked')).toBe('false');
   });

@@ -64,7 +64,7 @@ interface AutoAssignConfig {
           <!-- Autosave is authoritative here (no Save button): the band says
                so as the neutral save state with a violet check. -->
           <ng-container band-actions>
-            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
+            <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
                   [attr.aria-busy]="savingShown() ? 'true' : null">
               @if (savingShown()) {
                 <pf-busy label="Saving…"></pf-busy>
@@ -109,8 +109,8 @@ interface AutoAssignConfig {
 
       @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="nd-card__label pf-ls__title">Counters &amp; collection</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="pf-card__label pf-ls__title">Counters &amp; collection</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Whether <strong>billing</strong> and <strong>sample collection</strong> run at a separate
@@ -118,13 +118,13 @@ interface AutoAssignConfig {
           separate counter, or keep it inside Frontdesk to run inline. These stay in sync automatically.
         </p>
         <div class="flex flex-wrap items-center gap-2 mt-3">
-          <span class="nd-chip nd-chip--static pf-ls__chipm">
+          <span class="pf-chip pf-chip--static pf-ls__chipm">
             Billing — <strong style="color: var(--text-primary);">{{ billingMode() === 'separate_counter' ? 'Separate counter' : 'Front desk' }}</strong>
           </span>
-          <span class="nd-chip nd-chip--static pf-ls__chipm">
+          <span class="pf-chip pf-chip--static pf-ls__chipm">
             Collection — <strong style="color: var(--text-primary);">{{ collectionMode() === 'dedicated_counter' ? 'Dedicated counter' : 'Front desk' }}</strong>
           </span>
-          <button type="button" class="nd-btn nd-btn--tertiary pf-ls__wfbtn" (click)="goWorkflow()">Edit in Workflow</button>
+          <button type="button" class="pf-btn pf-btn--tertiary pf-ls__wfbtn" (click)="goWorkflow()">Edit in Workflow</button>
         </div>
       </div>
       </section>
@@ -132,8 +132,8 @@ interface AutoAssignConfig {
 
       @if (showSec('collection')) {
       <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="nd-card__label pf-ls__title">Sample identification</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample identification</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How techs identify a sample on the lab screens. <strong>Scan</strong> shows the camera
@@ -173,9 +173,9 @@ interface AutoAssignConfig {
               </button>
             }
           </div>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="samplePresetOn()"
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="samplePresetOn()"
                   aria-label="Pre-fill sample search" (click)="setSamplePreset(!samplePresetOn())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
       </div>
@@ -184,8 +184,8 @@ interface AutoAssignConfig {
 
       @if (showSec('queues')) {
       <!-- Queue focus (per-branch) — how the lab worklists group work. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="nd-card__label pf-ls__title">Queue focus</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-ls__title">Queue focus</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How the technician worklist, lab intake and result-entry queues group work.
@@ -221,8 +221,8 @@ interface AutoAssignConfig {
 
       @if (showSec('queues')) {
       <!-- Lab structure (per-branch): integrated / standalone / auto -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="nd-card__label pf-ls__title">Lab structure</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="pf-card__label pf-ls__title">Lab structure</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
@@ -258,24 +258,24 @@ interface AutoAssignConfig {
 
       @if (showSec('collection')) {
       <!-- Sample ID — short sample barcode number width (tenant-wide) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="nd-card__label pf-ls__title">Sample ID</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample ID</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           The short sample barcode is <strong>DD</strong>(dept) + <strong>YY</strong>(year) +
-          this many digits, e.g. <span class="nd-num">012600001</span>. Set each department's
+          this many digits, e.g. <span class="pf-num">012600001</span>. Set each department's
           2-digit code in <strong>Departments</strong>.
         </p>
         <div class="mt-4 flex flex-wrap items-end gap-4">
           <label class="block max-w-[160px]">
-            <span class="nd-field__lbl">Number width</span>
-            <input class="nd-input nd-num mt-1" type="number" min="1" max="9"
+            <span class="pf-field__lbl">Number width</span>
+            <input class="pf-input pf-num mt-1" type="number" min="1" max="9"
                    [ngModel]="sampleNumberWidth()"
                    (ngModelChange)="sampleNumberWidth.set(+$event)"
                    (blur)="saveSampleNumberWidth()" />
           </label>
           <p class="text-[13px] pb-2" style="color: var(--text-secondary);">
-            Preview: <strong class="nd-num" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
+            Preview: <strong class="pf-num" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
           </p>
         </div>
       </div>
@@ -284,8 +284,8 @@ interface AutoAssignConfig {
 
       @if (showSec('rules')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="nd-card__label pf-ls__title">Calculation constants</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="pf-card__label pf-ls__title">Calculation constants</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Lab-specific numbers used by calculated results during entry.
@@ -295,22 +295,22 @@ interface AutoAssignConfig {
         </p>
         <div class="mt-4 flex flex-wrap items-end gap-4">
           <label class="block max-w-[130px]">
-            <span class="nd-field__lbl">ISI</span>
-            <input class="nd-input nd-num mt-1" type="number" step="0.01" min="0" placeholder="1.0"
+            <span class="pf-field__lbl">ISI</span>
+            <input class="pf-input pf-num mt-1" type="number" step="0.01" min="0" placeholder="1.0"
                    [ngModel]="calcIsi()"
                    (ngModelChange)="calcIsi.set($event)"
                    (blur)="saveCalcConstants()" />
           </label>
           <label class="block max-w-[150px]">
-            <span class="nd-field__lbl">MNPT (seconds)</span>
-            <input class="nd-input nd-num mt-1" type="number" step="0.1" min="0" placeholder="12.0"
+            <span class="pf-field__lbl">MNPT (seconds)</span>
+            <input class="pf-input pf-num mt-1" type="number" step="0.1" min="0" placeholder="12.0"
                    [ngModel]="calcMnpt()"
                    (ngModelChange)="calcMnpt.set($event)"
                    (blur)="saveCalcConstants()" />
           </label>
           <label class="block max-w-[150px]">
-            <span class="nd-field__lbl">Normal HCT (%)</span>
-            <input class="nd-input nd-num mt-1" type="number" step="1" min="1" max="99" placeholder="45"
+            <span class="pf-field__lbl">Normal HCT (%)</span>
+            <input class="pf-input pf-num mt-1" type="number" step="1" min="1" max="99" placeholder="45"
                    [ngModel]="calcNormalHct()"
                    (ngModelChange)="calcNormalHct.set($event)"
                    (blur)="saveCalcConstants()" />
@@ -322,11 +322,11 @@ interface AutoAssignConfig {
 
       @if (showSec('rules')) {
       <!-- No-scan override (tenant-wide) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="nd-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="pf-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
                   (click)="setAllowNoScan(!allowNoScan())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -343,11 +343,11 @@ interface AutoAssignConfig {
       <!-- Inventory master switch — only when the tenant is entitled to the
            inventory module, so an admin can't turn on a module they don't have. -->
       @if (entitlements.moduleEnabled('inventory')) {
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="nd-card__label pf-ls__title">Enable inventory</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="inventoryEnabled()" aria-label="Enable inventory"
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="pf-card__label pf-ls__title">Enable inventory</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="inventoryEnabled()" aria-label="Enable inventory"
                   (click)="setInventoryEnabled(!inventoryEnabled())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -365,8 +365,8 @@ interface AutoAssignConfig {
       <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow.
            Revenue policy — billing / organisation admins only (never the
            Lab Admin (Technical) role); the server refuses it the same way. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="nd-card__label pf-ls__title">Require full payment to progress</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="pf-card__label pf-ls__title">Require full payment to progress</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Choose where an unpaid balance blocks the workflow. Sample <em>collection</em> is never blocked —
@@ -391,8 +391,8 @@ interface AutoAssignConfig {
       @if (showSec('collection')) {
       <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="nd-card__label pf-ls__title">Specimen label code</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="pf-card__label pf-ls__title">Specimen label code</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           The <strong>one</strong> machine-readable code printed on every tube label across the
@@ -419,11 +419,11 @@ interface AutoAssignConfig {
 
       @if (showSec('rules')) {
       <!-- Require validation for all results -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="nd-card__label pf-ls__title">Require validation for all results</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="pf-card__label pf-ls__title">Require validation for all results</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
                   (click)="setRequireValidation(!requireValidation())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -437,11 +437,11 @@ interface AutoAssignConfig {
 
       @if (showSec('rules') && canManagePayments()) {
       <!-- Front-desk Payments-due tab visibility (billing admins only). -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Show "Payments due" tab</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Show "Payments due" tab</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
                   (click)="setShowPaymentsDue(!showPaymentsDue())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -456,12 +456,12 @@ interface AutoAssignConfig {
       @if (showSec('report')) {
       <!-- Consolidated abnormal-results sheet — a report template option
            (metadata), so every viewer's report renders it identically. -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h3M8 17h3M15 12v6M13 14l2-2 2 2"/></svg></span><h3 class="nd-card__label pf-ls__title">Consolidated abnormal results sheet</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h3M8 17h3M15 12v6M13 14l2-2 2 2"/></svg></span><h3 class="pf-card__label pf-ls__title">Consolidated abnormal results sheet</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
                   aria-label="Consolidated abnormal results sheet" [disabled]="!reportTpl() || savingReportOption()"
                   (click)="setAbnormalSummary(!abnormalSummaryOn())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -484,11 +484,11 @@ interface AutoAssignConfig {
       <!-- Technician notes on the report (per branch, like the other
            result-entry switches): the bench writes rich-text notes that print
            under a test, a profile, a department section or the whole report. -->
-      <section class="nd-card pf-ls__card" data-testid="ls-tech-notes">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Technician notes on report</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
+      <section class="pf-card pf-ls__card" data-testid="ls-tech-notes">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Technician notes on report</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
                   aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -506,12 +506,12 @@ interface AutoAssignConfig {
       @if (showSec('report') && waSettings()) {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
-      <section class="nd-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="nd-card__spacer"></span>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
+      <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="pf-card__spacer"></span>
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
                   aria-label="Send WhatsApp automatically when the report is ready" [disabled]="waSaving() || !canManageWa()"
                   (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
@@ -525,7 +525,7 @@ interface AutoAssignConfig {
           <!-- Sender: the shared Prefrontal number until the lab's own number is
                connected AND its template approved (the card below manages it). -->
           <div class="pf-ls__wa-sender">
-            <span class="nd-chip nd-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
+            <span class="pf-chip pf-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
               Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
             </span>
           </div>
@@ -533,11 +533,11 @@ interface AutoAssignConfig {
             <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
           }
           <div class="pf-ls__wa-row">
-            <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
+            <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
                     data-testid="ls-wa-resend-regen"
                     [disabled]="waSaving() || !canManageWa()"
                     (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               Send again when a report is regenerated or corrected
             </button>
             <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
@@ -561,8 +561,8 @@ interface AutoAssignConfig {
 
       @if (showSec('queues')) {
       <!-- Auto-assign per department -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="nd-card__label pf-ls__title">Auto-assign by department</h3></div>
+      <section class="pf-card pf-ls__card">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="pf-card__label pf-ls__title">Auto-assign by department</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Two independent legs. <strong>Technicians</strong> — when a sample is received, each test is
@@ -579,9 +579,9 @@ interface AutoAssignConfig {
             <p class="pf-ls__dept-name">Auto-assign technicians</p>
             <p class="pf-ls__hint">On receive, route each test to its department's tech pool. Off → the shared bench queue.</p>
           </div>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
                   (click)="setAutoAssignEnabled(!autoAssignEnabled())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
@@ -589,9 +589,9 @@ interface AutoAssignConfig {
             <p class="pf-ls__dept-name">Auto-assign validators</p>
             <p class="pf-ls__hint">On submit, route the result to its department's validator pool. Their Pending-validation screen lists it first; any validator of that department can still validate it.</p>
           </div>
-          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignValidatorsEnabled()" aria-label="Auto-assign validators"
+          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignValidatorsEnabled()" aria-label="Auto-assign validators"
                   (click)="setAutoAssignValidatorsEnabled(!autoAssignValidatorsEnabled())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
 
@@ -674,16 +674,16 @@ interface AutoAssignConfig {
       display: inline-flex; align-items: center; gap: 6px;
       margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
       font-size: 12px; font-weight: 600;
-      /* Palette only (nd-kit): a neutral chip, no green. */
+      /* Palette only (pf-kit): a neutral chip, no green. */
       color: var(--text-secondary);
-      background: var(--nd-chip-bg, rgba(127, 127, 127, 0.1));
-      border: 1px solid var(--nd-line, rgba(127, 127, 127, 0.25));
+      background: var(--pf-chip-bg, rgba(127, 127, 127, 0.1));
+      border: 1px solid var(--pf-line, rgba(127, 127, 127, 0.25));
     }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
     /* ── ND audit: kit cards (BILLING header), slate switches, neutral radios ── */
     .pf-ls__card { margin-bottom: 16px; }
-    .pf-ls__card .pf-ls__title.nd-card__label { font-size: 13px; }
+    .pf-ls__card .pf-ls__title.pf-card__label { font-size: 13px; }
     .pf-ls__cardbody { padding: 14px 18px 18px; }
     .pf-ls__cardbody > .pf-ls__hint:first-child { margin-top: 0; }
     .pf-ls__switch { flex: none; }
@@ -714,10 +714,10 @@ interface AutoAssignConfig {
 
     /* Payment-gate radio options */
     .pf-ls__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-    .pf-ls__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; border-radius: var(--nd-radius); background: var(--nd-card-bg); border: 1px solid var(--nd-line); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-    .pf-ls__gate-opt:hover { border-color: var(--nd-sel-border); }
+    .pf-ls__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; border-radius: var(--pf-radius); background: var(--pf-card-bg); border: 1px solid var(--pf-line); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+    .pf-ls__gate-opt:hover { border-color: var(--pf-sel-border); }
     /* Neutral selected state; the radio's small violet dot is the one accent. */
-    .pf-ls__gate-opt[aria-checked='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-ls__gate-opt[aria-checked='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-ls__gate-opt:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-ls__gate-radio { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--border-input, #cbd5e1); position: relative; transition: border-color .15s ease; }
     .pf-ls__gate-opt[aria-checked='true'] .pf-ls__gate-radio { border-color: var(--color-violet-500, #7c3aed); }
@@ -729,8 +729,8 @@ interface AutoAssignConfig {
 
     .pf-ls__autoassign-master {
       margin-top: 12px; padding: 12px 14px;
-      border: 1px solid var(--nd-line); border-radius: var(--nd-radius);
-      background: var(--nd-card-bg);
+      border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
+      background: var(--pf-card-bg);
     }
     .pf-ls__dept-grid {
       display: grid;
@@ -757,9 +757,9 @@ interface AutoAssignConfig {
     .pf-ls__chip-x:disabled { opacity: 0.4; cursor: not-allowed; }
     .pf-ls__dept {
       padding: 14px;
-      border-radius: var(--nd-radius);
-      background: var(--nd-card-bg);
-      border: 1px solid var(--nd-line);
+      border-radius: var(--pf-radius);
+      background: var(--pf-card-bg);
+      border: 1px solid var(--pf-line);
       display: flex; flex-direction: column; gap: 8px;
     }
     .pf-ls__dept-head {
@@ -781,7 +781,7 @@ interface AutoAssignConfig {
       transition: border-color 0.15s ease, background 0.15s ease;
     }
     .pf-ls__radio:hover { border-color: rgba(168, 85, 247, 0.35); }
-    .pf-ls__radio--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-ls__radio--on { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-ls__radio input { position: absolute; opacity: 0; pointer-events: none; }
     .pf-ls__radio-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__radio-sub { font-size: 11.5px; color: var(--text-tertiary); }
@@ -845,7 +845,7 @@ export class LabSettingsComponent implements OnInit {
   ];
   readonly tab = signal<LabSettingsTab>('collection');
 
-  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   /** First load: skeleton cards until the branch config answers (held, no flash). */
   private readonly loadHold = createLoadHold(true);
   readonly firstLoad = this.loadHold.active;

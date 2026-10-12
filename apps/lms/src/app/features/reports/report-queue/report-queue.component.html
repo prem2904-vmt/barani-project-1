@@ -1,7 +1,7 @@
 <section class="pf-rq-page px-4 md:px-8 pt-6" [class.pf-rq-page--nd]="theme.isNewDesign()">
   <div class="pf-rq-chrome">
     @if (theme.isNewDesign()) {
-    <!-- ND band (docs/ND-PATTERN.md → "Reports list"): the pill = search +
+    <!-- ND band (docs/PF-PATTERN.md → "Reports list"): the pill = search +
          ONE status filter (neutral segmented, plain tabular counts, no
          colour dots). No second stats strip. No primary here: Generate is a
          manual fallback (reports generate themselves on validation). -->
@@ -34,7 +34,7 @@
           Generate
         </button>
         } @else if (viewOnly()) {
-        <span class="nd-chip nd-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
+        <span class="pf-chip pf-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
         }
       </ng-container>
     </pf-hero-band>
@@ -223,12 +223,12 @@
          report of the ready tubes (latest supersedes previous). -->
     @if (visiblePartials().length === 0) {
     @if (theme.isNewDesign()) {
-    <div class="nd-empty pf-rq-empty">
-      <span class="nd-empty__icon" aria-hidden="true">
+    <div class="pf-empty pf-rq-empty">
+      <span class="pf-empty__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>
       </span>
-      <p class="nd-empty__title">No partial reports</p>
-      <p class="nd-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
+      <p class="pf-empty__title">No partial reports</p>
+      <p class="pf-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
     </div>
     } @else {
     <pf-tile tone="default" padding="xl">
@@ -249,8 +249,8 @@
                 [attr.aria-expanded]="open" [attr.aria-controls]="'pf-rq-po-' + po.id">
           <span class="pf-rq-card__who">
             <span class="pf-rq-card__name"><pf-daily-no [of]="po" />{{ po.patientName }}</span>
-            <span class="pf-rq-card__meta nd-num">{{ po.patientMeta }}</span>
-            <span class="pf-rq-card__meta pf-rq-card__count nd-num">{{ po.countLabel }}</span>
+            <span class="pf-rq-card__meta pf-num">{{ po.patientMeta }}</span>
+            <span class="pf-rq-card__meta pf-rq-card__count pf-num">{{ po.countLabel }}</span>
           </span>
           <span class="pf-rq-status" data-status="preliminary" data-tone="amber">
             <span class="pf-rq-status__dot" aria-hidden="true"></span>
@@ -267,9 +267,9 @@
               @for (d of po.shownDepts; track d.key) {
               <section class="pf-rq-dept" [attr.data-state]="d.state">
                 <header class="pf-rq-dept__head">
-                  @if (d.code) { <span class="nd-chip nd-chip--static pf-rq-dept__code nd-num">{{ d.code }}</span> }
+                  @if (d.code) { <span class="pf-chip pf-chip--static pf-rq-dept__code pf-num">{{ d.code }}</span> }
                   <span class="pf-rq-dept__name">{{ d.name }}</span>
-                  <span class="pf-rq-dept__note nd-num">
+                  <span class="pf-rq-dept__note pf-num">
                     @if (d.state === 'ready') { Ready } @else { {{ d.readyTests }} of {{ d.tests.length }} tests ready }
                   </span>
                 </header>
@@ -290,7 +290,7 @@
                   @if (t.cultureLines.length) {
                   <dl class="pf-rq-culture">
                     @for (l of t.cultureLines; track l.label) {
-                    <div class="pf-rq-culture__row"><dt>{{ l.label }}</dt><dd class="nd-num">{{ l.value }}</dd></div>
+                    <div class="pf-rq-culture__row"><dt>{{ l.label }}</dt><dd class="pf-num">{{ l.value }}</dd></div>
                     }
                   </dl>
                   } @else {
@@ -301,8 +301,8 @@
                     @for (v of t.values; track v.name) {
                     <li class="pf-rq-value" [attr.data-flag]="v.flag">
                       <span class="pf-rq-value__name">{{ v.title }}</span>
-                      <span class="pf-rq-value__val nd-num">{{ v.value }}@if (v.unit) { <span class="pf-rq-value__unit">{{ v.unit }}</span> }</span>
-                      <span class="pf-rq-value__range nd-num">{{ v.range || '—' }}</span>
+                      <span class="pf-rq-value__val pf-num">{{ v.value }}@if (v.unit) { <span class="pf-rq-value__unit">{{ v.unit }}</span> }</span>
+                      <span class="pf-rq-value__range pf-num">{{ v.range || '—' }}</span>
                       <span class="pf-rq-value__flag" [attr.data-flag]="v.flag">
                         @switch (v.flag) {
                           @case ('critical') { {{ v.code || 'C' }} }
@@ -327,7 +327,7 @@
                 </svg>
                 <span>Still pending:
                   @for (pd of po.pending; track pd.name; let last = $last) {
-                  <strong class="pf-rq-pending__dept">{{ pd.name }}</strong>@if (pd.detail) { <span class="nd-num"> ({{ pd.detail }})</span> }@if (!last) {<span>, </span>}
+                  <strong class="pf-rq-pending__dept">{{ pd.name }}</strong>@if (pd.detail) { <span class="pf-num"> ({{ pd.detail }})</span> }@if (!last) {<span>, </span>}
                   }
                 </span>
               </p>
@@ -335,7 +335,7 @@
             </div>
             @if (canGenerate()) {
             <div class="pf-rq-card__foot">
-              <button type="button" class="nd-btn nd-btn--secondary pf-rq-genpartial" [disabled]="generating() === po.id"
+              <button type="button" class="pf-btn pf-btn--secondary pf-rq-genpartial" [disabled]="generating() === po.id"
                       [pfBusy]="generating() === po.id" pfBusyLabel="Generating…" (click)="generatePartial(po)">
                 {{ generating() === po.id ? 'Generating…' : 'Generate partial PDF' }}
               </button>
@@ -349,12 +349,12 @@
     }
     } @else if (visible().length === 0) {
     @if (theme.isNewDesign()) {
-    <div class="nd-empty pf-rq-empty">
-      <span class="nd-empty__icon" aria-hidden="true">
+    <div class="pf-empty pf-rq-empty">
+      <span class="pf-empty__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
       </span>
-      <p class="nd-empty__title">{{ query() ? 'No matching reports' : 'No reports here' }}</p>
-      <p class="nd-empty__body">{{ query() ? 'Try a patient name, MRN, phone or order number.' : 'Reports appear here as soon as an order is validated.' }}</p>
+      <p class="pf-empty__title">{{ query() ? 'No matching reports' : 'No reports here' }}</p>
+      <p class="pf-empty__body">{{ query() ? 'Try a patient name, MRN, phone or order number.' : 'Reports appear here as soon as an order is validated.' }}</p>
     </div>
     } @else {
     <pf-tile tone="default" padding="xl">
@@ -372,10 +372,10 @@
         <div class="pf-rq-card__head">
           <div class="pf-rq-card__who">
             <p class="pf-rq-card__name"><pf-daily-no [of]="r.order" />{{ reportPatientName(r) }}</p>
-            <p class="pf-rq-card__meta nd-num">{{ reportMeta(r) }}</p>
+            <p class="pf-rq-card__meta pf-num">{{ reportMeta(r) }}</p>
           </div>
           <!-- ONE status: dot + coloured word, no chip, in a fixed right column
-               so status and actions line up on every row (ND-PATTERN §20).
+               so status and actions line up on every row (PF-PATTERN §20).
                Preliminary replaces Completed; hidden facts go in the meta. -->
           @let st = cardStatus(r);
           <span class="pf-rq-status" [attr.data-status]="st.key" [attr.data-tone]="st.tone">
@@ -388,47 +388,47 @@
             {{ st.label }}
           </span>
           <div class="pf-rq-card__acts">
-            <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" aria-label="View" title="View on screen" (click)="view(r)">
+            <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="View" title="View on screen" (click)="view(r)">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
               </svg>
-              <span class="nd-rowact__t">View</span>
+              <span class="pf-rowact__t">View</span>
             </button>
-            <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
+            <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
                     [disabled]="isRowBusy(r.id, 'download')" [pfBusy]="isRowBusy(r.id, 'download')" pfBusyLabel="Preparing the PDF…">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
               </svg>
-              <span class="nd-rowact__t">Download</span>
+              <span class="pf-rowact__t">Download</span>
             </button>
             <!-- View-only Results can PRINT (not a delivery: nothing recorded);
                  the delivery desk prints from the Share menu below. -->
             @if (!canDeliver() && canPrint()) {
-            <button type="button" class="nd-rowact pf-rq-print" [class.nd-rowact--icon]="!web()" aria-label="Print" title="Print"
+            <button type="button" class="pf-rowact pf-rq-print" [class.pf-rowact--icon]="!web()" aria-label="Print" title="Print"
                     [disabled]="isRowBusy(r.id, 'print')" [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
                     (click)="printReport(r)">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
               </svg>
-              <span class="nd-rowact__t">Print</span>
+              <span class="pf-rowact__t">Print</span>
             </button>
             }
             <!-- Sending needs deliver_report; a view_report-only viewer sees the
                  SAME list with View / Download / More only (route-access.ts). -->
             @if (canDeliver()) {
             <span class="pf-rq-split pf-rq-split--nd">
-              <button type="button" class="nd-rowact pf-rq-split__face" [class.nd-rowact--icon]="!web()" aria-label="Share" title="Send via WhatsApp"
+              <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="!web()" aria-label="Share" title="Send via WhatsApp"
                       [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, 'whatsapp')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
                 </svg>
-                <span class="nd-rowact__t">Share</span>
+                <span class="pf-rowact__t">Share</span>
               </button>
-              <button type="button" class="nd-rowact pf-rq-split__caret" [class.nd-rowact--icon]="!web()" (click)="toggleShare(r.id, $event)"
+              <button type="button" class="pf-rowact pf-rq-split__caret" [class.pf-rowact--icon]="!web()" (click)="toggleShare(r.id, $event)"
                       [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
                       [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -451,14 +451,14 @@
             @if (rowActions().get(r.id)?.length) {
             <pf-actions-menu class="pf-rq-kebab" [actions]="rowActions().get(r.id) ?? []" label="Report actions"
                              [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
-              <button pfActionsTrigger type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()"
+              <button pfActionsTrigger type="button" class="pf-rowact pf-rq-more" [class.pf-rowact--icon]="!web()"
                       [pfBusy]="isRowBusy(r.id, 'regenerate')" pfBusyLabel="Regenerating…"
                       aria-label="Report actions" title="Report actions">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/>
                 </svg>
-                <span class="nd-rowact__t">More</span>
+                <span class="pf-rowact__t">More</span>
               </button>
             </pf-actions-menu>
             }
@@ -614,11 +614,11 @@
     @if (filter() !== "partial" && hasMorePages() && visible().length > 0) {
     <!-- Server paging (DB optimisation phase 3): the next page, appended. -->
     <div class="pf-rq-more">
-      <button type="button" class="nd-btn nd-btn--secondary pf-rq-more__btn press"
+      <button type="button" class="pf-btn pf-btn--secondary pf-rq-more__btn press"
               [disabled]="loadingMore()" [attr.aria-busy]="loadingMore()" (click)="loadMore()">
         @if (loadingMore()) { Loading… } @else { Load {{ nextPageCount() }} more }
       </button>
-      <span class="pf-rq-more__count nd-num" aria-live="polite">Showing {{ items().length }} of {{ total() }}</span>
+      <span class="pf-rq-more__count pf-num" aria-live="polite">Showing {{ items().length }} of {{ total() }}</span>
     </div>
     }
   </div>

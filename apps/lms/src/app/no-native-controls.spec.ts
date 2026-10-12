@@ -5,8 +5,8 @@ import { join, relative, resolve } from 'node:path';
  * Owner's standing rule (no-native-browser-controls): never a native
  * `<select>`, `<datalist>`, `type="date"/"time"/"datetime-local"/"month"`
  * input, or `window.confirm/alert/prompt` anywhere in the LMS app — always
- * `pf-select`, the kit date/time/datetime inputs (`pf-nd-date`/`pf-nd-time`/
- * `pf-nd-datetime`), or `DialogService`.
+ * `pf-select`, the kit date/time/datetime inputs (`pf-date`/`pf-time`/
+ * `pf-datetime`), or `DialogService`.
  *
  * This is a grep-style guard over the SOURCE TEXT (inline templates in
  * `.ts` files and `templateUrl` `.html` siblings), not a rendered-DOM check,
@@ -14,7 +14,7 @@ import { join, relative, resolve } from 'node:path';
  *
  * Two kinds of input are allowed to keep `type="date"`/`"time"` even though
  * they match the attribute:
- *  1. The kit components themselves (`nd-date`, `nd-time`) — a HIDDEN native
+ *  1. The kit components themselves (`pf-date`, `pf-time`) — a HIDDEN native
  *     input sits behind the typed box only to open the OS picker
  *     (`showPicker()`); it always carries `aria-hidden="true"` in the SAME
  *     tag, which this guard treats as the sanctioned marker.

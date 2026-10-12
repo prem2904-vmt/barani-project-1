@@ -173,8 +173,8 @@
       padding: 3px 8px; border-radius: 7px; color: #fbbf24;
       background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.4); }
     .pf-sc__card:hover {
-      border-color: rgba(168, 85, 247, 0.45);
-      background: rgba(168, 85, 247, 0.04);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff));
       box-shadow: 0 10px 28px rgba(0,0,0,0.22);
     }
     .pf-sc__card:active { transform: scale(0.998); }
@@ -812,7 +812,7 @@
       .pf-rej__chips { --pf-rej-chip-min-height: 44px; }
     }
     .pf-rej__chip:hover:not(.pf-rej__chip--on) {
-      border-color: var(--nd-sel-border, rgba(139, 92, 246, 0.45));
+      border-color: var(--pf-sel-border, rgba(139, 92, 246, 0.45));
       color: var(--text-primary);
     }
     .pf-rej__chip--on {
@@ -899,11 +899,11 @@
     }
     :host-context([data-theme="light"]) .pf-rej__panel {
       background: var(--bg-card-solid, #ffffff);
-      border-color: var(--nd-line, rgba(15, 23, 42, 0.08));
+      border-color: var(--pf-line, rgba(15, 23, 42, 0.08));
     }
     :host-context([data-theme="light"]) .pf-rej__chip {
-      background: var(--nd-chip-bg, #f8fafc);
-      border-color: var(--nd-line, rgba(15, 23, 42, 0.12));
+      background: var(--pf-chip-bg, #f8fafc);
+      border-color: var(--pf-line, rgba(15, 23, 42, 0.12));
       color: var(--text-secondary);
     }
     :host-context([data-theme="light"]) .pf-rej__chip--on {
@@ -913,12 +913,12 @@
     }
     :host-context([data-theme="light"]) .pf-rej__note {
       background: var(--bg-card-solid, #ffffff);
-      border-color: var(--nd-line, rgba(15, 23, 42, 0.16));
+      border-color: var(--pf-line, rgba(15, 23, 42, 0.16));
     }
     :host-context([data-theme="light"]) .pf-rej__foot .pf-btn-ghost {
-      border-color: var(--nd-line, rgba(15, 23, 42, 0.16));
+      border-color: var(--pf-line, rgba(15, 23, 42, 0.16));
       &:hover:not(:disabled) {
-        background: var(--nd-chip-bg, #f1f5f9);
+        background: var(--pf-chip-bg, #f1f5f9);
       }
     }
 
@@ -1113,6 +1113,7 @@
     }
     :host-context([data-theme="light"]) .pf-sc__card:hover {
       background: var(--surface-elevated);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
       box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
     }
     :host-context([data-theme="light"]) .pf-sc__rack {
@@ -1353,7 +1354,7 @@
        chrome still needs the notch inset so the close button / patient name
        don't sit under the status bar. Add it only on native.
        CLASSIC drawer only: the new-design drawer (.pf-drawer--nd) is an
-       .nd-fullscreen view from top:0 — there is no top navbar on native to
+       .pf-fullscreen view from top:0 — there is no top navbar on native to
        clear. Offsetting it by --navbar-height (64px) left the QUEUE's own
        band (tenant + Refresh, its search row hidden = the "empty strip")
        showing above the drawer's band: two bands on the owner's iPad. */
@@ -1647,39 +1648,40 @@
        Scoped to .pf-drawer--nd (the drawer is teleported to <body>, and the
        emulated attributes still apply). */
     .pf-drawer.pf-drawer--nd {
-      --pf-nd-card: var(--bg-card-solid, #ffffff);
-      --pf-nd-line: var(--border-muted, #e5e7eb);
-      --pf-nd-chip: #f3f4f6;
-      --pf-nd-sel-border: #9aa4ae;
-      --pf-nd-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.06);
-      --pf-nd-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+      --pf-card: var(--bg-card-solid, #ffffff);
+      --pf-line: var(--border-muted, #e5e7eb);
+      --pf-chip: #f3f4f6;
+      --pf-sel-border: #9aa4ae;
+      --pf-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.06);
+      --pf-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
       background: var(--bg-primary);
       color: var(--text-primary);
       font-family: 'Noto Sans', system-ui, sans-serif;
+      bottom: var(--pf-nav-h, 64px);
     }
     :host-context(.dark) .pf-drawer.pf-drawer--nd,
     :host-context([data-theme='dark']) .pf-drawer.pf-drawer--nd {
-      --pf-nd-chip: rgba(255, 255, 255, 0.08);
-      --pf-nd-sel-border: rgba(255, 255, 255, 0.4);
-      --pf-nd-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+      --pf-chip: rgba(255, 255, 255, 0.08);
+      --pf-sel-border: rgba(255, 255, 255, 0.4);
+      --pf-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
     }
 
     /* Header = the band: close top-left, patient + meta, progress card right. */
     .pf-drawer--nd .pf-drawer__head {
       background-color: var(--pf-band-bg, var(--bg-card-solid));
       background-image: var(--pf-band-fade, none), var(--pf-band-sweep, none);
-      border-bottom: 1px solid var(--pf-band-edge, var(--pf-nd-line));
+      border-bottom: 1px solid var(--pf-band-edge, var(--pf-line));
       padding-top: 20px;
       padding-bottom: 16px;
     }
     .pf-drawer--nd .pf-drawer__close {
       width: 40px; height: 40px; border-radius: 10px;
-      background: var(--pf-nd-card);
-      border: 1px solid var(--pf-nd-line);
+      background: var(--pf-card);
+      border: 1px solid var(--pf-line);
       color: var(--text-secondary);
-      box-shadow: var(--pf-nd-shadow);
+      box-shadow: var(--pf-shadow);
     }
-    .pf-drawer--nd .pf-drawer__close:hover { color: var(--text-primary); border-color: var(--pf-nd-sel-border); background: var(--pf-nd-card); }
+    .pf-drawer--nd .pf-drawer__close:hover { color: var(--text-primary); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: var(--pf-card); }
     .pf-drawer--nd .pf-drawer__name {
       font-size: 22px; font-weight: 600; letter-spacing: -0.01em;
       background: none; -webkit-text-fill-color: currentColor; color: var(--text-primary);
@@ -1693,20 +1695,33 @@
     .pf-drawer--nd .pf-drawer__sub { font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
     .pf-drawer--nd .pf-drawer__progress {
       min-width: 104px; padding: 8px 14px; border-radius: 12px;
-      background: var(--pf-nd-card);
-      border: 1px solid var(--pf-nd-line);
-      box-shadow: var(--pf-nd-shadow);
+      background: var(--pf-card);
+      border: 1px solid var(--pf-line);
+      box-shadow: var(--pf-shadow);
     }
     .pf-drawer--nd .pf-drawer__progress-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); }
     .pf-drawer--nd .pf-drawer__progress-lbl { font-size: 10px; letter-spacing: 0.12em; color: var(--text-muted); }
-    .pf-tick { display: inline-block; animation: pf-nd-tick 240ms var(--pf-nd-spring, ease) both; }
-    @keyframes pf-nd-tick { from { transform: translateY(35%); opacity: 0; } to { transform: none; opacity: 1; } }
+    .pf-tick { display: inline-block; animation: pf-tick 240ms var(--pf-spring, ease) both; }
+    @keyframes pf-tick { from { transform: translateY(35%); opacity: 0; } to { transform: none; opacity: 1; } }
 
-    /* Thin progress bar with a subtle accent (no glow). */
-    .pf-drawer--nd .pf-drawer__progressbar { height: 3px; margin-top: 0; background: var(--pf-nd-line); border-radius: 0 0 3px 3px; }
-    .pf-drawer--nd .pf-drawer__progressbar > span {
-      background: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 70%, transparent);
+    /* Thin progress bar sitting directly on the vials card top border */
+    .pf-drawer--nd .pf-drawer__progressbar,
+    .pf-sc-vials .pf-drawer__progressbar {
+      height: 3px;
+      margin: 0;
+      width: 100%;
+      background: var(--pf-line);
+      border-radius: 0;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .pf-drawer--nd .pf-drawer__progressbar > span,
+    .pf-sc-vials .pf-drawer__progressbar > span {
+      display: block;
+      height: 100%;
+      background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3));
       box-shadow: none;
+      transition: width 0.35s cubic-bezier(0.2, 0.85, 0.3, 1);
     }
     .pf-drawer--nd .pf-drawer__hint {
       max-width: 680px; margin-left: auto; margin-right: auto;
@@ -1716,26 +1731,26 @@
 
     /* Vial cards: calm neutral surface, 12px radius, small soft shadow. */
     .pf-drawer--nd .pf-tube {
-      background: var(--pf-nd-card);
-      border: 1px solid var(--pf-nd-line);
+      background: var(--pf-card);
+      border: 1px solid var(--pf-line);
       border-radius: 12px;
-      box-shadow: var(--pf-nd-shadow);
+      box-shadow: var(--pf-shadow);
     }
-    .pf-drawer--nd .pf-tube:hover:not([disabled]) { border-color: var(--pf-nd-sel-border); }
+    .pf-drawer--nd .pf-tube:hover:not([disabled]) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-drawer--nd .pf-tube:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 2px; }
     /* Drawn: a light tint + the check; a quick, subtle confirmation pop. */
     .pf-drawer--nd .pf-tube--done {
-      background: color-mix(in srgb, var(--color-success, #10b981) 7%, var(--pf-nd-card));
+      background: color-mix(in srgb, var(--color-success, #10b981) 7%, var(--pf-card));
       border-color: color-mix(in srgb, var(--color-success, #10b981) 45%, transparent);
-      box-shadow: var(--pf-nd-shadow);
-      animation: pf-nd-drawn 230ms var(--pf-nd-spring) both;
+      box-shadow: var(--pf-shadow);
+      animation: pf-drawn 230ms var(--pf-spring) both;
     }
-    @keyframes pf-nd-drawn { 0% { transform: scale(0.97); } 60% { transform: scale(1.015); } 100% { transform: none; } }
-    .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: pf-nd-check 220ms ease-out both; }
-    @keyframes pf-nd-check { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    @keyframes pf-drawn { 0% { transform: scale(0.97); } 60% { transform: scale(1.015); } 100% { transform: none; } }
+    .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: pf-check 220ms ease-out both; }
+    @keyframes pf-check { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
     .pf-drawer--nd .pf-tube--selected {
-      background: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 7%, var(--pf-nd-card));
-      border-color: var(--pf-nd-sel-border);
+      background: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 7%, var(--pf-card));
+      border-color: var(--pf-sel-border);
     }
     .pf-drawer--nd .pf-tube__code { font-family: inherit; font-variant-numeric: tabular-nums; }
 
@@ -1748,22 +1763,22 @@
     }
     .pf-drawer--nd .pf-tube__stamp--pending {
       color: var(--text-secondary);
-      background: var(--pf-nd-chip);
-      border-color: var(--pf-nd-line);
+      background: var(--pf-chip);
+      border-color: var(--pf-line);
     }
     /* EXTERNAL tag: a neutral rounded rectangle; marked = neutral selected. */
     .pf-drawer--nd .pf-tube__extflag {
       border-radius: 8px;
-      border: 1px solid var(--pf-nd-line);
-      background: var(--pf-nd-card);
+      border: 1px solid var(--pf-line);
+      background: var(--pf-card);
       color: var(--text-tertiary);
-      box-shadow: var(--pf-nd-shadow);
+      box-shadow: var(--pf-shadow);
     }
-    .pf-drawer--nd .pf-tube__extflag:not(:disabled):hover { color: var(--text-primary); border-color: var(--pf-nd-sel-border); }
+    .pf-drawer--nd .pf-tube__extflag:not(:disabled):hover { color: var(--text-primary); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-drawer--nd .pf-tube__extflag--on {
       color: var(--text-primary);
-      background: var(--pf-nd-chip);
-      border: 1px solid var(--pf-nd-sel-border);
+      background: var(--pf-chip);
+      border: 1px solid var(--pf-sel-border);
       box-shadow: none;
     }
     .pf-drawer--nd .pf-tube__extlabel { color: var(--text-tertiary); }
@@ -1772,25 +1787,25 @@
        this full-screen flow is open, so no nav clearance). */
     .pf-drawer--nd .pf-drawer__foot {
       position: sticky; bottom: 0; z-index: 2;
-      background: var(--pf-nd-card);
-      border-top: 1px solid var(--pf-nd-line);
+      background: var(--pf-card);
+      border-top: 1px solid var(--pf-line);
       padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
     }
     .pf-drawer--nd .pf-drawer__remaining {
       font-family: 'Noto Sans', system-ui, sans-serif; font-size: 12px; font-weight: 500;
       color: var(--text-tertiary);
-      padding: 4px 10px; border-radius: 8px; background: var(--pf-nd-chip);
+      padding: 4px 10px; border-radius: 8px; background: var(--pf-chip);
     }
     .pf-drawer--nd .pf-drawer__done-stamp { border-radius: 10px; }
     /* Secondary = neutral; primary gradient ONLY on the main CTA. */
     .pf-drawer--nd .pf-drawer__foot .pf-btn { border-radius: 10px; min-height: 44px; }
     .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost {
-      background: var(--pf-nd-card);
-      border: 1px solid var(--pf-nd-line);
+      background: var(--pf-card);
+      border: 1px solid var(--pf-line);
       color: var(--text-primary);
-      box-shadow: var(--pf-nd-shadow);
+      box-shadow: var(--pf-shadow);
     }
-    .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost:hover:not(:disabled) { border-color: var(--pf-nd-sel-border); background: var(--pf-nd-card); }
+    .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost:hover:not(:disabled) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: var(--pf-card); }
     .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost:disabled { opacity: 0.55; }
     .pf-drawer--nd .pf-drawer__foot .pf-btn-primary {
       background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
@@ -1829,7 +1844,7 @@
       .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: none; }
     }
 
-    /* ════ Collect on the nd pattern (docs/ND-PATTERN.md) ════════════════
+    /* ════ Collect on the nd pattern (docs/PF-PATTERN.md) ════════════════
        Band (identical to every step) with the pill as the CONTEXT BAR →
        VIALS main card with compact tiles → COLLECTION side card with the
        billing-card footer. Phones: pill = patient + order; filters in the
@@ -1845,13 +1860,13 @@
     .pf-sc-chip__name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pf-sc-chip__meta { flex: none; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
     .pf-sc-chip--order, .pf-sc-chip--samples { flex: none; }
-    .pf-sc-chip .nd-mono { font-size: 12px; color: var(--text-primary); }
+    .pf-sc-chip .pf-mono { font-size: 12px; color: var(--text-primary); }
     .pf-sc-samples { position: relative; flex: none; }
     .pf-sc-samples__pop {
       display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 5;
       flex-direction: column; gap: 4px; padding: 8px 10px; min-width: 180px;
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm);
-      box-shadow: var(--nd-shadow-sm); font-size: 12px;
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm);
+      box-shadow: var(--pf-shadow-sm); font-size: 12px;
     }
     .pf-sc-samples__pop--open,
     .pf-sc-samples:hover .pf-sc-samples__pop,
@@ -1879,7 +1894,7 @@
       display: flex; flex-direction: row; align-items: center; gap: 12px;
       min-height: 112px; padding: 8px 12px 8px 10px;
       text-align: left;
-      border-radius: var(--nd-radius, 12px);
+      border-radius: var(--pf-radius, 12px);
     }
     .pf-drawer--nd .pf-tube-wrap:has(.pf-tube__extflag) .pf-sc-tile { padding-right: 104px; }
     .pf-drawer--nd .pf-sc-tile::before { display: none; }
@@ -1905,7 +1920,24 @@
     .pf-sc-sumrow { min-height: 40px; padding: 6px 10px; }
     .pf-sc-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
     .pf-sc-sumrow__state { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
-    .pf-sc-labelinfo { margin: 0; font-size: 12px; color: var(--text-tertiary); text-wrap: pretty; }
+    .pf-sc-labelinfo {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 0 0 2px;
+      font-size: 11.5px;
+      line-height: 1.35;
+      color: var(--text-tertiary);
+      text-wrap: pretty;
+    }
+    .pf-sc-foot {
+      gap: 8px;
+      padding: 10px 14px 12px;
+    }
+    .pf-sc-foot .pf-btn {
+      min-height: 40px;
+      height: 40px;
+      font-size: 12.5px;
+    }
     .pf-sc-foot .pf-drawer__remaining { font-family: inherit; font-size: 12px; color: var(--text-tertiary); align-self: center; }
     .pf-sc-foot .pf-btn__icon { display: none; }
 
@@ -1916,7 +1948,7 @@
       .pf-sc-chip__meta { display: none; }
       .pf-sc-chip--order .pf-sc-chip__meta { display: none; }
       .pf-sc-vials__filters { display: inline-flex; flex: 1 0 100%; overflow-x: auto; scrollbar-width: none; }
-      .pf-drawer--nd .nd-card__note { display: none; }
+      .pf-drawer--nd .pf-card__note { display: none; }
       .pf-sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .pf-drawer--nd .pf-tube.pf-sc-tile { min-height: 100px; gap: 8px; padding: 6px 8px; }
       .pf-drawer--nd .pf-sc-tile .pf-vial { height: 86px; }
@@ -1927,10 +1959,10 @@
       .pf-sc-side { display: none; }
       .pf-sc-side.pf-sc-side--open {
         display: flex;
-        position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1002;
-        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+        position: fixed; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 1002;
+        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
         border-radius: 20px 20px 0 0;
-        animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+        animation: pf-rise var(--pf-dur-sheet, 360ms) var(--pf-spring-bounce, ease) both;
       }
       .pf-sc-side__close { display: inline-flex; }
       .pf-sc-backdrop { z-index: 1001; }
@@ -1958,19 +1990,26 @@
 
     /* ════ Round 2 (owner): nav always visible, External row, adaptive tiles ════ */
     /* The drawer ends ABOVE the always-visible bottom navbar. */
-    .pf-drawer.pf-drawer--nd.nd-fullscreen { bottom: var(--nd-nav-h, 0px); height: auto; }
+    .pf-drawer.pf-drawer--nd,
+    .pf-drawer.pf-drawer--nd.pf-fullscreen,
+    .pf-drawer.pf-fullscreen,
+    .pf-drawer.pf-drawer--pf.pf-fullscreen {
+      bottom: var(--pf-nav-h, 64px);
+      height: auto;
+      max-height: calc(100dvh - var(--pf-nav-h, 64px));
+    }
 
     /* Tile = one card: the tap area (tube + text) on top, then a divider
        and the External row. The two never share a hit area. */
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap {
       display: flex; flex-direction: column;
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius, 12px); box-shadow: var(--nd-shadow-sm);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius, 12px); box-shadow: var(--pf-shadow-sm);
       overflow: hidden;
       transition: background 0.25s ease 0.6s, border-color 0.25s ease 0.6s;
     }
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(.pf-tube--done) {
-      background: var(--nd-done-tint);
+      background: var(--pf-done-tint);
       border-color: color-mix(in srgb, var(--color-success, #10b981) 45%, transparent);
     }
     .pf-drawer--nd .pf-sc-grid .pf-tube.pf-sc-tile {
@@ -1987,16 +2026,16 @@
       position: static;
       width: 100%; min-height: 44px; height: 44px;
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      border: 0; border-top: 1px solid var(--nd-line); border-radius: 0;
+      border: 0; border-top: 1px solid var(--pf-line); border-radius: 0;
       background: transparent; box-shadow: none;
       color: var(--text-secondary);
       font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none;
     }
     .pf-drawer--nd .pf-sc-grid .pf-sc-ext::after { display: none; }
     .pf-drawer--nd .pf-sc-grid .pf-sc-ext .pf-tube__extflag-txt { display: inline; }
-    .pf-drawer--nd .pf-sc-grid .pf-sc-ext:not(:disabled):hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext:not(:disabled):hover { background: var(--pf-chip-bg); color: var(--text-primary); }
     .pf-drawer--nd .pf-sc-grid .pf-sc-ext.pf-tube__extflag--on {
-      background: var(--nd-sel-bg); color: var(--text-primary); border: 0; border-top: 1px solid var(--nd-sel-border);
+      background: var(--pf-sel-bg); color: var(--text-primary); border: 0; border-top: 1px solid var(--pf-sel-border);
     }
 
     /* Adaptive size by vial count — the tube (and its fill) is the hero. */
@@ -2033,28 +2072,28 @@
        data and stay exactly as they are. ════ */
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(.pf-tube--done),
     .pf-drawer--nd .pf-tube--done {
-      background: var(--nd-done-tint);
-      border-color: var(--nd-sel-border);
+      background: var(--pf-done-tint);
+      border-color: var(--pf-sel-border);
     }
     .pf-drawer--nd .pf-sc-grid .pf-tube.pf-sc-tile.pf-tube--done { background: transparent; }
     .pf-drawer--nd .pf-tube__stamp,
     .pf-drawer--nd .pf-tube__stamp--pending {
       color: var(--text-secondary);
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
+      background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line);
       font-variant-numeric: tabular-nums;
     }
     .pf-drawer--nd .pf-tube__stamp svg { color: var(--violet-text, #6d28d9); }
     .pf-drawer--nd .pf-drawer__done-stamp {
       color: var(--text-primary);
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
+      background: var(--pf-chip-bg);
+      border: 1px solid var(--pf-line);
     }
     .pf-drawer--nd .pf-drawer__done-stamp svg { color: var(--violet-text, #6d28d9); }
-    .pf-drawer--nd .pf-sc-sumrow.nd-row--done { background: var(--nd-card-bg); border-color: var(--nd-line); }
+    .pf-drawer--nd .pf-sc-sumrow.pf-row--done { background: var(--pf-card-bg); border-color: var(--pf-line); }
     .pf-sc-sumrow__check { flex: none; color: var(--violet-text, #6d28d9); }
     .pf-drawer--nd .pf-tube:hover:not([disabled]),
-    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:hover { border-color: var(--nd-sel-border); }
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-drawer--nd .pf-tube:focus-visible { outline-color: var(--color-violet-500, #8b5cf6); }
 
     /* ════ Round 3 (owner): symmetric tiles, lean COLLECTION panel ════ */
@@ -2078,7 +2117,7 @@
       display: inline-flex; align-items: center; justify-content: center;
       width: 22px; height: 22px; border-radius: 999px;
       background: var(--color-violet-600, #7c3aed); color: #fff;
-      box-shadow: 0 0 0 2px var(--nd-card-bg);
+      box-shadow: 0 0 0 2px var(--pf-card-bg);
       animation: pf-tick-pop 0.3s cubic-bezier(0.2, 0.85, 0.3, 1) 0.6s both;
     }
     .pf-sc-grid--xl { --pf-illo-w: 150px; --pf-illo-h: clamp(170px, 30dvh, 240px); }
@@ -2114,15 +2153,15 @@
        Same family, lighter weights, smaller sizes. The panel fills its
        space with what the tiles DON'T show: tests per tube (+ volume) and
        the order's timeline. */
-    .pf-drawer--nd .nd-band-chip { font-size: 12.5px; gap: 5px; }
-    .pf-drawer--nd .nd-band-chip strong { font-size: 13.5px; font-weight: 500; }
+    .pf-drawer--nd .pf-band-chip { font-size: 12.5px; gap: 5px; }
+    .pf-drawer--nd .pf-band-chip strong { font-size: 13.5px; font-weight: 500; }
     .pf-drawer--nd .pf-sc-chip__name { font-weight: 500; }
     .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__label { font-size: 13.5px; font-weight: 500; }
     .pf-sc-grid--xl .pf-tube__label { font-size: 14px !important; }
     .pf-sc-status { font-weight: 500; font-size: 12.5px; height: 32px; }
-    .pf-drawer--nd .nd-card__label { font-weight: 500; letter-spacing: 0.1em; font-size: 12px; }
+    .pf-drawer--nd .pf-card__label { font-weight: 500; letter-spacing: 0.1em; font-size: 12px; }
 
-    .pf-sc-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-sc-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
     .pf-sc-sec__title {
       margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--text-muted);
@@ -2137,7 +2176,7 @@
     .pf-sc-tests__head::-webkit-details-marker { display: none; }
     .pf-sc-tests__all-head { margin: 0; }
     .pf-sc-tests__all-head .pf-sc-tests__count { margin-left: auto; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-sc-tests__chev { flex: none; color: var(--text-tertiary); transition: transform var(--nd-dur-fast, 200ms) ease; }
+    .pf-sc-tests__chev { flex: none; color: var(--text-tertiary); transition: transform var(--pf-dur-fast, 200ms) ease; }
     .pf-sc-tests__all[open] > .pf-sc-tests__all-head > .pf-sc-tests__chev,
     .pf-sc-tests__accordion[open] > .pf-sc-tests__head > .pf-sc-tests__chev { transform: rotate(180deg); }
     .pf-sc-tests__all-head:focus-visible,
@@ -2155,11 +2194,11 @@
       min-height: 30px; font-size: 12.5px; color: var(--text-tertiary);
     }
     .pf-sc-timeline__step:not(:last-child)::after {
-      content: ''; position: absolute; left: 4px; top: 21px; bottom: -9px; width: 1px; background: var(--nd-line);
+      content: ''; position: absolute; left: 4px; top: 21px; bottom: -9px; width: 1px; background: var(--pf-line);
     }
     .pf-sc-timeline__mark {
       flex: none; width: 9px; height: 9px; border-radius: 999px;
-      border: 1.5px solid var(--nd-sel-border); background: var(--nd-card-bg);
+      border: 1.5px solid var(--pf-sel-border); background: var(--pf-card-bg);
     }
     .pf-sc-timeline__step--done { color: var(--text-primary); }
     .pf-sc-timeline__step--done .pf-sc-timeline__mark { border-color: var(--color-violet-600, #7c3aed); background: var(--color-violet-600, #7c3aed); }
@@ -2182,16 +2221,16 @@
     /* Deep-link loading in the new design: the band + card skeleton, not a
        full-screen loader, so arriving from Order & Payments is seamless. */
     .pf-sc-skel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-    .pf-sc-skel .nd-card__body { gap: 12px; }
-    .pf-sc-skel__bar { height: 12px; border-radius: 6px; background: var(--nd-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
-    .pf-sc-skel__tile { height: 220px; border-radius: var(--nd-radius, 12px); background: var(--nd-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
+    .pf-sc-skel .pf-card__body { gap: 12px; }
+    .pf-sc-skel__bar { height: 12px; border-radius: 6px; background: var(--pf-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
+    .pf-sc-skel__tile { height: 220px; border-radius: var(--pf-radius, 12px); background: var(--pf-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
     .pf-sc-skel__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); justify-content: start; gap: 12px; }
     @keyframes pf-sc-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-skel__bar, .pf-sc-skel__tile { animation: none; } }
 
 
 /* Outsourced tube: identical tile; a small neutral "Outsourced" mark sits at
-   the top (nd-chip — no new colours). */
+   the top (pf-chip — no new colours). */
 .pf-tube__out { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 1;
   height: 20px; padding: 0 8px; font-size: 10.5px; pointer-events: none; }
 
@@ -2204,13 +2243,13 @@
     .pf-sc-embed .pf-sc__section { margin: 14px 2px 8px; }
     :host-context(.design-new) .pf-sc-embed .pf-scan {
       align-items: center; gap: 10px; margin: 0; padding: 6px 12px 6px 6px;
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius-sm, 10px); box-shadow: none;
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius-sm, 10px); box-shadow: none;
     }
-    :host-context(.design-new) .pf-sc-embed .pf-scan:focus-within { border-color: var(--nd-sel-border, #7c3aed); }
+    :host-context(.design-new) .pf-sc-embed .pf-scan:focus-within { border-color: var(--pf-sel-border, #7c3aed); }
     :host-context(.design-new) .pf-sc-embed .pf-scan__icon-btn {
       width: 36px; height: 36px; border-radius: 8px;
-      background: var(--nd-chip-bg, rgba(124, 58, 237, 0.08)); color: var(--violet-text, #6d28d9);
+      background: var(--pf-chip-bg, rgba(124, 58, 237, 0.08)); color: var(--violet-text, #6d28d9);
     }
     :host-context(.design-new) .pf-sc-embed .pf-scan__label {
       font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-tertiary);
@@ -2220,16 +2259,16 @@
       font-weight: 500; letter-spacing: 0.08em; color: var(--text-tertiary);
     }
     :host-context(.design-new) .pf-sc-embed .pf-sc__card {
-      padding: 12px 12px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg); border-color: var(--nd-line);
+      padding: 12px 12px; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg); border-color: var(--pf-line);
     }
     :host-context(.design-new) .pf-sc-embed .pf-sc__card:hover {
-      background: var(--nd-sel-bg, rgba(124, 58, 237, 0.04)); border-color: var(--nd-sel-border, rgba(124, 58, 237, 0.4));
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
       box-shadow: none;
     }
     :host-context(.design-new) .pf-sc-embed .pf-sc__who-name { font-size: 13.5px; font-weight: 500; }
     :host-context(.design-new) .pf-sc-embed .pf-sc__empty {
-      border-radius: var(--nd-radius-sm, 10px); background: transparent; border-color: var(--nd-line);
+      border-radius: var(--pf-radius-sm, 10px); background: transparent; border-color: var(--pf-line);
     }
     /* iOS focus-zoom guard: inputs under 16px zoom the page on phones. */
     @media (max-width: 640px) {
@@ -2241,32 +2280,32 @@
       display: flex;
       flex-direction: column;
       margin-top: 16px;
-      background: var(--nd-card-bg, #ffffff);
-      border: 1px solid var(--nd-line, #e2e8f0);
-      border-radius: var(--nd-radius-card, 16px);
-      box-shadow: var(--nd-shadow-sm);
+      background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--pf-line, #e2e8f0);
+      border-radius: var(--pf-radius-card, 16px);
+      box-shadow: var(--pf-shadow-sm);
       overflow: hidden;
     }
-    .pf-sc-queue-card .nd-card__head {
+    .pf-sc-queue-card .pf-card__head {
       padding: 14px 18px;
       display: flex;
       align-items: center;
       gap: 10px;
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg));
-      border-bottom: 1px solid var(--nd-line, #e2e8f0);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+      border-bottom: 1px solid var(--pf-line, #e2e8f0);
     }
-    .pf-sc-queue-card .nd-card__icon {
+    .pf-sc-queue-card .pf-card__icon {
       width: 28px;
       height: 28px;
       border-radius: 8px;
-      background: var(--nd-chip-bg, rgba(124, 58, 237, 0.08));
+      background: var(--pf-chip-bg, rgba(124, 58, 237, 0.08));
       color: var(--violet-text, #7c3aed);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
     }
-    .pf-sc-queue-card .nd-card__label {
+    .pf-sc-queue-card .pf-card__label {
       font-size: 11.5px;
       font-weight: 700;
       letter-spacing: 0.1em;
@@ -2306,20 +2345,20 @@
       justify-content: space-between;
       gap: 12px;
       padding: 14px 16px;
-      background: var(--nd-card-bg, #ffffff);
-      border: 1px solid var(--nd-line, #e2e8f0);
-      border-radius: var(--nd-radius, 12px);
+      background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--pf-line, #e2e8f0);
+      border-radius: var(--pf-radius, 12px);
       box-sizing: border-box;
       width: 100%;
-      transition: border-color var(--nd-dur-fast, 200ms) ease,
-                  background var(--nd-dur-fast, 200ms) ease,
-                  box-shadow var(--nd-dur-fast, 200ms) ease,
+      transition: border-color var(--pf-dur-fast, 200ms) ease,
+                  background var(--pf-dur-fast, 200ms) ease,
+                  box-shadow var(--pf-dur-fast, 200ms) ease,
                   transform 0.08s ease;
     }
     .pf-sc__pcard:hover {
-      border-color: var(--nd-sel-border, rgba(124, 58, 237, 0.4));
-      background: var(--nd-sel-bg, rgba(124, 58, 237, 0.02));
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg, #ffffff));
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);
     }
     .pf-sc__pcard:active {
       transform: scale(0.99);

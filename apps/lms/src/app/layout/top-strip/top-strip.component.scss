@@ -526,7 +526,7 @@
 }
 
 /* ── Presence status (Teams-style presets) ─────────────────────────
-   The dot itself: solid color per preset; DND-grade (dnd / surgery)
+   The dot itself: solid color per preset; DPF-grade (dnd / surgery)
    carries a white dash; Away is a hollow ring. Colors come from
    shared/models/presence.model.ts — keep them in sync. */
 .pf-status-dot {
@@ -1251,7 +1251,7 @@ a.pf-ts-tenant:hover {
    last page icon so the pages read as their own group. */
 :host-context(.design-new.nav-bottom) .pf-topnav-center {
   padding-right: 8px;
-  border-right: 1px solid var(--nd-line, rgba(148, 163, 184, 0.35));
+  border-right: 1px solid var(--pf-line, rgba(148, 163, 184, 0.35));
 }
 /* ── Bottom-bar layout (all widths): a plain self-aligning flex row —
    [pf glyph][pages, LEFT-aligned][spacer][branch][bell][avatar]. The
@@ -1426,22 +1426,22 @@ a.pf-ts-tenant:hover {
   display: inline-flex; align-items: center; gap: 7px;
   flex-shrink: 0;
   height: 28px; padding: 0 10px 0 9px;
-  border-radius: var(--nd-radius-chip, 8px);
-  background: var(--nd-card-bg, var(--bg-card-solid, #fff));
-  border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
+  border-radius: var(--pf-radius-chip, 8px);
+  background: var(--pf-card-bg, var(--bg-card-solid, #fff));
+  border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
   box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
   color: var(--text-primary);
   font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
   font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
   text-decoration: none; white-space: nowrap; cursor: pointer;
   transition:
-    transform var(--nd-dur-fast, 200ms) var(--nd-spring, ease),
-    box-shadow var(--nd-dur-fast, 200ms) ease,
-    border-color var(--nd-dur-fast, 200ms) ease,
-    background-color var(--nd-dur-fast, 200ms) ease;
+    transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease),
+    box-shadow var(--pf-dur-fast, 200ms) ease,
+    border-color var(--pf-dur-fast, 200ms) ease,
+    background-color var(--pf-dur-fast, 200ms) ease;
 }
 :host-context(.dark) .pf-draftshelf__chip {
-  background: var(--nd-chip-bg, rgba(255, 255, 255, 0.06));
+  background: var(--pf-chip-bg, rgba(255, 255, 255, 0.06));
   border-color: rgba(255, 255, 255, 0.10);
   box-shadow: none;
 }
@@ -1457,7 +1457,7 @@ a.pf-ts-tenant:hover {
 @media (hover: hover) {
   .pf-draftshelf__chip:hover:not([aria-current]) {
     transform: translateY(-1px);
-    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--nd-line, #e5e7eb));
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--pf-line, #e5e7eb));
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);
   }
   :host-context(.dark) .pf-draftshelf__chip:hover:not([aria-current]) {
@@ -1492,9 +1492,9 @@ a.pf-ts-tenant:hover {
 .pf-draftshelf__menu { flex-shrink: 0; }
 .pf-draftshelf__more { gap: 4px; padding: 0 8px 0 10px; color: var(--text-secondary); font-weight: 600; }
 .pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
-.pf-draftshelf__more svg { flex-shrink: 0; opacity: 0.7; transition: transform var(--nd-dur-fast, 200ms) var(--nd-spring, ease); }
+.pf-draftshelf__more svg { flex-shrink: 0; opacity: 0.7; transition: transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease); }
 .pf-draftshelf__more[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--nd-line, #e5e7eb));
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--pf-line, #e5e7eb));
   color: var(--text-primary);
 }
 .pf-draftshelf__more[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -1591,7 +1591,7 @@ a.pf-ts-tenant:hover {
 .pf-msgs-pop__name { font-size: 12.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Disambiguator (context thread / same-name colleague / group) — quiet. */
 .pf-msgs-pop__disamb { font-weight: 400; color: var(--text-muted); }
-.pf-msgs-pop__item { --pf-pdot-ring: var(--pf-msgs-pop-bg, var(--nd-card-bg, #fff)); }
+.pf-msgs-pop__item { --pf-pdot-ring: var(--pf-msgs-pop-bg, var(--pf-card-bg, #fff)); }
 .pf-msgs-pop__last { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pf-msgs-pop__unread {
   flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
@@ -1681,7 +1681,7 @@ a.pf-ts-tenant:hover {
 :host-context(.design-new.nav-bottom) .pf-topnav-link:hover { background: transparent; }
 @media (hover: hover) {
   :host-context(.design-new.nav-bottom) .pf-topnav-link:not(.pf-topnav-link--on):hover::before {
-    background: var(--nd-chip-bg, rgba(15, 23, 42, 0.05));
+    background: var(--pf-chip-bg, rgba(15, 23, 42, 0.05));
   }
 }
 :host-context(.design-new.nav-bottom) .pf-topnav-link--on {
@@ -1693,8 +1693,8 @@ a.pf-ts-tenant:hover {
 }
 :host-context(.design-new.nav-bottom) .pf-topnav-link--on svg { opacity: 1; }
 :host-context(.design-new.nav-bottom) .pf-topnav-link--on::before {
-  background: var(--nd-card-bg, #ffffff);
-  box-shadow: 0 0 0 1px var(--nd-line, #e5e7eb), 0 1px 2px rgba(15, 23, 42, 0.10);
+  background: var(--pf-card-bg, #ffffff);
+  box-shadow: 0 0 0 1px var(--pf-line, #e5e7eb), 0 1px 2px rgba(15, 23, 42, 0.10);
 }
 :host-context(.dark.design-new.nav-bottom) .pf-topnav-link--on {
   color: #f5f3ff;

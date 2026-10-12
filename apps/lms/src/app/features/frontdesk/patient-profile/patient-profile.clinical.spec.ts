@@ -4,7 +4,7 @@ import {
 } from './patient-profile.clinical';
 
 /**
- * Clinical-first patient profile helpers (docs/ND-PATTERN.md §22): the
+ * Clinical-first patient profile helpers (docs/PF-PATTERN.md §22): the
  * snapshot's "needs attention" + deltas, the cumulative grid (grouping,
  * newest-first visits, unit-mismatch flag), sparklines, the permission-gated
  * quick actions and a timeline that only ever shows REAL records.

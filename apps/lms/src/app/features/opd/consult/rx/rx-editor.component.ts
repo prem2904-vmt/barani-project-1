@@ -63,7 +63,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
           @let open = openTok()?.key === l.key ? openTok()!.tok : null;
           @let sn = sentence(l);
           <div class="rl" [class.rl--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)" [class.rl--flash]="flash() === l.key" [attr.data-key]="l.key">
-            <span class="rl__no nd-num">{{ i + 1 }}</span>
+            <span class="rl__no pf-num">{{ i + 1 }}</span>
             <div class="rl__drug">
               <b class="rl__name">{{ l.drug.name }}</b>
               @if (l.drug.strength && !nameHasStrength(l.drug)) { <span class="rl__str">{{ l.drug.strength }}</span> }
@@ -74,15 +74,15 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
             </div>
             <div class="rl__toks">
               @if (showDose(l)) {
-                <button type="button" class="tok nd-num" data-tok="dose" [disabled]="readonly()" [attr.aria-expanded]="open === 'dose'" (click)="toggleTok(l, 'dose')" [attr.aria-label]="'Dose ' + doseShort(l.drug, l.line.dose)">{{ doseShort(l.drug, l.line.dose) }}</button>
+                <button type="button" class="tok pf-num" data-tok="dose" [disabled]="readonly()" [attr.aria-expanded]="open === 'dose'" (click)="toggleTok(l, 'dose')" [attr.aria-label]="'Dose ' + doseShort(l.drug, l.line.dose)">{{ doseShort(l.drug, l.line.dose) }}</button>
               }
               @if (sites(l).length) {
                 <button type="button" class="tok" data-tok="site" [disabled]="readonly()" [attr.aria-expanded]="open === 'site'" (click)="toggleTok(l, 'site')" aria-label="Where">{{ l.line.site || 'Where?' }}</button>
               }
-              <button #patTok type="button" class="tok nd-num" data-tok="pat" [disabled]="readonly()" [attr.aria-expanded]="open === 'pat'" (click)="toggleTok(l, 'pat')" [attr.aria-label]="'When: ' + pattern(l)">{{ pattern(l) }}</button>
+              <button #patTok type="button" class="tok pf-num" data-tok="pat" [disabled]="readonly()" [attr.aria-expanded]="open === 'pat'" (click)="toggleTok(l, 'pat')" [attr.aria-label]="'When: ' + pattern(l)">{{ pattern(l) }}</button>
               @if (canDays(l)) {
-                <button type="button" class="tok nd-num" data-tok="days" [disabled]="readonly()" [attr.aria-expanded]="open === 'days'" (click)="toggleTok(l, 'days')" [attr.aria-label]="'For: ' + days(l)">{{ days(l) }}</button>
-              } @else { <span class="tok tok--static nd-num">{{ days(l) }}</span> }
+                <button type="button" class="tok pf-num" data-tok="days" [disabled]="readonly()" [attr.aria-expanded]="open === 'days'" (click)="toggleTok(l, 'days')" [attr.aria-label]="'For: ' + days(l)">{{ days(l) }}</button>
+              } @else { <span class="tok tok--static pf-num">{{ days(l) }}</span> }
               @if (hasFood(l)) {
                 <button type="button" class="tok" data-tok="food" [disabled]="readonly()" [attr.aria-expanded]="open === 'food'" (click)="toggleTok(l, 'food')" [attr.aria-label]="'Food: ' + food(l)">{{ food(l) }}</button>
               }
@@ -96,7 +96,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
             @if (open) {
               <div class="rl__opts" role="listbox" [attr.aria-label]="tokTitle(open)" (keydown)="onOptsKey($event, l)">
                 @for (o of optionsFor(l, open); track o.id) {
-                  <button type="button" class="nd-num" role="option" [attr.aria-pressed]="o.id === selectedFor(l, open)" [attr.aria-selected]="o.id === selectedFor(l, open)"
+                  <button type="button" class="pf-num" role="option" [attr.aria-pressed]="o.id === selectedFor(l, open)" [attr.aria-selected]="o.id === selectedFor(l, open)"
                           [attr.data-opt]="o.id" (click)="pickOpt(l, open, o.id, $event)">{{ o.label }}</button>
                 }
               </div>
@@ -105,7 +105,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
             <p class="rl__say" [class.rl__say--empty]="!sn.qty">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
               <span class="rl__sent">{{ sn.text }}</span>
-              @if (sn.qty) { <span class="rl__qty nd-num">{{ sn.qty }}</span> }
+              @if (sn.qty) { <span class="rl__qty pf-num">{{ sn.qty }}</span> }
             </p>
 
             @if (hit) {
@@ -161,13 +161,13 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
             <div class="cmp__line">
               <b class="cmp__name">{{ c.drug.name }}@if (c.drug.strength && !nameHasStrength(c.drug)) { <span> {{ c.drug.strength }}</span> }</b>
               <span class="cmp__chip-wrap">
-                <button type="button" class="cmp__chip nd-num" [class.on]="cOpen() === 'pat'" (click)="cOpen.set(cOpen() === 'pat' ? null : 'pat')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'pat'">{{ patternOf(c.line) }}<span aria-hidden="true">▾</span></button>
-                @if (cOpen() === 'pat') { <span class="cmp__menu" role="listbox" aria-label="When">@for (o of composePatterns; track o.id) { <button type="button" class="nd-num" [attr.aria-pressed]="o.id === patIdOf(c.line)" (click)="composeSet('pat', o.id)">{{ o.label }}</button> }</span> }
+                <button type="button" class="cmp__chip pf-num" [class.on]="cOpen() === 'pat'" (click)="cOpen.set(cOpen() === 'pat' ? null : 'pat')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'pat'">{{ patternOf(c.line) }}<span aria-hidden="true">▾</span></button>
+                @if (cOpen() === 'pat') { <span class="cmp__menu" role="listbox" aria-label="When">@for (o of composePatterns; track o.id) { <button type="button" class="pf-num" [attr.aria-pressed]="o.id === patIdOf(c.line)" (click)="composeSet('pat', o.id)">{{ o.label }}</button> }</span> }
               </span>
               @if (daysOk(c.line)) {
                 <span class="cmp__chip-wrap">
-                  <button type="button" class="cmp__chip nd-num" [class.on]="cOpen() === 'days'" (click)="cOpen.set(cOpen() === 'days' ? null : 'days')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'days'">{{ daysOf(c) }}<span aria-hidden="true">▾</span></button>
-                  @if (cOpen() === 'days') { <span class="cmp__menu" role="listbox" aria-label="For how long">@for (o of daysOpts; track o.id) { <button type="button" class="nd-num" [attr.aria-pressed]="o.id === dayIdOf(c)" (click)="composeSet('days', o.id)">{{ o.label }}</button> }</span> }
+                  <button type="button" class="cmp__chip pf-num" [class.on]="cOpen() === 'days'" (click)="cOpen.set(cOpen() === 'days' ? null : 'days')" aria-haspopup="listbox" [attr.aria-expanded]="cOpen() === 'days'">{{ daysOf(c) }}<span aria-hidden="true">▾</span></button>
+                  @if (cOpen() === 'days') { <span class="cmp__menu" role="listbox" aria-label="For how long">@for (o of daysOpts; track o.id) { <button type="button" class="pf-num" [attr.aria-pressed]="o.id === dayIdOf(c)" (click)="composeSet('days', o.id)">{{ o.label }}</button> }</span> }
                 </span>
               }
               @if (foodOk(c.drug)) {
@@ -176,13 +176,13 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
                   @if (cOpen() === 'food') { <span class="cmp__menu" role="listbox" aria-label="Food">@for (o of foodOpts; track o.id) { <button type="button" [attr.aria-pressed]="o.id === (c.line.food ?? '')" (click)="composeSet('food', o.id)">{{ o.label }}</button> }</span> }
                 </span>
               }
-              <button #cAdd type="button" class="nd-btn nd-btn--primary cmp__add" (click)="composeAdd()" data-cadd>Add ↵</button>
+              <button #cAdd type="button" class="pf-btn pf-btn--primary cmp__add" (click)="composeAdd()" data-cadd>Add ↵</button>
               <button #cAdv type="button" class="cmp__link" (click)="openComposeMore(cAdv)">Advanced</button>
               <button type="button" class="rl__x" (click)="cancelCompose()" aria-label="Cancel">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
-            <p class="cmp__say">{{ sentenceOf(c).text }}@if (sentenceOf(c).qty) { · <b class="nd-num">{{ sentenceOf(c).qty }}</b> }</p>
+            <p class="cmp__say">{{ sentenceOf(c).text }}@if (sentenceOf(c).qty) { · <b class="pf-num">{{ sentenceOf(c).qty }}</b> }</p>
           </div>
         } @else {
           <div class="rxe__bar">
@@ -199,7 +199,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
                     <button type="button" class="rxe__sg" role="option" [attr.aria-selected]="i === active()" (mousedown)="$event.preventDefault()" (click)="addSuggestion(s)">
                       @if (s.kind === 'free') { <b>Add “{{ s.drug.name }}” as written</b> }
                       @else { <b>{{ s.drug.name }}@if (s.drug.strength && !nameHasStrength(s.drug)) { {{ ' ' + s.drug.strength }} }</b> }
-                      <span class="rxe__sgd nd-num">{{ s.kind === 'parsed' ? sentenceOf({ drug: s.drug, line: s.line }).text : s.meta }}</span>
+                      <span class="rxe__sgd pf-num">{{ s.kind === 'parsed' ? sentenceOf({ drug: s.drug, line: s.line }).text : s.meta }}</span>
                       @if (s.kind !== 'free' && hitOfDrug(s.drug)) { <span class="rxe__sgw">Allergy</span> }
                       @else if (s.kind !== 'free' && pregHitOfDrug(s.drug); as ph) { <span class="rxe__sgw">{{ ph.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
                     </button>
@@ -227,26 +227,26 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .rxe { display: flex; flex-direction: column; gap: 8px; }
     .rxe__bar { position: relative; }
     .rxe__sgm { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding-right: 8px; }
-    .rxe__sgm.act { background: var(--nd-chip-bg); }
+    .rxe__sgm.act { background: var(--pf-chip-bg); }
     .rxe__sgm .rxe__sg { flex: 1; background: none !important; }
     .rxe__sgd { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
-    .rxe__chg { flex: none; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+    .rxe__chg { flex: none; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       font: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
     .rxe__chg:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
-    .rxe__hint { margin: 4px 0 0; padding: 8px 12px 0; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); }
+    .rxe__hint { margin: 4px 0 0; padding: 8px 12px 0; border-top: 1px solid var(--pf-line); font-size: 12px; color: var(--text-tertiary); }
     /* The one-line dose composer. */
-    .cmp { display: grid; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); background: var(--nd-in-tint); }
+    .cmp { display: grid; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); background: var(--pf-in-tint); }
     .cmp__line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .cmp__name { font-size: 14.5px; font-weight: 600; margin-right: 4px; }
     .cmp__name span { font-weight: 400; color: var(--text-tertiary); }
     .cmp__chip-wrap { position: relative; }
-    .cmp__chip { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+    .cmp__chip { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       font: inherit; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; }
     .cmp__chip span { font-size: 10px; color: var(--text-tertiary); }
     .cmp__chip.on { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent); }
     .cmp__menu { position: absolute; left: 0; top: 40px; z-index: 30; display: flex; flex-wrap: wrap; gap: 8px; width: max-content; max-width: min(420px, 80vw); padding: 8px;
-      border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
-    .cmp__menu button { height: 34px; min-width: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      border-radius: 12px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+    .cmp__menu button { height: 34px; min-width: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
     .cmp__menu button[aria-pressed='true'] { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 60%, transparent);
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
@@ -255,17 +255,17 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .cmp__say { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
     .cmp__say b { color: var(--text-secondary); }
     .rxe__in { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text-tertiary);
-      border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--nd-line)); background: var(--nd-in-tint); }
+      border: 1px dashed color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line)); background: var(--pf-in-tint); }
     .rxe__in:focus-within { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .rxe__addin { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; }
     .rxe__addin::placeholder { color: var(--text-tertiary); }
-    .rxe__in kbd { font: inherit; font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--nd-line); border-radius: 6px; padding: 1px 6px; }
+    .rxe__in kbd { font: inherit; font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--pf-line); border-radius: 6px; padding: 1px 6px; }
     .rxe__sug { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; display: grid; gap: 2px; padding: 6px; max-height: 340px; overflow-y: auto;
-      border-radius: 12px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+      border-radius: 12px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
     :host-context(html.dark) .rxe__sug { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
     .rxe__sg { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; min-height: 44px; padding: 8px 10px;
       border: 0; border-radius: 9px; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
-    .rxe__sg.act { background: var(--nd-chip-bg); }
+    .rxe__sg.act { background: var(--pf-chip-bg); }
     .rxe__sgk { justify-self: start; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px;
       color: var(--orange-text, #c2410c); background: color-mix(in srgb, #fdba74 18%, transparent); }
     .rxe__sgt { min-width: 0; font-size: 14px; }
@@ -275,12 +275,12 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .rxe__sge { font-size: 11px; color: var(--text-tertiary); }
     .rxe__sgw { font-size: 11px; font-weight: 600; color: var(--red-text, #dc2626); }
 
-    .rxe__list { border: 1px solid var(--nd-line); border-radius: 12px; overflow: hidden; }
+    .rxe__list { border: 1px solid var(--pf-line); border-radius: 12px; overflow: hidden; }
     .rxe__none { margin: 0; padding: 22px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
-    .rl { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 28px; gap: 4px 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--nd-line);
+    .rl { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 28px; gap: 4px 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--pf-line);
       transition: background-color 600ms ease; }
     .rl:last-child { border-bottom: 0; }
-    .rl--flash { background: var(--nd-in-tint); }
+    .rl--flash { background: var(--pf-in-tint); }
     .rl__no { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--violet-text, #6d28d9);
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .rl--warn .rl__no { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 12%, transparent); }
@@ -289,12 +289,12 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .rl--warn .rl__name { color: var(--red-text, #dc2626); }
     .rl__str { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
     .rl__form { font-size: 12px; color: var(--text-tertiary); }
-    .rl__sch { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--text-tertiary); }
+    .rl__sch { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--pf-line); color: var(--text-tertiary); }
     .rl__sch--h { color: var(--red-text, #dc2626); border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); }
     .rl__caution { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, #d97706 45%, transparent); color: var(--amber-text, #b45309); }
     .rl__free { flex-basis: 100%; font-size: 12px; color: var(--text-tertiary); }
     .rl__toks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-    .tok { height: 32px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-in-tint); color: var(--text-primary);
+    .tok { height: 32px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-in-tint); color: var(--text-primary);
       font: inherit; font-size: 13.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
     .tok:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); }
     .tok:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
@@ -303,7 +303,7 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .rl__x { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
     .rl__x:hover { color: var(--red-text, #dc2626); background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent); }
     .rl__opts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
-    .rl__opts button { height: 34px; min-width: 52px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+    .rl__opts button { height: 34px; min-width: 52px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-card-bg);
       color: var(--text-secondary); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
     .rl__opts button:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
     .rl__opts button[aria-pressed='true'] { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 60%, transparent);
@@ -315,13 +315,13 @@ interface Suggest { kind: 'parsed' | 'drug' | 'free'; drug: ConsultDrugRef; line
     .rl__sent { flex: 1; min-width: 0; }
     .rl__qty { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
     .rl__alert { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 6px; padding: 10px 14px; border-radius: 12px;
-      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent);
+      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--pf-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent);
       color: var(--text-primary); font-size: 13px; line-height: 1.45; }
     .rl__alert > svg { color: var(--red-text, #dc2626); flex: none; }
     .rl__alert-t { flex: 1 1 260px; min-width: 0; }
     .rl__alert-t b { color: var(--red-text, #dc2626); font-weight: 600; }
     .rl__swap { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--color-violet-600, #7c3aed);
-      background: var(--nd-card-bg); color: var(--violet-text, #6d28d9); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+      background: var(--pf-card-bg); color: var(--violet-text, #6d28d9); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .rl__keep { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 13px; font-weight: 600; color: var(--violet-text, #6d28d9); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
     .rl__acked { grid-column: 2 / -1; margin: 4px 0 0; font-size: 12.5px; color: var(--text-tertiary); }
     .rl__undo { border: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--violet-text, #6d28d9); cursor: pointer; }

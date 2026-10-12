@@ -10,7 +10,7 @@ import { PatientProfileService } from '../../../core/services/patient-profile.se
 import { ToastService } from '../../../core/services/toast.service';
 
 /** Edit panel's Date of birth used a native `<input type="date">` — now
- *  `pf-nd-date`, same `dateOfBirth` (yyyy-MM-dd) the save payload reads. */
+ *  `pf-date`, same `dateOfBirth` (yyyy-MM-dd) the save payload reads. */
 describe('Patient profile modal — edit DOB (no native date input)', () => {
   const patient = {
     id: 'p1', title: 'Mr', firstName: 'Ravi', fathersName: 'Kumar',
@@ -40,15 +40,15 @@ describe('Patient profile modal — edit DOB (no native date input)', () => {
     return { f, c, el: f.nativeElement as HTMLElement };
   }
 
-  it('renders pf-nd-date for Date of birth, never a visible native date input', () => {
+  it('renders pf-date for Date of birth, never a visible native date input', () => {
     const { el } = render();
-    expect(el.querySelector('pf-nd-date')).not.toBeNull();
+    expect(el.querySelector('pf-date')).not.toBeNull();
     expect(el.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
   });
 
   it('typing a DOB sets draft().dateOfBirth as plain ISO yyyy-MM-dd', () => {
     const { el, c } = render();
-    const txt = el.querySelector<HTMLInputElement>('pf-nd-date input[type="text"]')!;
+    const txt = el.querySelector<HTMLInputElement>('pf-date input[type="text"]')!;
     txt.value = '15051990';
     txt.dispatchEvent(new Event('input'));
     expect(c.draft().dateOfBirth).toBe('1990-05-15');

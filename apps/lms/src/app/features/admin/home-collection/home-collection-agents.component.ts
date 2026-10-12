@@ -47,13 +47,13 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
     .pf-hc-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-hc-chip { height: 24px; font-size: 11.5px; gap: 4px; }
     .pf-hc-area { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .pf-hc-acts { border-top: 1px solid var(--nd-line); }
+    .pf-hc-acts { border-top: 1px solid var(--pf-line); }
     /* Phone-only (<=640px): keep this page's OWN text input at >=16px so iOS
        Safari does not auto-zoom on focus. Scoped to this component's instances
        only — does not restyle the global .pf-input primitive elsewhere.
        Desktop-web (>=1280px) and iPad are byte-for-byte unchanged. */
     @media (max-width: 640px) {
-      :host input.nd-input { font-size: 16px; }
+      :host input.pf-input { font-size: 16px; }
       /* Same iOS auto-zoom guard for this page's numeric fields (lat/lng/radius/
          weight). pf-number-input's inner .field is 14px; bump to 16px on phone.
          Scoped under :host so only THIS page's number inputs are affected — the
@@ -96,22 +96,22 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 
       <div class="pf-band-body">
       @if (formOpen()) {
-        <section class="nd-card nd-anim-in pf-hc-form" [attr.aria-label]="editing() ? 'Edit area' : 'New agent'">
-          <div class="nd-card__head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
-            <h3 class="nd-card__label pf-section-title">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
+        <section class="pf-card pf-anim-in pf-hc-form" [attr.aria-label]="editing() ? 'Edit area' : 'New agent'">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
+            <h3 class="pf-card__label pf-section-title">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-hc-form__body">
             <div class="sm:col-span-2">
-              <label class="nd-field__lbl pf-hc-lbl">Agent (staff member)</label>
+              <label class="pf-field__lbl pf-hc-lbl">Agent (staff member)</label>
               <pf-select [options]="userOptions()" [value]="draft().userId" [disabled]="editing()"
                 placeholder="Pick a user" (valueChange)="patch({ userId: $any($event) })"></pf-select>
             </div>
             <div class="sm:col-span-2">
-              <label class="nd-field__lbl pf-hc-lbl">Coverage</label>
-              <span class="nd-seg" role="radiogroup" aria-label="Coverage">
+              <label class="pf-field__lbl pf-hc-lbl">Coverage</label>
+              <span class="pf-seg" role="radiogroup" aria-label="Coverage">
                 @for (o of modeOptions; track o.value) {
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="draft().areaMode === o.value"
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="draft().areaMode === o.value"
                           (click)="patch({ areaMode: o.value })">{{ o.label }}</button>
                 }
               </span>
@@ -119,40 +119,40 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 
             @if (draft().areaMode === 'pincode') {
               <div class="sm:col-span-2">
-                <label class="nd-field__lbl pf-hc-lbl">Pincodes — list and/or ranges</label>
-                <input type="text" class="nd-input nd-num" [ngModel]="draft().pincodes"
+                <label class="pf-field__lbl pf-hc-lbl">Pincodes — list and/or ranges</label>
+                <input type="text" class="pf-input pf-num" [ngModel]="draft().pincodes"
                   (ngModelChange)="patch({ pincodes: $event })" placeholder="600001, 600028, 600001-600050" />
-                <p class="nd-field__hint pf-hc-hint">
-                  Comma-separated. Use a range with a dash or "to": <span class="nd-num">600001-600050</span> or <span class="nd-num">600001 to 600050</span>.
+                <p class="pf-field__hint pf-hc-hint">
+                  Comma-separated. Use a range with a dash or "to": <span class="pf-num">600001-600050</span> or <span class="pf-num">600001 to 600050</span>.
                 </p>
               </div>
             } @else {
               <div>
-                <label class="nd-field__lbl pf-hc-lbl">Centre latitude</label>
+                <label class="pf-field__lbl pf-hc-lbl">Centre latitude</label>
                 <pf-number-input [value]="draft().centerLat" [step]="0.001" [allowEmpty]="true"
                   (valueChange)="patch({ centerLat: $event })"></pf-number-input>
               </div>
               <div>
-                <label class="nd-field__lbl pf-hc-lbl">Centre longitude</label>
+                <label class="pf-field__lbl pf-hc-lbl">Centre longitude</label>
                 <pf-number-input [value]="draft().centerLng" [step]="0.001" [allowEmpty]="true"
                   (valueChange)="patch({ centerLng: $event })"></pf-number-input>
               </div>
               <div>
-                <label class="nd-field__lbl pf-hc-lbl">Radius (km)</label>
+                <label class="pf-field__lbl pf-hc-lbl">Radius (km)</label>
                 <pf-number-input [value]="draft().radiusKm" [step]="1" [min]="1" [allowEmpty]="true"
                   (valueChange)="patch({ radiusKm: $event })"></pf-number-input>
               </div>
             }
 
             <div>
-              <label class="nd-field__lbl pf-hc-lbl">Weight (share of work)</label>
+              <label class="pf-field__lbl pf-hc-lbl">Weight (share of work)</label>
               <pf-number-input [value]="draft().weightage" [step]="1" [min]="1"
                 (valueChange)="patch({ weightage: $event ?? 1 })"></pf-number-input>
             </div>
           </div>
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save agent' }}
             </button>
           </div>
@@ -169,19 +169,19 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
       } @else {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           @for (a of visibleAgents(); track a.id) {
-            <div class="nd-card pf-hc-card">
+            <div class="pf-card pf-hc-card">
               <div class="flex flex-col justify-between h-full gap-3">
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap min-w-0">
                     <p class="pf-hc-name">{{ agentName(a) }}</p>
-                    <span class="nd-chip nd-chip--static pf-hc-chip">Weight <span class="nd-num">{{ a.weightage }}</span></span>
-                    @if (!a.isActive) { <span class="nd-chip nd-chip--static pf-hc-chip">Inactive</span> }
+                    <span class="pf-chip pf-chip--static pf-hc-chip">Weight <span class="pf-num">{{ a.weightage }}</span></span>
+                    @if (!a.isActive) { <span class="pf-chip pf-chip--static pf-hc-chip">Inactive</span> }
                   </div>
                   <p class="pf-hc-area">{{ areaSummary(a) }}</p>
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-2 pf-hc-acts">
-                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="edit(a)" aria-label="Edit area" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
-                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="remove(a)" [disabled]="removingId() === a.id" [pfBusy]="removingId() === a.id" pfBusyLabel="Removing…" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="nd-rowact__t">Remove</span></button>
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="edit(a)" aria-label="Edit area" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="pf-rowact__t">Edit</span></button>
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="remove(a)" [disabled]="removingId() === a.id" [pfBusy]="removingId() === a.id" pfBusyLabel="Removing…" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="pf-rowact__t">Remove</span></button>
                 </div>
               </div>
             </div>
@@ -197,7 +197,7 @@ export class HomeCollectionAgentsComponent implements OnInit {
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
   protected readonly theme = inject(ThemeService);
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
   /** Band pill search: agent name/email and the area they cover. */

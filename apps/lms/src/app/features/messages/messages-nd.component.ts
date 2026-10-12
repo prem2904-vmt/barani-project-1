@@ -36,11 +36,11 @@ function readFlag(key: string): boolean {
 }
 
 /**
- * MESSAGES — the new-design screen (docs/ND-PATTERN.md §17).
+ * MESSAGES — the new-design screen (docs/PF-PATTERN.md §17).
  *
  * Same behaviour as the classic page (it EXTENDS it: realtime, unread,
  * typing, receipts, attachments, voice notes, calls, deep links, modals),
- * laid out on the nd-kit:
+ * laid out on the pf-kit:
  *
  *   band  ‹ tenant                              [Reconnecting] [sounds] [New chat]
  *   pill  [search conversations and people]  | All · Unread · Groups · Calls

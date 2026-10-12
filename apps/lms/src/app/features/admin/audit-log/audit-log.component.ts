@@ -11,7 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 
 /** Quick date windows for the band pill ('' = any time). */
 type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
@@ -37,7 +37,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent, NdDateComponent],
+  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     @use '../../../shared/styles/device-tier' as dt;
@@ -92,7 +92,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
     .audit-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .audit-date {
       height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit; font-variant-numeric: tabular-nums;
-      background: var(--nd-card-bg); border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); color: var(--text-primary);
+      background: var(--pf-card-bg); border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); color: var(--text-primary);
       color-scheme: light dark;
     }
     .audit-date:focus { outline: none; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
@@ -130,11 +130,11 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                        aria-label="When"></pf-select>
             @if (range() === 'custom') {
               <span class="audit-dates">
-                <pf-nd-date label="From" [value]="filters().from || null"
-                            (valueChange)="setFilter({ from: $event ?? '' })"></pf-nd-date>
+                <pf-date label="From" [value]="filters().from || null"
+                            (valueChange)="setFilter({ from: $event ?? '' })"></pf-date>
                 <span class="audit-dates__sep">to</span>
-                <pf-nd-date label="To" [value]="filters().to || null"
-                            (valueChange)="setFilter({ to: $event ?? '' })"></pf-nd-date>
+                <pf-date label="To" [value]="filters().to || null"
+                            (valueChange)="setFilter({ to: $event ?? '' })"></pf-date>
               </span>
             }
           </ng-container>
@@ -176,13 +176,13 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
           </div>
           <div>
             <label class="pf-label">From</label>
-            <pf-nd-date label="From" [value]="filters().from || null"
-                        (valueChange)="patch({ from: $event ?? '' })"></pf-nd-date>
+            <pf-date label="From" [value]="filters().from || null"
+                        (valueChange)="patch({ from: $event ?? '' })"></pf-date>
           </div>
           <div>
             <label class="pf-label">To</label>
-            <pf-nd-date label="To" [value]="filters().to || null"
-                        (valueChange)="patch({ to: $event ?? '' })"></pf-nd-date>
+            <pf-date label="To" [value]="filters().to || null"
+                        (valueChange)="patch({ to: $event ?? '' })"></pf-date>
           </div>
         </div>
         <div class="mt-3 flex gap-2 justify-end">
@@ -206,19 +206,19 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
       } @else {
         <div class="space-y-2">
           @for (log of logs(); track log.id) {
-            <div class="nd-card audit-card">
+            <div class="pf-card audit-card">
               <button type="button" class="audit-row w-full flex items-center gap-3 text-left"
                       (click)="toggle(log.id)" [attr.aria-expanded]="expanded() === log.id">
-                <span class="nd-chip nd-chip--static audit-badge" [attr.data-tone]="badgeTone(log.action)">
+                <span class="pf-chip pf-chip--static audit-badge" [attr.data-tone]="badgeTone(log.action)">
                   @if (badgeTone(log.action) === 'add') { <span class="audit-badge__dot" aria-hidden="true"></span> }
                   {{ actionLabel(log.action) }}
                 </span>
                 <span class="text-[13px] font-semibold shrink-0">{{ typeLabel(log.entityType) }}</span>
-                <span class="audit-id nd-num text-[12px] min-w-0">{{ log.entityId }}</span>
+                <span class="audit-id pf-num text-[12px] min-w-0">{{ log.entityId }}</span>
                 <span class="audit-user ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
                   {{ log.userName || 'System' }}
                 </span>
-                <span class="audit-when nd-num text-[11.5px] shrink-0" style="color: var(--text-tertiary);">
+                <span class="audit-when pf-num text-[11.5px] shrink-0" style="color: var(--text-tertiary);">
                   {{ when(log.at) }}
                 </span>
               </button>
@@ -239,7 +239,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                     <div class="space-y-1.5">
                       @for (d of diff(log); track d.field) {
                         <div class="audit-diff grid grid-cols-[140px_1fr] gap-2 text-[12px] audit-diff-row">
-                          <span class="nd-num font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
+                          <span class="pf-num font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
                           @if (d.kind === 'change') {
                             <span>
                               <span class="line-through" style="color: var(--text-tertiary);">{{ d.old }}</span>
@@ -253,7 +253,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                       }
                     </div>
                   }
-                  <p class="audit-full-id mt-2 text-[11.5px] nd-num" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
+                  <p class="audit-full-id mt-2 text-[11.5px] pf-num" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
                 </div>
               }
             </div>

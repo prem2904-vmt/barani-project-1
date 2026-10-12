@@ -117,7 +117,7 @@ import { ReportNotesStore } from '../../../shared/components/report-note/report-
 import { ReportNoteButtonComponent, ReportNoteSlotComponent } from '../../../shared/components/report-note/report-note-slot.component';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -176,7 +176,7 @@ function calcKey(testId: string, paramName: string): string {
     ReportNoteButtonComponent,
     ReportNoteSlotComponent,
     ReportNotesCardComponent,
-    NdDateComponent,
+    PfDateComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -206,7 +206,7 @@ export class SampleResultEntryComponent {
   private readonly instrumentsApi = inject(InstrumentsApiService);
   private readonly layoutSvc = inject(ReportLayoutService);
 
-  // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
+  // ── New-design frame (docs/PF-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
    *  skeleton is the zoom target so the queue tile can morph into it. */
   readonly routeSampleId = signal<string | null>(null);
@@ -323,8 +323,8 @@ export class SampleResultEntryComponent {
       ["position", "fixed"], ["z-index", "2000"], ["top", "0px"], ["left", "0px"], ["box-sizing", "border-box"],
       ["width", "min(300px, calc(100vw - 32px))"], ["padding", "10px 12px"],
       ["display", "flex"], ["flex-direction", "column"], ["gap", "6px"],
-      ["border-radius", "var(--nd-radius-sm, 10px)"], ["background", "var(--nd-card-bg, #fff)"],
-      ["border", "1px solid var(--nd-line, #e5e7eb)"], ["box-shadow", "0 12px 32px rgba(15, 23, 42, 0.22)"],
+      ["border-radius", "var(--pf-radius-sm, 10px)"], ["background", "var(--pf-card-bg, #fff)"],
+      ["border", "1px solid var(--pf-line, #e5e7eb)"], ["box-shadow", "0 12px 32px rgba(15, 23, 42, 0.22)"],
       ["font-family", "inherit"], ["font-size", "12.5px"], ["line-height", "1.45"], ["color", "var(--text-primary)"],
       ["white-space", "normal"], ["overflow-wrap", "break-word"], ["pointer-events", "auto"],
     ];
@@ -639,7 +639,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-ndd__in",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-date__in",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -865,7 +865,7 @@ export class SampleResultEntryComponent {
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
   /** WHICH header action started the running `submitting()` request — only
-   *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
+   *  that button shows the busy dots (PF-PATTERN "Loading feedback"). */
   readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | 'close' | null>(null);
 
   // ── NABL critical-result records of this tube (open / acknowledged) ──

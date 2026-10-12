@@ -43,7 +43,7 @@ describe('daily patient number (utils/daily-no)', () => {
 
   it('renders the grid chip as escaped HTML with the kit class', () => {
     expect(dailyNoHtml({ dailyNo: 2, dailyNoDay: TODAY }, TODAY))
-      .toBe(`<span class="nd-dayno" title="Today&#39;s patient number 2">#2</span>`);
+      .toBe(`<span class="pf-dayno" title="Today&#39;s patient number 2">#2</span>`);
     expect(dailyNoHtml({}, TODAY)).toBe('');
   });
 

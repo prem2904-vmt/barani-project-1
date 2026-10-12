@@ -13,7 +13,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
-import { NdTimeComponent } from '../../../shared/components/nd-time/nd-time.component';
+import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -29,7 +29,7 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, NdTimeComponent],
+  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -42,11 +42,11 @@ const MODES: ModeOption[] = [
     .pf-ap-hint--top { margin: 0 0 12px; }
     .pf-mode-btn {
       display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 12px 14px;
-      border-radius: var(--nd-radius); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
-      cursor: pointer; transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+      border-radius: var(--pf-radius); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+      cursor: pointer; transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
     }
-    .pf-mode-btn:hover { border-color: var(--nd-sel-border); }
-    .pf-mode-btn[aria-checked='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+    .pf-mode-btn:hover { border-color: var(--pf-sel-border); }
+    .pf-mode-btn[aria-checked='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pf-mode-btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-mode-btn__t { font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-mode-btn__d { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
@@ -117,12 +117,12 @@ const MODES: ModeOption[] = [
       } @else {
         @if (showSec('mode')) {
         <!-- Queue mode -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="nd-card__label pf-section-title">Queue mode</h3></div>
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-section-title">Queue mode</h3></div>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
             @for (m of modes(); track m.value) {
-              <!-- Neutral selected tile (ND-PATTERN §3), never a violet tile. -->
-              <button type="button" class="pf-mode-btn nd-tile-sel text-left" role="radio"
+              <!-- Neutral selected tile (PF-PATTERN §3), never a violet tile. -->
+              <button type="button" class="pf-mode-btn pf-tile-sel text-left" role="radio"
                       [attr.aria-checked]="cfg()!.queueMode === m.value" (click)="setMode(m.value)">
                 <span class="pf-mode-btn__t">{{ m.label }}</span>
                 <span class="pf-mode-btn__d">{{ m.desc }}</span>
@@ -135,24 +135,24 @@ const MODES: ModeOption[] = [
 
         @if (showSec('slots')) {
         <!-- Slot config -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><h3 class="nd-card__label pf-section-title">Booking slots</h3></div>
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><h3 class="pf-card__label pf-section-title">Booking slots</h3></div>
           <div class="pf-ap-body">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="flex flex-col gap-1">
-              <span class="nd-field__lbl">Time between appointments (min)</span>
+              <span class="pf-field__lbl">Time between appointments (min)</span>
               <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240"
                 (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
             </label>
             <label class="flex flex-col gap-1">
-              <span class="nd-field__lbl">Concurrent slots</span>
+              <span class="pf-field__lbl">Concurrent slots</span>
               <pf-number-input [value]="cfg()!.maxConcurrentSlots" [step]="1" [min]="1"
                 (valueChange)="patch({ maxConcurrentSlots: $event ?? 1 })"></pf-number-input>
             </label>
             <div class="pf-check-row flex items-center sm:mt-6">
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="cfg()!.open24h"
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="cfg()!.open24h"
                       (click)="patch({ open24h: !cfg()!.open24h })">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 <span>Open 24×7</span>
               </button>
             </div>
@@ -161,19 +161,19 @@ const MODES: ModeOption[] = [
           @if (!cfg()!.open24h) {
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">Start time</span>
-                <pf-nd-time label="Start time" [value]="startTime()"
-                  (valueChange)="setStart($event)"></pf-nd-time>
+                <span class="pf-field__lbl">Start time</span>
+                <pf-time label="Start time" [value]="startTime()"
+                  (valueChange)="setStart($event)"></pf-time>
               </label>
               <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">End time</span>
-                <pf-nd-time label="End time" [value]="endTime()"
-                  (valueChange)="setEnd($event)"></pf-nd-time>
+                <span class="pf-field__lbl">End time</span>
+                <pf-time label="End time" [value]="endTime()"
+                  (valueChange)="setEnd($event)"></pf-time>
               </label>
             </div>
             <p class="pf-ap-hint">
-              Booking is open every day from <span class="nd-num">{{ startTime() }}</span> to <span class="nd-num">{{ endTime() }}</span>,
-              in <span class="nd-num">{{ cfg()!.slotMinutes }}</span>-minute steps.
+              Booking is open every day from <span class="pf-num">{{ startTime() }}</span> to <span class="pf-num">{{ endTime() }}</span>,
+              in <span class="pf-num">{{ cfg()!.slotMinutes }}</span>-minute steps.
             </p>
           }
           </div>
@@ -183,8 +183,8 @@ const MODES: ModeOption[] = [
 
         @if (showSec('priority')) {
         <!-- Priority engine -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span><h3 class="nd-card__label pf-section-title">Priority engine</h3></div>
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span><h3 class="pf-card__label pf-section-title">Priority engine</h3></div>
           <div class="pf-ap-body">
           <p class="pf-ap-hint pf-ap-hint--top">
             Higher score = called sooner. score = base(type) + minutes&nbsp;waited × weight − late penalty; urgent jumps to the top.
@@ -192,7 +192,7 @@ const MODES: ModeOption[] = [
           <div class="pf-priority-grid grid grid-cols-2 sm:grid-cols-3 gap-3">
             @for (f of optionFields; track f.key) {
               <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">{{ f.label }}</span>
+                <span class="pf-field__lbl">{{ f.label }}</span>
                 <pf-number-input [value]="opt(f.key)" [step]="f.step" [min]="0"
                   (valueChange)="patchOpt(f.key, $event ?? 0)"></pf-number-input>
               </label>

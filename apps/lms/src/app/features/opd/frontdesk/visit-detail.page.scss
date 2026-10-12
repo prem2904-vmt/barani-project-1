@@ -2,42 +2,42 @@
 .pf-vd-body { padding: 16px 18px; gap: 18px; }
 .pf-vd-token {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px 16px;
-  border: 1px solid var(--nd-line); border-radius: var(--nd-radius, 12px); background: var(--nd-chip-bg); text-align: center;
+  border: 1px solid var(--pf-line); border-radius: var(--pf-radius, 12px); background: var(--pf-chip-bg); text-align: center;
 }
-.pf-vd-token--new { border-color: var(--nd-sel-border); background: var(--nd-in-tint); }
+.pf-vd-token--new { border-color: var(--pf-sel-border); background: var(--pf-in-tint); }
 .pf-vd-token__k { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
 .pf-vd-token__n { font-size: 56px; line-height: 1.05; font-weight: 600; color: var(--text-primary); }
 .pf-vd-token__who { font-size: 14px; color: var(--text-secondary); }
 .pf-vd-token__next { font-size: 13px; color: var(--text-tertiary); max-width: 440px; }
 .pf-vd-tl { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-.pf-vd-tl__step { display: grid; grid-template-columns: 20px 1fr; gap: 2px 8px; align-items: center; padding: 10px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); }
+.pf-vd-tl__step { display: grid; grid-template-columns: 20px 1fr; gap: 2px 8px; align-items: center; padding: 10px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); }
 .pf-vd-tl__mark { grid-row: span 2; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--text-muted); color: #fff; }
 .pf-vd-tl__step[data-state='done'] .pf-vd-tl__mark { background: var(--color-primary, #7c3aed); border-color: var(--color-primary, #7c3aed); }
-.pf-vd-tl__step[data-state='current'] { border-color: var(--nd-sel-border); background: var(--nd-in-tint); }
-.pf-vd-tl__step[data-state='current'] .pf-vd-tl__mark { border-color: var(--color-primary, #7c3aed); box-shadow: inset 0 0 0 4px var(--nd-card-bg), inset 0 0 0 10px var(--color-primary, #7c3aed); }
+.pf-vd-tl__step[data-state='current'] { border-color: var(--pf-sel-border); background: var(--pf-in-tint); }
+.pf-vd-tl__step[data-state='current'] .pf-vd-tl__mark { border-color: var(--color-primary, #7c3aed); box-shadow: inset 0 0 0 4px var(--pf-card-bg), inset 0 0 0 10px var(--color-primary, #7c3aed); }
 .pf-vd-tl__step[data-state='skipped'], .pf-vd-tl__step[data-state='upcoming'] { color: var(--text-tertiary); }
 .pf-vd-tl__t { font-size: 13px; font-weight: 500; }
 .pf-vd-tl__at { font-size: 12px; color: var(--text-tertiary); }
 .pf-vd-vitals { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--text-secondary); }
 .pf-vd-vitals b { font-size: 15px; color: var(--text-primary); font-weight: 600; margin-right: 3px; }
 .pf-vd-flags { display: flex; flex-wrap: wrap; gap: 6px; }
-.pf-vd-flags .nd-chip { gap: 6px; }
+.pf-vd-flags .pf-chip { gap: 6px; }
 .pf-vd-flagdot { width: 7px; height: 7px; border-radius: 50%; background: var(--red-text, #dc2626); }
 .pf-vd-link { align-self: flex-start; height: 40px; text-decoration: none; }
 .pf-vd-sums { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
 .pf-vd-sums > div { display: flex; justify-content: space-between; }
-.pf-vd-sums__total { font-size: 15px; font-weight: 600; color: var(--text-primary); padding-top: 6px; border-top: 1px solid var(--nd-line); }
+.pf-vd-sums__total { font-size: 15px; font-weight: 600; color: var(--text-primary); padding-top: 6px; border-top: 1px solid var(--pf-line); }
 .pf-vd-danger { display: flex; justify-content: space-between; gap: 8px; }
-.pf-vd-danger .nd-btn { width: auto; flex: 1; }
-.pf-ob-foot a.nd-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.pf-vd-danger .pf-btn { width: auto; flex: 1; }
+.pf-ob-foot a.pf-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 /* Consult procedures: every visit bill + the desk's collect box. */
 .pf-vd-bill { display: flex; flex-direction: column; gap: 8px; }
-.pf-vd-bill + .pf-vd-bill { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--nd-line); }
+.pf-vd-bill + .pf-vd-bill { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--pf-line); }
 .pf-vd-due { color: var(--text-primary); font-weight: 600; }
-.pf-vd-collect { margin-top: 12px; border-color: var(--nd-sel-border); }
+.pf-vd-collect { margin-top: 12px; border-color: var(--pf-sel-border); }
 .pf-vd-collect__row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.pf-vd-collect .nd-input { min-height: 44px; font-size: 16px; width: 100%; }
+.pf-vd-collect .pf-input { min-height: 44px; font-size: 16px; width: 100%; }
 .pf-vd-err { margin: 0; font-size: 12.5px; color: var(--red-text, #dc2626); }
-.pf-ob-foot .nd-btn.pf-vd-mini { width: auto; height: 32px; }
+.pf-ob-foot .pf-btn.pf-vd-mini { width: auto; height: 32px; }
 .pf-vd-mini { width: auto; height: 32px; }

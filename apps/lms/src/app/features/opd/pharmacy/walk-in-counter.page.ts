@@ -67,43 +67,43 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
   template: `
     <section class="pf-band-page ph">
       <pf-hero-band [back]="true" backTo="/opd/pharmacy" [customSearch]="true" [contextBar]="true">
-        <div band-search class="nd-ctx ph-ctx">
-          <span class="nd-ctx__primary">{{ patient()?.name || name() || 'Walk-in customer' }}</span>
-          <span class="nd-ctx__chip">{{ editingId() ? (editable() ? 'Open bill' : 'Bill') : 'New sale' }}</span>
-          @if (prescriber()) { <span class="nd-ctx__chip">Rx · {{ prescriber() }}</span> } @else { <span class="nd-ctx__chip">No prescription</span> }
+        <div band-search class="pf-ctx ph-ctx">
+          <span class="pf-ctx__primary">{{ patient()?.name || name() || 'Walk-in customer' }}</span>
+          <span class="pf-ctx__chip">{{ editingId() ? (editable() ? 'Open bill' : 'Bill') : 'New sale' }}</span>
+          @if (prescriber()) { <span class="pf-ctx__chip">Rx · {{ prescriber() }}</span> } @else { <span class="pf-ctx__chip">No prescription</span> }
         </div>
         <pf-pharmacy-sections band-tools active="counter"></pf-pharmacy-sections>
       </pf-hero-band>
 
       <div class="ph-body">
-        <section class="nd-card" aria-labelledby="ph-c-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L22 7H6"/></svg></span>
-            <span class="nd-card__label" id="ph-c-t">Counter</span>
-            <span class="nd-card__note">Walk-in bills stay editable until paid · Batch pick: {{ cfg().batchPick === 'pharmacist' ? 'pharmacist picks' : 'earliest expiry' }}</span>
+        <section class="pf-card" aria-labelledby="ph-c-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L22 7H6"/></svg></span>
+            <span class="pf-card__label" id="ph-c-t">Counter</span>
+            <span class="pf-card__note">Walk-in bills stay editable until paid · Batch pick: {{ cfg().batchPick === 'pharmacist' ? 'pharmacist picks' : 'earliest expiry' }}</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @if (paid()) {
-              <div class="nd-empty">
-                <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                <p class="nd-empty__title">{{ inr(paid()!.bill?.totalPaid ?? 0, false) }} received</p>
-                <p class="nd-empty__body nd-num">{{ paid()!.customerName || 'Walk-in customer' }} · {{ paid()!.bill?.invoiceNumber }}</p>
+              <div class="pf-empty">
+                <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <p class="pf-empty__title">{{ inr(paid()!.bill?.totalPaid ?? 0, false) }} received</p>
+                <p class="pf-empty__body pf-num">{{ paid()!.customerName || 'Walk-in customer' }} · {{ paid()!.bill?.invoiceNumber }}</p>
               </div>
             } @else {
               <div class="ph-fields">
-                <div class="nd-field">
-                  <label class="nd-field__lbl" for="ph-wn">Customer name <span class="ph-muted">· optional for OTC</span></label>
-                  <input id="ph-wn" class="nd-input" [value]="name()" (input)="name.set($any($event.target).value)" placeholder="e.g. Mr. Anand" [disabled]="locked()" />
+                <div class="pf-field">
+                  <label class="pf-field__lbl" for="ph-wn">Customer name <span class="ph-muted">· optional for OTC</span></label>
+                  <input id="ph-wn" class="pf-input" [value]="name()" (input)="name.set($any($event.target).value)" placeholder="e.g. Mr. Anand" [disabled]="locked()" />
                 </div>
-                <div class="nd-field">
-                  <label class="nd-field__lbl" for="ph-wp">Mobile <span class="ph-muted">· for the WhatsApp bill</span></label>
-                  <input id="ph-wp" class="nd-input nd-num" inputmode="tel" [value]="phone()" (input)="phone.set($any($event.target).value)" placeholder="10-digit mobile" [disabled]="locked()" />
+                <div class="pf-field">
+                  <label class="pf-field__lbl" for="ph-wp">Mobile <span class="ph-muted">· for the WhatsApp bill</span></label>
+                  <input id="ph-wp" class="pf-input pf-num" inputmode="tel" [value]="phone()" (input)="phone.set($any($event.target).value)" placeholder="10-digit mobile" [disabled]="locked()" />
                 </div>
-                <div class="nd-field ph-span">
-                  <span class="nd-field__lbl">Link to a patient <span class="ph-muted">· optional</span></span>
+                <div class="pf-field ph-span">
+                  <span class="pf-field__lbl">Link to a patient <span class="ph-muted">· optional</span></span>
                   @if (patient(); as p) {
-                    <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ p.name }}</span><span class="ph-row__meta nd-num">{{ p.meta }}</span></span>
-                      @if (!locked()) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="patient.set(null)">Unlink</button> }</div>
+                    <div class="ph-row" style="cursor:default"><span class="ph-row__main"><span class="ph-row__name">{{ p.name }}</span><span class="ph-row__meta pf-num">{{ p.meta }}</span></span>
+                      @if (!locked()) { <button type="button" class="pf-btn pf-btn--tertiary" (click)="patient.set(null)">Unlink</button> }</div>
                   } @else if (!locked()) {
                     <pf-patient-search placeholder="Search patient by name, MRN or phone" (picked)="linkPatient($event)"></pf-patient-search>
                   }
@@ -112,31 +112,31 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
 
               @if (rxNeeded() || prescriber() || regNo()) {
                 <div class="ph-fields">
-                  <div class="nd-field">
-                    <label class="nd-field__lbl" for="ph-pr">Prescribing doctor <span class="nd-dot-unpriced" aria-hidden="true"></span></label>
-                    <input id="ph-pr" class="nd-input" [value]="prescriber()" (input)="prescriber.set($any($event.target).value)" placeholder="Dr. name on the prescription" [disabled]="locked()" />
+                  <div class="pf-field">
+                    <label class="pf-field__lbl" for="ph-pr">Prescribing doctor <span class="pf-dot-unpriced" aria-hidden="true"></span></label>
+                    <input id="ph-pr" class="pf-input" [value]="prescriber()" (input)="prescriber.set($any($event.target).value)" placeholder="Dr. name on the prescription" [disabled]="locked()" />
                   </div>
-                  <div class="nd-field">
-                    <label class="nd-field__lbl" for="ph-rg">Registration no. <span class="nd-dot-unpriced" aria-hidden="true"></span></label>
-                    <input id="ph-rg" class="nd-input nd-num" [value]="regNo()" (input)="regNo.set($any($event.target).value)" placeholder="e.g. TNMC 12345" [disabled]="locked()" />
+                  <div class="pf-field">
+                    <label class="pf-field__lbl" for="ph-rg">Registration no. <span class="pf-dot-unpriced" aria-hidden="true"></span></label>
+                    <input id="ph-rg" class="pf-input pf-num" [value]="regNo()" (input)="regNo.set($any($event.target).value)" placeholder="e.g. TNMC 12345" [disabled]="locked()" />
                   </div>
-                  <p class="nd-field__hint ph-span">Check the original prescription before selling a Schedule H / H1 / X drug. It is recorded on the bill{{ h1() ? ' and in the H1 register' : '' }}.</p>
+                  <p class="pf-field__hint ph-span">Check the original prescription before selling a Schedule H / H1 / X drug. It is recorded on the bill{{ h1() ? ' and in the H1 register' : '' }}.</p>
                   @if (h1()) {
-                    <div class="nd-field ph-span">
-                      <label class="nd-field__lbl" for="ph-cust-addr">Customer's address <span class="ph-muted">· required for the H1 / X register</span></label>
-                      <input id="ph-cust-addr" class="nd-input" [value]="address()" (input)="address.set($any($event.target).value)" placeholder="House no., street, city" [disabled]="locked()" />
+                    <div class="pf-field ph-span">
+                      <label class="pf-field__lbl" for="ph-cust-addr">Customer's address <span class="ph-muted">· required for the H1 / X register</span></label>
+                      <input id="ph-cust-addr" class="pf-input" [value]="address()" (input)="address.set($any($event.target).value)" placeholder="House no., street, city" [disabled]="locked()" />
                     </div>
                   }
                   <div class="ph-span ph-rxfile">
                     @if (editingId()) {
-                      <label class="nd-btn nd-btn--quiet ph-rxfile__btn" [class.is-busy]="uploadingRx()">
+                      <label class="pf-btn pf-btn--quiet ph-rxfile__btn" [class.is-busy]="uploadingRx()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         {{ uploadingRx() ? 'Uploading…' : rxFile() ? 'Replace prescription photo' : 'Attach prescription photo' }}
                         <input type="file" class="ph-rxfile__in" accept="image/*,application/pdf" [disabled]="uploadingRx()" (change)="attachRx($any($event.target))" />
                       </label>
-                      @if (rxFile()) { <button type="button" class="nd-btn nd-btn--quiet" (click)="viewRx()">View {{ rxFile() }}</button> }
+                      @if (rxFile()) { <button type="button" class="pf-btn pf-btn--quiet" (click)="viewRx()">View {{ rxFile() }}</button> }
                     } @else {
-                      <span class="nd-field__hint">Save the bill to attach a photo of the prescription.</span>
+                      <span class="pf-field__hint">Save the bill to attach a photo of the prescription.</span>
                     }
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                           <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ it.drug.generic || it.drug.name }} <span class="ph-sch" [attr.data-rx]="isRx(it.drug.schedule)">{{ schLabel(it.drug.schedule) }}</span></div>
                           <div class="ph-sub">{{ it.drug.generic ? it.drug.name + (it.drug.strength ? ' ' + it.drug.strength : '') : (it.drug.strength || '') }}</div>
                         </td>
-                        <td class="nd-num" data-l="Batch">
+                        <td class="pf-num" data-l="Batch">
                           @if (cfg().batchPick === 'pharmacist') {
                             <pf-select size="sm" [options]="batchOpts(it)" [value]="it.batchId ?? ''" (valueChange)="setBatch(i, $event)" placeholder="Pick a batch" [disabled]="locked()"></pf-select>
                           } @else {
@@ -170,7 +170,7 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                         <td class="r" data-l="Left after" [class.ph-low]="left(it) < 0">{{ units(left(it), it.drug) }}</td>
                         <td class="r" data-l="MRP">{{ inr(mrpOf(it)) }}</td>
                         <td class="r" data-l="Amount">{{ inr(amount(it)) }}</td>
-                        <td class="ph-td-act">@if (!locked()) { <button type="button" class="nd-btn nd-btn--icon" (click)="remove(i)" [attr.aria-label]="'Remove ' + it.drug.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button> }</td>
+                        <td class="ph-td-act">@if (!locked()) { <button type="button" class="pf-btn pf-btn--icon" (click)="remove(i)" [attr.aria-label]="'Remove ' + it.drug.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button> }</td>
                       </tr>
                     } @empty {
                       <tr><td colspan="7" class="ph-muted" style="text-align:center;padding:24px">Cart is empty — add a drug below.</td></tr>
@@ -183,29 +183,29 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
           </div>
         </section>
 
-        <aside class="nd-card" aria-labelledby="ph-cb-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-            <span class="nd-card__label" id="ph-cb-t">Billing</span>
-            <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">{{ items().length }} {{ items().length === 1 ? 'item' : 'items' }}</span>
+        <aside class="pf-card" aria-labelledby="ph-cb-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+            <span class="pf-card__label" id="ph-cb-t">Billing</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ph-sub pf-num">{{ items().length }} {{ items().length === 1 ? 'item' : 'items' }}</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @if (paid()) {
               <p class="ph-title">WhatsApp bill{{ phone() ? ' to ' + phone() : '' }}</p>
               <div class="ph-wa">{{ receiptText() }}</div>
             } @else {
               @for (it of items(); track it.drug.id) {
-                <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><span>{{ it.drug.name }} <span class="ph-muted nd-num">× {{ it.qty }}</span></span><span class="nd-num">{{ inr(amount(it)) }}</span></div>
+                <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px"><span>{{ it.drug.name }} <span class="ph-muted pf-num">× {{ it.qty }}</span></span><span class="pf-num">{{ inr(amount(it)) }}</span></div>
               }
-              <div class="nd-field">
-                <label class="nd-field__lbl" for="ph-cd">Discount (₹, before GST)</label>
-                <input id="ph-cd" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="discount() || ''" (input)="setDiscount($any($event.target).value)" placeholder="0" [disabled]="locked()" />
+              <div class="pf-field">
+                <label class="pf-field__lbl" for="ph-cd">Discount (₹, before GST)</label>
+                <input id="ph-cd" class="pf-input pf-num" type="number" min="0" inputmode="decimal" [value]="discount() || ''" (input)="setDiscount($any($event.target).value)" placeholder="0" [disabled]="locked()" />
               </div>
-              <div class="nd-field">
-                <span class="nd-field__lbl" id="ph-cpay">Payment</span>
-                <div class="nd-seg" role="radiogroup" aria-labelledby="ph-cpay" style="width:100%">
-                  @for (m of modes; track m.v) { <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button> }
+              <div class="pf-field">
+                <span class="pf-field__lbl" id="ph-cpay">Payment</span>
+                <div class="pf-seg" role="radiogroup" aria-labelledby="ph-cpay" style="width:100%">
+                  @for (m of modes; track m.v) { <button type="button" class="pf-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button> }
                 </div>
               </div>
               @if (payGate(); as g) {
@@ -217,18 +217,18 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                 <p class="ph-title" style="margin-top:6px">Open bills</p>
                 @for (b of openBills(); track b.id) {
                   <button type="button" class="ph-row press" [attr.aria-current]="b.id === editingId()" (click)="openBill(b)">
-                    <span class="ph-row__main"><span class="ph-row__name">{{ b.customerName || 'Walk-in customer' }}</span><span class="ph-row__meta nd-num">{{ b.lines }} {{ b.lines === 1 ? 'item' : 'items' }} · {{ time(b.createdAt) }}</span></span>
-                    <span class="ph-row__end nd-num">{{ inr(b.total) }}</span>
+                    <span class="ph-row__main"><span class="ph-row__name">{{ b.customerName || 'Walk-in customer' }}</span><span class="ph-row__meta pf-num">{{ b.lines }} {{ b.lines === 1 ? 'item' : 'items' }} · {{ time(b.createdAt) }}</span></span>
+                    <span class="ph-row__end pf-num">{{ inr(b.total) }}</span>
                   </button>
                 }
               }
             }
           </div>
-          <div class="nd-card__foot">
+          <div class="pf-card__foot">
             @if (paid()) {
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="print()">Print receipt</button>
-              <a class="nd-btn nd-btn--secondary" [href]="receiptHref()" target="_blank" rel="noopener">WhatsApp bill</a>
-              <button type="button" class="nd-btn nd-btn--primary nd-span" (click)="reset()">New sale</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="print()">Print receipt</button>
+              <a class="pf-btn pf-btn--secondary" [href]="receiptHref()" target="_blank" rel="noopener">WhatsApp bill</a>
+              <button type="button" class="pf-btn pf-btn--primary pf-span" (click)="reset()">New sale</button>
             } @else {
               <div class="ph-sum">
                 <span>Taxable value</span><span>{{ inr(totals().taxable) }}</span>
@@ -238,20 +238,20 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
               </div>
               <div class="ph-total"><span>Total</span><strong>{{ inr(totals().payable) }}</strong></div>
               @if (editingId() && !locked()) {
-                <button type="button" class="nd-btn nd-btn--danger" [disabled]="saving()" (click)="cancelBill()">Cancel bill</button>
+                <button type="button" class="pf-btn pf-btn--danger" [disabled]="saving()" (click)="cancelBill()">Cancel bill</button>
               }
-              <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!ready() || saving() || locked()" (click)="save()">Save bill</button>
+              <button type="button" class="pf-btn pf-btn--secondary" [disabled]="!ready() || saving() || locked()" (click)="save()">Save bill</button>
               @if (!isPhone()) {
-                <button type="button" class="nd-btn nd-span" [class.nd-btn--primary]="canPay()" [class.nd-btn--secondary]="!canPay()"
+                <button type="button" class="pf-btn pf-span" [class.pf-btn--primary]="canPay()" [class.pf-btn--secondary]="!canPay()"
                         [disabled]="!canPay() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment {{ inr(totals().payable, false) }}</button>
               }
             }
           </div>
         </aside>
         @if (isPhone() && !paid()) {
-          <div class="nd-bottombar" role="region" aria-label="Payment">
-            <span class="nd-bottombar__info nd-num">{{ inr(totals().payable, false) }} · {{ items().length }} {{ items().length === 1 ? 'item' : 'items' }}</span>
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="canPay()" [class.nd-btn--secondary]="!canPay()"
+          <div class="pf-bottombar" role="region" aria-label="Payment">
+            <span class="pf-bottombar__info pf-num">{{ inr(totals().payable, false) }} · {{ items().length }} {{ items().length === 1 ? 'item' : 'items' }}</span>
+            <button type="button" class="pf-btn" [class.pf-btn--primary]="canPay()" [class.pf-btn--secondary]="!canPay()"
                     [disabled]="!canPay() || saving()" [pfBusy]="saving()" pfBusyLabel="Taking payment…" (click)="pay()">Take payment</button>
           </div>
         }

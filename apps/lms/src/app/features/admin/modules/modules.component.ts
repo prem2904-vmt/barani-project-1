@@ -31,10 +31,10 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
             <!-- Neutral kit segment (counts in Noto tabular, never mono). -->
-            <span class="nd-seg pf-mods-seg" role="radiogroup" aria-label="Show modules">
+            <span class="pf-seg pf-mods-seg" role="radiogroup" aria-label="Show modules">
               @for (o of statusOptions(); track o.value) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
-                        (click)="status.set(o.value)">{{ o.label }} <span class="nd-num pf-mods-seg__n">{{ o.count }}</span></button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
+                        (click)="status.set(o.value)">{{ o.label }} <span class="pf-num pf-mods-seg__n">{{ o.count }}</span></button>
               }
             </span>
           </ng-container>
@@ -49,9 +49,9 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
       <div class="pf-band-body">
       <div class="pf-mods">
         @for (m of visibleCatalog(); track m.id) {
-          <div class="pf-mod nd-card" [class.pf-mod--on]="isModuleOn(m.id)">
+          <div class="pf-mod pf-card" [class.pf-mod--on]="isModuleOn(m.id)">
             <div class="pf-mod__head">
-              <span class="nd-card__icon pf-mod__icon" [style.opacity]="isModuleOn(m.id) ? 1 : 0.5">
+              <span class="pf-card__icon pf-mod__icon" [style.opacity]="isModuleOn(m.id) ? 1 : 0.5">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path [attr.d]="m.iconPath"></path>
@@ -60,13 +60,13 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
               <div class="pf-mod__meta">
                 <div class="pf-mod__titlerow">
                   <h3 class="pf-mod__title">{{ m.label }}</h3>
-                  @if (m.status === 'coming_soon') { <span class="nd-chip nd-chip--static pf-mod__badge">Coming soon</span> }
+                  @if (m.status === 'coming_soon') { <span class="pf-chip pf-chip--static pf-mod__badge">Coming soon</span> }
                 </div>
                 <p class="pf-mod__blurb">{{ m.blurb }}</p>
               </div>
-              <button type="button" class="nd-toggle pf-tog" role="switch" [attr.aria-checked]="isModuleOn(m.id)"
+              <button type="button" class="pf-toggle pf-tog" role="switch" [attr.aria-checked]="isModuleOn(m.id)"
                       [attr.aria-label]="'Enable ' + m.label" [disabled]="busy()" (click)="toggleModule(m.id)">
-                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               </button>
             </div>
 
@@ -78,9 +78,9 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
                       <span class="pf-feat__label">{{ f.label }}</span>
                       @if (f.hint) { <span class="pf-feat__hint">{{ f.hint }}</span> }
                     </div>
-                    <button type="button" class="nd-toggle pf-tog" role="switch" [attr.aria-checked]="isFeatureOn(m.id, f.key)"
+                    <button type="button" class="pf-toggle pf-tog" role="switch" [attr.aria-checked]="isFeatureOn(m.id, f.key)"
                             [attr.aria-label]="'Enable ' + f.label" [disabled]="busy()" (click)="toggleFeature(m.id, f.key)">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                 }
@@ -97,11 +97,11 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
   `,
   styles: [`
     .pf-mods-seg { flex: none; }
-    .pf-mods-seg .nd-seg__item { height: 32px; }
+    .pf-mods-seg .pf-seg__item { height: 32px; }
     .pf-mods-seg__n { color: var(--text-tertiary); font-weight: 500; margin-left: 2px; }
     .pf-mods { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin-inline: auto; }
-    .pf-mod { transition: border-color var(--nd-dur-fast) ease; }
-    .pf-mod--on { border-color: var(--nd-sel-border); }
+    .pf-mod { transition: border-color var(--pf-dur-fast) ease; }
+    .pf-mod--on { border-color: var(--pf-sel-border); }
     .pf-mod__head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; }
     .pf-mod__icon { width: 36px; height: 36px; border-radius: 10px; }
     .pf-mod__meta { flex: 1; min-width: 0; }
@@ -110,11 +110,11 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
     .pf-mod__badge { height: 22px; font-size: 11px; }
     .pf-mod__blurb { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-mod__feats {
-      border-top: 1px solid var(--nd-line);
+      border-top: 1px solid var(--pf-line);
       padding: 6px 18px 10px 66px; display: flex; flex-direction: column;
     }
     .pf-feat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; }
-    .pf-feat + .pf-feat { border-top: 1px solid var(--nd-line); }
+    .pf-feat + .pf-feat { border-top: 1px solid var(--pf-line); }
     .pf-feat__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .pf-feat__label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .pf-feat__hint { font-size: 12px; color: var(--text-tertiary); }

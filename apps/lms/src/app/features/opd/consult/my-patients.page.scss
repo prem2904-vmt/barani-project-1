@@ -21,7 +21,7 @@
 .mp__tag {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 6px;
   font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
-  background: var(--nd-chip-bg, color-mix(in srgb, var(--text-primary) 6%, transparent));
+  background: var(--pf-chip-bg, color-mix(in srgb, var(--text-primary) 6%, transparent));
 }
 .mp__tag--done svg { color: var(--color-violet-600, #7c3aed); }
 .mp__tag--warn { color: var(--error-text, #dc2626); background: color-mix(in srgb, var(--error-text, #dc2626) 10%, transparent); }

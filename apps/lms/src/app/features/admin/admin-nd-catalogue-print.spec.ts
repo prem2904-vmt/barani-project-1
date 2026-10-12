@@ -17,19 +17,19 @@ import { AuthService } from '../../core/auth/auth.service';
 import { TestPricingService } from '../../core/services/test-pricing.service';
 
 /**
- * ND-PATTERN audit (current rules) for the catalogue + print pages: ONE
+ * PF-PATTERN audit (current rules) for the catalogue + print pages: ONE
  * primary in view (classic-only markup excluded), slate switches instead of
  * the violet pf-toggle / checkboxes, neutral selected states (aria-pressed,
  * never `--on` gradients), kit cards / fields, no native select, no mono.
  * Test Master editors (option group, micro master) open as a side card that
  * is a sheet on phones, with the editor's save as the ONE primary.
  */
-const PRIMARY = '.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';
+const PRIMARY = '.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';
 /** Primaries a new-design user can see (classic-only markup is display:none). */
 const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLElement>(PRIMARY)).filter(b => !b.closest('.pf-classic-only'));
 const hygiene = (el: HTMLElement) => {
-  expect(el.querySelector('pf-toggle, select, datalist, .font-mono, [class*="--on"]:not(.nd-toggle)')).toBeNull();
+  expect(el.querySelector('pf-toggle, select, datalist, .font-mono, [class*="--on"]:not(.pf-toggle)')).toBeNull();
   expect(Array.from(el.querySelectorAll('input[type="checkbox"]')).filter(i => !/srcheck/.test(i.className))).toEqual([]);
 };
 const tabBtn = (el: HTMLElement, label: string) =>
@@ -42,7 +42,7 @@ describe('ND audit — Report designer', () => {
       : url === '/api/tenants/departments' ? [{ id: 'd1', name: 'Haematology' }]
       : url.startsWith('/api/workflows/') ? { configJson: '{}' } : null,
   });
-  it('one primary on every tab; slate switches; neutral thumbs; preview is an nd-card', () => {
+  it('one primary on every tab; slate switches; neutral thumbs; preview is an pf-card', () => {
     const p = make();
     for (const t of ['Letterhead', 'Patient strip', 'Results table', 'Footer']) {
       tabBtn(p.el, t).click();
@@ -52,17 +52,17 @@ describe('ND audit — Report designer', () => {
     }
     tabBtn(p.el, 'Letterhead').click();
     p.f.detectChanges();
-    const sw = p.el.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"][aria-label="NABL accredited"]')!;
+    const sw = p.el.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"][aria-label="NABL accredited"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('false');
     sw.click(); p.f.detectChanges();
     expect(p.cmp.tpl().nablAccredited).toBe(true);
     // Header styles: neutral selected tile in the designer's side card.
-    expect(p.el.querySelector('.pf-rhe-preset.nd-tile-sel[aria-checked="true"]')).not.toBeNull();
+    expect(p.el.querySelector('.pf-rhe-preset.pf-tile-sel[aria-checked="true"]')).not.toBeNull();
     tabBtn(p.el, 'Patient strip').click();
     p.f.detectChanges();
     const aside = p.el.querySelector('.pf-rt-aside')!;
-    expect(aside.classList.contains('nd-card')).toBe(true);
-    expect(aside.querySelector('.nd-card__label')!.textContent).toContain('Live preview');
+    expect(aside.classList.contains('pf-card')).toBe(true);
+    expect(aside.querySelector('.pf-card__label')!.textContent).toContain('Live preview');
   });
 });
 
@@ -79,12 +79,12 @@ describe('ND audit — Billing config', () => {
       expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual(['Save']);
       hygiene(p.el);
     }
-    expect(p.el.querySelector('.pf-save-letterhead')!.classList.contains('nd-btn--secondary')).toBe(true);
-    expect(p.el.querySelectorAll('.nd-toggle[role="switch"]').length).toBeGreaterThanOrEqual(4);
+    expect(p.el.querySelector('.pf-save-letterhead')!.classList.contains('pf-btn--secondary')).toBe(true);
+    expect(p.el.querySelectorAll('.pf-toggle[role="switch"]').length).toBeGreaterThanOrEqual(4);
     expect(p.el.querySelector('.pf-tpl-chip[aria-pressed="true"]')).not.toBeNull();
     tabBtn(p.el, 'GST Setup').click();
     p.f.detectChanges();
-    p.el.querySelector<HTMLButtonElement>('.nd-toggle[aria-label="Enable GST"]')!.click();
+    p.el.querySelector<HTMLButtonElement>('.pf-toggle[aria-label="Enable GST"]')!.click();
     expect(p.cmp.config().gstEnabled).toBe(true);
   });
 });
@@ -96,9 +96,9 @@ describe('ND audit — Branding, Printing, Signature', () => {
       providers: [{ provide: TenantStateService, useValue: { tenant, ensureLoaded: vi.fn(), update: vi.fn() } }],
     });
     p.api.patch.mockImplementation(() => of({ id: 't1' }) as any);
-    const cards = p.el.querySelectorAll('section.nd-card');
+    const cards = p.el.querySelectorAll('section.pf-card');
     expect(cards.length).toBe(2);
-    expect(cards[0].querySelector('.nd-card__icon svg')).not.toBeNull();
+    expect(cards[0].querySelector('.pf-card__icon svg')).not.toBeNull();
     expect(primaries(p.el).length).toBe(1);
     hygiene(p.el);
   });
@@ -128,7 +128,7 @@ describe('ND audit — Branding, Printing, Signature', () => {
     tabBtn(p.el, 'Registration ID').click();
     p.f.detectChanges();
     expect(primaries(p.el).length).toBe(1);
-    expect(p.el.querySelector('.pf-sig-input')!.classList.contains('nd-input')).toBe(true);
+    expect(p.el.querySelector('.pf-sig-input')!.classList.contains('pf-input')).toBe(true);
     hygiene(p.el);
   });
 });
@@ -143,7 +143,7 @@ describe('ND audit — Test Master side views', () => {
     const emitted: boolean[] = [];
     p.cmp.editingChange.subscribe((v: boolean) => emitted.push(v));
     p.f.detectChanges();
-    const sw = p.el.querySelector<HTMLButtonElement>('.pf-pricing__offer .nd-toggle[role="switch"]');
+    const sw = p.el.querySelector<HTMLButtonElement>('.pf-pricing__offer .pf-toggle[role="switch"]');
     expect(sw).not.toBeNull();
     expect(sw!.getAttribute('aria-checked')).toBe('true');
     expect(primaries(p.el)).toEqual([]);
@@ -163,15 +163,15 @@ describe('ND audit — Test Master side views', () => {
     p.cmp.editingChange.subscribe((v: boolean) => emitted.push(v));
     p.f.detectChanges();
     const side = () => p.el.querySelector('aside.pf-og__side')!;
-    expect(side().classList.contains('nd-card')).toBe(true);
-    expect(side().classList.contains('nd-sheet')).toBe(false);
+    expect(side().classList.contains('pf-card')).toBe(true);
+    expect(side().classList.contains('pf-sheet')).toBe(false);
     // "Normal" is the neutral selected chip + a violet check — never green.
     expect(side().querySelector('.pf-og__chip--normal svg')).not.toBeNull();
     p.cmp.startEdit(p.cmp.selected());
     p.f.detectChanges();
-    expect(side().classList.contains('nd-sheet')).toBe(true);
+    expect(side().classList.contains('pf-sheet')).toBe(true);
     expect(emitted.at(-1)).toBe(true);
-    expect(side().querySelectorAll('.nd-toggle[role="switch"]').length).toBe(2);   // Normal + Active
+    expect(side().querySelectorAll('.pf-toggle[role="switch"]').length).toBe(2);   // Normal + Active
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save everywhere']);
     hygiene(p.el);
   });
@@ -186,10 +186,10 @@ describe('ND audit — Test Master side views', () => {
     p.f.detectChanges();
     const ed = p.el.querySelector('aside.pf-mm__side--editor')!;
     expect(ed).not.toBeNull();
-    expect(ed.classList.contains('nd-card')).toBe(true);
-    expect(ed.classList.contains('nd-sheet')).toBe(true);
-    expect(ed.querySelectorAll('.nd-toggle[role="switch"]').length).toBe(3);   // AST · Disk · MIC
-    expect(ed.querySelector('input.nd-input')).not.toBeNull();
+    expect(ed.classList.contains('pf-card')).toBe(true);
+    expect(ed.classList.contains('pf-sheet')).toBe(true);
+    expect(ed.querySelectorAll('.pf-toggle[role="switch"]').length).toBe(3);   // AST · Disk · MIC
+    expect(ed.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save']);
     hygiene(p.el);
   });

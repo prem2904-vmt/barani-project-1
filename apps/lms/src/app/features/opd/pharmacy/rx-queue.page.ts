@@ -59,24 +59,24 @@ export function todaySummary(dispenses: readonly Pick<DispenseSummary, 'status' 
       </pf-hero-band>
 
       <div class="ph-body">
-        <section class="nd-card" aria-labelledby="ph-q-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
-            <span class="nd-card__label" id="ph-q-t">Waiting to dispense</span>
-            <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">{{ rows().length }} {{ rows().length === 1 ? 'prescription' : 'prescriptions' }}</span>
+        <section class="pf-card" aria-labelledby="ph-q-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z"/><path d="m8.5 8.5 7 7"/></svg></span>
+            <span class="pf-card__label" id="ph-q-t">Waiting to dispense</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ph-sub pf-num">{{ rows().length }} {{ rows().length === 1 ? 'prescription' : 'prescriptions' }}</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @if (showSkeleton()) {
               <pf-skeleton-rows [rows]="5" label="Loading prescriptions…"></pf-skeleton-rows>
             } @else if (error()) {
-              <div class="nd-empty"><p class="nd-empty__title">Couldn't load the queue</p><p class="nd-empty__body">{{ error() }}</p>
-                <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="load()">Try again</button></div>
+              <div class="pf-empty"><p class="pf-empty__title">Couldn't load the queue</p><p class="pf-empty__body">{{ error() }}</p>
+                <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="load()">Try again</button></div>
             } @else if (!rows().length) {
-              <div class="nd-empty">
-                <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                <p class="nd-empty__title">{{ q() ? 'No prescription matches' : 'No prescriptions waiting' }}</p>
-                <p class="nd-empty__body">When a doctor completes a consult with medicines, it appears here.</p>
+              <div class="pf-empty">
+                <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <p class="pf-empty__title">{{ q() ? 'No prescription matches' : 'No prescriptions waiting' }}</p>
+                <p class="pf-empty__body">When a doctor completes a consult with medicines, it appears here.</p>
               </div>
             } @else {
               <ul class="ph-list" aria-label="Prescriptions waiting">
@@ -85,11 +85,11 @@ export function todaySummary(dispenses: readonly Pick<DispenseSummary, 'status' 
                     <button type="button" class="ph-row press" (click)="open(r)">
                       <span class="ph-row__main">
                         <span class="ph-row__name">{{ r.patientName }}</span>
-                        <span class="ph-row__meta nd-num">{{ meta(r) }}</span>
+                        <span class="ph-row__meta pf-num">{{ meta(r) }}</span>
                       </span>
                       <span class="ph-row__end">
                         <span class="ph-dot" [attr.data-tone]="r.status === 'partial' ? 'warn' : null">{{ r.status === 'partial' ? 'Part given' : 'New' }} · {{ r.pending }} of {{ r.lines }}</span>
-                        <span class="ph-sub nd-num">{{ wait(r) }}</span>
+                        <span class="ph-sub pf-num">{{ wait(r) }}</span>
                       </span>
                     </button>
                   </li>
@@ -99,25 +99,25 @@ export function todaySummary(dispenses: readonly Pick<DispenseSummary, 'status' 
           </div>
         </section>
 
-        <aside class="nd-card" aria-labelledby="ph-today-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
-            <span class="nd-card__label" id="ph-today-t">Today</span>
-            <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">Billed {{ inr(summary().billed, false) }} · Collected {{ inr(summary().collected, false) }}{{ summary().due > 0 ? ' · Due ' + inr(summary().due, false) : '' }}</span>
+        <aside class="pf-card" aria-labelledby="ph-today-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+            <span class="pf-card__label" id="ph-today-t">Today</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ph-sub pf-num">Billed {{ inr(summary().billed, false) }} · Collected {{ inr(summary().collected, false) }}{{ summary().due > 0 ? ' · Due ' + inr(summary().due, false) : '' }}</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             @for (d of today(); track d.id) {
               <div class="ph-row" style="cursor:default">
                 <span class="ph-row__main">
                   <span class="ph-row__name">{{ d.customerName || (d.kind === 'rx' ? 'Prescription' : 'Walk-in customer') }}</span>
-                  <span class="ph-row__meta nd-num">{{ d.number || 'Draft' }} · {{ d.kind === 'rx' ? 'Prescription' : 'Counter' }} · {{ d.lines }} {{ d.lines === 1 ? 'item' : 'items' }}</span>
+                  <span class="ph-row__meta pf-num">{{ d.number || 'Draft' }} · {{ d.kind === 'rx' ? 'Prescription' : 'Counter' }} · {{ d.lines }} {{ d.lines === 1 ? 'item' : 'items' }}</span>
                 </span>
                 <span class="ph-row__end">
-                  <span class="nd-num ph-strong">{{ inr(d.total) }}</span>
+                  <span class="pf-num ph-strong">{{ inr(d.total) }}</span>
                   <span class="ph-dot" [attr.data-tone]="d.status === 'completed' ? 'done' : d.status === 'cancelled' ? 'bad' : 'warn'">{{ statusWord(d) }}</span>
                   @if (due(d) > 0) {
-                    <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="collecting() === d.id" [pfBusy]="collecting() === d.id" pfBusyLabel="Collecting…" (click)="collect(d)">Collect payment</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary" [disabled]="collecting() === d.id" [pfBusy]="collecting() === d.id" pfBusyLabel="Collecting…" (click)="collect(d)">Collect payment</button>
                   }
                 </span>
               </div>

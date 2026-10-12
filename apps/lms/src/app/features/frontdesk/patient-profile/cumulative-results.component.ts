@@ -6,7 +6,7 @@ import {
 } from './patient-profile.clinical';
 
 /**
- * CUMULATIVE RESULTS — the doctor's results review (docs/ND-PATTERN.md §22):
+ * CUMULATIVE RESULTS — the doctor's results review (docs/PF-PATTERN.md §22):
  * an analyte × visit grid, newest visit first (older visits scroll
  * sideways), grouped department → panel. Each analyte carries a tiny
  * sparkline (reference band shaded) and a trend arrow; flagged cells are
@@ -20,23 +20,23 @@ import {
   standalone: true,
   imports: [ZoomSourceDirective, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'nd-card pf-cr', '[attr.aria-busy]': 'loading()' },
+  host: { class: 'pf-card pf-cr', '[attr.aria-busy]': 'loading()' },
   template: `
-    <header class="nd-card__head pf-cr__head">
-      <span class="nd-card__icon" aria-hidden="true">
+    <header class="pf-card__head pf-cr__head">
+      <span class="pf-card__icon" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
       </span>
-      <span class="nd-card__label pf-cr__label">Cumulative results</span>
+      <span class="pf-card__label pf-cr__label">Cumulative results</span>
       @if (grid(); as g) {
         @if (g.rowCount) {
           <label class="pf-cr__find">
             <svg class="pf-cr__find-i" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input class="nd-input pf-cr__find-in" type="search" placeholder="Search analytes" aria-label="Search analytes"
+            <input class="pf-input pf-cr__find-in" type="search" placeholder="Search analytes" aria-label="Search analytes"
                    [value]="query()" (input)="query.set($any($event.target).value)" />
           </label>
-          <button type="button" class="nd-toggle pf-cr__abn" role="switch" [attr.aria-checked]="abnormalOnly()"
+          <button type="button" class="pf-toggle pf-cr__abn" role="switch" [attr.aria-checked]="abnormalOnly()"
                   (click)="abnormalOnly.set(!abnormalOnly())">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             Abnormal only
           </button>
         }
@@ -46,20 +46,20 @@ import {
     @if (grid(); as g) {
       @if (g.departments.length > 1) {
         <div class="pf-cr__chips" role="group" aria-label="Departments">
-          <button type="button" class="nd-chip pf-cr__chip" [attr.aria-pressed]="!depts().length" (click)="depts.set([])">All</button>
+          <button type="button" class="pf-chip pf-cr__chip" [attr.aria-pressed]="!depts().length" (click)="depts.set([])">All</button>
           @for (d of g.departments; track d) {
-            <button type="button" class="nd-chip pf-cr__chip" [attr.aria-pressed]="depts().includes(d)" (click)="toggleDept(d)">{{ d }}</button>
+            <button type="button" class="pf-chip pf-cr__chip" [attr.aria-pressed]="depts().includes(d)" (click)="toggleDept(d)">{{ d }}</button>
           }
         </div>
       }
     }
 
-    <div class="nd-card__body pf-cr__body" [class.pf-cr__body--grid]="!cards()">
+    <div class="pf-card__body pf-cr__body" [class.pf-cr__body--grid]="!cards()">
       @if (forbidden()) {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-          <p class="nd-empty__title">Results need report access</p>
-          <p class="nd-empty__body">Ask an admin for View report or View order to see this patient's results.</p>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <p class="pf-empty__title">Results need report access</p>
+          <p class="pf-empty__body">Ask an admin for View report or View order to see this patient's results.</p>
         </div>
       } @else if (loading()) {
         <div class="pf-cr__skel" aria-hidden="true">
@@ -68,22 +68,22 @@ import {
           }
         </div>
       } @else if (failed()) {
-        <div class="nd-empty" role="alert">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg></span>
-          <p class="nd-empty__title">Couldn’t load results</p>
-          <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="retry.emit()">Try again</button>
+        <div class="pf-empty" role="alert">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg></span>
+          <p class="pf-empty__title">Couldn’t load results</p>
+          <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="retry.emit()">Try again</button>
         </div>
       } @else if (!grid()?.rowCount) {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/><path d="M7 14h10"/></svg></span>
-          <p class="nd-empty__title">No results yet</p>
-          <p class="nd-empty__body">Resulted tests appear here, one row per analyte, one column per visit.</p>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/><path d="M7 14h10"/></svg></span>
+          <p class="pf-empty__title">No results yet</p>
+          <p class="pf-empty__body">Resulted tests appear here, one row per analyte, one column per visit.</p>
         </div>
       } @else if (!shown().length) {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
-          <p class="nd-empty__title">No analytes match</p>
-          <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="clear()">Clear filters</button>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+          <p class="pf-empty__title">No analytes match</p>
+          <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="clear()">Clear filters</button>
         </div>
       } @else if (cards()) {
         <!-- Phones: one card per analyte. -->
@@ -97,18 +97,18 @@ import {
                   <span class="pf-cr__card-top">
                     <span class="pf-cr__card-name">{{ r.title }}</span>
                     @if (r.trend; as t) {
-                      <span class="pf-cr__trend nd-num" [attr.data-dir]="t.dir">
+                      <span class="pf-cr__trend pf-num" [attr.data-dir]="t.dir">
                         <ng-container *ngTemplateOutlet="arrow; context: { $implicit: t.dir }"></ng-container>{{ t.text }}
                       </span>
                     }
                   </span>
                   <span class="pf-cr__card-mid">
-                    <span class="pf-cr__card-val nd-num" [attr.data-tone]="r.latest.tone">
+                    <span class="pf-cr__card-val pf-num" [attr.data-tone]="r.latest.tone">
                       {{ r.latest.value }}@if (r.unit) {<span class="pf-cr__unit">{{ r.unit }}</span>}
                     </span>
                     @if (spark(r, 128, 34); as s) { <ng-container *ngTemplateOutlet="sparkTpl; context: { $implicit: s }"></ng-container> }
                   </span>
-                  <span class="pf-cr__card-foot nd-num">
+                  <span class="pf-cr__card-foot pf-num">
                     @if (r.latest.tone !== 'normal') {
                       <span class="pf-cr__word" [attr.data-tone]="r.latest.tone"><span class="pf-cr__dot" aria-hidden="true"></span>{{ flagWord(r.latest) }}</span>
                     }
@@ -128,7 +128,7 @@ import {
               <th scope="col" class="pf-cr__th pf-cr__th--name">Analyte</th>
               <th scope="col" class="pf-cr__th pf-cr__th--ref">Reference</th>
               @for (c of grid()!.columns; track c.orderId) {
-                <th scope="col" class="pf-cr__th pf-cr__th--date nd-num" [title]="(c.orderNumber || '') + (c.final ? '' : ' · awaiting validation')">
+                <th scope="col" class="pf-cr__th pf-cr__th--date pf-num" [title]="(c.orderNumber || '') + (c.final ? '' : ' · awaiting validation')">
                   {{ c.label }}
                 </th>
               }
@@ -143,7 +143,7 @@ import {
                     <button type="button" class="pf-cr__namebtn" [pfZoomSource]="[r.key]" (click)="openRow(r)" [attr.aria-label]="rowLabel(r)">
                       <span class="pf-cr__nametext">
                         <span class="pf-cr__title">{{ r.title }}</span>
-                        <span class="pf-cr__sub nd-num">
+                        <span class="pf-cr__sub pf-num">
                           @if (r.unit) { {{ r.unit }} }
                           @if (r.unitMismatch) { <span class="pf-cr__mis" [title]="'Units used: ' + r.units.join(', ')">Units differ</span> }
                         </span>
@@ -151,18 +151,18 @@ import {
                       <span class="pf-cr__viz">
                         @if (spark(r, 64, 22); as s) { <ng-container *ngTemplateOutlet="sparkTpl; context: { $implicit: s }"></ng-container> }
                         @if (r.trend; as t) {
-                          <span class="pf-cr__trend nd-num" [attr.data-dir]="t.dir" [title]="'Change since the previous result: ' + t.text">
+                          <span class="pf-cr__trend pf-num" [attr.data-dir]="t.dir" [title]="'Change since the previous result: ' + t.text">
                             <ng-container *ngTemplateOutlet="arrow; context: { $implicit: t.dir }"></ng-container>{{ t.text === 'no change' ? '0%' : t.text }}
                           </span>
                         }
                       </span>
                     </button>
                   </th>
-                  <td class="pf-cr__ref nd-num">{{ r.range || '—' }}</td>
+                  <td class="pf-cr__ref pf-num">{{ r.range || '—' }}</td>
                   @for (c of grid()!.columns; track c.orderId) {
                     @if (r.cells[c.orderId]; as cell) {
                       <td class="pf-cr__cell" [attr.data-tone]="cell.tone">
-                        <button type="button" class="pf-cr__cellbtn nd-num" [class.pf-cr__cellbtn--prelim]="!cell.final" [pfZoomSource]="[c.orderId]"
+                        <button type="button" class="pf-cr__cellbtn pf-num" [class.pf-cr__cellbtn--prelim]="!cell.final" [pfZoomSource]="[c.orderId]"
                                 (click)="openOrder.emit(c.orderId)" [attr.aria-label]="cellLabel(r, cell, c.label)"
                                 [title]="cellTitle(cell)">
                           @if (cell.dir) { <ng-container *ngTemplateOutlet="arrow; context: { $implicit: cell.dir }"></ng-container> }
@@ -182,7 +182,7 @@ import {
       }
     </div>
     @if (grid()?.rowCount && !cards()) {
-      <footer class="pf-cr__legend nd-num" aria-label="Legend">
+      <footer class="pf-cr__legend pf-num" aria-label="Legend">
         <span class="pf-cr__word" data-tone="abnormal"><span class="pf-cr__dot" aria-hidden="true"></span>High / low</span>
         <span class="pf-cr__word" data-tone="critical"><span class="pf-cr__dot" aria-hidden="true"></span>Critical</span>
         <span class="pf-cr__lg"><span class="pf-cr__lg-band" aria-hidden="true"></span>Reference band</span>
@@ -220,7 +220,7 @@ import {
     .pf-cr__find-i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
     .pf-cr__find-in { width: 100%; height: 36px; min-height: 36px; padding-left: 34px; font-size: 13px; }
     .pf-cr__abn { flex: none; min-height: 36px; font-size: 12.5px; }
-    .pf-cr__chips { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--nd-line); overflow-x: auto; scrollbar-width: none; flex: none; }
+    .pf-cr__chips { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--pf-line); overflow-x: auto; scrollbar-width: none; flex: none; }
     .pf-cr__chips::-webkit-scrollbar { display: none; }
     .pf-cr__chip { flex: none; }
 
@@ -230,24 +230,24 @@ import {
     /* ── Grid: sticky header row + sticky analyte column ── */
     .pf-cr__t { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 13px; color: var(--text-primary); }
     .pf-cr__th {
-      position: sticky; top: 0; z-index: 2; background: var(--nd-card-bg);
-      padding: 8px 12px; border-bottom: 1px solid var(--nd-line);
+      position: sticky; top: 0; z-index: 2; background: var(--pf-card-bg);
+      padding: 8px 12px; border-bottom: 1px solid var(--pf-line);
       font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary);
       text-align: right; white-space: nowrap;
     }
     .pf-cr__th--name { left: 0; z-index: 3; text-align: left; min-width: 250px; }
     .pf-cr__th--ref { text-align: left; }
     .pf-cr__th--date { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); min-width: 76px; }
-    .pf-cr__gcell { position: sticky; left: 0; z-index: 1; padding: 14px 12px 6px; text-align: left; background: var(--nd-card-bg); }
+    .pf-cr__gcell { position: sticky; left: 0; z-index: 1; padding: 14px 12px 6px; text-align: left; background: var(--pf-card-bg); }
     .pf-cr__gtext { position: sticky; left: 12px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
     .pf-cr__gdept { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-cr__row > * { border-bottom: 1px solid var(--nd-line); }
-    .pf-cr__name { position: sticky; left: 0; z-index: 1; background: var(--nd-card-bg); padding: 0; text-align: left; font-weight: 400; box-shadow: 1px 0 0 var(--nd-line); }
+    .pf-cr__row > * { border-bottom: 1px solid var(--pf-line); }
+    .pf-cr__name { position: sticky; left: 0; z-index: 1; background: var(--pf-card-bg); padding: 0; text-align: left; font-weight: 400; box-shadow: 1px 0 0 var(--pf-line); }
     .pf-cr__namebtn {
       display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 12px;
       border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
     }
-    .pf-cr__namebtn:hover { background: var(--nd-chip-bg); }
+    .pf-cr__namebtn:hover { background: var(--pf-chip-bg); }
     .pf-cr__namebtn:focus-visible, .pf-cr__cellbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
     .pf-cr__nametext { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
     .pf-cr__title { font-size: 13px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
@@ -259,7 +259,7 @@ import {
       display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; width: 100%; min-height: 48px; padding: 6px 12px;
       border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
     }
-    .pf-cr__cellbtn:hover { background: var(--nd-chip-bg); }
+    .pf-cr__cellbtn:hover { background: var(--pf-chip-bg); }
     .pf-cr__cellbtn--prelim span:first-of-type { text-decoration: underline dotted; text-underline-offset: 3px; }
     .pf-cr__cellunit { font-size: 11px; font-weight: 500; color: color-mix(in srgb, var(--amber-text) 80%, var(--text-primary)); }
     /* Flag tint: subtle, the dot-word tones (amber high / low, red critical). */
@@ -290,25 +290,25 @@ import {
     .pf-cr__word[data-tone='critical'] { --t: var(--red-text); }
     .pf-cr__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--t); }
 
-    .pf-cr__legend { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 16px 10px; border-top: 1px solid var(--nd-line); font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-cr__legend { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 16px 10px; border-top: 1px solid var(--pf-line); font-size: 11.5px; color: var(--text-tertiary); }
     .pf-cr__lg { display: inline-flex; align-items: center; gap: 6px; }
     .pf-cr__lg-band { width: 18px; height: 8px; border-radius: 2px; background: color-mix(in srgb, var(--text-tertiary) 16%, transparent); }
     .pf-cr__lg-prelim { text-decoration: underline dotted; text-underline-offset: 3px; color: var(--text-secondary); }
 
     .pf-cr__skel { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; }
-    .pf-cr__skelrow { display: flex; gap: 24px; height: 40px; align-items: center; border-bottom: 1px solid var(--nd-line); }
-    .pf-cr__sk { display: block; height: 11px; border-radius: 6px; background: var(--nd-chip-bg); }
+    .pf-cr__skelrow { display: flex; gap: 24px; height: 40px; align-items: center; border-bottom: 1px solid var(--pf-line); }
+    .pf-cr__sk { display: block; height: 11px; border-radius: 6px; background: var(--pf-chip-bg); }
 
     /* ── Phone cards ── */
     .pf-cr__ghead { margin: 14px 2px 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .pf-cr__ghead:first-child { margin-top: 2px; }
     .pf-cr__ghead span { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-cr__cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 8px; }
-    .pf-cr__cardli { animation: pf-cr-in var(--nd-dur, 320ms) var(--nd-spring) both; animation-delay: calc(var(--i, 0) * 18ms); }
+    .pf-cr__cardli { animation: pf-cr-in var(--pf-dur, 320ms) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 18ms); }
     @keyframes pf-cr-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     .pf-cr__card {
       display: flex; flex-direction: column; gap: 6px; width: 100%; min-height: 44px; padding: 12px 14px; text-align: left; cursor: pointer;
-      border-radius: var(--nd-radius, 12px); border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); font: inherit;
+      border-radius: var(--pf-radius, 12px); border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-primary); font: inherit;
     }
     .pf-cr__card[data-tone='abnormal'] { border-left: 3px solid color-mix(in srgb, var(--amber-text) 70%, transparent); }
     .pf-cr__card[data-tone='critical'] { border-left: 3px solid color-mix(in srgb, var(--red-text) 75%, transparent); }
@@ -326,7 +326,7 @@ import {
     }
     @media (max-width: 640px) {
       .pf-cr__head { flex-wrap: wrap; padding: 10px 12px; min-height: 0; }
-      .pf-cr__head > .nd-card__icon { display: none; }
+      .pf-cr__head > .pf-card__icon { display: none; }
       .pf-cr__label { display: inline; flex: 1 1 auto; }
       .pf-cr__find { flex: 1 1 100%; order: 3; }
       .pf-cr__find-in { height: 44px; min-height: 44px; font-size: 16px; }

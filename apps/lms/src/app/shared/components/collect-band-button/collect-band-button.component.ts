@@ -6,7 +6,7 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../../models/process-workflow.model';
 
 /**
- * Band "Collect" entry point (ND-PATTERN §1). Sample Collection sits only in
+ * Band "Collect" entry point (PF-PATTERN §1). Sample Collection sits only in
  * its fixed slots (Collect / Frontdesk / Lab — owner's final rule): when the
  * Frontdesk or Lab copy is switched ON, that area's screens get this quiet
  * button at the RIGHT of their band actions. The billing counter and custom
@@ -110,7 +110,7 @@ export class CollectBandButtonComponent {
     const local = this.inPlace();
     if (local) { local(); return; }
     // The Collect screen is a lazy route: the pressed button turns "held"
-    // the same frame, until the navigation settles (ND-PATTERN "Loading feedback").
+    // the same frame, until the navigation settles (PF-PATTERN "Loading feedback").
     this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     const t = this.target();
     this.router.navigate(t.commands, { queryParams: t.queryParams });

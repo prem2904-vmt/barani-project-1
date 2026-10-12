@@ -52,14 +52,14 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     <div class="pf-og">
       <div class="pf-og__bar">
         @if (bandQuery() === null) {
-          <input type="search" class="nd-input pf-og__search" placeholder="Search values, tests, parameters…" aria-label="Search option groups"
+          <input type="search" class="pf-input pf-og__search" placeholder="Search values, tests, parameters…" aria-label="Search option groups"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
         }
-        <span class="pf-og__count"><span class="nd-num">{{ rows().length }}</span> option group{{ rows().length === 1 ? '' : 's' }}</span>
+        <span class="pf-og__count"><span class="pf-num">{{ rows().length }}</span> option group{{ rows().length === 1 ? '' : 's' }}</span>
         <span class="pf-og__spacer"></span>
         @if (bandQuery() === null) {
-          <button type="button" class="nd-btn pf-og__new press" [class.nd-btn--primary]="!sheetOpen()"
-                  [class.nd-btn--secondary]="sheetOpen()" (click)="startCreate()">+ New option group</button>
+          <button type="button" class="pf-btn pf-og__new press" [class.pf-btn--primary]="!sheetOpen()"
+                  [class.pf-btn--secondary]="sheetOpen()" (click)="startCreate()">+ New option group</button>
         }
       </div>
 
@@ -67,7 +67,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
         <!-- ── LEFT: the groups grid ── -->
         <div class="pf-og__grid">
           @if (listSkeleton()) {
-            <!-- First load: the grid's shape over the mounted grid (ND-PATTERN "Loading feedback"). -->
+            <!-- First load: the grid's shape over the mounted grid (PF-PATTERN "Loading feedback"). -->
             <pf-skeleton-table class="pf-og__gridskel" [rows]="8" [cols]="5" label="Loading option groups…"></pf-skeleton-table>
           }
           <ag-grid-angular
@@ -84,43 +84,43 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
 
         <!-- ── RIGHT: detail / editor side card (phones: a sheet above the
              navbar while creating / editing). ── -->
-        @if (sheetOpen()) { <div class="nd-sheet-backdrop" (click)="closeEditor()" aria-hidden="true"></div> }
-        <aside class="nd-card pf-og__side" [class.nd-sheet]="sheetOpen()"
+        @if (sheetOpen()) { <div class="pf-sheet-backdrop" (click)="closeEditor()" aria-hidden="true"></div> }
+        <aside class="pf-card pf-og__side" [class.pf-sheet]="sheetOpen()"
                [attr.aria-label]="mode() === 'create' ? 'New option group' : 'Option group'">
-          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
           @if (listSkeleton() && mode() !== 'create') {
             <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading option group…"></pf-skeleton-card>
           }
           @else if (mode() === 'create') {
-            <div class="nd-card__head">
-              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
-              <span class="nd-card__label">New option group</span>
-              <span class="nd-card__spacer"></span>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-og__hbtn press" (click)="mode.set('idle')">Cancel</button>
+            <div class="pf-card__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="pf-card__label">New option group</span>
+              <span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-og__hbtn press" (click)="mode.set('idle')">Cancel</button>
             </div>
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="pf-og__slabel">Values</div>
               @for (r of draft(); track $index) {
                 <div class="pf-og__row">
-                  <input type="text" class="nd-input nd-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
+                  <input type="text" class="pf-input pf-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
                          (ngModelChange)="patchRow($index, { value: $event })" placeholder="Value" />
-                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
-                        (click)="patchRow($index, { normal: !r.normal })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Normal</button>
+                  <button type="button" class="pf-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
+                        (click)="patchRow($index, { normal: !r.normal })"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Normal</button>
                   <button type="button" class="pf-og__rowdel press" (click)="removeRow($index)" aria-label="Remove value" title="Remove value"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                 </div>
               }
-              <button type="button" class="nd-btn nd-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
 
               <div class="pf-og__slabel">Map into tests</div>
-              <input type="search" class="nd-input pf-og__search--full" placeholder="Search a test…" aria-label="Search a test"
+              <input type="search" class="pf-input pf-og__search--full" placeholder="Search a test…" aria-label="Search a test"
                      [ngModel]="pickQuery()" (ngModelChange)="pickQuery.set($event)" />
               @if (pickQuery().trim()) {
                 <div class="pf-og__picklist">
                   @for (p of pickable(); track p.testId + p.paramName) {
-                    <label class="nd-row pf-og__pick" [class.nd-row--in]="isTargeted(p)">
+                    <label class="pf-row pf-og__pick" [class.pf-row--in]="isTargeted(p)">
                       <input type="checkbox" class="pf-og__srcheck" [checked]="isTargeted(p)" (change)="toggleTarget(p)" />
-                      <span class="nd-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-                      <span class="nd-row__name pf-og__picktest"><span class="nd-num pf-og__pcode">{{ p.testCode || '—' }}</span> {{ p.testName }}
+                      <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span class="pf-row__name pf-og__picktest"><span class="pf-num pf-og__pcode">{{ p.testCode || '—' }}</span> {{ p.testName }}
                         <span class="pf-og__pickparam">{{ p.paramTitle }}</span></span>
                       @if (p.mappedTo) { <span class="pf-og__pickwarn">already mapped: {{ p.mappedTo }}</span> }
                     </label>
@@ -130,7 +130,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                 </div>
               }
               @if (targets().length) {
-                <div class="pf-og__slabel">Selected (<span class="nd-num">{{ targets().length }}</span>)</div>
+                <div class="pf-og__slabel">Selected (<span class="pf-num">{{ targets().length }}</span>)</div>
                 <div class="pf-og__chips">
                   @for (t of targets(); track t.testId + t.paramName) {
                     <span class="pf-og__chip" [class.pf-og__chip--warnmap]="t.mappedTo"
@@ -148,23 +148,23 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
                   {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
               } @else { <span class="pf-og__warn"></span> }
-              <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
+              <button type="button" class="pf-btn pf-btn--primary pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
                       [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
             </div>
           }
 
           @else if (selected(); as g) {
-            <div class="nd-card__head">
-              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
-              <span class="nd-card__label pf-og__sname">{{ g.name }}</span>
-              <span class="nd-card__spacer"></span>
+            <div class="pf-card__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="pf-card__label pf-og__sname">{{ g.name }}</span>
+              <span class="pf-card__spacer"></span>
               @if (editing()) {
-                <button type="button" class="nd-btn nd-btn--tertiary pf-og__hbtn press" (click)="editing.set(false)">Cancel</button>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-og__hbtn press" (click)="editing.set(false)">Cancel</button>
               } @else {
-                <button type="button" class="nd-btn nd-btn--secondary pf-og__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
+                <button type="button" class="pf-btn pf-btn--secondary pf-og__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
               }
             </div>
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="pf-og__chips">
                 @for (v of g.values; track v.value) {
                   <span class="pf-og__chip" [class.pf-og__chip--normal]="v.normal" [class.pf-og__chip--off]="!v.active"
@@ -178,28 +178,28 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                 <div class="pf-og__slabel">Values</div>
                 @for (r of draft(); track $index) {
                   <div class="pf-og__row">
-                  <input type="text" class="nd-input nd-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
+                  <input type="text" class="pf-input pf-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
                          (ngModelChange)="patchRow($index, { value: $event })" placeholder="Value" />
-                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
-                        (click)="patchRow($index, { normal: !r.normal })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Normal</button>
-                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.active"
-                        (click)="patchRow($index, { active: !r.active })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Active</button>
+                  <button type="button" class="pf-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
+                        (click)="patchRow($index, { normal: !r.normal })"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Normal</button>
+                  <button type="button" class="pf-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.active"
+                        (click)="patchRow($index, { active: !r.active })"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>Active</button>
                   <button type="button" class="pf-og__rowdel press" (click)="removeRow($index)" aria-label="Remove value" title="Remove value"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                 </div>
                 }
-                <button type="button" class="nd-btn nd-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
               }
 
-              <div class="pf-og__slabel">Linked tests (<span class="nd-num">{{ testsOf(g).length }}</span>)</div>
+              <div class="pf-og__slabel">Linked tests (<span class="pf-num">{{ testsOf(g).length }}</span>)</div>
               <div class="pf-og__tests">
                 @for (t of testsOf(g); track t.testId) {
-                  <button type="button" class="nd-row pf-og__test press" (click)="openTest(t.testId)"
+                  <button type="button" class="pf-row pf-og__test press" (click)="openTest(t.testId)"
                           (pointerenter)="warmEditor()" (focus)="warmEditor()"
                           [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
-                    <span class="nd-num pf-og__tcode">{{ t.testCode || '—' }}</span>
-                    <span class="nd-row__name pf-og__tname">{{ t.testName }}</span>
+                    <span class="pf-num pf-og__tcode">{{ t.testCode || '—' }}</span>
+                    <span class="pf-row__name pf-og__tname">{{ t.testName }}</span>
                     @if (paramsHint(t); as hint) {
-                      <span class="nd-row__meta pf-og__tparams">{{ hint }}</span>
+                      <span class="pf-row__meta pf-og__tparams">{{ hint }}</span>
                     }
                   </button>
                 }
@@ -207,8 +207,8 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
             </div>
             @if (editing()) {
               <div class="pf-og__editact">
-                <span class="pf-og__warn">Updates <span class="nd-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="nd-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
-                <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
+                <span class="pf-og__warn">Updates <span class="pf-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="pf-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
+                <button type="button" class="pf-btn pf-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
                   {{ saving() ? 'Saving…' : 'Save everywhere' }}
                 </button>
               </div>
@@ -236,13 +236,13 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
        the side card body scroll themselves; the page never does. */
     .pf-og__cols { flex: 1 1 auto; min-height: 0; display: grid;
       grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
-    .pf-og__grid { position: relative; min-height: 0; border-radius: var(--nd-radius, 12px); overflow: hidden; }
-    .pf-og__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); border-radius: inherit; }
+    .pf-og__grid { position: relative; min-height: 0; border-radius: var(--pf-radius, 12px); overflow: hidden; }
+    .pf-og__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
     .pf-og__side { min-height: 0; max-height: 100%; }
-    .pf-og__side:not(.nd-sheet) .nd-sheet__handle { display: none; }
-    .pf-og__side .nd-card__body { gap: 8px; }
+    .pf-og__side:not(.pf-sheet) .pf-sheet__handle { display: none; }
+    .pf-og__side .pf-card__body { gap: 8px; }
     .pf-og__sname { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); }
-    @media (min-width: 641px) { .pf-og__cols > .nd-sheet-backdrop { display: none; } }
+    @media (min-width: 641px) { .pf-og__cols > .pf-sheet-backdrop { display: none; } }
     .pf-og__hbtn { height: 36px; min-height: 36px; }
     @media (max-width: 980px) {
       .pf-og__cols { grid-template-columns: 1fr; grid-template-rows: none; }
@@ -252,9 +252,9 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     .pf-og__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 2px; }
     .pf-og__chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-og__chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; padding: 4px 10px;
-      border-radius: var(--nd-radius-chip, 8px); color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
+      border-radius: var(--pf-radius-chip, 8px); color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     /* Normal = the neutral selected state + a violet check (never green). */
-    .pf-og__chip--normal { color: var(--text-primary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-og__chip--normal { color: var(--text-primary); border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-og__chip--normal svg { color: var(--violet-text, #7c3aed); }
     .pf-og__chip--off { opacity: .45; text-decoration: line-through; }
     .pf-og__chip--warnmap { border-style: dashed; }
@@ -265,10 +265,10 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     .pf-og__flag { font-size: 12.5px; }
     .pf-og__rowdel { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px;
       border-radius: 8px; border: 1px solid transparent; cursor: pointer; color: var(--text-tertiary); background: transparent; }
-    .pf-og__rowdel:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .pf-og__rowdel:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
     .pf-og__addrow { align-self: flex-start; height: 34px; min-height: 34px; }
     .pf-og__editact { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 14px;
-      border-top: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+      border-top: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-og__warn { flex: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); }
     .pf-og__warn--amber { color: var(--text-secondary); font-weight: 500; }
 
@@ -282,9 +282,9 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
 
     .pf-og__tests { display: flex; flex-direction: column; gap: 6px; }
     .pf-og__test { width: 100%; cursor: pointer; min-height: 44px; }
-    .pf-og__test:hover { border-color: var(--nd-sel-border); }
+    .pf-og__test:hover { border-color: var(--pf-sel-border); }
     .pf-og__tcode { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-    @media (max-width: 640px) { .pf-og__side.nd-sheet { z-index: 80; } }
+    @media (max-width: 640px) { .pf-og__side.pf-sheet { z-index: 80; } }
   `],
 })
 export class OptionGroupsPanelComponent implements OnInit {

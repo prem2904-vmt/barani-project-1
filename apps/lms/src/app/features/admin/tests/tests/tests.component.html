@@ -9,7 +9,7 @@
       <ng-container band-tools>
         @if (narrow() && gridView()) {
           <!-- Narrow widths: the DEPARTMENTS side card opens as a sheet. -->
-          <button type="button" class="nd-chip pf-tm-deptchip press" (click)="openDeptSheet()"
+          <button type="button" class="pf-chip pf-tm-deptchip press" (click)="openDeptSheet()"
                   aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()"
                   [attr.aria-pressed]="!!selectedDept()" [title]="selectedDept() ? 'Departments · ' + selectedDept() : 'Departments'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -51,9 +51,9 @@
         }
         @if (pricingView() && pricingDirty() > 0) {
           <!-- Pricing edits: the band owns Save (the ONE primary) + Discard. -->
-          <span class="nd-savestate pf-tm-pricestate" role="status" aria-live="polite">
-            <span class="nd-savestate__dot" aria-hidden="true"></span>
-            <span class="nd-num">{{ pricingDirty() }}</span>&nbsp;unsaved
+          <span class="pf-savestate pf-tm-pricestate" role="status" aria-live="polite">
+            <span class="pf-savestate__dot" aria-hidden="true"></span>
+            <span class="pf-num">{{ pricingDirty() }}</span>&nbsp;unsaved
           </span>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-tm-pricediscard press" [disabled]="pricingSaving()"
                   (click)="pricingTable()?.discard()" title="Discard price changes" aria-label="Discard price changes">
@@ -172,7 +172,7 @@
        copies named) — Accept all / Dismiss all. Hidden when none wait. -->
   <pf-catalog-proposals-panel [proposals]="proposals()" [tests]="allTests()"
                               (changed)="onProposalsChanged()"></pf-catalog-proposals-panel>
-  <!-- Two jobs on one screen (ND-PATTERN): DEPARTMENTS is a FILTER
+  <!-- Two jobs on one screen (PF-PATTERN): DEPARTMENTS is a FILTER
        companion, so it sits on the LEFT (read left to right: filter, then
        content); the grid is the MAIN card on the right. Styled like BILLING. It collapses to a slim strip (remembered per
        user); on narrow widths it is a sheet opened from the band pill. -->
@@ -180,22 +180,22 @@
     <!-- ── SIDE card (LEFT): DEPARTMENTS — the filter comes first ── -->
     @if (narrow()) {
       @if (deptSheetOpen()) {
-        <div class="nd-sheet-backdrop pf-tm-sheet-backdrop" (click)="closeDeptSheet()"></div>
-        <aside class="nd-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments"
+        <div class="pf-sheet-backdrop pf-tm-sheet-backdrop" (click)="closeDeptSheet()"></div>
+        <aside class="pf-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments"
                (keydown.escape)="closeDeptSheet()">
-          <span class="nd-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
+          <span class="pf-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
           <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
           <ng-container *ngTemplateOutlet="deptBody"></ng-container>
         </aside>
       }
     } @else if (sideCollapsed()) {
-      <aside class="nd-card pf-tm-strip" aria-label="Departments">
+      <aside class="pf-card pf-tm-strip" aria-label="Departments">
         <button type="button" class="pf-tm-strip__btn" (click)="toggleSide()"
                 title="Show departments" aria-label="Show departments" aria-expanded="false">
-          <span class="nd-btn nd-btn--icon pf-tm-strip__expand" aria-hidden="true">
+          <span class="pf-btn pf-btn--icon pf-tm-strip__expand" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           </span>
-          <span class="nd-card__icon" aria-hidden="true">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           </span>
           <span class="pf-tm-strip__label">Departments</span>
@@ -203,31 +203,31 @@
         </button>
       </aside>
     } @else {
-      <aside class="nd-card pf-tm-side" aria-label="Departments">
+      <aside class="pf-card pf-tm-side" aria-label="Departments">
         <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
         <ng-container *ngTemplateOutlet="deptBody"></ng-container>
       </aside>
     }
 
     <!-- ── MAIN card (RIGHT): the test grid ──────────────── -->
-    <section class="nd-card pf-tm-main" aria-label="Test Master">
-      <header class="nd-card__head pf-tm-main__head">
-        <span class="nd-card__icon" aria-hidden="true">
+    <section class="pf-card pf-tm-main" aria-label="Test Master">
+      <header class="pf-card__head pf-tm-main__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/>
           </svg>
         </span>
-        <span class="nd-card__label">{{ type() === 'package' ? 'Packages' : type() === 'profile' ? 'Profiles' : 'Tests' }}</span>
-        <span class="nd-card__note pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
-        <span class="pf-tm-count nd-num">{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
+        <span class="pf-card__label">{{ type() === 'package' ? 'Packages' : type() === 'profile' ? 'Profiles' : 'Tests' }}</span>
+        <span class="pf-card__note pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
+        <span class="pf-tm-count pf-num">{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
         <!-- Status filter: the Active/Inactive switch. All (default) keeps
              switched-off tests listed, greyed, so nothing ever disappears. -->
         <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()"
                       [value]="statusFilter()" (valueChange)="statusFilter.set($event)"
                       aria-label="Filter by status"></pf-segmented>
         @if (narrow() && !theme.isNewDesign()) {
-          <button type="button" class="nd-btn nd-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
+          <button type="button" class="pf-btn pf-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
                   aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()">Departments</button>
         }
         <div class="pf-tm-search pf-classic-only">
@@ -269,18 +269,18 @@
   </div>
 
   <ng-template #deptHead let-sheet="sheet">
-    <header class="nd-card__head pf-tm-side__head">
-      <span class="nd-card__icon" aria-hidden="true">
+    <header class="pf-card__head pf-tm-side__head">
+      <span class="pf-card__icon" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
       </span>
-      <span class="nd-card__label">Departments</span>
-      <span class="nd-card__spacer"></span>
+      <span class="pf-card__label">Departments</span>
+      <span class="pf-card__spacer"></span>
       @if (sheet) {
-        <button type="button" class="nd-btn nd-btn--icon pf-tm-side__close" (click)="closeDeptSheet()" aria-label="Close departments">
+        <button type="button" class="pf-btn pf-btn--icon pf-tm-side__close" (click)="closeDeptSheet()" aria-label="Close departments">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       } @else {
-        <button type="button" class="nd-btn nd-btn--icon pf-tm-side__collapse" (click)="toggleSide()"
+        <button type="button" class="pf-btn pf-btn--icon pf-tm-side__collapse" (click)="toggleSide()"
                 title="Hide departments" aria-label="Hide departments" aria-expanded="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
@@ -291,15 +291,15 @@
   <ng-template #deptBody>
     @if (listSkeleton()) {
     <!-- First open: the departments are on their way with the grid. -->
-    <div class="nd-card__body">
+    <div class="pf-card__body">
       <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
     </div>
     } @else {
-    <ul class="nd-card__body pf-tm-dept-list">
+    <ul class="pf-card__body pf-tm-dept-list">
       <li class="pf-tm-dept-row">
         <button type="button" class="pf-tm-dept" [attr.aria-pressed]="!selectedDept()" (click)="pickDept(null)">
           <span class="pf-tm-dept-name">All</span>
-          <span class="pf-tm-dept-count nd-num">{{ typeTests().length }}</span>
+          <span class="pf-tm-dept-count pf-num">{{ typeTests().length }}</span>
         </button>
       </li>
       @for (d of departments(); track d.key) {
@@ -308,18 +308,18 @@
                   (click)="pickDept(d.key)">
             <span class="pf-tm-dept-name">
               <span class="pf-tm-dept-text">{{ d.name }}</span>
-              @if (d.code) { <span class="pf-tm-dept-code nd-num">{{ d.code }}</span> }
+              @if (d.code) { <span class="pf-tm-dept-code pf-num">{{ d.code }}</span> }
               @if (d.id && !d.isActive) { <span class="pf-tm-dept-off">Off</span> }
             </span>
-            <span class="pf-tm-dept-count nd-num">{{ d.count }}</span>
+            <span class="pf-tm-dept-count pf-num">{{ d.count }}</span>
           </button>
           @if (d.id) {
             <!-- Kit switch (violet ON) — its own target. -->
-            <button type="button" class="nd-toggle pf-tm-dept-switch" role="switch" [attr.aria-checked]="d.isActive"
+            <button type="button" class="pf-toggle pf-tm-dept-switch" role="switch" [attr.aria-checked]="d.isActive"
                     (click)="toggleDept(d)"
                     [title]="d.isActive ? 'Turn department off' : 'Turn department on'"
                     [attr.aria-label]="'Department ' + d.name + ' on'">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           } @else {
             <span class="pf-tm-dept-switch-gap" aria-hidden="true"></span>

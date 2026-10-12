@@ -18,7 +18,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 /**
- * Appointments calendar — NEW DESIGN (ND-PATTERN §21): the band (back ·
+ * Appointments calendar — NEW DESIGN (PF-PATTERN §21): the band (back ·
  * tenant · ONE primary "New appointment"), the pill (search + the neutral
  * Day / Week / Month switch + date navigation), CALENDAR (main) + DAY (the
  * collapsible right companion: the chosen day's list → an appointment's
@@ -100,7 +100,7 @@ function render(opts: Opts = {}) {
   return { f, el, c, api, queue, router, toasts, navBack, profile, zoom, view };
 }
 
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 const texts = (els: NodeListOf<Element> | Element[]) => Array.from(els).map(e => e.textContent?.replace(/\s+/g, ' ').trim());
 const click = (el: Element | null) => (el as HTMLElement).click();
 
@@ -125,7 +125,7 @@ describe('Appointments calendar (nd) — band + pill', () => {
     const { el, c, f } = render();
     const pill = el.querySelector('.pf-hb__search')!;
     expect(pill.querySelector<HTMLInputElement>('input.pf-apc-search__input')?.placeholder).toBe('Search patient, phone or MRN');
-    const seg = pill.querySelector('.nd-seg.pf-apc-views[role="radiogroup"]')!;
+    const seg = pill.querySelector('.pf-seg.pf-apc-views[role="radiogroup"]')!;
     expect(texts(seg.querySelectorAll('[role="radio"]'))).toEqual(['Day', 'Week', 'Month']);
     // Month is the web default; the switch is neutral (aria-checked, no gradient / --on class).
     expect(seg.querySelector('[aria-checked="true"]')?.textContent?.trim()).toBe('Month');
@@ -174,7 +174,7 @@ describe('Appointments calendar (nd) — the grid', () => {
     const a1 = Array.from(cards).find(e => e.textContent?.includes('Paravai'))!;
     expect(a1.querySelector('.pf-apc-ev__name')?.textContent?.trim()).toBe('Ms. Paravai Munusamy');
     expect(a1.querySelector('.pf-apc-ev__meta')?.textContent?.trim()).toBe('10:30 · 44/F · AA0007');
-    expect(a1.querySelector('.pf-apc-ev__meta')?.classList).toContain('nd-num');
+    expect(a1.querySelector('.pf-apc-ev__meta')?.classList).toContain('pf-num');
     const st = a1.querySelector('.pf-apc-status')!;
     expect(st.textContent?.trim()).toBe('Booked');
     expect(st.getAttribute('data-tone')).toBe('violet');
@@ -222,7 +222,7 @@ describe('Appointments calendar (nd) — the grid', () => {
     const today = el.querySelector('.pf-apc-mcell--today')!;
     expect(today.querySelector('.pf-apc-mcell__n')?.getAttribute('aria-current')).toBe('date');
     const chip = today.querySelector('.pf-apc-mcell__chip')!;
-    expect(chip.querySelector('.nd-num')?.textContent?.trim()).toBe('2');
+    expect(chip.querySelector('.pf-num')?.textContent?.trim()).toBe('2');
     expect(chip.querySelector('.pf-apc-mcell__word')?.textContent?.trim()).toBe('appointments');
     expect(chip.getAttribute('aria-label')).toMatch(/: 2 appointments$/);
     router.navigate.mockClear();
@@ -237,8 +237,8 @@ describe('Appointments calendar (nd) — DAY companion + detail', () => {
   it('the right card lists the chosen day (week strip picks it), one row per appointment', () => {
     const { el, c, f, view } = render();
     view('week');
-    const side = el.querySelector('aside.nd-card.pf-apc-side')!;
-    expect(side.querySelector('.nd-card__label')?.textContent?.trim()).toBe('Day');
+    const side = el.querySelector('aside.pf-card.pf-apc-side')!;
+    expect(side.querySelector('.pf-card__label')?.textContent?.trim()).toBe('Day');
     expect(side.querySelector('.pf-apc-range')?.textContent).toContain('Today');
     const rows = side.querySelectorAll('.pf-apc-row');
     expect(rows.length).toBe(2);
@@ -267,25 +267,25 @@ describe('Appointments calendar (nd) — DAY companion + detail', () => {
     expect(d.querySelector('.pf-apc-subject__name')?.textContent?.trim()).toBe('Ms. Paravai Munusamy');
     expect(d.textContent).toContain('2 tests booked');
     expect(d.textContent).toContain('Fasting');
-    expect(texts(d.querySelectorAll('.pf-apc-acts .nd-btn'))).toEqual(
+    expect(texts(d.querySelectorAll('.pf-apc-acts .pf-btn'))).toEqual(
       ['Open profile', 'Check in', 'Reschedule', 'No-show', 'Cancel appointment']);
     // The band CTA stays the only primary; Cancel is the muted-red outline.
     expect(primaries(el).length).toBe(1);
-    expect(d.querySelector('.nd-btn--danger')?.textContent?.trim()).toBe('Cancel appointment');
-    click(Array.from(d.querySelectorAll('.pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === 'Check in')!);
+    expect(d.querySelector('.pf-btn--danger')?.textContent?.trim()).toBe('Cancel appointment');
+    click(Array.from(d.querySelectorAll('.pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === 'Check in')!);
     expect(queue.checkIn).toHaveBeenCalledWith('a1');
     f.detectChanges();
     click(el.querySelector('.pf-apc-row')); f.detectChanges();
-    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === 'Open profile')!);
+    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === 'Open profile')!);
     expect(profile.open).toHaveBeenCalledWith('p1');
   });
 
   it('checked-in: Complete · Mark urgent · No-show · Cancel; each on its API', () => {
     const { el, f, queue, c } = render();
     c.openAppt(A2); f.detectChanges();
-    const acts = texts(el.querySelectorAll('aside .pf-apc-acts .nd-btn'));
+    const acts = texts(el.querySelectorAll('aside .pf-apc-acts .pf-btn'));
     expect(acts).toEqual(['Open profile', 'Complete', 'Mark urgent', 'No-show', 'Cancel appointment']);
-    const btn = (t: string) => Array.from(el.querySelectorAll('aside .pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === t)!;
+    const btn = (t: string) => Array.from(el.querySelectorAll('aside .pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === t)!;
     click(btn('Complete')); expect(queue.complete).toHaveBeenCalledWith('a2');
     c.openAppt(A2); f.detectChanges();
     click(btn('Mark urgent')); expect(queue.markUrgent).toHaveBeenCalledWith('a2');
@@ -298,21 +298,21 @@ describe('Appointments calendar (nd) — DAY companion + detail', () => {
   it('Reschedule is a STEP (slides in): the kit date + a pf-select time, then the same reschedule API', () => {
     const { el, f, queue, c } = render();
     c.openAppt(A1); f.detectChanges();
-    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === 'Reschedule')!);
+    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === 'Reschedule')!);
     f.detectChanges();
     const step = el.querySelector('aside .pf-apc-resched')!;
     expect(step.classList).toContain('pf-apc-step--fwd');
-    expect(step.querySelector('pf-nd-date input[type="text"]')?.getAttribute('placeholder')).toBe('dd/mm/yyyy');
+    expect(step.querySelector('pf-date input[type="text"]')?.getAttribute('placeholder')).toBe('dd/mm/yyyy');
     expect(step.querySelector('pf-select')).not.toBeNull();
     expect(el.querySelectorAll('input[type="time"], select, datalist').length).toBe(0);
-    expect(el.querySelector('aside .nd-card__label')?.textContent?.trim()).toBe('Reschedule');
+    expect(el.querySelector('aside .pf-card__label')?.textContent?.trim()).toBe('Reschedule');
     c.rDate = iso(OTHER); c.rTime = '11:00';
-    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === 'Save new time')!);
+    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === 'Save new time')!);
     expect(queue.reschedule).toHaveBeenCalledWith('a1', new Date(iso(OTHER)).toISOString(), '11:00');
     // Back slides the facts back in from the left.
     c.openAppt(A2); f.detectChanges();
     c.openReschedule(); f.detectChanges();
-    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .nd-btn')).find(b => b.textContent?.trim() === 'Back')!);
+    click(Array.from(el.querySelectorAll('aside .pf-apc-acts .pf-btn')).find(b => b.textContent?.trim() === 'Back')!);
     f.detectChanges();
     expect(el.querySelector('aside .pf-apc-facts')?.classList).toContain('pf-apc-step--back');
   });
@@ -348,7 +348,7 @@ describe('Appointments calendar (nd) — narrow + phones', () => {
     expect(el.querySelector('section.pf-apc-daycard .pf-apc-strip7')).not.toBeNull();
     c.cursor.set(new Date(TODAY)); f.detectChanges();
     click(el.querySelector('.pf-apc-daycard .pf-apc-row')); f.detectChanges();
-    const sheet = el.querySelector('.nd-sheet.pf-apc-sheet[role="dialog"]')!;
+    const sheet = el.querySelector('.pf-sheet.pf-apc-sheet[role="dialog"]')!;
     expect(sheet).not.toBeNull();
     expect(sheet.querySelector('.pf-apc-acts')).not.toBeNull();
     click(el.querySelector('.pf-apc-scrim')); f.detectChanges();
@@ -359,7 +359,7 @@ describe('Appointments calendar (nd) — narrow + phones', () => {
     const { el, router } = render({ phone: true });
     expect(el.querySelector('.pf-hb__actions .pf-hb-btn--primary')).toBeNull();
     expect(primaries(el).length).toBe(1);
-    const cta = el.querySelector('.pf-apc-foot .nd-btn--primary.nd-span')!;
+    const cta = el.querySelector('.pf-apc-foot .pf-btn--primary.pf-span')!;
     expect(cta.textContent?.trim()).toBe('New appointment');
     click(cta);
     expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/appointments/new']);

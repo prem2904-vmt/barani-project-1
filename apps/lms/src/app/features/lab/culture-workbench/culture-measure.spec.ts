@@ -89,8 +89,8 @@ describe('Culture case — Measure on the Identification header', () => {
     expect(btn).toBeTruthy();
     expect(btn.textContent?.trim()).toBe('Measure');
     expect(btn.querySelector('pf-logo-mark')).toBeTruthy();
-    expect(btn.classList.contains('nd-btn--primary')).toBe(false);
-    expect(btn.classList.contains('nd-btn--secondary')).toBe(false);   // neutral, not violet
+    expect(btn.classList.contains('pf-btn--primary')).toBe(false);
+    expect(btn.classList.contains('pf-btn--secondary')).toBe(false);   // neutral, not violet
     expect(btn.textContent).not.toMatch(/\bAI\b/);
     const acts = [...h.querySelectorAll('.pf-stg__acts > *')];
     expect(acts.indexOf(btn)).toBeLessThan(acts.indexOf(h.querySelector('.pf-cse-note')!));

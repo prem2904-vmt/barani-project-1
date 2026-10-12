@@ -41,7 +41,7 @@
 .pf-ov-svc .pf-price { align-self: flex-start; padding-top: 2px; font-size: 13px; font-weight: 600; }
 .pf-ov-radio { border-radius: 50%; margin-top: 1px; }
 .pf-ov-complaint { margin-top: 4px; }
-.pf-ov-complaint .nd-input { height: 40px; width: 100%; }
+.pf-ov-complaint .pf-input { height: 40px; width: 100%; }
 
 @media (max-width: 640px) {
   .pf-ov-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; overflow-y: auto; }
@@ -108,7 +108,7 @@
 }
 .pf-ov-fee:has(.pf-ov-fee__in--err) { border-color: var(--error-text, #dc2626); }
 .pf-ov-reason { margin: 2px 0 0; }
-.pf-ov-reason .nd-input { height: 38px; }
+.pf-ov-reason .pf-input { height: 38px; }
 .pf-ov-bill .pf-field-error { margin: 0; font-size: 12px; }
 .pf-ov-note { text-align: left; line-height: 1.5; }
 .pf-ov-note strong { font-weight: 600; color: var(--text-secondary); }
@@ -119,6 +119,6 @@
 }
 @media (max-width: 640px) {
   .pf-ov-fee__in { font-size: 16px; } // iOS zoom guard
-  .pf-ov-complaint .nd-input { height: 44px; font-size: 16px; }
+  .pf-ov-complaint .pf-input { height: 44px; font-size: 16px; }
   .pf-ov-chips { flex-wrap: nowrap; }
 }

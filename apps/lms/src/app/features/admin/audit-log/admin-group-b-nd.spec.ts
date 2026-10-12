@@ -21,13 +21,13 @@ describe('Audit trail — ND audit', () => {
 
   it('neutral action chips (violet dot = create, red text = delete); full record id in tabular Noto', () => {
     const p = make();
-    const chips = p.el.querySelectorAll('.audit-badge.nd-chip');
+    const chips = p.el.querySelectorAll('.audit-badge.pf-chip');
     expect(chips.length).toBe(2);
     expect(chips[0].getAttribute('data-tone')).toBe('add');
     expect(chips[0].querySelector('.audit-badge__dot')).not.toBeNull();
     expect(chips[1].getAttribute('data-tone')).toBe('warn');
     expect(chips[0].getAttribute('style')).toBeNull();
-    expect(p.el.querySelector('.audit-id.nd-num')!.textContent).toContain('5f1c2a9e-0000-4444-8888-123456789abc');
+    expect(p.el.querySelector('.audit-id.pf-num')!.textContent).toContain('5f1c2a9e-0000-4444-8888-123456789abc');
     noMono(p.el);
     noLoudColours(p.el);
     expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(0);
@@ -43,11 +43,11 @@ describe('Notifications — ND audit', () => {
 
   it('slate role=switch per alert; overdue = neutral chip; no orange', () => {
     const p = make();
-    const sw = p.el.querySelectorAll('.pf-nc-card .nd-toggle[role="switch"]');
+    const sw = p.el.querySelectorAll('.pf-nc-card .pf-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     expect(sw[0].getAttribute('aria-checked')).toBe('true');
     expect(p.el.querySelector('pf-toggle')).toBeNull();
-    expect(p.el.querySelector('.pf-nc-badge')!.classList.contains('nd-chip')).toBe(true);
+    expect(p.el.querySelector('.pf-nc-badge')!.classList.contains('pf-chip')).toBe(true);
     (sw[1] as HTMLButtonElement).click();
     p.f.detectChanges();
     expect(p.api.put.mock.calls.length + p.api.post.mock.calls.length + p.api.patch.mock.calls.length).toBeGreaterThan(0);
@@ -68,7 +68,7 @@ describe('KPIs — ND audit', () => {
     p.cmp.addToScreen(catalog[0]);
     p.f.detectChanges();
     const tile = p.el.querySelector('.pf-kpi-tile')!;
-    expect(tile.querySelector('.nd-toggle[role="switch"]')).not.toBeNull();
+    expect(tile.querySelector('.pf-toggle[role="switch"]')).not.toBeNull();
     expect(tile.querySelector('input[type=checkbox]')).toBeNull();
     expect(/[▲▼⋮＋]/.test(p.el.querySelector('.pf-band-body')!.textContent ?? '')).toBe(false);
     noMono(p.el);

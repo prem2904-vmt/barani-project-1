@@ -61,9 +61,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
+            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
               @if (dirty()) {
-                <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
+                <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
               } @else {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
               }
@@ -85,8 +85,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
-        <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
-          @if (dirty()) { <span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
+        <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
+          @if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
         <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
@@ -98,8 +98,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
         <!-- First load: the designer's shape until the lab's template lands
              (never the defaults flashing before the saved template). -->
         <div class="pf-rt-loading">
-          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
-          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
+          <section class="pf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
+          <section class="pf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
         </div>
       } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
@@ -166,11 +166,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                     </div>
                     @if (patientScope() !== 'default') {
                       @if (deptPatientConfigured()) { <span class="pf-pt-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Configured</span> }
-                      <button type="button" class="nd-btn nd-btn--tertiary pf-pt-btn press"
+                      <button type="button" class="pf-btn pf-btn--tertiary pf-pt-btn press"
                               [disabled]="!deptPatientConfigured()"
                               (click)="resetDeptPatient()">Reset to default</button>
                       <!-- Secondary: the band's Save owns the ONE primary. -->
-                      <button type="button" class="nd-btn nd-btn--secondary pf-pt-btn press"
+                      <button type="button" class="pf-btn pf-btn--secondary pf-pt-btn press"
                               [disabled]="!deptPatientDirty() || deptPatientSaving()" [pfBusy]="deptPatientSaving()" pfBusyLabel="Saving…"
                               (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
                     }
@@ -207,9 +207,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           <span class="pf-sqr__label">{{ q.label }}</span>
                           <span class="pf-sqr__desc">{{ q.desc }}</span>
                         </span>
-                        <button type="button" class="nd-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="stripQrOn(q.key)"
+                        <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="stripQrOn(q.key)"
                                 [attr.aria-label]="q.label" (click)="toggleStripQr(q.key)">
-                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                         </button>
                       </div>
                     }
@@ -377,9 +377,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Zebra rows</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().zebraRows ?? false)"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().zebraRows ?? false)"
                             aria-label="Zebra rows" (click)="patch({ zebraRows: !(tpl().zebraRows ?? false) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                 </div>
@@ -456,9 +456,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Group by department</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().groupByDepartment)"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().groupByDepartment)"
                             aria-label="Group by department" (click)="patch({ groupByDepartment: !(tpl().groupByDepartment) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                   <div class="pf-toggle-row">
@@ -466,23 +466,23 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       <span class="text-[13px]" style="color: var(--text-primary);">Each department on a new page</span>
                       <span class="text-[12px]" style="color: var(--text-tertiary);">Start every department's tests on a fresh page.</span>
                     </div>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().departmentPageBreak ?? false)"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().departmentPageBreak ?? false)"
                             aria-label="Each department on a new page" (click)="patch({ departmentPageBreak: !(tpl().departmentPageBreak ?? false) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Show method line</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showMethod)"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showMethod)"
                             aria-label="Show method line" (click)="patch({ showMethod: !(tpl().showMethod) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Show specimen line</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="specimenLineOn()"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="specimenLineOn()"
                             aria-label="Show specimen line" (click)="toggleSpecimenLine()">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                   <!-- Same switch as Lab settings → Report (one metadata option). -->
@@ -491,9 +491,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       <span class="text-[13px]" style="color: var(--text-primary);">Consolidated abnormal results sheet</span>
                       <span class="text-[12px]" style="color: var(--text-tertiary);">Print a first page listing every high and low result.</span>
                     </div>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
                             aria-label="Consolidated abnormal results sheet" (click)="toggleAbnormalSummary()">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
                 </div>
@@ -518,12 +518,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
         </div>
 
         <!-- ── Right: live PDF preview, shared by every section. ─────── -->
-        <aside class="pf-rt-aside" [class.nd-card]="theme.isNewDesign()" aria-label="Live preview">
+        <aside class="pf-rt-aside" [class.pf-card]="theme.isNewDesign()" aria-label="Live preview">
           @if (theme.isNewDesign()) {
-            <div class="nd-card__head pf-rt-aside__head">
-              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
-              <span class="nd-card__label">Live preview</span>
-              <span class="nd-card__note">{{ rendering() ? 'Rendering…' : 'PDF' }}</span>
+            <div class="pf-card__head pf-rt-aside__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="pf-card__label">Live preview</span>
+              <span class="pf-card__note">{{ rendering() ? 'Rendering…' : 'PDF' }}</span>
             </div>
           } @else {
           <p class="pf-rt-aside__k">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
@@ -559,7 +559,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
       padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
-    .pf-wys-thumb[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-wys-thumb[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-wys-thumb__name { font-size: 11px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
     .pf-wys-thumb__paper { position: relative; width: 116px; height: 62px; border-radius: 6px; background: #fff;
       display: block; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
@@ -580,7 +580,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 1px;
       padding: 8px 6px; border-radius: 11px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
-    .pf-wys-font[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-wys-font[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
     .pf-wys-font__sample { font-size: 15px; }
     .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
 
@@ -590,8 +590,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-rtheme__card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left;
       min-height: 44px; padding: 10px; border-radius: 12px; cursor: pointer; font: inherit; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
-    .pf-rtheme__card[aria-checked='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
-    .pf-rtheme__card:focus-visible { outline: 2px solid var(--nd-sel-border); outline-offset: 2px; }
+    .pf-rtheme__card[aria-checked='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
+    .pf-rtheme__card:focus-visible { outline: 2px solid var(--pf-sel-border); outline-offset: 2px; }
     .pf-rtheme__spec { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px;
       background: #fff; color: #1B3A6B; border: 1px solid rgba(0,0,0,0.08); }
     .pf-rtheme__lab { font-size: 17px; line-height: 1.1; }
@@ -708,9 +708,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-rt-aside { min-width: 0; }
     .pf-rt-aside__k { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em;
       text-transform: uppercase; color: var(--text-tertiary); }
-    /* New design: the preview is an nd-card side card (header + framed PDF). */
-    .pf-rt-aside.nd-card .pf-pdf-frame { margin: 12px; }
-    .pf-rt-aside.nd-card .pf-rt-aside__hint { margin: 0 14px 12px; }
+    /* New design: the preview is an pf-card side card (header + framed PDF). */
+    .pf-rt-aside.pf-card .pf-pdf-frame { margin: 12px; }
+    .pf-rt-aside.pf-card .pf-rt-aside__hint { margin: 0 14px 12px; }
     .pf-rt-aside__head { flex: none; }
     .pf-rt-aside__hint { margin: 8px 0 0; font-size: 12px; color: var(--text-tertiary); }
 
@@ -749,7 +749,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-color-field__hex { padding: 0 10px; font-variant-numeric: tabular-nums; font-size: 12px;
       color: var(--text-secondary, #cbd5e1); }
 
-    .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--nd-toggle-on, #aeb8c2); }
+    .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--pf-toggle-on, #aeb8c2); }
     .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
 
     /* Patient-strip QR switches */
@@ -768,13 +768,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .pf-pt-scope__sel { flex: 1 1 240px; min-width: 220px; }
     .pf-pt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 4px 10px;
-      border-radius: var(--nd-radius-chip, 8px); color: var(--text-secondary); border: 1px solid var(--nd-line); background: var(--nd-chip-bg); }
+      border-radius: var(--pf-radius-chip, 8px); color: var(--text-secondary); border: 1px solid var(--pf-line); background: var(--pf-chip-bg); }
     .pf-pt-chip svg { color: var(--violet-text, #7c3aed); }
     .pf-pt-btn { height: 36px; min-height: 36px; }
 
     .pf-rt-sw { flex-shrink: 0; }
-    /* New design: the focused section is an nd-card surface (kit line/shadow). */
-    :host-context(.design-new) .pf-rt-work { background: var(--nd-card-bg); border-color: var(--nd-line); box-shadow: var(--nd-shadow-sm); }
+    /* New design: the focused section is an pf-card surface (kit line/shadow). */
+    :host-context(.design-new) .pf-rt-work { background: var(--pf-card-bg); border-color: var(--pf-line); box-shadow: var(--pf-shadow-sm); }
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }

@@ -12,7 +12,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-catalog';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { USER_FORM_STYLES } from './user-form.styles';
+
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -75,13 +75,13 @@ interface PermGroupView {
               {{ saving() ? 'Saving…' : (editing()?.id ? 'Save' : 'Create role') }}
             </button>
           </ng-container>
-          <div band-search class="nd-ctx pf-uf-ctx">
+          <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
-            <span class="nd-ctx__primary pf-uf-ctx__name">
+            <span class="pf-ctx__primary pf-uf-ctx__name">
               <span class="pf-uf-ctx__text">{{ editing()?.name || newRoleName().trim() || 'New role' }}</span>
               @if (editing()?.id) { <span class="pf-uf-ctx__badge" role="note">{{ typeLabel() }}</span> }
               @if (!editing()?.id) {
-                <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+                <button type="button" class="pf-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
               </button>
               }
@@ -102,12 +102,12 @@ interface PermGroupView {
       <div class="pf-band-body">
         @if (recordSkeleton()) {
           <!-- Opening the role editor: its own shape until the role + the
-               permission catalogue land (ND-PATTERN "Loading feedback") —
+               permission catalogue land (PF-PATTERN "Loading feedback") —
                never the create form flashing before an existing role. -->
           <div class="pf-uf-body pf-re-loading">
             <div class="pf-uf-grid2">
-              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-form [fields]="2" [cols]="1" label="Loading role…"></pf-skeleton-form></div></section>
-              <section class="nd-card pf-uf-card"><div class="nd-card__body"><pf-skeleton-card [lines]="6" [boxed]="false" label="Loading permissions…"></pf-skeleton-card></div></section>
+              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="2" [cols]="1" label="Loading role…"></pf-skeleton-form></div></section>
+              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="6" [boxed]="false" label="Loading permissions…"></pf-skeleton-card></div></section>
             </div>
           </div>
         } @else {
@@ -115,16 +115,16 @@ interface PermGroupView {
           <div class="pf-uf-grid2">
             @if (!editing()?.id) {
               <!-- ROLE (create) -->
-              <section class="nd-card pf-uf-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-                  <h2 class="nd-card__label pf-uf-h">Role</h2>
-                  <span class="nd-card__note"><span class="pf-uf-req">*</span> required</span>
+              <section class="pf-card pf-uf-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                  <h2 class="pf-card__label pf-uf-h">Role</h2>
+                  <span class="pf-card__note"><span class="pf-uf-req">*</span> required</span>
                 </div>
-                <div class="nd-card__body">
-                  <label class="nd-field">
-                    <span class="nd-field__lbl">Role name <span class="pf-uf-req">*</span></span>
-                    <input type="text" #nameInput class="nd-input pf-re-name" [class.nd-input--error]="!!nameError()"
+                <div class="pf-card__body">
+                  <label class="pf-field">
+                    <span class="pf-field__lbl">Role name <span class="pf-uf-req">*</span></span>
+                    <input type="text" #nameInput class="pf-input pf-re-name" [class.pf-input--error]="!!nameError()"
                            [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
                            placeholder="e.g. Billing Supervisor" />
                     @if (nameError()) { <p class="pf-uf-err">{{ nameError() }}</p> }
@@ -133,63 +133,63 @@ interface PermGroupView {
                        section in Create User. OPD dark build: shown only while the
                        OPD gate is open (a new role is 'general' otherwise, as today). -->
                   @if (opdGate.visible()) {
-                    <div class="nd-field">
-                      <span class="nd-field__lbl">Role type</span>
-                      <span class="nd-seg re-type" role="radiogroup" aria-label="Role type">
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Role type</span>
+                      <span class="pf-seg re-type" role="radiogroup" aria-label="Role type">
                         @for (o of roleTypeOptions; track o.value) {
-                          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
+                          <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
                                   (click)="roleType.set($any(o.value))">{{ o.label }}</button>
                         }
                       </span>
-                      <p class="nd-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
+                      <p class="pf-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
                     </div>
                   }
                 </div>
               </section>
             } @else {
               <!-- WHO this role is — the one-breath answer before any toggles. -->
-              <section class="nd-card pf-uf-card">
-                <div class="nd-card__head">
-                  <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-                  <h2 class="nd-card__label pf-uf-h">Who this is</h2>
+              <section class="pf-card pf-uf-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                  <h2 class="pf-card__label pf-uf-h">Who this is</h2>
                 </div>
-                <div class="nd-card__body">
+                <div class="pf-card__body">
                   <p class="re-who__text">
                     @if (roleWho(editing()!.name); as who) { {{ who }} }
                     @else { A custom role for your organisation — the summary updates as you switch permissions. }
                   </p>
                   @if (editing()!.isPreSeeded) {
-                    <p class="nd-field__hint">System role — the name is locked. Editing the permissions saves a copy for your organisation only.</p>
+                    <p class="pf-field__hint">System role — the name is locked. Editing the permissions saves a copy for your organisation only.</p>
                   }
                 </div>
               </section>
             }
 
             <!-- Live capability summary — the big picture while toggling. -->
-            <section class="nd-card pf-uf-card">
-              <div class="nd-card__head">
-                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-                <h2 class="nd-card__label pf-uf-h">This role can work in</h2>
-                <span class="nd-card__spacer"></span>
-                <span class="re-sum__count"><span class="nd-num">{{ grantedCount() }}</span> of <span class="nd-num">{{ permissions().length }}</span> permissions</span>
+            <section class="pf-card pf-uf-card">
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                <h2 class="pf-card__label pf-uf-h">This role can work in</h2>
+                <span class="pf-card__spacer"></span>
+                <span class="re-sum__count"><span class="pf-num">{{ grantedCount() }}</span> of <span class="pf-num">{{ permissions().length }}</span> permissions</span>
               </div>
-              <div class="nd-card__body">
+              <div class="pf-card__body">
                 <div class="re-sum">
                   @if (capabilityChips().length === 0) {
                     <span class="re-sum__none">Nothing yet — switch permissions on below.</span>
                   }
                   @for (c of capabilityChips(); track c) {
-                    <span class="nd-chip nd-chip--static re-sum__chip">{{ c }}</span>
+                    <span class="pf-chip pf-chip--static re-sum__chip">{{ c }}</span>
                   }
                 </div>
                 @if (!editing()?.id && templateRoles().length > 0) {
                   <!-- Start from a known role: the fastest way to a correct
                        custom role is copying the closest real one, then trimming. -->
-                  <div class="nd-field">
-                    <span class="nd-field__lbl">Start from an existing role <span class="re-optional">optional</span></span>
+                  <div class="pf-field">
+                    <span class="pf-field__lbl">Start from an existing role <span class="re-optional">optional</span></span>
                     <div class="re-templates">
                       @for (r of templateRoles(); track r.id) {
-                        <button type="button" class="nd-tile-sel re-template press" (click)="applyTemplate(r)"
+                        <button type="button" class="pf-tile-sel re-template press" (click)="applyTemplate(r)"
                                 [attr.aria-pressed]="templateApplied() === r.id">
                           <span class="re-template__name">{{ r.name }}</span>
                           <span class="re-template__who">{{ roleWho(r.name) }}</span>
@@ -203,16 +203,16 @@ interface PermGroupView {
           </div>
 
           <!-- PERMISSIONS -->
-          <section class="nd-card pf-uf-card">
-            <div class="nd-card__head">
-              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-              <h2 class="nd-card__label pf-uf-h">What can this person do?</h2>
-              <span class="nd-card__spacer"></span>
-              <input type="search" class="nd-input re-search" aria-label="Find a permission"
+          <section class="pf-card pf-uf-card">
+            <div class="pf-card__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              <h2 class="pf-card__label pf-uf-h">What can this person do?</h2>
+              <span class="pf-card__spacer"></span>
+              <input type="search" class="pf-input re-search" aria-label="Find a permission"
                      placeholder="Find a permission — try “discount” or “sign out”"
                      [ngModel]="search()" (ngModelChange)="search.set($event)" />
             </div>
-            <div class="nd-card__body">
+            <div class="pf-card__body">
               <div class="re-groups">
                 @for (group of groupViews(); track group.key) {
                   <div class="re-group">
@@ -222,27 +222,27 @@ interface PermGroupView {
                         <p class="re-group__blurb">{{ group.blurb }}</p>
                       </div>
                       <div class="re-group__tools">
-                        <span class="re-group__count nd-num">{{ group.granted }}/{{ group.items.length }}</span>
+                        <span class="re-group__count pf-num">{{ group.granted }}/{{ group.items.length }}</span>
                         @if (group.granted < group.items.length) {
-                          <button type="button" class="nd-btn nd-btn--tertiary re-group__link" (click)="grantGroup(group, true)">Grant all</button>
+                          <button type="button" class="pf-btn pf-btn--tertiary re-group__link" (click)="grantGroup(group, true)">Grant all</button>
                         }
                         @if (group.granted > 0) {
-                          <button type="button" class="nd-btn nd-btn--tertiary re-group__link" (click)="grantGroup(group, false)">Clear</button>
+                          <button type="button" class="pf-btn pf-btn--tertiary re-group__link" (click)="grantGroup(group, false)">Clear</button>
                         }
                       </div>
                     </div>
                     <div class="re-perm-grid">
                       @for (row of group.items; track row.perm.id) {
-                        <button type="button" class="nd-toggle pf-uf-sw re-perm" role="switch"
+                        <button type="button" class="pf-toggle pf-uf-sw re-perm" role="switch"
                                 [attr.aria-checked]="isGranted(row.perm.id)" (click)="setGranted(row.perm.id, !isGranted(row.perm.id))">
-                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                           <span class="pf-uf-sw__txt">
                             <span class="pf-uf-sw__name re-perm__title">
                               {{ row.title }}
-                              @if (row.sensitive) { <span class="nd-chip nd-chip--static re-perm__flag">High impact</span> }
+                              @if (row.sensitive) { <span class="pf-chip pf-chip--static re-perm__flag">High impact</span> }
                             </span>
                             <span class="pf-uf-sw__what">{{ row.what }}</span>
-                            <span class="pf-uf-sw__code nd-num">{{ row.perm.code }}</span>
+                            <span class="pf-uf-sw__code pf-num">{{ row.perm.code }}</span>
                           </span>
                         </button>
                       }
@@ -260,50 +260,7 @@ interface PermGroupView {
       </div>
     </section>
   `,
-  styles: [USER_FORM_STYLES, `
-    .re-optional { font-size: 11px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
-    .re-type { align-self: flex-start; }
-    .re-type .nd-seg__item { height: 36px; min-width: 88px; font-size: 13px; }
-
-    /* Template picker (create) */
-    .re-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-    .re-template { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 12px;
-      border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg); cursor: pointer;
-      font: inherit; transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease; }
-    .re-template:hover { border-color: var(--nd-sel-border); }
-    .re-template[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
-    .re-template__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .re-template__who { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
-
-    .re-who__text { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
-
-    /* Capability summary */
-    .re-sum { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .re-sum__chip { cursor: default; }
-    .re-sum__none { font-size: 12.5px; color: var(--text-muted); }
-    .re-sum__count { font-size: 12px; color: var(--text-tertiary); }
-    .re-sum__count .nd-num { color: var(--text-primary); font-weight: 500; }
-
-    /* Permissions */
-    .re-search { flex: 0 1 340px; }
-    .re-groups { display: flex; flex-direction: column; gap: 22px; }
-    .re-group__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-    .re-group__title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-    .re-group__blurb { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); }
-    .re-group__tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-    .re-group__count { font-size: 12px; color: var(--text-tertiary); }
-    .re-group__link { height: 32px; min-height: 32px; font-size: 12.5px; }
-    .re-perm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .re-perm__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .re-perm__flag { height: 22px; padding: 0 8px; font-size: 11px; }
-    .re-empty { font-size: 13px; color: var(--text-muted); }
-
-    @media (max-width: 900px) {
-      .re-perm-grid { grid-template-columns: 1fr; }
-      .re-group__head { flex-direction: column; align-items: flex-start; gap: 4px; }
-      .re-search { flex: 1 1 100%; }
-    }
-  `]
+  styleUrls: ['./user-form.styles.scss', './role-editor.component.scss']
 })
 export class RoleEditorComponent implements OnInit {
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');

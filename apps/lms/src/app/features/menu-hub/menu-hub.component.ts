@@ -91,7 +91,7 @@ export class MenuHubComponent {
   });
 
   /** A tile opens a lazy screen: it turns "held" the same frame, until the
-   *  navigation settles (ND-PATTERN "Loading feedback"). */
+   *  navigation settles (PF-PATTERN "Loading feedback"). */
   open(route: string, ev?: Event) {
     this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     this.router.navigate([route]);

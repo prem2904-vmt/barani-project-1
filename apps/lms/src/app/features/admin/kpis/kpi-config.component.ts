@@ -228,17 +228,17 @@ const CATEGORY_LABELS: Record<string, string> = {
                       (drop)="onDrop($event, i)"
                       (dragend)="onDragEnd()">
                     <span class="pf-kpi-tile__grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
-                    <span class="pf-kpi-tile__pos nd-num">{{ i + 1 }}</span>
+                    <span class="pf-kpi-tile__pos pf-num">{{ i + 1 }}</span>
                     <div class="pf-kpi-tile__body">
                       <span class="pf-kpi-tile__label">{{ kpiName(a.kpiId) }}</span>
                       <span class="pf-kpi-tile__meta">
                         {{ kpiCategory(a.kpiId) }} · {{ kpiValueType(a.kpiId) }}
                       </span>
                     </div>
-                    <button type="button" class="nd-toggle pf-kpi-tile__switch" role="switch" [attr.aria-checked]="a.enabled"
+                    <button type="button" class="pf-toggle pf-kpi-tile__switch" role="switch" [attr.aria-checked]="a.enabled"
                             [attr.aria-label]="kpiName(a.kpiId) + (a.enabled ? ' — shown' : ' — hidden')"
                             [title]="a.enabled ? 'Disable' : 'Enable'" (click)="toggleEnabled(i)">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                     <span class="pf-kpi-tile__updown" aria-hidden="false">
                       <button type="button" class="pf-kpi-tile__mv" [disabled]="i === 0"

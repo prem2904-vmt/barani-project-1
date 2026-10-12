@@ -14,8 +14,8 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { TenantStateService } from '../../../../core/services/tenant-state.service';
 
 /**
- * (Harness copied from test-editor.nd.spec.ts.)
- * Test editor — NEW DESIGN (ND-PATTERN "Editors"). The band is back · tenant
+ * (Harness copied from test-editor.pf.spec.ts.)
+ * Test editor — NEW DESIGN (PF-PATTERN "Editors"). The band is back · tenant
  * · Save (ONE primary) with a neutral save state; the pill is the CONTEXT
  * BAR (the full test name + neutral chips); the SECTIONS rail is a tabs row;
  * the live preview is the side card, behind "Preview" on small screens.

@@ -14,7 +14,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { AuthService } from '../../../core/auth/auth.service';
 
 /**
- * Order & Payments — LOADING FEEDBACK (ND-PATTERN "Loading feedback"):
+ * Order & Payments — LOADING FEEDBACK (PF-PATTERN "Loading feedback"):
  * every button that waits on the server (Update order, Confirm payment, the
  * paid-order Print / Receipt / WhatsApp) turns busy in the same frame —
  * disabled + aria-busy, repeat presses swallowed — and shows the kit's dots

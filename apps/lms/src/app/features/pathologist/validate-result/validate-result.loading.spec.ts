@@ -14,7 +14,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { PlatformService } from '../../../core/services/platform.service';
 
 /**
- * Validate — LOADING FEEDBACK (ND-PATTERN "Loading feedback"). The screen
+ * Validate — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). The screen
  * opens on the kit's detail skeleton (never the PF logo — that's sign-in
  * branding only), and Validate / Reject show their busy state (disabled +
  * aria-busy the same frame, dots after 150ms) while the request runs. The

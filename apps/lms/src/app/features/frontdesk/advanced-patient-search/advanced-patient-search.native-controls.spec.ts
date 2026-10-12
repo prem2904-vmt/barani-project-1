@@ -5,7 +5,7 @@ import { AdvancedPatientSearchComponent } from './advanced-patient-search.compon
 import { ApiService } from '../../../core/services/api.service';
 
 /** Visit-date "Custom…" range used two native `<input type="date">` —
- *  now `pf-nd-date`, same ISO yyyy-MM-dd the server-side filter reads. */
+ *  now `pf-date`, same ISO yyyy-MM-dd the server-side filter reads. */
 function render() {
   const api = { get: vi.fn(() => of([])) };
   TestBed.configureTestingModule({
@@ -25,16 +25,16 @@ function render() {
 describe('Advanced patient search — custom date range (no native date input)', () => {
   afterEach(() => document.querySelectorAll('.pf-aps-root').forEach(n => n.remove()));
 
-  it('renders two pf-nd-date fields, never a native date input', () => {
+  it('renders two pf-date fields, never a native date input', () => {
     const { root } = render();
     const range = root().querySelector('.pf-aps-custom-range')!;
-    expect(range.querySelectorAll('pf-nd-date').length).toBe(2);
+    expect(range.querySelectorAll('pf-date').length).toBe(2);
     expect(range.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
   });
 
   it('typing From/To sets filters().dateFrom/dateTo as plain ISO strings', () => {
     const { root, c } = render();
-    const [from, to] = Array.from(root().querySelectorAll<HTMLInputElement>('.pf-aps-custom-range pf-nd-date input[type="text"]'));
+    const [from, to] = Array.from(root().querySelectorAll<HTMLInputElement>('.pf-aps-custom-range pf-date input[type="text"]'));
     from.value = '01092026'; from.dispatchEvent(new Event('input'));
     to.value = '30092026'; to.dispatchEvent(new Event('input'));
     expect(c.filters().dateFrom).toBe('2026-09-01');

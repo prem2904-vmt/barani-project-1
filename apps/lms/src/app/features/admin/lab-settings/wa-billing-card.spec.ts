@@ -133,8 +133,8 @@ describe('WhatsApp billing card — own number', () => {
     expect(add.href).toBe(LINKS.paymentMethods);
     expect(add.target).toBe('_blank');
     expect(add.rel).toContain('noopener');
-    expect(add.classList.contains('nd-btn--primary')).toBe(true);
-    expect(p.el.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    expect(add.classList.contains('pf-btn--primary')).toBe(true);
+    expect(p.el.querySelectorAll('.pf-btn--primary').length).toBe(1);
     expect((p.q('wab-account-billing') as HTMLAnchorElement).href).toBe(LINKS.accountBilling);
     expect(p.el.textContent).not.toMatch(/recharge/i);
     expect(p.el.querySelector('select, datalist, input[type="checkbox"], input[type="number"]')).toBeNull();

@@ -20,7 +20,7 @@ describe('PRESENCE_OPTIONS', () => {
     expect(keys).toEqual(['available', 'busy', 'with_patient', 'rounds', 'surgery', 'dnd', 'away']);
   });
 
-  it('marks only surgery and dnd as DND-grade (calls blocked, pushes silenced)', () => {
+  it('marks only surgery and dnd as DPF-grade (calls blocked, pushes silenced)', () => {
     const dndStatuses = PRESENCE_OPTIONS.filter(o => o.dnd).map(o => o.key);
     expect(dndStatuses).toEqual(['surgery', 'dnd']);
   });
@@ -149,7 +149,7 @@ describe('presenceColor', () => {
 });
 
 describe('presenceIsDnd', () => {
-  it('returns true for DND-grade statuses (surgery and dnd)', () => {
+  it('returns true for DPF-grade statuses (surgery and dnd)', () => {
     expect(presenceIsDnd('surgery')).toBe(true);
     expect(presenceIsDnd('dnd')).toBe(true);
   });

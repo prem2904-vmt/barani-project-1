@@ -45,7 +45,7 @@ describe('Frontdesk order drawer — fonts and colours', () => {
   });
 
   it('the status is a neutral ND chip with a state dot', () => {
-    const chip = root.querySelector('.pf-drawer__hdr-actions .nd-chip.nd-chip--static.pf-drawer__status');
+    const chip = root.querySelector('.pf-drawer__hdr-actions .pf-chip.pf-chip--static.pf-drawer__status');
     expect(chip).not.toBeNull();
     expect(chip!.querySelector('.pf-drawer__status-dot')).not.toBeNull();
   });
@@ -73,7 +73,7 @@ describe('Frontdesk order drawer — header', () => {
 
   // PR #70 (2026-09-28): MRN + Order # left the header meta line; age/sex stays.
   it('age/sex ride the quiet meta line (no "|" separators)', () => {
-    const meta = root.querySelector('.pf-drawer__hdr-meta.nd-num')!;
+    const meta = root.querySelector('.pf-drawer__hdr-meta.pf-num')!;
     expect(meta.textContent).toMatch(/drawerAgeSex/);
     const literal = meta.textContent!.replace(/\{\{[\s\S]*?\}\}|@if \([^)]*\)/g, '');
     expect(literal).not.toMatch(/\|/); // no "Name | 22/M | MRN" joins
@@ -82,7 +82,7 @@ describe('Frontdesk order drawer — header', () => {
   it('avatar · text · status + close sit on one grid; no gradient hairline', () => {
     expect(rule('.pf-drawer__hdr')).toMatch(/grid-template-columns: auto minmax\(0, 1fr\) auto/);
     expect(css).not.toMatch(/\.pf-drawer__hdr::after/);
-    expect(rule('.pf-drawer__hdr')).toMatch(/border-bottom: 1px solid var\(--nd-line\)/);
+    expect(rule('.pf-drawer__hdr')).toMatch(/border-bottom: 1px solid var\(--pf-line\)/);
   });
 
   it('empty doctor stays a muted em dash', () => {
@@ -104,7 +104,7 @@ describe('Frontdesk order drawer — footer actions', () => {
     expect(f).toMatch(/position: sticky/);
     expect(f).toMatch(/flex-shrink: 0/);
     expect(f).toMatch(/env\(safe-area-inset-bottom/);
-    expect(rule('.pf-drawer')).toMatch(/bottom: var\(--nd-nav-h/);
+    expect(rule('.pf-drawer')).toMatch(/bottom: var\(--pf-nav-h/);
     expect(rule('.pf-drawer__body')).toMatch(/min-height: 0/);
   });
 
@@ -148,11 +148,11 @@ describe('Frontdesk order drawer — footer actions', () => {
   });
 
   it('at most one primary; cancel is danger-secondary, not a filled red circle', () => {
-    expect(footer.querySelectorAll('.nd-btn--primary').length).toBeLessThanOrEqual(1);
+    expect(footer.querySelectorAll('.pf-btn--primary').length).toBeLessThanOrEqual(1);
     const cancel = buttons.find(b => b.getAttribute('aria-label') === 'Cancel order')!;
-    expect(cancel.classList).toContain('nd-btn--danger');
-    expect(cancel.classList).not.toContain('nd-btn--primary');
-    for (const b of buttons.filter(x => x !== cancel)) expect(b.classList).toContain('nd-btn--secondary');
+    expect(cancel.classList).toContain('pf-btn--danger');
+    expect(cancel.classList).not.toContain('pf-btn--primary');
+    for (const b of buttons.filter(x => x !== cancel)) expect(b.classList).toContain('pf-btn--secondary');
     expect(drawer).not.toMatch(/pf-actbtn/);
   });
 });

@@ -1,6 +1,6 @@
 /**
  * Patient profile (new design) — pure helpers for the ND layout
- * (docs/ND-PATTERN.md → "Patient profile"). Labels, tones and the band's
+ * (docs/PF-PATTERN.md → "Patient profile"). Labels, tones and the band's
  * context line live here so the template stays declarative and the spec can
  * pin them without rendering.
  */

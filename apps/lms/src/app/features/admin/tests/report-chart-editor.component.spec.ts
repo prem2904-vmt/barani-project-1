@@ -71,7 +71,7 @@ describe('pf-report-chart-editor (Test Master chart block)', () => {
 
   it('time points are unavailable for a test that is not a series', () => {
     const { el } = make(LIPID, { v: 1, kind: 'bar', x: 'parameters', parameters: ['hdl'] });
-    const tp = [...el.querySelectorAll<HTMLButtonElement>('[aria-label="X axis"] .nd-seg__item')].find(b => /Time points/.test(b.textContent ?? ''))!;
+    const tp = [...el.querySelectorAll<HTMLButtonElement>('[aria-label="X axis"] .pf-seg__item')].find(b => /Time points/.test(b.textContent ?? ''))!;
     expect(tp.disabled).toBe(true);
   });
 

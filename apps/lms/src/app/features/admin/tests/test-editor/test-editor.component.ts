@@ -212,7 +212,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly origin = signal<TestOrigin | null>(null);
   /** The lab's catalogue mode on the loaded row ('clone' | 'reference'). */
   readonly catalogMode = signal<string | null>(null);
-  // ── New design (ND-PATTERN "Editors") ─────────────────────────────
+  // ── New design (PF-PATTERN "Editors") ─────────────────────────────
   /** Band + context bar + tabs row. Only in the LMS new design, never in the
    *  admin console's master mode (it hosts this editor in its own shell). */
   readonly nd = computed(() => this.themeSvc.isNewDesign() && this.codeMode() === 'tenant');
@@ -237,7 +237,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return { label: originLabel(t), hint: originHint(t), icon: ORIGIN_ICON_PATHS[k] };
   });
   /** The section tabs in the pill + their sliding indicator (x / width of
-   *  the selected tab, measured after render; slides on --nd-spring). */
+   *  the selected tab, measured after render; slides on --pf-spring). */
   private readonly tabsEl = viewChild<ElementRef<HTMLElement>>('tabsEl');
   readonly tabInd = signal<{ x: number; w: number }>({ x: 0, w: 0 });
   private readonly _tabIndFx = effect(() => {
@@ -986,7 +986,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
 
-  // ── Loading feedback (ND-PATTERN "Loading feedback") ─────────────────
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ─────────────────
   /** An existing record is being fetched: true from the first frame of an
    *  `/:id/edit` route until GET /api/tests/:id answers (or fails). The
    *  editor draws its own shape (skeleton) instead of a blank "Edit test"

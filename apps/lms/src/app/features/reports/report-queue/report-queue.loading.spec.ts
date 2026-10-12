@@ -16,7 +16,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 /**
- * Reports list — LOADING FEEDBACK (ND-PATTERN "Loading feedback"; owner,
+ * Reports list — LOADING FEEDBACK (PF-PATTERN "Loading feedback"; owner,
  * 2026-09-29: "wherever there is an action that takes time, there needs to
  * be an animation"). A row's Download renders / fetches the stored PDF and
  * the band's Generate posts: each button turns busy (disabled + aria-busy)

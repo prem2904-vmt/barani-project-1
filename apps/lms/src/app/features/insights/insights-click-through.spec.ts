@@ -62,7 +62,7 @@ describe('Insights — layout + defaults', () => {
     p.f.detectChanges();
     expect(p.el.querySelector('aside.pf-ins-nav')).not.toBeNull();
     expect(p.el.querySelector('section.pf-ins-main')).not.toBeNull();
-    expect(p.el.querySelectorAll('.nd-btn--primary').length).toBeLessThanOrEqual(1);
+    expect(p.el.querySelectorAll('.pf-btn--primary').length).toBeLessThanOrEqual(1);
     const items = Array.from(p.el.querySelectorAll('.pf-ins-nav__item')).map(b => b.textContent?.trim());
     expect(items).toContain('Patients & Volume');
     expect(items).toContain('Patients');
@@ -86,7 +86,7 @@ describe('Insights — click-through to the list', () => {
     kpi.click();
     p.f.detectChanges();
     expect(p.c.selectedKpi()).toBe('patients');
-    const cta = p.el.querySelector<HTMLButtonElement>('.nd-btn--primary')!;
+    const cta = p.el.querySelector<HTMLButtonElement>('.pf-btn--primary')!;
     expect(cta.textContent).toContain('Open patients');
     cta.click();
     p.f.detectChanges();
@@ -178,7 +178,7 @@ describe('Insights — phone band (owner 2026-10-02: no sideways scroll)', () =>
     expect(p.el.querySelector('.pf-ins-filters')).not.toBeNull();
     p.c.setDraft('department', 'dep-3');
     expect(p.c.departmentId()).toBe(''); // nothing applies until Apply
-    p.el.querySelector<HTMLButtonElement>('.pf-ins-filters .nd-btn--primary')!.click();
+    p.el.querySelector<HTMLButtonElement>('.pf-ins-filters .pf-btn--primary')!.click();
     p.f.detectChanges();
     expect(p.c.departmentId()).toBe('dep-3');
     expect(p.c.filtersSheet()).toBe(false);

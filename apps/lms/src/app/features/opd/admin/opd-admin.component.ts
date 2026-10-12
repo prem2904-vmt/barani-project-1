@@ -41,8 +41,8 @@ interface OpdTile {
       <div class="pf-band-body">
       <div class="pf-lsh">
         @for (t of visibleTiles(); track t.href) {
-          <a [routerLink]="t.href" class="pf-lsh__tile nd-card press">
-            <span class="nd-card__icon pf-lsh__ic">
+          <a [routerLink]="t.href" class="pf-lsh__tile pf-card press">
+            <span class="pf-card__icon pf-lsh__ic">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path [attr.d]="t.iconPath"></path>
@@ -72,9 +72,9 @@ interface OpdTile {
     }
     .pf-lsh__tile {
       gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
-      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
+      transition: border-color var(--pf-dur-fast) ease, transform 100ms ease;
     }
-    .pf-lsh__tile:hover { border-color: var(--nd-sel-border); }
+    .pf-lsh__tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-lsh__tile:active { transform: scale(.99); }
     .pf-lsh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .pf-lsh__tile { transition: none; } .pf-lsh__tile:active { transform: none; } }

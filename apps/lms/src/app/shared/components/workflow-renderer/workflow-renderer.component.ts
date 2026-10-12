@@ -40,7 +40,7 @@ export interface WorkflowStepCompleteEvent {
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
     } @else if (singlePage() && nd()) {
-      <!-- NEW DESIGN (ND-PATTERN §15): ONE form, every step visible at once
+      <!-- NEW DESIGN (PF-PATTERN §15): ONE form, every step visible at once
            as its own section card (violet icon chip + label + "N required").
            The host lays the cards out (3 / 2 / 1 columns) and owns the
            actions (the ONE primary sits in the band). Keyboard-first: Enter
@@ -49,9 +49,9 @@ export interface WorkflowStepCompleteEvent {
       <div class="pf-wr-cards" (keydown)="onNdKey($event)" (focusout)="onNdBlur($event)">
         @for (s of visibleSteps(); track s.id) {
           @let req = requiredCount(s);
-          <section class="nd-card pf-wr-card" [attr.data-step]="s.id" [attr.aria-labelledby]="'pf-wr-h-' + s.id">
-            <div class="nd-card__head pf-wr-card__head">
-              <span class="nd-card__icon">
+          <section class="pf-card pf-wr-card" [attr.data-step]="s.id" [attr.aria-labelledby]="'pf-wr-h-' + s.id">
+            <div class="pf-card__head pf-wr-card__head">
+              <span class="pf-card__icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   @switch (stepKind(s)) {
@@ -62,16 +62,16 @@ export interface WorkflowStepCompleteEvent {
                   }
                 </svg>
               </span>
-              <h2 class="nd-card__label pf-wr-card__label" [id]="'pf-wr-h-' + s.id">{{ s.title }}</h2>
+              <h2 class="pf-card__label pf-wr-card__label" [id]="'pf-wr-h-' + s.id">{{ s.title }}</h2>
               <span class="pf-wr-card__note">
-                @if (req > 0) { <span class="nd-dot-unpriced" aria-hidden="true"></span>{{ req }} required } @else { Optional }
+                @if (req > 0) { <span class="pf-dot-unpriced" aria-hidden="true"></span>{{ req }} required } @else { Optional }
               </span>
-              <span class="nd-card__spacer"></span>
+              <span class="pf-card__spacer"></span>
               @if (stepHeaderTpl() && stepHeaderFor() === s.id) {
                 <span class="pf-wr-card__extra"><ng-container *ngTemplateOutlet="stepHeaderTpl()!"></ng-container></span>
               }
             </div>
-            <div class="nd-card__body pf-wr-card__body">
+            <div class="pf-card__body pf-wr-card__body">
               <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
             </div>
           </section>
@@ -80,10 +80,10 @@ export interface WorkflowStepCompleteEvent {
       @if (!hideActions()) {
         <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
           @for (action of extraActions(); track action.id) {
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
+            <button type="button" class="pf-btn pf-btn--secondary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                     (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
           }
-          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
+          <button type="button" class="pf-btn pf-btn--primary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                   (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
         </div>
       }
@@ -289,7 +289,7 @@ export interface WorkflowStepCompleteEvent {
       .pf-wr-grid { grid-template-columns: minmax(0, 1fr); }
       .pf-wr-card__body { padding: 14px; }
       /* Beat the global phone h2 cap (!important): the card label is 12px. */
-      h2.nd-card__label.pf-wr-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+      h2.pf-card__label.pf-wr-card__label { font-size: 12px !important; line-height: 1.3 !important; }
     }
     /* Same 44px control height / 12px radius the dynamic inputs use — the
        renderer's own raw inputs and the title-prefix select must not sit a
@@ -313,7 +313,7 @@ export class WorkflowRendererComponent implements OnChanges {
    *  later steps are revealed inline by "Add more"; one Submit finishes. Used by
    *  the patient-registration form. */
   readonly singlePage = input<boolean>(false);
-  /** New-design markup (ND-PATTERN §14): kit fields, no in-form headings.
+  /** New-design markup (PF-PATTERN §14): kit fields, no in-form headings.
    *  Only meaningful with singlePage. Off by default (workflow preview …). */
   readonly nd = input<boolean>(false);
   /** New design: extra header content (e.g. ABHA buttons) for ONE card. */

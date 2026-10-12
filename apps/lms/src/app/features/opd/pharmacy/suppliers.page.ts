@@ -47,41 +47,41 @@ export function gstinOk(g: string | null | undefined): boolean {
         </ng-container>
       </pf-hero-band>
       <div class="ph-body">
-        <section class="nd-card" aria-labelledby="ph-sp-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h13v10H3zM16 10h4l1 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg></span>
-            <span class="nd-card__label" id="ph-sp-t">Suppliers</span>
-            <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">{{ rows().length }}</span>
+        <section class="pf-card" aria-labelledby="ph-sp-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h13v10H3zM16 10h4l1 3v4h-5"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg></span>
+            <span class="pf-card__label" id="ph-sp-t">Suppliers</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ph-sub pf-num">{{ rows().length }}</span>
           </header>
-          <div class="nd-card__body ph-card-body--flush">
+          <div class="pf-card__body ph-card-body--flush">
             <ag-grid-angular class="ph-grid" style="height:100%" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="cols"
                              [getRowId]="rowId" (rowClicked)="pick($event)" [overlayNoRowsTemplate]="noRows"></ag-grid-angular>
           </div>
         </section>
-        <aside class="nd-card" aria-labelledby="ph-se-t">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
-            <span class="nd-card__label" id="ph-se-t">{{ editId() ? 'Edit supplier' : 'New supplier' }}</span>
+        <aside class="pf-card" aria-labelledby="ph-se-t">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+            <span class="pf-card__label" id="ph-se-t">{{ editId() ? 'Edit supplier' : 'New supplier' }}</span>
           </header>
-          <div class="nd-card__body">
+          <div class="pf-card__body">
             <div class="ph-fields">
-              <div class="nd-field ph-span"><label class="nd-field__lbl" for="ph-sn">Name <span class="nd-dot-unpriced" aria-hidden="true"></span></label><input id="ph-sn" class="nd-input" [value]="form().name" (input)="set('name', $any($event.target).value)" /></div>
-              <div class="nd-field"><label class="nd-field__lbl" for="ph-sg">GSTIN</label><input id="ph-sg" class="nd-input nd-num" [class.nd-input--error]="!gstOk()" [value]="form().gstin" (input)="set('gstin', $any($event.target).value)" maxlength="15" />
-                @if (!gstOk()) { <span class="nd-field__hint" style="color:var(--red-text,#dc2626)">A GSTIN has 15 characters.</span> }</div>
-              <div class="nd-field"><label class="nd-field__lbl" for="ph-sl">Drug licence no.</label><input id="ph-sl" class="nd-input nd-num" [value]="form().drugLicenseNo" (input)="set('drugLicenseNo', $any($event.target).value)" /></div>
-              <div class="nd-field"><label class="nd-field__lbl" for="ph-sph">Phone</label><input id="ph-sph" class="nd-input nd-num" inputmode="tel" [value]="form().phone" (input)="set('phone', $any($event.target).value)" /></div>
-              <div class="nd-field"><label class="nd-field__lbl" for="ph-se">Email</label><input id="ph-se" class="nd-input" type="email" [value]="form().email" (input)="set('email', $any($event.target).value)" /></div>
-              <div class="nd-field ph-span"><label class="nd-field__lbl" for="ph-sa">Address</label><textarea id="ph-sa" class="nd-input" rows="3" style="height:auto;padding-top:8px" [value]="form().address ?? ''" (input)="set('address', $any($event.target).value)"></textarea></div>
-              <div class="nd-field ph-span" style="flex-direction:row;align-items:center;justify-content:space-between;display:flex">
-                <span class="nd-field__lbl" id="ph-sact">Active</span>
-                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="form().isActive" aria-labelledby="ph-sact" (click)="set('isActive', !form().isActive)"><span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span></button>
+              <div class="pf-field ph-span"><label class="pf-field__lbl" for="ph-sn">Name <span class="pf-dot-unpriced" aria-hidden="true"></span></label><input id="ph-sn" class="pf-input" [value]="form().name" (input)="set('name', $any($event.target).value)" /></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="ph-sg">GSTIN</label><input id="ph-sg" class="pf-input pf-num" [class.pf-input--error]="!gstOk()" [value]="form().gstin" (input)="set('gstin', $any($event.target).value)" maxlength="15" />
+                @if (!gstOk()) { <span class="pf-field__hint" style="color:var(--red-text,#dc2626)">A GSTIN has 15 characters.</span> }</div>
+              <div class="pf-field"><label class="pf-field__lbl" for="ph-sl">Drug licence no.</label><input id="ph-sl" class="pf-input pf-num" [value]="form().drugLicenseNo" (input)="set('drugLicenseNo', $any($event.target).value)" /></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="ph-sph">Phone</label><input id="ph-sph" class="pf-input pf-num" inputmode="tel" [value]="form().phone" (input)="set('phone', $any($event.target).value)" /></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="ph-se">Email</label><input id="ph-se" class="pf-input" type="email" [value]="form().email" (input)="set('email', $any($event.target).value)" /></div>
+              <div class="pf-field ph-span"><label class="pf-field__lbl" for="ph-sa">Address</label><textarea id="ph-sa" class="pf-input" rows="3" style="height:auto;padding-top:8px" [value]="form().address ?? ''" (input)="set('address', $any($event.target).value)"></textarea></div>
+              <div class="pf-field ph-span" style="flex-direction:row;align-items:center;justify-content:space-between;display:flex">
+                <span class="pf-field__lbl" id="ph-sact">Active</span>
+                <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="form().isActive" aria-labelledby="ph-sact" (click)="set('isActive', !form().isActive)"><span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span></button>
               </div>
             </div>
           </div>
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="startNew()">Clear</button>
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="valid()" [class.nd-btn--secondary]="!valid()" [disabled]="!valid() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ editId() ? 'Save' : 'Add supplier' }}</button>
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="startNew()">Clear</button>
+            <button type="button" class="pf-btn" [class.pf-btn--primary]="valid()" [class.pf-btn--secondary]="!valid()" [disabled]="!valid() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ editId() ? 'Save' : 'Add supplier' }}</button>
           </div>
         </aside>
       </div>

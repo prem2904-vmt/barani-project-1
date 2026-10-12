@@ -24,9 +24,9 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
   imports: [DatePipe, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="nd-card__head vc__head">
-      <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
-      <span class="nd-card__label">{{ isToday() ? 'Today' : 'Visit' }}</span>
+    <header class="pf-card__head vc__head">
+      <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      <span class="pf-card__label">{{ isToday() ? 'Today' : 'Visit' }}</span>
       @if (pinnable()) {
         <button type="button" class="vc__pin" (click)="togglePin.emit()" [attr.aria-pressed]="pinned()" data-pin
                 [title]="autoCollapsed() ? 'Pinned · collapsed for space' : pinned() ? 'Pinned: stays open beside the consult' : 'Unpinned: folds to a rail'"
@@ -40,8 +40,8 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       }
-      <span class="nd-card__spacer"></span>
-      <button type="button" class="vc__date nd-num" (click)="stripOpen.set(!stripOpen())" [attr.aria-expanded]="stripOpen()" aria-label="Show the patient's allergies, conditions and medicines">
+      <span class="pf-card__spacer"></span>
+      <button type="button" class="vc__date pf-num" (click)="stripOpen.set(!stripOpen())" [attr.aria-expanded]="stripOpen()" aria-label="Show the patient's allergies, conditions and medicines">
         {{ dayKey() + 'T00:00:00' | date:'EEE, d MMM y' }}
       </button>
       @if (!isToday()) { <button type="button" class="vc__today" (click)="today.emit()">Today</button> }
@@ -69,12 +69,12 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
       </div>
       @if (adding()) {
         <div class="vc__add">
-          <input class="nd-input" type="text" placeholder="Allergen (drug, food, other)" aria-label="Allergen" [value]="newAllergen()" (input)="newAllergen.set($any($event.target).value)" />
-          <input class="nd-input" type="text" placeholder="Reaction (e.g. rash)" aria-label="Reaction" [value]="newReaction()" (input)="newReaction.set($any($event.target).value)" />
+          <input class="pf-input" type="text" placeholder="Allergen (drug, food, other)" aria-label="Allergen" [value]="newAllergen()" (input)="newAllergen.set($any($event.target).value)" />
+          <input class="pf-input" type="text" placeholder="Reaction (e.g. rash)" aria-label="Reaction" [value]="newReaction()" (input)="newReaction.set($any($event.target).value)" />
           <pf-select size="sm" [options]="severityOpts" [value]="newSeverity()" placeholder="Severity" (valueChange)="newSeverity.set($event)"></pf-select>
           <div class="vc__addact">
-            <button type="button" class="nd-btn nd-btn--tertiary" (click)="adding.set(false)">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!newAllergen().trim()" (click)="saveAllergy()">Save allergy</button>
+            <button type="button" class="pf-btn pf-btn--tertiary" (click)="adding.set(false)">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--secondary" [disabled]="!newAllergen().trim()" (click)="saveAllergy()">Save allergy</button>
           </div>
         </div>
       }
@@ -91,13 +91,13 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
       }
       <div class="vc__ar"><span class="vc__k">Conditions</span><span class="vc__v">{{ conditionsText() || 'None on record' }}</span></div>
       <div class="vc__ar"><span class="vc__k">Medicines</span><span class="vc__v">{{ medsText() || 'None running' }}</span></div>
-      @if (watch()) { <div class="vc__ar"><span class="vc__k">Watch</span><span class="vc__v vc__w nd-num">{{ watch() }}</span></div> }
+      @if (watch()) { <div class="vc__ar"><span class="vc__k">Watch</span><span class="vc__v vc__w pf-num">{{ watch() }}</span></div> }
       @if (results().length) {
         <div class="vc__ar"><span class="vc__k">Results</span>
           <span class="vc__v vc__res">
             @for (r of results(); track r.test + r.param) {
               @let hl = flagOf(r);
-              <span class="vc__rv nd-num" [attr.data-flag]="hl" [title]="r.test + ' · ' + (r.date | date:'d MMM y')">{{ r.param }} <b>{{ r.value }}</b>@if (r.unit) { {{ ' ' + r.unit }} }@if (hl) { <i>{{ hl }}</i> }</span>
+              <span class="vc__rv pf-num" [attr.data-flag]="hl" [title]="r.test + ' · ' + (r.date | date:'d MMM y')">{{ r.param }} <b>{{ r.value }}</b>@if (r.unit) { {{ ' ' + r.unit }} }@if (hl) { <i>{{ hl }}</i> }</span>
             }
           </span>
         </div>
@@ -132,9 +132,9 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
               </span>
               <span class="vc__t">
                 <span class="vc__n">{{ i.title }}</span>
-                <span class="vc__s nd-num" [class.vc__s--h]="i.high">{{ i.sub }}</span>
+                <span class="vc__s pf-num" [class.vc__s--h]="i.high">{{ i.sub }}</span>
               </span>
-              @if (order > 0) { <span class="vc__ord nd-num" aria-hidden="true">{{ order }}</span> }
+              @if (order > 0) { <span class="vc__ord pf-num" aria-hidden="true">{{ order }}</span> }
             </button>
           </div>
         } @empty {
@@ -150,7 +150,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__date:focus-visible, .vc__today:focus-visible, .vc__pill:focus-visible, .vc__open:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .vc__today { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
       color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-    .vc__always { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--nd-line); }
+    .vc__always { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--pf-line); }
     .vc__ar { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; font-size: 12.5px; line-height: 1.45; }
     .vc__k { color: var(--text-tertiary); }
     .vc__v { color: var(--text-primary); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
@@ -166,30 +166,30 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__muted { color: var(--text-tertiary); font-size: 12.5px; margin: 0; }
     .vc__pad { padding: 4px 2px; }
     .vc__allergy { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 1px 2px 1px 8px; border-radius: 7px; font-size: 12.5px;
-      color: var(--red-text, #dc2626); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--nd-card-bg)); }
+      color: var(--red-text, #dc2626); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--pf-card-bg)); }
     .vc__allergy em { font-style: normal; color: var(--text-secondary); }
     .vc__rm { width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
     .vc__link { border: 0; background: transparent; padding: 2px 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); cursor: pointer; }
     .vc__add { display: grid; gap: 8px; }
     .vc__addact { display: flex; justify-content: flex-end; gap: 8px; }
     .vc__conflict { display: grid; gap: 6px; padding: 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent);
-      background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--nd-card-bg)); font-size: 12.5px; }
+      background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--pf-card-bg)); font-size: 12.5px; }
     .vc__conflict p { margin: 0; color: var(--text-primary); line-height: 1.45; }
     .vc__cact { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .vc__swap { min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--color-violet-600, #7c3aed); background: var(--nd-card-bg);
+    .vc__swap { min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--color-violet-600, #7c3aed); background: var(--pf-card-bg);
       color: var(--violet-text, #6d28d9); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
     .vc__preg { padding: 8px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--text-primary);
-      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 28%, transparent); }
+      background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--pf-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 28%, transparent); }
     .vc__pills { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 4px; }
-    .vc__pill { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--nd-line); background: none; font: inherit; font-size: 12px; font-weight: 500;
+    .vc__pill { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--pf-line); background: none; font: inherit; font-size: 12px; font-weight: 500;
       color: var(--text-secondary); cursor: pointer; }
     .vc__pill[aria-pressed='true'] { border-color: transparent; color: #fff; font-weight: 600; background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); }
     .vc__scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
     .vc__items { display: grid; gap: 8px; padding: 10px 14px 14px; align-content: start; }
-    .vc__row { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0; border-radius: var(--nd-radius-sm, 10px);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
-    .vc__row:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--nd-line)); }
-    .vc__row[aria-current='true'] { background: var(--nd-in-tint); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); }
+    .vc__row { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0; border-radius: var(--pf-radius-sm, 10px);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+    .vc__row:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--pf-line)); }
+    .vc__row[aria-current='true'] { background: var(--pf-in-tint); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); }
     .vc__open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
     .vc__ic { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--violet-text, #6d28d9);
       background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent); }
@@ -204,14 +204,14 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
     .vc__row--picked { border-style: solid; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent); }
     .vc__ord { flex: none; margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
       color: #fff; background: var(--color-violet-600, #7c3aed); }
-    .vc__pin { order: 8; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--nd-line); background: none;
+    .vc__pin { order: 8; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--pf-line); background: none;
       color: var(--text-secondary); display: inline-grid; place-items: center; cursor: pointer; }
     .vc__pin[aria-pressed='true'] { border-color: transparent; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .vc__auto { order: 7; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
     .vc__pin:focus-visible, .vc__x:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .vc__x { order: 9; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; }
 
-    @media (max-width: 760px) { .nd-input { font-size: 16px; } }
+    @media (max-width: 760px) { .pf-input { font-size: 16px; } }
   `],
 })
 export class ConsultVisitCardComponent {

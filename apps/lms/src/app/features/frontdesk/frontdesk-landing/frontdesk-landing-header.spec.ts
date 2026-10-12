@@ -68,7 +68,7 @@ describe('Frontdesk landing — work card header', () => {
     expect(kids[1].matches('.pf-work-hdr__filter')).toBe(true);
     const input = kids[0].querySelector('input') as HTMLInputElement;
     expect(input.getAttribute('type')).toBe('search');
-    expect(input.classList).toContain('nd-input');
+    expect(input.classList).toContain('pf-input');
     expect(kids[0].querySelector('svg')).not.toBeNull(); // icon, no emoji
     // Status chips are toggle buttons (aria-pressed) since 2026-09-30, not tabs.
     const tabs = [...kids[1].querySelectorAll('button')].map(b => b.textContent?.replace(/\s+/g, ' ').trim());

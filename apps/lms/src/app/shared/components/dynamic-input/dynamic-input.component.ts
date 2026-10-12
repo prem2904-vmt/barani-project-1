@@ -10,9 +10,9 @@ import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
 import { labToday } from '../../utils/lab-clock';
-import { NdDateComponent } from '../nd-date/nd-date.component';
-import { NdTimeComponent } from '../nd-time/nd-time.component';
-import { NdDateTimeComponent } from '../nd-date/nd-datetime.component';
+import { PfDateComponent } from '../pf-date/pf-date.component';
+import { PfTimeComponent } from '../pf-time/pf-time.component';
+import { PfDateTimeComponent } from '../pf-date/pf-datetime.component';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -50,7 +50,7 @@ export { isContactNumberField };
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, SelectComponent, NdDateComponent, NdTimeComponent, NdDateTimeComponent],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent, PfDateComponent, PfTimeComponent, PfDateTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ndOn()) {
@@ -59,10 +59,10 @@ export { isContactNumberField };
       <ng-container *ngTemplateOutlet="classicTpl"></ng-container>
     }
 
-    <!-- NEW DESIGN (ND-PATTERN §14 fields) — opt-in via [nd]. Kit fields:
-         .nd-field › .nd-field__lbl (+ the amber REQUIRED dot) › .nd-input;
-         choices of 2–4 (and one-tap pills) are a neutral .nd-seg driven by
-         aria-pressed (never an --on class); on/off is a slate .nd-toggle.
+    <!-- NEW DESIGN (PF-PATTERN §14 fields) — opt-in via [nd]. Kit fields:
+         .pf-field › .pf-field__lbl (+ the amber REQUIRED dot) › .pf-input;
+         choices of 2–4 (and one-tap pills) are a neutral .pf-seg driven by
+         aria-pressed (never an --on class); on/off is a slate .pf-toggle.
          Noto only; ID / phone / age numbers in tabular numbers. The value
          logic (phone rules, identity grouping, DOB ⇄ age) is shared with
          the classic template below — only the markup differs. -->
@@ -70,13 +70,13 @@ export { isContactNumberField };
       @let t = ndType();
       @let opts = normalisedOptions();
       @let err = error || (t === 'phone' ? phoneError() : null) || (isDobField() ? dobError() : null);
-      <div class="flex flex-col gap-1.5 nd-field pf-di-nd" [attr.data-field]="field.name" [class.pf-di-nd--error]="!!err">
+      <div class="flex flex-col gap-1.5 pf-field pf-di-nd" [attr.data-field]="field.name" [class.pf-di-pf--error]="!!err">
         @if (t !== 'checkbox' && t !== 'toggle') {
-          <label class="nd-field__lbl pf-di-lbl" [attr.for]="inputId" [id]="inputId + '-l'">
+          <label class="pf-field__lbl pf-di-lbl" [attr.for]="inputId" [id]="inputId + '-l'">
             <span>{{ field.title }}</span>
             @if (field.unit) { <span class="pf-di-unit">({{ field.unit }})</span> }
             @if (field.required) {
-              <span class="nd-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
+              <span class="pf-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
             }
           </label>
         }
@@ -84,25 +84,25 @@ export { isContactNumberField };
         @switch (t) {
           @case ('text') {
             @if (identityFormat(); as fmt) {
-              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" class="nd-input nd-num"
-                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" class="pf-input pf-num"
+                     [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.maxlength]="fmt.max" [placeholder]="fmt.placeholder" [attr.aria-required]="field.required || null"
                      [ngModel]="displayIdentity(value)" (ngModelChange)="emitIdentity(dinp, $event, fmt)" />
             } @else if (digitLimit(); as lim) {
-              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" pattern="[0-9]*" class="nd-input nd-num"
-                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" pattern="[0-9]*" class="pf-input pf-num"
+                     [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.maxlength]="lim" [placeholder]="field.placeholder ?? ''" [attr.aria-required]="field.required || null"
                      [ngModel]="value" (ngModelChange)="emitDigits(dinp, $event, lim)" />
             } @else {
-              <input [id]="inputId" data-pf-stop type="text" class="nd-input" [placeholder]="field.placeholder ?? ''"
-                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+              <input [id]="inputId" data-pf-stop type="text" class="pf-input" [placeholder]="field.placeholder ?? ''"
+                     [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.aria-required]="field.required || null"
                      [ngModel]="value" (ngModelChange)="emit($event)" />
             }
           }
           @case ('email') {
-            <input [id]="inputId" data-pf-stop type="email" class="nd-input" [placeholder]="field.placeholder ?? ''"
-                   [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+            <input [id]="inputId" data-pf-stop type="email" class="pf-input" [placeholder]="field.placeholder ?? ''"
+                   [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                    [attr.aria-required]="field.required || null" [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @case ('phone') {
@@ -110,7 +110,7 @@ export { isContactNumberField };
               <pf-select class="pf-di-phone__cc" [options]="countrySelectOptionsNd" [searchable]="true"
                          [value]="selectedCountryCode()" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
               <span class="pf-di-phone__sep" aria-hidden="true"></span>
-              <input #phIn [id]="inputId" data-pf-stop type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
+              <input #phIn [id]="inputId" data-pf-stop type="tel" inputmode="tel" class="pf-di-phone__num pf-num"
                      [attr.aria-required]="field.required || null"
                      [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.maxlength]="activePhoneRule().maxDigits"
@@ -121,8 +121,8 @@ export { isContactNumberField };
           @case ('number') { <ng-container *ngTemplateOutlet="ndNumTpl; context: { err: err }"></ng-container> }
           @case ('numeric') { <ng-container *ngTemplateOutlet="ndNumTpl; context: { err: err }"></ng-container> }
           @case ('textarea') {
-            <textarea [id]="inputId" data-pf-stop class="nd-input pf-di-area" [placeholder]="field.placeholder ?? ''"
-                      [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+            <textarea [id]="inputId" data-pf-stop class="pf-input pf-di-area" [placeholder]="field.placeholder ?? ''"
+                      [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                       [ngModel]="value" (ngModelChange)="emit($event)"></textarea>
           }
           @case ('date') {
@@ -134,8 +134,8 @@ export { isContactNumberField };
                      The calendar button still opens the native picker. -->
                 <span class="pf-di-date pf-di-dob__date">
                   <input #dobIn [id]="inputId" data-pf-stop type="text" inputmode="numeric" autocomplete="off"
-                         maxlength="10" placeholder="dd/mm/yyyy" class="nd-input nd-num pf-di-date__in"
-                         [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+                         maxlength="10" placeholder="dd/mm/yyyy" class="pf-input pf-num pf-di-date__in"
+                         [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                          [attr.aria-required]="field.required || null"
                          [value]="dobText()" (input)="onDobInput(dobIn)" (blur)="onDobBlur()" />
                   <button type="button" class="pf-di-date__pick" tabindex="-1" aria-label="Pick a date" title="Pick a date"
@@ -147,33 +147,33 @@ export { isContactNumberField };
                 </span>
                 <span class="pf-di-dob__or">or</span>
                 <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
-                       class="nd-input nd-num pf-di-dob__age" [class.nd-input--error]="!!err" placeholder="Age"
+                       class="pf-input pf-num pf-di-dob__age" [class.pf-input--error]="!!err" placeholder="Age"
                        [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
                        [attr.aria-describedby]="err ? inputId + '-e' : null"
                        [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
-                <div class="nd-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
+                <div class="pf-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
                      (keydown)="onUnitKey($event)">
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
                           [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
                           [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
                           [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
                 </div>
               </div>
-              @if (!err) { <p class="nd-field__hint">Type either — an entered age stays current automatically.</p> }
+              @if (!err) { <p class="pf-field__hint">Type either — an entered age stays current automatically.</p> }
             } @else {
-              <pf-nd-date [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
-                          (valueChange)="emit($event)"></pf-nd-date>
+              <pf-date [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                          (valueChange)="emit($event)"></pf-date>
             }
           }
           @case ('datetime') {
-            <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)"
-                            (valueChange)="emit($event)"></pf-nd-datetime>
+            <pf-datetime [label]="field.title" [value]="asDateStr(value)"
+                            (valueChange)="emit($event)"></pf-datetime>
           }
           @case ('time') {
-            <pf-nd-time [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
-                        (valueChange)="emit($event)"></pf-nd-time>
+            <pf-time [inputId]="inputId" [label]="field.title" [value]="asDateStr(value)"
+                        (valueChange)="emit($event)"></pf-time>
           }
           @case ('select') {
             @if (opts.length >= 2 && opts.length <= 4) {
@@ -203,7 +203,7 @@ export { isContactNumberField };
           @case ('multi_button_select') {
             <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
               @for (o of opts; track o.value; let first = $first) {
-                <button type="button" class="nd-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
+                <button type="button" class="pf-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
                         [attr.aria-pressed]="isSelected(o.value)" (click)="toggleMulti(o.value)">{{ o.label }}</button>
               }
             </div>
@@ -211,27 +211,27 @@ export { isContactNumberField };
           @case ('multiselect') {
             <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
               @for (o of opts; track o.value; let first = $first) {
-                <button type="button" class="nd-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
+                <button type="button" class="pf-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
                         [attr.aria-pressed]="isSelected(o.value)"
                         [title]="o.sublabel ?? o.label" (click)="toggleMulti(o.value)">{{ o.label }}</button>
               } @empty {
-                <p class="nd-field__hint">No options available.</p>
+                <p class="pf-field__hint">No options available.</p>
               }
             </div>
           }
           @case ('scan') {
-            <input [id]="inputId" data-pf-stop type="text" class="nd-input nd-num" placeholder="Scan or type barcode"
-                   [class.nd-input--error]="!!err" [ngModel]="value" (ngModelChange)="emit($event)" />
+            <input [id]="inputId" data-pf-stop type="text" class="pf-input pf-num" placeholder="Scan or type barcode"
+                   [class.pf-input--error]="!!err" [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @default {
             <!-- checkbox / toggle: a slate switch with its label beside it. -->
-            <button type="button" data-pf-stop class="nd-toggle pf-di-switch" role="switch" [attr.aria-checked]="!!value"
+            <button type="button" data-pf-stop class="pf-toggle pf-di-switch" role="switch" [attr.aria-checked]="!!value"
                     (click)="emit(!value)">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               <span class="pf-di-switch__t">
                 {{ t === 'checkbox' ? (field.placeholder ?? field.title) : field.title }}
                 @if (field.required) {
-                  <span class="nd-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
+                  <span class="pf-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
                 }
               </span>
             </button>
@@ -241,14 +241,14 @@ export { isContactNumberField };
         @if (err) {
           <p class="pf-di-err" [id]="inputId + '-e'" role="alert">{{ err }}</p>
         } @else if (field.helperText && t !== 'checkbox') {
-          <p class="nd-field__hint">{{ field.helperText }}</p>
+          <p class="pf-field__hint">{{ field.helperText }}</p>
         }
       </div>
     </ng-template>
 
     <ng-template #ndNumTpl let-err="err">
-      <input [id]="inputId" data-pf-stop type="number" class="nd-input nd-num" [step]="'any'" [placeholder]="field.placeholder ?? ''"
-             [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null"
+      <input [id]="inputId" data-pf-stop type="number" class="pf-input pf-num" [step]="'any'" [placeholder]="field.placeholder ?? ''"
+             [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null"
              [ngModel]="value" (ngModelChange)="emit($event === null ? null : $event)" />
     </ng-template>
 
@@ -258,12 +258,12 @@ export { isContactNumberField };
          checked option (or the first) is the one Tab stop. fill → equal
          segments across the column (2–4 choices). -->
     <ng-template #ndSegTpl let-list let-fill="fill" let-err="err">
-      <div class="nd-seg pf-di-seg" [class.pf-di-seg--fill]="fill" [class.pf-di-seg--error]="!!err"
+      <div class="pf-seg pf-di-seg" [class.pf-di-seg--fill]="fill" [class.pf-di-seg--error]="!!err"
            role="radiogroup" [attr.aria-labelledby]="inputId + '-l'" [attr.aria-required]="field.required || null"
            [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
            (keydown)="onSegKey($event, list)">
         @for (o of list; track o.value; let i = $index) {
-          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="value === o.value"
+          <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="value === o.value"
                   [attr.tabindex]="segStop(list, i) ? 0 : -1" [attr.data-pf-stop]="segStop(list, i) ? '' : null"
                   (click)="emit(o.value)">{{ o.label }}</button>
         }
@@ -357,8 +357,8 @@ export { isContactNumberField };
                  increments over time; either way the field's value is a DOB.
                  Infants: flip the unit to Months (auto-selected under 2 yrs). -->
             <div class="flex items-center gap-2 flex-wrap">
-              <span style="flex:1 1 150px"><pf-nd-date [label]="field.title" [value]="asDateStr(value)" [max]="todayIso"
-                          (valueChange)="emitDob($event, false)"></pf-nd-date></span>
+              <span style="flex:1 1 150px"><pf-date [label]="field.title" [value]="asDateStr(value)" [max]="todayIso"
+                          (valueChange)="emitDob($event, false)"></pf-date></span>
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
               <input type="number" class="pf-input" style="flex:0 0 84px" min="0"
                      [attr.max]="ageLimit()"
@@ -383,14 +383,14 @@ export { isContactNumberField };
               Type either — an entered age stays current automatically.
             </p>
           } @else {
-            <pf-nd-date [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-date>
+            <pf-date [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-date>
           }
         }
         @case ('datetime') {
-          <pf-nd-datetime [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-datetime>
+          <pf-datetime [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-datetime>
         }
         @case ('time') {
-          <pf-nd-time [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-nd-time>
+          <pf-time [label]="field.title" [value]="asDateStr(value)" (valueChange)="emit($event)"></pf-time>
         }
 
         @case ('select') {
@@ -781,7 +781,7 @@ export { isContactNumberField };
     }
     .pf-bsel__item:hover {
       background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
-      border-color: var(--text-secondary, rgba(255, 255, 255, 0.24));
+      border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     }
     .pf-bsel__item--on {
       background: var(--color-primary, #a855f7);
@@ -909,7 +909,7 @@ export { isContactNumberField };
       cursor: pointer;
       transition: border-color 160ms ease, background 160ms ease;
     }
-    .pf-radio:hover { border-color: var(--text-secondary, #cbd5e1); }
+    .pf-radio:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-radio:checked {
       border-color: #a855f7;
       background: radial-gradient(circle, #a855f7 45%, transparent 47%);
@@ -956,21 +956,21 @@ export { isContactNumberField };
     .pf-di-unit { font-weight: 400; color: var(--text-tertiary); }
     .pf-di-err { margin: 0; font-size: 12px; line-height: 1.4; color: var(--red-text, #dc2626); }
     .pf-di-area { min-height: 88px; }
-    /* The classic 44px/12px trigger rule above must not win in nd. */
+    /* The classic 44px/12px trigger rule above must not win in pf. */
     :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger {
-      height: 40px; border-radius: var(--nd-radius-sm);
+      height: 40px; border-radius: var(--pf-radius-sm);
       border-color: color-mix(in srgb, var(--text-primary) 22%, transparent);
-      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg));
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
     }
     /* Phone: country code + number share ONE kit input shell. */
     .pf-di-phone {
       display: flex; align-items: center; width: 100%; min-height: 40px; box-sizing: border-box;
-      border-radius: var(--nd-radius-sm);
+      border-radius: var(--pf-radius-sm);
       border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
-      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg));
-      transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
+      transition: border-color var(--pf-dur-fast) ease, box-shadow var(--pf-dur-fast) ease;
     }
-    .pf-di-phone:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
+    .pf-di-phone:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .pf-di-phone:focus-within {
       border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
@@ -982,7 +982,7 @@ export { isContactNumberField };
       height: 38px !important; border: 0 !important; background: transparent !important;
       box-shadow: none !important; padding: 0 6px 0 12px;
     }
-    .pf-di-phone__sep { flex: none; width: 1px; align-self: stretch; margin: 8px 0; background: var(--nd-line); }
+    .pf-di-phone__sep { flex: none; width: 1px; align-self: stretch; margin: 8px 0; background: var(--pf-line); }
     .pf-di-phone__num {
       flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 12px; border: 0; outline: 0;
       background: transparent; color: var(--text-primary);
@@ -1001,22 +1001,22 @@ export { isContactNumberField };
       display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
       border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer;
     }
-    .pf-di-date__pick:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+    .pf-di-date__pick:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
     .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
     /* Segmented choices: a 40px neutral control; wraps rather than clips. */
     .pf-di-seg { box-sizing: border-box; min-height: 40px; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
-    .pf-di-seg .nd-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
+    .pf-di-seg .pf-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
     /* Pills (5+ options, e.g. Title) keep their natural width on web. */
     .pf-di-seg:not(.pf-di-seg--fill) { align-self: flex-start; }
     .pf-di-seg--fill { display: flex; width: 100%; }
-    .pf-di-seg--fill .nd-seg__item { flex: 1 1 0; }
+    .pf-di-seg--fill .pf-seg__item { flex: 1 1 0; }
     .pf-di-seg--unit { flex: none; }
-    .pf-di-seg--unit .nd-seg__item { min-width: 44px; padding: 0 10px; }
+    .pf-di-seg--unit .pf-seg__item { min-width: 44px; padding: 0 10px; }
     /* Field-level errors (new design): the control is outlined in error red. */
     .pf-di-seg--error { border-color: var(--red-border, #ef4444); }
     :host .pf-di-nd ::ng-deep pf-select.pf-di-select--error .pf-dd__trigger { border-color: var(--red-border, #ef4444) !important; }
-    .pf-di-seg .nd-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+    .pf-di-seg .pf-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pf-di-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-di-chip { height: 34px; font-size: 13px; }
     .pf-di-switch { min-height: 40px; font-size: 13.5px; white-space: normal; text-align: left; }
@@ -1027,7 +1027,7 @@ export { isContactNumberField };
       :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger { height: 42px !important; }
       :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger { height: 44px; }
       .pf-di-seg { min-height: 44px; }
-      .pf-di-seg .nd-seg__item { min-height: 38px; }
+      .pf-di-seg .pf-seg__item { min-height: 38px; }
       /* 5+ one-tap options (Title): balanced rows of three, full width. */
       .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
       .pf-di-dob__date { flex-basis: 100%; }
@@ -1040,7 +1040,7 @@ export class DynamicInputComponent {
   private static _seq = 0;
   /** Stable id so the kit label's for= points at the control (getByLabel works). */
   readonly inputId = `pf-di-${++DynamicInputComponent._seq}`;
-  /** New-design markup (ND-PATTERN §14). Off by default: every existing host
+  /** New-design markup (PF-PATTERN §14). Off by default: every existing host
    *  (result entry, workflow preview, …) keeps the classic look. */
   @Input() nd = false;
   /** Forwarded to the field's own `pf-select` (the 'select' case only — never

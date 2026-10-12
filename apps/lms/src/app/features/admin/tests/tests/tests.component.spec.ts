@@ -442,9 +442,9 @@ describe('Test Master grid — column sizing: slim actions, wrap instead of crop
     if (!c.web()) return;   // runner reports touch — covered by the touch assertion below
     const el = col(c, 'actions').cellRenderer({ data: hb({ origin: 'customised' }), context: {} });
     const [edit, revert] = Array.from(el.querySelectorAll('button')) as HTMLElement[];
-    expect(edit.classList.contains('nd-rowact--icon')).toBe(false);
+    expect(edit.classList.contains('pf-rowact--icon')).toBe(false);
     expect(edit.textContent).toContain('Edit');
-    expect(revert.classList.contains('nd-rowact--icon')).toBe(true);
+    expect(revert.classList.contains('pf-rowact--icon')).toBe(true);
     expect(revert.title).toContain('Revert');
   });
 
@@ -452,7 +452,7 @@ describe('Test Master grid — column sizing: slim actions, wrap instead of crop
     const { c } = make([hb({ origin: 'customised' })]);
     const el = col(c, 'actions').cellRenderer({ data: hb({ origin: 'customised' }), context: {} });
     const revert = el.querySelectorAll('button')[1] as HTMLElement;
-    expect(revert.classList.contains('nd-rowact--icon')).toBe(true);
+    expect(revert.classList.contains('pf-rowact--icon')).toBe(true);
     expect(revert.getAttribute('aria-label')).toMatch(/^Revert .* to master$/);
   });
 

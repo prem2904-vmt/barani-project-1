@@ -69,7 +69,7 @@ describe('ExpenseEntryDialogComponent', () => {
     expect(inputs[0].accept).toBe('image/*');
     expect(inputs[1].multiple).toBe(true);
     expect(inputs[1].accept).toContain('application/pdf');
-    expect(el.querySelectorAll('.pf-xd .nd-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('.pf-xd .pf-btn--primary').length).toBe(1);
     expect(el.querySelectorAll('.pf-xd select, .pf-xd datalist, .pf-xd input[type="date"]').length).toBe(0);
     expect((el.querySelector('#pf-xd-amount') as HTMLInputElement).getAttribute('inputmode')).toBe('decimal');
   });
@@ -127,7 +127,7 @@ describe('ExpenseEntryDialogComponent', () => {
     const { c, el } = await render({ entry: saved({ amount: 99, paidTo: 'Shop' }) });
     expect(c.amountText()).toBe('99');
     expect(c.paidTo()).toBe('Shop');
-    expect(el.querySelector('.pf-xd .nd-btn--danger')?.textContent).toContain('Delete');
+    expect(el.querySelector('.pf-xd .pf-btn--danger')?.textContent).toContain('Delete');
     c.amountText.set('100');
     await c.save();
     expect(svc['update']).toHaveBeenCalledWith('e1', expect.objectContaining({ amount: 100 }));

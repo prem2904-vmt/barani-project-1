@@ -37,7 +37,7 @@ describe('Analyzer results (unmatched + QC)', () => {
     const p = render();
     await flush(); p.f.detectChanges();
     expect(p.api.get).toHaveBeenCalledWith('/api/instruments/messages?state=unmatched&page=1&pageSize=100');
-    expect(p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length).toBe(0);
+    expect(p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length).toBe(0);
     expect(p.cmp.colDefs().some((c: { colId: string }) => c.colId === 'actions')).toBe(true);
     p.cmp.setTab('qc'); p.f.detectChanges(); await flush();
     expect(p.api.get).toHaveBeenCalledWith('/api/instruments/messages?state=qc&page=1&pageSize=100');

@@ -42,10 +42,10 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
           </div>
         </div>
       } @else if (tests().length === 0) {
-        <div class="nd-empty">
-          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
-          <p class="nd-empty__title">No repeat tests yet</p>
-          <p class="nd-empty__body">Trends appear once this patient has taken the same test at least twice.</p>
+        <div class="pf-empty">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
+          <p class="pf-empty__title">No repeat tests yet</p>
+          <p class="pf-empty__body">Trends appear once this patient has taken the same test at least twice.</p>
         </div>
       } @else {
         <div class="pf-lt__grid">
@@ -56,7 +56,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
                 </svg>
-                <input type="text" class="nd-input" placeholder="Search tests" aria-label="Search tests" [value]="testQuery()"
+                <input type="text" class="pf-input" placeholder="Search tests" aria-label="Search tests" [value]="testQuery()"
                        (input)="testQuery.set($any($event.target).value)" />
               </label>
             }
@@ -66,7 +66,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                         [attr.aria-selected]="selectedTestId() === t.testId"
                         (click)="selectTest(t.testId)">
                   <span class="pf-lt__test-name">{{ t.testName }}</span>
-                  <span class="pf-lt__test-meta nd-num">
+                  <span class="pf-lt__test-meta pf-num">
                     @if (t.parameters.length > 1) { {{ t.parameters.length }} values · }{{ t.count }} results
                   </span>
                 </button>
@@ -92,7 +92,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                            [options]="testOptions()" [value]="selectedTestId() ?? ''"
                            (valueChange)="selectTest($any($event))"></pf-select>
                 @if (viewMode() === 'param' && st.parameters.length > 1) {
-                  <button type="button" class="nd-btn nd-btn--tertiary pf-lt__back" (click)="backToOverview()" aria-label="All values" title="All values">
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-lt__back" (click)="backToOverview()" aria-label="All values" title="All values">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                     <span class="pf-lt__back-lbl">All values</span>
                   </button>
@@ -108,9 +108,9 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                            [options]="RANGE_OPTIONS" [value]="range()"
                            (valueChange)="range.set($any($event))"></pf-select>
                 @if (viewMode() === 'param') {
-                  <div class="nd-seg pf-lt__toggle" role="radiogroup" aria-label="Chart type">
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="chartType() === 'line'" (click)="chartType.set('line')">Line</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="chartType() === 'bar'" (click)="chartType.set('bar')">Bar</button>
+                  <div class="pf-seg pf-lt__toggle" role="radiogroup" aria-label="Chart type">
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="chartType() === 'line'" (click)="chartType.set('line')">Line</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="chartType() === 'bar'" (click)="chartType.set('bar')">Bar</button>
                   </div>
                 }
               </div>
@@ -122,18 +122,18 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                       <div class="pf-lt__cell-head">
                         <span class="pf-lt__cell-name">{{ p.parameter }}</span>
                         @if (delta(p); as d) {
-                          <span class="pf-lt__cell-delta nd-num">
+                          <span class="pf-lt__cell-delta pf-num">
                             @if (d.dir === 'up') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> }
                             @else if (d.dir === 'down') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> }
                             {{ d.text }}
                           </span>
                         }
                       </div>
-                      <div class="pf-lt__cell-val nd-num" [class.abn]="isAbnormal(p)">
+                      <div class="pf-lt__cell-val pf-num" [class.abn]="isAbnormal(p)">
                         {{ latest(p) }}<span class="pf-lt__cell-unit">{{ p.unit || '' }}</span>
                       </div>
                       <div class="pf-lt__spark" #spark></div>
-                      <div class="pf-lt__cell-foot nd-num">
+                      <div class="pf-lt__cell-foot pf-num">
                         <span>{{ pointCount(p) }} results</span>
                         @if (p.referenceRange) { <span class="pf-lt__cell-ref" [title]="p.referenceRange">{{ refLine(p.referenceRange) }}</span> }
                       </div>
@@ -141,7 +141,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                   }
                 </div>
               } @else if (activeParam(); as ap) {
-                <div class="pf-lt__meta nd-num">
+                <div class="pf-lt__meta pf-num">
                   <span>{{ filteredPoints().length }} results</span>
                   @if (ap.referenceRange) { <span class="pf-lt__ref">Reference: {{ ap.referenceRange }}{{ ap.unit ? ' ' + ap.unit : '' }}</span> }
                 </div>
@@ -164,15 +164,15 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     .pf-lt__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
     .pf-lt__search { position: relative; display: block; flex: none; }
     .pf-lt__search > svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
-    .pf-lt__search .nd-input { width: 100%; height: 36px; min-height: 36px; padding-left: 34px; }
+    .pf-lt__search .pf-input { width: 100%; height: 36px; min-height: 36px; padding-left: 34px; }
     .pf-lt__list { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; }
     .pf-lt__test {
       display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 48px;
-      padding: 8px 12px; border-radius: var(--nd-radius-sm, 10px); text-align: left; cursor: pointer;
+      padding: 8px 12px; border-radius: var(--pf-radius-sm, 10px); text-align: left; cursor: pointer;
       background: transparent; border: 1px solid transparent; color: var(--text-primary); font: inherit;
     }
-    .pf-lt__test:hover { background: var(--nd-chip-bg); }
-    .pf-lt__test[aria-selected='true'] { background: var(--nd-sel-bg, var(--nd-chip-bg)); border-color: var(--nd-sel-border); }
+    .pf-lt__test:hover { background: var(--pf-chip-bg); }
+    .pf-lt__test[aria-selected='true'] { background: var(--pf-sel-bg, var(--pf-chip-bg)); border-color: var(--pf-sel-border); }
     .pf-lt__test:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
     /* Names wrap onto multiple lines instead of truncating. */
     .pf-lt__test-name { font-size: 13px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
@@ -193,11 +193,11 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     }
     .pf-lt__cell {
       display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
-      padding: 10px 11px 8px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-primary);
-      transition: border-color var(--nd-dur-fast) ease;
+      padding: 10px 11px 8px; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); color: var(--text-primary);
+      transition: border-color var(--pf-dur-fast) ease;
     }
-    .pf-lt__cell:hover { border-color: var(--nd-sel-border); }
+    .pf-lt__cell:hover { border-color: var(--pf-sel-border); }
     .pf-lt__cell:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-lt__cell-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
     .pf-lt__cell-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); overflow-wrap: anywhere; line-height: 1.25; }
@@ -213,9 +213,9 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     /* Loading: a static skeleton in the page's shape (no shimmer loop). */
     .pf-lt__skel { display: grid; grid-template-columns: 240px 1fr; gap: 16px; flex: 1 1 auto; min-height: 220px; }
     .pf-lt__skel-side, .pf-lt__skel-main { display: flex; flex-direction: column; gap: 10px; }
-    .pf-lt__skel-bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg); }
+    .pf-lt__skel-bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--pf-chip-bg); }
     .pf-lt__skel-bar--row { height: 40px; border-radius: 10px; }
-    .pf-lt__skel-chart { flex: 1 1 auto; min-height: 180px; border-radius: 12px; background: var(--nd-chip-bg); }
+    .pf-lt__skel-chart { flex: 1 1 auto; min-height: 180px; border-radius: 12px; background: var(--pf-chip-bg); }
     @media (max-width: 700px) { .pf-lt__skel { grid-template-columns: 1fr; } .pf-lt__skel-side { display: none; } }
 
     .pf-lt__mobile-pick { display: none; }
@@ -241,7 +241,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
       .pf-lt__back { display: none; }
       .pf-lt__dd--param { flex: 1 1 150px; width: auto; min-width: 0; }
       .pf-lt__dd--range { flex: 0 0 auto; width: 150px; }
-      .pf-lt__toggle .nd-seg__item { min-height: 40px; }
+      .pf-lt__toggle .pf-seg__item { min-height: 40px; }
       .pf-lt__title { display: none; }
       .pf-lt__matrix { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
       .pf-lt__cell-val { font-size: 16px; }
@@ -261,7 +261,7 @@ export class LabTrendsComponent implements OnDestroy {
   /** The profile card's header search (ND "card header: search + filter").
    *  null = standalone: the list shows its own search box. */
   readonly query = input<string | null>(null);
-  /** Measure the viewport and size itself (standalone). Inside an nd-card
+  /** Measure the viewport and size itself (standalone). Inside an pf-card
    *  body the card owns the height, so the profile passes false. */
   readonly fit = input<boolean>(true);
   /** Open straight on one analyte (the cumulative grid's row → its chart):

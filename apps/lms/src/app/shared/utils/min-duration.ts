@@ -112,7 +112,7 @@ export function heldFlag(source: Signal<boolean>, ms: number = MIN_LOAD_MS): Sig
 }
 
 /**
- * A FIRST-LOAD skeleton flag (ND-PATTERN "Loading feedback"): on from the
+ * A FIRST-LOAD skeleton flag (PF-PATTERN "Loading feedback"): on from the
  * very first frame (created in a field initializer, so the template's first
  * pass already draws the skeleton — never a blank form), held
  * {@link MIN_LOAD_MS} once the data arrives asynchronously, and skipped

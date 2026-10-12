@@ -148,7 +148,7 @@
         </span>
         <span class="pf-oc-bill__title">NEW VISIT</span>
         <span class="pf-oc-bill__spacer"></span>
-        <span class="pf-ov-head__date nd-num" data-date>OPD · {{ today() }}</span>
+        <span class="pf-ov-head__date pf-num" data-date>OPD · {{ today() }}</span>
       </header>
 
       <div class="pf-ov-panes">
@@ -203,7 +203,7 @@
                             <span class="pf-ov-txt">
                               <span class="pf-ov-name">Any doctor in {{ dep.name }}</span>
                               <span class="pf-ov-meta">Shortest queue · {{ deptDoctorsText(dep) }}</span>
-                              <span class="pf-ov-meta pf-ov-avail nd-num"><span class="pf-ov-dot" [attr.data-tone]="waitTone(anyWait(g))" aria-hidden="true"></span>{{ waitText(anyWait(g)) }}</span>
+                              <span class="pf-ov-meta pf-ov-avail pf-num"><span class="pf-ov-dot" [attr.data-tone]="waitTone(anyWait(g))" aria-hidden="true"></span>{{ waitText(anyWait(g)) }}</span>
                             </span>
                           </button>
                         </div>
@@ -215,7 +215,7 @@
                             <span class="pf-ov-txt">
                               <span class="pf-ov-name">{{ d.name }}</span>
                               <span class="pf-ov-meta">{{ d.department || 'OPD' }}</span>
-                              <span class="pf-ov-meta pf-ov-avail nd-num">
+                              <span class="pf-ov-meta pf-ov-avail pf-num">
                                 @if (d.sitsToday === false) {
                                   <span class="pf-ov-dot" data-tone="away" aria-hidden="true"></span>Not in today{{ d.nextSitting ? ' · next ' + dayName(d.nextSitting) : '' }}
                                 } @else {
@@ -272,9 +272,9 @@
                     <p class="pf-empty-line">No visit types are set up for this doctor yet.</p>
                   }
                 </div>
-                <label class="nd-field pf-ov-complaint">
-                  <span class="nd-field__lbl">Complaint / reason <span class="pf-ov-muted">· optional, goes to the doctor</span></span>
-                  <input class="nd-input" type="text" maxlength="500" [value]="purpose()" (input)="purpose.set($any($event.target).value)"
+                <label class="pf-field pf-ov-complaint">
+                  <span class="pf-field__lbl">Complaint / reason <span class="pf-ov-muted">· optional, goes to the doctor</span></span>
+                  <input class="pf-input" type="text" maxlength="500" [value]="purpose()" (input)="purpose.set($any($event.target).value)"
                          placeholder="e.g. Nasal block for 10 days" />
                 </label>
               }
@@ -361,12 +361,12 @@
                   @if (overrideOpen()) {
                     <span class="pf-ov-fee">
                       <span class="pf-ov-fee__cur" aria-hidden="true">₹</span>
-                      <input #feeInput class="pf-ov-fee__in nd-num" type="text" inputmode="decimal" aria-label="Fee charged (₹)" data-fee-input
+                      <input #feeInput class="pf-ov-fee__in pf-num" type="text" inputmode="decimal" aria-label="Fee charged (₹)" data-fee-input
                              [class.pf-ov-fee__in--err]="overrideInvalid() || overrideAboveRule()" [attr.aria-invalid]="overrideInvalid() || overrideAboveRule()"
                              [value]="overrideRaw()" (input)="onOverride($any($event.target).value)" (keydown)="onFeeKey($event)" />
                     </span>
                   } @else {
-                    <button type="button" class="pf-ov-feebtn nd-num" data-fee (click)="openOverride()" [attr.aria-label]="'Fee ' + preview().opd.subTotal + ' rupees — change the amount'">
+                    <button type="button" class="pf-ov-feebtn pf-num" data-fee (click)="openOverride()" [attr.aria-label]="'Fee ' + preview().opd.subTotal + ' rupees — change the amount'">
                       {{ preview().opd.subTotal | inr }}
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                     </button>
@@ -376,9 +376,9 @@
                   @if (overridden() || overrideOpen()) { · <button type="button" class="pf-oc-textbtn" (click)="clearOverride()">Use rule</button> }
                 </p>
                 @if (overrideOpen() || overridden()) {
-                  <label class="nd-field pf-ov-reason">
-                    <span class="nd-field__lbl">Reason <span class="pf-ov-muted">· set at the desk, printed on the bill</span></span>
-                    <input class="nd-input" type="text" maxlength="300" [value]="overrideReason()" (input)="overrideReason.set($any($event.target).value)"
+                  <label class="pf-field pf-ov-reason">
+                    <span class="pf-field__lbl">Reason <span class="pf-ov-muted">· set at the desk, printed on the bill</span></span>
+                    <input class="pf-input" type="text" maxlength="300" [value]="overrideReason()" (input)="overrideReason.set($any($event.target).value)"
                            (keydown.enter)="closeOverride()" placeholder="e.g. Senior citizen" />
                   </label>
                 }
@@ -426,7 +426,7 @@
               <div class="pf-paid__sumline"><span>Paid</span><span class="tabular-nums">{{ b.totalPaid | inr }}</span></div>
               @if (b.balance > 0) { <div class="pf-paid__sumline pf-paid__sumline--due"><span>Balance due</span><span class="tabular-nums">{{ b.balance | inr }}</span></div> }
             }
-            @if (v.labOrder; as lo) { <div class="pf-paid__sumline"><span>Lab order</span><span class="nd-num">{{ lo.orderNumber }}</span></div> }
+            @if (v.labOrder; as lo) { <div class="pf-paid__sumline"><span>Lab order</span><span class="pf-num">{{ lo.orderNumber }}</span></div> }
           </div>
           <div class="pf-oc-paid-acts">
             <button type="button" class="pf-oc-act press" [disabled]="printing()" [pfBusy]="printing()" (click)="printToken()">

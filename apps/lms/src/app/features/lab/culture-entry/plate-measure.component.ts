@@ -64,14 +64,14 @@ const NOT_A_DISK = '__not_a_disk';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pm-backdrop" [class.pm-backdrop--full]="fullscreen()" [class.pm-backdrop--phonefull]="phoneFull">
-      <div class="pm-panel nd-sheet" [class.pm-panel--full]="fullscreen()" role="dialog" aria-modal="true"
+      <div class="pm-panel pf-sheet" [class.pm-panel--full]="fullscreen()" role="dialog" aria-modal="true"
            aria-label="Measure zones from plate" (click)="$event.stopPropagation()">
-        <span class="nd-sheet__handle" aria-hidden="true"></span>
+        <span class="pf-sheet__handle" aria-hidden="true"></span>
         <div class="pm-head">
-          <span class="nd-card__icon pm-head__ico" aria-hidden="true">
+          <span class="pf-card__icon pm-head__ico" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
           </span>
-          <span class="nd-card__label pm-head__label">Measure zones</span>
+          <span class="pf-card__label pm-head__label">Measure zones</span>
           <span class="pm-head__grow"></span>
           <button type="button" class="pm-icon" (click)="fullscreen.set(!fullscreen())"
                   [attr.aria-label]="fullscreen() ? 'Exit full screen' : 'Full screen'" [title]="fullscreen() ? 'Exit full screen' : 'Full screen'">
@@ -126,11 +126,11 @@ const NOT_A_DISK = '__not_a_disk';
                    : (tiltOk() ? 'Level — fit the dish inside the circle, then capture.' : 'Tilt the phone flat — shoot straight down at the plate.') }}
               </p>
               <div class="pm-actions">
-                <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="captureFromVideo()">
+                <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary" (click)="captureFromVideo()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
                   Capture
                 </button>
-                <label class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost">Upload a photo instead
+                <label class="pf-btn pf-btn--secondary pm-btn pm-btn--ghost">Upload a photo instead
                   <input type="file" accept="image/png,image/jpeg,image/webp" (change)="onFilePick($event)" hidden /></label>
               </div>
             } @else {
@@ -141,9 +141,9 @@ const NOT_A_DISK = '__not_a_disk';
               <p class="pm-hinttext pm-hinttext--lead">Take a clear photo of the plate from directly above, with the whole dish in frame.</p>
               @if (camError()) { <p class="pm-hinttext">{{ camError() }}</p> }
               <div class="pm-actions">
-                @if (isNative()) { <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="capturePhoto()">Take photo</button> }
-                @else { <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="startCamera()">Open camera</button> }
-                <label class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost">{{ isNative() ? 'Choose from gallery' : 'Upload a photo' }}
+                @if (isNative()) { <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary" (click)="capturePhoto()">Take photo</button> }
+                @else { <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary" (click)="startCamera()">Open camera</button> }
+                <label class="pf-btn pf-btn--secondary pm-btn pm-btn--ghost">{{ isNative() ? 'Choose from gallery' : 'Upload a photo' }}
                   <input type="file" accept="image/png,image/jpeg,image/webp" capture="environment" (change)="onFilePick($event)" hidden /></label>
               </div>
             }
@@ -152,7 +152,7 @@ const NOT_A_DISK = '__not_a_disk';
 
         @if (mode() !== 'capture' && imageSrc()) {
           <div class="pm-body" [class.pm-body--cal]="mode() === 'calibrate'">
-            <div class="pm-stage nd-ai-glow nd-ai-glow--inset" [attr.data-ai-working]="aiWorking() ? 'true' : null">
+            <div class="pm-stage pf-ai-glow pf-ai-glow--inset" [attr.data-ai-working]="aiWorking() ? 'true' : null">
               <img #img class="pm-dim" [src]="imageSrc()" (load)="onImgLoad($event)" alt="" />
               <svg #svg class="pm-svg" [attr.viewBox]="viewBox()" preserveAspectRatio="xMidYMid meet"
                    role="img" [attr.aria-label]="stageLabel()"
@@ -197,7 +197,7 @@ const NOT_A_DISK = '__not_a_disk';
                         <path [attr.d]="delPath(d)" stroke="#fff" [attr.stroke-width]="unit()*0.6" stroke-linecap="round" />
                       }
                       <!-- numbered neutral badge -->
-                      <circle class="pm-badge nd-ai-glow-mark" [attr.data-ai-working]="isPending(d) ? 'true' : null" [attr.cx]="badgeX(d)" [attr.cy]="badgeY(d)" [attr.r]="unit()*2.7" fill="#ffffff" stroke="rgba(15,17,24,0.35)" [attr.stroke-width]="unit()*0.3" />
+                      <circle class="pm-badge pf-ai-glow-mark" [attr.data-ai-working]="isPending(d) ? 'true' : null" [attr.cx]="badgeX(d)" [attr.cy]="badgeY(d)" [attr.r]="unit()*2.7" fill="#ffffff" stroke="rgba(15,17,24,0.35)" [attr.stroke-width]="unit()*0.3" />
                       <text class="pm-svgtxt" [attr.x]="badgeX(d)" [attr.y]="badgeY(d)" dominant-baseline="central" text-anchor="middle"
                             [attr.font-size]="unit()*3" font-weight="600" fill="#111827">{{ d.n }}</text>
                       <!-- mm label chip -->
@@ -259,24 +259,24 @@ const NOT_A_DISK = '__not_a_disk';
                       <li><b>Pinch / scroll</b> to zoom · Pan to move around</li>
                       <li>Codes fill in while you work — tap one to change it</li>
                     </ul>
-                    <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--wide" (click)="dismissHint()">Got it</button>
+                    <button type="button" class="pf-btn pf-btn--secondary pm-btn pm-btn--wide" (click)="dismissHint()">Got it</button>
                   </div>
                 </div>
               }
             </div>
 
             @if (mode() === 'measure' || mode() === 'review') {
-              <aside class="pm-list nd-ai-glow nd-ai-glow--inset" aria-label="Disks" [attr.data-ai-working]="aiWorking() ? 'true' : null">
+              <aside class="pm-list pf-ai-glow pf-ai-glow--inset" aria-label="Disks" [attr.data-ai-working]="aiWorking() ? 'true' : null">
                <div class="pm-list__in">
                 <div class="pm-list__hd">
                   <span class="pm-list__ttl">{{ mode() === 'review' ? 'Review' : 'Disks' }}</span>
                   @if (aiWorking()) {
-                    <span class="pm-sense nd-ai-glow" data-ai-working="true" role="status">
+                    <span class="pm-sense pf-ai-glow" data-ai-working="true" role="status">
                       <span class="pm-pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
                       PF Sense · {{ aiSlow() ? 'still reading…' : 'reading…' }}
                     </span>
                   }
-                  <span class="pm-list__count nd-num">{{ activeRows().length }} {{ activeRows().length === 1 ? 'disk' : 'disks' }}</span>
+                  <span class="pm-list__count pf-num">{{ activeRows().length }} {{ activeRows().length === 1 ? 'disk' : 'disks' }}</span>
                 </div>
                 @if (manualHint(); as hint) {
                   <div class="pm-note pm-note--manual" role="status">
@@ -291,9 +291,9 @@ const NOT_A_DISK = '__not_a_disk';
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
                     <span class="pm-note__t">{{ w.text }}</span>
                     @if (w.action === 'dish' && scale()?.suggestedDishMm; as s) {
-                      <button type="button" class="nd-btn nd-btn--tertiary pm-note__btn" (click)="setDish(s)">Use {{ s }} mm</button>
+                      <button type="button" class="pf-btn pf-btn--tertiary pm-note__btn" (click)="setDish(s)">Use {{ s }} mm</button>
                     } @else if (w.action === 'retake') {
-                      <button type="button" class="nd-btn nd-btn--tertiary pm-note__btn" (click)="retake()">Retake</button>
+                      <button type="button" class="pf-btn pf-btn--tertiary pm-note__btn" (click)="retake()">Retake</button>
                     }
                   </div>
                 }
@@ -305,10 +305,10 @@ const NOT_A_DISK = '__not_a_disk';
                   @for (d of rows(); track d.id) {
                     <li class="pm-drow" [attr.aria-selected]="d.id === selectedId()" [class.pm-drow--off]="d.notDisk" [class.pm-drow--settle]="justRead().has(d.id)"
                         [attr.data-n]="d.n" (click)="select(d.id)">
-                      <span class="pm-drow__n nd-num" aria-hidden="true">{{ d.n }}</span>
+                      <span class="pm-drow__n pf-num" aria-hidden="true">{{ d.n }}</span>
                       <div class="pm-drow__code">
                         <div class="pm-drow__pick">
-                          <pf-select class="pm-codesel nd-ai-glow nd-ai-glow--ring" [attr.data-ai-working]="isPending(d) ? 'true' : null" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
+                          <pf-select class="pm-codesel pf-ai-glow pf-ai-glow--ring" [attr.data-ai-working]="isPending(d) ? 'true' : null" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
                                      [options]="codeOptions().get(d.id) ?? []" [value]="codeValue(d)" [searchable]="true" size="sm"
                                      [placeholder]="isPending(d) ? (aiSlow() ? 'Still reading…' : 'Reading…') : 'Unknown — tap to pick'"
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
@@ -320,7 +320,7 @@ const NOT_A_DISK = '__not_a_disk';
                         @if (!d.code && !d.notDisk && d.suggested) {
                           <button type="button" class="pm-sug" (click)="$event.stopPropagation(); pickCode(d.id, d.suggested)"
                                   [attr.aria-label]="'Probably ' + d.suggested + ' — confirm for disk ' + d.n">
-                            <span class="pm-sug__t">Probably <b class="nd-num">{{ d.suggested }}</b></span>
+                            <span class="pm-sug__t">Probably <b class="pf-num">{{ d.suggested }}</b></span>
                             <span class="pm-sug__ok">Confirm</span>
                           </button>
                         }
@@ -331,7 +331,7 @@ const NOT_A_DISK = '__not_a_disk';
                       @if (!d.notDisk) {
                         @if (mode() === 'measure') {
                           <label class="pm-drow__mm" (click)="$event.stopPropagation()">
-                            <input class="pm-mm nd-num" type="text" inputmode="decimal" [value]="mmOf(d)"
+                            <input class="pm-mm pf-num" type="text" inputmode="decimal" [value]="mmOf(d)"
                                    pfNumpad pfNumpadKeys="digits ." pfNumpadUnit="mm"
                                    [pfNumpadLabel]="'Zone for disk ' + d.n"
                                    [attr.aria-label]="'Zone for disk ' + d.n + ' in mm'"
@@ -340,7 +340,7 @@ const NOT_A_DISK = '__not_a_disk';
                             <span class="pm-mm__u">mm</span>
                           </label>
                         } @else {
-                          <span class="pm-drow__mmro nd-num">{{ mmOf(d) }} mm</span>
+                          <span class="pm-drow__mmro pf-num">{{ mmOf(d) }} mm</span>
                         }
                         <span class="pm-sir" [attr.data-sir]="sirOf(d) || null" [attr.aria-label]="sirOf(d) ? 'Result ' + sirWord(d) : 'No result'">{{ sirOf(d) || '–' }}</span>
                       }
@@ -350,7 +350,7 @@ const NOT_A_DISK = '__not_a_disk';
                   }
                 </ul>
                 }
-                @if (usageLine()) { <p class="pm-usage nd-num">{{ usageLine() }}</p> }
+                @if (usageLine()) { <p class="pm-usage pf-num">{{ usageLine() }}</p> }
                </div>
               </aside>
             }
@@ -361,16 +361,16 @@ const NOT_A_DISK = '__not_a_disk';
           <div class="pm-controls">
             <div class="pm-calrow">
               <span class="pm-calrow__lbl" id="pm-dish-lbl">Plate size</span>
-              <div class="nd-seg pm-seg" role="radiogroup" aria-labelledby="pm-dish-lbl">
+              <div class="pf-seg pm-seg" role="radiogroup" aria-labelledby="pm-dish-lbl">
                 @for (s of plateSizes; track s) {
-                  <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="dishMm() === s" (click)="setDish(s)">{{ s }} mm</button>
+                  <button type="button" class="pf-seg__item pf-num" role="radio" [attr.aria-checked]="dishMm() === s" (click)="setDish(s)">{{ s }} mm</button>
                 }
               </div>
             </div>
             <p class="pm-hinttext" role="status">{{ plateLine() }}</p>
             <div class="pm-row">
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="resetCalibration()">Re-tap rim</button>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" [disabled]="!calibrated() || measuring()" [pfBusy]="measuring()" pfBusyLabel="Measuring…" (click)="goMeasure()">{{ measuring() ? 'Measuring…' : 'Measure' }}</button>
+              <button type="button" class="pf-btn pf-btn--secondary pm-btn" (click)="resetCalibration()">Re-tap rim</button>
+              <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary" [disabled]="!calibrated() || measuring()" [pfBusy]="measuring()" pfBusyLabel="Measuring…" (click)="goMeasure()">{{ measuring() ? 'Measuring…' : 'Measure' }}</button>
             </div>
           </div>
         }
@@ -378,14 +378,14 @@ const NOT_A_DISK = '__not_a_disk';
         @if (mode() === 'measure') {
           <div class="pm-controls">
             <div class="pm-row pm-row--wrap">
-              <button type="button" class="nd-toggle pm-rejtoggle" role="switch" [attr.aria-checked]="showRejected()" (click)="showRejected.set(!showRejected())">
-                <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+              <button type="button" class="pf-toggle pm-rejtoggle" role="switch" [attr.aria-checked]="showRejected()" (click)="showRejected.set(!showRejected())">
+                <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
                 <span><span class="pm-wide">Show rejected</span><span class="pm-narrow">Rejected</span>{{ rejected().length ? ' (' + rejected().length + ')' : '' }}</span>
               </button>
               <span class="pm-grow"></span>
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--aux" (click)="recalibrate()">Recalibrate</button>
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--aux" (click)="retake()">Retake</button>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="!activeRows().length" (click)="goReview()">Review</button>
+              <button type="button" class="pf-btn pf-btn--secondary pm-btn pm-btn--aux" (click)="recalibrate()">Recalibrate</button>
+              <button type="button" class="pf-btn pf-btn--secondary pm-btn pm-btn--aux" (click)="retake()">Retake</button>
+              <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="!activeRows().length" (click)="goReview()">Review</button>
             </div>
           </div>
         }
@@ -394,9 +394,9 @@ const NOT_A_DISK = '__not_a_disk';
           <div class="pm-controls">
             <p class="pm-hinttext">{{ reviewLine() }}</p>
             <div class="pm-row pm-row--wrap">
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="mode.set('measure')">Back</button>
+              <button type="button" class="pf-btn pf-btn--secondary pm-btn" (click)="mode.set('measure')">Back</button>
               <span class="pm-grow"></span>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0 || applyBlocked" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="apply()">
+              <button type="button" class="pf-btn pf-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0 || applyBlocked" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="apply()">
                 {{ busy() ? 'Saving…' : applyLabel }}
               </button>
             </div>
@@ -408,37 +408,37 @@ const NOT_A_DISK = '__not_a_disk';
   styles: [`
     .pm-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 12px;
       background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-    .pm-backdrop--full { padding: 0; bottom: var(--nd-nav-h, 0px); }
+    .pm-backdrop--full { padding: 0; bottom: var(--pf-nav-h, 0px); }
     .pm-panel { width: 100%; max-width: 1100px; max-height: 92dvh; display: flex; flex-direction: column; overflow: hidden;
-      background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line, var(--glass-border));
-      border-radius: var(--nd-radius-card, 16px); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22); font-family: inherit;
-      animation: pm-in var(--nd-dur, 320ms) var(--nd-spring, ease) both; }
+      background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line, var(--glass-border));
+      border-radius: var(--pf-radius-card, 16px); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22); font-family: inherit;
+      animation: pm-in var(--pf-dur, 320ms) var(--pf-spring, ease) both; }
     .pm-panel--full { max-width: none; width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
     @keyframes pm-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
     .pm-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 0; flex-shrink: 0; }
     .pm-head__grow, .pm-grow { flex: 1 1 auto; }
     .pm-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
       border-radius: 8px; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .pm-icon:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
-    .pm-titles { padding: 10px 16px 12px; border-bottom: 1px solid var(--nd-line); flex-shrink: 0; }
+    .pm-icon:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+    .pm-titles { padding: 10px 16px 12px; border-bottom: 1px solid var(--pf-line); flex-shrink: 0; }
     .pm-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
     .pm-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .pm-step { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); }
-    .pm-step + .pm-step::before { content: ''; width: 18px; height: 1px; background: var(--nd-line); margin-right: 2px; }
+    .pm-step + .pm-step::before { content: ''; width: 18px; height: 1px; background: var(--pf-line); margin-right: 2px; }
     .pm-step__dot { width: 14px; height: 14px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
-      border: 1.5px solid var(--nd-sel-border, #9aa4ae); background: transparent; color: var(--text-secondary); }
+      border: 1.5px solid var(--pf-sel-border, #9aa4ae); background: transparent; color: var(--text-secondary); }
     .pm-step[data-state='active'] { color: var(--text-primary); font-weight: 500; }
     .pm-step[data-state='active'] .pm-step__dot { border-color: var(--color-violet-600, #7c3aed); background: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent); }
-    .pm-step[data-state='done'] .pm-step__dot { border-color: transparent; background: var(--nd-chip-bg); }
+    .pm-step[data-state='done'] .pm-step__dot { border-color: transparent; background: var(--pf-chip-bg); }
     .pm-sub { margin: 8px 0 0; font-size: 12px; color: var(--text-tertiary); }
 
     /* Capture */
     .pm-capture { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; gap: 12px; min-height: 320px; }
     .pm-capture__ico { color: var(--text-tertiary); }
     .pm-camwrap { position: relative; width: 100%; max-width: 560px; }
-    .pm-cam { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--nd-radius, 12px); background: #000; object-fit: cover; display: block; }
-    .pm-guide { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: var(--nd-radius, 12px); pointer-events: none; }
+    .pm-cam { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--pf-radius, 12px); background: #000; object-fit: cover; display: block; }
+    .pm-guide { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: var(--pf-radius, 12px); pointer-events: none; }
     .pm-sweep { transform-origin: 200px 150px; animation: pm-sweep 3.2s linear infinite; }
     @keyframes pm-sweep { to { transform: rotate(360deg); } }
     .pm-level { position: absolute; right: 10px; bottom: 10px; width: 52px; height: 52px; border-radius: 50%; pointer-events: none;
@@ -455,20 +455,20 @@ const NOT_A_DISK = '__not_a_disk';
     /* Buttons: the kit owns colour + border; this sets shape only. */
     .pm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 14px; border-radius: 10px;
       font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-    .pm-btn.nd-btn { height: 44px; min-height: 44px; }
+    .pm-btn.pf-btn { height: 44px; min-height: 44px; }
     .pm-btn svg { flex-shrink: 0; }
     .pm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     label.pm-btn { cursor: pointer; }
     .pm-btn--wide { width: 100%; }
     .pm-row { display: flex; gap: 8px; align-items: center; }
-    .pm-row > .nd-btn { flex: 1 1 0; }
+    .pm-row > .pf-btn { flex: 1 1 0; }
     .pm-row--wrap { flex-wrap: wrap; }
-    .pm-row--wrap > .nd-btn { flex: 0 0 auto; }
+    .pm-row--wrap > .pf-btn { flex: 0 0 auto; }
     .pm-row--wrap > .pm-apply { flex: 0 1 200px; }
-    .pm-controls { padding: 12px 16px 14px; border-top: 1px solid var(--nd-line); background: var(--nd-card-bg); flex-shrink: 0; }
+    .pm-controls { padding: 12px 16px 14px; border-top: 1px solid var(--pf-line); background: var(--pf-card-bg); flex-shrink: 0; }
     .pm-calrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
     .pm-calrow__lbl { font-size: 13px; color: var(--text-secondary); }
-    .pm-seg .nd-seg__item { min-width: 72px; font-variant-numeric: tabular-nums; }
+    .pm-seg .pf-seg__item { min-width: 72px; font-variant-numeric: tabular-nums; }
 
     /* Stage */
     .pm-body { flex: 1; display: flex; min-height: 380px; }
@@ -497,42 +497,42 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-busy__dot { width: 7px; height: 7px; border-radius: 999px; background: #a78bfa; animation: pm-pulse 1.2s ease-in-out infinite; flex: none; }
     @keyframes pm-pulse { 50% { opacity: 0.35; } }
     .pm-hint { position: absolute; inset: 0; z-index: 6; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
-    .pm-hint-card { max-width: 340px; padding: 16px 18px; border-radius: var(--nd-radius, 12px); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
+    .pm-hint-card { max-width: 340px; padding: 16px 18px; border-radius: var(--pf-radius, 12px); background: var(--pf-card-bg); border: 1px solid var(--pf-line); }
     .pm-hint-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
     .pm-hint-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: var(--text-secondary); }
     .pm-hint-list b { color: var(--text-primary); font-weight: 600; }
 
     /* Disk list (side on web, under the plate on phones) */
-    .pm-list { width: 400px; flex-shrink: 0; border-left: 1px solid var(--nd-line); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+    .pm-list { width: 400px; flex-shrink: 0; border-left: 1px solid var(--pf-line); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
     .pm-list__in { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
     .pm-list__hd { display: flex; align-items: center; gap: 8px; min-height: 28px; }
     .pm-list__ttl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
     .pm-list__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
     .pm-status { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); }
-    .pm-note { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); font-size: 12.5px; color: var(--text-primary); }
+    .pm-note { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--pf-radius-sm, 10px);
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12.5px; color: var(--text-primary); }
     .pm-note svg { color: var(--text-tertiary); flex: none; }
     .pm-note__t { flex: 1; min-width: 0; }
     .pm-note__btn { height: 32px; padding: 0 8px; font-size: 13px; flex: none; }
     .pm-disks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .pm-drow { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto 32px; align-items: center; gap: 8px; min-height: 52px;
-      padding: 6px 8px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid transparent; cursor: pointer; }
-    .pm-drow:hover { background: var(--nd-chip-bg); }
-    .pm-drow[aria-selected='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+      padding: 6px 8px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid transparent; cursor: pointer; }
+    .pm-drow:hover { background: var(--pf-chip-bg); }
+    .pm-drow[aria-selected='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pm-drow--off { opacity: 0.6; }
     .pm-drow__n { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
+      font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--pf-card-bg); border: 1px solid var(--pf-line); }
     .pm-drow__code { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
     .pm-drow__pick { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .pm-drow__code > .pm-sug { align-self: flex-start; }
     .pm-drow__drug { font-size: 12.5px; color: var(--text-secondary); min-width: 0; padding-left: 2px; }
     .pm-drow__drug--none { color: var(--text-tertiary); }
-    .pm-codesel { display: block; flex: 1 1 auto; min-width: 0; border-radius: var(--nd-radius-chip, 999px); }
+    .pm-codesel { display: block; flex: 1 1 auto; min-width: 0; border-radius: var(--pf-radius-chip, 999px); }
     /* A row the AI just coded: a brief shimmer that settles. */
-    .pm-drow--settle { animation: pm-settle 900ms var(--nd-spring, ease) both; }
+    .pm-drow--settle { animation: pm-settle 900ms var(--pf-spring, ease) both; }
     @keyframes pm-settle {
-      0% { background: linear-gradient(90deg, transparent, var(--nd-sel-bg), transparent) -100% 0 / 200% 100% no-repeat; }
-      70% { background: linear-gradient(90deg, transparent, var(--nd-sel-bg), transparent) 100% 0 / 200% 100% no-repeat; }
+      0% { background: linear-gradient(90deg, transparent, var(--pf-sel-bg), transparent) -100% 0 / 200% 100% no-repeat; }
+      70% { background: linear-gradient(90deg, transparent, var(--pf-sel-bg), transparent) 100% 0 / 200% 100% no-repeat; }
       100% { background: transparent; } }
     /* PF Sense mark (the brand glyph, mono) — never the letters "AI". */
     .pm-pf { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--color-violet-600, #7c3aed); }
@@ -540,22 +540,22 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-pf pf-logo-mark ::ng-deep .pill { width: 14px; height: 14px; }
     .pm-pf pf-logo-mark ::ng-deep .glyph { width: 11px; height: 14px; }
     .pm-sense { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 7px; border-radius: 999px;
-      font-size: 12px; font-weight: 500; color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); white-space: nowrap; }
-    .pm-sug { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-radius: var(--nd-radius-chip, 999px);
-      border: 1px solid var(--nd-line); background: var(--nd-chip-bg); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
+      font-size: 12px; font-weight: 500; color: var(--text-primary); background: var(--pf-card-bg); border: 1px solid var(--pf-line); white-space: nowrap; }
+    .pm-sug { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-radius: var(--pf-radius-chip, 999px);
+      border: 1px solid var(--pf-line); background: var(--pf-chip-bg); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
     .pm-sug b { font-weight: 600; color: var(--text-primary); }
     .pm-sug__t { white-space: nowrap; }
-    .pm-sug__ok { padding: 3px 8px; border-radius: 999px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-primary); font-weight: 500; }
+    .pm-sug__ok { padding: 3px 8px; border-radius: 999px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); color: var(--text-primary); font-weight: 500; }
     .pm-drow__mm { display: inline-flex; align-items: center; gap: 4px; }
-    .pm-mm { width: 52px; height: 36px; padding: 0 6px; text-align: center; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
-      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; outline: none; }
+    .pm-mm { width: 52px; height: 36px; padding: 0 6px; text-align: center; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; outline: none; }
     .pm-mm:focus { border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
     .pm-mm__u, .pm-drow__mmro { font-size: 12.5px; color: var(--text-tertiary); }
     .pm-drow__mmro { color: var(--text-primary); font-weight: 500; }
     /* S / I / R: neutral in light mode (a 5px red dot on R is the one colour). */
     .pm-sir { position: relative; width: 30px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; color: var(--text-tertiary); background: transparent; border: 1px solid var(--nd-line); }
-    .pm-sir[data-sir] { color: var(--text-primary); background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+      font-size: 13px; font-weight: 600; color: var(--text-tertiary); background: transparent; border: 1px solid var(--pf-line); }
+    .pm-sir[data-sir] { color: var(--text-primary); background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
     .pm-sir[data-sir='R']::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 999px; background: #dc2626; }
     :host-context(.dark) .pm-sir[data-sir='S'] { color: #34d399; }
     :host-context(.dark) .pm-sir[data-sir='I'] { color: #fbbf24; }
@@ -566,11 +566,11 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-narrow { display: none; }
 
     /* The code picker trigger IS the code chip. */
-    .pm-codesel ::ng-deep .pf-dd__trigger { min-height: 34px; height: auto; border-radius: var(--nd-radius-chip, 999px); padding: 0 10px;
-      background: var(--nd-chip-bg); border-color: transparent; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .pm-codesel:not(.pm-codesel--set) ::ng-deep .pf-dd__trigger { font-weight: 500; background: transparent; border: 1px dashed var(--nd-sel-border, #9aa4ae); }
+    .pm-codesel ::ng-deep .pf-dd__trigger { min-height: 34px; height: auto; border-radius: var(--pf-radius-chip, 999px); padding: 0 10px;
+      background: var(--pf-chip-bg); border-color: transparent; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pm-codesel:not(.pm-codesel--set) ::ng-deep .pf-dd__trigger { font-weight: 500; background: transparent; border: 1px dashed var(--pf-sel-border, #9aa4ae); }
     .pm-codesel--pending ::ng-deep .pf-dd__trigger { border-style: solid; border-color: transparent;
-      background: linear-gradient(90deg, var(--nd-chip-bg) 0%, var(--nd-sel-bg) 50%, var(--nd-chip-bg) 100%); background-size: 200% 100%;
+      background: linear-gradient(90deg, var(--pf-chip-bg) 0%, var(--pf-sel-bg) 50%, var(--pf-chip-bg) 100%); background-size: 200% 100%;
       animation: pm-shimmer 1.4s linear infinite; }
     @keyframes pm-shimmer { to { background-position: -200% 0; } }
 
@@ -588,14 +588,14 @@ const NOT_A_DISK = '__not_a_disk';
       .pm-body { flex-direction: column; min-height: 0; }
       .pm-stage { flex: 0 0 auto; height: 46dvh; min-height: 240px; }
       .pm-body--cal .pm-stage { flex: 1 1 auto; height: auto; }
-      .pm-list { width: auto; border-left: 0; border-top: 1px solid var(--nd-line); flex: 1 1 auto; min-height: 0; }
+      .pm-list { width: auto; border-left: 0; border-top: 1px solid var(--pf-line); flex: 1 1 auto; min-height: 0; }
       .pm-controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
     }
     /* Phones: a tall sheet ABOVE the always-visible navbar. */
     @media (max-width: 640px) {
-      .pm-backdrop { bottom: var(--nd-nav-h, 0px); align-items: flex-end; padding: 0; }
+      .pm-backdrop { bottom: var(--pf-nav-h, 0px); align-items: flex-end; padding: 0; }
       .pm-panel, .pm-panel--full { position: relative; top: auto; bottom: auto; left: auto; right: auto; width: 100%; max-width: none;
-        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px)); max-height: none;
+        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px)); max-height: none;
         border-radius: 20px 20px 0 0; border-bottom: 0; }
       .pm-head { padding-top: 6px; }
       .pm-titles { padding: 8px 16px 10px; }
@@ -620,9 +620,9 @@ const NOT_A_DISK = '__not_a_disk';
       /* When the caller asks (the culture case's Identification Measure):
          FULL screen above the navbar — no sheet corners. */
       .pm-backdrop--phonefull .pm-panel, .pm-backdrop--phonefull .pm-panel--full {
-        height: calc(100dvh - var(--nd-nav-h, 0px)); border-radius: 0; border-top: 0;
+        height: calc(100dvh - var(--pf-nav-h, 0px)); border-radius: 0; border-top: 0;
         padding-top: env(safe-area-inset-top, 0px); }
-      .pm-backdrop--phonefull .nd-sheet__handle { display: none; }
+      .pm-backdrop--phonefull .pf-sheet__handle { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
       .pm-sweep, .pm-panel, .pm-busy__dot { animation: none; }
@@ -1057,7 +1057,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       error: e => { this.ai.set('failed'); this.aiMsg.set(aiFallbackMessage(e)); },
     });
   }
-  /** The AI read is in flight — drives the rainbow glow (nd-ai-glow). */
+  /** The AI read is in flight — drives the rainbow glow (pf-ai-glow). */
   readonly aiWorking = computed(() => this.ai() === 'pending');
   /** Rows the AI just coded — a brief shimmer-to-settled. */
   readonly justRead = signal<Set<number>>(new Set());

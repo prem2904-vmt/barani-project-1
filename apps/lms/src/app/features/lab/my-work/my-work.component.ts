@@ -436,7 +436,7 @@ const COUNTERS: CounterSpec[] = [
         <section #collectPane class="pf-mw-pane pf-mw-collect" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
-            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/></svg></span> }
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/></svg></span> }
             <span class="pf-mw-pane__title">Collection</span>
             @if (theme.isNewDesign() && !isPhone()) {
             <button type="button" class="pf-mw-pin pf-mw-collect__hide press" (click)="collapseCollect()"
@@ -473,7 +473,7 @@ const COUNTERS: CounterSpec[] = [
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
-            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/></svg></span> }
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/></svg></span> }
             <span class="pf-mw-pane__title">Lab Intake</span>
             <!-- Pin = keep it open next time; chevron = back to the rail. -->
             @if (theme.isNewDesign() && !isPhone()) {
@@ -530,7 +530,7 @@ const COUNTERS: CounterSpec[] = [
               </button>
               }
               <button type="button" class="press"
-                      [class.pf-mw-scan__btn]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
+                      [class.pf-mw-scan__btn]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
                       [disabled]="!intakeScanInput().trim()"
                       (click)="intakeReceive()">Receive</button>
             </div>
@@ -567,7 +567,7 @@ const COUNTERS: CounterSpec[] = [
                    control; the header just names what you're looking at.
                    Classic keeps the tab strip here. -->
               @if (theme.isNewDesign()) {
-                <span class="nd-card__icon pf-mw-icon" aria-hidden="true">
+                <span class="pf-card__icon pf-mw-icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     @switch (tab()) {
                       @case ('service_queue') { <path d="M4 6h16M4 12h16M4 18h10"/> }
@@ -659,7 +659,7 @@ const COUNTERS: CounterSpec[] = [
           </p>
         </pf-tile>
       } @else {
-        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
+        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
           @for (tube of completedTubes(); track tube.sampleId) {
             <li>
               <div class="pf-tq pf-tq--done" [pfZoomSource]="tube.sampleId">
@@ -698,8 +698,8 @@ const COUNTERS: CounterSpec[] = [
                   <div class="pf-tq__acts">
                   @if (tube.status === 'validated' || tube.status === 'partial') {
                     <button type="button" class="pf-tq__act--print" title="Print report"
-                            [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
-                            [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                            [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="printingTubeId() === tube.sampleId"
                             [pfBusy]="printingTubeId() === tube.sampleId" pfBusyLabel="Opening the report…"
                             [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
@@ -710,13 +710,13 @@ const COUNTERS: CounterSpec[] = [
                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
                         <rect x="6" y="14" width="12" height="8" rx="1"/>
                       </svg>
-                      <span class="pf-tq__act-t nd-rowact__t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
+                      <span class="pf-tq__act-t pf-rowact__t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
                     </button>
                   }
                   @if (canEditResult()) {
                     <button type="button" title="Edit results"
-                            [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
-                            [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                            [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="reopeningTubeId() === tube.sampleId"
                             [pfBusy]="reopeningTubeId() === tube.sampleId" pfBusyLabel="Opening…"
                             [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
@@ -726,7 +726,7 @@ const COUNTERS: CounterSpec[] = [
                         <path d="M12 20h9"/>
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
                       </svg>
-                      <span class="pf-tq__act-t nd-rowact__t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
+                      <span class="pf-tq__act-t pf-rowact__t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
                     </button>
                   }
                   </div>
@@ -770,7 +770,7 @@ const COUNTERS: CounterSpec[] = [
             <!-- Group by patient/order so a single patient with 3 tests is one
                  expandable card, not 3 floating cards across columns. -->
             @if (!labCfg.sampleFocused()) {
-            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
                   <pf-tile [tone]="toneFor(bucket.priority)" padding="md" class="block">
@@ -910,7 +910,7 @@ const COUNTERS: CounterSpec[] = [
                  Sample ID. The tube (sample) is the bold headline; the patient
                  is demoted to a small secondary line. Same tests + same actions
                  and CSS as the patient-first tube tile. -->
-            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
               @for (tube of sampleRows(bucket.items); track tube.sampleId) {
                 <li>
                   <!-- Designed for touch FIRST, so the mouse gets the same
@@ -988,14 +988,14 @@ const COUNTERS: CounterSpec[] = [
                       }
                       @if (tab() === 'service_queue' ? canReassign() : !tube.allDone) {
                         <button type="button" title="Delegate"
-                                [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
-                                [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                                [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                                [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
                                 [attr.aria-label]="'Delegate ' + (tube.barcode || tube.sampleId)"
                                 (click)="openDelegate(tube.tests); $event.stopPropagation()">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M18 8h4m-2-2v4"/>
                           </svg>
-                          <span class="pf-tq__act-t nd-rowact__t">Delegate</span>
+                          <span class="pf-tq__act-t pf-rowact__t">Delegate</span>
                         </button>
                       }
                     </div>
@@ -1109,7 +1109,7 @@ const COUNTERS: CounterSpec[] = [
                  [style.--culture-w.px]="cultureWidth()"
                  [class.pf-mobile-hide]="mobileTab() !== 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
-            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg></span> }
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg></span> }
             <span class="pf-mw-pane__title">Culture Bench</span>
             <span class="pf-mw-culture__count">{{ cultureCount() }}</span>
           </header>
@@ -2525,19 +2525,19 @@ const COUNTERS: CounterSpec[] = [
       .pf-claim__sheet { max-width: none; max-height: 80dvh; }
     }
 
-    /* ════ New-design remap (owner): nd-kit tiles, palette only ════
+    /* ════ New-design remap (owner): pf-kit tiles, palette only ════
        Queue / My Work / Done tiles become calm nd cards: neutral surface,
        hairline border, 12px radius, small soft shadow; Noto Sans with
        tabular numbers for sample IDs. The left cap stripe keeps ONLY the
        functional priority colour (Urgent red); done is a
        violet mark, not green. Counter chips lose their colour dots. */
     :host-context(.design-new) .pf-tq {
-      background: var(--nd-card-bg, var(--bg-card-solid));
-      border: 1px solid var(--nd-line, var(--border-muted));
-      border-radius: var(--nd-radius, 12px);
-      box-shadow: var(--nd-shadow-sm);
+      background: var(--pf-card-bg, var(--bg-card-solid));
+      border: 1px solid var(--pf-line, var(--border-muted));
+      border-radius: var(--pf-radius, 12px);
+      box-shadow: var(--pf-shadow-sm);
     }
-    :host-context(.design-new) .pf-tq:hover { border-color: var(--nd-sel-border); box-shadow: var(--nd-shadow-sm); }
+    :host-context(.design-new) .pf-tq:hover { border-color: var(--pf-sel-border); box-shadow: var(--pf-shadow-sm); }
     :host-context(.design-new) .pf-tq__main:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
     :host-context(.design-new) .pf-tq--done { --tq-accent: var(--color-violet-500, #8b5cf6); }
     :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
@@ -2550,7 +2550,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq__id { font-size: 13.5px; }
     :host-context(.design-new) .pf-tq__who { font-weight: 500; }
     :host-context(.design-new) .pf-tq__act {
-      border-radius: var(--nd-radius-sm, 10px);
+      border-radius: var(--pf-radius-sm, 10px);
       color: var(--text-secondary);
     }
     /* Counter chips: neutral, no colour dots; selected = neutral raised. */
@@ -2558,7 +2558,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-kpi-stat__dot { display: none !important; }
     :host-context(.design-new) .pf-counter--on,
     :host-context(.design-new) .pf-kpi-stat.is-on {
-      background: var(--nd-sel-bg) !important;
+      background: var(--pf-sel-bg) !important;
       color: var(--text-primary) !important;
       box-shadow: none !important;
     }
@@ -2571,12 +2571,12 @@ const COUNTERS: CounterSpec[] = [
        right-aligned value); buttons = nd secondary outline / neutral icon. */
     :host-context(.design-new) .pf-mw-pane,
     :host-context(.design-new) .pf-mw-rail {
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
-      border-radius: var(--nd-radius-card, 16px); box-shadow: var(--nd-shadow-sm);
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius-card, 16px); box-shadow: var(--pf-shadow-sm);
     }
     :host-context(.design-new) .pf-mw-pane__hdr {
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg));
-      border-bottom: 1px solid var(--nd-line);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+      border-bottom: 1px solid var(--pf-line);
       padding: 12px 14px;
     }
     :host-context(.design-new) .pf-mw-pane__title {
@@ -2584,12 +2584,12 @@ const COUNTERS: CounterSpec[] = [
     }
     /* Pin / hide = neutral icon buttons; pinned = neutral selected. */
     :host-context(.design-new) .pf-mw-pin {
-      width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-secondary);
+      width: 32px; height: 32px; border-radius: var(--pf-radius-sm, 10px);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-secondary);
     }
-    :host-context(.design-new) .pf-mw-pin:hover { border-color: var(--nd-sel-border); background: var(--nd-card-bg); color: var(--text-primary); }
+    :host-context(.design-new) .pf-mw-pin:hover { border-color: var(--pf-sel-border); background: var(--pf-card-bg); color: var(--text-primary); }
     :host-context(.design-new) .pf-mw-pin--on {
-      color: var(--text-primary); background: var(--nd-sel-bg); border-color: var(--nd-sel-border); box-shadow: none;
+      color: var(--text-primary); background: var(--pf-sel-bg); border-color: var(--pf-sel-border); box-shadow: none;
     }
     /* Pane tabs (Queue / My Work / Completed): underline like the catalogue tabs. */
     :host-context(.design-new) .pf-mw-tab {
@@ -2604,16 +2604,16 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-mw-tab__count { background: transparent !important; color: var(--violet-text, #7c3aed) !important; font-size: 11px; }
     /* Intake scan bar: stock input look + nd buttons. */
     :host-context(.design-new) .pf-mw-scan {
-      border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
     }
     :host-context(.design-new) .pf-mw-scan__btn {
-      border-radius: var(--nd-radius-sm, 10px) !important;
+      border-radius: var(--pf-radius-sm, 10px) !important;
       background: transparent !important; border: 1px solid var(--color-violet-600, #7c3aed) !important;
       color: var(--violet-text, #6d28d9) !important; font-weight: 600; box-shadow: none !important;
     }
 
     /* Queue tile = the catalogue row. */
-    :host-context(.design-new) .pf-tq { border-radius: var(--nd-radius-sm, 10px); }
+    :host-context(.design-new) .pf-tq { border-radius: var(--pf-radius-sm, 10px); }
     :host-context(.design-new) .pf-tq__main { padding: 10px 12px 10px 14px; }
     :host-context(.design-new) .pf-tq__line { gap: 8px; }
     :host-context(.design-new) .pf-tq__id {
@@ -2623,13 +2623,13 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq__who { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
     :host-context(.design-new) .pf-tq__tag {
       font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
-      padding: 1px 6px; border-radius: 6px; background: var(--nd-chip-bg); color: var(--text-secondary);
+      padding: 1px 6px; border-radius: 6px; background: var(--pf-chip-bg); color: var(--text-secondary);
     }
     :host-context(.design-new) .pf-tq__tag--warn { background: var(--error-bg, rgba(239, 68, 68, 0.12)); color: var(--error-text, #b91c1c); }
-    :host-context(.design-new) .pf-tq__tag--draft { background: var(--nd-chip-bg); color: var(--text-secondary); }
+    :host-context(.design-new) .pf-tq__tag--draft { background: var(--pf-chip-bg); color: var(--text-secondary); }
     /* Trailing zone: no dark slab — a hairline and a right-aligned value. */
     :host-context(.design-new) .pf-tq__side {
-      background: transparent; border-left: 1px solid var(--nd-line);
+      background: transparent; border-left: 1px solid var(--pf-line);
       flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px 8px 12px;
     }
     :host-context(.design-new) .pf-tq__stat {
@@ -2660,7 +2660,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq--done .pf-tq__tag,
     :host-context(.design-new) .pf-tq--done .pf-tq__tag--warn {
       display: inline-flex; align-items: center; gap: 5px;
-      background: var(--nd-chip-bg) !important; color: var(--text-secondary) !important;
+      background: var(--pf-chip-bg) !important; color: var(--text-secondary) !important;
     }
     :host-context(.design-new) .pf-tq__tag--validated::before {
       content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed);
@@ -2686,7 +2686,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-mtab--on .pf-mtab__count {
       font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 500;
       font-size: 11px; letter-spacing: 0; padding: 1px 7px;
-      background: var(--nd-chip-bg, rgba(100,116,139,0.12)); border: 0;
+      background: var(--pf-chip-bg, rgba(100,116,139,0.12)); border: 0;
       color: var(--text-tertiary);
     }
     :host-context(.design-new) .pf-mtab--on .pf-mtab__count { color: var(--text-primary); }
@@ -2698,29 +2698,29 @@ const COUNTERS: CounterSpec[] = [
       background: none !important; border: 0 !important; padding: 0 !important;
       border-radius: 0 !important; gap: 10px; box-shadow: none !important;
     }
-    :host-context(.design-new) .pf-mw-pane__hdr { background: var(--nd-card-bg) !important; }
+    :host-context(.design-new) .pf-mw-pane__hdr { background: var(--pf-card-bg) !important; }
     :host-context(.design-new) .pf-mw-pane .pf-mw-pane__title { background: none !important; padding: 0 !important; }
-    /* Row actions: .nd-rowact (kit) — flex row so text buttons sit side by side. */
+    /* Row actions: .pf-rowact (kit) — flex row so text buttons sit side by side. */
     :host-context(.design-new) .pf-tq__acts { gap: 8px; }
     /* Queue "done" stat: palette only — violet check, never green. */
     :host-context(.design-new) .pf-tq__stat--done,
     :host-context(.design-new) .pf-tq__stat--done .pf-tq__stat-u { color: var(--violet-text, #6d28d9); }
     /* Group dots: NORMAL is neutral; red only for Urgent (order priority). */
-    :host-context(.design-new) .pf-dot[data-priority='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
+    :host-context(.design-new) .pf-dot[data-priority='normal'] { background: var(--pf-toggle-on, #aeb8c2); box-shadow: none; }
     :host-context(.design-new) .pf-dot[data-priority='urgent'] { box-shadow: none; }
 
     /* ════ Adaptive tile grid (owner): 3 / 2 / 1 by the LIST's width ════
        In a grid cell the tile stacks: content on top (name wraps, never
        truncates), the trailing zone becomes a bottom row with the action
        at the bottom-right — so "Delegate" never squeezes the name. */
-    :host-context(.design-new) .nd-tilegrid .pf-tq { flex-direction: column; height: 100%; }
-    :host-context(.design-new) .nd-tilegrid .pf-tq__main { flex: 1 1 auto; }
-    :host-context(.design-new) .nd-tilegrid .pf-tq__sub { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-    :host-context(.design-new) .nd-tilegrid .pf-tq__side {
+    :host-context(.design-new) .pf-tilegrid .pf-tq { flex-direction: column; height: 100%; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__main { flex: 1 1 auto; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__sub { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side {
       border-left: 0; padding: 0 10px 10px 14px; justify-content: flex-start; flex-wrap: wrap;
     }
-    :host-context(.design-new) .nd-tilegrid .pf-tq__side > :last-child { margin-left: auto; }
-    :host-context(.design-new) .nd-tilegrid .pf-tq__side:empty { display: none; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side > :last-child { margin-left: auto; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side:empty { display: none; }
 
     /* ════ Round 6 (owner): the SAMPLE ID is the primary line ════
        15px / 600 / normal text colour, Noto tabular — the biggest thing
@@ -2740,9 +2740,9 @@ const COUNTERS: CounterSpec[] = [
       border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
     }
-    :host-context(.design-new) .pf-mw-scan .nd-rowact { height: 28px; min-height: 28px; padding: 0 12px; }
+    :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 28px; min-height: 28px; padding: 0 12px; }
     @media (pointer: coarse) {
-      :host-context(.design-new) .pf-mw-scan .nd-rowact { height: 40px; min-height: 40px; }
+      :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 40px; min-height: 40px; }
     }
 
   `]
@@ -2779,7 +2779,7 @@ export class MyWorkComponent implements OnInit {
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   /** Row actions: text buttons on web (fine pointer + hover), icon buttons
-   *  on touch — the Order & Payments device-mode query (nd-kit .nd-rowact). */
+   *  on touch — the Order & Payments device-mode query (pf-kit .pf-rowact). */
   readonly webPointer = webPointerSignal();
   /** "1 sample" / "2 samples". */
   protected readonly plural = plural;

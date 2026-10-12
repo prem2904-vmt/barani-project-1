@@ -54,6 +54,7 @@ Thumbs.db
 .claude/settings.local.json
 .nx/polygraph
 .angular
+.agents/
 
 __screenshots__/
 

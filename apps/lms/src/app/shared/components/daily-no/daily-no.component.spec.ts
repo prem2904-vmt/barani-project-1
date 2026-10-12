@@ -6,7 +6,7 @@ function render(inputs: Record<string, unknown>) {
   const f = TestBed.createComponent(DailyNoComponent);
   for (const [k, v] of Object.entries(inputs)) f.componentRef.setInput(k, v);
   f.detectChanges();
-  return (f.nativeElement as HTMLElement).querySelector('.nd-dayno') as HTMLElement | null;
+  return (f.nativeElement as HTMLElement).querySelector('.pf-dayno') as HTMLElement | null;
 }
 
 describe('pf-daily-no', () => {

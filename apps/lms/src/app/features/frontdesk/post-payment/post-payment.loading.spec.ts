@@ -14,7 +14,7 @@ import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 
 /**
- * Post-payment (order complete) — LOADING FEEDBACK (ND-PATTERN "Loading
+ * Post-payment (order complete) — LOADING FEEDBACK (PF-PATTERN "Loading
  * feedback"): the label grid and the sidebar draw their own shape on the
  * first frame (never a blank page while the order is on its way), held for
  * the minimum so it never flashes, and "Print N labels" is busy (disabled +

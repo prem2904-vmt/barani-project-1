@@ -222,8 +222,8 @@ describe('Public report page — states', () => {
     expect(t.el.textContent).toContain('ORD-2609-0042');
     expect(t.q('pr-status')!.textContent).toContain('Ready');
     expect(t.q('pr-date')!.textContent).toMatch(/2026/);
-    expect(t.el.querySelectorAll('.nd-btn--primary').length).toBe(1);
-    expect(t.q('pr-download')!.classList.contains('nd-btn--primary')).toBe(true);
+    expect(t.el.querySelectorAll('.pf-btn--primary').length).toBe(1);
+    expect(t.q('pr-download')!.classList.contains('pf-btn--primary')).toBe(true);
     expect(t.q('pr-view')!.getAttribute('href')).toBe('https://files.example/r.pdf?sig=inline');
     expect(t.q('pr-view')!.getAttribute('target')).toBe('_blank');
     expect(t.q('pr-superseded')).toBeNull();

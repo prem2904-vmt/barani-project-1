@@ -1,4 +1,4 @@
-/* Billing counter — ND-PATTERN §17: QUEUE (left, patients waiting to pay)
+/* Billing counter — PF-PATTERN §17: QUEUE (left, patients waiting to pay)
    + BILLING (main, the cart + payment) + MONEY (summary companion, right). Band stays put, only card
    bodies scroll: no page scroll. Palette: violet + neutrals; Noto only,
    tabular numbers, never monospace. */
@@ -25,10 +25,10 @@
   flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
   border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer;
 }
-.pf-bc-us__clear:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+.pf-bc-us__clear:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
 .pf-bc-us__spin {
   flex: none; width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--nd-line); border-top-color: var(--color-violet-600, #7c3aed);
+  border: 2px solid var(--pf-line); border-top-color: var(--color-violet-600, #7c3aed);
   animation: pf-bc-spin 0.7s linear infinite;
 }
 @keyframes pf-bc-spin { to { transform: rotate(360deg); } }
@@ -37,16 +37,16 @@
 .pf-bc-scrim {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 1090;
   background: rgba(15, 23, 42, 0.18);
-  animation: pf-bc-fade var(--nd-dur-fast, 200ms) ease both;
+  animation: pf-bc-fade var(--pf-dur-fast, 200ms) ease both;
 }
 @keyframes pf-bc-fade { from { opacity: 0; } to { opacity: 1; } }
 .pf-bc-drop {
   position: fixed; z-index: 1100; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
-  padding: 6px; border-radius: var(--nd-radius, 14px);
-  background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line);
+  padding: 6px; border-radius: var(--pf-radius, 14px);
+  background: var(--pf-card-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line);
   box-shadow: 0 16px 40px rgba(31, 17, 71, 0.18);
 }
-.pf-bc-drop__group + .pf-bc-drop__group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--nd-line); }
+.pf-bc-drop__group + .pf-bc-drop__group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--pf-line); }
 .pf-bc-drop__title {
   margin: 0; padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--text-tertiary);
@@ -56,7 +56,7 @@
   width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 8px 10px;
   border: 0; border-radius: 10px; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit;
 }
-.pf-bc-drop__row[aria-selected='true'] { background: var(--nd-sel-bg); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+.pf-bc-drop__row[aria-selected='true'] { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
 .pf-bc-drop__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pf-bc-drop__name { font-size: 14px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
 .pf-bc-drop__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
@@ -64,7 +64,7 @@
 
 /* Narrow: the compact switch between the two cards (neutral selected). */
 .pf-bc-switch { flex: none; }
-.pf-bc-switch .nd-seg__item { height: 32px; min-width: 96px; font-size: 13px; }
+.pf-bc-switch .pf-seg__item { height: 32px; min-width: 96px; font-size: 13px; }
 .pf-bc-switch__n { font-weight: 500; color: var(--text-tertiary); }
 
 /* ── Two cards ──────────────────────────────────────────────────────── */
@@ -72,7 +72,7 @@
 .pf-bc-panels {
   flex: 1 1 auto; min-height: 0;
   display: grid; grid-template-columns: 340px minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
-  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
+  transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring, ease);
 }
 .pf-bc-panels--collapsed { grid-template-columns: 340px minmax(0, 1fr) 52px; }
 @media (max-width: 1280px) {
@@ -81,7 +81,7 @@
 }
 .pf-bc-panels--narrow, .pf-bc-panels--narrow.pf-bc-panels--collapsed { grid-template-columns: minmax(0, 1fr); }
 .pf-bc-queue, .pf-bc-main, .pf-bc-side, .pf-bc-strip { min-height: 0; }
-.pf-bc-side, .pf-bc-strip { animation: pf-bc-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both; }
+.pf-bc-side, .pf-bc-strip { animation: pf-bc-side-in var(--pf-dur, 320ms) var(--pf-spring, ease) both; }
 @keyframes pf-bc-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 .pf-bc-collapse { width: 32px !important; height: 32px; min-height: 32px; }
 .pf-bc-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
@@ -92,7 +92,7 @@
   flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
   padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
 }
-.pf-bc-strip__btn:hover .pf-bc-strip__expand { border-color: var(--nd-sel-border); color: var(--text-primary); }
+.pf-bc-strip__btn:hover .pf-bc-strip__expand { border-color: var(--pf-sel-border); color: var(--text-primary); }
 .pf-bc-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
 .pf-bc-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
 .pf-bc-strip__label {
@@ -119,19 +119,19 @@
 .pf-bc-check { color: var(--color-violet-600, #7c3aed); }
 
 .pf-bc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.pf-bc-orow { width: 100%; cursor: pointer; transition: border-color var(--nd-dur-fast, 200ms) ease, background var(--nd-dur-fast, 200ms) ease; }
-.pf-bc-orow:hover { border-color: var(--nd-sel-border); background: var(--nd-chip-bg); }
+.pf-bc-orow { width: 100%; cursor: pointer; transition: border-color var(--pf-dur-fast, 200ms) ease, background var(--pf-dur-fast, 200ms) ease; }
+.pf-bc-orow:hover { border-color: var(--pf-sel-border); background: var(--pf-chip-bg); }
 .pf-bc-orow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 .pf-bc-orow__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.pf-bc-orow__text .nd-row__name { font-size: 14px; }
+.pf-bc-orow__text .pf-row__name { font-size: 14px; }
 .pf-bc-orow__meta { font-size: 12px; color: var(--text-tertiary); }
-.pf-bc-orow .nd-row__value { font-size: 13.5px; color: var(--text-primary); }
+.pf-bc-orow .pf-row__value { font-size: 13.5px; color: var(--text-primary); }
 .pf-bc-chev { flex: none; color: var(--text-tertiary); }
 
-.pf-bc-items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--nd-line); }
+.pf-bc-items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--pf-line); }
 .pf-bc-item {
   display: flex; align-items: baseline; gap: 12px; min-height: 44px; padding: 10px 2px;
-  border-bottom: 1px solid var(--nd-line);
+  border-bottom: 1px solid var(--pf-line);
 }
 .pf-bc-item__name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
 .pf-bc-item__amt { flex: none; font-size: 13.5px; color: var(--text-secondary); }
@@ -140,7 +140,7 @@
 .pf-bc-dues > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
 .pf-bc-dues dt { color: var(--text-secondary); }
 .pf-bc-dues dd { margin: 0; color: var(--text-primary); }
-.pf-bc-dues__bal { padding-top: 8px; border-top: 1px solid var(--nd-line); }
+.pf-bc-dues__bal { padding-top: 8px; border-top: 1px solid var(--pf-line); }
 .pf-bc-dues__bal dt, .pf-bc-dues__bal dd { font-size: 15px; font-weight: 600; color: var(--text-primary); }
 
 .pf-bc-empty {
@@ -158,11 +158,11 @@
   width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 10px 12px;
   border: 1px solid transparent; border-radius: 12px; background: transparent; font: inherit; text-align: left;
   cursor: pointer; color: inherit;
-  transition: background var(--nd-dur-fast, 200ms) ease, border-color var(--nd-dur-fast, 200ms) ease;
+  transition: background var(--pf-dur-fast, 200ms) ease, border-color var(--pf-dur-fast, 200ms) ease;
 }
-.pf-bc-qrow:hover { background: var(--nd-chip-bg); }
+.pf-bc-qrow:hover { background: var(--pf-chip-bg); }
 .pf-bc-qrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
-.pf-bc-qrow[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+.pf-bc-qrow[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
 .pf-bc-qrow__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .pf-bc-qrow__name { font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
 .pf-bc-qrow__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
@@ -174,14 +174,14 @@
 /* ── Payment (inline panel) + refund + paid ──────────────────────────── */
 .pf-bc-pay { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
 .pf-bc-rmodes { align-self: flex-start; }
-.pf-bc-rmodes .nd-seg__item { min-width: 72px; }
+.pf-bc-rmodes .pf-seg__item { min-width: 72px; }
 .pf-bc-done {
   flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 4px; padding: 32px 16px; text-align: center;
 }
 .pf-bc-done__mark {
   display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
-  margin-bottom: 8px; border-radius: 999px; background: var(--nd-done-tint, var(--nd-sel-bg));
+  margin-bottom: 8px; border-radius: 999px; background: var(--pf-done-tint, var(--pf-sel-bg));
   color: var(--color-violet-600, #7c3aed);
 }
 .pf-bc-done__title { margin: 0; font-size: 20px; font-weight: 600; color: var(--text-primary); }
@@ -196,11 +196,11 @@
 .pf-bc-mrow {
   width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 8px 10px;
   border: 0; border-radius: 10px; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit;
-  transition: background var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease;
+  transition: background var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease;
 }
-.pf-bc-mrow:hover { background: var(--nd-chip-bg); }
+.pf-bc-mrow:hover { background: var(--pf-chip-bg); }
 .pf-bc-mrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
-.pf-bc-mrow[aria-pressed='true'] { background: var(--nd-sel-bg); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+.pf-bc-mrow[aria-pressed='true'] { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
 .pf-bc-mrow__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pf-bc-mrow__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
 .pf-bc-mrow__meta { font-size: 12px; color: var(--text-tertiary); }
@@ -213,9 +213,9 @@
 .pf-bc-recon { display: table !important; width: 100% !important; overflow: visible !important; border-collapse: collapse; font-size: 13px; color: var(--text-primary); }
 .pf-bc-recon th {
   padding: 6px 8px; text-align: left; font-size: 12px; font-weight: 500; color: var(--text-tertiary);
-  border-bottom: 1px solid var(--nd-line);
+  border-bottom: 1px solid var(--pf-line);
 }
-.pf-bc-recon td { padding: 9px 8px; border-bottom: 1px solid var(--nd-line); }
+.pf-bc-recon td { padding: 9px 8px; border-bottom: 1px solid var(--pf-line); }
 .pf-bc-recon .num { text-align: right; white-space: nowrap; }
 .pf-bc-recon__refund td { color: var(--text-secondary); }
 .pf-bc-recon__empty { color: var(--text-tertiary); }
@@ -224,7 +224,7 @@
 .pf-bc-totals > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .pf-bc-totals dt { color: var(--text-secondary); }
 .pf-bc-totals dd { margin: 0; color: var(--text-primary); }
-.pf-bc-totals__net { padding-top: 8px; border-top: 1px solid var(--nd-line); }
+.pf-bc-totals__net { padding-top: 8px; border-top: 1px solid var(--pf-line); }
 .pf-bc-totals__net dt, .pf-bc-totals__net dd { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 
 /* ── Phones: 16px inputs (no iOS zoom), 44px targets ────────────────── */
@@ -233,13 +233,13 @@
   .pf-bc-us__input { font-size: 16px; }
   .pf-bc-us__clear { width: 44px; height: 44px; }
   .pf-bc-switch { display: flex; width: 100%; }
-  .pf-bc-switch .nd-seg__item { flex: 1 1 0; height: 40px; }
+  .pf-bc-switch .pf-seg__item { flex: 1 1 0; height: 40px; }
   .pf-bc-dayhead { flex-direction: column; align-items: stretch; }
   .pf-bc-date { width: 100%; }
   .pf-bc-clear { height: 44px; min-height: 44px; }
   .pf-bc-rmodes { align-self: stretch; display: flex; }
-  .pf-bc-rmodes .nd-seg__item { flex: 1 1 0; height: 44px; }
-  .pf-bc-main .nd-card__foot .nd-btn { min-height: 44px; }
+  .pf-bc-rmodes .pf-seg__item { flex: 1 1 0; height: 44px; }
+  .pf-bc-main .pf-card__foot .pf-btn { min-height: 44px; }
   /* The shared payment panel (Pay now / vendor / Pay later + advance):
      44px targets, 16px inputs — scoped to this counter only. */
   .pf-bc-pay ::ng-deep {

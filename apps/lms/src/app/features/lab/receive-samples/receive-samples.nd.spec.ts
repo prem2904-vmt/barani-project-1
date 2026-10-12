@@ -13,7 +13,7 @@ describe('Lab Intake rows — new design', () => {
   });
 
   it('pending / received rows drop the coloured left stripe', () => {
-    expect(nd()).toMatch(/\.pf-rs-row--received[^{]*\{[^}]*border-left:\s*1px solid var\(--nd-line\)/);
+    expect(nd()).toMatch(/\.pf-rs-row--received[^{]*\{[^}]*border-left:\s*1px solid var\(--pf-line\)/);
   });
 
   it('received = quieter row + violet check + muted label, no pill fill', () => {

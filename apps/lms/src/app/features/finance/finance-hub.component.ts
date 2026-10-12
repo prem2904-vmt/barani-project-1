@@ -16,7 +16,7 @@ import { OpdGateService } from '../opd/shared/opd-gate.service';
 import { bandFilter } from '../../shared/utils/band-search';
 import { SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 import { labDaysAgo } from '../../shared/utils/lab-clock';
-import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -54,7 +54,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, NdDateComponent],
+  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -69,9 +69,9 @@ interface FinanceSummary {
                           [value]="module()" (valueChange)="selectModule($event)"></pf-segmented>
             @if (module() === 'lab' || module() === 'overall') {
               <div class="pf-fin__bandrange" role="group" aria-label="Date range">
-                <pf-nd-date label="From date" [value]="fromDate" (valueChange)="setFromDateRange($event)"></pf-nd-date>
+                <pf-date label="From date" [value]="fromDate" (valueChange)="setFromDateRange($event)"></pf-date>
                 <span class="pf-fin__bdash" aria-hidden="true">–</span>
-                <pf-nd-date label="To date" [value]="toDate" (valueChange)="setToDateRange($event)"></pf-nd-date>
+                <pf-date label="To date" [value]="toDate" (valueChange)="setToDateRange($event)"></pf-date>
                 <pf-segmented size="sm" [options]="quickOptions" [value]="quickDays()"
                               (valueChange)="quick($event)"></pf-segmented>
               </div>
@@ -130,8 +130,8 @@ interface FinanceSummary {
 
         <!-- Date range (classic; the new design has it in the band pill) -->
         <div class="pf-fin__range pf-classic-only">
-          <label>From <pf-nd-date label="From" [value]="fromDate" (valueChange)="setFromDateClassic($event)"></pf-nd-date></label>
-          <label>To <pf-nd-date label="To" [value]="toDate" (valueChange)="setToDateClassic($event)"></pf-nd-date></label>
+          <label>From <pf-date label="From" [value]="fromDate" (valueChange)="setFromDateClassic($event)"></pf-date></label>
+          <label>To <pf-date label="To" [value]="toDate" (valueChange)="setToDateClassic($event)"></pf-date></label>
           <div class="pf-fin__quick">
             <button type="button" (click)="quick(7)">7d</button>
             <button type="button" (click)="quick(30)">30d</button>

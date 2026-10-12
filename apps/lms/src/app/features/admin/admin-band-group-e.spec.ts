@@ -196,7 +196,7 @@ describe('Admin band — Printing (/printing)', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).toBeNull();
-    expect(p.el.querySelector('.pf-hb__search--ctx .nd-ctx')).not.toBeNull();
+    expect(p.el.querySelector('.pf-hb__search--ctx .pf-ctx')).not.toBeNull();
     expect(p.el.querySelector('pf-hero-band pf-segmented')).toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
     const btn = p.actions().find((b) => b.textContent!.includes('Test print'))!;
@@ -207,7 +207,7 @@ describe('Admin band — Printing (/printing)', () => {
 
   it('every section is a card in the body at once (web: no Documents card)', () => {
     const p = make();
-    const cards = Array.from(p.body()!.querySelectorAll('.nd-card[data-card]')).map((c) => c.getAttribute('data-card'));
+    const cards = Array.from(p.body()!.querySelectorAll('.pf-card[data-card]')).map((c) => c.getAttribute('data-card'));
     expect(cards).toEqual(['label', 'printer', 'quality']);
     expect(p.body()!.querySelector('.pf-nudge svg')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-lp-label canvas')).not.toBeNull();

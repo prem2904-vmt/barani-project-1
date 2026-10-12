@@ -44,17 +44,17 @@ type Show = 'active' | 'archived';
       }
       <pf-screen-header class="pf-classic-only" eyebrow="OPD" title="Consultation forms" parentRoute="/admin/opd"
         subtitle="One shared library. Edit a form right on the doctor's own screen; publishing makes a new version.">
-        <div actions><button type="button" class="nd-btn nd-btn--primary press" (click)="newForm()">New form</button></div>
+        <div actions><button type="button" class="pf-btn pf-btn--primary press" (click)="newForm()">New form</button></div>
       </pf-screen-header>
 
       <div class="pf-band-body pf-band-body--fill">
-        <section class="nd-card oa-main" aria-label="Form library" style="flex:1 1 auto">
-          <header class="nd-card__head oa-main__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5"/></svg></span>
-            <span class="nd-card__label">Form library</span>
-            <span class="nd-card__note oa-hint">Vitals, diagnosis, prescription, investigations and follow-up are built into every consult — not form questions.</span>
+        <section class="pf-card oa-main" aria-label="Form library" style="flex:1 1 auto">
+          <header class="pf-card__head oa-main__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5"/></svg></span>
+            <span class="pf-card__label">Form library</span>
+            <span class="pf-card__note oa-hint">Vitals, diagnosis, prescription, investigations and follow-up are built into every consult — not form questions.</span>
             <pf-segmented size="sm" [options]="showOptions()" [value]="show()" (valueChange)="show.set($event)" aria-label="Show"></pf-segmented>
-            <span class="oa-count nd-num">{{ plural(visible().length, 'form') }}</span>
+            <span class="oa-count pf-num">{{ plural(visible().length, 'form') }}</span>
           </header>
           <div class="oa-main__body">
             @if (skeleton()) { <pf-skeleton-table class="oa-grid-skel" [rows]="8" [cols]="5" label="Loading forms…"></pf-skeleton-table> }
@@ -93,12 +93,12 @@ export class OpdFormLibraryPage {
   readonly cols: ColDef<OpdFormListRow>[] = [
     { field: 'name', headerName: 'Form', flex: 2, minWidth: 200 },
     { headerName: 'Version', minWidth: 150, valueGetter: (p) => (p.data ? libraryVersion(p.data) : '') },
-    { field: 'questionCount', headerName: 'Questions', width: 120, flex: 0, cellClass: 'nd-num', type: 'rightAligned' },
+    { field: 'questionCount', headerName: 'Questions', width: 120, flex: 0, cellClass: 'pf-num', type: 'rightAligned' },
     { headerName: 'Used by', minWidth: 170, valueGetter: (p) => (p.data ? usedBy(p.data) : '') },
-    { field: 'updatedAt', headerName: 'Changed', minWidth: 130, cellClass: 'nd-num',
+    { field: 'updatedAt', headerName: 'Changed', minWidth: 130, cellClass: 'pf-num',
       valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '') },
     { colId: 'act', headerName: '', width: 92, flex: 0, sortable: false, pinned: 'right',
-      cellRenderer: (p: ICellRendererParams<OpdFormListRow>) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'nd-rowact'; b.textContent = 'Edit'; b.setAttribute('aria-label', `Edit ${p.data?.name ?? 'form'}`); return b; } },
+      cellRenderer: (p: ICellRendererParams<OpdFormListRow>) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'pf-rowact'; b.textContent = 'Edit'; b.setAttribute('aria-label', `Edit ${p.data?.name ?? 'form'}`); return b; } },
   ];
 
   constructor() {

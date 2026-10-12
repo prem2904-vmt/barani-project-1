@@ -61,7 +61,11 @@ import { PinDotsComponent } from './pin-dots.component';
       left: calc(-1 * env(safe-area-inset-left, 0px));
       right: calc(-1 * env(safe-area-inset-right, 0px));
       z-index: 190;
-      display: flex; align-items: center; justify-content: center; padding: 20px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px 20px;
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      box-sizing: border-box;
       --text-primary: #f3f4f6;
       --text-secondary: #d1d5db;
       --text-muted: #9ca3af;
@@ -112,7 +116,7 @@ import { PinDotsComponent } from './pin-dots.component';
     .pf-lk-picker {
       position: relative;
       display: flex; flex-direction: column; align-items: center; gap: 26px;
-      max-width: 640px;
+      max-width: 640px; margin: auto; padding: 24px 0;
     }
     .pf-lk-heading {
       margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em;
@@ -157,39 +161,51 @@ import { PinDotsComponent } from './pin-dots.component';
 
     /* ── Selected profile / PIN card ── */
     .pf-lk-card {
-      position: relative; width: 100%; max-width: 21rem; padding: 24px;
+      position: relative; width: 100%; max-width: 22rem;
+      padding: 28px 24px 36px 24px;
+      margin: auto;
       display: flex; flex-direction: column; align-items: center; gap: 8px;
-      border-radius: 20px; background: var(--bg-card-solid);
+      border-radius: 24px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border);
       box-shadow: 0 1px 0 0 rgba(255,255,255,.04) inset, 0 30px 70px rgba(0,0,0,.55);
+      box-sizing: border-box;
     }
     /* A 55%-black drop shadow reads as dirt on a light page. */
     :host-context(html.light) .pf-lk-card,
     :host-context([data-theme='light']) .pf-lk-card {
-      box-shadow: 0 18px 44px rgba(17, 25, 40, 0.14), 0 2px 6px rgba(17, 25, 40, 0.06);
+      box-shadow: 0 20px 48px -8px rgba(124, 58, 237, 0.14), 0 4px 16px rgba(17, 25, 40, 0.04);
+      border: 1px solid rgba(124, 58, 237, 0.12);
     }
     .pf-lk-back {
       align-self: flex-start;
       border: none; background: transparent; cursor: pointer;
-      font-size: 13px; color: var(--text-muted); padding: 4px 6px; min-height: 34px;
+      font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 4px 8px; min-height: 34px;
+      border-radius: 8px; transition: all .15s ease;
     }
-    .pf-lk-back:hover { color: var(--text-primary); }
+    .pf-lk-back:hover { color: #7c3aed; background: rgba(124, 58, 237, 0.08); }
     .pf-lk-avatar {
-      width: 56px; height: 56px; border-radius: 50%;
+      width: 64px; height: 64px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 700; color: var(--violet-text);
-      background: linear-gradient(135deg, rgba(168,85,247,.22), rgba(236,72,153,.12));
-      border: 1px solid rgba(168,85,247,.3);
+      font-size: 22px; font-weight: 800; color: #7c3aed;
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.16) 0%, rgba(219, 39, 119, 0.1) 100%);
+      border: 1.5px solid rgba(124, 58, 237, 0.3);
+      box-shadow: 0 4px 16px rgba(124, 58, 237, 0.12);
     }
-    .pf-lk-name { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
-    .pf-lk-org { margin: -4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
-    .pf-lk-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
-    .pf-lk-error { margin: 2px 0 0; font-size: 12px; color: var(--red-text); }
+    .pf-lk-name { margin: 2px 0 0; font-size: 17px; font-weight: 700; color: var(--text-primary); }
+    .pf-lk-org {
+      margin: 0; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+      color: #7c3aed; background: rgba(124, 58, 237, 0.08); padding: 3px 12px; border-radius: 9999px;
+      border: 1px solid rgba(124, 58, 237, 0.16);
+    }
+    .pf-lk-hint { margin: 8px 0 0; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); text-align: center; }
+    .pf-lk-error { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--red-text); text-align: center; }
     .pf-lk-alt {
-      margin-top: 6px; border: none; background: transparent; cursor: pointer;
-      font-size: 12px; color: var(--text-muted); text-decoration: underline;
-      min-height: 34px; position: relative;
+      margin-top: 14px; border: none; background: transparent; cursor: pointer;
+      font-size: 12.5px; font-weight: 500; color: var(--text-secondary); text-decoration: none;
+      min-height: 38px; padding: 6px 14px; border-radius: 8px; transition: all .15s ease;
+      display: inline-flex; align-items: center; justify-content: center;
     }
+    .pf-lk-alt:hover { color: #7c3aed; background: rgba(124, 58, 237, 0.06); text-decoration: underline; text-underline-offset: 3px; }
 
     /* ── Phone (<=640px) ────────────────────────────────────────
        The picker was sized for a lab monitor: 84px avatars with 26px
@@ -198,10 +214,10 @@ import { PinDotsComponent } from './pin-dots.component';
        scrolling, and respect the notch. */
     @media (max-width: 640px) {
       .pf-lk-root {
-        padding: max(16px, env(safe-area-inset-top)) 16px
-                 max(16px, env(safe-area-inset-bottom));
+        padding: max(20px, env(safe-area-inset-top)) 16px
+                 max(24px, env(safe-area-inset-bottom));
       }
-      .pf-lk-picker { gap: 18px; width: 100%; }
+      .pf-lk-picker { gap: 18px; width: 100%; margin: auto; padding: 16px 0 24px; }
       .pf-lk-heading { font-size: 20px; text-align: center; }
       /* dvh, not vh — mobile browser chrome shows and hides. */
       .pf-lk-tiles { gap: 14px; max-height: 56dvh; }
@@ -210,7 +226,7 @@ import { PinDotsComponent } from './pin-dots.component';
       .pf-lk-tile-name { max-width: 92px; font-size: 12.5px; }
       /* Hover-scale is meaningless on touch and fights the tap highlight. */
       .pf-lk-tile:hover { transform: none; }
-      .pf-lk-card { max-width: 100%; padding: 20px 18px; }
+      .pf-lk-card { max-width: 100%; padding: 24px 20px 32px 20px; margin: auto; }
       .pf-lk-back, .pf-lk-alt { min-height: 44px; }
     }
   `]

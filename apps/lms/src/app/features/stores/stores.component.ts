@@ -18,7 +18,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../shared/components/barcode-display/barcode-display.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 import { SegmentedComponent, type SegmentedOption } from '../../shared/primitives/segmented.component';
 import { printLabelOnly } from '../../shared/utils/print-label';
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
@@ -51,7 +51,7 @@ const ICON = {
 } as const;
 
 /**
- * Stores — the inventory operator's work area (ND-PATTERN: band → main card
+ * Stores — the inventory operator's work area (PF-PATTERN: band → main card
  * + side card). The band pill holds ONE field and the section tabs
  * (Overview · Receive · Issue · Count):
  *
@@ -76,7 +76,7 @@ const ICON = {
   selector: 'pf-stores',
   standalone: true,
   imports: [DecimalPipe, DatePipe, NgTemplateOutlet, RouterLink, AgGridAngular, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent,
-    BusyDirective, SkeletonTableComponent, HeroBandComponent, NdDateComponent, SegmentedComponent],
+    BusyDirective, SkeletonTableComponent, HeroBandComponent, PfDateComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./inv-layout.scss'],
   template: `
@@ -92,10 +92,10 @@ const ICON = {
         </ng-container>
         <ng-container band-tools>
           @if (narrow() && mode() === 'home') {
-            <button type="button" class="nd-chip st-attn-chip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
+            <button type="button" class="pf-chip st-attn-chip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
                     [attr.aria-expanded]="attnOpen()" [attr.aria-label]="'Attention, ' + attentionCount()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
-              Attention <span class="nd-num inv-muted">{{ attentionCount() }}</span>
+              Attention <span class="pf-num inv-muted">{{ attentionCount() }}</span>
             </button>
           }
           <pf-segmented class="st-tabs" size="sm" [options]="tabOptions()" [value]="tab()" (valueChange)="onTab($event)"></pf-segmented>
@@ -120,15 +120,15 @@ const ICON = {
         @if (mode() === 'home') {
           <div class="inv-body">
             <!-- MAIN: stock on hand -->
-            <section class="nd-card" aria-labelledby="st-stock-t">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-                <span class="nd-card__label" id="st-stock-t">Stock</span>
+            <section class="pf-card" aria-labelledby="st-stock-t">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+                <span class="pf-card__label" id="st-stock-t">Stock</span>
                 <pf-segmented class="st-filter" [options]="stockFilterOptions()" [value]="stockStatus()" mode="text" (valueChange)="stockStatus.set($any($event))" aria-label="Show" />
-                <span class="nd-card__spacer"></span>
-                <span class="inv-count nd-num">{{ itemsLabel() }}</span>
+                <span class="pf-card__spacer"></span>
+                <span class="inv-count pf-num">{{ itemsLabel() }}</span>
               </header>
-              <div class="nd-card__body inv-main__body">
+              <div class="pf-card__body inv-main__body">
                 @if (stockSkeleton()) {
                   <pf-skeleton-table [rows]="6" [cols]="4" label="Loading stock…"></pf-skeleton-table>
                 } @else if (!items().length) {
@@ -143,12 +143,12 @@ const ICON = {
 
             <!-- SIDE: what needs attention (a sheet on narrow widths) -->
             @if (!narrow()) {
-              <aside class="nd-card" aria-labelledby="st-attn-t">
+              <aside class="pf-card" aria-labelledby="st-attn-t">
                 <ng-container [ngTemplateOutlet]="attentionCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
               </aside>
             } @else if (attnOpen()) {
               <div class="inv-sheet-backdrop" (click)="attnOpen.set(false)"></div>
-              <aside class="nd-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-attn-t" (keydown.escape)="attnOpen.set(false)">
+              <aside class="pf-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-attn-t" (keydown.escape)="attnOpen.set(false)">
                 <span class="inv-sheet-handle" aria-hidden="true"></span>
                 <ng-container [ngTemplateOutlet]="attentionCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
               </aside>
@@ -157,28 +157,28 @@ const ICON = {
         } @else {
           <div class="inv-body">
             <!-- MAIN: the items to act on — the band field filters them -->
-            <section class="nd-card" aria-labelledby="st-items-t">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
-                <span class="nd-card__label" id="st-items-t">Items</span>
-                <span class="nd-card__note">{{ manual() ? 'Type a name, SKU or code above — or pick an item' : 'Scan a barcode or type above — or pick an item' }}</span>
+            <section class="pf-card" aria-labelledby="st-items-t">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+                <span class="pf-card__label" id="st-items-t">Items</span>
+                <span class="pf-card__note">{{ manual() ? 'Type a name, SKU or code above — or pick an item' : 'Scan a barcode or type above — or pick an item' }}</span>
                 @if (!manual()) {
-                  <span class="nd-sdot st-listen" data-tone="done" title="Point the scanner and scan — no need to click the field first">Scanner ready</span>
+                  <span class="pf-sdot st-listen" data-tone="done" title="Point the scanner and scan — no need to click the field first">Scanner ready</span>
                 }
               </header>
-              <div class="nd-card__body st-items-body">
+              <div class="pf-card__body st-items-body">
                 @if (unknown(); as u) {
                   <div class="inv-note" role="status">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>
                     <div class="inv-note__body">
-                      No item has barcode <strong class="nd-num">{{ u.code }}</strong>.
+                      No item has barcode <strong class="pf-num">{{ u.code }}</strong>.
                       @if (canManage()) {
                         Pick the item it belongs to — you can link the barcode to it from the side card, so the next scan finds it.
                       } @else {
                         Pick the item to {{ actionVerb() }} it. To make this barcode scan next time, ask an inventory admin to link it to the item.
                       }
                       <div class="inv-note__actions">
-                        <button type="button" class="nd-btn nd-btn--quiet" (click)="unknown.set(null)">Dismiss</button>
+                        <button type="button" class="pf-btn pf-btn--quiet" (click)="unknown.set(null)">Dismiss</button>
                       </div>
                     </div>
                   </div>
@@ -192,18 +192,18 @@ const ICON = {
                         <button type="button" class="inv-row" [attr.aria-pressed]="resolved()?.item?.id === it.id" (click)="pick(it)">
                           <span class="inv-row__main">
                             <span class="inv-row__name">{{ it.name }}</span>
-                            <span class="inv-row__meta nd-num">{{ it.sku }}{{ it.category ? ' · ' + it.category : '' }}</span>
+                            <span class="inv-row__meta pf-num">{{ it.sku }}{{ it.category ? ' · ' + it.category : '' }}</span>
                           </span>
                           <span class="inv-row__end">
                             <span class="inv-row__qty">{{ it.onHand | number:'1.0-2' }} {{ it.uom }}</span>
-                            @if (level(it) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
+                            @if (level(it) !== 'ok') { <span class="pf-sdot" [attr.data-tone]="tone(it)">{{ levelLabel(it) }}</span> }
                           </span>
                         </button>
                       </li>
                     } @empty {
-                      <li class="nd-empty nd-empty--compact">
-                        <p class="nd-empty__title">No items match “{{ term().trim() }}”</p>
-                        <p class="nd-empty__body">Check the spelling, or scan the item's barcode.</p>
+                      <li class="pf-empty pf-empty--compact">
+                        <p class="pf-empty__title">No items match “{{ term().trim() }}”</p>
+                        <p class="pf-empty__body">Check the spelling, or scan the item's barcode.</p>
                       </li>
                     }
                   </ul>
@@ -213,12 +213,12 @@ const ICON = {
 
             <!-- SIDE: the picked item + this action (a sheet on narrow widths) -->
             @if (!narrow()) {
-              <aside class="nd-card" aria-labelledby="st-act-t">
+              <aside class="pf-card" aria-labelledby="st-act-t">
                 <ng-container [ngTemplateOutlet]="actionCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
               </aside>
             } @else if (resolved()) {
               <div class="inv-sheet-backdrop" (click)="clearPick()"></div>
-              <aside class="nd-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-act-t" (keydown.escape)="clearPick()">
+              <aside class="pf-card inv-side--sheet" role="dialog" aria-modal="true" aria-labelledby="st-act-t" (keydown.escape)="clearPick()">
                 <span class="inv-sheet-handle" aria-hidden="true"></span>
                 <ng-container [ngTemplateOutlet]="actionCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
               </aside>
@@ -230,35 +230,35 @@ const ICON = {
 
     <!-- No items at all: guide to creating them -->
     <ng-template #noItems>
-      <div class="nd-empty">
-        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-        <p class="nd-empty__title">No inventory items yet</p>
+      <div class="pf-empty">
+        <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
+        <p class="pf-empty__title">No inventory items yet</p>
         @if (canManage()) {
-          <p class="nd-empty__body">Create the items this lab stocks — tubes, reagents, kits — in Inventory. Then receive, issue and count them here.</p>
-          <a class="nd-btn nd-btn--secondary nd-empty__action" routerLink="/admin/inventory">Create items</a>
+          <p class="pf-empty__body">Create the items this lab stocks — tubes, reagents, kits — in Inventory. Then receive, issue and count them here.</p>
+          <a class="pf-btn pf-btn--secondary pf-empty__action" routerLink="/admin/inventory">Create items</a>
         } @else {
-          <p class="nd-empty__body">Items are created in Admin → Inventory. Ask an inventory admin to add the items this lab stocks; they show here to receive, issue and count.</p>
+          <p class="pf-empty__body">Items are created in Admin → Inventory. Ask an inventory admin to add the items this lab stocks; they show here to receive, issue and count.</p>
         }
       </div>
     </ng-template>
 
     <!-- ATTENTION side card -->
     <ng-template #attentionCard let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
-        <span class="nd-card__label" id="st-attn-t">Attention</span>
-        <span class="nd-card__spacer"></span>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+        <span class="pf-card__label" id="st-attn-t">Attention</span>
+        <span class="pf-card__spacer"></span>
         @if (sheet) {
-          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="attnOpen.set(false)" aria-label="Close attention">
+          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="attnOpen.set(false)" aria-label="Close attention">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         }
       </header>
-      <div class="nd-card__body">
+      <div class="pf-card__body">
         <div class="inv-kpis" role="list" aria-label="Stock summary">
-          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().low | number }}</span><span class="nd-sdot" data-tone="warn">Low</span></div>
-          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().out | number }}</span><span class="nd-sdot" data-tone="bad">Out</span></div>
-          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="nd-sdot" data-tone="warn">Expiring</span></div>
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().low | number }}</span><span class="pf-sdot" data-tone="warn">Low</span></div>
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ kpis().out | number }}</span><span class="pf-sdot" data-tone="bad">Out</span></div>
+          <div class="inv-kpi" role="listitem"><span class="inv-kpi__v">{{ expiring().length | number }}</span><span class="pf-sdot" data-tone="warn">Expiring</span></div>
         </div>
 
         <p class="inv-title">Expiring soon</p>
@@ -267,9 +267,9 @@ const ICON = {
             <div class="inv-line">
               <span class="inv-line__main">
                 <span class="inv-line__name">{{ e.item }}</span>
-                <span class="inv-line__meta nd-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}{{ e.qtyOnHand != null ? ' · ' + (e.qtyOnHand | number:'1.0-2') + ' left' : '' }}</span>
+                <span class="inv-line__meta pf-num">{{ e.lotNumber ? 'Lot ' + e.lotNumber : 'No lot' }}{{ e.qtyOnHand != null ? ' · ' + (e.qtyOnHand | number:'1.0-2') + ' left' : '' }}</span>
               </span>
-              <span class="inv-line__end"><span class="nd-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
+              <span class="inv-line__end"><span class="pf-sdot" [attr.data-tone]="expiry(e.daysLeft).tone">{{ expiry(e.daysLeft).label }}</span></span>
             </div>
           } @empty { <p class="inv-sub">Nothing expiring within its item's near-expiry window.</p> }
         </div>
@@ -280,9 +280,9 @@ const ICON = {
             <div class="inv-line">
               <span class="inv-line__main">
                 <span class="inv-line__name">{{ l.name }}</span>
-                @if (l.sku) { <span class="inv-line__meta nd-num">{{ l.sku }}</span> }
+                @if (l.sku) { <span class="inv-line__meta pf-num">{{ l.sku }}</span> }
               </span>
-              <span class="inv-line__end nd-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
+              <span class="inv-line__end pf-num"><span class="inv-strong">{{ l.onHand | number:'1.0-2' }}</span><span class="inv-muted">/ {{ l.reorderLevel | number:'1.0-2' }}</span></span>
             </div>
           } @empty { <p class="inv-sub">Every item is above its reorder level.</p> }
         </div>
@@ -291,32 +291,32 @@ const ICON = {
 
     <!-- ACTION side card: Receive / Issue / Count for the picked item -->
     <ng-template #actionCard let-sheet="sheet">
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             @for (d of actionIcon(); track d) { <path [attr.d]="d"/> }
           </svg>
         </span>
-        <span class="nd-card__label" id="st-act-t">{{ actionTitle() }}</span>
-        <span class="nd-card__spacer"></span>
+        <span class="pf-card__label" id="st-act-t">{{ actionTitle() }}</span>
+        <span class="pf-card__spacer"></span>
         @if (resolved()) {
-          <button type="button" class="nd-btn nd-btn--icon inv-close" (click)="clearPick()" [attr.aria-label]="sheet ? 'Close' : 'Clear the picked item'" [title]="sheet ? 'Close' : 'Clear'">
+          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="clearPick()" [attr.aria-label]="sheet ? 'Close' : 'Clear the picked item'" [title]="sheet ? 'Close' : 'Clear'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         }
       </header>
 
       @if (resolved(); as r) {
-        <div class="nd-card__body">
+        <div class="pf-card__body">
           <div class="inv-subject">
             <div>
               <p class="inv-subject__name">{{ r.item.name }}</p>
-              <p class="inv-subject__meta nd-num">{{ r.item.sku }}{{ r.item.category ? ' · ' + r.item.category : '' }}</p>
+              <p class="inv-subject__meta pf-num">{{ r.item.sku }}{{ r.item.category ? ' · ' + r.item.category : '' }}</p>
             </div>
             <div class="inv-onhand">
               <span class="inv-onhand__v">{{ r.item.onHand | number:'1.0-2' }}</span>
               <span class="inv-onhand__u">{{ r.item.uom }} on hand</span>
-              @if (level(r.item) !== 'ok') { <span class="nd-sdot" [attr.data-tone]="tone(r.item)">{{ levelLabel(r.item) }}</span> }
+              @if (level(r.item) !== 'ok') { <span class="pf-sdot" [attr.data-tone]="tone(r.item)">{{ levelLabel(r.item) }}</span> }
             </div>
           </div>
 
@@ -325,12 +325,12 @@ const ICON = {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>
               <div class="inv-note__body">
                 @if (canManage()) {
-                  Link barcode <strong class="nd-num">{{ u.code }}</strong> to this item so the next scan finds it.
+                  Link barcode <strong class="pf-num">{{ u.code }}</strong> to this item so the next scan finds it.
                   <div class="inv-note__actions">
-                    <button type="button" class="nd-btn nd-btn--quiet" (click)="linkBarcode(r.item)" [disabled]="linking()" [pfBusy]="linking()" pfBusyLabel="Linking…">Link barcode</button>
+                    <button type="button" class="pf-btn pf-btn--quiet" (click)="linkBarcode(r.item)" [disabled]="linking()" [pfBusy]="linking()" pfBusyLabel="Linking…">Link barcode</button>
                   </div>
                 } @else {
-                  Barcode <strong class="nd-num">{{ u.code }}</strong> isn't on any item. You can still {{ actionVerb() }} this item; an inventory admin can link the barcode in Admin → Inventory.
+                  Barcode <strong class="pf-num">{{ u.code }}</strong> isn't on any item. You can still {{ actionVerb() }} this item; an inventory admin can link the barcode in Admin → Inventory.
                 }
               </div>
             </div>
@@ -338,14 +338,14 @@ const ICON = {
 
           @if (action() === 'receive') {
             <div class="inv-fields">
-              <div class="nd-field"><label class="nd-field__lbl" for="st-lot">Lot no.</label>
-                <input id="st-lot" class="nd-input nd-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)" /></div>
-              <div class="nd-field"><span class="nd-field__lbl">Expiry</span>
-                <pf-nd-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-nd-date></div>
-              <div class="nd-field"><label class="nd-field__lbl" for="st-cost">Unit cost (₹)</label>
-                <input id="st-cost" class="nd-input nd-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)" /></div>
-              <div class="nd-field"><label class="nd-field__lbl" for="st-qty">Quantity ({{ r.item.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
-                <input id="st-qty" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)" /></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="st-lot">Lot no.</label>
+                <input id="st-lot" class="pf-input pf-num" autocomplete="off" [value]="rcv().lot" (input)="setR('lot', $any($event.target).value)" /></div>
+              <div class="pf-field"><span class="pf-field__lbl">Expiry</span>
+                <pf-date label="Expiry" [value]="rcv().expiry || null" (valueChange)="setR('expiry', $event ?? '')"></pf-date></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="st-cost">Unit cost (₹)</label>
+                <input id="st-cost" class="pf-input pf-num" type="number" min="0" step="0.01" inputmode="decimal" [value]="rcv().cost || ''" (input)="setR('cost', +$any($event.target).value)" /></div>
+              <div class="pf-field"><label class="pf-field__lbl" for="st-qty">Quantity ({{ r.item.uom }}) <span class="pf-dot-unpriced" aria-label="required"></span></label>
+                <input id="st-qty" class="pf-input pf-num" type="number" min="0" inputmode="decimal" [value]="rcv().qty || ''" (input)="setR('qty', +$any($event.target).value)" /></div>
             </div>
             @if (prefilled()) { <p class="inv-sub">Lot, expiry and quantity were read from the barcode — check them before receiving.</p> }
             @if (lastLabel()) {
@@ -361,8 +361,8 @@ const ICON = {
 
           @if (action() === 'issue') {
             <div class="inv-fields">
-              <div class="nd-field inv-span"><label class="nd-field__lbl" for="st-iq">Quantity to issue ({{ r.item.uom }}) <span class="nd-dot-unpriced" aria-label="required"></span></label>
-                <input id="st-iq" class="nd-input nd-num" type="number" min="0" inputmode="decimal" [value]="issueQty() || ''" (input)="issueQty.set(+$any($event.target).value)" /></div>
+              <div class="pf-field inv-span"><label class="pf-field__lbl" for="st-iq">Quantity to issue ({{ r.item.uom }}) <span class="pf-dot-unpriced" aria-label="required"></span></label>
+                <input id="st-iq" class="pf-input pf-num" type="number" min="0" inputmode="decimal" [value]="issueQty() || ''" (input)="issueQty.set(+$any($event.target).value)" /></div>
             </div>
             <p class="inv-sub">The earliest-expiring lot that isn't expired is used first (FEFO). Expired stock is never issued.</p>
           }
@@ -373,18 +373,18 @@ const ICON = {
               @for (b of r.batches; track b.id) {
                 <div class="inv-line st-count">
                   <span class="inv-line__main">
-                    <span class="inv-line__name nd-num">{{ b.lotNumber || 'No lot no.' }}</span>
-                    <span class="inv-line__meta nd-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }} · system {{ b.qtyOnHand | number:'1.0-2' }}
-                      @if (b.expired) { · <span class="nd-sdot" data-tone="bad">Expired</span> }</span>
+                    <span class="inv-line__name pf-num">{{ b.lotNumber || 'No lot no.' }}</span>
+                    <span class="inv-line__meta pf-num">exp {{ b.expiryDate ? (b.expiryDate | date:'d MMM y') : '—' }} · system {{ b.qtyOnHand | number:'1.0-2' }}
+                      @if (b.expired) { · <span class="pf-sdot" data-tone="bad">Expired</span> }</span>
                   </span>
                   <span class="inv-line__end">
-                    <input class="nd-input nd-num st-count__in" type="number" min="0" inputmode="decimal" placeholder="Count"
+                    <input class="pf-input pf-num st-count__in" type="number" min="0" inputmode="decimal" placeholder="Count"
                            [attr.aria-label]="'Counted quantity for lot ' + (b.lotNumber || 'without number')"
                            [value]="countValue(b.id)" (input)="setCount(b.id, +$any($event.target).value)" />
-                    <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busy() && countingId() === b.id" pfBusyLabel="Saving…"
+                    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busy() && countingId() === b.id" pfBusyLabel="Saving…"
                             (click)="doCount(b)" [attr.aria-label]="'Save count for lot ' + (b.lotNumber || 'without number')">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                      <span class="nd-rowact__t">Save</span>
+                      <span class="pf-rowact__t">Save</span>
                     </button>
                   </span>
                 </div>
@@ -395,38 +395,38 @@ const ICON = {
         </div>
 
         @if (action() === 'receive') {
-          <div class="nd-card__foot">
+          <div class="pf-card__foot">
             @if (lastLabel()) {
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="printLabel()">Print label</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="printLabel()">Print label</button>
             } @else {
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="clearPick()">Cancel</button>
+              <button type="button" class="pf-btn pf-btn--secondary" (click)="clearPick()">Cancel</button>
             }
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="rcv().qty > 0" [class.nd-btn--secondary]="rcv().qty <= 0"
+            <button type="button" class="pf-btn" [class.pf-btn--primary]="rcv().qty > 0" [class.pf-btn--secondary]="rcv().qty <= 0"
                     [disabled]="busy() || rcv().qty <= 0" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="doReceive(r.item)">
               Receive {{ rcv().qty > 0 ? (rcv().qty | number:'1.0-2') + ' ' + r.item.uom : 'stock' }}
             </button>
           </div>
         }
         @if (action() === 'issue') {
-          <div class="nd-card__foot">
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="clearPick()">Cancel</button>
-            <button type="button" class="nd-btn" [class.nd-btn--primary]="issueQty() > 0" [class.nd-btn--secondary]="issueQty() <= 0"
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="clearPick()">Cancel</button>
+            <button type="button" class="pf-btn" [class.pf-btn--primary]="issueQty() > 0" [class.pf-btn--secondary]="issueQty() <= 0"
                     [disabled]="busy() || issueQty() <= 0" [pfBusy]="busy()" pfBusyLabel="Issuing…" (click)="doIssue(r.item)">
               Issue {{ issueQty() > 0 ? (issueQty() | number:'1.0-2') + ' ' + r.item.uom : 'stock' }}
             </button>
           </div>
         }
       } @else {
-        <div class="nd-card__body">
-          <div class="nd-empty">
-            <span class="nd-empty__icon" aria-hidden="true">
+        <div class="pf-card__body">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
               @if (manual()) {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
               } @else { <pf-scan-icon [size]="20" /> }
             </span>
-            <p class="nd-empty__title">{{ manual() ? 'Find an item' : 'Scan or pick an item' }}</p>
-            <p class="nd-empty__body">{{ emptyHint() }}</p>
-            @if (lastScan()) { <p class="nd-empty__body">Last read <span class="nd-num inv-strong">{{ lastScan() }}</span></p> }
+            <p class="pf-empty__title">{{ manual() ? 'Find an item' : 'Scan or pick an item' }}</p>
+            <p class="pf-empty__body">{{ emptyHint() }}</p>
+            @if (lastScan()) { <p class="pf-empty__body">Last read <span class="pf-num inv-strong">{{ lastScan() }}</span></p> }
           </div>
         </div>
       }
@@ -448,12 +448,12 @@ const ICON = {
     .st-count__in { width: 96px; height: 40px; }
     @media (max-width: 640px) {
       .st-filter { order: 10; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
-      .st-filter .nd-seg__item { flex: 1 0 auto; min-height: 36px; }
+      .st-filter .pf-seg__item { flex: 1 0 auto; min-height: 36px; }
       .st-count { flex-wrap: wrap; }
       .st-count .inv-line__end { flex: 1 1 100%; justify-content: flex-end; }
       .st-count__in { flex: 1 1 auto; width: auto; height: 44px; }
     }
-    @media (pointer: coarse) { .st-filter .nd-seg__item { min-height: 40px; } }
+    @media (pointer: coarse) { .st-filter .pf-seg__item { min-height: 40px; } }
   `],
 })
 export class StoresComponent implements OnInit, AfterViewInit {
@@ -465,7 +465,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
   private readonly scan = inject(ScanService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
   /** ≤900px: no side column — side cards become sheets. */
   protected readonly narrow = mediaSignal('(max-width: 900px)');
@@ -494,7 +494,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
   readonly countingId = signal<string | null>(null);
   /** Resolve (scan / typed code lookup) request in flight. */
   readonly resolving = signal(false);
-  /** First-load skeleton for the stock grid (ND-PATTERN "Loading feedback"). */
+  /** First-load skeleton for the stock grid (PF-PATTERN "Loading feedback"). */
   private readonly stockHold = createLoadHold(true);
   readonly stockSkeleton = this.stockHold.active;
   readonly resolved = signal<{ item: InvItem; batches: InvBatch[] } | null>(null);

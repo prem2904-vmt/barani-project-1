@@ -28,7 +28,7 @@ import { of } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
 
 /**
- * /admin ND audit (fork D) — the CURRENT ND-PATTERN on hubs, list pages and
+ * /admin ND audit (fork D) — the CURRENT PF-PATTERN on hubs, list pages and
  * settings pages: ONE primary per view (in the band), the pill = context bar
  * (search on lists, identity chips on single-record pages), kit cards / fields,
  * slate switches (role=switch), neutral segments, no monospace / green / amber
@@ -43,7 +43,7 @@ export function hygiene(el: HTMLElement) {
 }
 /** Visible primaries (the classic header stays in code as .pf-classic-only). */
 export const primaries = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary'))
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
 /** A real /api/tenants/modules payload: the entitlements service parses the
@@ -58,11 +58,11 @@ describe('ND audit D — Modules', () => {
     const p = renderModules();
     p.cmp.state.set({ ipd: { enabled: true, features: {} } }); // (OPD is dark → not listed)
     p.f.detectChanges();
-    const sw = p.el.querySelectorAll('.pf-mod .nd-toggle[role="switch"]');
+    const sw = p.el.querySelectorAll('.pf-mod .pf-toggle[role="switch"]');
     expect(sw.length).toBeGreaterThan(3);
-    expect(p.el.querySelector('.pf-mod .nd-toggle[aria-checked="true"]')).not.toBeNull();
-    expect(p.el.querySelector('.pf-mod.nd-card .nd-card__icon')).not.toBeNull();
-    const seg = p.tools()!.querySelector('.nd-seg[role="radiogroup"]')!;
+    expect(p.el.querySelector('.pf-mod .pf-toggle[aria-checked="true"]')).not.toBeNull();
+    expect(p.el.querySelector('.pf-mod.pf-card .pf-card__icon')).not.toBeNull();
+    const seg = p.tools()!.querySelector('.pf-seg[role="radiogroup"]')!;
     expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
     expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
     expect(primaries(p.el)).toBe(0);   // toggles save live — no band actions
@@ -72,7 +72,7 @@ describe('ND audit D — Modules', () => {
   it('a switch click flips the module (persist is called)', () => {
     const p = renderModules();
     const spy = vi.spyOn(p.cmp as any, 'persist').mockImplementation(() => {});
-    (p.el.querySelector('.pf-mod .pf-mod__head .nd-toggle') as HTMLButtonElement).click();
+    (p.el.querySelector('.pf-mod .pf-mod__head .pf-toggle') as HTMLButtonElement).click();
     expect(spy).toHaveBeenCalled();
   });
 });
@@ -87,8 +87,8 @@ describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
       const p = renderBandPage(cmp as any);
       expect(p.bandInput()).not.toBeNull();
       const tile = p.el.querySelector(sel)!;
-      expect(tile.classList.contains('nd-card')).toBe(true);
-      expect(tile.querySelector('.nd-card__icon svg[aria-hidden="true"]')).not.toBeNull();
+      expect(tile.classList.contains('pf-card')).toBe(true);
+      expect(tile.querySelector('.pf-card__icon svg[aria-hidden="true"]')).not.toBeNull();
       expect(primaries(p.el)).toBe(0);
       hygiene(p.el);
     });
@@ -96,19 +96,19 @@ describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
 });
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
-  it('Microbiology: nd-card sections, slate supervisor switch, kit number fields, ONE primary (band Save)', () => {
+  it('Microbiology: pf-card sections, slate supervisor switch, kit number fields, ONE primary (band Save)', () => {
     const p = renderBandPage(CultureSettingsComponent, {
       getFor: () => ({ lockTimeoutMinutes: 60, allowSupervisorTakeover: true, stageTats: [{ stageKey: 'gram', tatHours: 4 }] }),
     });
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].className).toContain('pf-hb-btn--primary');
-    const card = p.el.querySelector('.pf-band-body .nd-card')!;
-    expect(card.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    const sw = card.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    const card = p.el.querySelector('.pf-band-body .pf-card')!;
+    expect(card.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    const sw = card.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(card.querySelector('input.nd-input.nd-num')).not.toBeNull();
+    expect(card.querySelector('input.pf-input.pf-num')).not.toBeNull();
     hygiene(p.el);
   });
 
@@ -117,9 +117,9 @@ describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
       getFor: () => ({ followUpMode: 'auto', tiers: [{ withinDays: 7, discountPercent: 50 }] }),
     });
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-os__card.nd-card')!;
+    const card = p.el.querySelector('.pf-os__card.pf-card')!;
     expect(card).not.toBeNull();
-    expect(card.querySelectorAll('input.nd-input.nd-num').length).toBe(2);
+    expect(card.querySelectorAll('input.pf-input.pf-num').length).toBe(2);
     expect(card.querySelector('.pf-os__del svg')).not.toBeNull();
     hygiene(p.el);
   });
@@ -132,10 +132,10 @@ describe('ND audit D — module placeholders (/admin/ipd …)', () => {
     });
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    const ctx = p.el.querySelector('pf-hero-band .nd-ctx')!;
-    expect(ctx.querySelector('.nd-ctx__primary')!.textContent).toContain('Pharmacy');
+    const ctx = p.el.querySelector('pf-hero-band .pf-ctx')!;
+    expect(ctx.querySelector('.pf-ctx__primary')!.textContent).toContain('Pharmacy');
     expect(ctx.textContent).toContain('Coming soon');
-    expect(p.body()!.querySelector('.nd-card')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-card')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
     TestBed.resetTestingModule();
@@ -143,14 +143,14 @@ describe('ND audit D — module placeholders (/admin/ipd …)', () => {
 });
 
 describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', () => {
-  it('Overview: range is a neutral nd-seg in the pill, content scrolls inside .pf-band-body, violet kit icon chips only', () => {
+  it('Overview: range is a neutral pf-seg in the pill, content scrolls inside .pf-band-body, violet kit icon chips only', () => {
     const p = renderBandPage(AdminOverviewComponent);
-    const seg = p.tools()!.querySelector('.nd-seg[role="radiogroup"]')!;
+    const seg = p.tools()!.querySelector('.pf-seg[role="radiogroup"]')!;
     expect(seg.querySelectorAll('[role="radio"]').length).toBe(4);
     expect(seg.querySelector('[aria-checked="true"]')!.textContent!.trim()).toBe('Today');
     expect(p.el.querySelector('pf-hero-band .pf-ov__range--on')).toBeNull();
     expect(p.body()).not.toBeNull();
-    expect(p.body()!.querySelector('.pf-ov__kpi.nd-card .nd-card__icon')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-ov__kpi.pf-card .pf-card__icon')).not.toBeNull();
     expect(p.el.querySelector('[data-color], [data-g]')).toBeNull();
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
@@ -158,13 +158,13 @@ describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', ()
 
   it('Manage: the category pane is ONE kit card with the BILLING header and a plain muted count; no rainbow chips', () => {
     const p = renderBandPage(AdminDashboardComponent);
-    const pane = p.el.querySelector('.pf-admin-pane.nd-card')!;
+    const pane = p.el.querySelector('.pf-admin-pane.pf-card')!;
     expect(pane).not.toBeNull();
-    const head = pane.querySelector('.nd-card__head')!;
-    expect(head.querySelector('.nd-card__icon svg')).not.toBeNull();
-    expect(head.querySelector('.nd-card__label')).not.toBeNull();
+    const head = pane.querySelector('.pf-card__head')!;
+    expect(head.querySelector('.pf-card__icon svg')).not.toBeNull();
+    expect(head.querySelector('.pf-card__label')).not.toBeNull();
     expect(head.querySelector('.pf-admin-pane__count')!.textContent).toMatch(/\d+ settings?/);
-    expect(pane.querySelector('.pf-admin-tile .nd-card__icon')).not.toBeNull();
+    expect(pane.querySelector('.pf-admin-tile .pf-card__icon')).not.toBeNull();
     expect(p.el.querySelector('[data-g]')).toBeNull();
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
@@ -185,16 +185,16 @@ describe('ND audit D — Branches', () => {
     expect(primaries(p.el)).toBe(1);
     p.cmp.toggleNewBranch(); p.f.detectChanges();
     expect(primaries(p.el)).toBe(1);
-    const form = p.el.querySelector('.pf-br-new.nd-card')!;
-    expect(form.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    expect(form.querySelectorAll('input.nd-input').length).toBe(4);
-    expect(form.querySelector('.nd-btn--primary')!.textContent).toContain('Create branch');
+    const form = p.el.querySelector('.pf-br-new.pf-card')!;
+    expect(form.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    expect(form.querySelectorAll('input.pf-input').length).toBe(4);
+    expect(form.querySelector('.pf-btn--primary')!.textContent).toContain('Create branch');
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
   });
 
   it('branch cards are kit cards; names never truncated; no sub-branch section; no × / → glyphs', () => {
     const p = render();
-    const card = p.el.querySelector('.pf-br-card.nd-card')!;
+    const card = p.el.querySelector('.pf-br-card.pf-card')!;
     expect(card).not.toBeNull();
     expect(p.el.querySelector('.pf-trunc')).toBeNull();
     expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
@@ -220,11 +220,11 @@ describe('ND audit D — Vendors', () => {
     providers: [provideHttpClient()],
   });
 
-  it('ONE primary (band "Add vendor"); per-vendor actions are .nd-rowact text buttons with icons for touch', () => {
+  it('ONE primary (band "Add vendor"); per-vendor actions are .pf-rowact text buttons with icons for touch', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const acts = p.el.querySelectorAll('.pf-vn-card')[0].querySelectorAll('.pf-vendor__actions .nd-rowact');
-    expect(Array.from(acts).map(a => a.querySelector('.nd-rowact__t')!.textContent!.trim()))
+    const acts = p.el.querySelectorAll('.pf-vn-card')[0].querySelectorAll('.pf-vendor__actions .pf-rowact');
+    expect(Array.from(acts).map(a => a.querySelector('.pf-rowact__t')!.textContent!.trim()))
       .toEqual(['Top up', 'Record payment', 'Email statement', 'View history', 'Deactivate']);
     expect(Array.from(acts).every(a => !!a.querySelector('svg[aria-hidden="true"]'))).toBe(true);
     p.cmp.openTopUp(vendors[0]); p.f.detectChanges();
@@ -235,19 +235,19 @@ describe('ND audit D — Vendors', () => {
   it('new-vendor editor = kit card with kit fields; the band button becomes a quiet Cancel', () => {
     const p = render();
     p.cmp.toggleNewVendor(); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-vn-new.nd-card')!;
-    expect(form.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    expect(form.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(8);
+    const form = p.el.querySelector('.pf-vn-new.pf-card')!;
+    expect(form.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    expect(form.querySelectorAll('input.pf-input').length).toBeGreaterThanOrEqual(8);
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
   });
 
-  it('palette: code / inactive = neutral chips, in-credit = violet (never green), filter = neutral nd-seg', () => {
+  it('palette: code / inactive = neutral chips, in-credit = violet (never green), filter = neutral pf-seg', () => {
     const p = render();
-    const chips = p.el.querySelectorAll('.pf-vendor__code.nd-chip');
+    const chips = p.el.querySelectorAll('.pf-vendor__code.pf-chip');
     expect(chips.length).toBe(3);
     expect(p.el.querySelector('.pf-vendor__bal-amt--credit')).not.toBeNull();
-    expect(p.tools()!.querySelectorAll('.nd-seg [role="radio"]').length).toBe(3);
+    expect(p.tools()!.querySelectorAll('.pf-seg [role="radio"]').length).toBe(3);
     expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
   });
 });
@@ -262,22 +262,22 @@ describe('ND audit D — Referral labs', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }] : [],
   });
 
-  it('ONE primary; Edit / Deactivate are .nd-rowact; codes are neutral tabular chips', () => {
+  it('ONE primary; Edit / Deactivate are .pf-rowact; codes are neutral tabular chips', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-rl-card.nd-card')!;
-    expect(Array.from(card.querySelectorAll('.nd-rowact .nd-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
-    expect(card.querySelector('.pf-rl__code.nd-chip.nd-num')!.textContent).toContain('APOLLO');
+    const card = p.el.querySelector('.pf-rl-card.pf-card')!;
+    expect(Array.from(card.querySelectorAll('.pf-rowact .pf-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
+    expect(card.querySelector('.pf-rl__code.pf-chip.pf-num')!.textContent).toContain('APOLLO');
     hygiene(p.el);
   });
 
   it('edit opens the kit-card editor; dept chips use the NEUTRAL aria-pressed state (no --on gradient)', () => {
     const p = render();
     p.cmp.edit(labs[0]); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-rl-form.nd-card')!;
-    expect(form.querySelector('.nd-card__label')!.textContent).toContain('Edit referral lab');
+    const form = p.el.querySelector('.pf-rl-form.pf-card')!;
+    expect(form.querySelector('.pf-card__label')!.textContent).toContain('Edit referral lab');
     const chip = form.querySelector('.pf-dept-chip')!;
-    expect(chip.classList.contains('nd-chip')).toBe(true);
+    expect(chip.classList.contains('pf-chip')).toBe(true);
     expect(chip.getAttribute('aria-pressed')).toBe('true');
     expect(form.querySelector('[class*="--on"]')).toBeNull();
     expect(primaries(p.el)).toBe(1);
@@ -300,26 +300,26 @@ describe('ND audit D — Referring network', () => {
 
   it('panes are kit cards with BILLING headers; the selected hospital is the NEUTRAL aria-selected row; ONE primary', async () => {
     const p = await render();
-    const panes = p.el.querySelectorAll('.pf-rn-pane.nd-card');
+    const panes = p.el.querySelectorAll('.pf-rn-pane.pf-card');
     expect(panes.length).toBe(2);
-    expect(panes[0].querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    expect(panes[0].querySelector('.pf-rn-pane__count')!.classList.contains('nd-num')).toBe(true);
+    expect(panes[0].querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    expect(panes[0].querySelector('.pf-rn-pane__count')!.classList.contains('pf-num')).toBe(true);
     p.cmp.selectHospital('h1'); await p.f.whenStable(); p.f.detectChanges();
     expect(p.el.querySelector('.pf-rn-row[aria-selected="true"]')).not.toBeNull();
     expect(p.el.querySelector('.pf-rn-row--on')).toBeNull();
     expect(primaries(p.el)).toBe(1);
     const add = Array.from(p.el.querySelectorAll('.pf-rn-hdrbtn')).find(b => /Add doctor/.test(b.textContent ?? ''))!;
-    expect(add.classList.contains('nd-btn--secondary')).toBe(true);
+    expect(add.classList.contains('pf-btn--secondary')).toBe(true);
     hygiene(p.el);
   });
 
-  it('the hospital editor is an nd-card modal (BILLING header, kit fields, ONE primary in the footer)', async () => {
+  it('the hospital editor is an pf-card modal (BILLING header, kit fields, ONE primary in the footer)', async () => {
     const p = await render();
     p.cmp.openHospitalEditor(null); p.f.detectChanges();
-    const m = p.el.querySelector('.pf-rn-modal.nd-card[role="dialog"]')!;
-    expect(m.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    expect(m.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
-    expect(m.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    const m = p.el.querySelector('.pf-rn-modal.pf-card[role="dialog"]')!;
+    expect(m.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    expect(m.querySelectorAll('input.pf-input').length).toBeGreaterThanOrEqual(5);
+    expect(m.querySelectorAll('.pf-btn--primary').length).toBe(1);
   });
 });
 
@@ -342,10 +342,10 @@ describe('ND audit D — Inventory', () => {
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].className).toContain('pf-hb-btn--primary');
     expect(p.el.querySelector('ag-grid-angular.pf-inv-grid')).not.toBeNull();
-    const side = p.el.querySelector('.pf-inv-side.nd-card')!;
-    expect(side.querySelector('.nd-card__icon')).not.toBeNull();
+    const side = p.el.querySelector('.pf-inv-side.pf-card')!;
+    expect(side.querySelector('.pf-card__icon')).not.toBeNull();
     expect(side.textContent).toContain('Attention');
-    expect(side.querySelector('.nd-sdot[data-tone="warn"]')).not.toBeNull();
+    expect(side.querySelector('.pf-sdot[data-tone="warn"]')).not.toBeNull();
     expect(side.textContent).toContain('Glucose reagent');
     // No off-palette status pills / fills.
     expect(p.el.querySelector('.pill--green, .pill--amber, .pill--red, .kpi--green')).toBeNull();
@@ -361,16 +361,16 @@ describe('ND audit D — Inventory', () => {
     const secs = Array.from(side.querySelectorAll('.pf-inv-sections [role="radio"]')).map(b => b.textContent!.trim());
     expect(secs).toEqual(['Batches', 'Receive', 'Label', 'Ledger']);
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.nd-card__foot .nd-btn--primary')!.textContent).toContain('Receive stock');
+    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Receive stock');
     expect(p.actions()[0].className).toContain('pf-hb-btn--ghost');
     expect(p.api.get).toHaveBeenCalledWith('/api/inventory/items/i1/batches');
 
     // Receive: the kit date picker (never a native date input), Add stock is the primary once a quantity is in.
     p.cmp.openReceive(items[0]); p.cmp.setR('qty', 5); p.f.detectChanges();
-    expect(side.querySelector('pf-nd-date')).not.toBeNull();
-    expect(side.querySelector('input[type="date"]:not(.pf-ndd__native)')).toBeNull();
+    expect(side.querySelector('pf-date')).not.toBeNull();
+    expect(side.querySelector('input[type="date"]:not(.pf-date__native)')).toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.nd-card__foot .nd-btn--primary')!.textContent).toContain('Add stock');
+    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Add stock');
 
     // Ledger reads the item ledger endpoint.
     p.cmp.setSection(items[0], 'ledger'); p.f.detectChanges();
@@ -381,20 +381,20 @@ describe('ND audit D — Inventory', () => {
   it('item editor = the side card with kit fields (incl. Barcode) + a slate Active switch; the band turns ghost so Save is the one primary', async () => {
     const p = await render();
     p.cmp.startNew(); p.f.detectChanges();
-    const ed = p.el.querySelector('.pf-inv-side.nd-card')!;
-    expect(ed.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
+    const ed = p.el.querySelector('.pf-inv-side.pf-card')!;
+    expect(ed.querySelectorAll('input.pf-input').length).toBeGreaterThanOrEqual(5);
     expect(ed.querySelector('#pf-inv-barcode')).not.toBeNull();
-    const sw = ed.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    const sw = ed.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
     expect(sw).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(ed.querySelector('.nd-btn--primary')).not.toBeNull();
+    expect(ed.querySelector('.pf-btn--primary')).not.toBeNull();
     hygiene(p.el);
   });
 
-  it('the label type switch is a neutral nd-seg (no gradient --on)', async () => {
+  it('the label type switch is a neutral pf-seg (no gradient --on)', async () => {
     const p = await render();
     p.cmp.showLabel(items[0]); p.f.detectChanges();
-    const seg = p.el.querySelector('.label-wrap .nd-seg[role="radiogroup"]');
+    const seg = p.el.querySelector('.label-wrap .pf-seg[role="radiogroup"]');
     if (seg) {
       expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
       expect(p.el.querySelector('.seg__i--on')).toBeNull();
@@ -415,8 +415,8 @@ describe('ND audit D — Appointments & queue', () => {
   it('queue mode = neutral selected tiles (role=radio), kit card, ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-ap-card.nd-card')!;
-    expect(card.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    const card = p.el.querySelector('.pf-ap-card.pf-card')!;
+    expect(card.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
     const radios = card.querySelectorAll('.pf-mode-btn[role="radio"]');
     expect(radios.length).toBeGreaterThanOrEqual(2);
     expect(card.querySelectorAll('.pf-mode-btn[aria-checked="true"]').length).toBe(1);
@@ -427,14 +427,14 @@ describe('ND audit D — Appointments & queue', () => {
   it('Open 24×7 is a slate switch; turning it off shows kit time fields', () => {
     const p = render();
     p.cmp.tab.set('slots'); p.f.detectChanges();
-    const sw = p.el.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    const sw = p.el.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    // Kit time field (pf-nd-time): a typed hh:mm box, never a visible
+    // Kit time field (pf-time): a typed hh:mm box, never a visible
     // native time input (one hidden native sits behind it for the picker).
-    expect(p.el.querySelectorAll('pf-nd-time').length).toBe(2);
-    expect(p.el.querySelectorAll('input.pf-ndt__in').length).toBe(2);
+    expect(p.el.querySelectorAll('pf-time').length).toBe(2);
+    expect(p.el.querySelectorAll('input.pf-time__in').length).toBe(2);
     hygiene(p.el);
   });
 });
@@ -446,23 +446,23 @@ describe('ND audit D — Home-collection agents', () => {
     providers: [{ provide: AppointmentQueueService, useValue: { listAgents: vi.fn(() => of(agents)), upsertAgent: vi.fn(() => of({})), removeAgent: vi.fn(() => of({})) } }],
   });
 
-  it('agent cards: kit card, full name (no truncate), neutral weight chip, Edit / Remove .nd-rowact; ONE primary', () => {
+  it('agent cards: kit card, full name (no truncate), neutral weight chip, Edit / Remove .pf-rowact; ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-hc-card.nd-card')!;
+    const card = p.el.querySelector('.pf-hc-card.pf-card')!;
     expect(card.querySelector('.pf-hc-name')!.textContent).toContain('Karthikeyan Subramaniam Ramasamy');
     expect(card.querySelector('.truncate')).toBeNull();
-    expect(card.querySelector('.pf-hc-chip.nd-chip')!.textContent).toContain('Weight');
-    expect(Array.from(card.querySelectorAll('.nd-rowact .nd-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Remove']);
+    expect(card.querySelector('.pf-hc-chip.pf-chip')!.textContent).toContain('Weight');
+    expect(Array.from(card.querySelectorAll('.pf-rowact .pf-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Remove']);
     hygiene(p.el);
   });
 
-  it('agent editor = kit card; coverage is a neutral nd-seg; the band turns a quiet Cancel', () => {
+  it('agent editor = kit card; coverage is a neutral pf-seg; the band turns a quiet Cancel', () => {
     const p = render();
     p.cmp.toggleForm(); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-hc-form.nd-card')!;
-    expect(form.querySelectorAll('.nd-seg [role="radio"]').length).toBe(2);
-    expect(form.querySelector('input.nd-input')).not.toBeNull();
+    const form = p.el.querySelector('.pf-hc-form.pf-card')!;
+    expect(form.querySelectorAll('.pf-seg [role="radio"]').length).toBe(2);
+    expect(form.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
     hygiene(p.el);
@@ -483,13 +483,13 @@ describe('ND audit D — Lab settings', () => {
 
   it('autosave is stated in the band (neutral + violet check); no primary; cards have the BILLING header', () => {
     const p = render();
-    const st = p.el.querySelector('pf-hero-band .pf-hb__actions .nd-savestate')!;
+    const st = p.el.querySelector('pf-hero-band .pf-hb__actions .pf-savestate')!;
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.body()!.querySelectorAll('.pf-ls__card.nd-card');
+    const cards = p.body()!.querySelectorAll('.pf-ls__card.pf-card');
     expect(cards.length).toBeGreaterThan(2);
-    expect(Array.from(cards).every(c => !!c.querySelector('.nd-card__head .nd-card__icon'))).toBe(true);
+    expect(Array.from(cards).every(c => !!c.querySelector('.pf-card__head .pf-card__icon'))).toBe(true);
     hygiene(p.el);
   });
 
@@ -498,9 +498,9 @@ describe('ND audit D — Lab settings', () => {
     expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
     expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
     p.cmp.tab.set('rules'); p.f.detectChanges();
-    const sw = p.el.querySelectorAll('.pf-ls__card .nd-toggle[role="switch"]');
+    const sw = p.el.querySelectorAll('.pf-ls__card .pf-toggle[role="switch"]');
     expect(sw.length).toBeGreaterThanOrEqual(3);
-    expect(p.el.querySelectorAll('input.nd-input.nd-num').length).toBe(3);
+    expect(p.el.querySelectorAll('input.pf-input.pf-num').length).toBe(3);
     hygiene(p.el);
   });
 });

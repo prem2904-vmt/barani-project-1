@@ -17,8 +17,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 /**
  * Per-test result entry (both the GRID/table view and the phone CARD view):
  * dropdown/radio/yesno parameters used a native `<select>`; date/time/
- * datetime used native inputs. Both views now use `pf-select` / `pf-nd-date`
- * / `pf-nd-time` / `pf-nd-datetime` — same `setValue`/`valueOf` contract.
+ * datetime used native inputs. Both views now use `pf-select` / `pf-date`
+ * / `pf-time` / `pf-datetime` — same `setValue`/`valueOf` contract.
  */
 const PARAMS = JSON.stringify({
   parameters: [
@@ -74,15 +74,15 @@ describe.each([['grid' as const], ['cards' as const]])('Result entry %s view —
     expect(el.querySelector('pf-select')).not.toBeNull();
   });
 
-  it('renders pf-nd-date for the date param, never a visible native date input', async () => {
+  it('renders pf-date for the date param, never a visible native date input', async () => {
     const { el } = await render(view);
     expect(el.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
-    expect(el.querySelector('pf-nd-date')).not.toBeNull();
+    expect(el.querySelector('pf-date')).not.toBeNull();
   });
 
   it('typing a date sets it as plain ISO yyyy-MM-dd via setValue', async () => {
     const { el, c } = await render(view);
-    const txt = el.querySelector<HTMLInputElement>('pf-nd-date input[type="text"]')!;
+    const txt = el.querySelector<HTMLInputElement>('pf-date input[type="text"]')!;
     txt.value = '26092026';
     txt.dispatchEvent(new Event('input'));
     expect(c.valueOf('collected_on')).toBe('2026-09-26');
@@ -95,9 +95,9 @@ describe.each([['grid' as const], ['cards' as const]])('Result entry %s view —
     for (const s of selects) expect((s.componentInstance as SelectComponent<unknown>).enterAdvances).toBe(true);
   });
 
-  it('the date box is the kit pf-nd-date scoped host class only — no leftover .pf-rg__input/.pf-param__input double box', async () => {
+  it('the date box is the kit pf-date scoped host class only — no leftover .pf-rg__input/.pf-param__input double box', async () => {
     const { el } = await render(view);
-    const dateHost = el.querySelector('pf-nd-date')!;
+    const dateHost = el.querySelector('pf-date')!;
     expect(dateHost.classList.contains('pf-rg__input')).toBe(false);
     expect(dateHost.classList.contains('pf-param__input')).toBe(false);
   });

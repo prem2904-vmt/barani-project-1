@@ -294,10 +294,10 @@ export class TestsComponent implements OnInit {
     new Set([...this._dirty().keys(), ...this._priceDirty().keys()]).size);
 
   readonly isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
-  /** Row actions: TEXT on web, ICON on touch (ND-PATTERN .nd-rowact). */
+  /** Row actions: TEXT on web, ICON on touch (PF-PATTERN .pf-rowact). */
   readonly web = webPointerSignal();
   readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-  // ── DEPARTMENTS side card (ND-PATTERN "two jobs on one screen") ────────
+  // ── DEPARTMENTS side card (PF-PATTERN "two jobs on one screen") ────────
   // The departments filter is the SIDE card on the LEFT (a filter companion:
   // filter first, then content; BILLING's anatomy); the grid is the MAIN
   // card on the right. It collapses to a slim strip — remembered
@@ -753,8 +753,8 @@ export class TestsComponent implements OnInit {
     btn.style.cssText = 'position:relative;flex-shrink:0;width:36px;height:20px;border-radius:999px;padding:0;cursor:pointer;'
       + 'transition:background 0.15s, border-color 0.15s;outline:none;'
       + (isActive
-          ? 'background:var(--nd-switch-on, #7c3aed);border:1px solid var(--nd-switch-on, #7c3aed);'
-          : 'background:var(--nd-toggle-off, #e3e7eb);border:1px solid var(--nd-toggle-off, #e3e7eb);');
+          ? 'background:var(--pf-switch-on, #7c3aed);border:1px solid var(--pf-switch-on, #7c3aed);'
+          : 'background:var(--pf-toggle-off, #e3e7eb);border:1px solid var(--pf-toggle-off, #e3e7eb);');
 
     const knob = document.createElement('span');
     knob.style.cssText = 'position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:50%;'
@@ -846,18 +846,18 @@ export class TestsComponent implements OnInit {
     const web = this.web();
     // Kit row action: compact TEXT "Edit" on web, a 44px neutral ICON on
     // touch (label kept for AT via aria-label + the visually-hidden
-    // .nd-rowact__t). Revert — only where it applies — is always a quiet
+    // .pf-rowact__t). Revert — only where it applies — is always a quiet
     // icon (a compact 28px one on web) with its words in the tooltip.
     const act = (label: string, aria: string, path: string, run: () => void, icon = false) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'nd-rowact' + (!web || icon ? ' nd-rowact--icon' : '') + (web && icon ? ' pf-tm-rowact-sm' : '');
+      b.className = 'pf-rowact' + (!web || icon ? ' pf-rowact--icon' : '') + (web && icon ? ' pf-tm-rowact-sm' : '');
       b.title = aria;
       b.setAttribute('aria-label', aria);
       b.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
         + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
       const t = document.createElement('span');
-      t.className = 'nd-rowact__t';
+      t.className = 'pf-rowact__t';
       t.textContent = label;
       b.appendChild(t);
       b.addEventListener('click', e => { e.stopPropagation(); run(); });

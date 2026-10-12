@@ -62,7 +62,7 @@ describe('CriticalCommunicationDialogComponent', () => {
     expect(dlg.textContent).toContain('Potassium');
     expect(dlg.textContent).toContain('Mr. Arun Kumar');
     // ONE primary: Save.
-    expect(dlg.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    expect(dlg.querySelectorAll('.pf-btn--primary').length).toBe(1);
   });
 
   it('needs a name before it can save, then posts method / name / role / notes and emits the updated record', () => {
@@ -102,7 +102,7 @@ describe('CriticalCommunicationDialogComponent', () => {
 
   it('Cancel and Escape close without saving', () => {
     const { f, dlg, host } = render();
-    (dlg.querySelector('.nd-btn--secondary') as HTMLButtonElement).click();
+    (dlg.querySelector('.pf-btn--secondary') as HTMLButtonElement).click();
     f.detectChanges();
     expect(host.closed).toBe(true);
     expect(svc.recordCommunication).not.toHaveBeenCalled();

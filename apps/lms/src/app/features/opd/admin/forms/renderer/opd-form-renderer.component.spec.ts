@@ -138,7 +138,7 @@ describe('OpdFormRendererComponent', () => {
     expect(q('edd')!.textContent).toContain('—');             // no LMP yet ⇒ blank
     expect(q('edd')!.querySelector('input')).toBeNull();       // never an editable control
 
-    // Answering the source (as the pf-nd-date picker's (valueChange) would) recomputes
+    // Answering the source (as the pf-date picker's (valueChange) would) recomputes
     // AND persists the calc value in the SAME emitted answers object.
     const lmp = f.componentInstance.list()[0];
     f.componentInstance.set(lmp, null, '2026-01-01');

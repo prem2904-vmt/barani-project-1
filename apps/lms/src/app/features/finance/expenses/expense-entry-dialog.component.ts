@@ -9,7 +9,7 @@ import {
   validExpenseAmount,
 } from '../../../shared/models/expense.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { ModalPortalDirective } from '../../../shared/directives/modal-portal.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { addDays } from '../../../shared/utils/lab-clock';
@@ -34,59 +34,59 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
 @Component({
   selector: 'pf-expense-entry-dialog',
   standalone: true,
-  imports: [SelectComponent, NdDateComponent, ModalPortalDirective, BusyDirective],
+  imports: [SelectComponent, PfDateComponent, ModalPortalDirective, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-xd" role="dialog" aria-modal="true" aria-labelledby="pf-xd-title" pfModalPortal>
       <div class="pf-xd__backdrop" (click)="close()"></div>
       <form class="pf-xd__card" (submit)="$event.preventDefault(); save()" novalidate>
-        <span class="nd-sheet__handle pf-xd__handle" aria-hidden="true"></span>
+        <span class="pf-sheet__handle pf-xd__handle" aria-hidden="true"></span>
         <header class="pf-xd__head">
-          <span class="nd-card__icon" aria-hidden="true">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
           </span>
-          <h2 id="pf-xd-title" class="nd-card__label pf-xd__title">{{ entry() ? 'Edit entry' : (kind() === 'cash_in' ? 'Add cash in' : 'Add expense') }}</h2>
-          <button type="button" class="nd-btn nd-btn--icon pf-xd__close" (click)="close()" aria-label="Close">
+          <h2 id="pf-xd-title" class="pf-card__label pf-xd__title">{{ entry() ? 'Edit entry' : (kind() === 'cash_in' ? 'Add cash in' : 'Add expense') }}</h2>
+          <button type="button" class="pf-btn pf-btn--icon pf-xd__close" (click)="close()" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
 
         <div class="pf-xd__body">
-          <div class="nd-field">
-            <span class="nd-field__lbl" id="pf-xd-kind-lbl">Type</span>
-            <span class="nd-seg pf-xd__seg" role="radiogroup" aria-labelledby="pf-xd-kind-lbl">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'expense'" (click)="kind.set('expense')">Expense</button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'cash_in'" (click)="kind.set('cash_in')">Cash in</button>
+          <div class="pf-field">
+            <span class="pf-field__lbl" id="pf-xd-kind-lbl">Type</span>
+            <span class="pf-seg pf-xd__seg" role="radiogroup" aria-labelledby="pf-xd-kind-lbl">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'expense'" (click)="kind.set('expense')">Expense</button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="kind() === 'cash_in'" (click)="kind.set('cash_in')">Cash in</button>
             </span>
             @if (kind() === 'cash_in') {
-              <p class="nd-field__hint">Money put INTO the expense account — a top-up or float. It raises the day's closing balance.</p>
+              <p class="pf-field__hint">Money put INTO the expense account — a top-up or float. It raises the day's closing balance.</p>
             }
           </div>
 
           <div class="pf-xd__row">
-            <div class="nd-field">
-              <label class="nd-field__lbl" for="pf-xd-amount">Amount (₹)</label>
-              <input id="pf-xd-amount" class="nd-input nd-num pf-xd__amount" type="text" inputmode="decimal" autocomplete="off"
-                     placeholder="0.00" [class.nd-input--error]="fieldErr() === 'amount'"
+            <div class="pf-field">
+              <label class="pf-field__lbl" for="pf-xd-amount">Amount (₹)</label>
+              <input id="pf-xd-amount" class="pf-input pf-num pf-xd__amount" type="text" inputmode="decimal" autocomplete="off"
+                     placeholder="0.00" [class.pf-input--error]="fieldErr() === 'amount'"
                      [value]="amountText()" (input)="amountText.set($any($event.target).value)" />
             </div>
-            <div class="nd-field">
-              <label class="nd-field__lbl" for="pf-xd-date">Date</label>
-              <pf-nd-date label="Date" inputId="pf-xd-date" [value]="date()" [min]="minDate()" [max]="today()"
-                          (valueChange)="date.set($event)"></pf-nd-date>
+            <div class="pf-field">
+              <label class="pf-field__lbl" for="pf-xd-date">Date</label>
+              <pf-date label="Date" inputId="pf-xd-date" [value]="date()" [min]="minDate()" [max]="today()"
+                          (valueChange)="date.set($event)"></pf-date>
             </div>
           </div>
 
-          <div class="nd-field">
-            <label class="nd-field__lbl" for="pf-xd-desc">{{ kind() === 'cash_in' ? 'Details' : 'Item / what it was for' }}</label>
-            <input id="pf-xd-desc" class="nd-input" type="text" maxlength="300" autocomplete="off"
+          <div class="pf-field">
+            <label class="pf-field__lbl" for="pf-xd-desc">{{ kind() === 'cash_in' ? 'Details' : 'Item / what it was for' }}</label>
+            <input id="pf-xd-desc" class="pf-input" type="text" maxlength="300" autocomplete="off"
                    [placeholder]="kind() === 'cash_in' ? 'e.g. Float from owner' : 'e.g. Printer toner'"
-                   [class.nd-input--error]="fieldErr() === 'description'"
+                   [class.pf-input--error]="fieldErr() === 'description'"
                    [value]="description()" (input)="description.set($any($event.target).value)" />
           </div>
 
-          <div class="nd-field">
-            <span class="nd-field__lbl">Bills &amp; receipts <span class="pf-xd__opt">photo or PDF</span></span>
+          <div class="pf-field">
+            <span class="pf-field__lbl">Bills &amp; receipts <span class="pf-xd__opt">photo or PDF</span></span>
             @if (bills().length || pending().length) {
               <ul class="pf-xd__bills" aria-label="Bills">
                 @for (b of bills(); track b.id) {
@@ -96,7 +96,7 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
                       @else { <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> }
                     </a>
                     <span class="pf-xd__billname">{{ b.fileName }}</span>
-                    <button type="button" class="nd-btn nd-btn--icon pf-xd__billx" (click)="removeStored(b)" [attr.aria-label]="'Remove ' + b.fileName">
+                    <button type="button" class="pf-btn pf-btn--icon pf-xd__billx" (click)="removeStored(b)" [attr.aria-label]="'Remove ' + b.fileName">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </li>
@@ -108,7 +108,7 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
                       @else { <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> }
                     </span>
                     <span class="pf-xd__billname">{{ p.file.name }}</span>
-                    <button type="button" class="nd-btn nd-btn--icon pf-xd__billx" (click)="dropPending(p)" [attr.aria-label]="'Remove ' + p.file.name">
+                    <button type="button" class="pf-btn pf-btn--icon pf-xd__billx" (click)="dropPending(p)" [attr.aria-label]="'Remove ' + p.file.name">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </li>
@@ -116,12 +116,12 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
               </ul>
             }
             <div class="pf-xd__pick">
-              <label class="nd-btn nd-btn--secondary pf-xd__pickbtn">
+              <label class="pf-btn pf-btn--secondary pf-xd__pickbtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                 Take photo
                 <input class="pf-xd__file" type="file" accept="image/*" capture="environment" (change)="onFiles($event)" />
               </label>
-              <label class="nd-btn nd-btn--secondary pf-xd__pickbtn">
+              <label class="pf-btn pf-btn--secondary pf-xd__pickbtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
                 Attach files
                 <input class="pf-xd__file" type="file" accept="image/*,application/pdf" multiple (change)="onFiles($event)" />
@@ -130,8 +130,8 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
           </div>
 
           @if (kind() === 'expense') {
-            <div class="nd-field">
-              <label class="nd-field__lbl" for="pf-xd-cat">Category</label>
+            <div class="pf-field">
+              <label class="pf-field__lbl" for="pf-xd-cat">Category</label>
               <pf-select id="pf-xd-cat" [options]="categoryOptions()" [value]="categoryId()" placeholder="Pick a category"
                          [searchable]="true" [allowCreate]="isAdmin()" createVerb="Add category"
                          createHint="New category for the whole lab"
@@ -139,24 +139,24 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
             </div>
           }
 
-          <div class="nd-field">
-            <span class="nd-field__lbl" id="pf-xd-mode-lbl">Payment mode</span>
-            <span class="nd-seg pf-xd__seg" role="radiogroup" aria-labelledby="pf-xd-mode-lbl">
+          <div class="pf-field">
+            <span class="pf-field__lbl" id="pf-xd-mode-lbl">Payment mode</span>
+            <span class="pf-seg pf-xd__seg" role="radiogroup" aria-labelledby="pf-xd-mode-lbl">
               @for (m of modes; track m.value) {
-                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === m.value" (click)="mode.set(m.value)">{{ m.value === 'bank' ? 'Bank' : m.label }}</button>
+                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="mode() === m.value" (click)="mode.set(m.value)">{{ m.value === 'bank' ? 'Bank' : m.label }}</button>
               }
             </span>
           </div>
 
-          <div class="nd-field">
-            <label class="nd-field__lbl" for="pf-xd-to">{{ kind() === 'cash_in' ? 'Received from' : 'Paid to / vendor' }} <span class="pf-xd__opt">optional</span></label>
-            <input id="pf-xd-to" class="nd-input" type="text" maxlength="160" autocomplete="off"
+          <div class="pf-field">
+            <label class="pf-field__lbl" for="pf-xd-to">{{ kind() === 'cash_in' ? 'Received from' : 'Paid to / vendor' }} <span class="pf-xd__opt">optional</span></label>
+            <input id="pf-xd-to" class="pf-input" type="text" maxlength="160" autocomplete="off"
                    [value]="paidTo()" (input)="paidTo.set($any($event.target).value)" />
           </div>
 
-          <div class="nd-field">
-            <label class="nd-field__lbl" for="pf-xd-notes">Notes <span class="pf-xd__opt">optional</span></label>
-            <textarea id="pf-xd-notes" class="nd-input" rows="2" maxlength="1000"
+          <div class="pf-field">
+            <label class="pf-field__lbl" for="pf-xd-notes">Notes <span class="pf-xd__opt">optional</span></label>
+            <textarea id="pf-xd-notes" class="pf-input" rows="2" maxlength="1000"
                       [value]="notes()" (input)="notes.set($any($event.target).value)"></textarea>
           </div>
 
@@ -165,11 +165,11 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
 
         <footer class="pf-xd__foot">
           @if (entry()) {
-            <button type="button" class="nd-btn nd-btn--danger" [disabled]="saving() || deleting()" [pfBusy]="deleting()" pfBusyLabel="Deleting…" (click)="remove()">Delete</button>
+            <button type="button" class="pf-btn pf-btn--danger" [disabled]="saving() || deleting()" [pfBusy]="deleting()" pfBusyLabel="Deleting…" (click)="remove()">Delete</button>
           } @else {
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="saving()" (click)="close()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--secondary" [disabled]="saving()" (click)="close()">Cancel</button>
           }
-          <button type="submit" class="nd-btn nd-btn--primary" [disabled]="!canSave() || saving() || deleting()" [pfBusy]="saving()" [pfBusyLabel]="savingLabel()">
+          <button type="submit" class="pf-btn pf-btn--primary" [disabled]="!canSave() || saving() || deleting()" [pfBusy]="saving()" [pfBusyLabel]="savingLabel()">
             {{ saving() ? savingLabel() : 'Save' }}
           </button>
         </footer>
@@ -183,11 +183,11 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
     .pf-xd__card {
       position: relative; width: 100%; max-width: 36rem; max-height: calc(100dvh - 32px);
       display: flex; flex-direction: column; margin: 0; padding: 0;
-      border-radius: var(--nd-radius-card, 18px); background: var(--nd-card-bg, var(--bg-card-solid));
-      border: 1px solid var(--nd-line, var(--glass-border)); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); overflow: hidden;
+      border-radius: var(--pf-radius-card, 18px); background: var(--pf-card-bg, var(--bg-card-solid));
+      border: 1px solid var(--pf-line, var(--glass-border)); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); overflow: hidden;
     }
     .pf-xd__handle { display: none; }
-    .pf-xd__head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--nd-line); }
+    .pf-xd__head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--pf-line); }
     .pf-xd__title { margin: 0; flex: 1 1 auto; }
     .pf-xd__close { flex: none; }
     .pf-xd__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -200,23 +200,23 @@ const BILL_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'appl
     .pf-xd__bill { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .pf-xd__thumb {
       display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
-      background: var(--glass-bg); border: 1px solid var(--nd-line); color: var(--text-tertiary);
+      background: var(--glass-bg); border: 1px solid var(--pf-line); color: var(--text-tertiary);
     }
     .pf-xd__thumb img { width: 100%; height: 100%; object-fit: cover; }
     .pf-xd__billname { font-size: 11.5px; color: var(--text-secondary); overflow-wrap: anywhere; line-height: 1.3; }
-    .pf-xd__billx { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; background: var(--nd-card-bg, var(--bg-card-solid)); }
+    .pf-xd__billx { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; background: var(--pf-card-bg, var(--bg-card-solid)); }
     .pf-xd__pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .pf-xd__pickbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
     .pf-xd__file { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-    .pf-xd__pickbtn:focus-within { outline: 2px solid var(--nd-focus, #7c3aed); outline-offset: 2px; }
-    .pf-xd__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--nd-line); }
+    .pf-xd__pickbtn:focus-within { outline: 2px solid var(--pf-focus, #7c3aed); outline-offset: 2px; }
+    .pf-xd__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--pf-line); }
     @media (pointer: coarse) { .pf-xd__billx { width: 44px; height: 44px; top: 0; right: 0; } }
     @media (max-width: 640px) {
-      .pf-xd { align-items: flex-end; padding: 0; bottom: var(--nd-nav-h, 0px); }
-      .pf-xd__card { max-width: none; border-radius: 18px 18px 0 0; max-height: calc(100dvh - var(--nd-nav-h, 0px) - env(safe-area-inset-top, 0px) - 12px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-      .pf-xd__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
-      .pf-xd__body .nd-input { font-size: 16px; min-height: 44px; }
-      .pf-xd__foot .nd-btn, .pf-xd__pickbtn { min-height: 44px; }
+      .pf-xd { align-items: flex-end; padding: 0; bottom: var(--pf-nav-h, 0px); }
+      .pf-xd__card { max-width: none; border-radius: 18px 18px 0 0; max-height: calc(100dvh - var(--pf-nav-h, 0px) - env(safe-area-inset-top, 0px) - 12px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+      .pf-xd__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
+      .pf-xd__body .pf-input { font-size: 16px; min-height: 44px; }
+      .pf-xd__foot .pf-btn, .pf-xd__pickbtn { min-height: 44px; }
     }
   `],
 })

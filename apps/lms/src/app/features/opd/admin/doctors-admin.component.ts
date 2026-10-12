@@ -93,12 +93,12 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
       </pf-screen-header>
 
       <div class="pf-band-body pf-band-body--fill">
-        <section class="nd-card oa-main" aria-label="Doctors" style="flex:1 1 auto">
-          <header class="nd-card__head oa-main__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg></span>
-            <span class="nd-card__label">Doctors</span>
-            <span class="nd-card__note oa-hint">Double-click a cell to edit · tap a day to switch it · a blank fee = not offered</span>
-            <span class="oa-count nd-num">{{ plural(visibleRows().length, 'doctor') }}</span>
+        <section class="pf-card oa-main" aria-label="Doctors" style="flex:1 1 auto">
+          <header class="pf-card__head oa-main__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg></span>
+            <span class="pf-card__label">Doctors</span>
+            <span class="pf-card__note oa-hint">Double-click a cell to edit · tap a day to switch it · a blank fee = not offered</span>
+            <span class="oa-count pf-num">{{ plural(visibleRows().length, 'doctor') }}</span>
           </header>
           <div class="oa-main__body">
             @if (listSkeleton()) {
@@ -125,9 +125,9 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
       color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-da__save:disabled { opacity: .5; cursor: default; }
     :host ::ng-deep .pf-da-days { display: inline-flex; gap: 3px; flex-wrap: wrap; padding: 4px 0; }
-    :host ::ng-deep .pf-da-day { min-width: 34px; height: 30px; padding: 0 4px; border-radius: 8px; border: 1px solid var(--nd-line); background: transparent;
+    :host ::ng-deep .pf-da-day { min-width: 34px; height: 30px; padding: 0 4px; border-radius: 8px; border: 1px solid var(--pf-line); background: transparent;
       color: var(--text-tertiary); font: inherit; font-size: 11.5px; cursor: pointer; }
-    :host ::ng-deep .pf-da-day[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); font-weight: 600; }
+    :host ::ng-deep .pf-da-day[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); color: var(--text-primary); font-weight: 600; }
     :host ::ng-deep .pf-da-day:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
   `],
 })
@@ -169,11 +169,11 @@ export class DoctorsAdminComponent {
     { headerName: 'Department', minWidth: 140, valueGetter: (p) => p.data?.department || '—' },
     { headerName: 'Qualifications', minWidth: 160, valueGetter: (p) => (p.data?.specializations ?? []).join(', ') || '—' },
     // The ONE registration number (users.RegistrationId) — what prints under the signature.
-    { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'nd-num',
+    { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150, cellClass: 'pf-num',
       valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 64), valueFormatter: (p) => p.value || '—' },
     { field: 'room', headerName: 'Room', editable: true, minWidth: 110,
       valueParser: (p) => String(p.newValue ?? '').trim().slice(0, 40) || null, valueFormatter: (p) => p.value || '—' },
-    { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'nd-num',
+    { field: 'tokenPrefix', headerName: 'Token prefix', editable: true, width: 120, flex: 0, cellClass: 'pf-num',
       valueParser: (p) => { const s = String(p.newValue ?? '').trim().toUpperCase(); return /^[A-Z0-9]{0,4}$/.test(s) ? (s || null) : p.oldValue; },
       valueFormatter: (p) => p.value || '—' },
     // The doctor's assistant (consult v6 Page) — a tenant user; blank = none.
@@ -185,7 +185,7 @@ export class DoctorsAdminComponent {
       cellRenderer: (p: ICellRendererParams<DoctorRow>) => this.daysCell(p.data) },
     ...this.perDoctorServices().map<ColDef<DoctorRow>>((s) => ({
       colId: `fee:${s.id}`, headerName: `${s.name} (₹)`, headerTooltip: `${s.code} — per-doctor fee; blank = not offered`,
-      editable: true, width: 150, flex: 0, type: 'rightAligned', cellClass: 'nd-num',
+      editable: true, width: 150, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
       valueGetter: (p) => p.data?.[`fee:${s.id}`] ?? null,
       valueSetter: (p) => {
         if (!p.data) return false;
@@ -198,7 +198,7 @@ export class DoctorsAdminComponent {
       valueFormatter: (p) => (p.value == null ? 'Not offered' : inr(p.value)),
     })),
     { field: 'fee', headerName: 'Default consult fee (₹)', editable: true, width: 190, flex: 0, headerTooltip: 'Legacy desk consult fee (pre-OPD Master)',
-      cellClass: 'nd-num', type: 'numericColumn',
+      cellClass: 'pf-num', type: 'numericColumn',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
       valueFormatter: p => '₹' + (p.value ?? 0) },
   ]);

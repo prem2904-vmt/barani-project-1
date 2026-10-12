@@ -67,9 +67,9 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
        column (pill · stem · 11px dot) whose height is its content, anchored
        21px up so the dot's centre lands on the line. Nothing overflows the
        axis box, so a host's padding really contains it. */
-    .ja__line { position: absolute; left: 0; right: 0; bottom: 26px; height: 1px; background: var(--glass-border, var(--nd-line)); }
+    .ja__line { position: absolute; left: 0; right: 0; bottom: 26px; height: 1px; background: var(--glass-border, var(--pf-line)); }
     .ja__tick { position: absolute; bottom: 0; height: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .ja__tick-mark { width: 1px; height: 6px; background: var(--glass-border, var(--nd-line)); }
+    .ja__tick-mark { width: 1px; height: 6px; background: var(--glass-border, var(--pf-line)); }
     .ja__tick-lbl { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .ja__ev { position: absolute; bottom: 21px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; cursor: pointer; z-index: 1; }
     /* The new design's light theme tints any button[class*=--on] (styles.scss);
@@ -78,15 +78,15 @@ import { JourneyAxisEvent, clampZoom, journeyAxisModel } from './journey-axis';
     .ja__ev:hover { z-index: 2; }
     .ja__ev:focus-visible { outline: none; }
     .ja__ev:focus-visible .ja__card { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .ja__card { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; background: var(--bg-card-solid, var(--nd-card-bg)); border: 1px solid var(--glass-border, var(--nd-line)); font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.28); transition: transform .1s, border-color .12s; font-variant-numeric: tabular-nums; }
+    .ja__card { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; background: var(--bg-card-solid, var(--pf-card-bg)); border: 1px solid var(--glass-border, var(--pf-line)); font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.28); transition: transform .1s, border-color .12s; font-variant-numeric: tabular-nums; }
     .ja__ev:hover .ja__card { transform: translateY(-1px); border-color: rgba(168,85,247,0.45); color: var(--text-primary); }
     .ja__ico { display: inline-flex; color: #a855f7; }
     .ja__ico[data-type="opd"] { color: var(--green-text); }
     .ja__ico[data-type="ipd"] { color: var(--amber-text); }
     .ja__ico[data-type="pharmacy"] { color: var(--pink-text); }
     .ja__ico[data-type="doc"] { color: var(--sky-text); }
-    .ja__stem { width: 1px; flex: none; background: var(--glass-border, var(--nd-line)); }
-    .ja__dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; background: var(--bg-card-solid, var(--nd-card-bg)); border: 2.5px solid #a855f7; }
+    .ja__stem { width: 1px; flex: none; background: var(--glass-border, var(--pf-line)); }
+    .ja__dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; background: var(--bg-card-solid, var(--pf-card-bg)); border: 2.5px solid #a855f7; }
     .ja__dot[data-type="opd"] { border-color: #34d399; }
     .ja__dot[data-type="ipd"] { border-color: #fbbf24; }
     .ja__dot[data-type="pharmacy"] { border-color: #f472b6; }

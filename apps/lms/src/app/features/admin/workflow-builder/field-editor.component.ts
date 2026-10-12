@@ -83,10 +83,10 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
               {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
             </button>
           </ng-container>
-          <!-- The pill = the field label + a tiny muted Type badge (ND-PATTERN
+          <!-- The pill = the field label + a tiny muted Type badge (PF-PATTERN
                §14). Form / step / key are shown in the form itself. -->
-          <div band-search class="nd-ctx pf-fe-ctx">
-            <span class="nd-ctx__primary">
+          <div band-search class="pf-ctx pf-fe-ctx">
+            <span class="pf-ctx__primary">
               <span class="pf-fe-ctx__name">{{ draft().title?.trim() || (mode() === 'edit' ? 'Edit field' : 'New field') }}</span>
               <span class="pf-fe-ctx__badge" data-k="Type" title="Field type">{{ typeLabel() }}</span>
             </span>
@@ -106,22 +106,22 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
 
       <div class="pf-fe-body" [class.pf-band-body]="theme.isNewDesign()">
       <!-- Basics -->
-      <section class="nd-card pf-fe-card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12z"/><circle cx="7.5" cy="7.5" r=".5"/></svg></span>
-          <h2 class="nd-card__label pf-fe-h">Basics</h2>
-          @if (stepTitle()) { <span class="nd-card__note">{{ screenLabel() }} · step “{{ stepTitle() }}”</span> }
+      <section class="pf-card pf-fe-card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12z"/><circle cx="7.5" cy="7.5" r=".5"/></svg></span>
+          <h2 class="pf-card__label pf-fe-h">Basics</h2>
+          @if (stepTitle()) { <span class="pf-card__note">{{ screenLabel() }} · step “{{ stepTitle() }}”</span> }
         </div>
-        <div class="nd-card__body pf-fe-cardbody">
+        <div class="pf-card__body pf-fe-cardbody">
           <div class="pf-fe-grid2">
-            <label class="nd-field">
-              <span class="nd-field__lbl">Label <span class="pf-fe-req" aria-hidden="true">*</span></span>
-              <input type="text" class="nd-input" [ngModel]="draft().title" (ngModelChange)="setTitle($event)" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Label <span class="pf-fe-req" aria-hidden="true">*</span></span>
+              <input type="text" class="pf-input" [ngModel]="draft().title" (ngModelChange)="setTitle($event)" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Name <span class="pf-fe-mut">(storage key — fixed)</span></span>
-              <input type="text" class="nd-input nd-num"
-                     [class.nd-input--error]="!!nameError()"
+            <label class="pf-field">
+              <span class="pf-field__lbl">Name <span class="pf-fe-mut">(storage key — fixed)</span></span>
+              <input type="text" class="pf-input pf-num"
+                     [class.pf-input--error]="!!nameError()"
                      [ngModel]="draft().name"
                      [readonly]="mode() === 'edit'"
                      (ngModelChange)="nameError.set(null); patch({ name: $event })" />
@@ -132,28 +132,28 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
           </div>
 
           <div class="pf-fe-grid2">
-            <div class="nd-field">
-              <span class="nd-field__lbl">Type <span class="pf-fe-req" aria-hidden="true">*</span></span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Type <span class="pf-fe-req" aria-hidden="true">*</span></span>
               <!-- Shared field-type picker (full taxonomy; registry-disabled
                    types filtered out). Only the storage Name stays fixed. -->
               <pf-field-type-picker [value]="$any(draft().type)" (valueChange)="setType($any($event))"></pf-field-type-picker>
             </div>
-            <div class="nd-field">
-              <span class="nd-field__lbl">Width</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Width</span>
               <pf-select [options]="widthSelectOptions" [value]="draft().width ?? 'full'"
                          (valueChange)="patch({ width: $any($event) })"></pf-select>
             </div>
           </div>
 
           <div class="pf-fe-switches">
-            <button type="button" class="nd-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="!!draft().isRequired"
+            <button type="button" class="pf-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="!!draft().isRequired"
                     (click)="patch({ isRequired: !draft().isRequired })">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               <span>Required</span>
             </button>
-            <button type="button" class="nd-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="isCustom()"
+            <button type="button" class="pf-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="isCustom()"
                     [disabled]="mode() === 'edit'" (click)="setStandard(isCustom())">
-              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               <span>Custom field <span class="pf-fe-mut">(stores to metadata)</span></span>
             </button>
           </div>
@@ -161,69 +161,69 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       </section>
 
       @if (category() === 'text') {
-        <section class="nd-card pf-fe-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
-            <h2 class="nd-card__label pf-fe-h">Hints</h2>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Hints</h2>
           </div>
-          <div class="nd-card__body pf-fe-cardbody">
-            <label class="nd-field">
-              <span class="nd-field__lbl">Placeholder</span>
-              <input type="text" class="nd-input" [ngModel]="draft().placeholder" (ngModelChange)="patch({ placeholder: $event })" />
+          <div class="pf-card__body pf-fe-cardbody">
+            <label class="pf-field">
+              <span class="pf-field__lbl">Placeholder</span>
+              <input type="text" class="pf-input" [ngModel]="draft().placeholder" (ngModelChange)="patch({ placeholder: $event })" />
             </label>
-            <label class="nd-field">
-              <span class="nd-field__lbl">Helper text</span>
-              <input type="text" class="nd-input" [ngModel]="draft().helperText" (ngModelChange)="patch({ helperText: $event })" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Helper text</span>
+              <input type="text" class="pf-input" [ngModel]="draft().helperText" (ngModelChange)="patch({ helperText: $event })" />
             </label>
           </div>
         </section>
       }
 
       @if (category() === 'numeric') {
-        <section class="nd-card pf-fe-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg></span>
-            <h2 class="nd-card__label pf-fe-h">Numeric config</h2>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Numeric config</h2>
           </div>
-          <div class="nd-card__body pf-fe-cardbody">
-            <label class="nd-field pf-fe-unit">
-              <span class="nd-field__lbl">Unit</span>
-              <input type="text" class="nd-input" [ngModel]="draft().unit" (ngModelChange)="patch({ unit: $event })" />
+          <div class="pf-card__body pf-fe-cardbody">
+            <label class="pf-field pf-fe-unit">
+              <span class="pf-field__lbl">Unit</span>
+              <input type="text" class="pf-input" [ngModel]="draft().unit" (ngModelChange)="patch({ unit: $event })" />
             </label>
 
             <div class="pf-fe-sub">
               <h3 class="pf-fe-h3">Reference ranges</h3>
               @for (range of draft().referenceRanges ?? []; let i = $index; track i) {
                 <div class="range-row">
-                  <label class="nd-field pf-fe-grow">
-                    <span class="nd-field__lbl">Segment</span>
-                    <input type="text" class="nd-input" [ngModel]="range.segment" (ngModelChange)="patchRange(i, { segment: $event })"
+                  <label class="pf-field pf-fe-grow">
+                    <span class="pf-field__lbl">Segment</span>
+                    <input type="text" class="pf-input" [ngModel]="range.segment" (ngModelChange)="patchRange(i, { segment: $event })"
                            placeholder="normal | adult_male | adult_female | child" />
                   </label>
-                  <label class="nd-field pf-fe-num">
-                    <span class="nd-field__lbl">Min</span>
-                    <input type="number" class="nd-input nd-num" step="any" [ngModel]="range.min" (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
+                  <label class="pf-field pf-fe-num">
+                    <span class="pf-field__lbl">Min</span>
+                    <input type="number" class="pf-input pf-num" step="any" [ngModel]="range.min" (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
                   </label>
-                  <label class="nd-field pf-fe-num">
-                    <span class="nd-field__lbl">Max</span>
-                    <input type="number" class="nd-input nd-num" step="any" [ngModel]="range.max" (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
+                  <label class="pf-field pf-fe-num">
+                    <span class="pf-field__lbl">Max</span>
+                    <input type="number" class="pf-input pf-num" step="any" [ngModel]="range.max" (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
                   </label>
                   <button type="button" class="field-remove" (click)="removeRange(i)" aria-label="Remove range" title="Remove range">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                   </button>
                 </div>
               }
-              <button type="button" class="nd-btn nd-btn--tertiary pf-fe-add" (click)="addRange()">+ Add range</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-fe-add" (click)="addRange()">+ Add range</button>
             </div>
 
             <div class="pf-fe-grid2">
-              <label class="nd-field">
-                <span class="nd-field__lbl">Critical low</span>
-                <input type="number" class="nd-input nd-num" step="any" [ngModel]="draft().criticalLow" (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Critical low</span>
+                <input type="number" class="pf-input pf-num" step="any" [ngModel]="draft().criticalLow" (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
               </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Critical high</span>
-                <input type="number" class="nd-input nd-num" step="any" [ngModel]="draft().criticalHigh" (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Critical high</span>
+                <input type="number" class="pf-input pf-num" step="any" [ngModel]="draft().criticalHigh" (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
               </label>
             </div>
           </div>
@@ -231,31 +231,31 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       }
 
       @if (category() === 'options') {
-        <section class="nd-card pf-fe-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
-            <h2 class="nd-card__label pf-fe-h">Options</h2>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Options</h2>
           </div>
-          <div class="nd-card__body pf-fe-cardbody">
+          <div class="pf-card__body pf-fe-cardbody">
             @for (opt of draft().options ?? []; let i = $index; track i) {
               <div class="option-row">
-                <label class="nd-field pf-fe-grow">
-                  <span class="nd-field__lbl">Label</span>
-                  <input type="text" class="nd-input" [ngModel]="opt.label" (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
+                <label class="pf-field pf-fe-grow">
+                  <span class="pf-field__lbl">Label</span>
+                  <input type="text" class="pf-input" [ngModel]="opt.label" (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
                 </label>
-                <label class="nd-field pf-fe-val">
-                  <span class="nd-field__lbl">Value</span>
-                  <input type="text" class="nd-input nd-num" [ngModel]="opt.value" (ngModelChange)="patchOption(i, { value: $event })" />
+                <label class="pf-field pf-fe-val">
+                  <span class="pf-field__lbl">Value</span>
+                  <input type="text" class="pf-input pf-num" [ngModel]="opt.value" (ngModelChange)="patchOption(i, { value: $event })" />
                 </label>
                 <button type="button" class="field-remove" (click)="removeOption(i)" aria-label="Remove option" title="Remove option">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
               </div>
             }
-            <button type="button" class="nd-btn nd-btn--tertiary pf-fe-add" (click)="addOption()">+ Add option</button>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-fe-add" (click)="addOption()">+ Add option</button>
 
-            <div class="nd-field pf-fe-normal">
-              <span class="nd-field__lbl">Normal value <span class="pf-fe-mut">(optional)</span></span>
+            <div class="pf-field pf-fe-normal">
+              <span class="pf-field__lbl">Normal value <span class="pf-fe-mut">(optional)</span></span>
               <pf-select [options]="normalValueSelectOptions()" [value]="(draft().normalValue ?? '') + ''" placeholder="—"
                          (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
@@ -264,24 +264,24 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       }
 
       @if (category() === 'boolean') {
-        <section class="nd-card pf-fe-card">
-          <div class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></span>
-            <h2 class="nd-card__label pf-fe-h">Labels</h2>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Labels</h2>
           </div>
-          <div class="nd-card__body pf-fe-cardbody">
+          <div class="pf-card__body pf-fe-cardbody">
             <div class="pf-fe-grid2">
-              <label class="nd-field">
-                <span class="nd-field__lbl">Positive label</span>
-                <input type="text" class="nd-input" [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'" (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Positive label</span>
+                <input type="text" class="pf-input" [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'" (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
               </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Negative label</span>
-                <input type="text" class="nd-input" [ngModel]="(draft().options?.[1]?.label) ?? 'No'" (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Negative label</span>
+                <input type="text" class="pf-input" [ngModel]="(draft().options?.[1]?.label) ?? 'No'" (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
               </label>
             </div>
-            <div class="nd-field pf-fe-normal">
-              <span class="nd-field__lbl">Normal value</span>
+            <div class="pf-field pf-fe-normal">
+              <span class="pf-field__lbl">Normal value</span>
               <pf-select [options]="booleanNormalSelectOptions()" [value]="(draft().normalValue ?? '') + ''" placeholder="—"
                          (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
@@ -289,12 +289,12 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
         </section>
       }
 
-      <section class="nd-card pf-fe-card">
-        <div class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <h2 class="nd-card__label pf-fe-h">Show when</h2>
+      <section class="pf-card pf-fe-card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <h2 class="pf-card__label pf-fe-h">Show when</h2>
         </div>
-        <div class="nd-card__body pf-fe-cardbody">
+        <div class="pf-card__body pf-fe-cardbody">
           <pf-condition-builder [rules]="draft().showWhen ?? []" [fields]="availableFields()" emptyLabel="Always visible."
             (rulesChange)="onConditionsChange($event)"></pf-condition-builder>
         </div>
@@ -303,10 +303,10 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
     </section>
   `,
   styles: [`
-    .pf-fe-ctx__badge { flex: none; margin-left: 6px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line);
-      background: var(--nd-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); }
+    .pf-fe-ctx__badge { flex: none; margin-left: 6px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--pf-line);
+      background: var(--pf-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); }
     .pf-fe-body { display: flex; flex-direction: column; gap: 14px; }
-    .pf-fe-card .nd-card__body { overflow: visible; }
+    .pf-fe-card .pf-card__body { overflow: visible; }
     .pf-fe-cardbody { gap: 14px; padding: 14px 16px 16px; }
     .pf-fe-h { margin: 0; }
     .pf-fe-h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -329,13 +329,13 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
       display: inline-flex; align-items: center; justify-content: center;
       color: var(--text-tertiary); background: transparent; border: 1px solid transparent; cursor: pointer;
     }
-    @media (hover: hover) { .field-remove:hover { color: var(--red-text); border-color: var(--nd-line); } }
+    @media (hover: hover) { .field-remove:hover { color: var(--red-text); border-color: var(--pf-line); } }
     @media (pointer: coarse) { .field-remove { width: 44px; height: 44px; } }
     @media (max-width: 640px) {
       .pf-fe-grid2 { grid-template-columns: 1fr; }
       .range-row, .option-row { flex-wrap: wrap; }
-      .range-row > .nd-field, .option-row > .nd-field { flex: 1 1 8rem; width: auto; min-width: 0; }
-      .range-row > .nd-field:first-child, .option-row > .nd-field:first-child { flex-basis: 100%; }
+      .range-row > .pf-field, .option-row > .pf-field { flex: 1 1 8rem; width: auto; min-width: 0; }
+      .range-row > .pf-field:first-child, .option-row > .pf-field:first-child { flex-basis: 100%; }
       .range-row > .field-remove, .option-row > .field-remove { margin-left: auto; }
       .pf-fe-unit, .pf-fe-normal { max-width: none; }
     }

@@ -68,5 +68,5 @@ export function dailyNoHtml(x: unknown, today: string = labToday()): string {
   const { dailyNo, dailyNoDay } = dailyNoOf(x);
   const label = dailyNoLabel(dailyNo, dailyNoDay, today);
   if (!label) return '';
-  return `<span class="nd-dayno" title="${esc(dailyNoTitle(dailyNo, dailyNoDay, today))}">${esc(label)}</span>`;
+  return `<span class="pf-dayno" title="${esc(dailyNoTitle(dailyNo, dailyNoDay, today))}">${esc(label)}</span>`;
 }

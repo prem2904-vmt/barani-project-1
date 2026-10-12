@@ -93,6 +93,12 @@
     background: #ffffff; border: 1px solid transparent; border-radius: 12px;
     min-width: 73px; height: 40px;
     box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .pf-daystrip__day:hover:not(.pf-daystrip__day--on) {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, #ffffff);
+    color: var(--text-primary);
   }
   .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #9ca3af; }
   .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #6b7280; }
@@ -104,8 +110,13 @@
      carries a plain 20px select circle, no avatar. */
   .pf-card {
     background: #fbf9fe;
-    border: none; border-radius: 12px;
+    border: 1px solid transparent; border-radius: 12px;
     box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pf-card:hover {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
   }
   .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
   .pf-card__meta { font-size: 12px; color: #6b7280; }
@@ -314,7 +325,7 @@
 
 :host-context(.design-new) {
   .pf-tabs__btn--on {
-    background: var(--nd-card-bg, #ffffff) !important;
+    background: var(--pf-card-bg, #ffffff) !important;
     color: var(--color-violet-600, #7c3aed) !important;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
     .pf-tabs__count {
@@ -329,10 +340,10 @@
 
   /* Phone list switcher = the same neutral segmented filter (44px). The
      global new-design `--on` rule would tint it violet, hence !important. */
-  .pf-mtabs { background: var(--nd-chip-bg); border-color: var(--nd-line); border-radius: 12px; padding: 3px; }
+  .pf-mtabs { background: var(--pf-chip-bg); border-color: var(--pf-line); border-radius: 12px; padding: 3px; }
   .pf-mtab { height: 44px; color: var(--text-secondary); }
   .pf-mtab--on {
-    background: var(--nd-card-bg) !important;
+    background: var(--pf-card-bg) !important;
     background-image: none !important;
     color: var(--text-primary) !important;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18) !important;
@@ -350,7 +361,7 @@
   }
 
 /* ══ Work card header: search, then the filter — ONE row (ND §1) ══
-   Compact kit search (icon + .nd-input, 36px) first, then the tab
+   Compact kit search (icon + .pf-input, 36px) first, then the tab
    filter in its own horizontal scroller so it never overflows the card.
    The search shrinks first; the date range folds into its icon menu
    when the card is too narrow to hold all three. */
@@ -408,8 +419,8 @@
 .pf-wsec-note {
   margin: 0 0 10px;
   padding: 8px 12px;
-  border-radius: var(--nd-radius-sm, 8px);
-  background: var(--nd-chip-bg);
+  border-radius: var(--pf-radius-sm, 8px);
+  background: var(--pf-chip-bg);
   font-size: 12.5px;
   color: var(--text-secondary);
 }

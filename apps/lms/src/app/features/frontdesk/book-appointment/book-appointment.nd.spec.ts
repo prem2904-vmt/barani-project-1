@@ -15,7 +15,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
 /**
- * New appointment — NEW DESIGN (ND-PATTERN §21): ONE page, no tabs,
+ * New appointment — NEW DESIGN (PF-PATTERN §21): ONE page, no tabs,
  * keyboard-first. Band = back · tenant · Cancel + the ONE primary "Book
  * appointment"; the pill = the context bar (date · slot · patient). Cards:
  * PATIENT · DATE → TIME SLOT → DETAILS. The booking call is unchanged.
@@ -88,7 +88,7 @@ async function render(opts: Opts = {}) {
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 const click = (el: Element | null) => (el as HTMLElement).click();
 const enter = (el: Element, extra: KeyboardEventInit = {}) =>
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra }));
@@ -117,7 +117,7 @@ describe('New appointment (nd) — band + pill', () => {
     // One page: no tabs, no steps, no old header.
     expect(el.querySelector('[role="tablist"]')).toBeNull();
     expect(el.querySelector('pf-screen-header')).toBeNull();
-    expect(Array.from(el.querySelectorAll('.nd-card__label')).map(e => e.textContent?.trim()))
+    expect(Array.from(el.querySelectorAll('.pf-card__label')).map(e => e.textContent?.trim()))
       .toEqual(['Patient', 'Date', 'Time slot', 'Details']);
   });
 
@@ -163,7 +163,7 @@ describe('New appointment (nd) — the form', () => {
 
   it('date: the kit date (typed dd/mm/yyyy, min today) above a full month grid', async () => {
     const { el } = await render();
-    const d = el.querySelector('.pf-bka-date pf-nd-date input[type="text"]') as HTMLInputElement;
+    const d = el.querySelector('.pf-bka-date pf-date input[type="text"]') as HTMLInputElement;
     expect(d.placeholder).toBe('dd/mm/yyyy');
     expect(d.value).toBe(`${pad(DAY.getDate())}/${pad(DAY.getMonth() + 1)}/${DAY.getFullYear()}`);
     // The 7-day strip is gone: one month grid, ‹ Month Year ›, M..S, 6 weeks.
@@ -222,7 +222,7 @@ describe('New appointment (nd) — the form', () => {
     expect(c.selectedTime()).toBe('');
     expect(el.querySelector(`.pf-bka-cal__day[data-iso="${nextIso}"]`)?.getAttribute('aria-selected')).toBe('true');
     expect(el.querySelector('.pf-bka-ctx__date')?.textContent).toContain(String(next.getDate()));
-    const typed = el.querySelector('.pf-bka-date pf-nd-date input[type="text"]') as HTMLInputElement;
+    const typed = el.querySelector('.pf-bka-date pf-date input[type="text"]') as HTMLInputElement;
     expect(typed.value).toBe(`${pad(next.getDate())}/${pad(next.getMonth() + 1)}/${next.getFullYear()}`);
     expect(api.get.mock.calls.filter((x: any[]) => String(x[0]).startsWith('/api/appointments?')).length).toBe(before + 1);
     // The other way: the typed date moves the grid to its month.
@@ -296,7 +296,7 @@ describe('New appointment (nd) — the form', () => {
     enter(input); f.detectChanges();
     expect(c.patient()?.id).toBe('p1');
     await sleep(0); f.detectChanges();
-    const date = el.querySelector('.pf-bka-date pf-nd-date input[type="text"]') as HTMLInputElement;
+    const date = el.querySelector('.pf-bka-date pf-date input[type="text"]') as HTMLInputElement;
     expect(document.activeElement).toBe(date);
     enter(date); f.detectChanges();
     expect(document.activeElement?.getAttribute('data-time')).toBe('09:00');
@@ -381,7 +381,7 @@ describe('New appointment (nd) — phones + rules', () => {
     const { el } = await render({ phone: true });
     expect(el.querySelector('.pf-hb__actions .pf-hb-btn--primary')).toBeNull();
     expect(primaries(el).length).toBe(1);
-    expect(el.querySelector('.nd-bottombar .nd-btn--primary')?.textContent?.trim()).toBe('Book appointment');
+    expect(el.querySelector('.pf-bottombar .pf-btn--primary')?.textContent?.trim()).toBe('Book appointment');
     const s = BOOK_APPOINTMENT_ND_STYLES;
     const phone = s.slice(s.indexOf('@media (max-width: 640px)'));
     expect(phone).toMatch(/\.pf-bka-chips \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
@@ -397,7 +397,7 @@ describe('New appointment (nd) — phones + rules', () => {
     expect(el.querySelectorAll('select, datalist, input[type="number"], input[type="time"]').length).toBe(0);
     expect(el.querySelectorAll('.flatpickr-calendar').length).toBe(0);
     const dates = Array.from(el.querySelectorAll('input[type="date"]'));
-    expect(dates.every(d => d.classList.contains('pf-ndd__native'))).toBe(true);
+    expect(dates.every(d => d.classList.contains('pf-date__native'))).toBe(true);
     expect(el.textContent).not.toMatch(/[✕⚠✓✔●]/u);
     expect(el.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
     expect(el.querySelector('.font-mono')).toBeNull();

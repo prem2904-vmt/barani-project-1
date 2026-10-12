@@ -7,7 +7,7 @@ import { renderBandPage } from '../admin-band.spec-helpers';
 
 /**
  * The reported bug: "Record payment" used a native `<input type="date">`
- * (showed "mm/dd/yyyy"). Now it's the kit `pf-nd-date` — typed dd/mm/yyyy,
+ * (showed "mm/dd/yyyy"). Now it's the kit `pf-date` — typed dd/mm/yyyy,
  * ISO `yyyy-MM-dd` in/out, same `paidAt` form field the backend already read.
  */
 describe('Vendors — Record payment date (no native browser control)', () => {
@@ -25,12 +25,12 @@ describe('Vendors — Record payment date (no native browser control)', () => {
     return { ...p, httpPost };
   }
 
-  it('renders pf-nd-date, never a native date input, for the payment date', () => {
+  it('renders pf-date, never a native date input, for the payment date', () => {
     const p = render();
     p.cmp.openPayment(vendor);
     p.f.detectChanges();
     const panel = p.el.querySelector('.pf-topup')!;
-    expect(panel.querySelector('pf-nd-date')).not.toBeNull();
+    expect(panel.querySelector('pf-date')).not.toBeNull();
     expect(panel.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
   });
 
@@ -38,7 +38,7 @@ describe('Vendors — Record payment date (no native browser control)', () => {
     const p = render();
     p.cmp.openPayment(vendor);
     p.f.detectChanges();
-    const txt = p.el.querySelector<HTMLInputElement>('.pf-topup pf-nd-date input[type="text"]')!;
+    const txt = p.el.querySelector<HTMLInputElement>('.pf-topup pf-date input[type="text"]')!;
     txt.value = '26092026';
     txt.dispatchEvent(new Event('input'));
     p.f.detectChanges();

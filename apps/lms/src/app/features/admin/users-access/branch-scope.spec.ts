@@ -197,6 +197,6 @@ describe('Users list — Branches column', () => {
     const col = c.userColDefs().find((d: any) => d.colId === 'branches');
     expect(col.valueGetter({ data: rows[0] })).toBe('Chennai Main');
     const cell: HTMLElement = col.cellRenderer({ data: rows[1] });
-    expect(Array.from(cell.querySelectorAll('.nd-chip')).map(x => x.textContent)).toEqual(['All branches']);
+    expect(Array.from(cell.querySelectorAll('.pf-chip')).map(x => x.textContent)).toEqual(['All branches']);
   });
 });

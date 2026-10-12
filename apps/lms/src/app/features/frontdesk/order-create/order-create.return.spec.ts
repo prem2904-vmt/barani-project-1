@@ -13,7 +13,7 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
-/** Registration round-trip (ND-PATTERN §15): "Register a new patient" /
+/** Registration round-trip (PF-PATTERN §15): "Register a new patient" /
  *  "Edit … details" stash the half-built cart and open registration with
  *  returnTo=order; coming back with ?patientId=…&resume=registration
  *  restores it with the patient attached. */

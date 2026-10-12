@@ -43,12 +43,12 @@ export const WA_INFO_WAIT_MS = 2500;
   imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="nd-card pf-wac" data-testid="ls-wa-connect-card" [attr.data-state]="state()">
-      <div class="nd-card__head">
-        <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>
-        <h3 class="nd-card__label pf-wac__title">Your WhatsApp number</h3>
-        <span class="nd-card__spacer"></span>
-        <span class="nd-chip nd-chip--static pf-wac__state" data-testid="wac-state">
+    <section class="pf-card pf-wac" data-testid="ls-wa-connect-card" [attr.data-state]="state()">
+      <div class="pf-card__head">
+        <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>
+        <h3 class="pf-card__label pf-wac__title">Your WhatsApp number</h3>
+        <span class="pf-card__spacer"></span>
+        <span class="pf-chip pf-chip--static pf-wac__state" data-testid="wac-state">
           <span class="pf-wac__dot" [attr.data-tone]="tone()" aria-hidden="true"></span>{{ stateLabel() }}
         </span>
       </div>
@@ -95,7 +95,7 @@ export const WA_INFO_WAIT_MS = 2500;
                 <li class="pf-wac__tpl">
                   <span class="pf-wac__tpl-name">{{ t.kind === 'pdf' ? 'Report with PDF' : 'Report link' }}
                     <span class="pf-wac__tpl-code">{{ t.name }}</span></span>
-                  <span class="nd-chip nd-chip--static pf-wac__tpl-st" [attr.data-tone]="templateTone(t)">
+                  <span class="pf-chip pf-chip--static pf-wac__tpl-st" [attr.data-tone]="templateTone(t)">
                     <span class="pf-wac__dot" [attr.data-tone]="templateTone(t)" aria-hidden="true"></span>{{ templateLabel(t) }}
                   </span>
                   @if (t.reason) { <span class="pf-wac__tpl-why">{{ t.reason }}</span> }
@@ -111,16 +111,16 @@ export const WA_INFO_WAIT_MS = 2500;
         @if (canManage() && (showConnect() || hasNumber())) {
           <div class="pf-wac__actions">
             @if (showConnect()) {
-              <button type="button" class="nd-btn nd-btn--primary pf-wac__btn" data-testid="wac-connect"
+              <button type="button" class="pf-btn pf-btn--primary pf-wac__btn" data-testid="wac-connect"
                       [disabled]="busy() || !sdkReady()" [pfBusy]="localConnecting()" pfBusyLabel="Connecting…" (click)="connect()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
                 {{ hasNumber() ? 'Reconnect WhatsApp' : 'Connect WhatsApp' }}
               </button>
             }
             @if (hasNumber()) {
-              <button type="button" class="nd-btn nd-btn--secondary pf-wac__btn" data-testid="wac-refresh"
+              <button type="button" class="pf-btn pf-btn--secondary pf-wac__btn" data-testid="wac-refresh"
                       [disabled]="busy()" [pfBusy]="busyAction() === 'refresh'" pfBusyLabel="Checking…" (click)="refresh()">Check status</button>
-              <button type="button" class="nd-btn nd-btn--danger pf-wac__btn" data-testid="wac-disconnect"
+              <button type="button" class="pf-btn pf-btn--danger pf-wac__btn" data-testid="wac-disconnect"
                       [disabled]="busy()" [pfBusy]="busyAction() === 'disconnect'" pfBusyLabel="Disconnecting…" (click)="disconnect()">Disconnect</button>
             }
           </div>
@@ -152,7 +152,7 @@ export const WA_INFO_WAIT_MS = 2500;
     .pf-wac__dot[data-tone='wait'] { background: #d97706; }
     .pf-wac__dot[data-tone='bad']  { background: #dc2626; }
 
-    .pf-wac__alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--nd-radius, 12px);
+    .pf-wac__alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--pf-radius, 12px);
       border: 1px solid rgba(220, 38, 38, 0.35); background: rgba(220, 38, 38, 0.06); color: #b91c1c; }
     .pf-wac__alert svg { flex-shrink: 0; margin-top: 1px; }
     .pf-wac__alert-t { margin: 0; font-size: 13px; font-weight: 600; }
@@ -164,8 +164,8 @@ export const WA_INFO_WAIT_MS = 2500;
     .pf-wac__fact dd { margin: 3px 0 0; font-size: 13.5px; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-wac__num { font-variant-numeric: tabular-nums; }
 
-    .pf-wac__tpls { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--nd-line, rgba(148,163,184,0.25)); }
-    .pf-wac__tpl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--nd-line, rgba(148,163,184,0.25)); }
+    .pf-wac__tpls { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--pf-line, rgba(148,163,184,0.25)); }
+    .pf-wac__tpl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--pf-line, rgba(148,163,184,0.25)); }
     .pf-wac__tpl-name { flex: 1 1 200px; font-size: 13px; color: var(--text-primary); }
     .pf-wac__tpl-code { display: block; font-size: 11.5px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
     .pf-wac__tpl-st { height: auto; min-height: 28px; }

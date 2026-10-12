@@ -96,7 +96,7 @@ export class ReportQueueComponent implements OnInit {
     return formatPatientInfo(p);
   }
 
-  // ── New design (docs/ND-PATTERN.md → "Reports list") ─────────────
+  // ── New design (docs/PF-PATTERN.md → "Reports list") ─────────────
   /** Web (fine pointer) = text row actions; touch = 44px icon actions. */
   readonly web = webPointerSignal();
 
@@ -621,7 +621,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly _generating = signal<string | null>(null);
   readonly generating = this._generating.asReadonly();
 
-  // ── Loading feedback (ND-PATTERN "Loading feedback") ──────────────
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ──────────────
   // A row action that renders / posts (Download, Print, Regenerate) keeps
   // ITS button busy until it answers; keyed "<reportId>:<kind>" so several
   // rows can run at once and a repeat press on the same one is ignored.

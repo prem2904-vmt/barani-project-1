@@ -82,7 +82,7 @@
         </span>
         <span class="pf-oc-bill__title">MY PATIENTS</span>
         <span class="pf-oc-bill__spacer"></span>
-        <span class="pf-ov-head__date nd-num" data-date>{{ today | date:'EEE, d MMM y' }}</span>
+        <span class="pf-ov-head__date pf-num" data-date>{{ today | date:'EEE, d MMM y' }}</span>
       </header>
 
       <div class="pf-oc-cat__head">
@@ -117,11 +117,11 @@
                 <button type="button" class="pf-crow__main" data-open (click)="open(r)"
                         (mouseenter)="preview(r)" (focus)="preview(r)"
                         [attr.aria-label]="openLabel(r) + ': token ' + r.tokenLabel + ', ' + r.patientName">
-                  <span class="mp__token nd-num" aria-hidden="true">{{ r.tokenLabel }}</span>
+                  <span class="mp__token pf-num" aria-hidden="true">{{ r.tokenLabel }}</span>
                   <span class="pf-ov-txt">
-                    <span class="pf-ov-name">{{ r.patientName }}@if (r.ageSex) { <span class="mp__agesex nd-num">{{ r.ageSex }}</span> }</span>
+                    <span class="pf-ov-name">{{ r.patientName }}@if (r.ageSex) { <span class="mp__agesex pf-num">{{ r.ageSex }}</span> }</span>
                     <span class="pf-ov-meta">{{ r.serviceName || 'Consultation' }}@if (r.departmentName) { · {{ r.departmentName }} }@if (showDoctorName() && r.doctorName) { · {{ r.doctorName }} }</span>
-                    <span class="pf-ov-meta pf-ov-avail nd-num">
+                    <span class="pf-ov-meta pf-ov-avail pf-num">
                       <span class="pf-ov-dot" [attr.data-tone]="info(r).tone" aria-hidden="true"></span>{{ info(r).text }}
                     </span>
                     <span class="mp__tags">
@@ -163,7 +163,7 @@
     @if (!sheetOpen()) {
       <div class="pf-cartbar">
         <button type="button" class="pf-cartbar__inner press" (click)="sheetOpen.set(true)" [attr.aria-label]="'At a glance: token ' + s.tokenLabel + ', ' + s.patientName">
-          <span class="pf-cartbar__icon"><span class="nd-num mp__bartoken">{{ s.tokenLabel }}</span></span>
+          <span class="pf-cartbar__icon"><span class="pf-num mp__bartoken">{{ s.tokenLabel }}</span></span>
           <span class="pf-cartbar__info"><span class="pf-cartbar__line1">{{ s.patientName }}</span></span>
           <span class="pf-cartbar__cta">At a glance
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
@@ -190,14 +190,14 @@
       </span>
       <span class="pf-oc-bill__title">AT A GLANCE</span>
       <span class="pf-oc-bill__spacer"></span>
-      @if (selected(); as s) { <span class="mp__glancetoken nd-num">Token {{ s.tokenLabel }}</span> }
+      @if (selected(); as s) { <span class="mp__glancetoken pf-num">Token {{ s.tokenLabel }}</span> }
     </header>
 
     <div class="pf-oc-bill__body" data-glance>
       @if (selected(); as s) {
         <div class="mp__who">
           <span class="mp__whoname">{{ glance()?.patient?.name || s.patientName }}</span>
-          <span class="pf-ov-meta nd-num">
+          <span class="pf-ov-meta pf-num">
             {{ glance()?.patient?.ageDisplay || s.ageSex || '' }}@if (glance()?.patient?.sex; as sx) { · {{ sx }} }@if (glance()?.patient?.mrn || s.mrn; as mrn) { · {{ mrn }} }
           </span>
           <span class="pf-ov-meta">{{ statusLabel(s.status) }} · {{ s.isFollowUp ? 'Follow-up' : 'New visit' }}@if (s.serviceName) { · {{ s.serviceName }} }</span>
@@ -218,7 +218,7 @@
           <div class="mp__sec">
             <span class="mp__sech">Today's vitals</span>
             @if (vitals().length) {
-              <div class="mp__vitals nd-num" data-vitals>
+              <div class="mp__vitals pf-num" data-vitals>
                 @for (v of vitals(); track v.label) {
                   <div class="mp__vital"><span class="mp__vk">{{ v.label }}</span><span class="mp__vv">{{ v.value }}</span></div>
                 }
@@ -237,7 +237,7 @@
             <span class="mp__sech">Last visit</span>
             @if (glance()?.lastVisit; as lv) {
               <p class="mp__p" data-last-visit>
-                <span class="nd-num">{{ lv.visitDate | date:'d MMM y' }}</span>@if (lv.doctorName) { · {{ lv.doctorName }} }<br />
+                <span class="pf-num">{{ lv.visitDate | date:'d MMM y' }}</span>@if (lv.doctorName) { · {{ lv.doctorName }} }<br />
                 {{ lv.diagnoses.length ? dxText(lv.diagnoses) : 'No diagnosis recorded' }} · {{ lv.rx.length }} {{ lv.rx.length === 1 ? 'medicine' : 'medicines' }}
               </p>
             } @else {

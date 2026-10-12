@@ -501,7 +501,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       const phone = typeof window !== 'undefined'
         && window.matchMedia('(max-width: 640px)').matches;
       if (typeof document !== 'undefined') {
-        // Classic only: the new design never hides the navbar (ND-PATTERN §8).
+        // Classic only: the new design never hides the navbar (PF-PATTERN §8).
         document.documentElement.classList.toggle('pf-chat-immersive', open && phone && this.hidesNavInThread());
       }
       // While a thread is open on phone, route edge-swipe / hardware back through

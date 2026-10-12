@@ -65,7 +65,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
       @if (formSkeleton()) {
         <!-- Settings on their way: a skeleton of the card (held 600ms), never
              the "Off" default dressed up as the saved policy. -->
-        <section class="nd-card pf-os__card">
+        <section class="pf-card pf-os__card">
           <pf-skeleton-form [fields]="3" [cols]="1" label="Loading OPD settings…"></pf-skeleton-form>
         </section>
       } @else if (theme.isNewDesign()) {
@@ -95,12 +95,12 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
       }
 
       @if (mode() !== 'off' && !formSkeleton()) {
-        <section class="nd-card pf-os__card">
-          <div class="nd-card__head pf-os__row-head">
-            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.25"/></svg></span>
-            <h3 class="nd-card__label pf-os__title">Tiers</h3>
-            <span class="nd-card__spacer"></span>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-os__add press" (click)="addTier()">+ Add tier</button>
+        <section class="pf-card pf-os__card">
+          <div class="pf-card__head pf-os__row-head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.25"/></svg></span>
+            <h3 class="pf-card__label pf-os__title">Tiers</h3>
+            <span class="pf-card__spacer"></span>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-os__add press" (click)="addTier()">+ Add tier</button>
           </div>
           <div class="pf-os__body">
             <p class="pf-os__hint">The tightest matching window applies. E.g. within 7 days → 100% off, within 30 days → 50% off.</p>
@@ -109,12 +109,12 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
               <p class="pf-os__muted">No tiers yet — add one.</p>
             }
             @for (t of tiers(); track $index) {
-              <div class="nd-row pf-os__tier">
+              <div class="pf-row pf-os__tier">
                 <span class="pf-os__tier-txt">Within</span>
-                <input type="number" min="1" inputmode="numeric" class="nd-input nd-num pf-os__num" [ngModel]="t.withinDays"
+                <input type="number" min="1" inputmode="numeric" class="pf-input pf-num pf-os__num" [ngModel]="t.withinDays"
                        (ngModelChange)="setTier($index, 'withinDays', $event)" aria-label="Within days" />
                 <span class="pf-os__tier-txt">days →</span>
-                <input type="number" min="0" max="100" inputmode="numeric" class="nd-input nd-num pf-os__num" [ngModel]="t.discountPercent"
+                <input type="number" min="0" max="100" inputmode="numeric" class="pf-input pf-num pf-os__num" [ngModel]="t.discountPercent"
                        (ngModelChange)="setTier($index, 'discountPercent', $event)" aria-label="Discount percent" />
                 <span class="pf-os__tier-txt">% {{ mode() === 'assisted' ? 'max' : 'off' }}</span>
                 <button type="button" class="pf-os__del press" (click)="removeTier($index)" aria-label="Remove tier" title="Remove tier">
@@ -151,8 +151,8 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
     .pf-os__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-os__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
 
-    .pf-os__modehint { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--nd-radius); font-size: 13px; line-height: 1.55;
-      color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
+    .pf-os__modehint { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--pf-radius); font-size: 13px; line-height: 1.55;
+      color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     .pf-os__modehint strong { color: var(--text-primary); font-weight: 600; }
     .pf-os__card { margin-bottom: 16px; }
     .pf-os__card .pf-os__title { margin: 0; font-size: 13px; }
@@ -165,7 +165,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
     .pf-os__num { width: 84px; text-align: right; }
     .pf-os__del { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
       border-radius: 8px; cursor: pointer; color: var(--text-tertiary); background: transparent; border: 1px solid transparent; }
-    .pf-os__del:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .pf-os__del:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
   `],
 })
 export class OpdSettingsComponent {
@@ -185,7 +185,7 @@ export class OpdSettingsComponent {
   readonly modeDesc = computed(() => this.MODES.find((m) => m.value === this.mode())?.desc ?? '');
   readonly tiers = signal<FollowUpTier[]>([]);
   readonly saving = signal(false);
-  /** First-load skeleton (ND-PATTERN "Loading feedback"). */
+  /** First-load skeleton (PF-PATTERN "Loading feedback"). */
   private readonly loadHold = createLoadHold(true);
   readonly formSkeleton = this.loadHold.active;
 

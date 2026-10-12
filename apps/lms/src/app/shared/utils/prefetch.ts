@@ -1,6 +1,6 @@
 /**
  * PREFETCH a lazy screen's code before the user asks for it, so the tap that
- * opens it doesn't wait on a chunk download (docs/ND-PATTERN.md "Loading
+ * opens it doesn't wait on a chunk download (docs/PF-PATTERN.md "Loading
  * feedback"). Used by list screens for the editor they open — Test Master
  * warms the test editor while the grid sits idle and again on hover / focus
  * of an "Edit" action.

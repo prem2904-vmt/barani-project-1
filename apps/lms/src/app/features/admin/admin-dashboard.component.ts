@@ -99,22 +99,22 @@ interface Category {
         <!-- Category is chosen on the Overview screen and deep-linked via ?cat=;
              the left category rail was redundant with those cards, so this hub
              shows just the selected category full-width. Back returns to it. -->
-        <div class="pf-admin-pane nd-card">
+        <div class="pf-admin-pane pf-card">
           @if (q().trim()) {
-            <header class="nd-card__head pf-admin-pane__hdr">
-              <span class="nd-card__icon pf-admin-pane__chip">
+            <header class="pf-card__head pf-admin-pane__hdr">
+              <span class="pf-card__icon pf-admin-pane__chip">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
               </span>
-              <h2 class="nd-card__label pf-admin-pane__title">Search results</h2>
-              <p class="nd-card__note pf-admin-pane__blurb">for “{{ q() }}”</p>
-              <span class="pf-admin-pane__count nd-num">{{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }}</span>
+              <h2 class="pf-card__label pf-admin-pane__title">Search results</h2>
+              <p class="pf-card__note pf-admin-pane__blurb">for “{{ q() }}”</p>
+              <span class="pf-admin-pane__count pf-num">{{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }}</span>
             </header>
             <div class="pf-admin-pane__grid">
               @for (r of results(); track r.tile.title) {
                 <a [routerLink]="r.tile.href" [queryParams]="r.tile.queryParams ?? null"
-                   class="pf-admin-tile nd-row group press">
-                  <span class="nd-card__icon pf-admin-tile__icon">
+                   class="pf-admin-tile pf-row group press">
+                  <span class="pf-card__icon pf-admin-tile__icon">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
                          stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="r.tile.iconPath"/>
@@ -135,8 +135,8 @@ interface Category {
               }
             </div>
           } @else if (activeCategory(); as cat) {
-            <header class="nd-card__head pf-admin-pane__hdr">
-              <span class="nd-card__icon pf-admin-pane__chip">
+            <header class="pf-card__head pf-admin-pane__hdr">
+              <span class="pf-card__icon pf-admin-pane__chip">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
                      stroke="currentColor" stroke-width="1.8"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -144,16 +144,16 @@ interface Category {
                   @if (cat.iconExtra) { <path [attr.d]="cat.iconExtra"/> }
                 </svg>
               </span>
-              <h2 class="nd-card__label pf-admin-pane__title">{{ cat.label }}</h2>
-              <p class="nd-card__note pf-admin-pane__blurb">{{ cat.blurb }}</p>
-              <span class="pf-admin-pane__count nd-num">{{ cat.tiles.length }} {{ cat.tiles.length === 1 ? 'setting' : 'settings' }}</span>
+              <h2 class="pf-card__label pf-admin-pane__title">{{ cat.label }}</h2>
+              <p class="pf-card__note pf-admin-pane__blurb">{{ cat.blurb }}</p>
+              <span class="pf-admin-pane__count pf-num">{{ cat.tiles.length }} {{ cat.tiles.length === 1 ? 'setting' : 'settings' }}</span>
             </header>
 
             <div class="pf-admin-pane__grid">
               @for (tile of cat.tiles; track tile.title) {
                 <a [routerLink]="tile.href" [queryParams]="tile.queryParams ?? null"
-                   class="pf-admin-tile nd-row group press">
-                  <span class="nd-card__icon pf-admin-tile__icon">
+                   class="pf-admin-tile pf-row group press">
+                  <span class="pf-card__icon pf-admin-tile__icon">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
                          stroke="currentColor" stroke-width="1.7"
                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -287,11 +287,11 @@ interface Category {
 
     /* ── Tile card ──────────────────────────────────────── */
     .pf-admin-tile {
-      gap: 16px; padding: 18px; min-height: 96px; border-radius: var(--nd-radius);
+      gap: 16px; padding: 18px; min-height: 96px; border-radius: var(--pf-radius);
       text-decoration: none;
-      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
+      transition: border-color var(--pf-dur-fast) ease, transform 100ms ease;
     }
-    .pf-admin-tile:hover { border-color: var(--nd-sel-border); transform: translateY(-1px); }
+    .pf-admin-tile:hover { border-color: var(--pf-sel-border); transform: translateY(-1px); }
     .pf-admin-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     /* Tile icon — inherits the active category's signature gradient.
        That single colour family is what makes the pane feel coherent
@@ -332,7 +332,7 @@ interface Category {
     }
     @media (hover: none) {
       .pf-admin-tile:hover {
-        border-color: var(--nd-line);
+        border-color: var(--pf-line);
         transform: none;
       }
       .pf-admin-tile:hover .pf-admin-tile__arrow {

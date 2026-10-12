@@ -25,7 +25,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { PatientTimelineService } from './patient-timeline.service';
 
 /**
- * Patient profile, CLINICAL-FIRST (docs/ND-PATTERN.md §22): band + context
+ * Patient profile, CLINICAL-FIRST (docs/PF-PATTERN.md §22): band + context
  * bar (ONE primary, New order, permission-gated) → SNAPSHOT (needs
  * attention with deltas · in progress now · last visit) → CUMULATIVE
  * RESULTS (analyte × visit grid; a row → the trend, a cell → the report) ‖
@@ -161,7 +161,7 @@ async function render(opts: Opts = {}) {
   return { f, el, c, api, router, orderEntry, navBack, timeline, zoom, holding, click };
 }
 
-const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 const css = (cmp: unknown) => ((cmp as any).ɵcmp.styles as string[]).join('\n');
 const txt = (e: Element | null | undefined) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
@@ -220,7 +220,7 @@ describe('Patient profile (clinical) — ONE primary + every action reachable', 
     expect(el.querySelector('.pf-pp-act--new')).toBeNull();
     const p = primaries(el);
     expect(p.length).toBe(1);
-    expect(p[0].closest('.nd-bottombar')).not.toBeNull();
+    expect(p[0].closest('.pf-bottombar')).not.toBeNull();
     click(p[0]);
     expect(orderEntry.startNewOrder).toHaveBeenCalledWith('p1');
   });
@@ -340,7 +340,7 @@ describe('Patient profile (clinical) — CUMULATIVE RESULTS', () => {
     input.value = 'plate'; input.dispatchEvent(new Event('input')); f.detectChanges();
     expect(rowsNow()).toEqual(['Platelets']);
     input.value = 'zzz'; input.dispatchEvent(new Event('input')); f.detectChanges();
-    expect(txt(el.querySelector('pf-cumulative-results .nd-empty'))).toContain('No analytes match');
+    expect(txt(el.querySelector('pf-cumulative-results .pf-empty'))).toContain('No analytes match');
   });
 
   it('"Show all N" in the snapshot turns on Abnormal only in the grid', async () => {
@@ -355,11 +355,11 @@ describe('Patient profile (clinical) — CUMULATIVE RESULTS', () => {
 
   it('empty and error states', async () => {
     const empty = await render({ results: [] });
-    expect(txt(empty.el.querySelector('pf-cumulative-results .nd-empty'))).toContain('No results yet');
+    expect(txt(empty.el.querySelector('pf-cumulative-results .pf-empty'))).toContain('No results yet');
     const failed = await render({ resultsFail: true });
-    expect(txt(failed.el.querySelector('pf-cumulative-results .nd-empty'))).toContain('Couldn’t load results');
+    expect(txt(failed.el.querySelector('pf-cumulative-results .pf-empty'))).toContain('Couldn’t load results');
     const denied = await render({ perms: ['view_patient'] });
-    expect(txt(denied.el.querySelector('pf-cumulative-results .nd-empty'))).toContain('Results need report access');
+    expect(txt(denied.el.querySelector('pf-cumulative-results .pf-empty'))).toContain('Results need report access');
   });
 
   it('phones: per-analyte cards with a sparkline, not the wide grid', async () => {
@@ -407,13 +407,13 @@ describe('Patient profile (clinical) — PATIENT companion', () => {
   it('no orders and no appointments → an empty timeline, never generated records', async () => {
     const { el } = await render({ orders: [], appointments: [], results: [] });
     expect(el.querySelectorAll('.pf-tl__row').length).toBe(0);
-    expect(txt(el.querySelector('.pf-pp-side .nd-empty'))).toContain('No history yet');
+    expect(txt(el.querySelector('.pf-pp-side .pf-empty'))).toContain('No history yet');
     expect(txt(el.querySelector('.pf-pp-pane--last'))).toContain('No visits yet');
   });
 
   it('Details: demographics, ABHA, billing outstanding, allergies; the seg is one Tab stop', async () => {
     const { el, click } = await render();
-    const seg = el.querySelector('.pf-pp-side .nd-seg[role=radiogroup]') as HTMLElement;
+    const seg = el.querySelector('.pf-pp-side .pf-seg[role=radiogroup]') as HTMLElement;
     expect([...seg.querySelectorAll('[role=radio]')].map(r => r.getAttribute('tabindex'))).toEqual(['0', '-1']);
     click(seg.querySelectorAll('[role=radio]')[1]);
     const side = el.querySelector('.pf-pp-side') as HTMLElement;
@@ -462,9 +462,9 @@ describe('Patient profile (clinical) — loading, zoom, rules', () => {
     expect(r.el.querySelector('.pf-pp-snap--skel')).toBeNull();
   });
 
-  it('not found → .nd-empty with a way back', async () => {
+  it('not found → .pf-empty with a way back', async () => {
     const { el } = await render({ fail: true });
-    expect(txt(el.querySelector('.pf-pp-missing .nd-empty'))).toContain('Patient not found');
+    expect(txt(el.querySelector('.pf-pp-missing .pf-empty'))).toContain('Patient not found');
   });
 
   it('no monospace, no emoji / glyph icons, no native select / datalist', async () => {
