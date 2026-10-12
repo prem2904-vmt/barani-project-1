@@ -1,4 +1,7 @@
 apply plugin: 'com.android.application'
+// Kotlin: the PfBridgeLocal plugin (health.prefrontal.lab.bridge) is Kotlin;
+// the rest of the app stays Java.
+apply plugin: 'kotlin-android'
 
 // Play upload signing — android/key.properties + android/keystore/ are
 // gitignored; keep the keystore backed up. Play App Signing holds the real
@@ -67,6 +70,10 @@ configurations.all {
     resolutionStrategy {
         force 'com.getkeepsafe.relinker:relinker:1.4.5'
     }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 repositories {

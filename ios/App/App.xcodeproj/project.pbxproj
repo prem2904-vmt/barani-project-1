@@ -7,10 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		29C4510EEB695EBC440352E7 /* PfBridgeLocalPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3E7B0E790F7AE786954C2D /* PfBridgeLocalPlugin.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4C445343055BA7F0E40ED0EF /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */; };
-		B2D5F8031C4E5D6F7081A2B3 /* ChatReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */; };
-		D4F7BAC51E6A7F8B9C0D1E2F /* CallAnswerNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -19,6 +18,8 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		7DFCCC7812A7FA0EEAD002F7 /* PrefrontalPrinterPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C0A07301C398F7D3B9F216 /* PrefrontalPrinterPlugin.swift */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
+		B2D5F8031C4E5D6F7081A2B3 /* ChatReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */; };
+		D4F7BAC51E6A7F8B9C0D1E2F /* CallAnswerNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */; };
 		DEFAAF0F9FA71C2269C84EA5 /* PrefrontalPrinterPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 42917E316D9CC003945A7975 /* PrefrontalPrinterPlugin.m */; };
 /* End PBXBuildFile section */
 
@@ -34,12 +35,13 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		73C0A07301C398F7D3B9F216 /* PrefrontalPrinterPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrefrontalPrinterPlugin.swift; sourceTree = "<group>"; };
+		9C3E7B0E790F7AE786954C2D /* PfBridgeLocalPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PfBridgeLocalPlugin.swift; sourceTree = "<group>"; };
 		9E6EE35E2FEE89A400682079 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatReply.swift; sourceTree = "<group>"; };
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
-		C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
-		A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatReply.swift; sourceTree = "<group>"; };
 		C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallAnswerNative.swift; sourceTree = "<group>"; };
+		C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -107,6 +109,7 @@
 				C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */,
 				A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */,
 				C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */,
+				F660ADFD81223DC6338478F2 /* bridge */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -118,6 +121,15 @@
 				AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */,
 			);
 			name = Pods;
+			sourceTree = "<group>";
+		};
+		F660ADFD81223DC6338478F2 /* bridge */ = {
+			isa = PBXGroup;
+			children = (
+				9C3E7B0E790F7AE786954C2D /* PfBridgeLocalPlugin.swift */,
+			);
+			name = bridge;
+			path = bridge;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -239,6 +251,7 @@
 				4C445343055BA7F0E40ED0EF /* MainViewController.swift in Sources */,
 				B2D5F8031C4E5D6F7081A2B3 /* ChatReply.swift in Sources */,
 				D4F7BAC51E6A7F8B9C0D1E2F /* CallAnswerNative.swift in Sources */,
+				29C4510EEB695EBC440352E7 /* PfBridgeLocalPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

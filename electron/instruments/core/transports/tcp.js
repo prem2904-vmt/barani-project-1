@@ -4,10 +4,17 @@
  *   TcpServerTransport — we listen; the analyzer connects to us (common for
  *                        LIS ports on haematology/chemistry analyzers).
  *   TcpClientTransport — we connect to the analyzer's LIS port, reconnecting
- *                        after drops.
+ *                        after drops, and backing off when the peer accepts
+ *                        and closes us again and again (e.g. an analyzer
+ *                        that only accepts ONE LIS connection and another
+ *                        program — or a stale connection of our own —
+ *                        already holds it).
  *
  * Common transport interface (see ./index.js):
- *   start() / stop() (Promises), write(bytes, sessionId?)
+ *   start() / stop() (Promises — stop() destroys the socket, clears every
+ *   timer and AWAITS the actual 'close' before resolving, so a caller that
+ *   starts a replacement transport right after stop() never ends up with two
+ *   live sockets to the same analyzer), write(bytes, sessionId?)
  *   events: 'data' (buf, sessionId), 'session-start' (id), 'session-end' (id),
  *           'status' ('listening'|'connected'|'disconnected'|'error'), 'error' (err)
  */
@@ -16,6 +23,15 @@ const { EventEmitter } = require('events');
 
 let seq = 0;
 const nextId = (p) => `${p}-${++seq}`;
+
+// How soon after 'connect' a 'close' counts as "the peer rejected us again"
+// (back off) rather than an ordinary drop of an established connection
+// (reconnect at the base interval).
+const IMMEDIATE_CLOSE_MS = 2000;
+// reconnectMs multipliers for repeated immediate closes: 1×, 2×, 6×, 12× —
+// with the 5s default that is the owner's 5s → 10s → 30s → 60s (capped)
+// sequence; capped again by maxReconnectMs regardless of reconnectMs.
+const BACKOFF_STEPS = [1, 2, 6, 12];
 
 class TcpServerTransport extends EventEmitter {
   constructor({ port, host = '0.0.0.0' } = {}) {
@@ -74,22 +90,28 @@ class TcpServerTransport extends EventEmitter {
 }
 
 class TcpClientTransport extends EventEmitter {
-  constructor({ host, port, reconnectMs = 5000 } = {}) {
+  constructor({ host, port, reconnectMs = 5000, maxReconnectMs = 60000 } = {}) {
     super();
     this.host = host;
     this.port = Number(port);
     this.reconnectMs = reconnectMs;
+    this.maxReconnectMs = maxReconnectMs;
     this.sock = null;
     this.sessionId = null;
     this.stopped = true;
     this.timer = null;
     this.kind = 'tcp-client';
+    this.connectedAt = null;   // set on 'connect', cleared on 'close' — tells an immediate close from a real drop
+    this.failStreak = 0;       // consecutive immediate-closes — drives the backoff
+    this.hintedBusy = false;   // the "accepted and closed" hint is logged once per problem episode
   }
 
   describe() { return `TCP client → ${this.host}:${this.port}`; }
 
   start() {
     this.stopped = false;
+    this.failStreak = 0;
+    this.hintedBusy = false;
     this._connect();
     return Promise.resolve();
   }
@@ -99,24 +121,52 @@ class TcpClientTransport extends EventEmitter {
     const sock = net.createConnection({ host: this.host, port: this.port });
     this.sock = sock;
     sock.setNoDelay(true);
+    // Every handler below checks `this.sock === sock`: once stop() (or a
+    // fresh _connect()) has moved this.sock on, THIS socket's own events are
+    // no-ops — the only way to guarantee never more than one live client
+    // socket per instrument even if a stale socket's events are still
+    // in flight when it is superseded.
     sock.on('connect', () => {
+      if (this.sock !== sock) return;
       sock.setKeepAlive(true, 30000);
+      this.connectedAt = Date.now();
       this.sessionId = nextId('tcpc');
       this.emit('session-start', this.sessionId, { remote: `${this.host}:${this.port}` });
       this.emit('status', 'connected');
     });
-    sock.on('data', (buf) => this.emit('data', buf, this.sessionId));
-    sock.on('error', (e) => this.emit('error', e));
+    sock.on('data', (buf) => { if (this.sock === sock) this.emit('data', buf, this.sessionId); });
+    sock.on('error', (e) => { if (this.sock === sock) this.emit('error', e); });
     sock.on('close', () => {
+      if (this.sock !== sock) return; // superseded — this socket's own close is a no-op
+      const wasConnected = this.connectedAt != null;
+      const immediate = wasConnected && (Date.now() - this.connectedAt) < IMMEDIATE_CLOSE_MS;
+      this.connectedAt = null;
       if (this.sessionId) this.emit('session-end', this.sessionId);
       this.sessionId = null;
       this.sock = null;
       this.emit('status', 'disconnected');
-      if (!this.stopped) {
-        clearTimeout(this.timer);
-        this.timer = setTimeout(() => this._connect(), this.reconnectMs);
-        if (this.timer.unref) this.timer.unref();
+      if (this.stopped) return;
+      let delay = this.reconnectMs;
+      if (immediate) {
+        // The peer (TCP-level) accepted us and closed us again right away —
+        // typically an analyzer that only allows ONE LIS connection and
+        // something else (another program, or a connection of our own it
+        // hasn't noticed is gone) already holds the slot. Hammering it every
+        // reconnectMs just keeps losing the race; back off instead.
+        const idx = Math.min(this.failStreak, BACKOFF_STEPS.length - 1);
+        delay = Math.min(this.reconnectMs * BACKOFF_STEPS[idx], this.maxReconnectMs);
+        this.failStreak++;
+        if (!this.hintedBusy) {
+          this.hintedBusy = true;
+          this.emit('error', new Error('The analyzer accepted and closed the connection — it may only allow one LIS connection; another program (or a stale connection) may be holding it.'));
+        }
+      } else {
+        this.failStreak = 0;
+        this.hintedBusy = false;
       }
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this._connect(), delay);
+      if (this.timer.unref) this.timer.unref();
     });
   }
 
@@ -125,9 +175,19 @@ class TcpClientTransport extends EventEmitter {
   stop() {
     this.stopped = true;
     clearTimeout(this.timer);
-    if (this.sock) this.sock.destroy();
+    this.timer = null;
+    const sock = this.sock;
     this.sock = null;
-    return Promise.resolve();
+    this.sessionId = null;
+    this.connectedAt = null;
+    if (!sock || sock.destroyed) return Promise.resolve();
+    // Await the ACTUAL close (not just calling destroy()) so a caller that
+    // starts a replacement transport right after stop() resolves never ends
+    // up with two live sockets to the same analyzer at once.
+    return new Promise((resolve) => {
+      sock.once('close', () => resolve());
+      sock.destroy();
+    });
   }
 }
 

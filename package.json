@@ -1,7 +1,7 @@
 {
   "name": "prefrontal",
   "productName": "Prefrontal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Prefrontal — clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
@@ -60,7 +60,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "electron/icon.png"
+      "icon": "electron/icon.ico"
     },
     "mac": {
       "target": [
@@ -81,11 +81,12 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "electron/icon.png",
-      "installerHeaderIcon": "electron/icon.png",
+      "installerIcon": "electron/icon.ico",
+      "installerHeaderIcon": "electron/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Prefrontal LMS"
+      "shortcutName": "Prefrontal LMS",
+      "uninstallerIcon": "electron/icon.ico"
     }
   },
   "engines": {
@@ -189,6 +190,7 @@
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "multicast-dns": "^7.2.5",
     "pdfjs-dist": "^4.10.38",
     "postcss": "^8.5.10",
     "preact": "^10.29.1",

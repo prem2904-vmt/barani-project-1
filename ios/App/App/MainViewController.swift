@@ -11,6 +11,8 @@ class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(PrefrontalPrinterPlugin())
         bridge?.registerPluginInstance(PfChatReplyPlugin())
+        // Prefrontal Bridge local access (mDNS, hotspot join, pinned HTTPS).
+        bridge?.registerPluginInstance(PfBridgeLocalPlugin())
         // The bridge just made Capacitor's NotificationRouter the delegate —
         // wrap it so chat Reply / Mark as read stay native and everything
         // else (taps, other pushes, local notifications) reaches the plugins.

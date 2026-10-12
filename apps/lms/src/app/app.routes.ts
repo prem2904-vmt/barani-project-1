@@ -56,6 +56,13 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/reports/public-report/public-report.component').then(m => m.PublicReportComponent)
   },
   {
+    // Public, no-login landing of a Prefrontal Bridge QR (`/b#1.S.C.P.F`,
+    // bridge-api v1 B.6): reads the fragment, hands it to /admin/bridges/add
+    // through sessionStorage (login first if needed). No secret in a URL param.
+    path: 'b',
+    loadComponent: () => import('./features/bridges/bridge-link.page').then(m => m.BridgeLinkPage)
+  },
+  {
     path: '',
     // Lazy: the authed shell (sidebar, navbar, chat, calls…) stays OUT of the
     // initial bundle, so the public patient pages above (/reports/public,
@@ -126,6 +133,24 @@ export const appRoutes: Route[] = [
         data: { recreateOn: ['id'] },
         canActivate: [...routeGuards('/admin/instruments')],
         loadComponent: () => import('./features/lab/instruments/instrument-editor.component').then(m => m.InstrumentEditorComponent)
+      },
+      {
+        // Prefrontal Bridges (zero-touch analyzer boxes, bridge-api v1):
+        // list, add (QR / code / nearby / local), one Bridge.
+        path: 'admin/bridges',
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridges-list.component').then(m => m.BridgesListComponent)
+      },
+      {
+        path: 'admin/bridges/add',
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridge-add.component').then(m => m.BridgeAddComponent)
+      },
+      {
+        path: 'admin/bridges/:id',
+        data: { recreateOn: ['id'] },
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridge-detail.component').then(m => m.BridgeDetailComponent)
       },
       {
         // Microbiology / Culture bench settings (lock timeout, TAT).

@@ -121,6 +121,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     preview: (raw, config) => ipcRenderer.invoke('instruments:preview', raw, config)
   },
+  // Prefrontal Bridges on this network (bridge-api v1, B.3/B.5): mDNS
+  // discovery + HTTPS to a Bridge's local API with its pinned certificate.
+  // Main validates every request (private IPv4, /local/v1/ only) and the
+  // sender. No hotspot join on the desktop.
+  bridges: {
+    discoverStart: () => ipcRenderer.invoke('bridges:discoverStart'),
+    discoverStop: () => ipcRenderer.invoke('bridges:discoverStop'),
+    onFound: (cb) => {
+      const h = (_e, ev) => cb(ev);
+      ipcRenderer.on('bridges:found', h);
+      return () => ipcRenderer.removeListener('bridges:found', h);
+    },
+    onLost: (cb) => {
+      const h = (_e, ev) => cb(ev);
+      ipcRenderer.on('bridges:lost', h);
+      return () => ipcRenderer.removeListener('bridges:lost', h);
+    },
+    localRequest: (req) => ipcRenderer.invoke('bridges:localRequest', req)
+  },
   // Document/invoice printers = the OS-installed printers (for A4 output).
   doc: {
     listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),

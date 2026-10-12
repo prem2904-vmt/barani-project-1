@@ -91,6 +91,10 @@ export interface InstrumentDto {
   createdAt?: string;
   updatedAt?: string;
   unmatchedCount?: number;
+  /** Prefrontal Bridge this analyzer is connected through (bridge-api v1,
+   *  additive; absent = this computer / a paired desktop). */
+  bridgeId?: string | null;
+  bridgeName?: string | null;
 }
 
 export interface InstrumentUpsert {
@@ -150,6 +154,10 @@ export interface MessageSummaryDto {
   mappedCount: number;
   /** The API omits null fields — treat a missing list as empty. */
   unmappedCodes?: string[];
+  /** Codes the Instruments:LoincAutoMatch ingest fallback matched with no
+   *  code-map row (derived server-side from `mapped[].autoMatched`) — never
+   *  set for a code a real code map already resolved. */
+  autoMatchedCodes?: string[];
   preview?: ResultPreview[];
 }
 
@@ -168,6 +176,9 @@ export interface MappedValue {
   unit?: string | null;
   rawUnit?: string | null;
   flags?: string[];
+  /** Set by the Instruments:LoincAutoMatch ingest fallback (factor 1, no
+   *  code-map row) — never set for a code-map-resolved value. */
+  autoMatched?: boolean;
 }
 
 export interface MessageDetailDto extends MessageSummaryDto {
@@ -197,6 +208,35 @@ export interface RunDto {
 /** GET /api/instruments/results/by-sample/{orderSampleId}. Runs are newest
  *  first, QC excluded, superseded included. */
 export interface SamplePrefillDto { orderSampleId: string; barcode: string; runs: RunDto[] }
+
+// ── LOINC auto-match (code-map-suggestions) ──────────────────────────────
+
+/** One of the tenant's active individual tests whose EFFECTIVE StandardCode
+ *  (its own override, else the master template's by CatalogKey) matched a
+ *  requested code. */
+export interface LoincCandidateDto {
+  testId: string;
+  testName: string;
+  catalogKey: string;
+  unit: string | null;
+}
+
+/** GET /api/instruments/{id}/code-map-suggestions?codes=a,b,c&units=…
+ *  Per requested code: a non-analyte skip (`isTest` false, `skipReason` set,
+ *  no candidates), no match (`isTest` true, empty candidates), a single
+ *  match (one candidate + a suggested factor/decimals/unit — never
+ *  auto-applied server-side), or ambiguous (several candidates, no suggested
+ *  factor — "no auto-pick"). The API omits null fields. */
+export interface LoincSuggestionDto {
+  code: string;
+  isTest: boolean;
+  skipReason?: string | null;
+  candidates: LoincCandidateDto[];
+  suggestedFactor?: number | null;
+  suggestedDecimals?: number | null;
+  suggestedUnit?: string | null;
+  confidence?: string | null;
+}
 
 // ── Connector core output ───────────────────────────────────────────────
 export interface InstrumentResult { code: string; value: string; unit?: string | null; flags?: string[]; rawRecord?: string }

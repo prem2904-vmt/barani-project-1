@@ -124,3 +124,20 @@
 .pf-ie-img__mapped { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
 .pf-ie-img__mk { display: inline-flex; vertical-align: -1px; margin-right: 6px; color: var(--color-violet-600, #7c3aed); }
 .pf-ie-img__none { font-size: 12px; color: var(--text-tertiary); }
+
+// ── LOINC auto-match ───────────────────────────────────────────────────
+/* A neutral "Matched by LOINC" tag beside the test picker — never a second
+   colour; only the icon chip elsewhere in this kit is tinted. */
+.pf-ie-maps__test { display: flex; flex-direction: column; gap: 4px; }
+.pf-ie-loinc-chip { align-self: flex-start; font-size: 11px; }
+.pf-ie-loinc-skip { color: var(--text-tertiary); }
+/* "N codes auto-matched by LOINC" banner (Status tab) — a quiet row above
+   the recent-results list, one neutral icon chip + a quiet action. */
+.pf-ie-notice {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px;
+  border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-sel-border); background: var(--nd-chip-bg);
+  font-size: 13px; color: var(--text-secondary);
+}
+.pf-ie-notice > svg { flex: none; color: var(--violet-text, #7c3aed); }
+.pf-ie-notice > span { flex: 1 1 auto; }
+.pf-ie-notice .nd-btn { flex: none; }

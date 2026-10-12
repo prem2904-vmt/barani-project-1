@@ -8,7 +8,8 @@ import { formatDate } from '@angular/common';
 import { LAB_TIME_ZONE } from '../utils/lab-clock';
 import type {
   CodeMapDto, CodeMapUpsert, DetectResult, Hl7SampleIdField, InstrumentConfig, InstrumentDto, InstrumentMessage,
-  InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, ParserConfig, ParserType, TransportConfig, TransportType,
+  InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, LoincCandidateDto, LoincSuggestionDto, ParserConfig,
+  ParserType, TransportConfig, TransportType,
 } from './instrument.models';
 
 // ── Defaults (from the contract) ─────────────────────────────────────────
@@ -285,6 +286,15 @@ export interface CodeMapRow {
   unit: string;
   /** Display only (server-resolved or picked). */
   testName?: string | null;
+  /** True when this row's test was auto-filled from a single unambiguous
+   *  LOINC match (server GET {id}/code-map-suggestions) — drives the
+   *  "Matched by LOINC" chip. Cleared once the human changes the test. */
+  loincMatched?: boolean;
+  /** Set when the row's code matched MORE THAN ONE active test ("no
+   *  auto-pick") — the editor renders a picker limited to just these
+   *  candidates instead of the full Test Master list. Cleared once a
+   *  candidate is chosen. */
+  loincCandidates?: LoincCandidateDto[];
 }
 
 export function emptyCodeMapRow(code = ''): CodeMapRow {
@@ -393,6 +403,72 @@ export function mergeUnmappedCodes(rows: readonly CodeMapRow[], codes: Iterable<
     added++;
   }
   return { rows: out, added };
+}
+
+export interface LoincSkip { code: string; reason: string }
+
+export interface LoincApplyResult {
+  rows: CodeMapRow[];
+  /** New rows actually added (matched + ambiguous + plain "is a test but no
+   *  candidate" blanks) — mirrors mergeUnmappedCodes's `added`. */
+  added: number;
+  /** Of `added`, how many got a full single-candidate auto-fill. */
+  matched: number;
+  /** Ignore-list codes (age/sex/height/weight…) — never added as a row. */
+  skipped: LoincSkip[];
+}
+
+/**
+ * Merge per-code LOINC suggestions (GET {id}/code-map-suggestions) into the
+ * code-map grid — the "Add unmapped codes" button's server-assisted fill,
+ * and the same logic a typed-code debounced lookup applies to one row.
+ *
+ * Per suggestion: a non-analyte skip is never added as a row (reported in
+ * `skipped` for the quiet note instead); a single candidate fills the test +
+ * the suggested factor/decimals/unit (falling back to the candidate's own
+ * unit when there's no special-case conversion) and sets `loincMatched`; two
+ * or more candidates add the row with `loincCandidates` set (no test picked
+ * — "no auto-pick") for a picker limited to just those tests; a LOINC code
+ * that is a real analyte but matches no test adds a plain blank row (same as
+ * `mergeUnmappedCodes`). An EXISTING blank row for the same code (case
+ * insensitive) is filled in place rather than duplicated; an existing row
+ * that already has a test is left untouched.
+ */
+export function applyLoincSuggestions(rows: readonly CodeMapRow[], suggestions: readonly LoincSuggestionDto[]): LoincApplyResult {
+  const out = rows.map((r) => ({ ...r }));
+  let added = 0;
+  let matched = 0;
+  const skipped: LoincSkip[] = [];
+
+  const indexOf = (code: string) => out.findIndex((r) => codeKey(r.analyzerCode) === codeKey(code));
+  const fill = (idx: number, code: string, patch: Partial<CodeMapRow>) => {
+    if (idx >= 0) {
+      if (!out[idx].testCatalogKey) Object.assign(out[idx], patch);
+    } else {
+      out.push({ ...emptyCodeMapRow(code), ...patch });
+      added++;
+    }
+  };
+
+  for (const s of suggestions) {
+    if (!s.code?.trim()) continue;
+    if (!s.isTest) { skipped.push({ code: s.code, reason: s.skipReason || 'not a test' }); continue; }
+    const idx = indexOf(s.code);
+    if (s.candidates.length === 1) {
+      const c = s.candidates[0];
+      fill(idx, s.code, {
+        analyzerCode: s.code, testCatalogKey: c.catalogKey, testName: c.testName,
+        factor: s.suggestedFactor ?? 1, decimals: s.suggestedDecimals ?? null,
+        unit: s.suggestedUnit ?? c.unit ?? '', loincMatched: true, loincCandidates: undefined,
+      });
+      matched++;
+    } else if (s.candidates.length > 1) {
+      fill(idx, s.code, { analyzerCode: s.code, loincCandidates: [...s.candidates], loincMatched: false });
+    } else {
+      fill(idx, s.code, { analyzerCode: s.code });
+    }
+  }
+  return { rows: out, added, matched, skipped };
 }
 
 /** Codes the listen session saw that are not on the grid yet. */

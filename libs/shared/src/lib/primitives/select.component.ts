@@ -1,9 +1,10 @@
 import {
   ApplicationRef, ChangeDetectionStrategy, Component, ElementRef,
   EmbeddedViewRef, EventEmitter, HostListener, Input,
-  OnDestroy, Output, TemplateRef, ViewChild, 
+  OnDestroy, Output, TemplateRef, ViewChild, ViewContainerRef,
   ViewEncapsulation, inject, signal
 } from '@angular/core';
+import { TYPE_AHEAD_RESET_MS, TypeAheadBuffer, highlightParts, matchLabel, typeAheadIndex } from '../utils/type-ahead';
 
 export interface PfSelectOption<T = string> {
   value: T;
@@ -89,6 +90,8 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
         <!-- Combobox: while open, the trigger IS the search field. -->
         <div class="pf-dd__trigger pf-dd__trigger--combo" role="combobox" aria-expanded="true">
           <input type="text" class="pf-dd__combox"
+                 [attr.aria-controls]="listboxId"
+                 [attr.aria-activedescendant]="activeDescendant()"
                  [value]="search()" [placeholder]="displayLabel"
                  (input)="onSearchInput($any($event.target).value)"
                  (keydown)="onPanelKey($event)"
@@ -104,15 +107,22 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                 class="pf-dd__trigger"
                 [disabled]="disabled"
                 [attr.aria-expanded]="isOpen()"
+                [attr.aria-controls]="isOpen() ? listboxId : null"
+                [attr.aria-activedescendant]="activeDescendant()"
                 aria-haspopup="listbox"
                 (click)="toggle($event)">
-          <span class="pf-dd__value" [class.pf-dd__value--ph]="!matched">{{ displayLabel }}</span>
+          <span class="pf-dd__value" [class.pf-dd__value--ph]="!matched && !pending()">{{ displayLabel }}</span>
           <svg class="pf-dd__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                aria-hidden="true">
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </button>
+      }
+      @if (typeAheadOn) {
+        <!-- Type-to-select announces the option it lands on (the closed
+             trigger's text changes silently otherwise). -->
+        <span class="pf-dd__sr" aria-live="polite" aria-atomic="true">{{ liveMsg() }}</span>
       }
     </div>
 
@@ -125,6 +135,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
            [style.left.px]="panelPos().left"
            [style.min-width.px]="panelPos().width"
            role="listbox"
+           [attr.id]="listboxId"
            [attr.aria-label]="placeholder">
         @if (searchable && !groups?.length && visibleOpts().length === 0) {
           <div class="pf-dd__none">No matches</div>
@@ -132,6 +143,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
         @if (!groups?.length) {
           @for (opt of visibleOpts(); track opt.value; let idx = $index) {
             <button type="button" class="pf-dd__option" role="option"
+                    [attr.id]="optionId(idx)"
                     [class.pf-dd__option--active]="!opt.create && isSelected(opt.value)"
                     [class.pf-dd__option--focused]="idx === focusedIndex()"
                     [class.pf-dd__option--create]="opt.create"
@@ -150,6 +162,9 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                   <span class="pf-dd__create-txt">{{ createVerb }} “{{ opt.label }}”</span>
                 </span>
+              } @else if (highlightQuery()) {
+                @let parts = labelParts(opt.label);
+                <span class="pf-dd__opt-label">{{ parts[0] }}@if (parts[1]) {<mark class="pf-dd__hl">{{ parts[1] }}</mark>}{{ parts[2] }}</span>
               } @else {
                 <span class="pf-dd__opt-label">{{ opt.label }}</span>
               }
@@ -200,7 +215,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     pf-select .pf-dd--sm .pf-dd__trigger {
       height: 34px; padding: 0 10px; font-size: 13px; border-radius: 8px; gap: 4px;
     }
-    pf-select .pf-dd__trigger:hover:not(:disabled) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+    pf-select .pf-dd__trigger:hover:not(:disabled) { border-color: var(--input-border-focus); }
     pf-select .pf-dd__trigger:focus,
     pf-select .pf-dd--open .pf-dd__trigger {
       border-color: var(--input-border-focus);
@@ -238,6 +253,10 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
     pf-select .pf-dd__chip-x:hover { background: rgba(255,255,255,0.26); color: var(--text-primary, #0f172a); }
     pf-select .pf-dd__value--ph { color: var(--text-tertiary, #94a3b8); }
+    pf-select .pf-dd__sr {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
 
     pf-select .pf-dd__chevron {
       flex-shrink: 0; color: var(--text-tertiary, #94a3b8);
@@ -315,6 +334,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       background: var(--color-primary, #7c3aed); border-color: var(--color-primary, #7c3aed); color: #fff;
     }
     .pf-dd__opt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    /* Type-to-select: the typed run, subtly (tint + weight, inherits ink). */
+    .pf-dd__hl {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+      color: inherit; font-weight: 700; border-radius: 3px; padding: 0 1px;
+    }
     .pf-dd__hint {
       flex-basis: 100%; min-width: 0; font-size: 11px; font-weight: 400;
       color: var(--text-tertiary, #64748b);
@@ -339,6 +363,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
 })
 export class SelectComponent<T = unknown> implements OnDestroy {
   private readonly el = inject(ElementRef<HTMLElement>);
+  private readonly vcr = inject(ViewContainerRef);
   private readonly appRef = inject(ApplicationRef);
 
   @ViewChild('panelTpl') private readonly panelTpl!: TemplateRef<void>;
@@ -393,12 +418,52 @@ export class SelectComponent<T = unknown> implements OnDestroy {
    *  entry, the dynamic-input data-entry field) — never the app default. */
   @Input() enterAdvances = false;
 
+  /** Type-to-select (owner 2026-10-11 — default ON for every single select
+   *  in the app). With the field focused and the list CLOSED:
+   *    letters / digits / symbols → the closest option shows in the field at
+   *      once (prefix, then word-start; "P" "O" within 800 ms = "po"; the
+   *      same key again cycles P → Positive → Preliminary → Positive);
+   *    ArrowDown / ArrowUp → next / previous option (wraps, like the open
+   *      list), without opening;
+   *    Enter → commits (and, with `enterAdvances`, bubbles to the host's
+   *      advance-to-next-field handler); Tab / leaving the field commits;
+   *    Escape → back to the value from before typing;
+   *    Alt+ArrowDown, Space (no query being typed) or Enter with nothing
+   *      typed → opens the full list as before.
+   *  The choice is emitted ONCE per commit through the same `valueChange`
+   *  as a click, so hosts (flags, autosave) see one ordinary change.
+   *  `undefined` = auto: on for single selects, off for `multiple` and for
+   *  `allowCreate` free-text comboboxes. `[typeAhead]="false"` opts out. */
+  @Input() typeAhead?: boolean;
+
   @Output() valueChange = new EventEmitter<T>();
   @Output() valuesChange = new EventEmitter<T[]>();
 
   readonly isOpen = signal(false);
   readonly panelPos = signal<PanelPos>({ top: 0, left: 0, width: 0, above: false });
   readonly focusedIndex = signal<number>(-1);
+
+  /** Why the LAST `valueChange` was emitted — read synchronously by a host
+   *  that reacts to the change itself (sample result entry advances focus
+   *  only after a pick from the open list, never when the field is being
+   *  left with Tab / a click, which already moves focus). */
+  changeSource: 'pick' | 'enter' | 'blur' | 'revert' = 'pick';
+
+  /** Type-to-select: the option shown in the closed field, not yet emitted. */
+  readonly pending = signal<{ value: T } | null>(null);
+  /** Polite screen-reader announcement of the option type-to-select landed on. */
+  readonly liveMsg = signal('');
+  /** The typed run highlighted in the open list ('' = none). */
+  readonly highlightQuery = signal('');
+  /** The value before this round of typing began (Escape restores it). */
+  private session: { value: T } | null = null;
+  private readonly buffer = new TypeAheadBuffer(TYPE_AHEAD_RESET_MS);
+  /** Clock seam — specs drive the 800 ms window without real timers. */
+  now: () => number = () => Date.now();
+
+  private static nextUid = 0;
+  private readonly uid = `pf-dd-${++SelectComponent.nextUid}`;
+  readonly listboxId = `${this.uid}-lb`;
 
   private static readonly PANEL_MAX_H = 252;
   private static readonly GAP = 5;
@@ -413,6 +478,24 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       SelectComponent.overlayHost = host;
     }
     return SelectComponent.overlayHost;
+  }
+
+  get typeAheadOn(): boolean {
+    if (this.multiple) return false;
+    return this.typeAhead ?? !this.allowCreate;
+  }
+
+  optionId(idx: number): string { return `${this.uid}-o${idx}`; }
+
+  /** aria-activedescendant: the focused option while the (flat) list is open. */
+  activeDescendant(): string | null {
+    if (!this.isOpen() || this.groups?.length) return null;
+    const i = this.focusedIndex();
+    return i >= 0 && i < this.visibleOpts().length ? this.optionId(i) : null;
+  }
+
+  labelParts(label: string): [string, string, string] {
+    return highlightParts(label, this.highlightQuery());
   }
 
   private get allOptions(): PfSelectOption<T>[] {
@@ -445,6 +528,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   onSearchInput(v: string): void {
     this.search.set(v);
+    if (this.typeAheadOn) this.highlightQuery.set(v.trim());
     // First row focused — with no other match that is the create row.
     this.focusedIndex.set(0);
     this.panelRef?.detectChanges();
@@ -488,6 +572,11 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       if (!sel.length) return this.placeholder;
       const labels = sel.map(v => this.allOptions.find(o => String(o.value) === String(v))?.label ?? String(v));
       return labels.length <= 2 ? labels.join(', ') : `${labels.length} selected`;
+    }
+    const pend = this.pending();
+    if (pend) {
+      const p = this.allOptions.find(o => String(o.value) === String(pend.value));
+      if (p) return p.label;
     }
     if (this.value === null || this.value === undefined) return this.placeholder;
     const opt = this.allOptions.find(o => String(o.value) === String(this.value));
@@ -544,14 +633,24 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       this.panelRef?.detectChanges();
       return;
     }
+    // A pick ends any type-to-select round (the pick IS the commit).
+    this.pending.set(null);
+    this.session = null;
+    this.buffer.reset();
+    this.changeSource = 'pick';
     this.valueChange.emit(opt.value);
     this.closePanel();
   }
 
   private openPanel(): void {
     this.updatePanelPos();
-    const selIdx = this.allOptions.findIndex((o) => this.isSelected(o.value));
+    // A type-to-select pick not yet committed is what the list lands on.
+    const pend = this.pending();
+    const selIdx = this.allOptions.findIndex((o) =>
+      pend ? String(o.value) === String(pend.value) : this.isSelected(o.value));
     this.focusedIndex.set(selIdx >= 0 ? selIdx : 0);
+    this.highlightQuery.set('');
+    this.buffer.reset();
     // Use TemplateRef.createEmbeddedView (not VCR) so no VCR re-anchors the node
     this.panelRef = this.panelTpl.createEmbeddedView(null as unknown as void);
     this.appRef.attachView(this.panelRef);
@@ -581,6 +680,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       this.panelRef = undefined;
     }
     this.search.set('');
+    this.highlightQuery.set('');
     this.isOpen.set(false);
   }
 
@@ -683,6 +783,8 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     ) as HTMLElement | undefined;
     if (!this.el.nativeElement.contains(related) && !(panelEl?.contains(related) ?? false)) {
       this.closePanel();
+      // Leaving the field (Tab, a click elsewhere) commits what was typed.
+      this.endTypeAhead('blur');
     }
   }
 
@@ -694,6 +796,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
     if ((ev.target as HTMLElement | null)?.classList?.contains('pf-dd__combox')) return;
 
     if (!this.isOpen()) {
+      if (this.typeAheadOn && this.onClosedTypeAhead(ev)) return;
       // enterAdvances: a filled, closed select lets Enter bubble (never
       // intercepted) so a parent's advance-to-next-field handler fires —
       // same as a native <select> always did. An EMPTY select still opens
@@ -742,6 +845,19 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       }
     } else if (ev.key === 'Tab') {
       this.closePanel();
+    } else if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey && this.typeAheadOn) {
+      // Open list: the same matcher moves the focus ring (Enter picks).
+      const q = this.buffer.push(ev.key, this.now());
+      const list = this.navOptions;
+      const idx = typeAheadIndex(list, q, this.focusedIndex());
+      if (idx >= 0) {
+        ev.preventDefault();
+        this.focusedIndex.set(idx);
+        const lq = q.toLowerCase().trimStart();
+        this.highlightQuery.set(matchLabel(list[idx].label, lq) ? lq : lq[0]);
+        this.panelRef?.detectChanges();
+        this.scrollFocusedIntoView();
+      }
     } else if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
       const char = ev.key.toLowerCase();
       const matchIdx = this.allOptions.findIndex((o) =>
@@ -753,6 +869,106 @@ export class SelectComponent<T = unknown> implements OnDestroy {
         this.scrollFocusedIntoView();
       }
     }
+  }
+
+  // ── Type-to-select (closed field) ──────────────────────────────────────
+
+  /** Index of the option the closed field shows (pending, else the value). */
+  private shownIndex(): number {
+    const pend = this.pending();
+    const v = pend ? pend.value : this.value;
+    if (v === null || v === undefined) return -1;
+    return this.allOptions.findIndex(o => String(o.value) === String(v));
+  }
+
+  /** Closed-list keys. Returns true when the key was handled here (or left
+   *  to bubble on purpose); false falls through to the classic handling. */
+  private onClosedTypeAhead(ev: KeyboardEvent): boolean {
+    const k = ev.key;
+    const now = this.now();
+    if (k === 'Enter') {
+      if (!this.pending() && !this.session) return false; // nothing typed: as before
+      this.endTypeAhead('enter');
+      if (this.enterAdvances) return true; // bubble → the host's next-field handler
+      ev.preventDefault();
+      ev.stopPropagation();
+      return true;
+    }
+    if (k === 'Escape') {
+      if (!this.revertTypeAhead()) return false; // nothing typed: Escape bubbles (dialogs)
+      ev.preventDefault();
+      ev.stopPropagation();
+      return true;
+    }
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+      if (ev.ctrlKey || ev.metaKey) return false;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (ev.altKey) { this.openPanel(); return true; }
+      this.buffer.reset();
+      this.step(k === 'ArrowDown' ? 1 : -1);
+      return true;
+    }
+    if (k.length !== 1 || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+    if (k === ' ' && !this.buffer.active(now)) return false; // Space opens, as before
+    const q = this.buffer.push(k, now);
+    const idx = typeAheadIndex(this.allOptions, q, this.shownIndex());
+    if (idx < 0) {
+      // No option for this run: keep the current one. A Space inside a run
+      // must not fall through and open the list / press the button.
+      if (k === ' ') { ev.preventDefault(); ev.stopPropagation(); }
+      return true;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.showPending(idx);
+    return true;
+  }
+
+  private step(dir: 1 | -1): void {
+    const opts = this.allOptions;
+    const n = opts.length;
+    let i = this.shownIndex();
+    for (let k = 0; k < n; k++) {
+      i = i < 0 ? (dir > 0 ? 0 : n - 1) : (i + dir + n) % n;
+      if (!opts[i].disabled) { this.showPending(i); return; }
+    }
+  }
+
+  private showPending(idx: number): void {
+    const opt = this.allOptions[idx];
+    if (!opt) return;
+    if (!this.session) this.session = { value: this.value };
+    this.pending.set({ value: opt.value });
+    this.liveMsg.set(opt.label);
+  }
+
+  /** Commit the shown option (one `valueChange`, only if it differs) and
+   *  close the typing round. */
+  private endTypeAhead(source: 'enter' | 'blur'): void {
+    const pend = this.pending();
+    this.pending.set(null);
+    this.session = null;
+    this.buffer.reset();
+    if (pend && String(pend.value) !== String(this.value)) {
+      this.changeSource = source;
+      this.valueChange.emit(pend.value);
+    }
+  }
+
+  /** Escape: drop what was typed. Returns false when nothing was typed. */
+  private revertTypeAhead(): boolean {
+    if (!this.session && !this.pending()) return false;
+    const orig = this.session;
+    this.pending.set(null);
+    this.session = null;
+    this.buffer.reset();
+    if (orig && String(orig.value) !== String(this.value)) {
+      this.changeSource = 'revert';
+      this.valueChange.emit(orig.value);
+    }
+    this.liveMsg.set(this.displayLabel);
+    return true;
   }
 
   private scrollFocusedIntoView(): void {

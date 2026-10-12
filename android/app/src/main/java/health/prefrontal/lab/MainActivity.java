@@ -8,6 +8,7 @@ import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
 
+import health.prefrontal.lab.bridge.PfBridgeLocalPlugin;
 import health.prefrontal.lab.calls.CallRingPlugin;
 import health.prefrontal.lab.calls.PrefrontalMessagingService;
 import health.prefrontal.lab.chat.PfChatReplyPlugin;
@@ -28,6 +29,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PrefrontalPrinterPlugin.class);
         registerPlugin(CallRingPlugin.class);
         registerPlugin(PfChatReplyPlugin.class);
+        registerPlugin(PfBridgeLocalPlugin.class);
         handleCallIntent(getIntent());
         super.onCreate(savedInstanceState);
     }

@@ -11,6 +11,8 @@ const notify = require('./notify');
 // Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
 // under ./instruments/core; this host just wires it to IPC + app lifecycle.
 const instruments = require('./instruments/host-electron');
+// Prefrontal Bridges on the LAN: mDNS discovery + pinned local HTTPS (IPC).
+const bridges = require('./bridges/host-electron');
 // Desktop self-update (electron-updater, generic provider). See
 // docs/DESKTOP-RELEASES.md. Channel comes from the build's own
 // pfDataProfile; a dev run (unpackaged) or a build with none disables it.
@@ -183,6 +185,8 @@ chatNotify.register(() => mainWindow);
 notify.register(() => mainWindow);
 // Analyzer connectors: IPC for the Instruments page (pair / status / listen).
 instruments.register(() => mainWindow);
+// Prefrontal Bridges: discovery + local API for the Bridges screens.
+bridges.register(() => mainWindow);
 // Desktop self-update: IPC for the renderer's update banner. The restart
 // guard reads the SAME instrument manager this registers against, so it
 // never restarts mid-run.
@@ -292,6 +296,7 @@ app.on('second-instance', () => {
 app.on('before-quit', () => {
   calls.setQuitting();
   instruments.stop();
+  bridges.stop();
 });
 
 app.on('window-all-closed', () => {

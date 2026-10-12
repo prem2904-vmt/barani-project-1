@@ -38,6 +38,18 @@ function normalizeType(type) {
   return type || 'auto';
 }
 
+/** Bytes to skip over while sniffing for the FIRST significant byte of a new
+ *  auto-detected session: ordinary whitespace/NUL noise, plus any OTHER
+ *  control byte besides ENQ (ASTM handshake) / VT (MLLP block) — neither is
+ *  ever a valid start of either supported protocol, but some analyzers (e.g.
+ *  the Mindray BC-5130) send a lone <STX> every few seconds as a keep-alive
+ *  between messages. Without this, that stray byte alone would lock the
+ *  session into 'raw' and break the real message that follows. */
+function isAutoNoiseByte(b) {
+  if (b === C.CR || b === C.LF || b === 0x20 || b === 0x00) return true;
+  return b < 0x20 && b !== C.ENQ && b !== C.VT;
+}
+
 class Link extends EventEmitter {
   /**
    * @param {object} cfg   link config ({ type, frameTimeoutMs, terminator, idleMs })
@@ -67,9 +79,10 @@ class Link extends EventEmitter {
   feed(data) {
     let bytes = toBuffer(data);
     if (!this.inner) {
-      // Auto: skip leading whitespace/NUL, decide on the first real byte.
+      // Auto: skip leading noise (whitespace/NUL/keep-alive control bytes),
+      // decide on the first real byte.
       let i = 0;
-      while (i < bytes.length && (bytes[i] === C.CR || bytes[i] === C.LF || bytes[i] === 0x20 || bytes[i] === 0x00)) i++;
+      while (i < bytes.length && isAutoNoiseByte(bytes[i])) i++;
       if (i >= bytes.length) return;
       const b = bytes[i];
       if (b === C.ENQ) this._use('astm-e1381');
@@ -99,4 +112,4 @@ class Link extends EventEmitter {
 
 function createLink(cfg, io) { return new Link(cfg, io); }
 
-module.exports = { createLink, Link, normalizeType };
+module.exports = { createLink, Link, normalizeType, isAutoNoiseByte };

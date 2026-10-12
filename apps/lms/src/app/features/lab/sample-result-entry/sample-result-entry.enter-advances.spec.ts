@@ -88,6 +88,9 @@ async function render() {
 
 describe('Sample result entry — select enterAdvances', () => {
   afterEach(() => { document.body.querySelectorAll('pf-sample-result-entry').forEach(n => n.remove()); });
+  // The previous test's pick is written to a debounced localStorage draft
+  // (pf-lms.sre-draft.*) that the next render would restore — start clean.
+  beforeEach(() => { try { localStorage.clear(); } catch { /* private mode */ } });
 
   it('the single select opts in; the multi-select (panel stays open across picks) does not', async () => {
     const { f } = await render();
@@ -114,5 +117,41 @@ describe('Sample result entry — select enterAdvances', () => {
     key('Enter');
     expect(document.querySelector('.pf-dd__panel')).toBeNull();
     expect(document.activeElement?.closest('[data-sre-field$="collected_on"]')).not.toBeNull();
+  });
+
+  it('type-to-select: "t" + Enter on the closed dropdown sets Turbid ONCE (same setValue path) and advances ONCE', async () => {
+    const { f, el } = await render();
+    const c = f.componentInstance as any;
+    const setValue = vi.spyOn(c, 'setValue');
+    const advanceFromSelect = vi.spyOn(c, 'advanceFromSelect');
+    const trigger = el.querySelector<HTMLButtonElement>('[data-sre-param$="appearance"] .pf-dd__trigger')!;
+    const key = (k: string) => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    trigger.focus();
+    key('t');
+    f.detectChanges();
+    expect(trigger.textContent?.trim()).toBe('Turbid'); // shown at once …
+    expect(setValue).not.toHaveBeenCalled(); // … committed only by Enter
+    expect(document.querySelector('.pf-dd__panel')).toBeNull();
+    key('Enter');
+    expect(setValue).toHaveBeenCalledTimes(1);
+    expect(setValue).toHaveBeenCalledWith('ot1', 'appearance', 'Turbid');
+    // Enter's own bubble (onEnterKey) is the one advance — the change handler
+    // does not advance a second time for a keyboard commit.
+    expect(advanceFromSelect).not.toHaveBeenCalled();
+    expect(document.activeElement?.closest('[data-sre-field$="collected_on"]')).not.toBeNull();
+  });
+
+  it('type-to-select: leaving the field with Tab commits once and never steals focus', async () => {
+    const { f, el } = await render();
+    const c = f.componentInstance as any;
+    const setValue = vi.spyOn(c, 'setValue');
+    const advanceFromSelect = vi.spyOn(c, 'advanceFromSelect');
+    const trigger = el.querySelector<HTMLButtonElement>('[data-sre-param$="appearance"] .pf-dd__trigger')!;
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true, cancelable: true }));
+    trigger.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+    expect(setValue).toHaveBeenCalledTimes(1);
+    expect(setValue).toHaveBeenCalledWith('ot1', 'appearance', 'Clear');
+    expect(advanceFromSelect).not.toHaveBeenCalled();
   });
 });
