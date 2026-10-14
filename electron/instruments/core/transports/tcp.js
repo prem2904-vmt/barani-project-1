@@ -101,6 +101,7 @@ class TcpClientTransport extends EventEmitter {
     this.stopped = true;
     this.timer = null;
     this.kind = 'tcp-client';
+    this.closeGraceMs = 1500;  // how long stop() waits for the peer to release the connection before destroying it
     this.connectedAt = null;   // set on 'connect', cleared on 'close' — tells an immediate close from a real drop
     this.failStreak = 0;       // consecutive immediate-closes — drives the backoff
     this.hintedBusy = false;   // the "accepted and closed" hint is logged once per problem episode
@@ -184,9 +185,21 @@ class TcpClientTransport extends EventEmitter {
     // Await the ACTUAL close (not just calling destroy()) so a caller that
     // starts a replacement transport right after stop() resolves never ends
     // up with two live sockets to the same analyzer at once.
+    //
+    // destroy() alone only closes OUR end: the peer (a one-client analyzer)
+    // notices the FIN later, so a replacement could still connect while the
+    // analyzer believes the old client is attached and refuse it — the
+    // reconnect loop seen on the Mindray BC-5130. So close gracefully
+    // (FIN, then wait for the peer's FIN/close = it has released the slot) and
+    // only destroy as a fallback if the peer doesn't answer in time.
     return new Promise((resolve) => {
-      sock.once('close', () => resolve());
-      sock.destroy();
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearTimeout(fallback); resolve(); };
+      const fallback = setTimeout(() => { sock.destroy(); }, this.closeGraceMs);
+      if (fallback.unref) fallback.unref();
+      sock.once('close', finish);
+      sock.on('error', () => {});
+      sock.end();
     });
   }
 }
