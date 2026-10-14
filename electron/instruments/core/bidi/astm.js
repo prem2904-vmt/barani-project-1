@@ -8,7 +8,8 @@
  * link/astm-e1381.js AstmSender):
  *     found      H , P , O (one per sample; report type O.26 = "O", an order
  *                in response to a query) , L|1|N
- *     no info    H , Q (echo of the request, Q.13 status "X") , L|1|I
+ *     no info    H , L|1|I          (not found, or server timeout with nothing cached)
+ *     refused    H , Q (echo, Q.13 "X") , L|1|Q   (server refused: 409 / non-retryable)
  *
  * Standard references (E1394-97 / LIS2-A2 numbering; the record layouts are
  * identical in both — verify section numbers against your copy):
@@ -179,10 +180,17 @@ function patientName(name, d) {
 }
 
 /**
- * H, then P + O per sample, then L|1|N.
+ * H, then [P] + O per sample, then L|1|N.   (Canonical wire format — the Pi
+ * Bridge emits identical bytes; see test/fixtures/bidi-wire.json.)
+ *   P only when a patient is sent (sendPatient AND the server gave one):
+ *     P.3 and P.4 patient id, P.6 name as ONE plain escaped string, P.8 DOB
+ *     YYYYMMDD, P.9 sex.
+ *   O.3 specimen id, O.5 tests, O.6 priority (S urgent / R), O.7 request time,
+ *     O.8 collected time, O.12 action code, O.16 specimen, O.26 "O".
  * @param {Array<object>} orders  DeviceOrdersDto[] (found, tests non-empty)
  * @param {object} d              delimiters
  * @param {{sampleIdField?:number, sampleIdComponent?:number, actionCode?:string, sendPatient?:boolean, filterTests?:string[]|null, now?:Date}} o
+ *        actionCode default: "A" (reply to a query) — the worklist caller passes "N".
  */
 function buildAstmOrders(orders, d = DEFAULT_DELIMS, o = {}) {
   const esc = (v) => astmEscape(v, d);
@@ -190,21 +198,17 @@ function buildAstmOrders(orders, d = DEFAULT_DELIMS, o = {}) {
   const compN = Number(o.sampleIdComponent) >= 1 ? Number(o.sampleIdComponent) : 1;
   const now = o.now || new Date();
   const lines = [header(d, { now, sender: o.sender, receiver: o.receiver })];
+  let pSeq = 0;
   orders.forEach((dto, i) => {
-    const pt = o.sendPatient !== false ? dto.patient : null;
-    const pmap = { 2: String(i + 1) };
+    const pt = o.sendPatient ? dto.patient : null;
     if (pt) {
-      pmap[3] = esc(pt.id);
-      pmap[6] = patientName(pt.name, d);
-      pmap[8] = String(pt.dob || '').replace(/-/g, '');
-      pmap[9] = esc(pt.sex || '');
-      if (!pt.dob && pt.ageYears != null) pmap[15] = esc(`${pt.ageYears}Y`);   // no standard age field — user "special field 1"
+      pSeq++;
+      lines.push(rec('P', { 2: String(pSeq), 3: esc(pt.id), 4: esc(pt.id), 6: esc(pt.name || ''), 8: String(pt.dob || '').replace(/-/g, ''), 9: esc(pt.sex || '') }, d, 9));
     }
-    lines.push(rec('P', pmap, d, 2));
     const tests = (dto.tests || []).filter((t) => !o.filterTests || o.filterTests.includes(t.code));
     const idVal = `${d.component.repeat(compN - 1)}${esc(dto.sampleId)}`;
     const omap = {
-      2: '1',
+      2: pt ? '1' : String(i + 1),
       5: tests.map((t) => `${d.component}${d.component}${d.component}${esc(t.code)}`).join(d.repeat),
       6: dto.priority === 'urgent' ? 'S' : 'R',
       7: astmTs(now),
@@ -222,15 +226,23 @@ function buildAstmOrders(orders, d = DEFAULT_DELIMS, o = {}) {
 }
 
 /**
- * LIS2-A2 "no information" answer: H, echo of the Q record with Q.13 = X,
- * L|1|I. `status` 'I' (default) — no information; callers may pass 'Q'.
+ * "No information" (LIS2-A2, L.3 = I): `H`, `L|1|I` — nothing else. Used for
+ * not found and for a server timeout/outage with nothing cached.
  */
-function buildAstmNoInfo(query, d = DEFAULT_DELIMS, o = {}) {
+function buildAstmNoInfo(_query, d = DEFAULT_DELIMS, o = {}) {
+  return [header(d, { now: o.now, sender: o.sender, receiver: o.receiver }), 'L|1|I'].join('\r') + '\r';
+}
+
+/**
+ * Server refusal (409 / non-retryable): `H`, echo of the Q record with
+ * Q.13 = X, `L|1|Q` (L.3 Q = error in last request for information).
+ */
+function buildAstmRefused(query, d = DEFAULT_DELIMS, o = {}) {
   const p = String(query.raw || '').split(d.field);
   const q = ['Q', p[1] || '1', p[2] || '', p[3] || '', p[4] || ''];
   while (q.length < 13) q.push('');
   q[12] = 'X';
-  return [header(d, { now: o.now, sender: o.sender, receiver: o.receiver }), q.join(d.field), `L|1|${o.status || 'I'}`].join('\r') + '\r';
+  return [header(d, { now: o.now, sender: o.sender, receiver: o.receiver }), q.join(d.field), 'L|1|Q'].join('\r') + '\r';
 }
 
-module.exports = { parseAstmQueries, hasQuery, hasResults, buildAstmOrders, buildAstmNoInfo, expandRange, astmTs, MAX_RANGE, DEFAULT_DELIMS };
+module.exports = { parseAstmQueries, hasQuery, hasResults, buildAstmOrders, buildAstmNoInfo, buildAstmRefused, expandRange, astmTs, MAX_RANGE, DEFAULT_DELIMS };

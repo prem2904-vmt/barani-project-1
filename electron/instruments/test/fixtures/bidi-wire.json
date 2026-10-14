@@ -1,0 +1,445 @@
+{
+  "note": "Canonical two-way reply bytes. CR is \\r. Local-time fields use TZ=Asia/Kolkata; now = 2026-10-14T06:30:00Z. Shared with the Pi Bridge tests.",
+  "tz": "Asia/Kolkata",
+  "now": "2026-10-14T06:30:00.000Z",
+  "cases": [
+    {
+      "name": "astm answer: urgent, patient sent, escaped name, query action A",
+      "fn": "astm_orders",
+      "input": {
+        "orders": [
+          {
+            "sampleId": "260100001",
+            "found": true,
+            "priority": "urgent",
+            "collectedAt": "2026-10-14T05:10:00Z",
+            "specimen": "Serum",
+            "patient": {
+              "id": "P-1",
+              "name": "Ann Q|Rs^t&u\\v~w",
+              "sex": "F",
+              "dob": "1980-01-31",
+              "ageYears": 46
+            },
+            "tests": [
+              {
+                "code": "GLU",
+                "testCatalogKey": "BIO001",
+                "name": "Glucose"
+              },
+              {
+                "code": "UREA",
+                "testCatalogKey": "BIO002",
+                "name": "Urea"
+              }
+            ],
+            "unmapped": []
+          }
+        ],
+        "sendPatient": true,
+        "actionCode": "A"
+      },
+      "expected": "H|\\^&|||PrefrontalLIS^1.0|||||||P|1|20261014120000\rP|1|P-1|P-1||Ann Q&F&Rs&S&t&E&u&R&v~w||19800131|F\rO|1|260100001||^^^GLU\\^^^UREA|S|20261014120000|20261014104000||||A||||Serum||||||||||O\rL|1|N\r"
+    },
+    {
+      "name": "astm answer: no patient (sendPatient off) — no P record",
+      "fn": "astm_orders",
+      "input": {
+        "orders": [
+          {
+            "sampleId": "260100001",
+            "found": true,
+            "priority": "normal",
+            "collectedAt": "2026-10-14T05:10:00Z",
+            "specimen": "Serum",
+            "patient": {
+              "id": "P-1",
+              "name": "Ann Q|Rs^t&u\\v~w",
+              "sex": "F",
+              "dob": "1980-01-31",
+              "ageYears": 46
+            },
+            "tests": [
+              {
+                "code": "GLU",
+                "testCatalogKey": "BIO001",
+                "name": "Glucose"
+              },
+              {
+                "code": "UREA",
+                "testCatalogKey": "BIO002",
+                "name": "Urea"
+              }
+            ],
+            "unmapped": []
+          }
+        ],
+        "sendPatient": false,
+        "actionCode": "A"
+      },
+      "expected": "H|\\^&|||PrefrontalLIS^1.0|||||||P|1|20261014120000\rO|1|260100001||^^^GLU\\^^^UREA|R|20261014120000|20261014104000||||A||||Serum||||||||||O\rL|1|N\r"
+    },
+    {
+      "name": "astm worklist download: action N, two samples",
+      "fn": "astm_orders",
+      "input": {
+        "orders": [
+          {
+            "sampleId": "260100001",
+            "found": true,
+            "priority": "normal",
+            "collectedAt": "2026-10-14T05:10:00Z",
+            "specimen": "Serum",
+            "patient": null,
+            "tests": [
+              {
+                "code": "GLU",
+                "testCatalogKey": "BIO001",
+                "name": "Glucose"
+              },
+              {
+                "code": "UREA",
+                "testCatalogKey": "BIO002",
+                "name": "Urea"
+              }
+            ],
+            "unmapped": []
+          },
+          {
+            "sampleId": "260100002",
+            "found": true,
+            "priority": "normal",
+            "collectedAt": "2026-10-14T05:10:00Z",
+            "specimen": "Serum",
+            "patient": null,
+            "tests": [
+              {
+                "code": "CHOL",
+                "name": "Cholesterol"
+              }
+            ],
+            "unmapped": []
+          }
+        ],
+        "sendPatient": false,
+        "actionCode": "N"
+      },
+      "expected": "H|\\^&|||PrefrontalLIS^1.0|||||||P|1|20261014120000\rO|1|260100001||^^^GLU\\^^^UREA|R|20261014120000|20261014104000||||N||||Serum||||||||||O\rO|2|260100002||^^^CHOL|R|20261014120000|20261014104000||||N||||Serum||||||||||O\rL|1|N\r"
+    },
+    {
+      "name": "astm not found / timeout with no cache: H, L|1|I",
+      "fn": "astm_noinfo",
+      "input": {
+        "query": "H|\\^&|||BS^1.0\rQ|1|^260100001||^^^ALL||||||||O\rL|1\r"
+      },
+      "expected": "H|\\^&|||PrefrontalLIS^1.0|||||BS||P|1|20261014120000\rL|1|I\r"
+    },
+    {
+      "name": "astm server refusal (409): H, Q echo X, L|1|Q",
+      "fn": "astm_refused",
+      "input": {
+        "query": "H|\\^&|||BS^1.0\rQ|1|^260100001||^^^ALL||||||||O\rL|1\r"
+      },
+      "expected": "H|\\^&|||PrefrontalLIS^1.0|||||BS||P|1|20261014120000\rQ|1|^260100001||^^^ALL||||||||X\rL|1|Q\r"
+    },
+    {
+      "name": "hl7 QCK^Q02 found",
+      "fn": "hl7_qck",
+      "input": {
+        "query": "MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\r",
+        "found": true
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|BS-240|LAB|20261014120000||QCK^Q02|CTRL1|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\r"
+    },
+    {
+      "name": "hl7 QCK^Q02 not found",
+      "fn": "hl7_qck",
+      "input": {
+        "query": "MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\r",
+        "found": false
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|BS-240|LAB|20261014120000||QCK^Q02|CTRL1|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|NF\r"
+    },
+    {
+      "name": "hl7 DSR^Q03 mindray (auto from MSH-3 BS-240), patient, urgent",
+      "fn": "hl7_dsr",
+      "input": {
+        "query": "MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "urgent",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": {
+            "id": "P-1",
+            "name": "Ann Q|Rs^t&u\\v~w",
+            "sex": "F",
+            "dob": "1980-01-31",
+            "ageYears": 46
+          },
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": true
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|BS-240|LAB|20261014120000||DSR^Q03|CTRL2|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\rDSP|1||P-1|||\rDSP|3||Ann Q\\F\\Rs\\S\\t\\T\\u\\E\\v\\R\\w|||\rDSP|4||19800131|||\rDSP|5||F|||\rDSP|21||260100001|||\rDSP|22||260100001|||\rDSP|23||20261014104000|||\rDSP|24||Y|||\rDSP|26||Serum|||\rDSP|29||GLU^^^|||\rDSP|30||UREA^^^|||\r"
+    },
+    {
+      "name": "hl7 DSR^Q03 mindray, no patient",
+      "fn": "hl7_dsr",
+      "input": {
+        "query": "MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "normal",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": null,
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": false
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|BS-240|LAB|20261014120000||DSR^Q03|CTRL2|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\rDSP|21||260100001|||\rDSP|22||260100001|||\rDSP|23||20261014104000|||\rDSP|24||N|||\rDSP|26||Serum|||\rDSP|29||GLU^^^|||\rDSP|30||UREA^^^|||\r"
+    },
+    {
+      "name": "hl7 DSR^Q03 autolab (auto from MSH-3), patient",
+      "fn": "hl7_dsr",
+      "input": {
+        "query": "MSH|^~\\&|Autolab|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|Autolab\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "normal",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": {
+            "id": "P-1",
+            "name": "Ann Q|Rs^t&u\\v~w",
+            "sex": "F",
+            "dob": "1980-01-31",
+            "ageYears": 46
+          },
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": true
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|Autolab|LAB|20261014120000||DSR^Q03|CTRL2|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|Autolab\rDSP|1||P-1|||\rDSP|2||Ann Q\\F\\Rs\\S\\t\\T\\u\\E\\v\\R\\w|||\rDSP|3||F|||\rDSP|4||19800131|||\rDSP|5||GLU^Glucose|||\rDSP|6||UREA^Urea|||\r"
+    },
+    {
+      "name": "hl7 DSR^Q03 generic (unknown analyzer)",
+      "fn": "hl7_dsr",
+      "input": {
+        "query": "MSH|^~\\&|XYZ-1|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|XYZ-1\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "normal",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": {
+            "id": "P-1",
+            "name": "Ann Q|Rs^t&u\\v~w",
+            "sex": "F",
+            "dob": "1980-01-31",
+            "ageYears": 46
+          },
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": true
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|XYZ-1|LAB|20261014120000||DSR^Q03|CTRL2|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|XYZ-1\rDSP|1||260100001|||\rDSP|2||P-1|||\rDSP|3||Ann Q\\F\\Rs\\S\\t\\T\\u\\E\\v\\R\\w|||\rDSP|4||19800131|||\rDSP|5||F|||\rDSP|6||GLU|||\rDSP|7||UREA|||\r"
+    },
+    {
+      "name": "hl7 DSR^Q03 dialect override beats auto-pick",
+      "fn": "hl7_dsr",
+      "input": {
+        "query": "MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "normal",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": null,
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": false,
+        "dialect": "autolab"
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|BS-240|LAB|20261014120000||DSR^Q03|CTRL2|P|2.3.1\rMSA|AA|77\rERR|0\rQAK|SR|OK\rQRD|20261014100000|R|D|9|||1^RD|260100001|OTH|||T\rQRF|BS-240\rDSP|5||GLU^Glucose|||\rDSP|6||UREA^Urea|||\r"
+    },
+    {
+      "name": "hl7 RSP^K11 found, patient, urgent",
+      "fn": "hl7_rsp",
+      "input": {
+        "query": "MSH|^~\\&|AU|LAB|LIS|HOST|20261014100000||QBP^Q11^QBP_Q11|88|P|2.5.1\rQPD|WOS^Work Order Step^IHE_LABTF|TAG7|260100001\rRCP|I||R\r",
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "urgent",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": {
+            "id": "P-1",
+            "name": "Ann Q|Rs^t&u\\v~w",
+            "sex": "F",
+            "dob": "1980-01-31",
+            "ageYears": 46
+          },
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "sendPatient": true
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|AU|LAB|20261014120000||RSP^K11^RSP_K11|CTRL3|P|2.5.1\rMSA|AA|88\rQAK|TAG7|OK|WOS^Work Order Step^IHE_LABTF\rQPD|WOS^Work Order Step^IHE_LABTF|TAG7|260100001\rPID|1||P-1||Q\\F\\Rs\\S\\t\\T\\u\\E\\v\\R\\w^Ann||19800131|F\rSPM|1|260100001||Serum\rORC|NW|260100001|260100001|||||20261014120000\rOBR|1|260100001|260100001|GLU^Glucose^L|S||20261014104000\rORC|NW|260100001|260100001|||||20261014120000\rOBR|2|260100001|260100001|UREA^Urea^L|S||20261014104000\r"
+    },
+    {
+      "name": "hl7 RSP^K11 not found",
+      "fn": "hl7_rsp",
+      "input": {
+        "query": "MSH|^~\\&|AU|LAB|LIS|HOST|20261014100000||QBP^Q11^QBP_Q11|88|P|2.5.1\rQPD|WOS^Work Order Step^IHE_LABTF|TAG7|260100001\rRCP|I||R\r",
+        "dto": null,
+        "sendPatient": false
+      },
+      "expected": "MSH|^~\\&|LIS|HOST|AU|LAB|20261014120000||RSP^K11^RSP_K11|CTRL3|P|2.5.1\rMSA|AA|88\rQAK|TAG7|NF|WOS^Work Order Step^IHE_LABTF\rQPD|WOS^Work Order Step^IHE_LABTF|TAG7|260100001\r"
+    },
+    {
+      "name": "hl7 worklist ORM^O01 no patient",
+      "fn": "hl7_worklist",
+      "input": {
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "normal",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": null,
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "type": "orm_o01",
+        "sendPatient": false
+      },
+      "expected": "MSH|^~\\&|PREFRONTAL|LIS|||20261014120000||ORM^O01|CTRL4|P|2.3.1\rORC|NW|260100001|260100001|||||20261014120000\rOBR|1|260100001|260100001|GLU^Glucose^L|R||20261014104000\rORC|NW|260100001|260100001|||||20261014120000\rOBR|2|260100001|260100001|UREA^Urea^L|R||20261014104000\r"
+    },
+    {
+      "name": "hl7 worklist OML^O21 patient, urgent",
+      "fn": "hl7_worklist",
+      "input": {
+        "dto": {
+          "sampleId": "260100001",
+          "found": true,
+          "priority": "urgent",
+          "collectedAt": "2026-10-14T05:10:00Z",
+          "specimen": "Serum",
+          "patient": {
+            "id": "P-1",
+            "name": "Ann Q|Rs^t&u\\v~w",
+            "sex": "F",
+            "dob": "1980-01-31",
+            "ageYears": 46
+          },
+          "tests": [
+            {
+              "code": "GLU",
+              "testCatalogKey": "BIO001",
+              "name": "Glucose"
+            },
+            {
+              "code": "UREA",
+              "testCatalogKey": "BIO002",
+              "name": "Urea"
+            }
+          ],
+          "unmapped": []
+        },
+        "type": "oml_o21",
+        "sendPatient": true
+      },
+      "expected": "MSH|^~\\&|PREFRONTAL|LIS|||20261014120000||OML^O21^OML_O21|CTRL4|P|2.5.1\rPID|1||P-1||Q\\F\\Rs\\S\\t\\T\\u\\E\\v\\R\\w^Ann||19800131|F\rSPM|1|260100001||Serum\rORC|NW|260100001|260100001|||||20261014120000\rOBR|1|260100001|260100001|GLU^Glucose^L|S||20261014104000\rORC|NW|260100001|260100001|||||20261014120000\rOBR|2|260100001|260100001|UREA^Urea^L|S||20261014104000\r"
+    }
+  ]
+}

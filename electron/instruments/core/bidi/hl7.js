@@ -20,19 +20,32 @@
  * The DSR^Q03 "DSP" row layout is vendor-specific. The positions live in the
  * DSP_DIALECTS table below ('mindray-bs' default, 'generic' = patient-less
  * sequential rows) and can be overridden per instrument with
- * bidirectional.hl7Dialect (name) — they were taken from published Mindray
- * BS-series LIS interface descriptions and MUST be confirmed against the
- * target analyzer's manual.
+ * bidirectional.hl7Dialect (name); otherwise auto-picked from MSH-3/4. Confirm
+ * against the target analyzer's manual.
  */
 const { encodingOf } = require('../parsers/hl7');
 const { hl7Escape } = require('./escape');
 
-/** DSP-n (sequence) → what it carries. `tests` = first DSP row of the test list. */
+/**
+ * DSR^Q03 DSP row layouts. DSP-1 is the row number, DSP-3 the value.
+ *   rows   field → row number;  tests = row number of the first test;
+ *   testFormat(code, name) → value.
+ * 'mindray-bs' is the Mindray BS-series layout: 1 admission/patient id,
+ * 3 name, 4 DOB, 5 sex, 21 sample barcode, 22 sample id, 23 sample time,
+ * 24 STAT (Y/N), 26 sample type, tests from 29 as `code^^^`.
+ * 'autolab': patient id, name, sex, DOB, then `code^name` per test.
+ */
 const DSP_DIALECTS = Object.freeze({
   'mindray-bs': {
-    rows: { patientId: 2, name: 4, dob: 5, sex: 6, sampleId: 21, collectedAt: 22, specimen: 24, priority: 25 },
-    tests: 26,
+    rows: { patientId: 1, name: 3, dob: 4, sex: 5, barcode: 21, sampleId: 22, collectedAt: 23, priority: 24, specimen: 26 },
+    tests: 29,
     testFormat: (code) => `${code}^^^`,
+    qrdSampleField: 8,
+  },
+  autolab: {
+    rows: { patientId: 1, name: 2, sex: 3, dob: 4 },
+    tests: 5,
+    testFormat: (code, name) => `${code}^${name || code}`,
     qrdSampleField: 8,
   },
   generic: {
@@ -42,6 +55,15 @@ const DSP_DIALECTS = Object.freeze({
     qrdSampleField: 8,
   },
 });
+
+/** Pick the DSP layout from the analyzer's MSH-3/4 unless `override` names one. */
+function pickDialect(msh, override) {
+  if (override && DSP_DIALECTS[override]) return override;
+  const id = `${msh && msh.sendingApp} ${msh && msh.sendingFac}`;
+  if (/mindray|\bBS-?\d|\bBC-?\d|\bBS\b/i.test(id)) return 'mindray-bs';
+  if (/autolab|eurolab|\bAU\d*\b|erba|transasia|xl-?\d/i.test(id)) return 'autolab';
+  return 'generic';
+}
 
 let seq = 0;
 function controlId(now = Date.now()) { return `PF${now.toString(36).toUpperCase()}${(++seq).toString(36).toUpperCase()}`; }
@@ -74,7 +96,7 @@ function classifyHl7(text, cfg = {}) {
   const m = (n) => mp[n - 1] ?? '';
   const type = m(9).split(e.component);
   const msh = { sendingApp: m(3), sendingFac: m(4), recvApp: m(5), recvFac: m(6), ctrl: m(10), proc: m(11) || 'P', version: m(12) || '2.3.1', enc: mshLine.slice(4).split(e.field)[0] || '^~\\&' };
-  const dialect = DSP_DIALECTS[cfg.hl7Dialect] || DSP_DIALECTS['mindray-bs'];
+  const dialect = DSP_DIALECTS[pickDialect(msh, cfg.hl7Dialect)];
   const seg = (name) => all.find((s) => s.startsWith(`${name}${e.field}`));
   const fieldOf = (line, n) => (line ? (line.split(e.field)[n] ?? '') : '');
   if (type[0] === 'QRY' || (type[0] === 'QRY' && type[1] === 'Q02')) {
@@ -102,10 +124,10 @@ function mshLine(e, msh, { type, ctrl, now, version }) {
 }
 
 /** QCK^Q02 acknowledgement (HL7 2.3.1 §5.?.? — MSA, [ERR], QAK with SR|OK|NF). */
-function buildQck(q, found, { now = new Date() } = {}) {
+function buildQck(q, found, { now = new Date(), ctrl } = {}) {
   const { e, msh } = q;
   return [
-    mshLine(e, msh, { type: `QCK${e.component}Q02`, ctrl: controlId(), now }),
+    mshLine(e, msh, { type: `QCK${e.component}Q02`, ctrl: ctrl || controlId(), now }),
     ['MSA', 'AA', msh.ctrl].join(e.field),
     ['ERR', '0'].join(e.field),
     ['QAK', 'SR', found ? 'OK' : 'NF'].join(e.field),
@@ -113,11 +135,11 @@ function buildQck(q, found, { now = new Date() } = {}) {
 }
 
 /** DSR^Q03 display response: the order as DSP rows (layout per dialect table). */
-function buildDsr(q, dto, { now = new Date(), dialect = 'mindray-bs', sendPatient = true } = {}) {
+function buildDsr(q, dto, { now = new Date(), dialect, sendPatient = true, ctrl } = {}) {
   const { e, msh } = q;
-  const dl = DSP_DIALECTS[dialect] || DSP_DIALECTS['mindray-bs'];
+  const dl = DSP_DIALECTS[pickDialect(q.msh, dialect)];
   const lines = [
-    mshLine(e, msh, { type: `DSR${e.component}Q03`, ctrl: controlId(), now }),
+    mshLine(e, msh, { type: `DSR${e.component}Q03`, ctrl: ctrl || controlId(), now }),
     ['MSA', 'AA', msh.ctrl].join(e.field),
     ['ERR', '0'].join(e.field),
     ['QAK', 'SR', 'OK'].join(e.field),
@@ -127,18 +149,19 @@ function buildDsr(q, dto, { now = new Date(), dialect = 'mindray-bs', sendPatien
   const vals = {};
   const pt = sendPatient ? dto.patient : null;
   vals.sampleId = dto.sampleId;
+  vals.barcode = dto.sampleId;
   if (pt) { vals.patientId = pt.id; vals.name = pt.name; vals.dob = String(pt.dob || '').replace(/-/g, ''); vals.sex = pt.sex; }
   if (dto.collectedAt) { const d = new Date(dto.collectedAt); if (!Number.isNaN(d.getTime())) vals.collectedAt = hl7Ts(d); }
   if (dto.specimen) vals.specimen = dto.specimen;
   vals.priority = dto.priority === 'urgent' ? 'Y' : 'N';
   const rows = [];
   for (const [k, n] of Object.entries(dl.rows)) if (vals[k] != null && vals[k] !== '') rows.push([n, vals[k], false]);
-  (dto.tests || []).forEach((t, i) => rows.push([dl.tests + i, dl.testFormat(t.code), true]));
+  (dto.tests || []).forEach((t, i) => rows.push([dl.tests + i, dl.testFormat(t.code, t.name), true]));
   rows.sort((a, b) => a[0] - b[0]);
   for (const [n, v, isTest] of rows) {
     // Test rows keep their component separators (CODE^^^) — escape only the code.
-    const val = isTest ? v.split(e.component).map((c) => hl7Escape(c, e)).join(e.component) : v;
-    lines.push(['DSP', String(n), '', isTest ? val : hl7Escape(val, e), '', '', ''].join(e.field));
+    const val = isTest ? v.split(e.component).map((c) => hl7Escape(c, e)).join(e.component) : hl7Escape(v, e);
+    lines.push(['DSP', String(n), '', val, '', '', ''].join(e.field));
   }
   return lines.join('\r') + '\r';
 }
@@ -165,12 +188,12 @@ function obrSegments(e, dto, startAt, { now, codeSystem = 'L' }) {
 }
 
 /** RSP^K11 (IHE LAW WOS response). */
-function buildRsp(q, dto, { now = new Date(), sendPatient = true } = {}) {
+function buildRsp(q, dto, { now = new Date(), sendPatient = true, ctrl } = {}) {
   const { e, msh } = q;
   const tag = q.queryId;
   const found = !!dto;
   const lines = [
-    mshLine(e, msh, { type: ['RSP', 'K11', 'RSP_K11'].join(e.component), ctrl: controlId(), now, version: msh.version }),
+    mshLine(e, msh, { type: ['RSP', 'K11', 'RSP_K11'].join(e.component), ctrl: ctrl || controlId(), now, version: msh.version }),
     ['MSA', 'AA', msh.ctrl].join(e.field),
     ['QAK', tag, found ? 'OK' : 'NF', q.queryName || ''].join(e.field),
     q.qpd,
@@ -192,7 +215,7 @@ function buildWorklistMessage(dto, o = {}) {
   const e = { field: '|', component: '^', repeat: '~', escape: '\\', sub: '&' };
   const now = o.now || new Date();
   const oml = o.type === 'oml_o21';
-  const ctrl = controlId();
+  const ctrl = o.ctrl || controlId();
   const lines = [[
     'MSH', '^~\\&', o.app || 'PREFRONTAL', o.fac || 'LIS', o.recvApp || '', o.recvFac || '', hl7Ts(now), '',
     oml ? 'OML^O21^OML_O21' : 'ORM^O01', ctrl, 'P', oml ? '2.5.1' : '2.3.1',
@@ -203,4 +226,4 @@ function buildWorklistMessage(dto, o = {}) {
   return { text: lines.join('\r') + '\r', ctrl };
 }
 
-module.exports = { classifyHl7, buildQck, buildDsr, buildRsp, buildWorklistMessage, DSP_DIALECTS, controlId, hl7Ts };
+module.exports = { pickDialect, classifyHl7, buildQck, buildDsr, buildRsp, buildWorklistMessage, DSP_DIALECTS, controlId, hl7Ts };

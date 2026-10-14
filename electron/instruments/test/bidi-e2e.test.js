@@ -95,7 +95,7 @@ for (const kind of Object.keys(KINDS)) {
         assert.equal(st.mode, 'query'); assert.equal(st.queriesAnswered, 1); assert.equal(st.queriesNotFound, 0);
         assert.ok(r.notes().some((n) => /answered/.test(n)));
         if (kind === 'astm') {
-          assert.equal(o[0].priority, 'S'); assert.equal(o[0].report, 'O'); assert.equal(o[0].patient, null);
+          assert.equal(o[0].priority, 'S'); assert.equal(o[0].action, 'A'); assert.equal(o[0].report, 'O'); assert.equal(o[0].patient, null);
         }
       } finally { await r.close(); }
     });
@@ -106,7 +106,7 @@ for (const kind of Object.keys(KINDS)) {
         const a = await KINDS[kind].ask(r.sim, '999999999');
         assert.equal(ordersOf(a).length, 0);
         assert.ok(a.text, 'the analyzer still got an answer');
-        if (kind === 'astm') { assert.equal(a.noInfo, true); assert.match(a.text, /Q\|1\|[^|]*\|[^|]*\|[^|]*\|[|]*X/); assert.ok(!/(^|\r)O\|/.test(a.text)); }
+        if (kind === 'astm') { assert.equal(a.noInfo, true); assert.ok(!/(^|\r)Q\|/.test(a.text)); assert.ok(!/(^|\r)O\|/.test(a.text)); }
         if (kind === 'hl7-q02') { assert.match(a.qck, /QAK\|SR\|NF/); assert.equal(a.dsr, null); assert.ok(!r.sim.received.some((t) => /DSR\^Q03/.test(t))); }
         if (kind === 'hl7-q11') assert.match(a.rsp, /QAK\|TAG[^|]*\|NF/);
         assert.equal(r.connector.status().bidi.queriesNotFound, 1);
@@ -125,6 +125,7 @@ for (const kind of Object.keys(KINDS)) {
         const cold = await KINDS[kind].ask(r.sim, 'B2');
         assert.equal(ordersOf(cold).length, 0, 'nothing cached → no order, tests are never invented');
         assert.ok(cold.text, 'but still answered');
+        if (kind === 'astm') assert.deepEqual(cold.text.split('\r').filter(Boolean).map((x) => x[0]), ['H', 'L'], 'timeout with no cache = H, L|1|I only');
         assert.ok(Date.now() - t0 < 1400, 'bounded by the ceiling, not the 1.5 s server');
         const st = r.connector.status().bidi;
         assert.equal(st.queriesFromCache, 1); assert.equal(st.queryErrors, 1);
@@ -149,7 +150,7 @@ for (const kind of Object.keys(KINDS)) {
         const a = await KINDS[kind].ask(r.sim, 'E1');
         const o = ordersOf(a)[0];
         assert.equal(o.sampleId, 'E1');
-        if (kind === 'astm') { assert.equal(o.patient.name, 'Q|Rs^t&u\\v~w Ann'); assert.equal(o.patient.id, 'P|1^2'); }
+        if (kind === 'astm') { assert.equal(o.patient.name, NASTY); assert.equal(o.patient.id, 'P|1^2'); }
         if (kind === 'hl7-q02') { assert.equal(o.name, NASTY); assert.equal(o.patientId, 'P|1^2'); }
         if (kind === 'hl7-q11') assert.equal(o.patient.name, 'Ann Q|Rs^t&u\\v~w');
       } finally { await r.close(); }
@@ -196,6 +197,21 @@ for (const kind of Object.keys(KINDS)) {
     });
   }
 }
+
+// ── server refusal ────────────────────────────────────────────────────────
+test('ASTM server refusal (409): Q echo with Q.13=X and L|1|Q, even if the order is cached', async () => {
+  const r = await rig({ kind: 'astm', transport: 'tcp-server', bidi: { mode: 'query' }, apiOpts: { orders: { A1: dto('A1', ['GLU']) } } });
+  try {
+    await r.sim.queryAstm('A1');                       // warm the cache
+    r.api.bidi.ordersStatus = 409;
+    const a = await r.sim.queryAstm('A1');
+    const recs = a.text.split('\r').filter(Boolean);
+    assert.deepEqual(recs.map((x) => x[0]), ['H', 'Q', 'L']);
+    assert.equal(recs[1].split('|')[12], 'X');
+    assert.equal(recs[2], 'L|1|Q');
+    assert.equal(r.connector.status().bidi.queryErrors, 1);
+  } finally { await r.close(); }
+});
 
 // ── ASTM-specific ─────────────────────────────────────────────────────────
 for (const transport of ['tcp-server', 'tcp-client']) {
@@ -293,6 +309,7 @@ for (const [kind, hl7Order] of WL) {
         assert.equal(res.sent, 2);
         assert.deepEqual((await r.sim.waitWorklist(2)).map((o) => o.sampleId), ['W1', 'W2']);
         assert.deepEqual(r.sim.worklist[0].tests, ['GLU', 'UREA']);
+        if (kind === 'astm') assert.equal(r.sim.worklist[0].action, 'N', 'worklist download default action code');
         res = await r.connector.bidi.worklistTick();
         assert.equal(res.sent, 0, 'nothing re-sent');
         await wait(100);

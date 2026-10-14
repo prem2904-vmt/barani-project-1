@@ -22,7 +22,7 @@ function parseAstmOrders(text) {
   const un = (v) => String(v).replace(/&([FSRE])&/g, (_m, k) => ({ F: d.f, S: d.c, R: d.r, E: d.e }[k]));
   for (const rec of split(text)) {
     const p = rec.split('|');
-    if (rec[0] === 'P') patient = { id: un(p[2] || ''), name: (p[5] || '').split('^').map(un).join(' ').trim() || null };
+    if (rec[0] === 'P') patient = { id: un(p[2] || ''), name: un(p[5] || '').trim() || null };
     if (rec[0] === 'O') {
       out.push({
         sampleId: un((p[2] || '').split('^').pop() || p[3] || ''),
@@ -50,13 +50,16 @@ function parseHl7Orders(text) {
   return out;
 }
 
-/** DSR^Q03 (mindray-bs layout) → { sampleId, patientId, name, tests }. */
-function parseDsr(text) {
+/** DSR^Q03 (mindray-bs layout; `autolab` for the Autolab one) → { sampleId, patientId, name, tests }. */
+function parseDsr(text, layout = 'mindray-bs') {
   const row = {};
   for (const seg of split(text)) { const p = seg.split('|'); if (p[0] === 'DSP') row[Number(p[1])] = p[3]; }
-  const tests = Object.keys(row).map(Number).filter((n) => n >= 26).sort((a, b) => a - b).map((n) => row[n].split('^')[0]);
   const unq = (v) => (v == null ? v : String(v).replace(/\\([FSTRE])\\/g, (_m, k) => ({ F: '|', S: '^', T: '&', R: '~', E: '\\' }[k])));
-  return { sampleId: row[21], patientId: unq(row[2]), name: unq(row[4]), tests };
+  const first = layout === 'autolab' ? 5 : 29;
+  const tests = Object.keys(row).map(Number).filter((n) => n >= first).sort((a, b) => a - b).map((n) => row[n].split('^')[0]);
+  return layout === 'autolab'
+    ? { sampleId: null, patientId: unq(row[1]), name: unq(row[2]), tests }
+    : { sampleId: row[21], patientId: unq(row[1]), name: unq(row[3]), tests };
 }
 
 class QuerySim {
@@ -127,7 +130,7 @@ class QuerySim {
   /** HL7 original-mode query QRY^Q02 → { qck, dsr, ... } */
   async queryQ02(sampleId) {
     const ctrl = `Q${Date.now().toString(36)}`;
-    const msg = [`MSH|^~\\&|SIM-CHEM|LAB|PREFRONTAL|LIS|${ts()}||QRY^Q02|${ctrl}|P|2.3.1`, `QRD|${ts()}|R|D|1|||1^RD|${sampleId}|OTH|||T`, 'QRF|SIM-CHEM'].join('\r') + '\r';
+    const msg = [`MSH|^~\\&|BS-240|LAB|PREFRONTAL|LIS|${ts()}||QRY^Q02|${ctrl}|P|2.3.1`, `QRD|${ts()}|R|D|1|||1^RD|${sampleId}|OTH|||T`, 'QRF|SIM-CHEM'].join('\r') + '\r';
     const first = this._next((t) => /\|QCK\^Q02\|/.test(t));
     this.io.write(mllpFrame(msg));
     const qck = await first;

@@ -17,7 +17,7 @@
  * (hard 4 s server ceiling; every failure ends in a protocol-correct "no
  * information"). We never start a run: the tube must be loaded on the analyzer.
  */
-const { parseAstmQueries, hasQuery, hasResults, buildAstmOrders, buildAstmNoInfo, astmTs, DEFAULT_DELIMS } = require('./astm');
+const { parseAstmQueries, hasQuery, hasResults, buildAstmOrders, buildAstmNoInfo, buildAstmRefused, astmTs, DEFAULT_DELIMS } = require('./astm');
 const { classifyHl7, buildQck, buildDsr, buildRsp, buildWorklistMessage } = require('./hl7');
 const { SentJournal, OrderCache } = require('./store');
 const { AstmSender } = require('../link/astm-e1381');
@@ -36,11 +36,11 @@ function normalizeBidi(raw) {
     sendPatient: !!b.sendPatient,
     hl7Query: ['auto', 'qry_q02', 'qbp_q11'].includes(b.hl7Query) ? b.hl7Query : 'auto',
     hl7Order: b.hl7Order === 'oml_o21' ? 'oml_o21' : 'orm_o01',
-    hl7Dialect: typeof b.hl7Dialect === 'string' ? b.hl7Dialect : 'mindray-bs',
+    hl7Dialect: typeof b.hl7Dialect === 'string' && b.hl7Dialect !== 'auto' ? b.hl7Dialect : '',   // '' = auto from MSH-3/4
     worklistWindowHours: clamp(b.worklistWindowHours, 1, 168, 24),
     worklistPollSeconds: clamp(b.worklistPollSeconds, 15, 3600, 60),
     astmQueryComponent: Number(b.astmQueryComponent) >= 1 ? Number(b.astmQueryComponent) : 0,
-    astmActionCode: typeof b.astmActionCode === 'string' && b.astmActionCode ? b.astmActionCode[0].toUpperCase() : 'A',
+    astmActionCode: typeof b.astmActionCode === 'string' && b.astmActionCode ? b.astmActionCode[0].toUpperCase() : '',   // '' = A for query replies, N for worklist downloads
     qrdSampleField: Number(b.qrdSampleField) || 0,
     qpdSampleField: Number(b.qpdSampleField) || 0,
   };
@@ -181,6 +181,9 @@ class BidiHost {
       return { status: 'notfound' };
     } catch (e) {
       this.lastError = `orders: ${e.message}`;
+      // 409 (two-way off on the server) or any other non-retryable refusal: the
+      // cache must not paper over it.
+      if (e && e.kind === 'permanent') return { status: 'refused' };
       this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
       const cached = this.cache.get(sampleId);
       if (cached) return { status: 'ok', dto: cached, fromCache: true };
@@ -203,6 +206,7 @@ class BidiHost {
     for (const q of queries) {
       let orders = [];
       let errored = false;
+      let refused = false;
       if (q.all) {
         let items = [];
         try {
@@ -216,20 +220,21 @@ class BidiHost {
         res.forEach((r) => {
           if (r.status === 'ok') { const d = this._filterTests(r.dto, q.tests); if (d) { orders.push(d); if (r.fromCache) this._bump('queriesFromCache'); } }
           else if (r.status === 'error') errored = true;
+          else if (r.status === 'refused') refused = true;
         });
       }
       orders = orders.map((d) => this._filterTests(d, q.tests)).filter(Boolean);
       const ids = q.all ? '(ALL)' : q.ids.join(',');
-      const sendOpts = { sender: 'PrefrontalLIS', receiver: header.sender, sampleIdField: this.c.active && this.c.active.parser && this.c.active.parser.astm && this.c.active.parser.astm.sampleIdField, sampleIdComponent: this.c.active && this.c.active.parser && this.c.active.parser.astm && this.c.active.parser.astm.sampleIdComponent, actionCode: cfg.astmActionCode, sendPatient: cfg.sendPatient };
+      const sendOpts = { sender: 'PrefrontalLIS', receiver: header.sender, sampleIdField: this.c.active && this.c.active.parser && this.c.active.parser.astm && this.c.active.parser.astm.sampleIdField, sampleIdComponent: this.c.active && this.c.active.parser && this.c.active.parser.astm && this.c.active.parser.astm.sampleIdComponent, actionCode: cfg.astmActionCode || 'A', sendPatient: cfg.sendPatient };
       let out;
       if (orders.length) {
         out = buildAstmOrders(orders, delims, sendOpts);
         this._bump('queriesAnswered');
         this._note(`answered query ${ids}: ${orders.map((o) => `${o.sampleId}[${o.tests.map((t) => t.code).join(' ')}]`).join(' ')}`);
       } else {
-        out = buildAstmNoInfo(q, delims, sendOpts);
-        this._bump(errored ? 'queryErrors' : 'queriesNotFound');
-        this._note(`query ${ids}: ${errored ? 'server unavailable and nothing cached' : 'no order on record'} — sent "no information" (L|1|I)`);
+        out = refused ? buildAstmRefused(q, delims, sendOpts) : buildAstmNoInfo(q, delims, sendOpts);
+        this._bump(errored || refused ? 'queryErrors' : 'queriesNotFound');
+        this._note(`query ${ids}: ${refused ? 'server refused' : errored ? 'server unavailable and nothing cached' : 'no order on record'} — sent ${refused ? 'L|1|Q' : '"no information" (L|1|I)'}`);
       }
       this.lastQueryAt = new Date(this.c.now()).toISOString();
       try { await this._sendAstm(sessionId, out); } catch (e) { this.lastError = `astm reply: ${e.message}`; this._note(`could not send the answer: ${e.message}`); this._bump('queryErrors'); }
@@ -276,7 +281,7 @@ class BidiHost {
       frames.push(buildRsp({ ...cl, qpd: cl.qpd || `QPD|WOS^Work Order Step^IHE_LABTF|${cl.queryId || ''}|${cl.sampleId}`, queryName: cl.queryName }, dto, { now, sendPatient: cfg.sendPatient }));
     }
     if (dto) { this._bump('queriesAnswered'); if (r.fromCache) this._bump('queriesFromCache'); this._note(`answered ${cl.sampleId}: ${dto.tests.map((t) => t.code).join(' ')}${r.fromCache ? ' (from cache)' : ''}`); }
-    else { this._bump(r.status === 'error' ? 'queryErrors' : 'queriesNotFound'); this._note(`query ${cl.sampleId}: ${r.status === 'error' ? 'server unavailable and nothing cached' : 'no order on record'} — replied NF`); }
+    else { this._bump(r.status === 'error' || r.status === 'refused' ? 'queryErrors' : 'queriesNotFound'); this._note(`query ${cl.sampleId}: ${r.status === 'error' ? 'server unavailable and nothing cached' : 'no order on record'} — replied NF`); }
     this.lastQueryAt = new Date(this.c.now()).toISOString();
     for (const f of frames) this.c._writeOut(mllpFrame(f), sessionId);
   }
@@ -340,7 +345,7 @@ class BidiHost {
       try {
         if (protocol === 'astm') {
           const p = this.c.active && this.c.active.parser && this.c.active.parser.astm || {};
-          const msg = buildAstmOrders([dto], DEFAULT_DELIMS, { sender: 'PrefrontalLIS', sampleIdField: p.sampleIdField, sampleIdComponent: p.sampleIdComponent, actionCode: cfg.astmActionCode, sendPatient: cfg.sendPatient });
+          const msg = buildAstmOrders([dto], DEFAULT_DELIMS, { sender: 'PrefrontalLIS', sampleIdField: p.sampleIdField, sampleIdComponent: p.sampleIdComponent, actionCode: cfg.astmActionCode || 'N', sendPatient: cfg.sendPatient });
           await this._run(sessionId, () => this._sendAstm(sessionId, msg));
           return true;
         }

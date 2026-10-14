@@ -79,7 +79,8 @@ test('ASTM answer: H P O L, repeat list, report type O, action code, escaping ro
   assert.equal(o.length, 26);
   assert.ok(!/Q\|Rs/.test(recs[1]), 'raw field delimiter never leaks into the P record');
   const orders = parseAstmOrders(msg);
-  assert.equal(orders[0].patient.name, `Q|Rs^t&u\\v~w Ann`);
+  assert.equal(orders[0].patient.name, NASTY);
+  assert.equal(recs[1], `P|1|P&F&1|P&F&1||Ann Q&F&Rs&S&t&E&u&R&v~w||19800131|F`.replace('P&F&1|P&F&1', 'P-1|P-1'));
   assert.deepEqual(orders[0].tests, ['GLU', 'UREA']);
   // The connector's own results parser also reads the answer back (sample id field/component)
   assert.equal(parseAstm(msg)[0].sampleId, '260100001');
@@ -90,7 +91,7 @@ test('ASTM answer: sample ID in O.4 / component 2 when the analyzer config says 
   const o = msg.split('\r').find((r) => r[0] === 'O').split('|');
   assert.equal(o[2], '');
   assert.equal(o[3], '^260100001');
-  assert.equal(msg.split('\r').find((r) => r[0] === 'P'), 'P|1');
+  assert.equal(msg.split('\r').find((r) => r[0] === 'P'), undefined, 'no P record without a patient');
   assert.equal(parseAstm(msg, { sampleIdField: 4, sampleIdComponent: 2 })[0].sampleId, '260100001');
 });
 
@@ -101,15 +102,16 @@ test('ASTM answer: honours the analyzer delimiters; test filter', () => {
   assert.match(msg, /O#1#260100001##\$\$\$UREA#/);
 });
 
-test('ASTM no information (LIS2-A2): H, Q echo with status X, L|1|I — never an empty order', () => {
+test('ASTM no information (LIS2-A2): H, L|1|I only — never an empty order; refusal = H, Q echo X, L|1|Q', () => {
   const q = A.parseAstmQueries('H|\\^&\rQ|1|^999||^^^ALL||||||||O\rL|1\r').queries[0];
-  const msg = A.buildAstmNoInfo(q, A.DEFAULT_DELIMS, {});
-  const recs = msg.split('\r').filter(Boolean);
-  assert.deepEqual(recs.map((r) => r[0]), ['H', 'Q', 'L']);
-  assert.equal(recs[1].split('|')[12], 'X');
-  assert.equal(recs[1].split('|')[2], '^999');
-  assert.equal(recs[2], 'L|1|I');
-  assert.ok(!recs.some((r) => r[0] === 'O'));
+  const recs = A.buildAstmNoInfo(q, A.DEFAULT_DELIMS, {}).split('\r').filter(Boolean);
+  assert.deepEqual(recs.map((r) => r[0]), ['H', 'L']);
+  assert.equal(recs[1], 'L|1|I');
+  const ref = A.buildAstmRefused(q, A.DEFAULT_DELIMS, {}).split('\r').filter(Boolean);
+  assert.deepEqual(ref.map((r) => r[0]), ['H', 'Q', 'L']);
+  assert.equal(ref[1].split('|')[12], 'X');
+  assert.equal(ref[1].split('|')[2], '^999');
+  assert.equal(ref[2], 'L|1|Q');
 });
 
 const QRY = (id) => `MSH|^~\\&|BS-240|LAB|LIS|HOST|20261014100000||QRY^Q02|77|P|2.3.1\rQRD|20261014100000|R|D|9|||1^RD|${id}|OTH|||T\rQRF|BS-240\r`;
@@ -135,11 +137,18 @@ test('HL7 QCK/DSR: QCK OK+NF, DSR rows per dialect (mindray-bs), sample id and t
   assert.match(dsr, /\|DSR\^Q03\|/);
   const p = parseDsr(dsr);
   assert.equal(p.sampleId, '260100001'); assert.deepEqual(p.tests, ['GLU', 'UREA']); assert.equal(p.name, NASTY);
-  assert.match(dsr, /DSP\|26\|\|GLU\^\^\^\|\|\|\r/);
-  assert.ok(!/DSP\|4\|/.test(H.buildDsr(q, DTO({ patient: { id: 'P', name: 'N' } }), { sendPatient: false })), 'no patient rows unless sendPatient');
+  assert.match(dsr, /DSP\|29\|\|GLU\^\^\^\|\|\|\r/);
+  assert.match(dsr, /DSP\|24\|\|N\|/);
+  assert.ok(!/DSP\|3\|/.test(H.buildDsr(q, DTO({ patient: { id: 'P', name: 'N' } }), { sendPatient: false })), 'no patient rows unless sendPatient');
   assert.match(dsr, /^MSH\|\^~\\&\|LIS\|HOST\|BS-240\|LAB\|/);        // sender/receiver swapped
   const gen = H.buildDsr(q, DTO(), { dialect: 'generic' });
   assert.match(gen, /DSP\|6\|\|GLU\|/);
+  const al = H.buildDsr(q, DTO({ patient: { id: 'P-1', name: 'A B', sex: 'M', dob: '1980-01-31' } }), { dialect: 'autolab' });
+  assert.match(al, /DSP\|5\|\|GLU\^Glucose\|/);
+  assert.equal(H.pickDialect({ sendingApp: 'BS-240', sendingFac: 'LAB' }), 'mindray-bs');
+  assert.equal(H.pickDialect({ sendingApp: 'Autolab', sendingFac: '' }), 'autolab');
+  assert.equal(H.pickDialect({ sendingApp: 'XYZ', sendingFac: '' }), 'generic');
+  assert.equal(H.pickDialect({ sendingApp: 'BS-240', sendingFac: '' }, 'generic'), 'generic');
 });
 
 test('HL7 RSP^K11: ORC/OBR per test, OK and NF, echoes tag and QPD', () => {
@@ -160,7 +169,7 @@ test('HL7 worklist: ORM^O01 and OML^O21, PID only with a patient, one ORC/OBR pe
   assert.match(orm.text, /\|ORM\^O01\|PF/); assert.ok(!/\rPID\|/.test(orm.text)); assert.equal((orm.text.match(/\rOBR\|/g) || []).length, 2);
   const oml = H.buildWorklistMessage(DTO({ patient: { id: 'P-1', name: NASTY, sex: 'F', dob: '1980-01-31' } }), { type: 'oml_o21', sendPatient: true });
   assert.match(oml.text, /\|OML\^O21\^OML_O21\|/); assert.match(oml.text, /\rSPM\|1\|260100001/);
-  assert.equal(parseHl7Orders(oml.text)[0].patient.name, 'Ann Q|Rs^t&u\\v~w');
+  assert.equal(parseHl7Orders(oml.text)[0].patient.name, 'Ann Q|Rs^t&u\\v~w');   // family^given, reversed back by the sim
   assert.ok(!/Q\|Rs/.test(oml.text.split('\r').find((s) => s.startsWith('PID'))));
   const noPt = H.buildWorklistMessage(DTO({ patient: { id: 'P', name: 'N' } }), { type: 'orm_o01', sendPatient: false });
   assert.ok(!/\rPID\|/.test(noPt.text));
