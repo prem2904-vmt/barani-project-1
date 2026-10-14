@@ -202,10 +202,10 @@ describe('Two-way section — "Test a barcode"', () => {
     expect(p.el.querySelector('.pf-tw__offnote')).toBeNull();
   });
 
-  it('server says two-way is off → plain message', async () => {
-    const p = renderSection({ value: { mode: 'query' }, get: () => throwError(() => new ApiError('off', 'bidirectional_off')) });
+  it('a server error on the preview → the server message, shown plainly', async () => {
+    const p = renderSection({ value: { mode: 'query' }, get: () => throwError(() => new ApiError('Could not read that order.', 'validation')) });
     await check(p);
-    expect(p.el.querySelector('[role=alert]')!.textContent).toContain('Two-way is off for this instrument');
+    expect(p.el.querySelector('[role=alert]')!.textContent).toContain('Could not read that order.');
   });
 });
 
