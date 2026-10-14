@@ -31,6 +31,8 @@ import {
   MessageSummaryDto, PairedInstrument, ParserType, RawLogEntry, TransportType,
 } from '../../../shared/instruments/instrument.models';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
+import { TwoWayForm, modeLabel } from '../../../shared/instruments/instrument-two-way';
+import { InstrumentTwoWayComponent } from './instrument-two-way.component';
 import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
 import type { BridgeDto } from '../../../shared/bridges/bridge.models';
 import { connectedViaOptions, transportOptionsFor } from '../../../shared/bridges/bridge-assign';
@@ -55,7 +57,7 @@ interface TabDef { id: Tab; label: string }
 @Component({
   selector: 'pf-instrument-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './instrument-editor.component.html',
   styleUrl: './instrument-editor.component.scss',
@@ -113,6 +115,7 @@ export class InstrumentEditorComponent {
     { id: 'protocol', label: 'Protocol' },
     { id: 'listen', label: 'Listen' },
     { id: 'mapping', label: 'Code mapping' },
+    { id: 'twoway', label: 'Two-way' },
     { id: 'device', label: 'Device' },
   ]);
   readonly title = computed(() => this.form().name.trim() || this.dto()?.name || 'New instrument');
@@ -128,6 +131,7 @@ export class InstrumentEditorComponent {
       case 'protocol': return !issues.some((i) => i.step === 'protocol');
       case 'listen': return this.detect() !== null || !!this.dto()?.lastMessageAt;
       case 'mapping': return this.maps().some((r) => r.testCatalogKey) && this.mapIssues().length === 0;
+      case 'twoway': return !issues.some((i) => i.step === 'twoway');
       case 'device': return !!this.dto()?.hasDeviceKey;
       default: return true;
     }
@@ -379,6 +383,9 @@ export class InstrumentEditorComponent {
   patchHl7(v: Hl7SampleIdField) { this.form.update((f) => ({ ...f, hl7: { sampleIdField: v } })); this.dirty.set(true); }
   patchText(p: Partial<InstrumentForm['text']>) { this.form.update((f) => ({ ...f, text: { ...f.text, ...p } })); this.dirty.set(true); }
   setFlow(v: FlowControl) { this.patchSerial({ flow: v }); }
+  patchTwoWay(v: TwoWayForm) { this.patch({ twoWay: v }); }
+  /** Side card: the two-way mode in plain words. */
+  readonly twoWayLabel = computed(() => modeLabel(this.form().twoWay.mode));
 
   // ── Steps ────────────────────────────────────────────────────────────
   go(t: Tab) { this.tab.set(t); if (t === 'status') { this.loadRecent(); void this.refreshRawLog(); } }

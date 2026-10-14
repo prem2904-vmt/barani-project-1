@@ -438,6 +438,19 @@
             </div>
           }
 
+          <!-- ── TWO-WAY WITH THE ANALYZER (ConfigJson `bidirectional`) ── -->
+          @case ('twoway') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+              <h2 class="pf-card__label">Two-way with the analyzer</h2>
+              <span class="pf-card__note">Let the analyzer know which tests each tube needs. Saved with the band Save.</span>
+            </header>
+            <div class="pf-card__body">
+              <pf-instrument-two-way [value]="form().twoWay" [protocol]="form().protocol" [instrumentId]="id()" [tests]="tests()"
+                                     [unsaved]="dirty()" (valueChange)="patchTwoWay($event)" (openMapping)="go('mapping')"></pf-instrument-two-way>
+            </div>
+          }
+
           <!-- ── DEVICE & PAIRING ───────────────────────────────────── -->
           @case ('device') {
             <header class="pf-card__head">
@@ -536,6 +549,7 @@
             @if (dto()?.lastStatus?.lastError; as err) { <p class="pf-field__hint pf-ie-err">{{ err }}</p> }
           }
           <p class="pf-field__hint">{{ connection() }}</p>
+          <dl class="pf-ie-kv"><div><dt>Two-way</dt><dd>{{ twoWayLabel() }}</dd></div></dl>
           <p class="pf-field__hint">Values arrive as a prefill in result entry — nothing is submitted or validated automatically.</p>
         </div>
       </aside>
