@@ -87,6 +87,10 @@
       </section>
     }
 
+  }
+
+  <!-- Order codes + barcode test work in every mode, Off included (the server
+       previews regardless, so a lab can check its codes before switching on). -->
     <!-- ── Per-test order codes ─────────────────────────────────────── -->
     <section class="pf-tw__sec" aria-labelledby="pf-tw-oc-h">
       <div class="pf-tw__hrow">
@@ -134,6 +138,9 @@
                   [pfBusy]="preview().kind === 'loading'" pfBusyLabel="Checking…">Check</button>
         </form>
 
+        @if (!on() && (previewResult() || previewError())) {
+          <p class="pf-tw__note pf-tw__offnote" role="note">Two-way is off — this is what the analyzer would be told once you switch it on.</p>
+        }
         @if (previewError(); as msg) {
           <p class="pf-field__hint pf-ie-err" role="alert">{{ msg }}</p>
         }
@@ -186,5 +193,4 @@
         }
       }
     </section>
-  }
 </div>

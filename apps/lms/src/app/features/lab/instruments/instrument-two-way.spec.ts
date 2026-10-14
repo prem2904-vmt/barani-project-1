@@ -50,15 +50,17 @@ function renderSection(opts: { value?: Partial<TwoWayForm>; protocol?: 'auto' | 
 describe('Two-way section — show / hide', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('Off: only the four modes + the "tube still has to be loaded" note; no other controls', () => {
+  it('Off: the four modes + note, order codes + barcode test; no patient / HL7 / worklist settings', () => {
     const p = renderSection();
     expect(p.el.querySelectorAll('[role=radio]').length).toBe(4);
     expect(p.modeBtn('off').getAttribute('aria-checked')).toBe('true');
     expect(p.text()).toContain('The tube still has to be loaded on the analyzer');
     expect(p.text()).toContain('The analyzer reads the tube barcode and asks Prefrontal which tests to run.');
     expect(p.el.querySelector('[role=switch]')).toBeNull();
-    expect(p.text()).not.toContain('Test a barcode');
-    expect(p.text()).not.toContain('Order codes');
+    expect(p.text()).not.toContain('HL7 messages');
+    expect(p.text()).not.toContain('Check for new samples every');
+    expect(p.text()).toContain('Order codes');
+    expect(p.text()).toContain('Test a barcode');
   });
 
   it('Analyzer asks: patient switch (off), HL7 answer style, order codes, barcode test — no worklist timing', () => {
@@ -184,6 +186,20 @@ describe('Two-way section — "Test a barcode"', () => {
     const res = p.el.querySelector('[data-state=not-found]')!;
     expect(res.textContent).toContain('No order for 999');
     expect(res.textContent).toContain('nothing to run');
+  });
+
+  it('Off: the preview still runs, with the "Two-way is off" note above the result', async () => {
+    const p = renderSection();
+    await check(p);
+    expect(p.api.get).toHaveBeenCalledWith('/api/instruments/inst-1/orders-preview?sampleId=26329');
+    expect(p.el.querySelector('.pf-tw__offnote')!.textContent).toContain('Two-way is off — this is what the analyzer would be told once you switch it on.');
+    expect(p.el.querySelector('[data-state=found]')).not.toBeNull();
+  });
+
+  it('a mode is on → no "Two-way is off" note', async () => {
+    const p = renderSection({ value: { mode: 'query' } });
+    await check(p);
+    expect(p.el.querySelector('.pf-tw__offnote')).toBeNull();
   });
 
   it('server says two-way is off → plain message', async () => {

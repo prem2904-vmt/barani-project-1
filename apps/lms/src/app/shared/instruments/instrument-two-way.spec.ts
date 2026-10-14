@@ -71,8 +71,10 @@ describe('two-way — what shows when', () => {
 });
 
 describe('two-way — validation (contract ranges + order-code rules)', () => {
-  it('nothing is checked while Off', () => {
-    expect(validateTwoWay({ ...emptyTwoWayForm(), worklistWindowHours: 999, orderCodes: [{ testCatalogKey: '', code: 'A|B' }] })).toEqual([]);
+  it('Off: worklist numbers (hidden) are not checked, but order codes (shown in every mode) are', () => {
+    expect(validateTwoWay({ ...emptyTwoWayForm(), worklistWindowHours: 999 })).toEqual([]);
+    expect(validateTwoWay({ ...emptyTwoWayForm(), worklistWindowHours: 999, orderCodes: [{ testCatalogKey: 'HEM001', code: 'A|B' }] }))
+      .toEqual([{ field: 'code', index: 0, message: 'A code can’t contain | ^ ~ \\ or &' }]);
   });
   it('worklist window 1..168 h and check-every 15..3600 s, whole numbers only — worklist modes only', () => {
     const base = { ...emptyTwoWayForm(), mode: 'worklist' as const };

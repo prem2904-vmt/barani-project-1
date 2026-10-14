@@ -185,10 +185,10 @@ function inRange(n: number | null, r: { min: number; max: number }): boolean {
   return typeof n === 'number' && Number.isInteger(n) && n >= r.min && n <= r.max;
 }
 
-/** Nothing is checked while the section is Off (its fields are hidden). */
+/** Worklist numbers are checked only in worklist modes (hidden otherwise);
+ *  order codes are visible — and checked — in every mode, Off included. */
 export function validateTwoWay(f: TwoWayForm): TwoWayIssue[] {
   const out: TwoWayIssue[] = [];
-  if (f.mode === 'off') return out;
   if (hasWorklist(f.mode)) {
     const w = TWO_WAY_LIMITS.windowHours;
     const p = TWO_WAY_LIMITS.pollSeconds;
