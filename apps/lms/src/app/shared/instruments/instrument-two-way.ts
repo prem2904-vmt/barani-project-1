@@ -282,7 +282,6 @@ export function previewView(dto: DeviceOrdersDto, sendPatient: boolean, fmtTime:
 
 /** A preview failure in plain words (ApiError code + message). */
 export function previewErrorText(code: string | null | undefined, message?: string | null): string {
-  if (code === 'bidirectional_off') return 'Two-way is off for this instrument. Choose a mode and save, then test again.';
   if (code === 'not_found') return 'This instrument was not found — it may have been removed.';
   return message?.trim() || 'Couldn’t check that barcode. Try again.';
 }

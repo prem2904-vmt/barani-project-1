@@ -220,7 +220,6 @@ describe('two-way — "Test a barcode" preview', () => {
     expect(v).toEqual({ found: false, sampleId: '999', meta: '', tests: [], unmapped: [], patientLine: null });
   });
   it('errors read in plain words', () => {
-    expect(previewErrorText('bidirectional_off')).toMatch(/Two-way is off/);
     expect(previewErrorText(undefined, 'Forbidden')).toBe('Forbidden');
     expect(previewErrorText(undefined, '')).toMatch(/Couldn’t check/);
   });

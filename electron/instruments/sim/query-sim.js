@@ -88,7 +88,10 @@ class QuerySim {
           // The analyzer ACKs an ORM/OML (worklist); it does not ACK QCK/DSR/RSP.
           if (!/^(?:\x0b)?MSH\|[^\r]*\|(ORM|OML)\^/m.test(t)) return null;
           const code = this.ackCode(t, ++this.ackCount);
-          return code ? buildAck(t, { code }) : null;   // a falsy code = the analyzer stays silent (ACK timeout test)
+          if (!code) return null;
+          const ack = buildAck(t, { code });
+          // o.ackRef(text) lets a test emulate an analyzer that echoes a wrong/empty MSA-2
+          return o.ackRef ? ack.replace(/(\rMSA\|[A-Z]+\|)[^\r]*/, (_m, pre) => `${pre}${o.ackRef(t)}`) : ack;   // a falsy code = the analyzer stays silent (ACK timeout test)
         },
       });
       this.rx.on('message', (t) => this._got(t));
