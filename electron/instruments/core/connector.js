@@ -26,6 +26,7 @@ const { DiskQueue } = require('./queue');
 const { RawLog } = require('./rawlog');
 const { Uploader } = require('./uploader');
 const { toBuffer, C, NAMES } = require('./bytes');
+const { BidiHost } = require('./bidi');
 
 const VERSION = '0.1.0';
 
@@ -77,6 +78,7 @@ class Connector extends EventEmitter {
     this.queue = new DiskQueue({ dir: this.dataDir, ...(o.queueOpts || {}) }).load();
     this.rawlog = new RawLog({ dir: this.dataDir });
     this.uploader = o.uploader || new Uploader({ apiUrl: o.apiUrl, instrumentId: o.instrumentId, deviceKey: o.deviceKey, fetchImpl: o.fetchImpl });
+    this.bidi = new BidiHost(this, o.bidiOpts || {});   // two-way interfacing; inert unless config.bidirectional.mode != 'off'
     this.remote = null;           // server config response
     this.transport = null;
     this.links = new Map();       // sessionId → Link
@@ -145,6 +147,7 @@ class Connector extends EventEmitter {
       return;
     }
     await this._startTransport(cfg);
+    this.bidi.start();
     this._scheduleHeartbeat(0);
     this._kick(0);
   }
@@ -156,6 +159,7 @@ class Connector extends EventEmitter {
     clearTimeout(this.hbTimer);
     clearTimeout(this.drainTimer);
     clearTimeout(this.cfgTimer);
+    this.bidi.stop();
     for (const l of this.links.values()) l.close();
     this.links.clear();
     await this._stopTransport();
@@ -286,6 +290,7 @@ class Connector extends EventEmitter {
       let l = this.links.get(id);
       if (!l) { l = this._makeLink(linkCfg(), parserCfg(), id); this.links.set(id, l); }
       l.feed(buf);
+      this.bidi.feed(buf, id);
     });
     t.on('file', (text, name) => {
       if (!isCurrent()) return;
@@ -337,17 +342,25 @@ class Connector extends EventEmitter {
 
   _makeLink(linkCfg, parserCfg, sessionId) {
     const link = createLink(linkCfg, {
-      write: (bytes) => {
-        this.rawlog.write('out', bytes);
-        this.emit('raw', { dir: 'out', bytes });
-        if (this.transport) this.transport.write(bytes, sessionId);
-      },
-      reply: (text) => buildAck(text),
+      write: (bytes) => this._writeOut(bytes, sessionId),
+      // Two-way: a query we answer ourselves (and an ACK to our worklist) must
+      // not also get the automatic ORU ACK. Inert (always false) when off.
+      reply: (text) => (this.bidi.suppressAck(text) ? null : buildAck(text)),
     });
-    link.on('message', (text, meta) => this._onText(text, parserCfg, meta));
+    link.on('message', (text, meta) => {
+      if (this.bidi.intercept(text, meta, sessionId)) return;
+      this._onText(text, parserCfg, meta);
+    });
     link.on('frame', (f) => { if (!f.ok) this.rawlog.write('note', `frame rejected (NAK): ${f.reason}`); });
     link.on('timeout', () => this.rawlog.write('note', 'link timeout — partial message discarded'));
     return link;
+  }
+
+  /** Every byte we send goes through here (raw log + live viewer + transport). */
+  _writeOut(bytes, sessionId) {
+    this.rawlog.write('out', bytes);
+    this.emit('raw', { dir: 'out', bytes });
+    if (this.transport) this.transport.write(bytes, sessionId);
   }
 
   _onFile(text, parserCfg) {
@@ -543,6 +556,9 @@ class Connector extends EventEmitter {
       serverOnline: this.serverOnline,
       serverOfflineSince: this.serverOfflineSince,
       recentErrors: this.errors.slice(-10),
+      // Present only when two-way is on, so an un-configured instrument's
+      // status object is exactly what it always was.
+      ...(this.bidi.active() ? { bidi: this.bidi.summary() } : {}),
     };
   }
 

@@ -32,6 +32,8 @@ function classify(status) {
   return 'permanent';
 }
 
+const QUERY_TIMEOUT_MS = 4000;
+
 class Uploader {
   constructor({ apiUrl, instrumentId, deviceKey, fetchImpl, timeoutMs = 15000, userAgent = 'prefrontal-instrument-connector' } = {}) {
     if (!apiUrl) throw new Error('Uploader: apiUrl is required');
@@ -45,9 +47,9 @@ class Uploader {
 
   _url(suffix) { return `${this.base}/api/instruments/${encodeURIComponent(this.instrumentId)}${suffix}`; }
 
-  async _req(method, suffix, body) {
+  async _req(method, suffix, body, timeoutMs) {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), this.timeoutMs);
+    const t = setTimeout(() => ctl.abort(), timeoutMs || this.timeoutMs);
     let res;
     try {
       res = await this.fetch(this._url(suffix), {
@@ -79,6 +81,29 @@ class Uploader {
   getConfig() { return this._req('GET', '/config'); }
   heartbeat(body) { return this._req('POST', '/heartbeat', body); }
   postMessage(payload) { return this._req('POST', '/messages', payload); }
+
+  /**
+   * Two-way interfacing (see bidi/): the analyzer is WAITING on these, so a
+   * query has a hard 4 s ceiling — enforced with a race as well as an abort,
+   * so a fetch that ignores its AbortSignal can never hang the analyzer.
+   *   GET {id}/orders?sampleId=<barcode>   → DeviceOrdersDto
+   *   GET {id}/worklist?since=<iso>        → { items: DeviceOrdersDto[], serverTime }
+   */
+  getOrders(sampleId, { timeoutMs = QUERY_TIMEOUT_MS } = {}) {
+    return this._hard(this._req('GET', `/orders?sampleId=${encodeURIComponent(sampleId)}`, undefined, timeoutMs), timeoutMs);
+  }
+
+  getWorklist({ since, timeoutMs = 10000 } = {}) {
+    const q = since ? `?since=${encodeURIComponent(since)}` : '';
+    return this._hard(this._req('GET', `/worklist${q}`, undefined, timeoutMs), timeoutMs);
+  }
+
+  _hard(p, ms) {
+    let timer;
+    const guard = new Promise((_r, rej) => { timer = setTimeout(() => rej(new ApiError('network: timeout', { kind: 'transient' })), ms + 100); if (timer.unref) timer.unref(); });
+    p.catch(() => {});
+    return Promise.race([p, guard]).finally(() => clearTimeout(timer));
+  }
 }
 
-module.exports = { Uploader, ApiError, classify };
+module.exports = { Uploader, ApiError, classify, QUERY_TIMEOUT_MS };

@@ -8,18 +8,36 @@
 const http = require('http');
 const { applyMaps } = require('../core/mapper');
 
-function fakeApi({ instruments = {}, knownBarcodes = [], failFirst = 0 } = {}) {
+function fakeApi({ instruments = {}, knownBarcodes = [], failFirst = 0, orders = {}, worklist = [], ordersDelayMs = 0, ordersStatus = 200 } = {}) {
   // instruments: { [id]: { key, name, config, codeMaps } }
-  const store = { messages: [], heartbeats: [], requests: 0 };
+  const store = { messages: [], heartbeats: [], requests: 0, orderQueries: [], worklistQueries: [] };
+  // Two-way (contract §2): `orders` = { [sampleId]: DeviceOrdersDto }, `worklist` = DeviceOrdersDto[]; tests mutate them live.
+  const bidi = { orders, worklist, ordersDelayMs, ordersStatus };
   let failures = failFirst;
   const server = http.createServer((req, res) => {
     store.requests++;
     const send = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
-    const m = /^\/api\/instruments\/([^/]+)\/(config|heartbeat|messages)$/.exec(req.url.split('?')[0]);
+    const m = /^\/api\/instruments\/([^/]+)\/(config|heartbeat|messages|orders|worklist)$/.exec(req.url.split('?')[0]);
     if (!m) return send(404, { success: false, error: 'not_found' });
     const inst = instruments[m[1]];
     if (!inst || req.headers['x-instrument-key'] !== inst.key) return send(401, { success: false, error: 'invalid_instrument_key' });
     if (failures > 0 && m[2] === 'messages') { failures--; return send(503, { success: false, error: 'unavailable' }); }
+    if (m[2] === 'orders' || m[2] === 'worklist') {
+      const u = new URL(req.url, 'http://x');
+      const respond = () => {
+        if (bidi.ordersStatus !== 200) return send(bidi.ordersStatus, { success: false, error: 'unavailable' });
+        if (m[2] === 'orders') {
+          const sid = u.searchParams.get('sampleId');
+          store.orderQueries.push(sid);
+          const dto = bidi.orders[sid];
+          return send(200, { success: true, data: dto || { sampleId: sid, found: false, priority: 'normal', collectedAt: null, specimen: null, patient: null, tests: [], unmapped: [] } });
+        }
+        store.worklistQueries.push(u.searchParams.get('since'));
+        return send(200, { success: true, data: { items: bidi.worklist, serverTime: new Date().toISOString() } });
+      };
+      if (bidi.ordersDelayMs) setTimeout(respond, bidi.ordersDelayMs); else respond();
+      return undefined;
+    }
     let body = '';
     req.on('data', (d) => { body += d; });
     req.on('end', () => {
@@ -43,7 +61,7 @@ function fakeApi({ instruments = {}, knownBarcodes = [], failFirst = 0 } = {}) {
     return undefined;
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
-    resolve({ url: `http://127.0.0.1:${server.address().port}`, store, close: () => new Promise((r) => server.close(() => r())), setFailures: (n) => { failures = n; } });
+    resolve({ url: `http://127.0.0.1:${server.address().port}`, store, bidi, close: () => new Promise((r) => server.close(() => r())), setFailures: (n) => { failures = n; } });
   }));
 }
 

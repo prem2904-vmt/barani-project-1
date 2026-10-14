@@ -222,8 +222,11 @@ class AstmReceiver extends EventEmitter {
  * true corrupts that frame's checksum on that attempt (attempt starts at 1).
  */
 class AstmSender extends EventEmitter {
-  constructor({ write, ackTimeoutMs = 15000, maxRetries = 6, busyRetryMs = 10000, maxText = MAX_FRAME_TEXT, corrupt } = {}) {
+  constructor({ write, ackTimeoutMs = 15000, maxRetries = 6, busyRetryMs = 10000, maxText = MAX_FRAME_TEXT, corrupt, beforeEnq } = {}) {
     super();
+    // Optional async gate run before EVERY ENQ (host-query replies: wait for
+    // the analyzer's EOT first — E1381 contention handling, see bidi/index.js).
+    this.beforeEnq = beforeEnq || null;
     this.write = write;
     this.ackTimeoutMs = ackTimeoutMs;
     this.maxRetries = maxRetries;
@@ -259,6 +262,7 @@ class AstmSender extends EventEmitter {
     // Establishment (retry on NAK = busy / timeout).
     let established = false;
     for (let attempt = 0; attempt <= this.maxRetries && !established; attempt++) {
+      if (this.beforeEnq) await this.beforeEnq(attempt);
       this.write(Buffer.from([C.ENQ]));
       const r = await this._await();
       if (r === C.ACK) established = true;

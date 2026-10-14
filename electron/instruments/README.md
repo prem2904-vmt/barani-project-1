@@ -120,6 +120,37 @@ node electron/instruments/sim/cbc-sim.js --dialect astm-5part --transport serial
 No socat (`brew install socat`)? `python3 electron/instruments/sim/pty-pair.py` prints `{"a": "/dev/ttys…", "b": "/dev/ttys…"}`
 and relays between them the same way. (The automated tests try socat first, then this relay.)
 
+## Two-way (host query + worklist)
+
+Off unless the instrument config carries `bidirectional.mode` of `query | worklist | both` (absent or `off` = the code
+paths below are never entered: queries are ACKed/ignored exactly as before, status has no `bidi` field). Code: `core/bidi/`.
+
+| Piece | What |
+|---|---|
+| `bidi/astm.js` | ASTM E1394 / LIS2-A2 `Q` record → ids (specimen component configurable: `bidirectional.astmQueryComponent`, default auto = component 2, then 3, then 1; ranges expand up to 20, `ALL` = the cached worklist, max 10 Q records per session). Answer = **new** E1381 session via `AstmSender`: `H, P, O…, L|1|N` (O.5 repeat list `^^^GLU\^^^UREA`, O.12 action code, O.26 = `O`). Not found / server error = `H, Q` (echo, Q.13 `X`), `L|1|I` ("no information", LIS2-A2) — never an empty order. The O-record sample id goes where `parser.astm.sampleIdField/Component` reads it. |
+| `bidi/hl7.js` | `QRY^Q02` → `QCK^Q02` (+ `DSR^Q03` with DSP rows when found); `QBP^Q11` → `RSP^K11` (QAK OK/NF, QPD echo, ORC/OBR per test); worklist `ORM^O01` or `OML^O21`. DSP positions are the `DSP_DIALECTS` table (`bidirectional.hl7Dialect`, default `mindray-bs`; confirm against the analyzer manual). |
+| `bidi/escape.js` | ASTM (`&F& &S& &R& &E&`) and HL7 (`\F\ \S\ \T\ \R\ \E\`, `\.br\`) escaping for every field we send. |
+| `bidi/store.js` | `bidi-sent.jsonl` (sampleId + test-set hash, torn-line tolerant) and `bidi-cache.json` (orders served when the server is slow/offline; expires after `worklistWindowHours`, never holds a "not found"). |
+| `bidi/index.js` | `BidiHost`: query handling, per-session send serialisation, worklist scheduler (`worklistTick()`), counters. |
+| `uploader.js` | `getOrders(sampleId)` / `getWorklist({since})` — **hard 4 s** ceiling on queries (abort + race), device-key header. |
+
+Rules: the answer is only what the server (or an earlier server answer in the cache) said — tests are never invented;
+timeout/offline with nothing cached = "no order"; patient details only with `sendPatient`. ASTM contention: the analyzer's
+session wins — we wait for its EOT (plus a short hold), then ENQ; a crossed ENQ is retried after the analyzer's EOT
+(`AstmSender` `beforeEnq` gate). HL7 worklist waits for the ACK (`MSA|AA`/`CA`), retries `AE`/`AR`/timeout with back-off
+(2 retries per cycle, then a per-sample back-off across cycles). Status gains `bidi: { mode, queriesAnswered,
+queriesNotFound, queriesFromCache, queryErrors, worklistSent, worklistFailed, lastQueryAt, lastWorklistAt, cachedOrders,
+lastError }` (IST-day counters) and every query/answer/download is a note in the raw log.
+
+Simulators: `sim/query-sim.js` (`QuerySim`: ASTM Q, `QRY^Q02`, `QBP^Q11`, worklist acceptance with scripted ACK codes),
+`astm-chem` / `hl7-chem` dialects (glucose, urea, creatinine, cholesterol… in `sim/chem-data.js`), and
+`cbc-sim.js --scenario query|worklist` (`--hl7-query q11`, `--listen-ms`).
+
+```bash
+node electron/instruments/sim/cbc-sim.js --dialect astm-chem --transport tcp-client --port 5001 --scenario query --sample 260100001
+node electron/instruments/sim/cbc-sim.js --dialect hl7-chem  --transport tcp-client --port 5001 --scenario query --hl7-query q11 --sample 260100001
+```
+
 ## Adding a new analyzer profile
 
 No code for standard analyzers:
@@ -138,8 +169,8 @@ Code is needed only for a genuinely new link/framing (e.g. a binary protocol): a
 
 ## Known gaps (first cut)
 
-- **Unidirectional only**: no host query / worklist download (ASTM Q records, HL7 ORM/OML/QRY). `AstmSender` exists, so
-  bidirectional is an addition, not a rewrite.
+- Two-way is connector-side only here and off by default (see **Two-way** below); remote start of a run is impossible by
+  design (the tube must be loaded on the analyzer).
 - One active connection per link session; a TCP server accepts several analyzers but all share one instrument profile.
 - Analyzer timestamps carry no zone and are read in the host's local zone.
 - Histograms / scattergrams (HL7 OBX type `ED`, e.g. the Medonic M51) are extracted into `message.images[]` (`code`,

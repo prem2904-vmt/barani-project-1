@@ -9,6 +9,7 @@
  *   text-3part  a plain printed ticket (raw text, form-feed terminated)
  */
 const { generateCbc } = require('./cbc-data');
+const { generateChem } = require('./chem-data');
 
 function ts(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
@@ -72,10 +73,39 @@ function textMessage(job) {
   return { text: lines.join('\r\n') + '\f', results };
 }
 
+/** Chemistry analyzer result message (Autolab / Eurolab 200 style): one tube, many photometric tests. */
+function astmChemMessage(job) {
+  const t = ts(job.at);
+  const results = generateChem({ sampleId: job.sampleId, tests: job.tests });
+  const recs = [
+    `H|\\^&|||SIM-CHEM^1.0^${job.serial || 'SIMCH0001'}|||||||P|LIS2-A2|${t}`,
+    'P|1',
+    `O|1|${job.sampleId}||${results.map((r) => `^^^${r.code}`).join('\\')}|R|${t}|||||N||||||||||||||F`,
+  ];
+  results.forEach((r, i) => recs.push(`R|${i + 1}|^^^${r.code}|${r.value}|${r.unit}||${r.flag || 'N'}||F||||${t}`));
+  recs.push('L|1|N');
+  return { text: recs.join('\r') + '\r', results };
+}
+
+function hl7ChemMessage(job) {
+  const t = ts(job.at);
+  const ctrl = `SIM${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1000)}`;
+  const results = generateChem({ sampleId: job.sampleId, tests: job.tests });
+  const segs = [
+    `MSH|^~\\&|SIM-CHEM|CHEM-${job.serial || '01'}|PREFRONTAL|LAB|${t}||ORU^R01|${ctrl}|P|2.3.1`,
+    'PID|1||||^',
+    `OBR|1||${job.sampleId}|CHEM^Chemistry^L|||${t}`,
+  ];
+  results.forEach((r, i) => segs.push(`OBX|${i + 1}|NM|${r.code}^${r.code}^L||${r.value}|${r.unit}||${r.flag || 'N'}|||F|||${t}`));
+  return { text: segs.join('\r') + '\r', results, controlId: ctrl };
+}
+
 const DIALECTS = {
+  'astm-chem': { build: astmChemMessage, link: 'astm-e1381', protocol: 'astm' },
+  'hl7-chem': { build: hl7ChemMessage, link: 'mllp', protocol: 'hl7' },
   'astm-5part': { build: astmMessage, link: 'astm-e1381', protocol: 'astm' },
   'hl7-5part': { build: hl7Message, link: 'mllp', protocol: 'hl7' },
   'text-3part': { build: textMessage, link: 'raw', protocol: 'text' },
 };
 
-module.exports = { DIALECTS, astmMessage, hl7Message, textMessage, LONG_COMMENT, ts };
+module.exports = { DIALECTS, astmChemMessage, hl7ChemMessage, astmMessage, hl7Message, textMessage, LONG_COMMENT, ts };

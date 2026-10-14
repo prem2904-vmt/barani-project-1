@@ -21,6 +21,7 @@ module.exports = {
   ...require('./uploader'),
   ...require('./transports'),
   ...require('./listen'),
+  ...require('./bidi'),
   ...require('./connector'),
   ...require('./manager'),
 };

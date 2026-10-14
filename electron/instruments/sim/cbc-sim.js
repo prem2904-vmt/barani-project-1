@@ -6,7 +6,7 @@
  *   node electron/instruments/sim/cbc-sim.js --dialect astm-5part --transport tcp-client --port 5001 --sample 260100023
  *
  * Options
- *   --dialect     astm-5part | hl7-5part | text-3part         (default astm-5part)
+ *   --dialect     astm-5part | hl7-5part | text-3part | astm-chem | hl7-chem   (default astm-5part)
  *   --transport   tcp-client  (sim connects to the connector's TCP server)
  *                 tcp-server  (sim listens; the connector connects to it)
  *                 serial      (sim writes to --serial-path)   (default tcp-client)
@@ -17,6 +17,9 @@
  *   --count       burst: N samples (IDs continue from the last --sample)
  *   --scenario    normal | rerun | qc | unknown | badchecksum | burst | all   (default normal)
  *   --unknown-id  barcode used by the unknown scenario         (default 999999999)
+ *   --scenario query     two-way: ask the host which tests to run for each --sample and print the answer
+ *                        (ASTM dialects send a Q record; HL7 dialects send QRY^Q02, or QBP^Q11 with --hl7-query q11)
+ *   --scenario worklist  two-way: stay connected --listen-ms (default 20000) and accept worklist downloads, ACKing them
  *   --delay       ms between messages                          (default 300)
  *   --json        print a JSON summary of everything sent
  *
@@ -45,6 +48,8 @@ function parseArgs(argv) {
       case '--scenario': o.scenario = v(); break;
       case '--unknown-id': o.unknownId = v(); break;
       case '--delay': o.delay = Number(v()); break;
+      case '--hl7-query': o.hl7Query = v(); break;
+      case '--listen-ms': o.listenMs = Number(v()); break;
       case '--json': o.json = true; break;
       case '--quiet': o.quiet = true; break;
       case '-h': case '--help': o.help = true; break;
@@ -128,7 +133,7 @@ async function sendOne(io, dialectName, job, o) {
   const d = DIALECTS[dialectName];
   const built = d.build({ ...job });
   const out = { kind: job.kind, sampleId: job.sampleId, run: job.run, qc: !!job.qc, results: built.results, ok: false };
-  if (dialectName === 'astm-5part') {
+  if (d.protocol === 'astm') {
     const sender = new AstmSender({
       write: io.write,
       ackTimeoutMs: o.ackTimeoutMs || 5000,
@@ -139,7 +144,7 @@ async function sendOne(io, dialectName, job, o) {
     io.onData((b) => sender.feed(b));
     const st = await sender.send(built.text);
     Object.assign(out, { ok: true, frames: st.frames, naks: st.naks, retransmits: st.retransmits });
-  } else if (dialectName === 'hl7-5part') {
+  } else if (d.protocol === 'hl7') {
     const ack = await new Promise((resolve) => {
       const rx = new MllpReceiver({});
       const t = setTimeout(() => resolve(null), o.ackTimeoutMs || 5000);
@@ -153,12 +158,38 @@ async function sendOne(io, dialectName, job, o) {
     io.write(Buffer.from(built.text, 'latin1'));
     out.ok = true;
   }
-  if (job.corrupt && dialectName !== 'astm-5part') out.note = 'bad-checksum injection applies to ASTM only';
+  if (job.corrupt && d.protocol !== 'astm') out.note = 'bad-checksum injection applies to ASTM only';
   return out;
 }
 
+/** Two-way scenarios (query / worklist) — see sim/query-sim.js. */
+async function runTwoWay(o) {
+  const { QuerySim } = require('./query-sim');
+  const d = DIALECTS[o.dialect];
+  const io = await openIo(o);
+  const sim = new QuerySim(io, { kind: d.protocol === 'astm' ? 'astm' : 'hl7' });
+  const sent = [];
+  try {
+    if (o.scenario === 'query') {
+      for (const id of o.samples) {
+        const r = d.protocol === 'astm' ? await sim.queryAstm(id) : o.hl7Query === 'q11' ? await sim.queryQ11(id) : await sim.queryQ02(id);
+        const orders = r.orders || (r.order ? [r.order] : []);
+        const ok = r.text != null;
+        sent.push({ kind: 'query', sampleId: id, ok, found: orders.length > 0 || !!r.found, tests: orders.flatMap((x) => x.tests) });
+        if (!o.quiet) process.stderr.write(`sim: query ${id} → ${orders.length ? orders.map((x) => `[${x.tests.join(' ')}]`).join(' ') : ok ? 'no order' : 'NO REPLY'}\n`);
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, o.listenMs || 20000));
+      sent.push({ kind: 'worklist', sampleId: '*', ok: true, accepted: sim.worklist });
+      if (!o.quiet) process.stderr.write(`sim: accepted ${sim.worklist.length} worklist order(s)\n`);
+    }
+  } finally { await io.close(); }
+  return { dialect: o.dialect, transport: o.transport, sent, ok: sent.every((s) => s.ok) };
+}
+
 async function runSim(o) {
-  if (!DIALECTS[o.dialect]) throw new Error(`unknown dialect ${o.dialect} (astm-5part | hl7-5part | text-3part)`);
+  if (o.scenario === 'query' || o.scenario === 'worklist') return runTwoWay(o);
+  if (!DIALECTS[o.dialect]) throw new Error(`unknown dialect ${o.dialect} (astm-5part | hl7-5part | text-3part | astm-chem | hl7-chem)`);
   const jobs = plan(o);
   const sent = [];
   // One connection per job so each message gets a fresh listener set; this

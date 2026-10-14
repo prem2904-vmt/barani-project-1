@@ -104,6 +104,9 @@ class Link extends EventEmitter {
     }
   }
 
+  /** True while an ASTM session from the analyzer is in progress (between its ENQ and EOT). */
+  isBusy() { return !!(this.inner && this.inner.state === 'receiving'); }
+
   /** Force-deliver a partially buffered raw message (e.g. connection closed). */
   flush() { if (this.inner && typeof this.inner.flush === 'function') this.inner.flush(); }
 
