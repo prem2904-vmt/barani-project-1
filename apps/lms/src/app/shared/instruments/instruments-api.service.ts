@@ -5,6 +5,7 @@ import {
   CodeMapDto, CodeMapUpsert, DeviceKeyDto, ImageCodeDto, ImageMapUpsert, InstrumentDto, InstrumentUpsert,
   LoincSuggestionDto, MessageDetailDto, MessagePage, MessageSummaryDto, SamplePrefillDto,
 } from './instrument.models';
+import { DeviceOrdersDto, ordersPreviewUrl } from './instrument-two-way';
 
 export type MessageStateFilter = 'unmatched' | 'qc' | 'matched' | 'superseded' | 'duplicate' | 'all';
 
@@ -94,6 +95,12 @@ export class InstrumentsApiService {
   /** Result-entry prefill for one tube (runs newest first, QC excluded). */
   prefillForSample(orderSampleId: string): Observable<SamplePrefillDto> {
     return this.api.get<SamplePrefillDto>(`/api/instruments/results/by-sample/${encodeURIComponent(orderSampleId)}`);
+  }
+
+  /** "Test a barcode" (two-way): exactly what the analyzer would be told for
+   *  this tube, using the instrument's SAVED settings (user auth, admin). */
+  ordersPreview(id: string, sampleId: string): Observable<DeviceOrdersDto> {
+    return this.api.get<DeviceOrdersDto>(ordersPreviewUrl(id, sampleId));
   }
 
   /** LOINC auto-match suggestions for codes with no code-map row yet (the

@@ -11,6 +11,7 @@ import type {
   InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, LoincCandidateDto, LoincSuggestionDto, ParserConfig,
   ParserType, TransportConfig, TransportType,
 } from './instrument.models';
+import { TwoWayForm, buildBidirectional, emptyTwoWayForm, twoWayFromConfig, validateTwoWay } from './instrument-two-way';
 
 // ── Defaults (from the contract) ─────────────────────────────────────────
 // Text-template defaults — MUST equal the connector core's TEXT_DEFAULTS
@@ -45,6 +46,8 @@ export interface InstrumentForm {
   astm: { sampleIdField: number; sampleIdComponent: number };
   hl7: { sampleIdField: Hl7SampleIdField };
   text: { linePattern: string; sampleIdPattern: string; qcPattern: string };
+  /** Two-way with the analyzer (ConfigJson `bidirectional`, instrument-two-way.ts). */
+  twoWay: TwoWayForm;
 }
 
 export function emptyInstrumentForm(): InstrumentForm {
@@ -59,6 +62,7 @@ export function emptyInstrumentForm(): InstrumentForm {
     astm: { sampleIdField: 3, sampleIdComponent: 1 },
     hl7: { sampleIdField: 'OBR-3' },
     text: { linePattern: DEFAULT_TEXT_LINE_PATTERN, sampleIdPattern: DEFAULT_TEXT_SAMPLE_ID_PATTERN, qcPattern: DEFAULT_TEXT_QC_PATTERN },
+    twoWay: emptyTwoWayForm(),
   };
 }
 
@@ -162,6 +166,9 @@ export type ConfigBase = Partial<Omit<InstrumentConfig, 'link'>> & { link?: Part
 export function buildInstrumentConfig(f: InstrumentForm, base?: ConfigBase | null): InstrumentConfig {
   const extra: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(base ?? {})) if (!['transport', 'link', 'parser'].includes(k)) extra[k] = v;
+  // Two-way: no block on an old instrument whose section is untouched (byte-identical save).
+  const bidi = buildBidirectional(f.twoWay ?? emptyTwoWayForm(), base?.['bidirectional']);
+  if (bidi) extra['bidirectional'] = bidi; else delete extra['bidirectional'];
   return { ...extra, transport: buildTransport(f), link: buildLink(f, base?.link ?? null), parser: buildParser(f) };
 }
 
@@ -200,6 +207,7 @@ export function formFromInstrument(dto: Pick<InstrumentDto, 'name' | 'make' | 'm
     f.folder = { path: d.path ?? '', pattern: d.pattern ?? '*.txt', moveTo: d.moveTo ?? '' };
   }
   applyParser(f, dto.config?.parser);
+  f.twoWay = twoWayFromConfig(dto.config?.['bidirectional']);
   return f;
 }
 
@@ -235,7 +243,7 @@ function structuredCloneForm(f: InstrumentForm): InstrumentForm {
 }
 
 // ── Validation (per wizard step) ─────────────────────────────────────────
-export type WizardStep = 'basics' | 'connection' | 'protocol' | 'listen' | 'mapping' | 'device';
+export type WizardStep = 'basics' | 'connection' | 'protocol' | 'listen' | 'mapping' | 'twoway' | 'device';
 
 export interface FormIssue { step: WizardStep; field: string; message: string }
 
@@ -271,6 +279,9 @@ export function validateInstrumentForm(f: InstrumentForm): FormIssue[] {
   }
   if (f.protocol === 'astm' && !(f.astm.sampleIdField >= 1)) {
     out.push({ step: 'protocol', field: 'astm.sampleIdField', message: 'Field must be 1 or more' });
+  }
+  for (const i of validateTwoWay(f.twoWay ?? emptyTwoWayForm())) {
+    out.push({ step: 'twoway', field: i.index === undefined ? `twoWay.${i.field}` : `twoWay.code.${i.index}`, message: i.message });
   }
   return out;
 }

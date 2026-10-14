@@ -114,7 +114,7 @@ describe('Instrument editor — web vs Electron', () => {
     expect(primaries(p.el)).toBe(1);
     expect(p.el.querySelector('.pf-ie-save')!.textContent).toContain('Create instrument');
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-tabs__item')).map((b) => b.textContent!.trim());
-    expect(tabs).toEqual(['Basics', 'Connection', 'Protocol', 'Listen', 'Code mapping', 'Device']);
+    expect(tabs).toEqual(['Basics', 'Connection', 'Protocol', 'Listen', 'Code mapping', 'Two-way', 'Device']);
     expect(p.el.querySelector('pf-hero-band .pf-ctx__primary')!.textContent).toContain('New instrument');
   });
 

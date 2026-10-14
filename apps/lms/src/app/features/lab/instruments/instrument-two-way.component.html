@@ -1,0 +1,190 @@
+<div class="pf-tw">
+  <!-- ── Mode ─────────────────────────────────────────────────────────── -->
+  <section class="pf-tw__sec" aria-labelledby="pf-tw-mode-h">
+    <h3 class="pf-tw__h" id="pf-tw-mode-h">Who decides the tests</h3>
+    <div class="pf-tw__modes" role="radiogroup" aria-labelledby="pf-tw-mode-h" (keydown)="onModeKey($event)">
+      @for (m of modes; track m.value) {
+        <!-- Neutral selected tile (PF-PATTERN §3), never a violet tile. -->
+        <button type="button" class="pf-tw-mode pf-tile-sel press" role="radio" [attr.data-mode]="m.value"
+                [attr.aria-checked]="value().mode === m.value" [attr.tabindex]="value().mode === m.value ? 0 : -1"
+                (click)="setMode(m.value)">
+          <span class="pf-tw-mode__mark" aria-hidden="true"><span class="pf-tw-mode__dot"></span></span>
+          <span class="pf-tw-mode__text">
+            <span class="pf-tw-mode__t">{{ m.label }}</span>
+            <span class="pf-tw-mode__d">{{ m.desc }}</span>
+          </span>
+        </button>
+      }
+    </div>
+    <p class="pf-tw__note">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span>The tube still has to be loaded on the analyzer — nothing starts from Prefrontal. This only tells the analyzer which tests to run.</span>
+    </p>
+  </section>
+
+  @if (on()) {
+    <!-- ── Patient details ──────────────────────────────────────────── -->
+    <section class="pf-tw__sec" aria-labelledby="pf-tw-pt-h">
+      <h3 class="pf-tw__h" id="pf-tw-pt-h">Patient details</h3>
+      <div class="pf-tw-switch">
+        <span class="pf-tw-switch__text">
+          <span class="pf-tw-switch__t" id="pf-tw-pt-lbl">Include patient name, sex and age</span>
+          <span class="pf-tw-switch__d">Off sends only the tube barcode and its tests. On, the patient’s details are also stored on the analyzer.</span>
+        </span>
+        <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="value().sendPatient" aria-labelledby="pf-tw-pt-lbl"
+                (click)="set({ sendPatient: !value().sendPatient })">
+          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── HL7 message style (HL7 / auto-detect only) ───────────────── -->
+    @if (hl7()) {
+      <section class="pf-tw__sec" aria-labelledby="pf-tw-hl7-h">
+        <h3 class="pf-tw__h" id="pf-tw-hl7-h">HL7 messages</h3>
+        <div class="pf-tw__grid">
+          @if (asks()) {
+            <div class="pf-field"><span class="pf-field__lbl">How to answer a barcode question</span>
+              <pf-select [options]="queryOptions" [value]="value().hl7Query" aria-label="How to answer a barcode question"
+                         (valueChange)="set({ hl7Query: $event })"></pf-select></div>
+          }
+          @if (worklist()) {
+            <div class="pf-field"><span class="pf-field__lbl">Worklist message</span>
+              <pf-select [options]="orderOptions" [value]="value().hl7Order" aria-label="Worklist message"
+                         (valueChange)="set({ hl7Order: $event })"></pf-select></div>
+          }
+        </div>
+        <p class="pf-field__hint">Only used when the analyzer speaks HL7. Keep the first choice unless the analyzer’s manual names a different message.</p>
+      </section>
+    }
+
+    <!-- ── Worklist timing ──────────────────────────────────────────── -->
+    @if (worklist()) {
+      <section class="pf-tw__sec" aria-labelledby="pf-tw-wl-h">
+        <h3 class="pf-tw__h" id="pf-tw-wl-h">Worklist</h3>
+        <div class="pf-tw__grid">
+          <label class="pf-field"><span class="pf-field__lbl">Send samples collected in the last</span>
+            <span class="pf-tw-unit">
+              <input class="pf-input pf-num" inputmode="numeric" [class.pf-input--error]="!!issue('window')"
+                     [value]="value().worklistWindowHours ?? ''" (input)="setInt('worklistWindowHours', $any($event.target).value)"
+                     [attr.aria-invalid]="!!issue('window')" />
+              <span class="pf-tw-unit__u">hours</span>
+            </span>
+            <span class="pf-field__hint">{{ limits.windowHours.min }} to {{ limits.windowHours.max }} hours (a week).</span>
+            @if (issue('window'); as msg) { <span class="pf-field__hint pf-ie-err" role="alert">{{ msg }}</span> }
+          </label>
+          <label class="pf-field"><span class="pf-field__lbl">Check for new samples every</span>
+            <span class="pf-tw-unit">
+              <input class="pf-input pf-num" inputmode="numeric" [class.pf-input--error]="!!issue('poll')"
+                     [value]="value().worklistPollSeconds ?? ''" (input)="setInt('worklistPollSeconds', $any($event.target).value)"
+                     [attr.aria-invalid]="!!issue('poll')" />
+              <span class="pf-tw-unit__u">seconds</span>
+            </span>
+            <span class="pf-field__hint">{{ limits.pollSeconds.min }} to {{ limits.pollSeconds.max }} seconds.</span>
+            @if (issue('poll'); as msg) { <span class="pf-field__hint pf-ie-err" role="alert">{{ msg }}</span> }
+          </label>
+        </div>
+      </section>
+    }
+
+    <!-- ── Per-test order codes ─────────────────────────────────────── -->
+    <section class="pf-tw__sec" aria-labelledby="pf-tw-oc-h">
+      <div class="pf-tw__hrow">
+        <h3 class="pf-tw__h" id="pf-tw-oc-h">Order codes</h3>
+        <button type="button" class="pf-btn pf-btn--quiet press" (click)="addRow()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add order code
+        </button>
+      </div>
+      <p class="pf-field__hint">Usually not needed — Prefrontal sends the codes from Code mapping. Add one when the analyzer expects a single code for a whole test, for example “CBC” for the full blood count.</p>
+      @if (value().orderCodes.length) {
+        <ul class="pf-tw-codes" aria-label="Order codes">
+          @for (r of value().orderCodes; track $index; let i = $index) {
+            <li class="pf-tw-code" [class.pf-tw-code--err]="!!codeIssue(i)">
+              <div class="pf-field pf-tw-code__test"><span class="pf-field__lbl">Test</span>
+                <pf-select [options]="testOptions()" [value]="r.testCatalogKey" [searchable]="true" placeholder="Pick a test…"
+                           [attr.aria-label]="'Test for order code ' + (i + 1)" (valueChange)="patchRow(i, { testCatalogKey: $event })"></pf-select>
+              </div>
+              <label class="pf-field pf-tw-code__code"><span class="pf-field__lbl">Code sent to the analyzer</span>
+                <input class="pf-input pf-num" [value]="r.code" maxlength="64" autocomplete="off" spellcheck="false" placeholder="e.g. CBC"
+                       [class.pf-input--error]="!!codeIssue(i)" (input)="patchRow(i, { code: $any($event.target).value })" />
+              </label>
+              <button type="button" class="pf-btn pf-btn--icon press pf-tw-code__rm" (click)="removeRow(i)"
+                      [attr.aria-label]="'Remove order code ' + (r.code || (i + 1))" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+              @if (codeIssue(i); as msg) { <p class="pf-field__hint pf-ie-err pf-tw-code__err" role="alert">{{ msg }}</p> }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- ── Test a barcode ───────────────────────────────────────────── -->
+    <section class="pf-tw__sec" aria-labelledby="pf-tw-try-h">
+      <h3 class="pf-tw__h" id="pf-tw-try-h">Test a barcode</h3>
+      @if (!instrumentId()) {
+        <p class="pf-field__hint">Create the instrument first — then test a tube barcode here.</p>
+      } @else {
+        <p class="pf-field__hint">See exactly what the analyzer would be told for a tube.{{ unsaved() ? ' Uses the saved settings — save first to include your changes.' : '' }}</p>
+        <form class="pf-tw-try" (submit)="$event.preventDefault(); runPreview()">
+          <input class="pf-input pf-num" [value]="barcode()" (input)="barcode.set($any($event.target).value)" placeholder="Tube barcode, e.g. 26329"
+                 aria-label="Tube barcode" autocomplete="off" spellcheck="false" />
+          <button type="submit" class="pf-btn pf-btn--secondary press" [disabled]="!barcode().trim() || preview().kind === 'loading'"
+                  [pfBusy]="preview().kind === 'loading'" pfBusyLabel="Checking…">Check</button>
+        </form>
+
+        @if (previewError(); as msg) {
+          <p class="pf-field__hint pf-ie-err" role="alert">{{ msg }}</p>
+        }
+        @if (previewResult(); as v) {
+            @if (v.found) {
+              <div class="pf-tw-res" role="status" data-state="found">
+                <div class="pf-tw-res__head">
+                  <span class="pf-tw-res__mk" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                  <span class="pf-tw-res__t">Sample <span class="pf-num">{{ v.sampleId }}</span> found</span>
+                </div>
+                @if (v.meta) { <p class="pf-tw-res__meta">{{ v.meta }}</p> }
+                @if (v.patientLine) { <p class="pf-tw-res__pt"><span class="pf-tw-res__k">Patient</span>{{ v.patientLine }}</p> }
+
+                @if (v.tests.length) {
+                  <p class="pf-tw-res__k">The analyzer would be asked to run {{ plural(v.tests.length, 'test') }}</p>
+                  <ul class="pf-tw-res__list">
+                    @for (t of v.tests; track t.code + t.testCatalogKey) {
+                      <li class="pf-tw-res__row"><span class="pf-tw-res__code pf-num">{{ t.code }}</span><span class="pf-tw-res__name">{{ t.name }}</span></li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="pf-tw-res__k">Nothing would be sent — none of this tube’s tests has a code for this analyzer.</p>
+                }
+
+                @if (v.unmapped.length) {
+                  <div class="pf-tw-res__miss">
+                    <p class="pf-tw-res__k">Not sent — no code for this analyzer</p>
+                    <ul class="pf-tw-res__list">
+                      @for (u of v.unmapped; track u.testCatalogKey) {
+                        <li class="pf-tw-res__row"><span class="pf-tw-res__code pf-tw-res__code--none" aria-hidden="true">—</span><span class="pf-tw-res__name">{{ u.name }}</span></li>
+                      }
+                    </ul>
+                    <p class="pf-field__hint">Map these in Code mapping, or give each an order code above.</p>
+                    <div class="pf-tw-res__acts">
+                      <button type="button" class="pf-btn pf-btn--quiet press" (click)="openMapping.emit()">Open Code mapping</button>
+                      <button type="button" class="pf-btn pf-btn--quiet press" (click)="addCodesFor(unmappedKeys(v))">Add order codes for these</button>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="pf-tw-res pf-tw-res--none" role="status" data-state="not-found">
+                <div class="pf-tw-res__head">
+                  <span class="pf-tw-res__mk pf-tw-res__mk--none" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+                  <span class="pf-tw-res__t">No order for <span class="pf-num">{{ v.sampleId }}</span></span>
+                </div>
+                <p class="pf-tw-res__meta">The analyzer would be told there is nothing to run. The barcode may be wrong, from another branch, cancelled, or every test on it is already validated.</p>
+              </div>
+            }
+        }
+      }
+    </section>
+  }
+</div>
