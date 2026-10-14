@@ -61,6 +61,8 @@ class BidiHost {
     this.ackWaiters = new Map();   // HL7 control id → resolve(code)
     this.failures = new Map();     // sampleId → { n, nextAt, hash }
     this.MAX_FAILED_CYCLES = 5;
+    this.issued = new Map();       // control ids of worklist messages we sent → expiry (to tell a LATE ACK from a mismatched one)
+    this.lastRx = new Map();       // sessionId → time of the last byte from the analyzer
     this.timer = null;
     this.ticking = false;
     this.stopped = true;
@@ -138,7 +140,10 @@ class BidiHost {
     this.timer = setTimeout(async () => {
       this.timer = null;
       try { await this.worklistTick(); } catch (e) { this.lastError = `worklist: ${e.message}`; }
-      this.refresh();
+      // Steady state: the configured poll interval. (firstPollMs is only for a start /
+      // mode switch, via refresh() — never re-armed from here.)
+      if (this.stopped) return;
+      this._watchConfig();
       if (this.sendsWorklist() && !this.timer) this._schedule(this.opts.pollMs ?? this.cfg().worklistPollSeconds * 1000);
     }, ms);
     if (this.timer.unref) this.timer.unref();
@@ -162,8 +167,16 @@ class BidiHost {
           if (!this.sendsWorklist()) return false;
           let key = cl.ref;
           let w = this.ackWaiters.get(key);
+          const now = this.c.now();
+          for (const [k, exp] of this.issued) if (exp < now) this.issued.delete(k);
+          if (!w && cl.ref && this.issued.has(cl.ref)) {
+            // Correctly addressed, but for a download we already gave up on: it must
+            // NOT be attributed to whatever is outstanding now.
+            this._note(`late ACK ${cl.code} for ${cl.ref} ignored (that download timed out)`);
+            return true;
+          }
           if (!w) {
-            // Some analyzers echo a wrong/empty MSA-2: with exactly ONE outstanding
+            // Some analyzers echo an empty / unknown MSA-2: with exactly ONE outstanding
             // download on this session the ACK can only be for it.
             const mine = [...this.ackWaiters].filter(([, x]) => x.sessionId === sessionId);
             if (mine.length === 1) { [key, w] = mine[0]; this._note(`ACK ${cl.code} with MSA-2 "${cl.ref}" accepted for ${key} (only one download outstanding)`); }
@@ -189,7 +202,10 @@ class BidiHost {
   }
 
   /** Raw inbound bytes for a session — feeds a transmitting AstmSender (ACK/NAK/EOT/ENQ). */
-  feed(bytes, sessionId) { const s = this.senders.get(sessionId); if (s) s.feed(bytes); }
+  feed(bytes, sessionId) { this.lastRx.set(sessionId, this.c.now()); const s = this.senders.get(sessionId); if (s) s.feed(bytes); }
+
+  /** A new analyzer connection: earlier failures were about a dead/other link — start clean. */
+  onSessionStart() { this.failures.clear(); }
 
   _run(sessionId, fn) {
     const prev = this.chains.get(sessionId) || Promise.resolve();
@@ -354,6 +370,8 @@ class BidiHost {
         this._watchConfig();
         this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
         this.cache.replace(items);            // exactly the server's current set — anything else is stale
+        const live = new Set(items.map((d) => d.sampleId));
+        for (const id of [...this.failures.keys()]) if (!live.has(id)) this.failures.delete(id);   // gone from the worklist
       } catch (e) {
         if (this.isRefusal(e)) this.cache.clear();
         this.lastError = `worklist: ${e.message}`;
@@ -370,13 +388,16 @@ class BidiHost {
         if (f && f.hash !== hash) { this.failures.delete(dto.sampleId); f = undefined; }   // tests changed: fresh start
         if (f && f.n >= this.MAX_FAILED_CYCLES) continue;                                  // gave up; visible in status.stuck / lastError
         if (f && f.nextAt > this.c.now()) continue;
-        const ok = await this._sendWorklistItem(sessionId, protocol, dto, cfg);
+        const res = await this._sendWorklistItem(sessionId, protocol, dto, cfg);
+        const ok = res === true;
         if (ok) { this.sent.mark(dto); this.failures.delete(dto.sampleId); sent++; this._bump('worklistSent'); this.lastWorklistAt = new Date(this.c.now()).toISOString(); this._note(`worklist: sent ${dto.sampleId} [${dto.tests.map((t) => t.code).join(' ')}]`); }
         else {
           failed++; this._bump('worklistFailed');
-          const n = (f ? f.n : 0) + 1;
+          // A link-level failure (nothing at all heard from the analyzer meanwhile) is not the
+          // sample's fault: back off, but don't count a strike toward parking it.
+          const n = (f ? f.n : 0) + (res.strike ? 1 : 0);
           if (n >= this.MAX_FAILED_CYCLES) { this.lastError = `worklist ${dto.sampleId}: gave up after ${n} failed cycles (the analyzer never accepted it) — will retry only if its tests change`; this._note(this.lastError); }
-          this.failures.set(dto.sampleId, { n, hash, nextAt: this.c.now() + Math.min(10 * 60000, (this.opts.failBackoffMs ?? 15000) * 2 ** (n - 1)) });
+          this.failures.set(dto.sampleId, { n, hash, nextAt: this.c.now() + Math.min(10 * 60000, (this.opts.failBackoffMs ?? 15000) * 2 ** Math.max(0, n - 1)) });
         }
       }
       return { sent, failed, total: items.length };
@@ -385,6 +406,7 @@ class BidiHost {
 
   async _sendWorklistItem(sessionId, protocol, dto, cfg) {
     const attempts = 1 + this.opts.retries;
+    const t0 = this.c.now();
     for (let i = 0; i < attempts; i++) {
       try {
         if (protocol === 'astm') {
@@ -396,6 +418,7 @@ class BidiHost {
         const { text, ctrl } = buildWorklistMessage(dto, { type: cfg.hl7Order, sendPatient: cfg.sendPatient });
         const waiter = new Promise((res) => {
           this.ackWaiters.set(ctrl, { res, sessionId });
+          this.issued.set(ctrl, this.c.now() + 60000);
           const t = setTimeout(() => { if (this.ackWaiters.delete(ctrl)) res('TIMEOUT'); }, this.opts.ackTimeoutMs);
           if (t.unref) t.unref();
         });
@@ -409,7 +432,8 @@ class BidiHost {
         if (i + 1 < attempts) await sleep(this.opts.retryBaseMs * 2 ** i);
       }
     }
-    return false;
+    // strike only if the analyzer said ANYTHING (an AE/AR, a NAK, any byte) while we tried
+    return { strike: (this.lastRx.get(sessionId) || 0) >= t0 };
   }
 }
 

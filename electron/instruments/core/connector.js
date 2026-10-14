@@ -274,6 +274,7 @@ class Connector extends EventEmitter {
     t.on('error', (e) => { if (!isCurrent()) return; this._recordError(e.message); this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
     t.on('session-start', (id, info) => {
       if (!isCurrent()) return;
+      this.bidi.onSessionStart();
       this.rawlog.write('note', `session ${id} opened ${info && info.remote ? `(${info.remote})` : ''}`);
       this.links.set(id, this._makeLink(linkCfg(), parserCfg(), id));
     });

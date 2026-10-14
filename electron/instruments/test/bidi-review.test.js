@@ -217,3 +217,76 @@ test('L3: mode off / query = no timer; worklist modes start it; switching off st
     } finally { await r.close(); }
   }
 });
+
+// ── re-review fixes ─────────────────────────────────────────────────────────
+const { frame: mllpFrame } = require('../core/link/mllp');
+const ackFor = (ref, code = 'AA') => mllpFrame(`MSH|^~\\&|A|B|C|D|20261014||ACK^O01|X${Math.random().toString(36).slice(2, 6)}|P|2.3.1\rMSA|${code}|${ref}\r`);
+const ctrlOf = (text) => text.split('\r')[0].split('|')[9];
+
+test('R1: polling uses firstPollMs once, then the configured interval (not firstPollMs forever)', async () => {
+  const r = await rig({ kind: 'astm', transport: 'tcp-server', bidi: { mode: 'worklist', worklistPollSeconds: 60 }, bidiOpts: { firstPollMs: 30, pollMs: undefined }, apiOpts: { worklist: [] } });
+  try {
+    const delays = [];
+    const orig = r.connector.bidi._schedule.bind(r.connector.bidi);
+    r.connector.bidi._schedule = (ms) => { delays.push(ms); return orig(ms); };
+    r.connector.bidi.stop(); r.connector.bidi.start();           // re-arm with the recorder in place
+    await wait(300);
+    assert.deepEqual(delays, [30, 60000], 'first poll fast, then worklistPollSeconds*1000');
+  } finally { await r.close(); }
+});
+
+test('R1: with a tiny firstPollMs and a larger pollMs the second gap is ~pollMs', async () => {
+  const r = await rig({ kind: 'astm', transport: 'tcp-server', bidi: { mode: 'worklist' }, bidiOpts: { firstPollMs: 20, pollMs: 400 }, apiOpts: { worklist: [] } });
+  try {
+    const at = [];
+    const orig = r.connector.bidi.worklistTick.bind(r.connector.bidi);
+    r.connector.bidi.worklistTick = () => { at.push(Date.now()); return orig(); };
+    r.connector.bidi.stop(); r.connector.bidi.start();
+    await wait(1100);
+    assert.ok(at.length >= 3, `ticks ${at.length}`);
+    const gap = at[2] - at[1];
+    assert.ok(gap >= 350 && gap < 700, `second gap ${gap}`);
+    assert.ok(at[1] - at[0] >= 350, 'first→second is already the steady interval');
+  } finally { await r.close(); }
+});
+
+test('R2: a LATE but correctly addressed ACK for a timed-out download is never credited to the next one', async () => {
+  const r = await rig({ kind: 'hl7-q02', transport: 'tcp-server', bidi: { mode: 'worklist' }, bidiOpts: { retries: 0, ackTimeoutMs: 120, failBackoffMs: 0 }, apiOpts: { worklist: [dto('W1', ['GLU'])] }, simOpts: { ackCode: () => null } });
+  try {
+    let res = await r.connector.bidi.worklistTick();
+    assert.equal(res.failed, 1);
+    const ctrl1 = ctrlOf(r.sim.received[0]);
+    r.api.bidi.worklist.splice(0, 1, dto('W2', ['UREA']));
+    r.connector.bidi.opts.ackTimeoutMs = 1500;
+    const tick = r.connector.bidi.worklistTick();
+    for (let i = 0; i < 100 && r.sim.received.length < 2; i++) await wait(10);
+    r.io.write(ackFor(ctrl1));                                     // W1's ACK, late
+    await wait(80);
+    assert.ok(r.notes().some((n) => new RegExp(`late ACK AA for ${ctrl1} ignored`).test(n)));
+    assert.equal(r.connector.bidi.sent.isSent(dto('W2', ['UREA'])), false, 'W2 not credited');
+    r.io.write(ackFor(''));                                        // an empty MSA-2 is still tolerated for W2
+    res = await tick;
+    assert.equal(res.sent, 1);
+  } finally { await r.close(); }
+});
+
+test('R3: link-level failures (analyzer silent) earn no strikes; AE answers do; new session and worklist changes clean up', async () => {
+  let code = null;
+  const r = await rig({ kind: 'hl7-q02', transport: 'tcp-server', bidi: { mode: 'worklist' }, bidiOpts: { retries: 0, ackTimeoutMs: 60, failBackoffMs: 0 }, apiOpts: { worklist: [dto('W1', ['GLU'])] }, simOpts: { ackCode: () => code } });
+  try {
+    for (let i = 0; i < 7; i++) await r.connector.bidi.worklistTick();
+    assert.deepEqual(r.connector.status().bidi.stuck, [], 'silence never parks a sample');
+    assert.equal(r.connector.status().bidi.worklistFailed, 7);
+    code = 'AE';
+    for (let i = 0; i < 5; i++) await r.connector.bidi.worklistTick();
+    assert.deepEqual(r.connector.status().bidi.stuck, ['W1'], 'the analyzer rejecting it does');
+    r.connector.transport.emit('session-start', 'fresh', {});      // a new analyzer connection
+    assert.deepEqual(r.connector.status().bidi.stuck, []);
+    code = 'AE';
+    await r.connector.bidi.worklistTick();
+    assert.equal(r.connector.bidi.failures.size, 1);
+    r.api.bidi.worklist.splice(0, 1);                              // gone from the worklist
+    await r.connector.bidi.worklistTick();
+    assert.equal(r.connector.bidi.failures.size, 0);
+  } finally { await r.close(); }
+});
