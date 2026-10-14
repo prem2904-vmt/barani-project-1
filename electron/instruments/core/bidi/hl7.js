@@ -58,7 +58,8 @@ const DSP_DIALECTS = Object.freeze({
 
 /** Pick the DSP layout from the analyzer's MSH-3/4 unless `override` names one. */
 function pickDialect(msh, override) {
-  if (override && DSP_DIALECTS[override]) return override;
+  const o = override === 'mindray' ? 'mindray-bs' : override;
+  if (o && DSP_DIALECTS[o]) return o;
   const id = `${msh && msh.sendingApp} ${msh && msh.sendingFac}`;
   if (/mindray|\bBS-?\d|\bBC-?\d|\bBS\b/i.test(id)) return 'mindray-bs';
   if (/autolab|eurolab|\bAU\d*\b|erba|transasia|xl-?\d/i.test(id)) return 'autolab';
@@ -99,7 +100,7 @@ function classifyHl7(text, cfg = {}) {
   const dialect = DSP_DIALECTS[pickDialect(msh, cfg.hl7Dialect)];
   const seg = (name) => all.find((s) => s.startsWith(`${name}${e.field}`));
   const fieldOf = (line, n) => (line ? (line.split(e.field)[n] ?? '') : '');
-  if (type[0] === 'QRY' || (type[0] === 'QRY' && type[1] === 'Q02')) {
+  if (type[0] === 'QRY' && type[1] === 'Q02') {
     const qrd = seg('QRD');
     const f = Number(cfg.qrdSampleField) || dialect.qrdSampleField;
     const sampleId = unesc(fieldOf(qrd, f).split(e.component)[0].trim(), e);
@@ -124,13 +125,13 @@ function mshLine(e, msh, { type, ctrl, now, version }) {
 }
 
 /** QCK^Q02 acknowledgement (HL7 2.3.1 §5.?.? — MSA, [ERR], QAK with SR|OK|NF). */
-function buildQck(q, found, { now = new Date(), ctrl } = {}) {
+function buildQck(q, found, { now = new Date(), ctrl, refused = false } = {}) {
   const { e, msh } = q;
   return [
     mshLine(e, msh, { type: `QCK${e.component}Q02`, ctrl: ctrl || controlId(), now }),
-    ['MSA', 'AA', msh.ctrl].join(e.field),
-    ['ERR', '0'].join(e.field),
-    ['QAK', 'SR', found ? 'OK' : 'NF'].join(e.field),
+    ['MSA', refused ? 'AE' : 'AA', msh.ctrl].join(e.field),
+    ['ERR', refused ? '207' : '0'].join(e.field),
+    ['QAK', 'SR', refused ? 'AE' : found ? 'OK' : 'NF'].join(e.field),
   ].join('\r') + '\r';
 }
 
@@ -188,14 +189,14 @@ function obrSegments(e, dto, startAt, { now, codeSystem = 'L' }) {
 }
 
 /** RSP^K11 (IHE LAW WOS response). */
-function buildRsp(q, dto, { now = new Date(), sendPatient = true, ctrl } = {}) {
+function buildRsp(q, dto, { now = new Date(), sendPatient = true, ctrl, refused = false } = {}) {
   const { e, msh } = q;
   const tag = q.queryId;
   const found = !!dto;
   const lines = [
     mshLine(e, msh, { type: ['RSP', 'K11', 'RSP_K11'].join(e.component), ctrl: ctrl || controlId(), now, version: msh.version }),
-    ['MSA', 'AA', msh.ctrl].join(e.field),
-    ['QAK', tag, found ? 'OK' : 'NF', q.queryName || ''].join(e.field),
+    ['MSA', refused ? 'AE' : 'AA', msh.ctrl].join(e.field),
+    ['QAK', tag, refused ? 'AE' : found ? 'OK' : 'NF', q.queryName || ''].join(e.field),
     q.qpd,
   ];
   if (found) {

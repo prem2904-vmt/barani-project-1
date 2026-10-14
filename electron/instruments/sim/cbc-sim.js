@@ -215,7 +215,7 @@ async function runSim(o) {
   return { dialect: o.dialect, transport: o.transport, sent, ok: sent.every((s) => s.ok) };
 }
 
-module.exports = { runSim, plan, parseArgs, nextId };
+module.exports = { runSim, plan, parseArgs, nextId, sendOne, openIo };
 
 if (require.main === module) {
   let o;

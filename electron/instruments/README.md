@@ -36,7 +36,7 @@ Any analyzer is a **settings profile, not code**: four configurable layers.
 | `host-electron.js` | Electron main-process host: IPC handlers (accepted only from the main window), keys encrypted with `safeStorage`, starts with the app, keeps running in the tray, stops on quit. |
 | `host-node.js` | Headless host (Raspberry Pi later): `pair`, `run`, `list`, `unpair`. |
 | `sim/` | `cbc-sim.js` CLI, `dialects.js` (generic dialects), `cbc-data.js` (realistic 5-part / 3-part CBC), `pty-pair.py` (virtual null-modem when socat is absent). |
-| `e2e/` | `harness.js`, `fake-api.js`, `run-sim-e2e.js` (real backend driver). |
+| `e2e/` | `harness.js`, `fake-api.js`, `run-sim-e2e.js` (real backend driver), `run-bidi-e2e.js` (two-way real-backend driver, used by prefrontal-mw `InstrumentBidiSimE2ETests`). |
 | `test/` | `node:test` suites. |
 
 Renderer bridge (preload): `window.electronAPI.instruments` — `list, pair, unpair, status, onStatus, rawLog, listSerialPorts,

@@ -19,7 +19,7 @@
  */
 const { parseAstmQueries, hasQuery, hasResults, buildAstmOrders, buildAstmNoInfo, buildAstmRefused, astmTs, DEFAULT_DELIMS } = require('./astm');
 const { classifyHl7, buildQck, buildDsr, buildRsp, buildWorklistMessage } = require('./hl7');
-const { SentJournal, OrderCache } = require('./store');
+const { SentJournal, OrderCache, testSetHash } = require('./store');
 const { AstmSender } = require('../link/astm-e1381');
 const { frame: mllpFrame } = require('../link/mllp');
 
@@ -36,7 +36,7 @@ function normalizeBidi(raw) {
     sendPatient: !!b.sendPatient,
     hl7Query: ['auto', 'qry_q02', 'qbp_q11'].includes(b.hl7Query) ? b.hl7Query : 'auto',
     hl7Order: b.hl7Order === 'oml_o21' ? 'oml_o21' : 'orm_o01',
-    hl7Dialect: typeof b.hl7Dialect === 'string' && b.hl7Dialect !== 'auto' ? b.hl7Dialect : '',   // '' = auto from MSH-3/4
+    hl7Dialect: typeof b.hl7Dialect === 'string' && b.hl7Dialect !== 'auto' ? (b.hl7Dialect === 'mindray' ? 'mindray-bs' : b.hl7Dialect) : '',   // '' = auto from MSH-3/4
     worklistWindowHours: clamp(b.worklistWindowHours, 1, 168, 24),
     worklistPollSeconds: clamp(b.worklistPollSeconds, 15, 3600, 60),
     astmQueryComponent: Number(b.astmQueryComponent) >= 1 ? Number(b.astmQueryComponent) : 0,
@@ -59,7 +59,8 @@ class BidiHost {
     this.senders = new Map();      // sessionId → AstmSender currently transmitting
     this.chains = new Map();       // sessionId → Promise (serialises our transmissions per session)
     this.ackWaiters = new Map();   // HL7 control id → resolve(code)
-    this.failures = new Map();     // sampleId → { n, nextAt }
+    this.failures = new Map();     // sampleId → { n, nextAt, hash }
+    this.MAX_FAILED_CYCLES = 5;
     this.timer = null;
     this.ticking = false;
     this.stopped = true;
@@ -74,7 +75,8 @@ class BidiHost {
 
   cfg() {
     const c = this.c;
-    const raw = (c.active && c.active.bidirectional) || (c.remote && c.remote.bidirectional) || (c.remote && c.remote.config && c.remote.config.bidirectional);
+    // the freshest server config first (remote), the running config as fallback
+    const raw = (c.remote && c.remote.config && c.remote.config.bidirectional) || (c.remote && c.remote.bidirectional) || (c.active && c.active.bidirectional);
     return normalizeBidi(raw);
   }
 
@@ -85,7 +87,12 @@ class BidiHost {
 
   summary() {
     const cfg = this.cfg();
-    return { mode: cfg.mode, ...this.counters, lastQueryAt: this.lastQueryAt, lastWorklistAt: this.lastWorklistAt, cachedOrders: this.cache.map.size, lastError: this.lastError };
+    return { mode: cfg.mode, ...this.counters, lastQueryAt: this.lastQueryAt, lastWorklistAt: this.lastWorklistAt, cachedOrders: this.cache.map.size, lastError: this.lastError, stuck: this.stuckSamples() };
+  }
+
+  /** Samples we stopped retrying (5 failed cycles) — visible until their test set changes. */
+  stuckSamples() {
+    return [...this.failures].filter(([, f]) => f.n >= this.MAX_FAILED_CYCLES).map(([id]) => id);
   }
 
   _note(msg) { this.c.rawlog.write('note', `two-way: ${msg}`); }
@@ -98,14 +105,29 @@ class BidiHost {
   // ── lifecycle ────────────────────────────────────────────────────────
   start() {
     this.stopped = false;
-    this._schedule(this.opts.firstPollMs ?? 1500);
+    this.refresh();
+  }
+
+  /** Start the poll timer only while a worklist mode is on; mode off = no timers. Called on start and after every config reload. */
+  refresh() {
+    if (this.stopped) return;
+    this._watchConfig();
+    if (this.sendsWorklist()) { if (!this.timer && !this.ticking) this._schedule(this.opts.firstPollMs ?? 1500); }
+    else { clearTimeout(this.timer); this.timer = null; }
+  }
+
+  /** Purge the cache when the mode or sendPatient changed since it was filled. */
+  _watchConfig() {
+    const c = this.cfg();
+    if (c.mode === 'off' && !this.cache.map.size && this.cache.key == null) return;
+    if (this.cache.fingerprint(`${c.mode}|${c.sendPatient ? 1 : 0}`)) this._note('two-way settings changed — cached orders cleared');
   }
 
   stop() {
     this.stopped = true;
     clearTimeout(this.timer);
     this.timer = null;
-    for (const [, res] of this.ackWaiters) res(null);
+    for (const [, w] of this.ackWaiters) w.res(null);
     this.ackWaiters.clear();
     this.senders.clear();
   }
@@ -114,8 +136,10 @@ class BidiHost {
     clearTimeout(this.timer);
     if (this.stopped) return;
     this.timer = setTimeout(async () => {
+      this.timer = null;
       try { await this.worklistTick(); } catch (e) { this.lastError = `worklist: ${e.message}`; }
-      this._schedule(this.opts.pollMs ?? this.cfg().worklistPollSeconds * 1000);
+      this.refresh();
+      if (this.sendsWorklist() && !this.timer) this._schedule(this.opts.pollMs ?? this.cfg().worklistPollSeconds * 1000);
     }, ms);
     if (this.timer.unref) this.timer.unref();
   }
@@ -136,8 +160,15 @@ class BidiHost {
         if (!cl) return false;
         if (cl.kind === 'ack') {
           if (!this.sendsWorklist()) return false;
-          const res = this.ackWaiters.get(cl.ref);
-          if (res) { this.ackWaiters.delete(cl.ref); res(cl.code); } else this._note(`unmatched ACK ${cl.code} for ${cl.ref} ignored`);
+          let key = cl.ref;
+          let w = this.ackWaiters.get(key);
+          if (!w) {
+            // Some analyzers echo a wrong/empty MSA-2: with exactly ONE outstanding
+            // download on this session the ACK can only be for it.
+            const mine = [...this.ackWaiters].filter(([, x]) => x.sessionId === sessionId);
+            if (mine.length === 1) { [key, w] = mine[0]; this._note(`ACK ${cl.code} with MSA-2 "${cl.ref}" accepted for ${key} (only one download outstanding)`); }
+          }
+          if (w) { this.ackWaiters.delete(key); w.res(cl.code); } else this._note(`unmatched ACK ${cl.code} for ${cl.ref} ignored`);
           return true;
         }
         if (!this.answersQueries()) return false;
@@ -168,23 +199,27 @@ class BidiHost {
   }
 
   // ── server lookups ───────────────────────────────────────────────────
-  /** @returns {{status:'ok'|'notfound'|'error', dto?:object, fromCache?:boolean}} */
+  /** Auth (401/403: inactive instrument, suspended tenant, rotated key) and every other
+   *  non-retryable answer (409 …) is a REFUSAL: nothing is served from the cache and the whole
+   *  cache is dropped. Only network/timeout/5xx ("transient") may fall back to the cache. */
+  isRefusal(e) { return !!e && (e.kind === 'permanent' || e.kind === 'auth'); }
+
+  /** @returns {{status:'ok'|'notfound'|'error'|'refused', dto?:object, fromCache?:boolean}} */
   async lookup(sampleId) {
     const t = this.opts.queryTimeoutMs;
+    this._watchConfig();
+    this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
     try {
       const dto = await this.c.uploader.getOrders(sampleId, { timeoutMs: t });
       if (dto && dto.found && (dto.tests || []).length) {
-        this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
         this.cache.put(dto); this.cache.save();
         return { status: 'ok', dto };
       }
+      this.cache.delete(sampleId);           // the server says there is nothing to run: never serve a stale order
       return { status: 'notfound' };
     } catch (e) {
       this.lastError = `orders: ${e.message}`;
-      // 409 (two-way off on the server) or any other non-retryable refusal: the
-      // cache must not paper over it.
-      if (e && e.kind === 'permanent') return { status: 'refused' };
-      this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
+      if (this.isRefusal(e)) { this.cache.clear(); return { status: 'refused' }; }
       const cached = this.cache.get(sampleId);
       if (cached) return { status: 'ok', dto: cached, fromCache: true };
       return { status: 'error' };
@@ -213,7 +248,9 @@ class BidiHost {
           const w = await this.c.uploader.getWorklist({ timeoutMs: this.opts.queryTimeoutMs });
           items = (w && w.items) || [];
           this.cache.putMany(items);
-        } catch { items = this.cache.all(); errored = !items.length; }
+        } catch (e) {
+          if (this.isRefusal(e)) { refused = true; this.cache.clear(); } else { items = this.cache.all(); errored = !items.length; }
+        }
         orders = items.filter((d) => d.found && (d.tests || []).length).slice(0, 20);
       } else {
         const res = await Promise.all(q.ids.map((id) => this.lookup(id)));
@@ -269,19 +306,20 @@ class BidiHost {
     const cfg = this.cfg();
     this._note(`HL7 ${cl.kind === 'qry_q02' ? 'QRY^Q02' : 'QBP^Q11'} query for ${cl.sampleId || '(no id)'}`);
     const r = cl.sampleId ? await this.lookup(cl.sampleId) : { status: 'notfound' };
+    const refused = r.status === 'refused';
     const dto = r.status === 'ok' ? r.dto : null;
     const asked = cl.kind;
     const shape = cfg.hl7Query === 'auto' ? asked : cfg.hl7Query;
     const now = new Date();
     const frames = [];
     if (shape === 'qry_q02') {
-      frames.push(buildQck(cl, !!dto, { now }));
+      frames.push(buildQck(cl, !!dto, { now, refused }));
       if (dto) frames.push(buildDsr(cl, dto, { now, dialect: cfg.hl7Dialect, sendPatient: cfg.sendPatient }));
     } else {
-      frames.push(buildRsp({ ...cl, qpd: cl.qpd || `QPD|WOS^Work Order Step^IHE_LABTF|${cl.queryId || ''}|${cl.sampleId}`, queryName: cl.queryName }, dto, { now, sendPatient: cfg.sendPatient }));
+      frames.push(buildRsp({ ...cl, qpd: cl.qpd || `QPD|WOS^Work Order Step^IHE_LABTF|${cl.queryId || ''}|${cl.sampleId}`, queryName: cl.queryName }, dto, { now, sendPatient: cfg.sendPatient, refused }));
     }
     if (dto) { this._bump('queriesAnswered'); if (r.fromCache) this._bump('queriesFromCache'); this._note(`answered ${cl.sampleId}: ${dto.tests.map((t) => t.code).join(' ')}${r.fromCache ? ' (from cache)' : ''}`); }
-    else { this._bump(r.status === 'error' || r.status === 'refused' ? 'queryErrors' : 'queriesNotFound'); this._note(`query ${cl.sampleId}: ${r.status === 'error' ? 'server unavailable and nothing cached' : 'no order on record'} — replied NF`); }
+    else { this._bump(r.status === 'error' || r.status === 'refused' ? 'queryErrors' : 'queriesNotFound'); this._note(`query ${cl.sampleId}: ${refused ? 'server refused' : r.status === 'error' ? 'server unavailable and nothing cached' : 'no order on record'} — replied ${refused ? 'AE' : 'NF'}`); }
     this.lastQueryAt = new Date(this.c.now()).toISOString();
     for (const f of frames) this.c._writeOut(mllpFrame(f), sessionId);
   }
@@ -313,9 +351,11 @@ class BidiHost {
       try {
         const w = await this.c.uploader.getWorklist({ timeoutMs: this.opts.worklistTimeoutMs ?? 10000 });
         items = ((w && w.items) || []).filter((d) => d && d.found !== false && (d.tests || []).length);
+        this._watchConfig();
         this.cache.setTtl(this.cfg().worklistWindowHours * 3600 * 1000);
-        this.cache.putMany(items);
+        this.cache.replace(items);            // exactly the server's current set — anything else is stale
       } catch (e) {
+        if (this.isRefusal(e)) this.cache.clear();
         this.lastError = `worklist: ${e.message}`;
         this._note(`worklist fetch failed: ${e.message}`);
         return { error: e.message };
@@ -325,14 +365,18 @@ class BidiHost {
       for (const dto of items.slice(0, 200)) {
         if (this.stopped) break;
         if (this.sent.isSent(dto)) continue;
-        const f = this.failures.get(dto.sampleId);
+        let f = this.failures.get(dto.sampleId);
+        const hash = testSetHash(dto);
+        if (f && f.hash !== hash) { this.failures.delete(dto.sampleId); f = undefined; }   // tests changed: fresh start
+        if (f && f.n >= this.MAX_FAILED_CYCLES) continue;                                  // gave up; visible in status.stuck / lastError
         if (f && f.nextAt > this.c.now()) continue;
         const ok = await this._sendWorklistItem(sessionId, protocol, dto, cfg);
         if (ok) { this.sent.mark(dto); this.failures.delete(dto.sampleId); sent++; this._bump('worklistSent'); this.lastWorklistAt = new Date(this.c.now()).toISOString(); this._note(`worklist: sent ${dto.sampleId} [${dto.tests.map((t) => t.code).join(' ')}]`); }
         else {
           failed++; this._bump('worklistFailed');
           const n = (f ? f.n : 0) + 1;
-          this.failures.set(dto.sampleId, { n, nextAt: this.c.now() + Math.min(10 * 60000, (this.opts.failBackoffMs ?? 15000) * 2 ** (n - 1)) });
+          if (n >= this.MAX_FAILED_CYCLES) { this.lastError = `worklist ${dto.sampleId}: gave up after ${n} failed cycles (the analyzer never accepted it) — will retry only if its tests change`; this._note(this.lastError); }
+          this.failures.set(dto.sampleId, { n, hash, nextAt: this.c.now() + Math.min(10 * 60000, (this.opts.failBackoffMs ?? 15000) * 2 ** (n - 1)) });
         }
       }
       return { sent, failed, total: items.length };
@@ -351,7 +395,7 @@ class BidiHost {
         }
         const { text, ctrl } = buildWorklistMessage(dto, { type: cfg.hl7Order, sendPatient: cfg.sendPatient });
         const waiter = new Promise((res) => {
-          this.ackWaiters.set(ctrl, res);
+          this.ackWaiters.set(ctrl, { res, sessionId });
           const t = setTimeout(() => { if (this.ackWaiters.delete(ctrl)) res('TIMEOUT'); }, this.opts.ackTimeoutMs);
           if (t.unref) t.unref();
         });

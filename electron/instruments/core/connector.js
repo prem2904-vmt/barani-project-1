@@ -202,6 +202,7 @@ class Connector extends EventEmitter {
     const before = this.active;
     const cfg = await this._loadConfig();
     if (!cfg || this.stopped) return none;
+    this.bidi.refresh();   // two-way settings may have changed (timer on/off, cache purge)
     const tKey = this._transportKey(cfg);
     if (!this.transport || tKey !== this.transportKey) {
       await this._stopTransport();
