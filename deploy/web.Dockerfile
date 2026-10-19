@@ -5,11 +5,9 @@
 FROM node:22 AS build
 ENV CI=true ELECTRON_SKIP_BINARY_DOWNLOAD=1 NODE_OPTIONS=--max-old-space-size=4096 HOME=/tmp
 WORKDIR /w
-COPY package.json package-lock.json ./
-# patch-package (postinstall) needs the patches before npm ci
-COPY patches ./patches
-RUN npm ci --no-audit --no-fund --ignore-scripts=false
+# The whole repo (minus .dockerignore) — npm needs .npmrc, workspaces and patches/
 COPY . .
+RUN npm ci --no-audit --no-fund
 RUN npm run build && test -f public/index.html
 
 FROM busybox:1.36
