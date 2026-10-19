@@ -4,7 +4,7 @@ name: deploy-oci
 # the same "npm run build" DigitalOcean runs, then swaps it into /opt/pf/www.
 on:
   push:
-    branches: [dev]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SITE: /opt/pf/www/med-${{ github.ref_name }}
+  SITE: /opt/pf/www/med-dev
 
 jobs:
   deploy:
