@@ -1,0 +1,2 @@
+# The real config.json is served by the host at runtime; never ship it in the build.
+config.json
