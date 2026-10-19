@@ -1,0 +1,44 @@
+name: build
+
+# BUILD ONCE: every push to main builds this website once (one build for every
+# environment), stores it in the registry, then releases it to DEV automatically.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP: lms-web
+  REGISTRY: hyd.ocir.io/axhslaiirs9d/pf
+
+jobs:
+  build:
+    runs-on: [self-hosted, oci]
+    timeout-minutes: 45
+    outputs:
+      build: ${{ steps.tag.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "build=$(date -u +%Y.%m.%d).${{ github.run_number }}-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build site image
+        run: |
+          flock /tmp/pf-build.lock docker build --pull -f deploy/web.Dockerfile \
+            --label pf.commit=${{ github.sha }} --label pf.build=${{ steps.tag.outputs.build }} \
+            -t $REGISTRY/$APP:${{ steps.tag.outputs.build }} -t $REGISTRY/$APP:${{ github.sha }} .
+      - name: Push to registry
+        run: |
+          docker push -q $REGISTRY/$APP:${{ steps.tag.outputs.build }}
+          docker push -q $REGISTRY/$APP:${{ github.sha }}
+          echo "### Build ${{ steps.tag.outputs.build }}" >> "$GITHUB_STEP_SUMMARY"
+
+  release-dev:
+    needs: build
+    uses: ./.github/workflows/release.yml
+    with:
+      environment: dev
+      build: ${{ needs.build.outputs.build }}

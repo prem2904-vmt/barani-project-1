@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+dist
+public
+.git
+.nx
+.angular
+coverage
+release-*

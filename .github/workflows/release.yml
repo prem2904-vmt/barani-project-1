@@ -1,0 +1,48 @@
+name: release
+run-name: Release ${{ inputs.build }} → ${{ inputs.environment }}
+
+# RELEASE: copies an already-built website onto an environment's server. Nothing
+# is compiled. The site gets its settings from /config.json on that server.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to release
+        type: choice
+        options: [stage, dev]
+        required: true
+      build:
+        description: Build number (e.g. 2026.10.19.12-abc1234) or full commit SHA
+        required: true
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+      build: { type: string, required: true }
+
+concurrency:
+  group: release-${{ inputs.environment }}-lms-web
+  cancel-in-progress: false
+
+env:
+  APP: lms-web
+  SITE: /opt/pf/www/med-${{ inputs.environment == 'stage' && 'stg' || 'dev' }}
+  REGISTRY: hyd.ocir.io/axhslaiirs9d/pf
+
+jobs:
+  release:
+    runs-on: [self-hosted, "${{ inputs.environment == 'stage' && 'oci-stage' || 'oci' }}"]
+    timeout-minutes: 15
+    steps:
+      - name: Pull build ${{ inputs.build }}
+        run: docker pull -q $REGISTRY/$APP:${{ inputs.build }}
+      - name: Publish files
+        run: |
+          C=$(docker create $REGISTRY/$APP:${{ inputs.build }} true)
+          rm -rf "$SITE.next"; docker cp "$C:/site" "$SITE.next"; docker rm -f "$C" >/dev/null
+          test -f "$SITE.next/index.html"
+          rm -rf "$SITE.old"; [ -d "$SITE" ] && mv "$SITE" "$SITE.old"; mv "$SITE.next" "$SITE"; rm -rf "$SITE.old"
+          echo "$(date -Is) $APP ${{ inputs.build }} ${{ github.actor }}" >> /opt/pf/releases/${{ inputs.environment }}.log
+          echo "Released **${{ inputs.build }}** to **${{ inputs.environment }}** ($(find "$SITE" -type f | wc -l) files)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Clean old images
+        if: always()
+        run: docker image prune -f >/dev/null
