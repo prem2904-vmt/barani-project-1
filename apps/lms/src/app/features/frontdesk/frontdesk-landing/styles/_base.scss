@@ -10,6 +10,49 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+
+  /* Frontdesk redesign — keep the pink/magenta brand gradient as-is; only
+   *  calm the loud emerald green (it was fighting the UI) to a muted sage. */
+  --green-text: #84bda6;
+}
+
+/* ── Weekday strip (Appointments) ─────────────────────────── */
+.pf-daystrip {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 8px;
+}
+.pf-daystrip__day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(148, 137, 172, 0.22));
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.pf-daystrip__day:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); color: var(--text-primary); }
+.pf-daystrip__dow { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.pf-daystrip__n { font-size: 14px; font-weight: 800; color: var(--text-secondary); line-height: 1; }
+.pf-daystrip__day--today .pf-daystrip__n { color: var(--text-primary); }
+.pf-daystrip__day--today { border-color: rgba(168, 85, 247, 0.32); }
+.pf-daystrip__day--on {
+  border-color: rgba(168, 85, 247, 0.55);
+  background: rgba(168, 85, 247, 0.14);
+  color: var(--violet-text, #c084fc);
+}
+.pf-daystrip__day--on .pf-daystrip__dow,
+.pf-daystrip__day--on .pf-daystrip__n { color: var(--violet-text, #c084fc); }
+@media (max-width: 480px) {
+  .pf-daystrip { gap: 4px; padding: 4px 8px 6px; }
+  .pf-daystrip__day { padding: 4px 6px; border-radius: 8px; }
+  .pf-daystrip__n { font-size: 13px; }
 }
 
 .pf-page__header {
@@ -219,19 +262,19 @@
 }
 
 .pf-tp-item__count[data-tone='rose'] {
-  color: #fca5a5;
+  color: var(--red-text);
   background: rgba(239, 68, 68, 0.16);
   border-color: rgba(239, 68, 68, 0.3);
 }
 
 .pf-tp-item__count[data-tone='amber'] {
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.16);
   border-color: rgba(245, 158, 11, 0.3);
 }
 
 .pf-tp-item__count[data-tone='emerald'] {
-  color: #34d399;
+  color: var(--green-text);
   background: rgba(16, 185, 129, 0.16);
   border-color: rgba(16, 185, 129, 0.3);
 }
@@ -304,7 +347,7 @@
   }
   .pf-appt-split__pane--expanded > .pf-cards,
   .pf-appt-split__pane--expanded > .pf-empty-tile,
-  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+  .pf-appt-split__pane--expanded > .pf-selbar {
     display: flex;
   }
   .pf-appt-split__pane--expanded > .pf-cards {
@@ -321,9 +364,65 @@
     margin: 12px 14px 14px;
     flex: 1 1 auto;
   }
-  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+  .pf-appt-split__pane--expanded > .pf-selbar {
     margin: 10px 14px 0;
   }
+}
+
+/* ── Tablet stack (641–1023px): nothing spills out of its card ─────────
+ * The Appointments pane carries an inline `flex-basis: N%` — the DESKTOP
+ * row split (drag handle). In this column stack that percentage became a
+ * HEIGHT, so the pane was squeezed to ~half the column while its content
+ * (header + week strip + a 200px-min empty state) was taller, and with
+ * `overflow: visible` the "Open calendar" button painted over the work
+ * card's tabs. Here:
+ *   • the inline basis is neutralised (it only means something side by side);
+ *   • the Appointments pane sizes to its content and, when that is taller
+ *     than the room left, scrolls INSIDE its own card (visible overflow is
+ *     kept only while its date-filter popover is open, so the popover can
+ *     still escape the card);
+ *   • its empty state uses the kit's compact metrics (.pf-empty--compact)
+ *     so the card stays short;
+ *   • the work pane, when expanded, takes the remaining height.
+ * Phones (≤640px) show one pane at a time and keep their own rules. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .pf-appt-split > .pf-appt-split__pane {
+    flex-basis: auto !important;
+  }
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--filtering {
+    overflow: visible;
+  }
+  .pf-appt-split > .pf-appt-split__pane--work.pf-appt-split__pane--expanded {
+    flex: 1 1 auto;
+  }
+  .pf-appt-split__pane > .pf-daystrip {
+    flex-shrink: 0;
+  }
+  /* A collapsed pane is header-only: round the header's bottom corners with
+     the card (the design skins give it a 20px-top-only radius, whose square
+     bottom corners poked out of the card once it was header-high). */
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) > .pf-appt-split__hdr {
+    border-radius: inherit !important;
+    border-bottom-color: transparent !important;
+  }
+  /* Mirrors .pf-empty.pf-empty--compact (shared/styles/_pf-kit.scss) —
+     Appointments pane, tablet only — the desktop pane and the work pane keep
+     their full, centred empty state. */
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile {
+    flex: none;
+    min-height: 0;
+    padding: 20px 12px;
+    margin: 0;
+  }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__icon { width: 32px; height: 32px; border-radius: 10px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__icon > svg { width: 16px; height: 16px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .pf-empty__title { font-size: 13.5px; }
 }
 
 @media (min-width: 1024px) {
@@ -401,7 +500,7 @@
   }
 
   .pf-appt-split__pane > .pf-appt-split__hdr,
-  .pf-appt-split__pane > .pf-bulk-bar,
+  .pf-appt-split__pane > .pf-selbar,
   .pf-appt-split__pane > .pf-empty {
     flex-shrink: 0;
   }
@@ -415,6 +514,14 @@
     margin: 0;
     border-bottom-left-radius: 14px;
     border-bottom-right-radius: 14px;
+  }
+  /* The drafts strip is a SIBLING list above the orders list — without
+     this it also gets flex:1 and stretches to half the pane, leaving a
+     dead gap under a single draft card. It hugs its content instead. */
+  .pf-appt-split__pane > .pf-cards--drafts {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .pf-appt-split__pane > .pf-empty-tile {
@@ -505,7 +612,7 @@
 
 :host-context([data-theme="light"]) {
   .pf-appt-split__pane {
-    background: #ffffff;
+    background: var(--glass-bg);
   }
   .pf-tp-item__count[data-tone='emerald'] {
     background: rgba(5, 150, 105, 0.1) !important;
@@ -514,4 +621,4 @@
   }
 }
 
-
+

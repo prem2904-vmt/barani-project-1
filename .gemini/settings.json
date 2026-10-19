@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "nx-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["nx", "mcp"]
+    },
+     "figma": {
+      "serverUrl": "https://mcp.figma.com/mcp"
+    }
+  },
+  "contextFileName": "AGENTS.md",
+  "toolPermission": "always-proceed"
+}

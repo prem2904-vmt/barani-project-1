@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input, inject } from "@angular/core";
+import { Router } from "@angular/router";
 import { NavBackService } from "../../core/services/nav-back.service";
 
 @Component({
@@ -29,6 +30,11 @@ import { NavBackService } from "../../core/services/nav-back.service";
     @media (hover: hover) {
       .pf-hdr-back:hover { background: var(--glass-bg, rgba(255, 255, 255, 0.06)); }
     }
+    /* NEW design (designer system): the hero band + navbar carry the page
+       context, so the big screen titles disappear app-wide. display:none
+       keeps the projected content mounted; back chip + actions stay. */
+    :host-context(.design-new) h1,
+    :host-context(.design-new) .pf-hdr-subtitle { display: none; }
   `],
   template: `
     <!-- Title and actions share one row on every width. The title sits in its
@@ -37,12 +43,12 @@ import { NavBackService } from "../../core/services/nav-back.service";
          actions stay pinned right and shrink-0 (wrapping within their own
          column if there are many). This restores the inline layout on phone —
          the icons sit beside the title, not on a new line below it. -->
-    <header class="flex flex-row items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
-      @if (navBack.showBack() && !noBack) {
+    <header class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+      @if ((parentRoute || navBack.showBack()) && !noBack) {
         <button
           type="button"
           class="pf-hdr-back shrink-0 inline-flex items-center justify-center"
-          (click)="navBack.back()"
+          (click)="onBack()"
           aria-label="Go back"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -51,7 +57,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
           </svg>
         </button>
       }
-      <div class="min-w-0 flex-1">
+      <div class="min-w-fit max-w-full flex-1">
         <!--
         @if (eyebrow) {
           <p
@@ -63,7 +69,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         }
         -->
         <h1
-          class="text-[20px] md:text-[32px] leading-[1.05] font-semibold tracking-tight break-words"
+          class="text-[20px] md:text-[32px] leading-[1.05] font-semibold tracking-tight break-normal"
           style="color: var(--text-primary);"
         >
           <ng-content></ng-content>
@@ -74,7 +80,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         <!--
         @if (subtitle) {
           <p
-            class="mt-1.5 md:mt-2 text-[14px] md:text-[15px] max-w-[720px]"
+            class="pf-hdr-subtitle mt-1.5 md:mt-2 text-[14px] md:text-[15px] max-w-[720px]"
             style="color: var(--text-secondary);"
           >
             {{ subtitle }}
@@ -82,7 +88,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         }
         -->
       </div>
-      <div class="shrink-0 flex items-center gap-2 flex-wrap justify-end max-w-full overflow-x-auto">
+      <div class="flex-1 sm:flex-initial flex items-center gap-2 flex-wrap justify-start sm:justify-end max-w-full">
         <ng-content select="[actions]"></ng-content>
       </div>
     </header>
@@ -90,14 +96,26 @@ import { NavBackService } from "../../core/services/nav-back.service";
 })
 export class ScreenHeaderComponent {
   protected readonly navBack = inject(NavBackService);
+  private readonly router = inject(Router);
 
   @Input() eyebrow: string | null = null;
   @Input() title: string | null = null;
   @Input() subtitle: string | null = null;
+  @Input() parentRoute: string | null = null;
 
   /** Force-hide the back chevron even on a secondary route (rare — for a
    *  screen that is logically a root but doesn't sit on the primary nav). */
   @Input() noBack = false;
+
+  protected onBack(): void {
+    if (this.parentRoute) {
+      // Pop-or-replace via the shared service so browser-back from the
+      // parent never bounces back down to this screen.
+      this.navBack.backTo(this.parentRoute);
+    } else {
+      this.navBack.back();
+    }
+  }
 
   /**
    * The default slot takes priority — consumers can project rich HTML for the title

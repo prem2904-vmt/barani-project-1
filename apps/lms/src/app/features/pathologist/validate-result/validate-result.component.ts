@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { TrendTest } from '../../../shared/utils/trend-chart';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -7,24 +8,51 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
+import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { CultureResult } from '../../../shared/models/culture.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { AuthService } from '../../../core/auth/auth.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
+import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
+import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { pickReassignee } from '../reassign-picker';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { ReportChartComponent } from '../../../shared/components/report-chart/report-chart.component';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { buildChartData, type ChartData } from '../../../shared/utils/report-chart/report-chart.data';
+import { chartOwnerOf, chartTestsFromOrder, savedValues } from '../../../shared/utils/report-chart/report-chart.order';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
+import { bandAgeYears } from '../../../shared/utils/patient-age';
+import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
+import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
+  /** mw's saved per-value verdicts ({ value, flag, range, unit, … }). */
+  flagged?: Record<string, SavedFlag>;
   note?: string;
   flags?: { critical: boolean; notifications: string[] };
+  /** Value names the tech marked "print in bold" at result entry. */
+  bold?: string[];
 }
 
 type Flag = 'normal' | 'abnormal' | 'critical';
-type View = 'cards' | 'table';
 
 interface ParamDef {
   name: string;
@@ -34,7 +62,7 @@ interface ParamDef {
   options?: string[];
   criticalLow?: number;
   criticalHigh?: number;
-  referenceRanges?: Array<{ segment: string; min: number; max: number }>;
+  referenceRanges?: Array<RangeLike & { criticalLow?: number | null; criticalHigh?: number | null }>;
 }
 
 interface ValueRow {
@@ -50,16 +78,27 @@ interface ValueRow {
   critHigh?: number;
   isNumeric: boolean;
   flag: Flag;
+  /** The critical badge mw saved: CL / CH (legacy rows: C); '' otherwise. */
+  crit?: CriticalCode | '';
+  /** The tech asked for this value to print bold (the B toggle). */
+  printBold?: boolean;
+  /** True when the parameter has a reference (range or critical bounds) —
+   *  only then does a "Normal" verdict mean anything. Referenceless
+   *  categorical values are shown as recorded, not judged. */
+  hasRef: boolean;
 }
 
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent],
+  imports: [DailyNoComponent, FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
+  // Technician report notes: the reviewer sees what will print (and, while
+  // a line awaits validation, may adjust it — the server decides).
+  providers: [ReportNotesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
-      <!-- Compact header -->
+      <!-- Slim header — identity only; context lives in the rail. -->
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
           @if (navBack.showBack()) {
@@ -67,311 +106,288 @@ interface ValueRow {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           }
-          <button type="button" class="pf-head__back press" (click)="back()" aria-label="Back">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-            <span class="hidden sm:inline">Back</span>
-          </button>
-          <h1 class="pf-head__title">{{ selected()?.test?.name ?? 'Validate' }}</h1>
-          <p class="pf-head__sub">{{ subtitleText() }}</p>
+          <div class="pf-head__id">
+            <h1 class="pf-head__title">{{ headTitle() }}</h1>
+            <p class="pf-head__sub">{{ subtitleText() }}</p>
+          </div>
         </div>
       </header>
 
+      @if (editDialogOpen() && editOrderId(); as oid) {
+        <pf-edit-result-dialog
+          [orderId]="oid"
+          title="Send results back for correction"
+          (edited)="onEdited()"
+          (closed)="editDialogOpen.set(false)">
+        </pf-edit-result-dialog>
+      }
+
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
-        @if (loading() && !selected()) {
-          <div class="pf-empty-block flex justify-center py-12">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading validation…"></pf-loading-logo>
+        @if ((loading() && !selected()) || zoom.holding()) {
+          <!-- The cockpit's own shape (identity, values, a card) — the kit
+               skeleton, never the PF logo (PF-PATTERN "Loading feedback"). -->
+          <div class="pf-vr-skel" [pfZoomTarget]="zoomKeys()">
+            <pf-skeleton-detail [fields]="6" [sections]="1" label="Loading validation…"></pf-skeleton-detail>
           </div>
         }
 
-        @if (!loading() && !selected()) {
-          <div class="pf-empty-block">Order test not found in the validation queue.</div>
+        @if (!loading() && !selected() && !zoom.holding()) {
+          <div class="pf-empty-block" [pfZoomTarget]="zoomKeys()">Order test not found in the validation queue.</div>
         }
 
-        @if (selected(); as t) {
+        @if (zoom.holding() ? null : selected(); as t) {
+          <div class="pf-cockpit">
 
-          <!-- Patient + context strip -->
-          <div class="pf-ctx">
-            <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
-            <div class="pf-ctx__id">
-              <p class="pf-ctx__name">{{ formatPatient(t.subOrder?.order?.patient) }}</p>
-              <p class="pf-ctx__meta">
-                {{ t.test?.department?.name ?? '—' }} ·
-                entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}
-              </p>
-            </div>
-            @if (snapshot()?.flags?.critical) {
-              <pf-chip tone="rose" size="sm">CRITICAL</pf-chip>
-            }
-          </div>
-
-          <!-- Sent-back banner — this result was previously rejected and
-               re-entered by the tech. Repeats the rejection reason so the
-               validator remembers WHY it was sent back before signing off.
-               Visual pattern mirrors sample-result-entry's reject banner. -->
-          @if (t.rejectionReason) {
-            <div class="pf-reject-banner">
-              <span class="pf-reject-banner__icon" aria-hidden="true">↻</span>
-              <p class="pf-reject-banner__text">
-                <strong>Sent back:</strong> {{ t.rejectionReason }}
-              </p>
-            </div>
-          }
-
-          <!-- Validator ↔ tech overall conversation. Bidirectional —
-               tech can post observations ("patient was nervous, two
-               attempts"); validator posts corrections ("recheck
-               platelet count"). Per-parameter comments live below
-               each row in the table view. -->
-          <section class="pf-overall-comments">
-            <p class="pf-eyebrow">Overall conversation</p>
-            <pf-comment-thread
-              [comments]="commentsFor(null)"
-              currentRole="validator"
-              (add)="addOverallComment($event.body, $event.type)"
-              (reply)="replyToOverall($event.parentId, $event.body)">
-            </pf-comment-thread>
-          </section>
-
-          <!-- Microbiology Culture & Sensitivity → structured read-only review -->
-          @if (isCulture()) {
-            @if (cultureResult(); as c) {
-              <div class="pf-culture-rev">
-                <div class="pf-culture-rev__meta">
-                  <div><span class="pf-eyebrow">Specimen</span><p>{{ c.specimen || '—' }}</p></div>
-                  <div><span class="pf-eyebrow">Gram stain</span><p>{{ c.gramStain || '—' }}</p></div>
-                  <div><span class="pf-eyebrow">Colony count</span><p>{{ c.colonyCount || '—' }}</p></div>
-                </div>
-                @if (c.noGrowth) {
-                  <p class="pf-culture-rev__growth">No significant growth</p>
-                } @else if ((c.organisms ?? []).length === 0) {
-                  <p class="pf-culture-rev__empty">No organisms recorded.</p>
-                } @else {
-                  @for (org of c.organisms ?? []; track $index) {
-                    <div class="pf-culture-rev__org">
-                      <div class="pf-culture-rev__org-name">{{ org.name || 'Organism' }}</div>
-                      <table class="pf-culture-rev__ast">
-                        <thead>
-                          <tr><th>Antimicrobial</th><th class="w-16">Zone</th><th class="w-32">Interpretation</th></tr>
-                        </thead>
-                        <tbody>
-                          @for (ab of org.antibiotics; track $index) {
-                            <tr>
-                              <td>{{ ab.name }}</td>
-                              <td class="text-center">{{ ab.zoneSize != null ? ab.zoneSize + ' mm' : '—' }}</td>
-                              <td class="font-bold" [style.color]="interpTone(ab.interpretation)">{{ interpLabel(ab.interpretation) }}</td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  }
-                }
-                @if (c.resistancePattern) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Resistance pattern</span> {{ c.resistancePattern }}</p> }
-                @if (c.intrinsicResistance) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Intrinsic resistance</span> {{ c.intrinsicResistance }}</p> }
-                @if (c.clinicalNotes) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Clinical notes</span> {{ c.clinicalNotes }}</p> }
-                @if (c.infectionControlAdvice) { <p class="pf-culture-rev__note"><span class="pf-eyebrow">Infection control advice</span> {{ c.infectionControlAdvice }}</p> }
-              </div>
-            } @else {
-              <div class="pf-empty-block">No culture result recorded.</div>
-            }
-          }
-
-          @if (!isCulture()) {
-          <!-- Summary strip: param counts with color-coded cells -->
-          @if (valueRows().length > 0) {
-            <div class="pf-summary">
-              <div class="pf-summary__cell">
-                <span class="pf-summary__num">{{ counts().total }}</span>
-                <span class="pf-summary__lbl">Parameters</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="normal">
-                <span class="pf-summary__num">{{ counts().normal }}</span>
-                <span class="pf-summary__lbl">Normal</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="abnormal">
-                <span class="pf-summary__num">{{ counts().abnormal }}</span>
-                <span class="pf-summary__lbl">Abnormal</span>
-              </div>
-              <div class="pf-summary__cell" data-tone="critical">
-                <span class="pf-summary__num">{{ counts().critical }}</span>
-                <span class="pf-summary__lbl">Critical</span>
-              </div>
-            </div>
-          }
-
-          <!-- Parameters header with view toggle -->
-          <div class="pf-params-head">
-            <p class="pf-eyebrow m-0">Parameters</p>
-            <div class="pf-view-toggle" role="group">
-              <button type="button"
-                      class="pf-view-toggle__btn"
-                      [class.pf-view-toggle__btn--on]="view() === 'cards'"
-                      (click)="setView('cards')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                  <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
-                Cards
-              </button>
-              <button type="button"
-                      class="pf-view-toggle__btn"
-                      [class.pf-view-toggle__btn--on]="view() === 'table'"
-                      (click)="setView('table')">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-                </svg>
-                Table
-              </button>
-            </div>
-          </div>
-
-          <!-- CARDS VIEW -->
-          @if (view() === 'cards') {
-            @if (valueRows().length === 0) {
-              <div class="pf-empty-block">No values recorded.</div>
-            } @else {
-              <ul class="pf-cards">
-                @for (r of valueRows(); track r.name) {
-                  <li>
-                    <button type="button"
-                            class="pf-vcard press"
-                            [attr.data-flag]="r.flag"
-                            (click)="openDetail(r)">
-                      <header class="pf-vcard__hdr">
-                        <span class="pf-vcard__name">{{ r.title }}</span>
-                        <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
-                          <span class="pf-vcard__chip-dot"></span>
-                          {{ flagLabel(r.flag) }}
-                        </span>
-                      </header>
-
-                      <div class="pf-vcard__value">
-                        <span class="pf-vcard__num">{{ r.value ?? '—' }}</span>
-                        @if (r.unit) { <span class="pf-vcard__unit">{{ r.unit }}</span> }
-                      </div>
-
-                      <!-- Range visualization — muted rail, highlighted normal zone, value pin. -->
-                      @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
-                        <div class="pf-rangebar">
-                          <div class="pf-rangebar__track">
-                            @for (z of zonesFor(r); track z.label) {
-                              <span class="pf-rangebar__zone"
-                                    [attr.data-tone]="z.tone"
-                                    [style.flex]="z.weight"></span>
-                            }
-                          </div>
-                          <span class="pf-rangebar__pin"
-                                [style.left.%]="pinFor(r)"
-                                [attr.data-flag]="r.flag"
-                                [attr.title]="r.value">
-                          </span>
-                          <div class="pf-rangebar__scale">
-                            <span>{{ r.min ?? r.critLow ?? '—' }}</span>
-                            <span class="pf-rangebar__scale-mid">normal</span>
-                            <span>{{ r.max ?? r.critHigh ?? '—' }}</span>
-                          </div>
-                        </div>
-                      }
-
-                      <p class="pf-vcard__range">
-                        @if (r.range) { Normal · {{ r.range }} }
-                        @else if (!r.isNumeric) { categorical }
-                        @else { no range }
+            <!-- ══ Results column — every test on this tube, full quality ══ -->
+            <main class="pf-cockpit__main">
+              @for (st of sampleTests(); track st.id; let sti = $index) {
+                @let c = countsFor(st);
+                <section class="pf-vt" [pfZoomTarget]="sti === 0 ? zoomKeys() : null" [id]="'vt-' + st.id" [attr.data-outcome]="outcomeOf(st)">
+                  <header class="pf-vt__hdr">
+                    <div class="pf-vt__id">
+                      <h2 class="pf-vt__name">{{ st.test?.name ?? 'Test' }}</h2>
+                      <p class="pf-vt__meta">
+                        @if (isCultureFor(st)) {
+                          Culture &amp; sensitivity
+                        } @else {
+                          {{ c.total }} parameters
+                          @if (specimenLabel(st); as sp) { <span class="pf-vt__spec" title="Specimen chosen at the order desk">· Specimen: {{ sp }}</span> }
+                          @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} critical</span> }
+                          @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abnormal</span> }
+                          @if (!c.abnormal && !c.critical && c.total && hasRefRows(st)) { <span class="pf-flagtag" data-flag="normal">all within range</span> }
+                        }
                       </p>
-                    </button>
-                  </li>
-                }
-              </ul>
-            }
-          }
-
-          <!-- TABLE VIEW -->
-          @if (view() === 'table') {
-            @if (valueRows().length === 0) {
-              <div class="pf-empty-block">No values recorded.</div>
-            } @else {
-              <div class="pf-table">
-                <div class="pf-table__head">
-                  <span>Parameter</span>
-                  <span>Value</span>
-                  <span>Range</span>
-                  <span>Where</span>
-                  <span>Flag</span>
-                </div>
-                @for (r of valueRows(); track r.name) {
-                  <button type="button"
-                          class="pf-table__row press"
-                          [class.pf-table__row--has-comments]="hasOpenComment(r.name)"
-                          [attr.data-flag]="r.flag"
-                          (click)="toggleParamComment(r.name); $event.stopPropagation()">
-                    <span class="pf-table__name">
-                      {{ r.title }}
-                      @if (hasOpenComment(r.name)) {
-                        <span class="pf-table__comment-flag" title="Open comment">💬</span>
+                    </div>
+                    <span class="grow"></span>
+                    @switch (outcomeOf(st)) {
+                      @case ('validated') {
+                        <span class="pf-vt__badge" data-outcome="validated">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                          Validated
+                        </span>
                       }
-                    </span>
-                    <span class="pf-table__value">
-                      {{ r.value ?? '—' }} @if (r.unit) { <em class="pf-table__unit">{{ r.unit }}</em> }
-                    </span>
-                    <span class="pf-table__range">{{ r.range ?? '—' }}</span>
-                    <span class="pf-table__where">
-                      @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
-                        <div class="pf-rangebar pf-rangebar--mini">
-                          <div class="pf-rangebar__track">
-                            @for (z of zonesFor(r); track z.label) {
-                              <span class="pf-rangebar__zone"
-                                    [attr.data-tone]="z.tone"
-                                    [style.flex]="z.weight"></span>
-                            }
-                          </div>
-                          <span class="pf-rangebar__pin"
-                                [style.left.%]="pinFor(r)"
-                                [attr.data-flag]="r.flag"></span>
-                        </div>
-                      } @else { — }
-                    </span>
-                    <span>
-                      <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
-                        <span class="pf-vcard__chip-dot"></span>
-                        {{ flagLabel(r.flag) }}
+                      @case ('rejected') {
+                        <span class="pf-vt__badge" data-outcome="rejected">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          Rejected
+                        </span>
+                      }
+                      @case ('validating') { <span class="pf-vt__badge" data-outcome="validating">Working…</span> }
+                      @default {
+                        @if (sampleTests().length > 1) {
+                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving() || rejectingId() === st.id" [pfBusy]="rejectingId() === st.id" pfBusyLabel="Rejecting…" (click)="rejectTest(st)">Reject</button>
+                          <button type="button" class="pf-vt__act pf-vt__act--approve press" [disabled]="saving()" (click)="approveTest(st)">Approve</button>
+                        }
+                      }
+                    }
+                  </header>
+
+                  @if (st.rejectionReason) {
+                    <!-- Previously sent back — repeat WHY so the validator can
+                         confirm the correction actually addressed it. -->
+                    <div class="pf-reject-banner pf-vt__banner">
+                      <span class="pf-reject-banner__icon" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
                       </span>
-                    </span>
-                  </button>
-                  @if (openParamComment() === r.name) {
-                    <div class="pf-table__row-comments" (click)="$event.stopPropagation()">
-                      <p class="pf-eyebrow pf-table__row-comments-label">{{ r.title }} · conversation</p>
-                      <pf-comment-thread
-                        [comments]="commentsFor(r.name)"
-                        currentRole="validator"
-                        [composeLabel]="'Comment on this parameter'"
-                        (add)="addParameterComment(r.name, $event.body, $event.type)"
-                        (reply)="replyToParameter(r.name, $event.parentId, $event.body)">
-                      </pf-comment-thread>
+                      <p class="pf-reject-banner__text"><strong>Sent back:</strong> {{ st.rejectionReason }}</p>
                     </div>
                   }
-                }
-              </div>
-            }
-          }
-          }
 
-          <!-- Clinical comment -->
-          <section class="pf-comment">
-            <label class="pf-eyebrow pf-comment__label">
-              Clinical comment <span class="pf-comment__optional">(optional)</span>
-            </label>
-            <textarea class="pf-comment__input"
-                      [value]="comment()"
-                      (input)="onComment($event)"
-                      placeholder="Notes for the report or the follow-up team…"></textarea>
-          </section>
+                  @if (isCultureFor(st)) {
+                    <!-- Culture signs out on the Culture case page (owner). -->
+                    <button type="button" class="pf-row pf-vt__culturelink press" (click)="openCultureBench(st)"
+                            [attr.aria-label]="'Review ' + (st.test?.name ?? 'culture') + ' on the culture bench'">
+                      <span class="pf-row__name">Culture: review and sign out on the bench</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  } @else if (valueRowsFor(st).length === 0) {
+                    <div class="pf-empty-block">No values recorded.</div>
+                  } @else {
+                    <div class="pf-plist">
+                      <div class="pf-plist__head" aria-hidden="true">
+                        <span>Parameter</span><span>Result</span><span>Within range</span><span>Reference</span><span>Flag</span><span></span>
+                      </div>
+                      @for (r of visibleRowsFor(st); track r.name) {
+                        <div class="pf-prow" [attr.data-flag]="r.flag">
+                          <div class="pf-prow__row" role="button" tabindex="0"
+                               [class.pf-prow__row--static]="isEditingTest(st)"
+                               (click)="!isEditingTest(st) && openDetail(r)"
+                               (keydown.enter)="!isEditingTest(st) && openDetail(r)">
+                            <span class="pf-prow__name">{{ r.title }}</span>
+                            <span class="pf-prow__val" [class.pf-prow__val--bold]="r.printBold">
+                              @if (isEditingTest(st)) {
+                                <input class="pf-prow__editin" [value]="editVal(r.name)"
+                                       (input)="setEditVal(r.name, $any($event.target).value)"
+                                       (click)="$event.stopPropagation()"
+                                       [attr.aria-label]="'New value for ' + r.title" />
+                                @if (r.unit) { <em>{{ r.unit }}</em> }
+                              } @else {
+                                {{ r.value ?? '—' }} @if (r.unit) { <em>{{ r.unit }}</em> }
+                              }
+                              @if (r.printBold) {
+                                <span class="pf-prow__boldmark" title="Prints in bold on the report" aria-label="Prints in bold on the report" role="img">
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z"/><path d="M7 12h7.5a3.5 3.5 0 0 1 0 7H7z"/></svg>
+                                </span>
+                              }
+                            </span>
+                            <span class="pf-prow__bar">
+                              @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
+                                <div class="pf-rangebar pf-rangebar--mini">
+                                  <div class="pf-rangebar__track">
+                                    @for (z of zonesFor(r); track z.label) {
+                                      <span class="pf-rangebar__zone" [attr.data-tone]="z.tone" [style.flex]="z.weight"></span>
+                                    }
+                                  </div>
+                                  <span class="pf-rangebar__pin" [style.left.%]="pinFor(r)" [attr.data-flag]="r.flag"></span>
+                                </div>
+                              } @else { <span class="pf-prow__dash">—</span> }
+                            </span>
+                            <span class="pf-prow__ref">{{ r.range ?? '—' }}</span>
+                            <span class="pf-prow__flag">
+                              @if (r.flag !== 'normal' || r.hasRef) {
+                                <span class="pf-vcard__chip" [attr.data-flag]="r.flag" [attr.title]="flagExplanation(r) || null">
+                                  <span class="pf-vcard__chip-dot"></span>
+                                  {{ flagLabel(r.flag, r.crit) }}
+                                </span>
+                              } @else { <span class="pf-prow__dash">—</span> }
+                            </span>
+                            <button type="button" class="pf-prow__cbtn press"
+                                    [class.pf-prow__cbtn--live]="selected()?.id === st.id && hasOpenComment(r.name)"
+                                    (click)="rowComment(st, r.name); $event.stopPropagation()"
+                                    [attr.aria-label]="'Discuss ' + r.title + ' with the bench'">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </button>
+                          </div>
+                          @if (openParamComment() === r.name && selected()?.id === st.id) {
+                            <div class="pf-prow__thread" (click)="$event.stopPropagation()">
+                              <pf-comment-thread
+                                [comments]="commentsFor(r.name)"
+                                currentRole="validator"
+                                [composeLabel]="'Comment on ' + r.title"
+                                (add)="addParameterComment(r.name, $event.body, $event.type)"
+                                (reply)="replyToParameter(r.name, $event.parentId, $event.body)">
+                              </pf-comment-thread>
+                            </div>
+                          }
+                        </div>
+                      }
+                      @if (hiddenNormals(st) > 0) {
+                        <button type="button" class="pf-plist__more press" (click)="toggleNormals(st)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                          Show {{ hiddenNormals(st) }} normal {{ hiddenNormals(st) === 1 ? 'parameter' : 'parameters' }}
+                        </button>
+                      } @else if (canCollapseNormals(st)) {
+                        <button type="button" class="pf-plist__more press" (click)="toggleNormals(st)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                          Hide normal parameters
+                        </button>
+                      }
+                    </div>
+                  }
+                </section>
+              }
+            </main>
+
+            <!-- ══ Context rail — always in view while reviewing ══ -->
+            <aside class="pf-cockpit__rail">
+              <div class="pf-rail-card">
+                <div class="pf-railpat">
+                  <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? '—'" [size]="44"></pf-avatar>
+                  <div class="pf-railpat__id">
+                    <p class="pf-railpat__name"><pf-daily-no [of]="t.subOrder" />{{ formatPatient(t.subOrder?.order?.patient) }}</p>
+                    <p class="pf-railpat__meta">{{ t.test?.department?.name ?? '—' }} · {{ sampleLabel() }}</p>
+                  </div>
+                  @if (hasSampleCritical()) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
+                </div>
+                <p class="pf-railpat__entered">Entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}</p>
+              </div>
+
+              @if (critical().length) {
+                <!-- NABL: the tube's critical values still to acknowledge / communicate. -->
+                <pf-critical-ack-strip [events]="critical()" via="validate" (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
+              }
+
+              @if (sampleTests().length > 1) {
+                <div class="pf-rail-card">
+                  <p class="pf-rail-lbl">This tube · {{ sampleProgress().done }}/{{ sampleProgress().total }} validated</p>
+                  <ul class="pf-checklist">
+                    @for (st of sampleTests(); track st.id) {
+                      <li>
+                        <button type="button" class="pf-checklist__item press" [attr.data-outcome]="outcomeOf(st)"
+                                [class.pf-checklist__item--focus]="selected()?.id === st.id"
+                                (click)="scrollToTest(st)">
+                          <span class="pf-checklist__ic" aria-hidden="true">
+                            @switch (outcomeOf(st)) {
+                              @case ('validated') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> }
+                              @case ('rejected') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> }
+                              @default { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> }
+                            }
+                          </span>
+                          <span class="pf-checklist__name">{{ st.test?.name ?? 'Test' }}</span>
+                          <span class="pf-checklist__hint">
+                            @if (isCultureFor(st)) { C&amp;S }
+                            @else {
+                              @let cc = countsFor(st);
+                              @if (cc.critical) { {{ cc.critical }} crit }
+                              @else if (cc.abnormal) { {{ cc.abnormal }} abn }
+                              @else { — }
+                            }
+                          </span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <!-- Technician notes that print on the report (Lab settings). -->
+              <pf-report-notes-card class="pf-rail-notes" [lineIds]="noteLineIds()" [showLines]="true" [showProfiles]="true"></pf-report-notes-card>
+
+              @if (printChart(); as pc) {
+                <div class="pf-rail-card pf-printchart">
+                  <p class="pf-rail-lbl">Chart · printed on the report</p>
+                  <pf-report-chart [data]="pc"></pf-report-chart>
+                </div>
+              }
+
+              <div class="pf-rail-card">
+                <p class="pf-rail-lbl">Bench conversation@if (sampleTests().length > 1) { · {{ t.test?.name }} }</p>
+                <pf-comment-thread
+                  [comments]="commentsFor(null)"
+                  currentRole="validator"
+                  (add)="addOverallComment($event.body, $event.type)"
+                  (reply)="replyToOverall($event.parentId, $event.body)">
+                </pf-comment-thread>
+              </div>
+
+              <div class="pf-rail-card">
+                <label class="pf-rail-lbl" for="pf-clinical-note">Clinical comment · printed on the report</label>
+                <textarea id="pf-clinical-note" class="pf-comment__input"
+                          [value]="comment()"
+                          (input)="onComment($event)"
+                          placeholder="Notes for the report or the follow-up team…"></textarea>
+              </div>
+
+              @if (trendEligible().length > 0) {
+                <div class="pf-rail-card">
+                  <!-- Kit switch (violet ON), never a native checkbox. -->
+                  <button type="button" class="pf-toggle pf-trendrow" role="switch"
+                          [attr.aria-checked]="trendogramOn()" (click)="toggleTrendogram()">
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    <span>Trendogram in the report</span>
+                  </button>
+                  @if (trendogramOn()) {
+                    <pf-select class="pf-trendsel" [options]="trendDurations"
+                               [value]="trendogramDuration()" (valueChange)="setTrendDuration($event)"></pf-select>
+                  }
+                </div>
+              }
+            </aside>
+          </div>
         }
       </div>
 
-      <!-- Sticky validate bar -->
+      <!-- Sticky verdict bar — one primary action, secondary in More. -->
       @if (selected()) {
         <footer class="pf-stickybar">
           <div class="pf-stickybar__inner">
@@ -382,47 +398,72 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="cancelEdit()">Cancel</button>
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" (click)="saveEdits()">
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEdits()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
             } @else {
               <span class="pf-stickybar__meta">
-                @if (hasCritical()) {
+                @if (sampleTests().length > 1) {
+                  @if (hasSampleCritical()) {
+                    <span class="pf-stickybar__dot" data-state="critical"></span>
+                    <b>Critical</b> in this sample · validating notifies the referring doctor
+                  } @else {
+                    <span class="pf-stickybar__dot" data-state="ok"></span>
+                    {{ sampleProgress().done }} validated · {{ sampleProgress().rej }} rejected · {{ pendingSampleTests().length }} pending
+                  }
+                } @else if (hasCritical()) {
                   <span class="pf-stickybar__dot" data-state="critical"></span>
-                  <b>Critical</b> · validation will notify referring doctor
+                  <b>Critical</b> · validating notifies the referring doctor
                 } @else {
                   <span class="pf-stickybar__dot" data-state="ok"></span>
                   Ready to validate
                 }
               </span>
               <div class="flex-1"></div>
-              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
-                <span class="pf-btn-label">Reject</span>
-              </button>
-              <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reassign()" aria-label="Reassign">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
-                <span class="pf-btn-label">Reassign</span>
-              </button>
-              @if (!isCulture()) {
-                <!-- Culture values are a structured object; editing them as flat
-                     fields would corrupt the shape. The validator rejects for
-                     re-entry instead, which reopens the structured tech screen. -->
-                <button type="button" class="pf-btn pf-btn--secondary pf-btn--icony press" (click)="startEdit()" aria-label="Edit values">
-                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                  <span class="pf-btn-label">Edit values</span>
+
+              <!-- ⋮ — the secondary steps (reassign, edit, send back) and
+                   go-to (patient, lab results) in one place. Validate stays
+                   THE primary; Reject stays visible. -->
+              @if (menuActions().length) {
+                <pf-actions-menu [actions]="menuActions()" label="More actions" [heading]="headTitle()"
+                                 (action)="runAction($event)">
+                  <button pfActionsTrigger type="button" class="pf-btn pf-btn--ghost pf-vr-kebab press" aria-label="More actions" title="More actions"
+                          [pfBusy]="reassigning()" pfBusyLabel="Reassigning…">
+                    <svg class="pf-vr-kebab__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+                    <span class="pf-vr-kebab__t">More</span>
+                  </button>
+                </pf-actions-menu>
+              }
+
+              @if (sampleTests().length > 1) {
+                <button type="button"
+                        class="pf-btn pf-btn--icony"
+                        [class.pf-btn--primary]="!hasSampleCritical()"
+                        [class.pf-btn--danger]="hasSampleCritical()"
+                        [disabled]="saving() || pendingSampleTests().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
+                        (click)="validateAllRemaining()">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
+                </button>
+              } @else {
+                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject"
+                        [disabled]="rejecting()" [pfBusy]="rejecting()" pfBusyLabel="Rejecting…">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+                  <span class="pf-btn-label">Reject</span>
+                </button>
+                <button type="button"
+                        class="pf-btn pf-btn--icony"
+                        [class.pf-btn--primary]="!hasCritical()"
+                        [class.pf-btn--danger]="hasCritical()"
+                        [disabled]="saving() || isCulture() || valueRows().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
+                        (click)="validate()"
+                        [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
+                  <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
                 </button>
               }
-              <button type="button"
-                      class="pf-btn pf-btn--icony"
-                      [class.pf-btn--primary]="!hasCritical()"
-                      [class.pf-btn--danger]="hasCritical()"
-                      [disabled]="saving() || (!isCulture() && valueRows().length === 0)"
-                      (click)="validate()"
-                      [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
-                <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                <span class="pf-btn-label">{{ saving() ? 'Validating…' : (hasCritical() ? 'Validate · notify' : 'Validate') }}</span>
-              </button>
             }
           </div>
         </footer>
@@ -434,13 +475,14 @@ interface ValueRow {
         <aside class="pf-drawer" role="dialog" aria-modal="true">
           <header class="pf-drawer__hdr">
             <div class="min-w-0 flex-1">
-              <p class="pf-eyebrow">Parameter</p>
               <h2 class="pf-drawer__title">{{ r.title }}</h2>
             </div>
-            <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
-              <span class="pf-vcard__chip-dot"></span>
-              {{ flagLabel(r.flag) }}
-            </span>
+            @if (r.flag !== 'normal' || r.hasRef) {
+              <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
+                <span class="pf-vcard__chip-dot"></span>
+                {{ flagLabel(r.flag, r.crit) }}
+              </span>
+            }
             <button type="button" class="pf-drawer__close press" (click)="closeDetail()" aria-label="Close">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -449,27 +491,19 @@ interface ValueRow {
           </header>
 
           <div class="pf-drawer__body">
-            <!-- Big value display -->
             <div class="pf-drawer__value">
               <span class="pf-drawer__num">{{ r.value ?? '—' }}</span>
               @if (r.unit) { <span class="pf-drawer__unit">{{ r.unit }}</span> }
             </div>
 
-            <!-- Big range bar -->
             @if (r.isNumeric && (r.min !== undefined || r.critLow !== undefined)) {
               <div class="pf-rangebar pf-rangebar--lg">
                 <div class="pf-rangebar__track">
                   @for (z of zonesFor(r); track z.label) {
-                    <span class="pf-rangebar__zone"
-                          [attr.data-tone]="z.tone"
-                          [style.flex]="z.weight"></span>
+                    <span class="pf-rangebar__zone" [attr.data-tone]="z.tone" [style.flex]="z.weight"></span>
                   }
                 </div>
-                <span class="pf-rangebar__pin"
-                      [style.left.%]="pinFor(r)"
-                      [attr.data-flag]="r.flag">
-                </span>
-                <!-- Zone labels along the bottom -->
+                <span class="pf-rangebar__pin" [style.left.%]="pinFor(r)" [attr.data-flag]="r.flag"></span>
                 <div class="pf-rangebar__labels">
                   @for (tick of ticksFor(r); track tick.label) {
                     <span class="pf-rangebar__tick" [style.left.%]="tick.pos">
@@ -480,13 +514,11 @@ interface ValueRow {
               </div>
             }
 
-            <!-- Reference ranges -->
             <section class="pf-drawer__sec">
-              <p class="pf-eyebrow mb-2">Reference</p>
               <dl class="pf-drawer__meta">
                 <div>
                   <dt>Normal range</dt>
-                  <dd>{{ r.range ?? '—' }}</dd>
+                  <dd class="pf-drawer__range">{{ r.range ?? '—' }}</dd>
                 </div>
                 <div>
                   <dt>Critical low</dt>
@@ -503,10 +535,8 @@ interface ValueRow {
               </dl>
             </section>
 
-            <!-- Flag explanation -->
             @if (r.flag !== 'normal') {
               <section class="pf-drawer__sec pf-drawer__sec--alert" [attr.data-flag]="r.flag">
-                <p class="pf-eyebrow mb-2">Why flagged</p>
                 <p class="pf-drawer__why">{{ flagExplanation(r) }}</p>
               </section>
             }
@@ -514,901 +544,374 @@ interface ValueRow {
         </aside>
       }
     </section>
-  `,
+    `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ── WORK page: non-scroll app layout ─────────────────────
        The PAGE itself never scrolls. :host fills the shell's main
-       area (shell-main is flex:1; min-height:0; overflow-y:auto, so
-       a height:100% child fits exactly). The screen header is fixed
-       (flex:0 0 auto); the SCROLL happens inside .pf-page__body. The
-       validate bar is a position:fixed overlay that floats above the
-       body, so it stays out of the flex flow. */
+       area; the screen header is fixed (flex:0 0 auto); the SCROLL
+       happens inside .pf-page__body. The verdict bar is a
+       position:fixed overlay floating above the body. */
     :host { display: block; height: 100%; overflow: hidden; }
     .pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-
-    /* ── Culture & Sensitivity read-only review ─────────────── */
-    .pf-culture-rev { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
-    .pf-culture-rev__meta { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
-    .pf-culture-rev__meta p { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .pf-culture-rev__growth { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-secondary); }
-    .pf-culture-rev__empty { margin: 0; font-size: 13px; color: var(--text-tertiary); }
-    .pf-culture-rev__org { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); }
-    .pf-culture-rev__org-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
-    .pf-culture-rev__ast { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .pf-culture-rev__ast th { text-align: left; font-weight: 700; font-size: 10.5px; letter-spacing: 0.06em;
-      text-transform: uppercase; color: var(--text-tertiary); padding: 4px 6px; border-bottom: 1px solid var(--glass-border); }
-    .pf-culture-rev__ast td { padding: 5px 6px; border-bottom: 1px solid var(--glass-border); color: var(--text-secondary); }
-    .pf-culture-rev__ast tr:last-child td { border-bottom: 0; }
-    .pf-culture-rev__note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
-    .pf-culture-rev__note .pf-eyebrow { margin-right: 6px; }
     .pf-page__header { flex: 0 0 auto; }
-    /* Internal scroll region: this is the ONLY scroll on the page. */
     .pf-page__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: 4px; -webkit-overflow-scrolling: touch; }
 
-    /* ── Compact page header (same shape as other screens) ─── */
-    .pf-head {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      padding: 6px 0 10px;
-    }
-    /* Legacy desktop text pill — retired at ALL widths. The single back
-       affordance is now the .pf-hdr-back chevron, rendered on every breakpoint. */
-    .pf-head__back {
-      display: none;
-      align-items: center;
-      gap: 4px;
-      height: 32px;
-      padding: 0 10px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      font-size: 12.5px;
-      font-weight: 500;
-      cursor: pointer;
-      align-self: center;
-    }
-    .pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-    .pf-head__title {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-      line-height: 1.1;
-    }
+    /* ── Compact page header ─────────────────────────────────── */
+    .pf-head { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; }
+    .pf-head__id { min-width: 0; flex: 1; }
+    .pf-head__title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.15; }
     @media (min-width: 768px) { .pf-head__title { font-size: 26px; } }
-    .pf-head__sub {
-      margin: 0;
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      flex: 1;
-      min-width: 0;
+    .pf-head__sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .pf-hdr-back { width: 38px; height: 38px; margin-left: -8px; border-radius: 11px; color: var(--text-primary); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .15s ease, transform .08s ease; }
+    .pf-hdr-back:active { transform: scale(0.9); background: var(--glass-bg, rgba(255,255,255,0.06)); }
+    @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
+
+    .pf-empty-block { padding: 40px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    .pf-vr-skel { padding: 16px 0; }
+
+    /* ── Cockpit: results + always-visible context rail ──────── */
+    .pf-cockpit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (min-width: 1100px) { .pf-cockpit { grid-template-columns: minmax(0, 1fr) 344px; gap: 20px; } }
+    .pf-cockpit__main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .pf-cockpit__rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    @media (min-width: 1100px) { .pf-cockpit__rail { position: sticky; top: 4px; } }
+
+    /* ── Test section ────────────────────────────────────────── */
+    .pf-vt__culturelink { margin: 4px 16px 16px; width: calc(100% - 32px); cursor: pointer; }
+    .pf-vt { border-radius: 16px; border: 1px solid var(--pf-line, var(--glass-border)); background: var(--pf-card-bg, #ffffff); box-shadow: var(--pf-shadow-sm); overflow: hidden; }
+    :root.dark .pf-vt, [data-theme='dark'] .pf-vt { background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-vt[data-outcome='validated'] { border-color: rgba(168, 85, 247, 0.45); }
+    .pf-vt[data-outcome='rejected']  { border-color: rgba(239, 68, 68, 0.4); }
+    .pf-vt__hdr { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; flex-wrap: wrap; }
+    .pf-vt__id { min-width: 0; }
+    .pf-vt__name { margin: 0; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-vt__meta { margin: 3px 0 0; font-size: 11.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pf-flagtag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid transparent; font-family: inherit; font-variant-numeric: tabular-nums; }
+    .pf-flagtag[data-flag='normal']   { color: var(--text-secondary); background: var(--pf-chip-bg, #f3f4f6); border-color: var(--pf-line, #e2e8f0); }
+    .pf-flagtag[data-flag='abnormal'] { color: #d97706; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.28); }
+    .pf-flagtag[data-flag='critical'] { color: #dc2626; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.32); }
+    :root.dark .pf-flagtag[data-flag='abnormal'] { color: #fbbf24; }
+    :root.dark .pf-flagtag[data-flag='critical'] { color: #fca5a5; }
+
+    .pf-vt__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-family: inherit; font-variant-numeric: tabular-nums; border: 1px solid transparent; }
+    .pf-vt__badge[data-outcome='validated']  { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.35); background: rgba(168, 85, 247, 0.08); }
+    .pf-vt__badge[data-outcome='rejected']   { color: #dc2626; border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); }
+    .pf-vt__badge[data-outcome='validating'] { color: var(--text-tertiary); border-color: var(--pf-line, var(--glass-border)); }
+    :root.dark .pf-vt__badge[data-outcome='rejected']  { color: #fca5a5; }
+
+    .pf-vt__act { height: 30px; padding: 0 14px; border-radius: 9999px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: transparent; transition: background .15s, color .15s, border-color .15s; }
+    .pf-vt__act:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pf-vt__act--approve { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.45); }
+    .pf-vt__act--reject  { color: var(--text-tertiary); }
+    @media (hover: hover) {
+      .pf-vt__act--approve:hover:not(:disabled) { background: rgba(168, 85, 247, 0.14); border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35)); }
+      .pf-vt__act--reject:hover:not(:disabled)  { background: rgba(239, 68, 68, 0.1); color: var(--red-text, #f87171); }
     }
 
-    .pf-eyebrow {
-      margin: 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .pf-vt__banner { margin: 0 16px 10px; }
 
-    .pf-empty-block {
-      padding: 40px 0;
-      text-align: center;
-      font-size: 13px;
-      color: var(--text-tertiary);
-    }
+    /* ── Sent-back banner ────────────────────────────────────── */
+    .pf-reject-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04)); border: 1px solid rgba(239, 68, 68, 0.34); }
+    .pf-reject-banner__icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.22); color: var(--red-text); flex-shrink: 0; }
+    .pf-reject-banner__text { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
+    .pf-reject-banner__text strong { color: var(--red-text); margin-right: 4px; }
 
-    /* ── Sent-back banner (previously rejected, now re-entered) ─
-       Visual pattern copied from sample-result-entry's reject banner. */
-    .pf-reject-banner {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04));
-      border: 1px solid rgba(239, 68, 68, 0.34);
-    }
-    .pf-reject-banner__icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px;
-      border-radius: 9999px;
-      background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
-      font-size: 13px; font-weight: 700;
-      flex-shrink: 0;
-    }
-    .pf-reject-banner__text {
-      margin: 0;
-      font-size: 13px; line-height: 1.4;
-      color: var(--text-secondary);
-    }
-    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
+    /* ── Culture meta strip ──────────────────────────────────── */
+    /* Report-row checkbox — checked = prints on the PDF; review always shows. */
+    .pf-rh { width: 14px; height: 14px; accent-color: #8b5cf6; flex-shrink: 0; cursor: pointer; }
 
-    /* ── Patient context strip ─────────────────────────────── */
-    .pf-ctx {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 12px;
-    }
-    .pf-ctx__id { min-width: 0; flex: 1; }
-    .pf-ctx__name {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .pf-ctx__meta {
-      margin: 2px 0 0;
-      font-size: 11.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-tertiary);
-    }
-
-    /* ── Summary strip — neutral cells, only number colored ── */
-    .pf-summary {
+    /* ── Parameter list — one view, attention-first ──────────── */
+    .pf-plist { border-top: 1px solid var(--border-muted); }
+    .pf-plist__head, .pf-prow__row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 0;
-      padding: 4px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 16px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(110px, 1.1fr) minmax(0, 1fr) 96px 36px;
+      gap: 12px; align-items: center; padding: 10px 16px;
     }
-    .pf-summary__cell {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      padding: 10px 14px;
-      position: relative;
-    }
-    .pf-summary__cell + .pf-summary__cell::before {
-      content: '';
-      position: absolute;
-      left: 0; top: 20%; bottom: 20%;
-      width: 1px;
-      background: var(--border-muted);
-    }
-    .pf-summary__num {
-      font-size: 22px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      line-height: 1;
-      letter-spacing: -0.02em;
-    }
-    .pf-summary__cell[data-tone='normal']   .pf-summary__num { color: #10b981; }
-    .pf-summary__cell[data-tone='abnormal'] .pf-summary__num { color: #d97706; }
-    .pf-summary__cell[data-tone='critical'] .pf-summary__num { color: #dc2626; }
-    :root.dark .pf-summary__cell[data-tone='normal']   .pf-summary__num { color: #34d399; }
-    :root.dark .pf-summary__cell[data-tone='abnormal'] .pf-summary__num { color: #fbbf24; }
-    :root.dark .pf-summary__cell[data-tone='critical'] .pf-summary__num { color: #fca5a5; }
-    .pf-summary__lbl {
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .pf-plist__head { padding: 9px 16px; background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg, #ffffff)); border-bottom: 1px solid var(--pf-line, var(--border-muted)); }
+    :root.dark .pf-plist__head, [data-theme='dark'] .pf-plist__head { background: rgba(255, 255, 255, 0.04); border-bottom-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-plist__head > span { font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+    .pf-prow + .pf-prow { border-top: 1px solid var(--pf-line, var(--border-muted)); }
+    .pf-prow__row { cursor: pointer; transition: background .15s; color: var(--text-primary); font-size: 13px; }
+    .pf-prow__row--static { cursor: default; }
+    .pf-prow__row:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.6); outline-offset: -2px; border-radius: 8px; }
+    @media (hover: hover) { .pf-prow__row:not(.pf-prow__row--static):hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); } }
+    .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+    .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+    .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
+    .pf-prow__val--bold { font-weight: 800; }
+    .pf-prow__boldmark { display: inline-flex; align-items: center; justify-content: center; align-self: center; width: 18px; height: 18px; border-radius: 5px;
+      color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent); }
+    .pf-prow__ref { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+    .pf-prow__dash { color: var(--text-muted); }
+    .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      font-variant-numeric: tabular-nums; background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
+    .pf-prow__editin:focus { box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
 
-    /* ── Params header + view toggle ───────────────────────── */
-    .pf-params-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-      padding: 0 4px;
-    }
-    .pf-view-toggle {
-      display: inline-flex;
-      padding: 3px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      gap: 2px;
-    }
-    .pf-view-toggle__btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 28px;
-      padding: 0 12px;
-      border: none;
-      background: transparent;
-      color: var(--text-tertiary);
-      font-size: 11px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-radius: 9999px;
-      cursor: pointer;
-      transition: color 0.15s, background 0.15s;
-    }
-    .pf-view-toggle__btn:hover { color: var(--text-primary); }
-    .pf-view-toggle__btn--on {
-      background: var(--bg-card-solid);
-      color: var(--text-primary);
-      border: 1px solid var(--glass-border-hover);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    }
+    .pf-prow__cbtn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;
+      border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; position: relative; transition: color .15s, background .15s; }
+    @media (hover: hover) { .pf-prow__cbtn:hover { color: var(--text-primary); background: var(--glass-bg-hover); } }
+    .pf-prow__cbtn--live { color: var(--violet-text, #c4b5fd); }
+    .pf-prow__cbtn--live::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 9999px; background: #a855f7; }
 
-    /* ── Parameter cards ───────────────────────────────────── */
-    .pf-cards {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-    @media (min-width: 768px) { .pf-cards { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); } }
+    .pf-prow__thread { padding: 12px 16px 14px 32px; background: rgba(96, 165, 250, 0.04); border-top: 1px solid var(--pf-line, var(--glass-border)); }
 
-    /* Cards: all neutral. Flag signal lives ONLY in the chip + pin. Sleek. */
-    .pf-vcard {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, transform 0.08s;
-    }
-    .pf-vcard:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); }
-    .pf-vcard:active { transform: scale(0.996); }
+    .pf-plist__more { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;
+      border: none; border-top: 1px solid var(--pf-line, var(--border-muted)); background: transparent; color: var(--text-tertiary);
+      font-size: 12px; font-weight: 600; cursor: pointer; transition: color .15s, background .15s; }
+    @media (hover: hover) { .pf-plist__more:hover { color: var(--text-primary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); } }
 
-    .pf-vcard__hdr {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .pf-vcard__name {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-
-    /* Single source of color: the flag chip. Subtle dot + text, no heavy fills. */
-    .pf-vcard__chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      font-weight: 700;
-      background: transparent;
-      border: 1px solid transparent;
-    }
-    .pf-vcard__chip--lg { font-size: 11px; padding: 5px 12px; }
+    /* ── Flag chips (shared with drawer) ─────────────────────── */
+    .pf-vcard__chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; font-size: 11px;
+      font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700;
+      background: transparent; border: 1px solid transparent; }
+    .pf-vcard__chip--lg { font-size: 11.5px; padding: 5px 12px; }
     .pf-vcard__chip-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
-    .pf-vcard__chip[data-flag='normal']   { color: #10b981; border-color: rgba(16, 185, 129, 0.28); }
+    .pf-vcard__chip[data-flag='normal']   { color: var(--text-tertiary); border-color: var(--pf-line, var(--glass-border)); }
     .pf-vcard__chip[data-flag='abnormal'] { color: #d97706; border-color: rgba(245, 158, 11, 0.32); }
     .pf-vcard__chip[data-flag='critical'] { color: #dc2626; border-color: rgba(239, 68, 68, 0.35); }
-    :root.dark .pf-vcard__chip[data-flag='normal']   { color: #34d399; }
     :root.dark .pf-vcard__chip[data-flag='abnormal'] { color: #fbbf24; }
     :root.dark .pf-vcard__chip[data-flag='critical'] { color: #fca5a5; }
 
-    .pf-vcard__value {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    /* Value text is ALWAYS neutral — the flag info is conveyed by the chip + pin. */
-    .pf-vcard__num {
-      font-size: 30px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-    .pf-vcard__unit {
-      font-size: 13px;
-      color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-    .pf-vcard__range {
-      margin: 0;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
-
-    /* ── Range bar ──
-       Layout: a full-width rail represents the possible value span.
-       - The whole rail is muted (means "full scale, mostly unused area").
-       - The NORMAL zone (between min and max) is filled with the theme accent
-         so the eye immediately sees "this is the good range".
-       - The pin sits at the value's actual position. Its color reflects the
-         flag (mint = in range, amber = outside normal, red = critical).
-       - A 3-part scale below labels: normal-min · "normal" · normal-max. */
-    .pf-rangebar {
-      position: relative;
-      width: 100%;
-      padding: 6px 0 0;
-    }
-    .pf-rangebar__track {
-      display: flex;
-      height: 8px;
-      border-radius: 9999px;
-      overflow: hidden;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-rangebar__zone {
-      display: block;
-      height: 100%;
-      background: transparent;
-    }
-    .pf-rangebar__zone[data-tone='normal'] {
-      background: var(--gradient-primary);
-      opacity: 0.82;
-    }
-    .pf-rangebar__pin {
-      position: absolute;
-      top: 4px;
-      transform: translateX(-50%);
-      width: 14px;
-      height: 14px;
-      pointer-events: none;
-    }
-    .pf-rangebar__pin::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 9999px;
-      background: var(--text-primary);
-      border: 2px solid var(--bg-card-solid);
-    }
+    /* ── Range bar ───────────────────────────────────────────── */
+    .pf-rangebar { position: relative; width: 100%; padding: 6px 0 0; }
+    .pf-rangebar__track { display: flex; height: 8px; border-radius: 9999px; overflow: hidden; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-rangebar__zone { display: block; height: 100%; background: transparent; }
+    .pf-rangebar__zone[data-tone='normal'] { background: var(--gradient-primary); opacity: 0.82; }
+    .pf-rangebar__pin { position: absolute; top: 4px; transform: translateX(-50%); width: 14px; height: 14px; pointer-events: none; }
+    .pf-rangebar__pin::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: var(--text-primary); border: 2px solid var(--bg-card-solid); }
     .pf-rangebar__pin[data-flag='critical']::before { background: #dc2626; }
     .pf-rangebar__pin[data-flag='abnormal']::before { background: #d97706; }
-    .pf-rangebar__pin[data-flag='normal']::before   { background: #10b981; }
     :root.dark .pf-rangebar__pin[data-flag='critical']::before { background: #ef4444; }
     :root.dark .pf-rangebar__pin[data-flag='abnormal']::before { background: #f59e0b; }
-    :root.dark .pf-rangebar__pin[data-flag='normal']::before   { background: #34d399; }
-
-    .pf-rangebar__scale {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 8px;
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-    .pf-rangebar__scale-mid {
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-    }
-
-    /* Mini (table) — drop the scale, keep the bar only */
-    .pf-rangebar--mini { padding: 2px 0 0; min-width: 110px; }
+    .pf-rangebar--mini { padding: 2px 0 0; min-width: 100px; }
     .pf-rangebar--mini .pf-rangebar__track { height: 6px; }
     .pf-rangebar--mini .pf-rangebar__pin   { width: 12px; height: 12px; top: 1px; }
-    .pf-rangebar--mini .pf-rangebar__scale { display: none; }
-
-    /* Large (drawer) */
     .pf-rangebar--lg { padding: 18px 0 0; }
     .pf-rangebar--lg .pf-rangebar__track { height: 12px; }
     .pf-rangebar--lg .pf-rangebar__pin   { width: 20px; height: 20px; top: 16px; }
     .pf-rangebar--lg .pf-rangebar__pin::before { border-width: 3px; }
+    .pf-rangebar__labels { position: relative; margin-top: 10px; height: 14px; }
+    .pf-rangebar__tick { position: absolute; transform: translateX(-50%); font-size: 10.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
-    /* Tick labels under drawer bar */
-    .pf-rangebar__labels {
-      position: relative;
-      margin-top: 10px;
-      height: 14px;
-    }
-    .pf-rangebar__tick {
-      position: absolute;
-      transform: translateX(-50%);
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
+    /* ── Context rail ────────────────────────────────────────── */
+    .pf-rail-card { padding: 13px 14px; border-radius: 14px; background: var(--pf-card-bg, #ffffff); border: 1px solid var(--pf-line, #e2e8f0); box-shadow: var(--pf-shadow-sm); }
+    :root.dark .pf-rail-card, [data-theme='dark'] .pf-rail-card { background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); }
+    .pf-rail-lbl { display: block; margin: 0 0 8px; font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+    .pf-railpat { display: flex; align-items: center; gap: 12px; }
+    .pf-railpat__id { min-width: 0; flex: 1; }
+    .pf-railpat__name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-railpat__meta { margin: 2px 0 0; font-size: 11.5px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+    .pf-railpat__entered { margin: 10px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
 
-    /* ── Table view ───────────────────────────────────────── */
-    .pf-table {
-      border-radius: 14px;
-      border: 1px solid var(--glass-border);
-      background: var(--glass-bg);
-      /* Horizontal scroll fallback below the mobile-area layout breakpoint
-         (767px) so the table stays readable even on the narrowest devices
-         before grid-areas kicks in. */
-      overflow-x: auto;
-      overflow: hidden;
-    }
-    .pf-table__head, .pf-table__row {
-      display: grid;
-      /* Flag column min-content (was hard 130px) so the cell shrinks to
-         the chip's intrinsic size on narrow tablets and we don't force
-         horizontal scroll on iPad Mini (768px). */
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(100px, 1.4fr) min-content;
-      gap: 12px;
-      padding: 10px 14px;
-      align-items: center;
-    }
-    .pf-table__head {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border-muted);
-      background: rgba(0,0,0,0.1);
-    }
-    .pf-table__head > span {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .pf-table__row {
-      width: 100%;
-      border: none;
-      border-top: 1px solid var(--border-muted);
-      background: transparent;
-      color: var(--text-primary);
-      font-size: 13px;
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .pf-table__row:first-of-type { border-top: 0; }
-    .pf-table__row:hover { background: var(--glass-bg-hover); }
-    /* Neutral value text in table; flag is carried by the chip only. */
-    .pf-table__name { font-weight: 600; }
-    .pf-table__value { font-variant-numeric: tabular-nums; font-weight: 600; }
-    .pf-table__unit { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; margin-left: 4px; }
-    .pf-table__range { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); }
+    .pf-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-checklist__item { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; cursor: pointer;
+      text-align: left; color: var(--text-secondary); font-size: 13px; transition: background .15s, border-color .15s, color .15s; }
+    @media (hover: hover) { .pf-checklist__item:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--pf-card-bg, #ffffff)); color: var(--text-primary); } }
+    .pf-checklist__item--focus { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.07); color: var(--text-primary); }
+    .pf-checklist__ic { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+    .pf-checklist__item[data-outcome='validated'] .pf-checklist__ic { color: var(--violet-text, #c4b5fd); }
+    .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #dc2626; }
+    :root.dark .pf-checklist__item[data-outcome='rejected'] .pf-checklist__ic  { color: #fca5a5; }
+    .pf-checklist__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .pf-checklist__hint { font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
-    @media (max-width: 767px) {
-      .pf-table__head { display: none; }
-      .pf-table__row {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-          'name flag'
-          'value flag'
-          'range flag'
-          'where flag';
-        gap: 4px 12px;
-      }
-      .pf-table__name  { grid-area: name; }
-      .pf-table__value { grid-area: value; }
-      .pf-table__range { grid-area: range; }
-      .pf-table__where { grid-area: where; }
-      .pf-table__row > span:last-child { grid-area: flag; }
-    }
+    .pf-comment__input { width: 100%; min-height: 76px; padding: 10px 12px; border-radius: 10px; background: var(--bg-card-solid);
+      border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 13px; outline: none; resize: vertical; font-family: inherit; }
+    .pf-comment__input:focus { border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
 
-    /* ── Comment ──────────────────────────────────────────── */
-    .pf-comment {
-      margin-top: 20px;
-      padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-comment__label { display: block; margin-bottom: 8px; }
-    .pf-comment__optional { text-transform: none; letter-spacing: 0; opacity: 0.6; font-weight: 400; }
-    .pf-comment__input {
-      width: 100%;
-      min-height: 80px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      font-size: 13px;
-      outline: none;
-      resize: vertical;
-      font-family: inherit;
-    }
-    .pf-comment__input:focus {
-      border-color: rgba(168, 85, 247, 0.5);
-      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
-    }
+    .pf-trendrow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+    .pf-trendrow { min-height: 44px; background: transparent; border: 0; padding: 0; }
+    .pf-trendsel { display: block; margin-top: 10px; }
 
-    /* ── Sticky validate bar ──────────────────────────────── */
-    .pf-stickybar {
-      position: fixed;
-      left: 0; right: 0;
-      bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
-      z-index: 30;
-      padding: 0 16px;
-      pointer-events: none;
-    }
-    @media (min-width: 1280px) { .pf-stickybar { bottom: 1rem; } }
-    .pf-stickybar__inner {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-radius: 16px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      max-width: 1400px;
-      margin: 0 auto;
+    /* ── Sticky verdict bar ──────────────────────────────────── */
+    .pf-stickybar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 0 16px; pointer-events: none; }
+    @include dt.desktop-only { .pf-stickybar { bottom: 1rem; } }
+    .pf-stickybar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
+      background: var(--pf-card-bg, #ffffff); border: 1px solid var(--pf-line, #e2e8f0); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
+    :root.dark .pf-stickybar__inner, [data-theme='dark'] .pf-stickybar__inner {
+      background: var(--bg-card-solid, #14141f); border-color: var(--glass-border, rgba(255, 255, 255, 0.12)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
     }
     @media (max-width: 640px) { .pf-stickybar__inner { flex-wrap: wrap; } }
-    .pf-stickybar__meta {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
+    .pf-stickybar__meta { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
     .pf-stickybar__dot { width: 7px; height: 7px; border-radius: 9999px; }
-    .pf-stickybar__dot[data-state='ok']       { background: #10b981; }
+    .pf-stickybar__dot[data-state='ok']       { background: #a855f7; }
     .pf-stickybar__dot[data-state='critical'] { background: #dc2626; animation: pf-pulse 1.8s infinite; }
     .pf-stickybar__dot[data-state='edit']     { background: #8b5cf6; }
-    :root.dark .pf-stickybar__dot[data-state='ok']       { background: #34d399; }
     :root.dark .pf-stickybar__dot[data-state='critical'] { background: #ef4444; }
     :root.dark .pf-stickybar__dot[data-state='edit']     { background: #a78bfa; }
-    @keyframes pf-pulse {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.5; }
-    }
+    @keyframes pf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-    .pf-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 36px;
-      padding: 0 14px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 600;
-      border: 1px solid transparent;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.15s, color 0.15s, box-shadow 0.25s, transform 80ms;
-    }
+    .pf-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 9999px; font-size: 13px;
+      font-weight: 600; border: 1px solid transparent; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, box-shadow .25s, transform 80ms; }
     .pf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pf-btn--ghost {
-      background: transparent;
-      color: var(--text-secondary);
-    }
-    .pf-btn--ghost:hover:not(:disabled) {
-      background: var(--glass-bg-hover);
-      color: var(--text-primary);
-    }
-    .pf-btn--secondary {
-      background: var(--glass-bg);
-      color: var(--text-primary);
-      border-color: var(--glass-border);
-    }
-    .pf-btn--secondary:hover:not(:disabled) { background: var(--glass-bg-hover); }
-    .pf-btn--primary {
-      background: var(--gradient-primary);
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
-    }
-    .pf-btn--primary:hover:not(:disabled) {
-      box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55);
-      transform: translateY(-1px);
-    }
-    .pf-btn--danger {
-      background: linear-gradient(135deg, #ef4444, #db2777);
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4);
-    }
-    .pf-btn--danger:hover:not(:disabled) {
-      box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55);
-    }
+    .pf-btn--ghost { background: transparent; color: var(--text-secondary); }
+    .pf-btn--ghost:hover:not(:disabled) { background: var(--glass-bg-hover); color: var(--text-primary); }
+    .pf-btn--primary { background: var(--gradient-primary); color: #ffffff; box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4); }
+    .pf-btn--primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(124, 58, 237, 0.55); transform: translateY(-1px); }
+    .pf-btn--danger { background: linear-gradient(135deg, #ef4444, #db2777); color: #ffffff; box-shadow: 0 6px 18px rgba(239, 68, 68, 0.4); }
+    .pf-btn--danger:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55); }
+    .pf-btn--icony .pf-btn__ic { display: none; }
 
-    /* ── Detail drawer ────────────────────────────────────── */
-    .pf-drawer-bd {
-      position: fixed; inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      backdrop-filter: blur(6px);
-      z-index: 44;
-      animation: pf-fade 0.2s ease both;
-    }
-    .pf-drawer {
-      position: fixed;
-      right: 0;
-      top: var(--navbar-height, 4rem);
-      bottom: 0;
-      width: min(100%, 520px);
-      background: var(--bg-card-solid);
-      border-left: 1px solid var(--glass-border);
-      box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
-      z-index: 45;
-      display: flex;
-      flex-direction: column;
-      animation: pf-drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-    }
-    .pf-drawer__hdr {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      border-bottom: 1px solid var(--border-muted);
-    }
-    .pf-drawer__title {
-      margin: 2px 0 0;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-    }
-    .pf-drawer__close {
-      width: 36px; height: 36px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer;
-    }
-    .pf-drawer__body {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 18px;
-    }
-    .pf-drawer__value {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      padding: 20px 22px;
-      border-radius: 18px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      margin-bottom: 8px;
-    }
-    .pf-drawer__num {
-      font-size: 46px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-primary);
-      line-height: 1;
-    }
-    .pf-drawer__unit {
-      font-size: 16px;
-      color: var(--text-secondary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-    .pf-drawer__sec { margin-top: 20px; }
-    .pf-drawer__meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px 18px;
-    }
-    .pf-drawer__meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .pf-drawer__meta dt {
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin: 0;
-    }
-    .pf-drawer__meta dd {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
-      font-variant-numeric: tabular-nums;
-    }
-    .pf-drawer__sec--alert {
-      padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-left-width: 3px;
-    }
-    .pf-drawer__sec--alert[data-flag='abnormal'] { border-left-color: #d97706; }
-    .pf-drawer__sec--alert[data-flag='critical'] { border-left-color: #dc2626; }
-    :root.dark .pf-drawer__sec--alert[data-flag='abnormal'] { border-left-color: #fbbf24; }
-    :root.dark .pf-drawer__sec--alert[data-flag='critical'] { border-left-color: #fca5a5; }
-    .pf-drawer__why {
-      margin: 0;
-      font-size: 13px;
-      color: var(--text-primary);
-      line-height: 1.5;
-    }
+    /* ── ⋮ More actions (pf-actions-menu) ────────────────────── */
+    .pf-vr-kebab { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-vr-kebab__i { flex: none; }
 
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    /* ── Validator ↔ tech conversation surfaces ─────────────────── */
-    .pf-overall-comments {
-      margin: 16px 0 20px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-overall-comments .pf-eyebrow { margin-bottom: 8px; }
-
-    /* Per-row inline comment thread (table view). Sits between the
-       tapped row and the next, indented + soft-bordered so the
-       conversation visually belongs to that row. */
-    .pf-table__row--has-comments .pf-table__name { color: #fca5a5; font-weight: 600; }
-    .pf-table__comment-flag { margin-left: 6px; font-size: 12px; }
-    .pf-table__row-comments {
-      grid-column: 1 / -1;
-      padding: 12px 16px 14px 32px;
-      background: rgba(96, 165, 250, 0.04);
-      border-top: 1px solid var(--glass-border);
-      border-bottom: 1px solid var(--glass-border);
-    }
-    .pf-table__row-comments-label { margin: 0 0 8px; }
-
-    /* Phones (<640px): tighten the new comment surfaces and the
-       overall section so they don't dominate the screen. */
-    @media (max-width: 639px) {
-      .pf-overall-comments {
-        margin: 12px 0 16px;
-        padding: 12px 14px;
-      }
-      .pf-table__row-comments {
-        padding: 10px 14px 12px 14px;
-      }
-      .pf-table__comment-flag { font-size: 11px; }
-    }
-
-    /* ════════════════════════════════════════════════════════════
-       CROSS-PLATFORM ADDITIVE OVERRIDES (scoped to :host)
-       Desktop-web >=1280px is untouched: every rule below is gated
-       behind a sub-desktop @media query, a touch/coarse-pointer
-       query, or a platform host-context. No base rule is edited.
-       ════════════════════════════════════════════════════════════ */
-
-    /* Non-scroll WORK page: :host stays height:100% on ALL sizes so it
-       fits the shell's main scroll host exactly (no outer page scroll,
-       no double scrollbars). The internal scroll lives in .pf-page__body,
-       whose min-height:0 lets it shrink and scroll on short mobile
-       viewports. (Prior sweep set 100dvh here — that fights the
-       non-scroll model and is intentionally removed.) */
-
-    /* Action-bar icons are phone-only — desktop keeps text labels (no icon). */
-    .pf-btn--icony .pf-btn__ic { display: none; }
-
-    /* ── Standard app-wide back chevron (before the title) ──
-       The single back affordance at ALL widths (web, iPad, phone). The legacy
-       text pill is retired everywhere, and .pf-head centers the row so this
-       38px chevron lines up vertically with the title on every breakpoint. */
-    .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
-    .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
-    @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-
     /* ── Phone (<=640px) ─────────────────────────────────────── */
     @media (max-width: 640px) {
-      /* Stop iOS auto-zoom on focus: form text >=16px on phones. */
       :host .pf-comment__input { font-size: 16px; }
-
-      /* Drop the header description on phone — it squeezes into a thin column
-         next to the long title and reads as broken. Title is enough. */
       :host .pf-head__sub { display: none; }
-
-      /* Validate-bar actions → icon-only on phone. Show the glyph, hide the
-         text label, make each a square 44px tap target. Cancel/Save (edit
-         mode) keep their text — they aren't .pf-btn--icony. */
       :host .pf-btn--icony .pf-btn-label { display: none; }
       :host .pf-btn--icony .pf-btn__ic { display: inline-block; }
-      :host .pf-btn--icony {
-        width: 44px; min-width: 44px; height: 44px;
-        padding: 0;
-        display: inline-flex; align-items: center; justify-content: center;
-      }
-
-      /* The sticky validate bar wraps to multiple rows on phones (status
-         line on its own row + Reject/Reassign/Edit/Validate buttons), so
-         the base pb-32 (128px) on the scroll body isn't enough to clear
-         it — the trailing clinical-comment textarea hides behind the
-         floating bar. Reserve the bar's offset (~tab-nav) plus its wrapped
-         height so the last field is always reachable above it. */
+      :host .pf-btn--icony { width: 44px; min-width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+      :host .pf-vr-kebab { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+      :host .pf-vr-kebab__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height) + 150px); }
-
-      /* Patient context strip lets the CRITICAL chip wrap under the
-         identity block instead of squeezing the name. */
-      :host .pf-ctx { flex-wrap: wrap; }
-
-      /* Culture meta grid: 3 cols is too tight on a phone. */
-      :host .pf-culture-rev__meta { grid-template-columns: 1fr; }
-
-      /* Detail drawer becomes a full-width bottom sheet on phones. */
-      :host .pf-drawer {
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        max-height: 88dvh;
-        border-left: none;
-        border-top: 1px solid var(--glass-border);
-        border-radius: 18px 18px 0 0;
-        animation: pf-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-      }
-      /* Sheet body clears the home-indicator safe area. */
+      :host .pf-railpat { flex-wrap: wrap; }
+      :host .pf-drawer { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 88dvh; border-left: none;
+        border-top: 1px solid var(--glass-border); border-radius: 18px 18px 0 0; animation: pf-sheet-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       :host .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
-
-      /* Drawer meta to single column so labels/values don't crush. */
       :host .pf-drawer__meta { grid-template-columns: 1fr; }
-
-      /* Sticky bar: when buttons wrap, give the status line its own row. */
       :host .pf-stickybar__meta { width: 100%; }
     }
     @keyframes pf-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    /* ── iPad / tablet (641–1279px) ──────────────────────────── */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      /* Use the extra width: 2-up parameter cards rather than the
-         auto-fill min that can leave a lonely single column. */
-      :host .pf-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Parameter rows stack on narrow screens (grid-areas, no h-scroll). */
+    @media (max-width: 767px) {
+      .pf-plist__head { display: none; }
+      .pf-plist__head, .pf-prow__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          'name  cbtn'
+          'value flag'
+          'bar   bar'
+          'ref   ref';
+        gap: 5px 12px;
+      }
+      .pf-prow__name { grid-area: name; }
+      .pf-prow__val  { grid-area: value; }
+      .pf-prow__bar  { grid-area: bar; }
+      .pf-prow__ref  { grid-area: ref; }
+      .pf-prow__flag { grid-area: flag; justify-self: end; }
+      .pf-prow__cbtn { grid-area: cbtn; justify-self: end; }
     }
 
-    /* ── Touch sizing (coarse pointer, any platform) ─────────── */
+    /* ── Touch sizing (coarse pointer) ───────────────────────── */
     @media (pointer: coarse) {
-      :host .pf-head__back { min-height: 44px; }
-      /* >=44px hit area (was 40px) — the toggle visually stays pill-sized
-         via line-height, but the tap target meets the touch minimum. */
-      :host .pf-view-toggle__btn { min-height: 44px; }
       :host .pf-btn { min-height: 44px; }
+      :host .pf-vt__act { min-height: 40px; }
+      :host .pf-prow__cbtn { width: 38px; height: 38px; }
       :host .pf-drawer__close { width: 44px; height: 44px; }
     }
 
-    /* ── Hover-only affordances gated to real hover devices ──── */
-    @media (hover: hover) {
-      :host .pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-      :host .pf-vcard:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hover); }
-      :host .pf-view-toggle__btn:hover { color: var(--text-primary); }
-      :host .pf-table__row:hover { background: var(--glass-bg-hover); }
-    }
-
-    /* On touch devices the un-gated base :hover rules above can "stick"
-       after a tap (hover persists until the next tap elsewhere). Reset
-       them on coarse/no-hover pointers so tapped cards/rows don't keep a
-       highlighted state. Additive — desktop hover is untouched. */
+    /* Touch devices: neutralize sticky :hover states after a tap. */
     @media (hover: none) {
-      :host .pf-head__back:hover { background: var(--glass-bg); color: var(--text-secondary); }
-      :host .pf-vcard:hover { background: var(--glass-bg); border-color: var(--glass-border); }
-      :host .pf-view-toggle__btn:hover { color: var(--text-tertiary); }
-      :host .pf-view-toggle__btn--on:hover { color: var(--text-primary); }
-      :host .pf-table__row:hover { background: transparent; }
+      :host .pf-btn--ghost:hover:not(:disabled) { background: transparent; color: var(--text-secondary); }
     }
 
-    /* ── Capacitor native: this page's own fixed chrome must clear
-         the notch / home indicator. Global body insets do not reach
-         position:fixed descendants. ──────────────────────────── */
+    /* ── Capacitor native: fixed chrome clears the notch ─────── */
     :host-context(html.cap-native) .pf-drawer { top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top, 0px)); }
     @media (max-width: 640px) {
       :host-context(html.cap-native) .pf-drawer { top: auto; }
       :host-context(html.cap-native) .pf-drawer__body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
     }
-  `]
+`]
 })
 export class ValidateResultComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
+
+  // ── Post-result edit ──────────────────────────────────
+  // edit_result: Lab Technician, Pathologist, Lab Admin — never front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  readonly editDialogOpen = signal(false);
+  /** The dialog works per ORDER — take it off the loaded test's sample. */
+  readonly editOrderId = computed(() =>
+    this.selected()?.subOrder?.orderId ?? this.selected()?.subOrder?.order?.id ?? null);
+
+  /** Re-opened work leaves the validation queue — reload what this screen
+   *  fetches so the (now empty) state is honest. */
+  onEdited() {
+    this.editDialogOpen.set(false);
+    this.ngOnInit();
+  }
+
+  // ── Report chart (Test Master chart block): the chart that will print ──
+  private readonly layoutSvc = inject(ReportLayoutService);
+  readonly printChart = signal<ChartData | null>(null);
+  private printChartKey = '';
+  private async loadPrintChart(t: OrderTest | null): Promise<void> {
+    const owner = t ? chartOwnerOf(t) : '';
+    const key = t ? `${owner}|${t.id}|${t.currentResult ?? ''}` : '';
+    if (key === this.printChartKey) return;
+    this.printChartKey = key;
+    if (!t || !owner) { this.printChart.set(null); return; }
+    try {
+      const lay = await this.layoutSvc.getTestLayout(owner);
+      const sec = (lay?.sections ?? []).find(x => x.type === 'chart' && !!(x as { trend?: unknown }).trend
+        && (x as { hidden?: boolean }).hidden !== true) as { label?: string | null; trend?: unknown } | undefined;
+      if (!sec) { if (this.printChartKey === key) this.printChart.set(null); return; }
+      let tests;
+      if (owner === t.testId) {
+        tests = [{ testId: t.testId, name: t.name, result: { values: savedValues(t.currentResult) } }];
+      } else {
+        const orderId = t.subOrder?.orderId ?? t.subOrder?.order?.id;
+        const order = orderId ? await firstValueFrom(this.api.get<{ samples?: [] }>(`/api/orders/${orderId}`)) : null;
+        tests = chartTestsFromOrder(order as never);
+      }
+      const data = buildChartData(sec.trend, sec.label, owner, tests);
+      if (this.printChartKey === key) this.printChart.set(data && !data.empty ? data : null);
+    } catch {
+      // No access to the layout / order → the card simply doesn't show.
+      if (this.printChartKey === key) this.printChart.set(null);
+    }
+  }
+
+  // ── Trendogram: add serial-result trend charts to this order's report ──
+  readonly trendEligible = signal<TrendTest[]>([]);
+  readonly trendogramOn = signal(false);
+  readonly trendogramDuration = signal('5');
+  private trendPatientId: string | null = null;
+
+  constructor() {
+    effect(() => { void this.loadPrintChart(this.selected()); });
+    effect(() => {
+      const pid = this.selected()?.subOrder?.order?.patient?.id ?? null;
+      if (pid && pid !== this.trendPatientId) {
+        this.trendPatientId = pid;
+        this.api.get<{ tests: TrendTest[] }>(`/api/patients/${pid}/lab-trends`).subscribe({
+          next: r => this.trendEligible.set(r?.tests ?? []),
+          error: () => this.trendEligible.set([]),
+        });
+      }
+    });
+  }
+
+  toggleTrendogram() { this.trendogramOn.set(!this.trendogramOn()); this.saveTrendogram(); }
+  setTrendDuration(d: string) { this.trendogramDuration.set(d); if (this.trendogramOn()) this.saveTrendogram(); }
+  private saveTrendogram() {
+    const oid = this.selected()?.subOrder?.order?.id;
+    if (!oid) return;
+    const body = this.trendogramOn()
+      ? { enabled: true, duration: this.trendogramDuration(), chartType: 'line',
+          charts: this.trendEligible()
+            .map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
+            .filter(c => !!c.parameter) }
+      : {};
+    this.api.patch(`/api/orders/${oid}/trendogram`, body).subscribe({
+      next: () => this.toasts.success(this.trendogramOn() ? 'Trendogram will be added to the report' : 'Trendogram removed'),
+      error: () => this.toasts.error('Could not update trendogram'),
+    });
+  }
   private readonly dialog = inject(DialogService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -1487,101 +990,356 @@ export class ValidateResultComponent implements OnInit {
   private readonly _saving = signal(false);
   private readonly _editing = signal(false);
   private readonly _edits = signal<Record<string, unknown>>({});
-  private readonly _view = signal<View>('cards');
   private readonly _detailRow = signal<ValueRow | null>(null);
 
   readonly selected = this._selected.asReadonly();
+  /** List → detail zoom (core/navigation/zoom.directive): the pending row
+   *  answers to the order-test id or its tube's sample id. */
+  protected readonly zoom = inject(ZoomTransitionService);
+  readonly zoomKeys = computed(() => [this._id(), this._selected()?.id, this._selected()?.subOrder?.id]);
   readonly comment = this._comment.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly saving = this._saving.asReadonly();
+  /** Single-test Reject (header) request in flight, after the reason prompt. */
+  readonly rejecting = signal(false);
+  /** Reassign (⋮ menu) request in flight, after the validator picker. */
+  readonly reassigning = signal(false);
+  /** Per-test Reject (multi-test tube) request in flight: that test's id. */
+  readonly rejectingId = signal<string | null>(null);
   readonly editing = this._editing.asReadonly();
-  readonly view = this._view.asReadonly();
   readonly detailRow = this._detailRow.asReadonly();
-  setView(v: View) { this._view.set(v); }
 
+  // ── Sample-level validation (all tests on one tube reviewed together) ──
+  /** The full validation queue, kept so we can show every sibling test of the
+   *  focused sample without re-fetching. */
+  private readonly _queue = signal<OrderTest[]>([]);
+  private readonly criticalSvc = inject(CriticalResultsService);
+  /** NABL critical-result records (open / acknowledged) of this tube's tests. */
+  readonly critical = signal<CriticalResultEvent[]>([]);
+  loadCritical(ids: string[]) {
+    if (!ids.length) { this.critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({ next: l => this.critical.set(l ?? []), error: () => { /* advisory */ } });
+  }
+  onCriticalChanged(u: CriticalResultEvent) {
+    this.critical.update(list => u.status === 'communicated' ? list.filter(e => e.id !== u.id) : list.map(e => (e.id === u.id ? u : e)));
+  }
+  /** Per-test outcome as the pathologist works through the sample. */
+  private readonly _outcome = signal<Record<string, 'pending' | 'validating' | 'validated' | 'rejected'>>({});
+  /** Tests whose normal rows are shown (attention-first collapse). */
+  private readonly _shownNormals = signal<Set<string>>(new Set());
+
+  /** Stable key identifying the tube/sample a test belongs to. */
+  private sampleKey(t: OrderTest | null | undefined): string {
+    if (!t) return '';
+    return t.subOrder?.id
+      ?? `${t.subOrder?.orderId ?? t.subOrder?.order?.id ?? ''}|${t.test?.department?.id ?? ''}`;
+  }
+
+  /** Technician report notes of this tube's order — re-read when a line's
+   *  status moves (validate / reject lock or unlock them). */
+  protected readonly notes = inject(ReportNotesStore);
+  readonly noteLineIds = computed(() => this.sampleTests().map(t => t.id));
+  private notesKey = '';
+  private readonly _notesSync = effect(() => {
+    const tests = this.sampleTests();
+    const oid = this.orderIdOf(tests[0] ?? this.selected());
+    const key = oid ? `${oid}|${tests.map(t => `${t.id}:${t.status}`).join(',')}` : '';
+    if (key === this.notesKey) return;
+    this.notesKey = key;
+    void this.notes.load(oid);
+  });
+
+  /** Every queued test on the same tube as the focused test (self as fallback). */
+  readonly sampleTests = computed<OrderTest[]>(() => {
+    const sel = this._selected();
+    if (!sel) return [];
+    const key = this.sampleKey(sel);
+    const sibs = this._queue().filter(t => this.sampleKey(t) === key);
+    return sibs.length ? sibs : [sel];
+  });
+
+  outcomeOf(t: OrderTest): 'pending' | 'validating' | 'validated' | 'rejected' {
+    return this._outcome()[t.id] ?? 'pending';
+  }
+  showsNormals(t: OrderTest): boolean { return this._shownNormals().has(t.id); }
+  toggleNormals(t: OrderTest) {
+    this._shownNormals.update(s => { const n = new Set(s); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; });
+  }
+  /** Focus a test so the detailed review / edit / comments below reflect it. */
+  focusTest(t: OrderTest) { this._selected.set(t); void this.loadComments(); }
+
+  /** Sample header helpers. */
+  readonly sampleLabel = computed(() => {
+    const s = this._selected()?.subOrder;
+    return s?.barcode ?? s?.id?.slice(0, 8) ?? 'Sample';
+  });
+  readonly sampleDept = computed(() => this._selected()?.test?.department?.name ?? '—');
+  readonly pendingSampleTests = computed(() => this.sampleTests().filter(t => this.outcomeOf(t) === 'pending' && !this.isCultureFor(t)));
+  readonly sampleProgress = computed(() => {
+    const all = this.sampleTests();
+    const done = all.filter(t => this.outcomeOf(t) === 'validated').length;
+    const rej = all.filter(t => this.outcomeOf(t) === 'rejected').length;
+    return { done, rej, total: all.length };
+  });
+  readonly hasSampleCritical = computed(() => this.sampleTests().some(t => this.countsFor(t).critical > 0));
+
+  // ── Cockpit helpers ────────────────────────────────────────
+  /** ⋮ More actions — the same rules the old More dropdown had, plus go-to
+   *  rows (each gated by its destination's route guard). */
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+  readonly menuActions = computed<PfAction[]>(() => {
+    const t = this._selected();
+    if (!t) return [];
+    const a: PfAction[] = [];
+    if (this.sampleTests().length <= 1) {
+      a.push({ id: 'reassign', label: 'Reassign to another validator', icon: 'reassign', group: 'Workflow' });
+      if (!this.isCulture()) a.push({ id: 'edit-self', label: 'Edit values myself', icon: 'edit', group: 'Workflow' });
+    }
+    if (this.canEditResult() && this.editOrderId()) {
+      a.push({ id: 'send-back', label: 'Send back for correction', icon: 'sendback', group: 'Workflow', hint: 'Re-opens the results for re-entry' });
+    }
+    if (this.patientId() && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    if (t.subOrder?.id && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  });
+  readonly patientId = computed(() => {
+    const o = this._selected()?.subOrder?.order as { patientId?: string; patient?: { id?: string } } | undefined;
+    return o?.patient?.id ?? o?.patientId ?? null;
+  });
+  runAction(id: string): void {
+    switch (id) {
+      case 'reassign': void this.reassign(); break;
+      case 'edit-self': this.startEdit(); break;
+      case 'send-back': this.editDialogOpen.set(true); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', this.patientId()]); break;
+      case 'lab': {
+        const sid = this._selected()?.subOrder?.id;
+        if (sid) void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
+        break;
+      }
+    }
+  }
+
+  /** Attention-first: flagged rows always visible; normals collapse behind
+   *  the expander. Editing shows everything — any value may need fixing. */
+  visibleRowsFor(t: OrderTest): ValueRow[] {
+    const rows = this.valueRowsFor(t);
+    if (this.isEditingTest(t) || this.showsNormals(t)) return rows;
+    const flagged = rows.filter(r => r.flag !== 'normal');
+    return flagged.length ? flagged : rows;
+  }
+  /** Any row with a real reference — gates the "all within range" tag. */
+  hasRefRows(t: OrderTest): boolean { return this.valueRowsFor(t).some(r => r.hasRef); }
+  hiddenNormals(t: OrderTest): number {
+    return this.valueRowsFor(t).length - this.visibleRowsFor(t).length;
+  }
+  canCollapseNormals(t: OrderTest): boolean {
+    if (!this.showsNormals(t) || this.isEditingTest(t)) return false;
+    const rows = this.valueRowsFor(t);
+    return rows.some(r => r.flag !== 'normal') && rows.some(r => r.flag === 'normal');
+  }
+
+  isEditingTest(t: OrderTest): boolean { return this.editing() && this._selected()?.id === t.id; }
+  editVal(name: string): string {
+    const v = this._edits()[name];
+    return v == null ? '' : String(v);
+  }
+  setEditVal(name: string, v: string) { this._edits.update(e => ({ ...e, [name]: v })); }
+
+  /** Rail checklist → jump to (and focus) that test's section. */
+  scrollToTest(t: OrderTest) {
+    this.focusTest(t);
+    document.getElementById('vt-' + t.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  /** A row's comment affordance follows focus: discussing a sibling test's
+   *  parameter first makes that test the conversation context. */
+  rowComment(t: OrderTest, paramName: string) {
+    if (this._selected()?.id !== t.id) this.focusTest(t);
+    this.toggleParamComment(paramName);
+  }
+
+  readonly trendDurations: PfSelectOption[] = [
+    { value: '5', label: 'Last 5 results' },
+    { value: '10', label: 'Last 10 results' },
+    { value: '3m', label: 'Last 3 months' },
+    { value: '6m', label: 'Last 6 months' },
+    { value: 'all', label: 'All history' },
+  ];
+
+  /** Validation can complete the order's final report — store its PDF now
+   *  (background) so the patient's WhatsApp carries it. */
+  private readonly prestore = inject(ReportPrestoreService);
+  private orderIdOf(t: OrderTest | null | undefined): string | null {
+    return t?.subOrder?.orderId ?? t?.subOrder?.order?.id ?? null;
+  }
+
+  approveTest(t: OrderTest) {
+    if (this.outcomeOf(t) !== 'pending') return;
+    this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
+    this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }).subscribe({
+      next: () => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        this.prestore.afterValidation(this.orderIdOf(t));
+        this.toasts.success(`${t.test?.name ?? 'Test'} validated`);
+        this.finishIfSampleDone();
+      },
+      error: e => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'pending' }));
+        this.toasts.error(ApiError.from(e).message);
+      }
+    });
+  }
+
+  async rejectTest(t: OrderTest) {
+    if (this.outcomeOf(t) !== 'pending') return;
+    const reason = await this.dialog.prompt({
+      title: 'Reject result?',
+      message: `Reject "${t.test?.name}". The lab tech will be notified to re-enter it.`,
+      placeholder: 'Reason for rejection…',
+      multiline: true, required: true, tone: 'danger', confirmLabel: 'Reject result'
+    });
+    if (!reason) return;
+    this.rejectingId.set(t.id);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).pipe(finalize(() => {
+      if (this.rejectingId() === t.id) this.rejectingId.set(null);
+    })).subscribe({
+      next: () => {
+        this._outcome.update(m => ({ ...m, [t.id]: 'rejected' }));
+        this.toasts.success('Rejected — lab tech notified');
+        this.finishIfSampleDone();
+      },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Bulk-validate every still-pending test in the sample, sequentially. */
+  async validateAllRemaining() {
+    const pending = this.pendingSampleTests();
+    if (pending.length === 0) return;
+    this._saving.set(true);
+    let ok = 0; const failed: string[] = [];
+    for (const t of pending) {
+      this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
+      try {
+        await firstValueFrom(this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }));
+        this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        ok++;
+      } catch (e) {
+        this._outcome.update(m => ({ ...m, [t.id]: 'pending' }));
+        failed.push(t.test?.name ?? 'Test');
+      }
+    }
+    this._saving.set(false);
+    if (ok > 0) this.prestore.afterValidation(this.orderIdOf(pending[0]));
+    if (failed.length === 0) this.toasts.success(`Validated ${ok} test${ok === 1 ? '' : 's'}`);
+    else this.toasts.warning(`Validated ${ok}; ${failed.length} failed: ${failed.join(', ')}`);
+    this.finishIfSampleDone();
+  }
+
+  /** When no test on the sample is pending, return to the queue. */
+  private finishIfSampleDone() {
+    if (this.pendingSampleTests().length === 0) setTimeout(() => this.back(), 600);
+  }
+
+  readonly headTitle = computed(() => {
+    if (this.sampleTests().length > 1) return `Sample ${this.sampleLabel()}`;
+    return this._selected()?.test?.name ?? 'Validate';
+  });
   readonly subtitleText = computed(() => {
     const t = this._selected();
     if (!t) return 'Review the entered result.';
     const name = t.subOrder?.order?.patient?.displayName ?? '—';
     const dept = t.test?.department?.name ?? '—';
-    return `${name} · ${dept} · review and sign off`;
+    const n = this.sampleTests().length;
+    return n > 1 ? `${name} · ${dept} · ${n} tests on this tube` : `${name} · ${dept} · ${this.sampleLabel()}`;
   });
 
-  readonly snapshot = computed<ResultSnapshot | null>(() => {
-    const raw = this._selected()?.currentResult;
+  private snapshotFor(t: OrderTest | null): ResultSnapshot | null {
+    const raw = t?.currentResult;
     if (!raw) return null;
     try { return JSON.parse(raw) as ResultSnapshot; } catch { return null; }
-  });
+  }
+  readonly snapshot = computed<ResultSnapshot | null>(() => this.snapshotFor(this._selected()));
 
-  readonly valueRows = computed<ValueRow[]>(() => {
-    const t = this._selected();
-    const snap = this.snapshot();
+  readonly valueRows = computed<ValueRow[]>(() => this.valueRowsFor(this._selected()));
+
+  /** Parameter rows for ANY test in the sample (not just the focused one).
+   *  The FLAG and printed range are the ones mw saved with the result
+   *  (snapshot `flagged` map) — the pathologist signs off exactly what will
+   *  print. The band below only draws the range bar: picked for THIS
+   *  patient's sex/age by the shared resolver (never `[0]`), with the band's
+   *  own criticals ahead of the parameter pair — the same band mw flagged with. */
+  valueRowsFor(t: OrderTest | null): ValueRow[] {
+    const snap = this.snapshotFor(t);
     if (!t?.test?.parameters || !snap?.values) return [];
+    const params = readParameters(parseParametersBlob(t.test.parameters)) as unknown as ParamDef[];
+    if (params.length === 0) return [];
 
-    let params: ParamDef[] = [];
-    try {
-      const blob = JSON.parse(t.test.parameters);
-      params = blob.parameters ?? [];
-    } catch { return []; }
+    const patient = t.subOrder?.order?.patient;
+    const sex = normalizeSex(patient?.sex);
+    // DOB-derived fractional age — the server's band-pick metric.
+    const ageYears = bandAgeYears(patient);
 
     return params.map(p => {
       const v = snap.values![p.name];
       const n = Number(v);
       const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
-      const r = (p.referenceRanges ?? [])[0];
-      let flag: Flag = 'normal';
-      if (isNum) {
-        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
-      }
+      const r = selectReferenceRange(p.referenceRanges ?? [], sex, ageYears);
+      const critLow = r?.criticalLow ?? p.criticalLow ?? undefined;
+      const critHigh = r?.criticalHigh ?? p.criticalHigh ?? undefined;
+      const saved = savedFlagOf(snap, p.name);
+      const unit = (saved?.unit ?? p.unit) || undefined;
+      const rangeText = saved ? (saved.range ?? null) : (normalizeReportText(fillUnit(r?.reportText, unit)) || formatRange(r));
       return {
         name: p.name,
         title: p.title,
         value: v ?? '—',
         numeric: isNum ? n : undefined,
-        unit: p.unit,
-        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
-        min: r?.min,
-        max: r?.max,
-        critLow: p.criticalLow,
-        critHigh: p.criticalHigh,
+        unit,
+        range: rangeWithUnit(rangeText, unit),
+        min: r?.min ?? undefined,
+        max: r?.max ?? undefined,
+        critLow,
+        critHigh,
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
-        flag
+        flag: flagTone(saved?.flag),
+        crit: criticalBadge(saved?.flag),
+        printBold: Array.isArray(snap.bold) && snap.bold.includes(p.name),
+        hasRef: !!rangeText || critLow != null || critHigh != null
       };
     });
-  });
+  }
 
-  readonly counts = computed(() => {
-    const rows = this.valueRows();
+  countsFor(t: OrderTest | null) {
+    const rows = this.valueRowsFor(t);
     return {
       total: rows.length,
       normal: rows.filter(r => r.flag === 'normal').length,
       abnormal: rows.filter(r => r.flag === 'abnormal').length,
       critical: rows.filter(r => r.flag === 'critical').length
     };
-  });
+  }
+  readonly counts = computed(() => this.countsFor(this._selected()));
 
   readonly hasCritical = computed(() => this.counts().critical > 0);
 
-  // ── Microbiology Culture & Sensitivity (read-only review) ──────────
-  /** True when this test is a structured culture — renders the organism +
-   *  antibiotic (S/I/R) review instead of the flat parameter cards. */
-  readonly isCulture = computed<boolean>(() => {
-    const raw = this._selected()?.test?.parameters;
+  // ── Microbiology Culture & Sensitivity ─────────────────────────────
+  /** A structured culture test — shown here only as a link: it is reviewed
+   *  and signed out on the Culture case page (owner). */
+  /** Culture tests are reviewed + signed out on the Culture case page. */
+  openCultureBench(t: OrderTest) { void this.router.navigate(['/lab/culture', t.id]); }
+  /** "Specimen: Urine" — chosen at the order desk, for a non-culture test
+   *  (culture shows it on the bench). */
+  specimenLabel(t: OrderTest): string | null {
+    return this.isCultureFor(t) ? null : chosenSpecimen(t);
+  }
+  isCultureFor(t: OrderTest | null): boolean {
+    const raw = t?.test?.parameters;
     if (!raw) return false;
     try { return (JSON.parse(raw) as { microFormat?: string }).microFormat === 'culture_sensitivity'; }
     catch { return false; }
-  });
-  /** The entered culture structure (specimen, organisms, AST, notes). */
-  readonly cultureResult = computed<CultureResult | null>(
-    () => (this.snapshot()?.values as CultureResult) ?? null);
-
-  interpLabel(v?: string): string {
-    return v === 'S' ? 'Sensitive' : v === 'R' ? 'Resistant' : v === 'I' ? 'Intermediate' : '—';
   }
-  interpTone(v?: string): string {
-    return v === 'S' ? '#10b981' : v === 'R' ? '#ef4444' : v === 'I' ? '#f59e0b' : 'var(--text-tertiary)';
-  }
+  readonly isCulture = computed<boolean>(() => this.isCultureFor(this._selected()));
 
   // ── Range-bar zone computation ─────────────────────────────
   /** Produce zones (critical-low / low / normal / high / critical-high) with proportional widths. */
@@ -1633,8 +1391,10 @@ export class ValidateResultComponent implements OnInit {
     return ticks;
   }
 
-  flagLabel(f: Flag): string {
-    return f === 'critical' ? 'CRITICAL' : f === 'abnormal' ? 'ABNORMAL' : 'NORMAL';
+  /** Chip text. A critical shows its direction badge — CL / CH (legacy: C). */
+  flagLabel(f: Flag, crit?: CriticalCode | ''): string {
+    if (f === 'critical') return crit || 'C';
+    return f === 'abnormal' ? 'ABNORMAL' : 'NORMAL';
   }
 
   flagExplanation(r: ValueRow): string {
@@ -1654,12 +1414,18 @@ export class ValidateResultComponent implements OnInit {
     this._id.set(id);
     if (!id) return;
     this._loading.set(true);
-    this.api.get<OrderTest[]>('/api/validation/queue?mine=false').subscribe({
+    // Only this test's tube (the focused test + its queued siblings — all the
+    // screen shows), not the whole queue (DB optimisation phase 3). An older
+    // server ignores tubeOf and answers the whole queue; the lookup below
+    // works on either.
+    this.api.get<OrderTest[]>(`/api/validation/queue?mine=false&tubeOf=${encodeURIComponent(id)}`).subscribe({
       next: rows => {
         this._loading.set(false);
+        this._queue.set(rows ?? []);
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
         if (match) void this.loadComments();
+        this.loadCritical([id, ...(rows ?? []).map(r => r.id)]);
       },
       error: () => this._loading.set(false)
     });
@@ -1667,7 +1433,7 @@ export class ValidateResultComponent implements OnInit {
 
   onComment(e: Event) { this._comment.set((e.target as HTMLTextAreaElement).value); }
 
-  back() { this.router.navigateByUrl('/pathologist'); }
+  back() { this.navBack.backTo('/pathologist'); }
 
   openDetail(r: ValueRow) { this._detailRow.set(r); }
   closeDetail() { this._detailRow.set(null); }
@@ -1682,7 +1448,7 @@ export class ValidateResultComponent implements OnInit {
     }
     this._edits.set(seed);
     this._editing.set(true);
-    this.toasts.success('Edit mode — click a parameter to change');
+    this.toasts.success('Edit mode — change values inline, then Save');
   }
 
   cancelEdit() {
@@ -1730,6 +1496,7 @@ export class ValidateResultComponent implements OnInit {
     this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: this._comment() || null }).subscribe({
       next: () => {
         this._saving.set(false);
+        this.prestore.afterValidation(this.orderIdOf(t));
         this.toasts.success('Validated');
         this.back();
       },
@@ -1753,7 +1520,8 @@ export class ValidateResultComponent implements OnInit {
       confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).subscribe({
+    this.rejecting.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).pipe(finalize(() => this.rejecting.set(false))).subscribe({
       next: () => {
         this.toasts.success('Rejected — lab tech notified');
         this.back();
@@ -1765,15 +1533,11 @@ export class ValidateResultComponent implements OnInit {
   async reassign() {
     const t = this._selected();
     if (!t) return;
-    const id = await this.dialog.prompt({
-      title: 'Reassign to pathologist',
-      message: `Move "${t.test?.name}" to another pathologist's queue.`,
-      placeholder: 'Pathologist user id',
-      required: true,
-      confirmLabel: 'Reassign'
-    });
+    // A picker of the validators who cover this department (never a pasted id).
+    const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
+    this.reassigning.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).pipe(finalize(() => this.reassigning.set(false))).subscribe({
       next: () => {
         this.toasts.success('Reassigned');
         this.back();

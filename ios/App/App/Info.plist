@@ -35,14 +35,31 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Prefrontal uses Bluetooth to connect to your label printer for sample tube labels.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Prefrontal uses Bluetooth to connect to your label printer for sample tube labels.</string>
+	<key>NSBluetoothWhileInUseUsageDescription</key>
+	<string></string>
 	<key>NSCameraUsageDescription</key>
 	<string>Prefrontal needs the camera to scan patient QR codes and sample barcodes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Prefrontal needs the microphone for voice calls and consults with your colleagues.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Prefrontal lets you pick photos from your library to attach to reports, messages, and patient records.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Prefrontal saves report PDFs and shared images to your photo library when you export them.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Prefrontal lets you pick photos from your library to attach to reports, messages, and patient records.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Prefrontal looks for Prefrontal Bridges on your lab's network so you can add and set them up.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_prefrontal-bridge._tcp</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -1,0 +1,261 @@
+<section class="pf-page pf-oc pf-ov mp">
+  <!-- Band: the New visit / Order & Payments pill — OPD product tile · Doctor
+       tile · one search that finds a patient in this list. -->
+  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="searchActive()" [customSearch]="true" [back]="true">
+    <div band-search #pill class="pf-us">
+      <div class="pf-us__tiles" role="group" aria-label="What to search">
+        <div class="pf-us__tile pf-us__tile--filled" [class.pf-us__tile--on]="bandMode() === 'product'">
+          <button type="button" class="pf-us__tile-btn" data-product (click)="selectScope('product')"
+                  [attr.aria-pressed]="bandMode() === 'product'" [attr.aria-label]="productSwitchable() ? 'OPD, switch product' : 'OPD'">
+            <svg class="pf-us__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 10v6M9 13h6"/></svg>
+            <span class="pf-us__tile-label">OPD</span>
+            @if (productSwitchable()) {
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            }
+          </button>
+        </div>
+        <div class="pf-us__tile pf-us__tile--filled" [class.pf-us__tile--on]="bandMode() === 'doctor'">
+          <button type="button" class="pf-us__tile-btn" data-scope="doctor" (click)="selectScope('doctor')"
+                  [attr.aria-pressed]="bandMode() === 'doctor'" [attr.aria-disabled]="!showFilter()"
+                  [attr.aria-label]="'Doctor: ' + doctorLabel() + (showFilter() ? ', switch doctor' : '')">
+            <svg class="pf-us__icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a4 4 0 0 0 8 0V3" /><path d="M10 13v2a5 5 0 0 0 10 0v-2" /><circle cx="20" cy="11" r="2" /></svg>
+            <span class="pf-us__tile-label">{{ doctorLabel() }}</span>
+            @if (showFilter()) {
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            }
+          </button>
+        </div>
+      </div>
+
+      <span class="pf-us__div" aria-hidden="true"></span>
+
+      <label class="pf-us__field">
+        <svg class="pf-us__glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <span class="sr-only">{{ pillPlaceholder() }}</span>
+        <input #searchInput type="text" class="pf-us__input" autocomplete="off" data-band-search
+               [attr.aria-expanded]="dropOpen()" aria-controls="mp-drop"
+               [value]="pillValue()" [placeholder]="pillPlaceholder()"
+               (input)="onPillInput($any($event.target).value)" (focus)="onPillFocus()" (blur)="onPillBlur()"
+               (keydown.arrowDown)="onPillArrow($event, 1)" (keydown.arrowUp)="onPillArrow($event, -1)"
+               (keydown.enter)="onPillEnter($event)" (keydown.escape)="onPillEscape()" (keydown.tab)="scopeOpen.set(false)" />
+      </label>
+      @if (pillValue()) {
+        <button type="button" class="pf-us__clear" (click)="onPillInput('')" aria-label="Clear search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      }
+
+      @if (dropOpen()) {
+        <div id="mp-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="bandMode() === 'doctor' ? 'Doctors' : 'Switch to'"
+             [style.left.px]="dropBox()?.left" [style.top.px]="dropBox()?.top" [style.width.px]="dropBox()?.width">
+          <div class="pf-us__drop-top">
+            <div class="pf-us__drop-head">
+              <span>{{ bandMode() === 'doctor' ? 'SHOW PATIENTS OF' : 'SWITCH TO' }}</span>
+              <button type="button" class="pf-us__drop-esc" (click)="closeScope()" aria-label="Close">Esc</button>
+            </div>
+          </div>
+          @for (r of dropRows(); track r.key; let i = $index) {
+            <button type="button" class="pf-us__row" role="option" [class.pf-us__row--hl]="i === scopeHighlight()"
+                    [attr.aria-selected]="i === scopeHighlight()" (mouseenter)="scopeHighlight.set(i)" (click)="pickDropRow(r)">
+              <span class="pf-us__row-text">
+                <span class="pf-us__row-title">{{ r.title }}</span>
+                <span class="pf-us__row-meta">{{ r.meta }}</span>
+              </span>
+              <span class="pf-us__row-cta">{{ bandMode() === 'product' ? (r.key === 'opd' ? 'Here' : 'Open') : 'Show' }}</span>
+            </button>
+          } @empty {
+            <p class="pf-us__drop-note">No doctor matches “{{ doctorQuery() }}”.</p>
+          }
+        </div>
+      }
+    </div>
+  </pf-hero-band>
+
+  <div class="pf-oc-scrim" [class.pf-oc-scrim--on]="dropOpen()" aria-hidden="true" (click)="closeScope()"></div>
+
+  <div class="pf-page__body pf-oc-body" [class.pf-oc-body--split]="isLg()">
+    <!-- ══ Left work card: MY PATIENTS ══ -->
+    <div class="pf-oc-cat pf-ov-main" aria-label="My patients">
+      <header class="pf-oc-bill__head">
+        <span class="pf-oc-bill__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/><path d="M16 4a3 3 0 0 1 0 6M21 20v-1a5 5 0 0 0-3-4.6"/></svg>
+        </span>
+        <span class="pf-oc-bill__title">MY PATIENTS</span>
+        <span class="pf-oc-bill__spacer"></span>
+        <span class="pf-ov-head__date pf-num" data-date>{{ today | date:'EEE, d MMM y' }}</span>
+      </header>
+
+      <div class="pf-oc-cat__head">
+        <div class="pf-tabs pf-no-print" role="tablist" aria-label="Patients">
+          @for (t of tabs; track t.id) {
+            <button type="button" class="pf-tabs__btn" [class.pf-tabs__btn--on]="tab() === t.id" role="tab"
+                    [attr.aria-selected]="tab() === t.id" (click)="setTab(t.id)" [attr.aria-label]="t.label + ' · ' + counts()[t.id]">
+              <span class="pf-tabs__label">{{ t.label }}</span>
+              @if (counts()[t.id] > 0) { <span class="pf-tabs__count">{{ counts()[t.id] }}</span> }
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="pf-deptpills pf-no-print pf-ov-chips" role="group" aria-label="Filter patients">
+        @for (c of chipDefs; track c.id) {
+          <button type="button" class="pf-deptpill" [attr.data-chip]="c.id" [attr.aria-pressed]="isChip(c.id)" (click)="toggleChip(c.id)">
+            <span class="pf-deptpill__name">{{ c.label }}</span>
+          </button>
+        }
+      </div>
+
+      <div class="pf-oc-cat__list pf-ov-list">
+        @if (loading() && !rows().length) {
+          <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" label="Loading your patients…"></pf-skeleton-rows>
+        } @else {
+          <div class="mp__grid" role="list">
+            @for (r of visible(); track r.visitId) {
+              <div class="pf-crow pf-ov-doc mp__tile" role="listitem" [class.pf-crow--in]="selected()?.visitId === r.visitId">
+                <!-- A tap / click / Enter OPENS the consult (Start or Resume);
+                     hover or keyboard focus previews it in At a glance (desktop). -->
+                <button type="button" class="pf-crow__main" data-open (click)="open(r)"
+                        (mouseenter)="preview(r)" (focus)="preview(r)"
+                        [attr.aria-label]="openLabel(r) + ': token ' + r.tokenLabel + ', ' + r.patientName">
+                  <span class="mp__token pf-num" aria-hidden="true">{{ r.tokenLabel }}</span>
+                  <span class="pf-ov-txt">
+                    <span class="pf-ov-name">{{ r.patientName }}@if (r.ageSex) { <span class="mp__agesex pf-num">{{ r.ageSex }}</span> }</span>
+                    <span class="pf-ov-meta">{{ r.serviceName || 'Consultation' }}@if (r.departmentName) { · {{ r.departmentName }} }@if (showDoctorName() && r.doctorName) { · {{ r.doctorName }} }</span>
+                    <span class="pf-ov-meta pf-ov-avail pf-num">
+                      <span class="pf-ov-dot" [attr.data-tone]="info(r).tone" aria-hidden="true"></span>{{ info(r).text }}
+                    </span>
+                    <span class="mp__tags">
+                      <span class="mp__tag">{{ r.isFollowUp ? 'Follow-up' : 'New' }}</span>
+                      @if (r.hasVitals) {
+                        <span class="mp__tag mp__tag--done" data-vitals-done>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Vitals
+                        </span>
+                      } @else if (r.status !== 'completed') {
+                        <span class="mp__tag">No vitals yet</span>
+                      }
+                      @if (r.allergyCount) { <span class="mp__tag mp__tag--warn">Allergy</span> }
+                    </span>
+                  </span>
+                </button>
+              </div>
+            } @empty {
+              <p class="pf-empty-line">{{ emptyText() }}. Patients the front desk books with you today appear here.</p>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (isLg()) {
+      <aside class="pf-oc-bill" aria-label="At a glance">
+        <ng-container *ngTemplateOutlet="glanceBody"></ng-container>
+      </aside>
+    }
+  </div>
+
+  <!-- The journey dock (consult v6) for the patient being previewed. -->
+  @if (isLg() && pickedId() && dock.patient()) {
+    <pf-journey-dock class="mp__dock" (picked)="historyAt($event)"></pf-journey-dock>
+  }
+
+  <!-- Below 1024px: the New visit bar → the at-a-glance sheet. -->
+  @if (!isLg() && selected(); as s) {
+    @if (!sheetOpen()) {
+      <div class="pf-cartbar">
+        <button type="button" class="pf-cartbar__inner press" (click)="sheetOpen.set(true)" [attr.aria-label]="'At a glance: token ' + s.tokenLabel + ', ' + s.patientName">
+          <span class="pf-cartbar__icon"><span class="pf-num mp__bartoken">{{ s.tokenLabel }}</span></span>
+          <span class="pf-cartbar__info"><span class="pf-cartbar__line1">{{ s.patientName }}</span></span>
+          <span class="pf-cartbar__cta">At a glance
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
+          </span>
+        </button>
+      </div>
+    } @else {
+      <div class="pf-cart-backdrop" (click)="closeSheet()"></div>
+      <aside class="pf-cart-drawer pf-cart-drawer--tall" aria-label="At a glance">
+        <span class="pf-sheet-handle" aria-hidden="true"></span>
+        <button type="button" class="pf-cart-drawer__close press" (click)="closeSheet()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+        <ng-container *ngTemplateOutlet="glanceBody"></ng-container>
+      </aside>
+    }
+  }
+
+  <!-- AT A GLANCE body (the BILLING card shape): header · facts · footer. -->
+  <ng-template #glanceBody>
+    <header class="pf-oc-bill__head">
+      <span class="pf-oc-bill__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+      </span>
+      <span class="pf-oc-bill__title">AT A GLANCE</span>
+      <span class="pf-oc-bill__spacer"></span>
+      @if (selected(); as s) { <span class="mp__glancetoken pf-num">Token {{ s.tokenLabel }}</span> }
+    </header>
+
+    <div class="pf-oc-bill__body" data-glance>
+      @if (selected(); as s) {
+        <div class="mp__who">
+          <span class="mp__whoname">{{ glance()?.patient?.name || s.patientName }}</span>
+          <span class="pf-ov-meta pf-num">
+            {{ glance()?.patient?.ageDisplay || s.ageSex || '' }}@if (glance()?.patient?.sex; as sx) { · {{ sx }} }@if (glance()?.patient?.mrn || s.mrn; as mrn) { · {{ mrn }} }
+          </span>
+          <span class="pf-ov-meta">{{ statusLabel(s.status) }} · {{ s.isFollowUp ? 'Follow-up' : 'New visit' }}@if (s.serviceName) { · {{ s.serviceName }} }</span>
+        </div>
+
+        @if (glanceLoading()) {
+          <pf-skeleton-rows [rows]="4" [avatar]="false" [dense]="true" label="Loading at a glance…"></pf-skeleton-rows>
+        } @else if (glanceError(); as err) {
+          <p class="pf-oc-bill__hint">{{ err }}</p>
+        } @else {
+          @if (allergies().length) {
+            <div class="mp__allergy" role="status" data-allergies>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+              <span><strong>Allergic to</strong> @for (a of allergies(); track a.id ?? a.allergen; let last = $last) { {{ a.allergen }}@if (a.reaction) { ({{ a.reaction }}) }@if (!last) {, } }</span>
+            </div>
+          }
+
+          <div class="mp__sec">
+            <span class="mp__sech">Today's vitals</span>
+            @if (vitals().length) {
+              <div class="mp__vitals pf-num" data-vitals>
+                @for (v of vitals(); track v.label) {
+                  <div class="mp__vital"><span class="mp__vk">{{ v.label }}</span><span class="mp__vv">{{ v.value }}</span></div>
+                }
+              </div>
+            } @else {
+              <p class="mp__muted">Not taken yet.</p>
+            }
+          </div>
+
+          <div class="mp__sec">
+            <span class="mp__sech">Complaint</span>
+            <p class="mp__p">{{ complaint() || 'Nothing noted at the desk.' }}</p>
+          </div>
+
+          <div class="mp__sec">
+            <span class="mp__sech">Last visit</span>
+            @if (glance()?.lastVisit; as lv) {
+              <p class="mp__p" data-last-visit>
+                <span class="pf-num">{{ lv.visitDate | date:'d MMM y' }}</span>@if (lv.doctorName) { · {{ lv.doctorName }} }<br />
+                {{ lv.diagnoses.length ? dxText(lv.diagnoses) : 'No diagnosis recorded' }} · {{ lv.rx.length }} {{ lv.rx.length === 1 ? 'medicine' : 'medicines' }}
+              </p>
+            } @else {
+              <p class="mp__muted">First visit here.</p>
+            }
+          </div>
+        }
+      } @else {
+        <p class="pf-oc-bill__hint">No patient to show. Patients the front desk books with you today appear here.</p>
+      }
+    </div>
+
+    <footer class="pf-oc-bill__foot pf-oc-bill__foot--sticky">
+      <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" data-history [disabled]="!selected()" (click)="history()">History</button>
+      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" data-cta [disabled]="!selected()" (click)="startSelected()">
+        {{ ctaLabel() }}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6" /></svg>
+      </button>
+    </footer>
+  </ng-template>
+</section>

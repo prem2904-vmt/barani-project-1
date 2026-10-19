@@ -1,0 +1,1074 @@
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal, output } from '@angular/core';
+import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
+import { FLAG_CONDITIONS, FLAG_OPERATOR, analyzeLines, type CondIssue } from '../../../shared/utils/flag-conditions';
+import type { InsightParam } from '../../../shared/utils/range-insight';
+import type { TestParametersBlob } from '../../../shared/models/test.model';
+import { ApiService } from '../../../core/services/api.service';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
+import {
+  GridRow,
+  GridRowParameter,
+  GridSection,
+  ParagraphSection,
+  ReportColumn,
+  ReportSection,
+  ResolvedReportLayout,
+} from '../../../shared/models/report-layout.model';
+import { PreviewProfileMember, ReportPdfPreviewComponent } from './report-pdf-preview.component';
+import { Test } from '../../../shared/models/test.model';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { TileComponent } from '../../../shared/primitives/tile.component';
+import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
+
+/**
+ * Per-test report LAYOUT editor. Lives inside the Report Template tile as a
+ * new "Per-test layout" tab. Admin picks a test, edits its ordered sections
+ * (grid / paragraph), then saves via the per-test layout endpoint. The right
+ * pane renders a live preview by POSTing sample result values to the engine's
+ * /preview endpoint and rendering the returned ResolvedReportLayout.
+ *
+ * Mirrors report-columns-editor.component.ts conventions: standalone, signals,
+ * OnPush, ReportLayoutService for HTTP, structured live preview.
+ *
+ * Scope: grid + paragraph sections are fully editable. A paragraph section can
+ * be labelled (e.g. "Interpretation", "Method / Notes") so admins can attach
+ * interpretive content per test.
+ */
+@Component({
+  selector: 'pf-test-notes-editor',
+  standalone: true,
+  imports: [SkeletonCardComponent, SelectComponent, TileComponent, TouchButtonComponent, ReportPdfPreviewComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="grid gap-5 {{ hidePreview() ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.3fr_1fr]' }}">
+
+      <!-- ─────────────── LEFT: section editor ─────────────── -->
+      <div class="block" [class.pf-tnotes-card]="!slim()">
+
+        <!-- Test picker + status. The picker disappears when the host already
+             knows the test (Test Master); the status pill stays useful. -->
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4" [hidden]="slim()">
+          <div class="flex items-center gap-3 pf-test-pick" [hidden]="!!fixedTestId()">
+            <label class="text-[11px] pf-num uppercase tracking-[0.16em]"
+                   style="color: var(--text-muted);">Test</label>
+            <pf-select
+              style="width: 260px"
+              [options]="testOptions()"
+              [value]="selectedTestId()"
+              [placeholder]="tests().length === 0 ? 'Loading…' : 'Select a test'"
+              (valueChange)="selectTest($event)">
+            </pf-select>
+          </div>
+
+          @if (selectedTestId()) {
+            @if (configured()) {
+              <span class="pf-status-pill pf-status-pill--ok">Configured</span>
+            } @else {
+              <span class="pf-status-pill pf-status-pill--default">No layout yet</span>
+            }
+          }
+        </div>
+
+        @if (loading()) {
+          <div class="flex justify-center py-8">
+            <pf-skeleton-card [lines]="5" label="Loading layout…"></pf-skeleton-card>
+          </div>
+        } @else if (selectedTestId()) {
+
+          <!-- ── 1 · DESCRIPTION column ─────────────────────────────
+               What most departments actually want here: the text printed in
+               the report's Description column beside each parameter. -->
+          <div class="pf-tl-block">
+            <h4 class="pf-tl-h">Description column</h4>
+            <p class="pf-tl-hint">
+              Printed in the report's <strong>Description</strong> column beside each
+              parameter — or, with no such column, as a line under its result — e.g.
+              what a high or low value means. Leave blank for none.
+            </p>
+            @if (descriptionColumn() === false) {
+              <!-- No column: the report prints each description as a full-width
+                   row right under its value (report-pdf.ts, owner 2026-09-28). -->
+              <p class="pf-tl-desc-warn" role="note" data-testid="desc-no-column-hint">
+                No Description column in this report — it prints as a line under the result.
+                Prefer a column? Use “Change the columns” above.
+              </p>
+            }
+            @for (name of paramNames(); track name) {
+              <div class="pf-tl-desc-row">
+                <span class="pf-tl-desc-name">{{ titleFor(name) }}</span>
+                <input type="text" class="pf-input pf-input--compact grow"
+                       [value]="descriptionFor(name)"
+                       (input)="setDescription(name, $any($event.target).value)"
+                       [placeholder]="descCondKind(name) === 'ladder' ? 'for any other result — when no line above matches' : 'e.g. High in dehydration · Low in anaemia'" />
+                @if (descCondKind(name) === 'custom') {
+                  <span class="pf-tl-desc-flag" title="This row carries print rules richer than one condition — edit them in the Advanced editor.">custom rules</span>
+                } @else {
+                  <button type="button" class="pf-tl-desc-vary press" (click)="toggleDescCond(name)">
+                    {{ descCondKind(name) === 'ladder' ? '− same wording for every result' : '+ depends on the result' }}
+                  </button>
+                }
+              </div>
+              @if (descCondKind(name) === 'ladder') {
+                @for (r of descRules(name); track $index; let ri = $index; let last = $last) {
+                  <div class="pf-tl-desc-cond">
+                    <span class="pf-tl-desc-w pf-tl-desc-w--kw">When the result</span>
+                    <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="descOpChoice(r)"
+                               (valueChange)="setDescOpChoice(name, ri, $any($event))"></pf-select></div>
+                    @if (r.operator !== 'flag') {
+                    <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
+                           [value]="r.value" [placeholder]="r.operator === 'between' ? 'from' : 'value'"
+                           (input)="setDescRule(name, ri, { value: $any($event.target).value })" />
+                    }
+                    @if (r.operator === 'between') {
+                      <span class="pf-tl-desc-w">and</span>
+                      <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
+                             [value]="r.value2" placeholder="to"
+                             (input)="setDescRule(name, ri, { value2: $any($event.target).value })" />
+                    }
+                    <span class="pf-tl-desc-w">say</span>
+                    <input type="text" class="pf-input pf-input--compact grow"
+                           [value]="r.text"
+                           (input)="setDescRule(name, ri, { text: $any($event.target).value })"
+                           placeholder="e.g. Suggests dehydration — advise fluids and repeat" />
+                    <button type="button" class="pf-tl-desc-x press" [disabled]="ri === 0" (click)="moveDescRule(name, ri, -1)"
+                            title="Check this line earlier" aria-label="Move this line up">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="pf-tl-desc-x press" [disabled]="last" (click)="moveDescRule(name, ri, 1)"
+                            title="Check this line later" aria-label="Move this line down">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <button type="button" class="pf-tl-desc-x press" (click)="removeDescRule(name, ri)"
+                            title="Remove this branch" aria-label="Remove this branch">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                  @for (m of descIssues(name)[ri]; track $index) {
+                    <p class="pf-tl-desc-warn" [class.pf-tl-desc-warn--err]="m.severity === 'error'">{{ m.message }}</p>
+                  }
+                }
+                <div class="pf-tl-desc-cond pf-tl-desc-cond--else">
+                  <span class="pf-tl-desc-w pf-tl-desc-w--kw">For any other result</span>
+                  <span class="pf-tl-desc-w">the description above prints. Lines are checked top to bottom — the first match is used.</span>
+                  <button type="button" class="pf-tl-desc-vary press" (click)="addDescRule(name)">+ Add another line</button>
+                </div>
+              }
+            } @empty {
+              @if (profileMembers().length > 0) {
+                <!-- A profile has no values of its own. Each member's
+                     description is a cell of THAT member's row, so it prints
+                     wherever the member prints — in this profile's block too.
+                     (Notes are different: the profile's replace its
+                     members' — see the profile-notes rule.) -->
+                <p class="pf-tl-profile-note">
+                  A profile prints each member's own description beside its result.
+                  Write it on the member test —
+                  @for (m of profileMembers(); track m.id; let last = $last) {
+                    <strong>{{ m.name }}</strong>{{ last ? '.' : ', ' }}
+                  }
+                  For wording that belongs to the whole profile, add a Sentence below the table.
+                </p>
+              } @else {
+                <p class="text-[12px] py-1" style="color: var(--text-tertiary);">This test has no parameters.</p>
+              }
+            }
+          </div>
+
+          <!-- ── 2 · NOTES & INTERPRETATION paragraphs ─────────────
+               Slim mode drops this: Sentence blocks on the print-order
+               surface author the same paragraph sections. -->
+          @if (!slim()) {
+          <div class="pf-tl-block">
+            <h4 class="pf-tl-h">Notes &amp; interpretation</h4>
+            <p class="pf-tl-hint">
+              Free-text paragraphs printed under this test's results. Supports
+              placeholders — e.g. {{ '{{Hemoglobin}}' }}, {{ '{{Hemoglobin_range}}' }}.
+            </p>
+            @for (ps of paragraphSecs(); track ps.s.id) {
+              <div class="pf-tl-para">
+                <div class="flex items-center gap-2 mb-1">
+                  <input type="text" class="pf-input pf-input--compact grow"
+                         [value]="ps.s.label ?? ''"
+                         (input)="patchSection(ps.si, { label: $any($event.target).value })"
+                         placeholder="Heading (e.g. Interpretation)" />
+                  <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                          (click)="removeSection(ps.si)" aria-label="Delete note">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                  </button>
+                </div>
+                <textarea class="pf-input min-h-[72px]"
+                          [value]="paraSection(ps.s).template"
+                          (input)="patchSection(ps.si, { template: $any($event.target).value })"
+                          placeholder="e.g. Values above {{ '{{Hemoglobin_range}}' }} suggest…"></textarea>
+              </div>
+            }
+            <button type="button" class="pf-link-btn" (click)="addParagraphPreset('Interpretation')">+ Add note block</button>
+          </div>
+          }
+
+          <!-- ── 3 · ADVANCED: raw table layout (kept, tucked away) ── -->
+          @if (!slim()) {
+          <button type="button" class="pf-tl-adv-toggle press" (click)="showAdvanced.set(!showAdvanced())">
+            {{ showAdvanced() ? '▾' : '▸' }} Advanced table layout
+            <span class="pf-tl-adv-sub">custom rows &amp; per-cell templates — most tests don't need this</span>
+          </button>
+
+          @if (showAdvanced()) {
+          <ul class="pf-sec-list">
+            @for (s of sections(); track s.id; let si = $index) {
+              @if (s.type !== 'paragraph') {
+              <li class="pf-sec-card">
+
+                <!-- Section header bar -->
+                <div class="pf-sec-head">
+                  <span class="pf-sec-badge pf-sec-badge--grid">{{ s.type }}</span>
+
+                  <input type="text" class="pf-input pf-input--compact grow"
+                         [value]="s.label ?? ''"
+                         (input)="patchSection(si, { label: $any($event.target).value })"
+                         placeholder="Section label (optional)" />
+
+                  <div class="pf-sec-head__actions">
+                    <button type="button" class="pf-icon-btn" [disabled]="si === 0"
+                            (click)="moveSection(si, -1)" aria-label="Move up">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="pf-icon-btn" [disabled]="si === sections().length - 1"
+                            (click)="moveSection(si, 1)" aria-label="Move down">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                            (click)="removeSection(si)" aria-label="Delete section">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- ───── GRID section body ───── -->
+                @if (s.type === 'grid') {
+                  <div class="pf-sec-body">
+                    @if (gridRows(s).length === 0) {
+                      <p class="text-[12px] py-1" style="color: var(--text-tertiary);">No rows yet.</p>
+                    }
+                    <ul class="pf-row-list">
+                      @for (r of gridRows(s); track r.id; let ri = $index) {
+                        <li class="pf-grid-row">
+                          <div class="flex items-center gap-2">
+                            <input type="text" class="pf-input pf-input--compact grow"
+                                   [value]="paramRow(r).parameter_name"
+                                   (input)="patchGridRow(si, ri, { parameter_name: $any($event.target).value })"
+                                   placeholder="Parameter name (e.g. Hemoglobin)" />
+                            <button type="button" class="pf-icon-btn" [disabled]="ri === 0"
+                                    (click)="moveGridRow(si, ri, -1)" aria-label="Move row up">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                            </button>
+                            <button type="button" class="pf-icon-btn" [disabled]="ri === gridRows(s).length - 1"
+                                    (click)="moveGridRow(si, ri, 1)" aria-label="Move row down">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                            <button type="button" class="pf-icon-btn pf-icon-btn--danger"
+                                    (click)="removeGridRow(si, ri)" aria-label="Delete row">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              </svg>
+                            </button>
+                          </div>
+
+                          <!-- Per-column cell templates -->
+                          <div class="pf-cell-grid">
+                            @for (col of cellColumnNames(); track col) {
+                              <div class="pf-cell-field">
+                                <span class="pf-cell-label">{{ col }}</span>
+                                <input type="text" class="pf-input pf-input--mono pf-input--compact"
+                                       [value]="paramRow(r).cells[col] || ''"
+                                       (input)="patchCell(si, ri, col, $any($event.target).value)"
+                                       [placeholder]="cellPlaceholder(col)" />
+                              </div>
+                            }
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                    <button type="button" class="pf-link-btn" (click)="addGridRow(si)">+ Add parameter row</button>
+                  </div>
+                }
+
+
+              </li>
+              }
+            }
+          </ul>
+          <button type="button" class="pf-link-btn" (click)="addSection('grid')">+ Custom table section</button>
+          }
+          }
+
+          <!-- Save footer -->
+          <div class="flex items-center justify-end gap-3 mt-4">
+            @if (slim()) {
+              <!-- Embedded in the test editor: every change saves itself (like
+                   the print-order blocks around it), so the live preview shows
+                   it — no second Save button beside the band's. -->
+              <span class="pf-tl-savestate" aria-live="polite">
+                @if (saving()) { Saving… } @else if (savedTick()) { Saved }
+              </span>
+            } @else {
+              <pf-touch-btn size="sm" variant="primary"
+                            [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
+                @if (saving()) { Saving… } @else { Save }
+              </pf-touch-btn>
+            }
+          </div>
+
+        } @else {
+          <p class="text-center py-6 text-[13px]" style="color: var(--text-tertiary);">
+            Select a test to edit its report layout.
+          </p>
+        }
+      </div>
+
+      <!-- ─────────────── RIGHT: live preview ───────────────
+           The EXACT printed output: the same jsPDF pipeline as the patient
+           report, embedded — not an HTML approximation. -->
+      @if (!hidePreview()) {
+      <aside class="xl:sticky xl:top-4 h-fit">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-[11px] pf-num uppercase tracking-[0.16em]"
+             style="color: var(--text-muted);">Live preview</p>
+          <button type="button" class="pf-link-btn" [disabled]="!selectedTestId()"
+                  (click)="refreshPreview()">Refresh</button>
+        </div>
+
+        <pf-report-pdf-preview
+          [testId]="selectedTestId()"
+          [testName]="selectedTest()?.name || ''"
+          [parameters]="paramNames()"
+          [profileMembers]="profileMembers()"
+          [columnsOverride]="columnsOverride()"
+          [refreshToken]="previewToken()">
+        </pf-report-pdf-preview>
+
+        <p class="text-[10px] mt-2" style="color: var(--text-tertiary);">
+          Rendered by the same PDF engine as the patient report — what you see here is the exact print.
+        </p>
+      </aside>
+      }
+    </div>
+  `,
+  styles: [`
+    .pf-tl-desc-vary { flex-shrink: 0; background: none; border: none; padding: 2px 4px; font-size: 11.5px;
+      font-weight: 600; color: var(--violet-text, #a78bfa); cursor: pointer; white-space: nowrap; }
+    .pf-tl-desc-vary:hover { text-decoration: underline; }
+    .pf-tl-desc-flag { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+    .pf-tl-desc-cond { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin: -2px 0 8px; padding: 8px 10px 8px 10px; border-left: 2px solid rgba(168,85,247,.35);
+      background: rgba(124,58,237,.05); border-radius: 0 10px 10px 0; }
+    .pf-tl-desc-w { font-size: 12px; color: var(--text-secondary, #cbd5e1); white-space: nowrap; }
+    .pf-tl-desc-op { min-width: 130px; }
+    .pf-tl-desc-val { width: 84px; text-align: center; }
+    .pf-tl-desc-w--kw { font-weight: 700; color: var(--violet-text, #a78bfa); }
+    .pf-tl-desc-cond--else { background: transparent; border-left-style: dotted; }
+    .pf-tl-desc-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+      border: none; border-radius: 8px; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
+    .pf-tl-desc-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
+    .pf-tl-desc-x:disabled { opacity: .3; cursor: default; }
+    .pf-tl-desc-x:disabled:hover { color: var(--text-tertiary, #64748b); background: transparent; }
+    .pf-tl-desc-warn--err { color: #dc2626; border-left-color: #dc2626; }
+    .pf-tl-profile-note { margin: 2px 0 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
+    .pf-tl-profile-note strong { color: var(--text-primary); font-weight: 600; }
+    .pf-tl-savestate { min-height: 16px; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
+    .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: var(--text-secondary);
+      border-left: 2px solid var(--pf-sel-border); }
+    .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
+      background: var(--glass-bg); padding: 1.75rem; }
+    /* ── Simple-mode blocks ── */
+    .pf-tl-block { margin-bottom: 18px; padding: 14px; border: 1px solid var(--glass-border, rgba(148,163,184,0.16));
+      border-radius: 14px; background: rgba(255,255,255,0.02); }
+    .pf-tl-h { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-tl-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+    .pf-tl-desc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .pf-tl-desc-name { flex: 0 0 190px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary, #cbd5e1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-tl-para { margin-bottom: 12px; }
+    .pf-tl-adv-toggle { display: block; width: 100%; text-align: left; margin: 4px 0 10px; padding: 10px 12px;
+      border: 1px dashed var(--glass-border, rgba(148,163,184,0.3)); border-radius: 12px; background: transparent;
+      font-size: 13px; font-weight: 600; color: var(--text-secondary, #cbd5e1); cursor: pointer; }
+    .pf-tl-adv-toggle:hover { border-color: rgba(168,85,247,0.4); }
+    .pf-tl-adv-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--text-tertiary, #94a3b8); }
+
+    .pf-input--compact { padding: 6px 10px; font-size: 12.5px; }
+    .pf-input--mono { font-variant-numeric: tabular-nums; font-size: 11px; }
+
+    .pf-status-pill {
+      display: inline-flex; align-items: center; padding: 4px 10px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; border-radius: 9999px;
+      border: 1px solid var(--glass-border);
+    }
+    .pf-status-pill--ok { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
+    .pf-status-pill--default { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); color: var(--text-secondary); }
+
+    .pf-sec-list { display: flex; flex-direction: column; gap: 12px; list-style: none; padding: 0; margin: 0; }
+    .pf-sec-card { border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass-bg); overflow: hidden; }
+    .pf-sec-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px dashed var(--glass-border); }
+    .pf-sec-head__actions { display: inline-flex; gap: 4px; }
+    .pf-sec-head .grow { flex: 1; min-width: 120px; }
+    .pf-sec-body { padding: 12px; }
+
+    .pf-sec-badge {
+      display: inline-flex; align-items: center; padding: 3px 8px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; border-radius: 7px;
+      border: 1px solid var(--glass-border); color: var(--text-muted);
+    }
+    .pf-sec-badge--grid { background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.4); color: #60a5fa; }
+    .pf-sec-badge--para { background: rgba(168,85,247,0.14); border-color: rgba(168,85,247,0.5); color: #c4b5fd; }
+
+    .pf-row-list { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0 0 8px; }
+    .pf-grid-row { padding: 10px; border: 1px solid var(--glass-border); border-radius: 10px; background: rgba(255,255,255,0.02); }
+    .pf-grid-row .grow { flex: 1; }
+
+    .pf-cell-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+    .pf-cell-field { display: flex; flex-direction: column; gap: 2px; }
+    .pf-cell-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+    .pf-icon-btn {
+      width: 26px; height: 26px; flex: 0 0 auto;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid var(--glass-border);
+      border-radius: 8px; color: var(--text-muted); cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    }
+    .pf-icon-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
+    .pf-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pf-icon-btn--danger:hover:not(:disabled) { color: #f87171; border-color: rgba(244,63,94,0.5); }
+
+    .pf-link-btn { background: transparent; border: 0; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: #c4b5fd; cursor: pointer; border-radius: 8px; }
+    .pf-link-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Additive cross-platform overrides only — desktop-web (>=1280)
+         stays byte-identical. ──────────────────────────────────────── */
+
+    /* Gate hovers so touch taps don't stick. */
+    @media (hover: hover) {
+      .pf-link-btn:hover:not(:disabled) { background: rgba(168,85,247,0.1); }
+    }
+
+    /* Coarse pointers: 26px reorder/delete buttons and the small link
+       buttons fall below the 44px touch minimum — enlarge hit area only. */
+    @media (pointer: coarse) {
+      .pf-icon-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+      .pf-link-btn { min-height: 44px; display: inline-flex; align-items: center; }
+    }
+
+    /* Phone (<=640): test picker uses a fixed inline width (260px) that
+       can crowd the status pill — let its row wrap and the select fill
+       the line. Guard the preview table from pushing the page wide. */
+    @media (max-width: 640px) {
+      .pf-test-pick { flex: 1 1 100%; }
+      :host ::ng-deep .pf-test-pick pf-select { width: 100% !important; }
+      .pf-preview { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
+
+    .pf-preview { font-size: 12.5px; }
+    .pf-prev-sec { margin-top: 12px; }
+    .pf-prev-sec__label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 5px; }
+    .pf-prev-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .pf-prev-table th { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--glass-border); color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .pf-prev-table td { padding: 5px 6px; border-bottom: 1px dashed var(--glass-border); color: var(--text-primary); }
+    .pf-prev-para { white-space: pre-wrap; color: var(--text-primary); line-height: 1.55; }
+  
+    @media (max-width: 640px) {
+      .pf-tl-desc-row { flex-wrap: wrap; }
+      .pf-tl-desc-name { flex: 1 1 100%; }
+    }
+`]
+})
+export class TestNotesEditorComponent implements OnInit {
+  /** When embedded in the Report Template shell (which has its own shared PDF
+   *  preview on the right), hide this editor's own preview pane and render the
+   *  section editor full-width. */
+  readonly hidePreview = input(false);
+  /** Slim mode (test editor): ONLY the Description column. Sentences are
+   *  authored on the print-order surface and power tools in Advanced —
+   *  repeating them here was three surfaces editing the same sections. */
+  readonly slim = input(false);
+  /** Drive the editor from a KNOWN test (Test Master embeds it inside a test
+   *  that is already open) instead of its own dropdown. When set, the picker
+   *  row is hidden and the catalogue fetch is skipped entirely. */
+  readonly fixedTestId = input<string>('');
+  /** Parameter names supplied by the HOST (Test Master has the live form
+   *  fields; the embedded editor has no catalogue). Fixes the empty preview /
+   *  empty Description list for tests with no saved layout. */
+  readonly parameters = input<string[]>([]);
+  /** name → display title ("erythrocyte_sedimentation_rate" → "ESR (Hourly)").
+   *  Conditions still store NAMES (the engine's identifiers); titles are
+   *  display-only. */
+  readonly parameterTitles = input<Record<string, string>>({});
+  titleFor(name: string): string { return this.parameterTitles()[name] || name; }
+  /** Profile members from the host — lets a PROFILE preview print exactly as
+   *  the report does (member rows + profile notes + column override). */
+  readonly profileMembers = input<PreviewProfileMember[]>([]);
+  /** LIVE per-test column override from the host's columns editor, previewed
+   *  before it is saved. */
+  readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** Whether the table this test prints in has a Description column (host
+   *  knows the effective columns). false → hint: each description prints as
+   *  a line under its result instead of in a column.
+   *  null = unknown / engine defaults (which include one). */
+  readonly descriptionColumn = input<boolean | null>(null);
+
+  private readonly api = inject(ApiService);
+  private readonly layout = inject(ReportLayoutService);
+  private readonly toasts = inject(ToastService);
+
+  protected readonly tests = signal<Test[]>([]);
+  protected readonly selectedTestId = signal<string>('');
+  protected readonly sections = signal<ReportSection[]>([]);
+  protected readonly configured = signal(false);
+  protected readonly loading = signal(false);
+  protected readonly saving = signal(false);
+
+  protected readonly preview = signal<ResolvedReportLayout | null>(null);
+  protected readonly previewing = signal(false);
+  protected readonly previewError = signal<string>('');
+  /** Bumped to re-render the embedded PDF preview (Refresh / after Save). */
+  protected readonly previewToken = signal(0);
+
+  /** Default column names a grid row exposes cell templates for. Matches the
+   *  default department column set; admins can leave cells blank to fall back
+   *  to engine-resolved values (result/unit/range pull automatically). */
+  private static readonly DEFAULT_CELL_COLUMNS = ['specimen', 'result', 'description'];
+
+  testOptions(): PfSelectOption[] {
+    return this.tests().map(t => ({
+      value: t.id,
+      label: t.name + (t.code ? ' · ' + t.code : ''),
+    }));
+  }
+
+  protected readonly selectedTest = computed<Test | undefined>(() =>
+    this.tests().find(t => t.id === this.selectedTestId()));
+
+  constructor() {
+    // Host-driven test id: load whenever it changes (and skip the catalogue
+    // fetch — the host already resolved the test).
+    effect(() => {
+      const id = this.fixedTestId();
+      if (id && id !== this.selectedTestId()) this.selectTest(id);
+    });
+  }
+
+  ngOnInit() {
+    if (this.fixedTestId()) return;   // embedded: no dropdown to populate
+    this.api.get<Test[]>('/api/tests/').subscribe({
+      next: list => this.tests.set((list ?? []).filter(t => t.type === 'individual')),
+      error: () => this.toasts.error('Failed to load tests'),
+    });
+  }
+
+  selectTest(testId: string) {
+    if (!testId) { this.selectedTestId.set(''); this.sections.set([]); this.preview.set(null); return; }
+    this.selectedTestId.set(testId);
+    this.preview.set(null);
+    this.previewError.set('');
+    this.loading.set(true);
+    this.layout.getTestLayout(testId).then(res => {
+      const sorted = [...(res.sections ?? [])].sort((a, b) => a.order - b.order);
+      this.sections.set(sorted);
+      this.configured.set(res.configured);
+      this.loading.set(false);
+      this.refreshPreview();
+    }).catch(() => {
+      this.sections.set([]);
+      this.configured.set(false);
+      this.loading.set(false);
+      this.toasts.error('Failed to load layout');
+    });
+  }
+
+  // ── Simple-mode state & helpers ─────────────────────────
+  /** Advanced (raw table) editor collapsed by default — most departments only
+   *  need the description column + note paragraphs. */
+  protected readonly showAdvanced = signal(false);
+
+  /** Paragraph sections with their real index (for patch/remove by index). */
+  protected paragraphSecs(): Array<{ s: ReportSection; si: number }> {
+    return this.sections().map((s, si) => ({ s, si })).filter(x => x.s.type === 'paragraph');
+  }
+
+  /** Parameter names of the selected test (from the test master), used to lay
+   *  out the Description-column fields even before any layout exists. */
+  protected paramNames(): string[] {
+    const host = this.parameters();
+    if (host.length > 0) return host;
+    const t = this.selectedTest();
+    const raw = (t as unknown as { parameters?: unknown })?.parameters;
+    if (!raw) return this.gridParamNames();
+    try {
+      const blob = typeof raw === 'string' ? parseParametersBlob(raw) : raw as TestParametersBlob;
+      const names = readParameters(blob).map(p => (p.name || p.title || '').trim()).filter(Boolean);
+      return names.length ? names : this.gridParamNames();
+    } catch { return this.gridParamNames(); }
+  }
+  private gridParamNames(): string[] {
+    const g = this.sections().find(s => s.type === 'grid') as GridSection | undefined;
+    return (g?.rows ?? []).map(r => (r as GridRowParameter).parameter_name).filter(Boolean);
+  }
+
+  /** The Description-column text for one parameter (first grid section). */
+  protected descriptionFor(name: string): string {
+    const g = this.sections().find(s => s.type === 'grid') as GridSection | undefined;
+    const row = (g?.rows ?? []).find(r => (r as GridRowParameter).parameter_name === name) as GridRowParameter | undefined;
+    return row?.cells?.['description'] ?? '';
+  }
+
+  /** Write the Description cell — creating the grid section / row on demand so
+   *  the admin never has to touch the advanced editor for this. Only the
+   *  edited parameter gets a stored row (an override keyed by param); the
+   *  rest of the test's values print from parameters[] untouched. */
+  protected setDescription(name: string, value: string): void {
+    this.mutateDescRow(name, row => { row.cells = { ...(row.cells ?? {}), description: value }; });
+  }
+  // ── Conditional descriptions ────────────────────────────────
+  // "High in dehydration" only when it IS high: one plain-words rule per
+  // parameter row, stored as the engine's OWN row conditions —
+  // [{ if:{parameter,operator,value}, then:{cells:{description: text}} }].
+  // The base description prints when the rule doesn't match. Anything richer
+  // (several rules, colors, other cells) is 'custom' and never rewritten.
+  readonly descOpOptions: PfSelectOption[] = [
+    { value: 'between', label: 'is between' },
+    { value: '>', label: 'is above' },
+    { value: '<', label: 'is below' },
+    { value: '>=', label: 'is at least' },
+    { value: '<=', label: 'is at most' },
+    { value: '=', label: 'equals' },
+    { value: '!=', label: 'is not' },
+    ...FLAG_CONDITIONS.map(o => ({ value: 'flag:' + o.value, label: o.label })),
+  ];
+  /** Each value's ranges (name → parameter) — what the flag choices and the
+   *  line checks read. */
+  readonly paramDefs = input<Record<string, InsightParam>>({});
+  descOpChoice(r: { operator: string; value: string }): string {
+    return r.operator === FLAG_OPERATOR ? 'flag:' + r.value : r.operator;
+  }
+  setDescOpChoice(name: string, idx: number, v: string) {
+    const cur = this.descRules(name)[idx];
+    if (v.startsWith('flag:')) this.setDescRule(name, idx, { operator: FLAG_OPERATOR, value: v.slice(5), value2: '' });
+    else this.setDescRule(name, idx, { operator: v, value: cur?.operator === FLAG_OPERATOR ? '' : (cur?.value ?? '') });
+  }
+  /** Lines are checked top to bottom and the first match wins — reorder. */
+  moveDescRule(name: string, idx: number, dir: -1 | 1) {
+    if (this.descCondKind(name) !== 'ladder') return;
+    const rules = [...this.descRules(name)];
+    const to = idx + dir;
+    if (to < 0 || to >= rules.length) return;
+    [rules[idx], rules[to]] = [rules[to], rules[idx]];
+    this.writeDescRules(name, rules);
+  }
+  /** Per line: blocking problems + first-match reachability / overlap with
+   *  the winner named, against this value's ranges (flag-conditions.ts). */
+  descIssues(name: string): CondIssue[][] {
+    const rules = this.descRules(name);
+    const defs = this.paramDefs();
+    const key = Object.keys(defs).find(k => k.trim().toLowerCase() === name.trim().toLowerCase());
+    const issues = analyzeLines(rules.map(r => ({ operator: r.operator, value: r.value, value2: r.value2 })),
+      key ? defs[key] : { referenceRanges: [] }, 'first-match');
+    return rules.map((_, i) => issues.filter(x => x.line === i));
+  }
+  private descRowConditions(name: string): Array<Record<string, unknown>> | undefined {
+    const g = this.sections().find(sec => sec.type === 'grid') as GridSection | undefined;
+    const row = (g?.rows ?? []).find(r => (r as GridRowParameter).parameter_name === name) as
+      (GridRowParameter & { conditions?: Array<Record<string, unknown>> }) | undefined;
+    return row?.conditions;
+  }
+  /** A LADDER = ordered simple branches, first match wins, base text = else.
+   *  [{if:{parameter,op,value}, then:{cells:{description}}}, …] — exactly how
+   *  the engine walks the conditions array. Anything richer is 'custom'. */
+  private isSimpleDescRule(r: Record<string, unknown>): boolean {
+    const p = (r['if'] ?? {}) as Record<string, unknown>;
+    const t = (r['then'] ?? {}) as { cells?: Record<string, unknown> };
+    const thenKeys = Object.keys(r['then'] ?? {});
+    const cellKeys = Object.keys(t.cells ?? {});
+    if (r['else'] || p['parameter'] == null || p['operator'] == null || p['or'] != null) return false;
+    if (thenKeys.length !== 1 || thenKeys[0] !== 'cells'
+      || cellKeys.length !== 1 || cellKeys[0] !== 'description') return false;
+    if (p['and'] == null) return true;
+    // BETWEEN rides as { >=, and: { <= } } on the same parameter.
+    const a = p['and'] as Record<string, unknown>;
+    return p['operator'] === '>=' && a['operator'] === '<='
+      && a['parameter'] === p['parameter'] && a['and'] == null && a['or'] == null;
+  }
+  descCondKind(name: string): 'none' | 'ladder' | 'custom' {
+    const c = this.descRowConditions(name);
+    if (!c || c.length === 0) return 'none';
+    return c.every(r => this.isSimpleDescRule(r)) ? 'ladder' : 'custom';
+  }
+  descRules(name: string): Array<{ operator: string; value: string; value2: string; text: string }> {
+    return (this.descRowConditions(name) ?? []).map(r => {
+      const rr = r as { if?: { operator?: string; value?: unknown; and?: { value?: unknown } };
+                        then?: { cells?: { description?: string } } };
+      const between = rr.if?.and != null;
+      return {
+        operator: between ? 'between' : String(rr.if?.operator ?? '>'),
+        value: rr.if?.value == null ? '' : String(rr.if.value),
+        value2: rr.if?.and?.value == null ? '' : String(rr.if.and.value),
+        text: String(rr.then?.cells?.description ?? ''),
+      };
+    });
+  }
+  toggleDescCond(name: string) {
+    if (this.descCondKind(name) === 'ladder') {
+      this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
+    } else {
+      this.writeDescRules(name, [{ operator: 'between', value: '', value2: '', text: '' }]);
+    }
+  }
+  addDescRule(name: string) {
+    this.writeDescRules(name, [...this.descRules(name), { operator: 'between', value: '', value2: '', text: '' }]);
+  }
+  removeDescRule(name: string, idx: number) {
+    const rules = this.descRules(name).filter((_, i) => i !== idx);
+    if (rules.length === 0) this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
+    else this.writeDescRules(name, rules);
+  }
+  setDescRule(name: string, idx: number, patch: Partial<{ operator: string; value: string; value2: string; text: string }>) {
+    if (this.descCondKind(name) !== 'ladder') return;
+    const rules = this.descRules(name).map((r, i) => i === idx ? { ...r, ...patch } : r);
+    this.writeDescRules(name, rules);
+  }
+  private writeDescRules(name: string, rules: Array<{ operator: string; value: string; value2: string; text: string }>) {
+    const coerce = (v: string): unknown => {
+      const n = parseFloat(String(v).replace(',', '.'));
+      return String(v).trim() !== '' && Number.isFinite(n) && String(n) === String(v).trim() ? n : v;
+    };
+    this.mutateDescRow(name, row => {
+      (row as { conditions?: unknown }).conditions = rules.map(c => ({
+        if: c.operator === 'between'
+          ? { parameter: name, operator: '>=', value: coerce(c.value),
+              and: { parameter: name, operator: '<=', value: coerce(c.value2) } }
+          : { parameter: name, operator: c.operator, value: coerce(c.value) },
+        then: { cells: { description: c.text } },
+      }));
+    });
+  }
+
+  /** Find-or-create the parameter's grid row, then apply fn to a copy — one
+   *  write path for row patches. A missing grid is created EMPTY: the layout
+   *  stores only the rows the admin overrode (keyed by param), never a
+   *  snapshot of every parameter (single source: parameters[] are the rows). */
+  private mutateDescRow(name: string, fn: (row: GridRowParameter) => void): void {
+    this.touched.add(name);
+    this.editSeq++;
+    this.scheduleAutosave();
+    this.sections.update(arr => {
+      const next = [...arr];
+      let gi = next.findIndex(sec => sec.type === 'grid');
+      if (gi < 0) {
+        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows: [] } as unknown as ReportSection);
+        gi = next.length - 1;
+      }
+      const g = { ...(next[gi] as GridSection) };
+      g.rows = [...(g.rows ?? [])];
+      let ri = g.rows.findIndex(r => (r as GridRowParameter).parameter_name === name);
+      if (ri < 0) {
+        g.rows.push({ id: this.newId('row'), row_merge: false, parameter_name: name, cells: {} } as unknown as GridRow);
+        ri = g.rows.length - 1;
+      }
+      const row = { ...(g.rows[ri] as GridRowParameter) };
+      fn(row);
+      g.rows[ri] = row as unknown as GridRow;
+      next[gi] = g;
+      return next;
+    });
+  }
+
+  // ── Narrowing helpers for the template ──────────────────
+  gridRows(s: ReportSection): GridRow[] { return s.type === 'grid' ? (s as GridSection).rows : []; }
+  paramRow(r: GridRow): GridRowParameter { return r as GridRowParameter; }
+  paraSection(s: ReportSection): ParagraphSection { return s as ParagraphSection; }
+
+  cellColumnNames(): string[] {
+    // Prefer the columns the engine actually resolved (preview reflects the
+    // department's configured columns); fall back to defaults. Unit / range
+    // are never offered: they always print from the parameter (single
+    // source), so a typed cell could only disagree with the flag band.
+    const cols = this.preview()?.columns;
+    const names = (cols && cols.length > 0)
+      ? cols.filter(c => !TestNotesEditorComponent.isDerivedColumn(c.name, c.type)).map(c => c.name)
+      : TestNotesEditorComponent.DEFAULT_CELL_COLUMNS;
+    return names;
+  }
+
+  /** Unit / range columns print from the parameter — never typed. */
+  private static isDerivedColumn(name: string, type?: string | null): boolean {
+    const t = (type ?? '').toLowerCase();
+    const n = (name ?? '').toLowerCase();
+    return t === 'unit' || t === 'range' || n === 'unit' || n === 'range';
+  }
+  private derivedColumnNames(): Set<string> {
+    const out = new Set(['unit', 'range']);
+    for (const c of this.preview()?.columns ?? []) {
+      if (TestNotesEditorComponent.isDerivedColumn(c.name, c.type)) out.add(c.name);
+    }
+    return out;
+  }
+
+  cellPlaceholder(col: string): string {
+    if (col === 'result') return '{{value}} or blank → auto';
+    return '{{placeholder}}';
+  }
+
+  // ── Section mutations ───────────────────────────────────
+  private newId(prefix: string): string {
+    return (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  patchSection(i: number, patch: { label?: string | null; template?: string }) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      next[i] = { ...next[i], ...patch } as ReportSection;
+      return next;
+    });
+  }
+
+  moveSection(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    this.sections.update(arr => {
+      if (j < 0 || j >= arr.length) return arr;
+      const next = [...arr];
+      [next[i], next[j]] = [next[j], next[i]];
+      return this.reindex(next);
+    });
+  }
+
+  removeSection(i: number) {
+    this.sections.update(arr => this.reindex(arr.filter((_, idx) => idx !== i)));
+  }
+
+  addSection(type: 'grid' | 'paragraph') {
+    const order = this.sections().length + 1;
+    const base = { id: this.newId(type), order, label: null as string | null, conditions: [] };
+    const section: ReportSection = type === 'grid'
+      ? { ...base, type: 'grid', rows: [] }
+      : { ...base, type: 'paragraph', template: '' };
+    this.sections.update(arr => [...arr, section]);
+  }
+
+  addParagraphPreset(label: string) {
+    const order = this.sections().length + 1;
+    const section: ParagraphSection = {
+      id: this.newId('paragraph'), order, label, conditions: [],
+      type: 'paragraph', template: '',
+    };
+    this.sections.update(arr => [...arr, section]);
+  }
+
+  // ── Grid row mutations ──────────────────────────────────
+  addGridRow(si: number) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[si] as GridSection;
+      const row: GridRowParameter = {
+        id: this.newId('row'), parameter_name: '', cells: {}, row_merge: false, conditions: [],
+      };
+      next[si] = { ...sec, rows: [...sec.rows, row] };
+      return next;
+    });
+  }
+
+  patchGridRow(si: number, ri: number, patch: Partial<GridRowParameter>) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[si] as GridSection;
+      const rows = [...sec.rows];
+      rows[ri] = { ...rows[ri], ...patch } as GridRow;
+      next[si] = { ...sec, rows };
+      return next;
+    });
+  }
+
+  patchCell(si: number, ri: number, col: string, value: string) {
+    if (this.derivedColumnNames().has(col)) return;   // unit/range print from the parameter
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[si] as GridSection;
+      const rows = [...sec.rows];
+      const row = rows[ri] as GridRowParameter;
+      rows[ri] = { ...row, cells: { ...row.cells, [col]: value } };
+      next[si] = { ...sec, rows };
+      return next;
+    });
+  }
+
+  removeGridRow(si: number, ri: number) {
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[si] as GridSection;
+      next[si] = { ...sec, rows: sec.rows.filter((_, idx) => idx !== ri) };
+      return next;
+    });
+  }
+
+  moveGridRow(si: number, ri: number, dir: -1 | 1) {
+    const rj = ri + dir;
+    this.sections.update(arr => {
+      const next = [...arr];
+      const sec = next[si] as GridSection;
+      if (rj < 0 || rj >= sec.rows.length) return arr;
+      const rows = [...sec.rows];
+      [rows[ri], rows[rj]] = [rows[rj], rows[ri]];
+      next[si] = { ...sec, rows };
+      return next;
+    });
+  }
+
+  /** Drop typed unit/range cells (legacy layouts carried them) — the printed
+   *  unit and range always come from the parameter. */
+  private stripDerivedCells(arr: ReportSection[]): ReportSection[] {
+    const derived = this.derivedColumnNames();
+    return arr.map(s => {
+      if (s.type !== 'grid') return s;
+      const g = s as GridSection;
+      return {
+        ...g,
+        rows: (g.rows ?? []).map(r => {
+          const cells = (r as GridRowParameter).cells;
+          if (r.row_merge || !cells || !Object.keys(cells).some(k => derived.has(k))) return r;
+          const kept = Object.fromEntries(Object.entries(cells).filter(([k]) => !derived.has(k)));
+          return { ...r, cells: kept } as GridRow;
+        }),
+      } as unknown as ReportSection;
+    });
+  }
+
+  private reindex(arr: ReportSection[]): ReportSection[] {
+    return arr.map((s, i) => ({ ...s, order: i + 1 }));
+  }
+
+  // ── Save ────────────────────────────────────────────────
+  /** Fires after a successful save — hosts refresh their live preview. */
+  readonly saved = output<void>();
+  protected readonly savedTick = signal(false);
+  /** Values whose Description row this editor changed since the last save. */
+  private readonly touched = new Set<string>();
+  private editSeq = 0;
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Slim (test editor): the print order beside this editor autosaves the
+   *  SAME layout, so descriptions save themselves too — debounced, like a
+   *  Sentence — and the live preview (which reads the stored layout) follows. */
+  private scheduleAutosave() {
+    if (!this.slim()) return;
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => void this.save(), 700);
+  }
+
+  async save() {
+    const testId = this.selectedTestId();
+    if (!testId) return;
+    if (this.autosaveTimer) { clearTimeout(this.autosaveTimer); this.autosaveTimer = null; }
+    const slim = this.slim();
+    const seq = this.editSeq;
+    const touched = [...this.touched];
+    this.saving.set(true);
+    this.savedTick.set(false);
+    try {
+      // Slim: another editor (the print order) writes this layout too — save
+      // ON TOP OF the latest stored copy and replace only the description
+      // rows touched here (layout-section-merge.ts). Posting the copy loaded
+      // when the tab opened erased Sentences typed since (owner bug 2026-09-27).
+      const base = slim
+        ? mergeDescriptionsOntoLatest(
+            ((await this.layout.getTestLayout(testId))?.sections ?? []) as unknown as LooseSection[],
+            this.sections() as unknown as LooseSection[], touched) as unknown as ReportSection[]
+        : this.sections();
+      const payload = this.stripDerivedCells(this.reindex(base));
+      await this.layout.saveTestLayout(testId, payload);
+      if (seq === this.editSeq) this.touched.clear();
+      this.configured.set(true);
+      if (slim) {
+        this.savedTick.set(true);
+        setTimeout(() => this.savedTick.set(false), 2200);
+      } else {
+        this.toasts.success('Layout saved');
+      }
+      this.saved.emit();
+      this.refreshPreview();
+    } catch (e: unknown) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  // ── Live preview ────────────────────────────────────────
+  /** Build sample result values keyed by this test's parameter names so the
+   *  engine's result/unit/range columns and {{placeholders}} resolve to
+   *  something visible. */
+  private sampleValues(): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
+    // Parameters declared on the edited grid rows.
+    for (const s of this.sections()) {
+      if (s.type !== 'grid') continue;
+      for (const r of (s as GridSection).rows) {
+        if (!r.row_merge) {
+          const name = (r as GridRowParameter).parameter_name?.trim();
+          if (name) values[name] = '1.0';
+        }
+      }
+    }
+    // Host-supplied parameter names (the embedded Test Master case, where
+    // selectedTest() is empty because the catalogue was never fetched).
+    for (const n of this.parameters()) {
+      if (n && !(n in values)) values[n] = '1.0';
+    }
+    // Parameters declared on the test entity (so preview works even before
+    // grid rows are added).
+    const test = this.selectedTest();
+    if (test?.parameters) {
+      try {
+        const parsed = JSON.parse(test.parameters);
+        const list: Array<{ name?: string }> = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.parameters) ? parsed.parameters : [];
+        for (const p of list) {
+          if (p?.name && !(p.name in values)) values[p.name] = '1.0';
+        }
+      } catch { /* parameters not JSON — ignore */ }
+    }
+    return values;
+  }
+
+  async refreshPreview() {
+    const testId = this.selectedTestId();
+    if (!testId) return;
+    this.previewToken.update(v => v + 1);   // re-render the embedded PDF
+    this.previewing.set(true);
+    this.previewError.set('');
+    try {
+      // Still fetched for cellColumnNames() — the advanced cell-template grid
+      // lists the department's resolved column names.
+      const resolved = await this.layout.preview(testId, this.sampleValues(), [], { sex: 'Female', age: 35 });
+      this.preview.set(resolved);
+    } catch (e: unknown) {
+      this.previewError.set(ApiError.from(e).message);
+    } finally {
+      this.previewing.set(false);
+    }
+  }
+}

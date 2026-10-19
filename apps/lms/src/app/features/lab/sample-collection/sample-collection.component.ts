@@ -1,23 +1,80 @@
-import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
-import { ApiService } from '../../../core/services/api.service';
-import { AuthService } from '../../../core/auth/auth.service';
-import { DialogService } from '../../../core/services/dialog.service';
-import { ToastService } from '../../../core/services/toast.service';
-import { Order, OrderSample } from '../../../shared/models/order.model';
-import { ApiError } from '../../../shared/models/api-response.model';
-import { formatPatientInfo } from '../../../shared/models/patient.model';
-import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
-import { LabelCardComponent } from '../../frontdesk/post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { DatePipe } from "@angular/common";
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
+import { ThemeService } from '../../../core/services/theme.service';
+import { DestroyRef,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Input,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  output,
+  signal,
+} from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { FormsModule } from "@angular/forms";
+import { ActivatedRoute, Router } from "@angular/router";
+import { firstValueFrom } from "rxjs";
+import { ApiService } from "../../../core/services/api.service";
+import { LiveQueueService } from "../../../core/services/live-queue.service";
+import { ScanService } from "../../../core/services/scan.service";
+import { AuthService } from "../../../core/auth/auth.service";
+import { DialogService } from "../../../core/services/dialog.service";
+import { ToastService } from "../../../core/services/toast.service";
+import { ProcessWorkflowService } from "../../../core/services/process-workflow.service";
+import {
+  Order,
+  OrderSample,
+  logicalTestCount,
+} from "../../../shared/models/order.model";
+import { ApiError } from "../../../shared/models/api-response.model";
+import {
+  formatPatientInfo,
+  patientDisplayName,
+} from "../../../shared/models/patient.model";
+import { BarcodeScannerModalComponent } from "../../../shared/components/barcode-scanner/barcode-scanner-modal.component";
+import { AvatarComponent } from "../../../shared/primitives/avatar.component";
+import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
+import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
+import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
+import {
+  LabelCardComponent,
+  tubeSpec,
+} from "../../frontdesk/post-payment/label-card.component";
+import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-specimen";
+import { LabelPrintService } from "../../../core/printer/label-print.service";
+import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
+import { printTubeLabels } from "../../../shared/utils/print-label";
+import {
+  SeriesState,
+  countdownLabel,
+  dueClockLabel,
+  offsetLabel,
+  seriesState,
+  sortForCollection,
+} from "../../../shared/utils/series-schedule";
+import { countCollected, isOrderDispatched } from "./dispatch-state";
+import {
+  isDrawn,
+  isNotCollected,
+  notCollectedLabel,
+} from "../../../shared/utils/sample-not-collected";
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { normalizePriority } from '../../../shared/utils/lab-priority';
+import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile, spinDelay } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -25,24 +82,30 @@ import { printLabelOnly } from '../../../shared/utils/print-label';
  * cap/container colour so labelling matches what's on the rack; "fill" is the
  * liquid colour used when the sample's drawn.
  */
-type ContainerKind = 'vacutainer' | 'urine_cup' | 'jar';
+type ContainerKind = "vacutainer" | "urine_cup" | "jar" | "bottle";
 interface Container {
   kind: ContainerKind;
-  color: string;   // cap / container accent
-  fill: string;    // liquid fill when collected
+  color: string; // cap / container accent
+  fill: string; // liquid fill when collected
   label: string;
 }
 
 // Tube colour conventions for blood vacutainers, keyed by department code.
-const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
-  HAEM:  { color: '#a78bfa', label: 'EDTA · Lavender' },
-  BIO:   { color: '#f59e0b', label: 'SST · Gold' },
-  SERO:  { color: '#ef4444', label: 'Plain · Red' },
-  MICRO: { color: '#10b981', label: 'Sterile tube' },
-  HISTO: { color: '#64748b', label: 'Formalin tube' }
+// Keyed by DEPARTMENT CODE. HEM / MIC are the codes going forward (owner
+// 2026-09-26: department codes follow the test codes); HAE / HAEM / MICRO stay
+// for departments that still carry the old codes.
+export const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
+  HAEM: { color: "#a855f7", label: "EDTA · Lavender" },
+  HAE: { color: "#a855f7", label: "EDTA · Lavender" },
+  HEM: { color: "#a855f7", label: "EDTA · Lavender" },
+  BIO: { color: "#eab308", label: "SST · Gold" },
+  SERO: { color: "#ef4444", label: "Plain · Red" },
+  MICRO: { color: "#e5e7eb", label: "Sterile container" },
+  MIC: { color: "#e5e7eb", label: "Sterile container" },
+  HISTO: { color: "#64748b", label: "Formalin tube" },
 };
-const BLOOD_FILL = '#b91c1c';
-const URINE_FILL = '#f59e0b';
+const BLOOD_FILL = "#b91c1c";
+const URINE_FILL = "#f59e0b";
 
 /**
  * Picks the container for a sample. Priority: explicit sampleType on the
@@ -51,1717 +114,401 @@ const URINE_FILL = '#f59e0b';
  */
 // The four vacutainer tube colours a vial can be grouped by (space, colour).
 const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
-  red:      { color: '#ef4444', label: 'Plain · Red' },
-  lavender: { color: '#a78bfa', label: 'EDTA · Lavender' },
-  grey:     { color: '#9ca3af', label: 'Fluoride · Grey' },
-  blue:     { color: '#3b82f6', label: 'Citrate · Blue' },
+  // NABL / standard vacutainer cap colours.
+  sst: { color: "#eab308", label: "SST · Gold" },
+  plain: { color: "#ef4444", label: "Plain · Red" },
+  edta: { color: "#a855f7", label: "EDTA · Lavender" },
+  fluoride: { color: "#9ca3af", label: "Fluoride · Grey" },
+  heparin: { color: "#22c55e", label: "Lithium Heparin · Green" },
+  citrate: { color: "#38bdf8", label: "Sodium Citrate · Blue" },
+  esr: { color: "#1f2937", label: "ESR · Black" },
+  trace: { color: "#1d4ed8", label: "Trace metal · Royal blue" },
+  sterile: { color: "#e5e7eb", label: "Sterile Container" },
+  urine: { color: "#facc15", label: "Urine Bottle" },
+  // Microbiology blood-culture bottle — drawn as a bottle (neck + crimped
+  // flip-cap), filling with blood like the vacutainer (shared/utils/tube-colors).
+  blood_culture: { color: "#0f766e", label: "Blood culture bottle" },
+  multiple: { color: "#6366f1", label: "Multiple" },
+  // Legacy keys (pre-NABL) so older tests still render a colour.
+  red: { color: "#ef4444", label: "Plain · Red" },
+  lavender: { color: "#a855f7", label: "EDTA · Lavender" },
+  grey: { color: "#9ca3af", label: "Fluoride · Grey" },
+  blue: { color: "#38bdf8", label: "Sodium Citrate · Blue" },
 };
 
-function containerFor(s: OrderSample, deptCfg?: Record<string, { color?: string | null; label?: string | null }>): Container {
+/** Map ONE specimen/sampleType token to its NABL vacutainer container, or null
+ *  when it doesn't match a known specimen (the caller then tries the next A/B
+ *  option, and finally the department default). Ordered specific → general so
+ *  "EDTA Plasma" resolves to EDTA, not the generic plasma branch. */
+/** "synovial fluid" → "Synovial Fluid"; "csf" → "CSF". */
+function specimenTitle(s: string): string {
+  const t = s.trim().replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
+  return t.replace(/\bCsf\b/g, "CSF");
+}
+
+function specimenContainer(sampleType: string): Container | null {
+  if (!sampleType) return null;
+  if (sampleType.includes("urine"))
+    return {
+      kind: "urine_cup",
+      color: "#facc15",
+      fill: URINE_FILL,
+      label: "Urine bottle",
+    };
+  if (
+    sampleType.includes("stool") ||
+    sampleType.includes("sputum") ||
+    sampleType.includes("swab") ||
+    sampleType.includes("csf") ||
+    sampleType.includes("fluid") ||
+    sampleType.includes("sterile") ||
+    sampleType.includes("semen") ||
+    sampleType.includes("secretion")
+  )
+    // One container PER SPECIMEN TYPE (stool ≠ CSF ≠ semen…) — name the
+    // specimen so two sterile pots on one order are distinguishable.
+    return {
+      kind: "jar",
+      color: "#e5e7eb",
+      fill: "#9ca3af",
+      label: `Sterile · ${specimenTitle(sampleType)}`,
+    };
+  if (sampleType.includes("edta"))
+    return {
+      kind: "vacutainer",
+      color: "#a855f7",
+      fill: BLOOD_FILL,
+      label: "EDTA · Lavender",
+    };
+  if (
+    sampleType.includes("fluoride") ||
+    sampleType.includes("glucose") ||
+    sampleType.includes("oxalate") ||
+    sampleType.includes("grey")
+  )
+    return {
+      kind: "vacutainer",
+      color: "#9ca3af",
+      fill: BLOOD_FILL,
+      label: "Fluoride · Grey",
+    };
+  if (sampleType.includes("citrate") || sampleType.includes("coag"))
+    return {
+      kind: "vacutainer",
+      color: "#38bdf8",
+      fill: BLOOD_FILL,
+      label: "Sodium Citrate · Blue",
+    };
+  if (sampleType.includes("esr"))
+    return {
+      kind: "vacutainer",
+      color: "#1f2937",
+      fill: BLOOD_FILL,
+      label: "ESR · Black",
+    };
+  if (
+    sampleType.includes("heparin") ||
+    sampleType.includes("arterial") ||
+    sampleType.includes("abg")
+  )
+    return {
+      kind: "vacutainer",
+      color: "#22c55e",
+      fill: BLOOD_FILL,
+      label: "Lithium Heparin · Green",
+    };
+  if (
+    sampleType.includes("sst") ||
+    sampleType.includes("gold") ||
+    sampleType.includes("serum")
+  )
+    return {
+      kind: "vacutainer",
+      color: "#eab308",
+      fill: BLOOD_FILL,
+      label: "SST · Gold",
+    };
+  if (sampleType.includes("plain") || sampleType.includes("red"))
+    return {
+      kind: "vacutainer",
+      color: "#ef4444",
+      fill: BLOOD_FILL,
+      label: "Plain · Red",
+    };
+  if (sampleType.includes("plasma"))
+    return {
+      kind: "vacutainer",
+      color: "#22c55e",
+      fill: BLOOD_FILL,
+      label: "Lithium Heparin · Green",
+    };
+  if (sampleType.includes("blood"))
+    return {
+      kind: "vacutainer",
+      color: "#a855f7",
+      fill: BLOOD_FILL,
+      label: "EDTA · Lavender",
+    };
+  return null;
+}
+
+export function containerFor(
+  s: OrderSample,
+  deptCfg?: Record<string, { color?: string | null; label?: string | null }>,
+): Container {
   // The vial's own colour (set on the test → grouped into this vial) is
   // authoritative: it's what defined this tube's (space, colour) group.
   const tc = s.tubeColor && TUBE_COLOR_MAP[s.tubeColor];
-  if (tc) return { kind: 'vacutainer', color: tc.color, fill: BLOOD_FILL, label: tc.label };
-  const sampleType = (s.tests[0]?.test?.sampleType ?? '').toLowerCase();
-  if (sampleType.includes('urine')) {
-    return { kind: 'urine_cup', color: '#facc15', fill: URINE_FILL, label: 'Urine cup' };
+  if (tc) {
+    // Sterile pots hold ONE specimen type each — label it with the specimen so
+    // two sterile containers on an order read differently (Stool vs CSF…).
+    if (s.tubeColor === "sterile") {
+      // The specimen CHOSEN at the desk wins (tubes group by it), else the
+      // Test Master's own specimen.
+      const spec = (tubeSpecimen(s) ?? "").toLowerCase().trim();
+      return {
+        kind: "jar",
+        color: tc.color,
+        fill: "#9ca3af",
+        label: spec ? `Sterile · ${specimenTitle(spec)}` : tc.label,
+      };
+    }
+    if (s.tubeColor === "blood_culture") {
+      const chosen = tubeChosenSpecimen(s);
+      return {
+        kind: "bottle",
+        color: tc.color,
+        fill: BLOOD_FILL,
+        label: chosen ? `${tc.label} · ${specimenTitle(chosen.toLowerCase())}` : tc.label,
+      };
+    }
+    if (s.tubeColor === "urine")
+      return {
+        kind: "urine_cup",
+        color: tc.color,
+        fill: URINE_FILL,
+        label: tc.label,
+      };
+    return {
+      kind: "vacutainer",
+      color: tc.color,
+      fill: BLOOD_FILL,
+      label: tc.label,
+    };
   }
-  if (sampleType.includes('stool') || sampleType.includes('sputum') || sampleType.includes('swab')) {
-    return { kind: 'jar', color: '#10b981', fill: '#6b7280', label: 'Sterile container' };
+  // Analyte-driven tubes (NABL): a few analytes dictate the tube regardless of a
+  // generic serum/plasma specimen. Blood sugar / glucose-tolerance → sodium
+  // fluoride (grey, stops glycolysis); HbA1c → EDTA (lavender). An explicit
+  // per-test tube colour above still wins.
+  const testName = (s.tests[0]?.test?.name ?? "").toLowerCase();
+  if (/hba1c|glycated h|glycosylated h/.test(testName)) {
+    return {
+      kind: "vacutainer",
+      color: "#a855f7",
+      fill: BLOOD_FILL,
+      label: "EDTA · Lavender",
+    };
   }
-  // Blood: vacutainer. Prefer the tube colour spelt out in the sampleType
-  // ("Blood - EDTA"), otherwise use the department's conventional colour.
-  if (sampleType.includes('edta')) return { kind: 'vacutainer', color: '#a78bfa', fill: BLOOD_FILL, label: 'EDTA · Lavender' };
-  if (sampleType.includes('sst') || sampleType.includes('gold')) return { kind: 'vacutainer', color: '#f59e0b', fill: BLOOD_FILL, label: 'SST · Gold' };
-  if (sampleType.includes('fluoride') || sampleType.includes('grey')) return { kind: 'vacutainer', color: '#6b7280', fill: BLOOD_FILL, label: 'Fluoride · Grey' };
-  if (sampleType.includes('citrate') || sampleType.includes('blue')) return { kind: 'vacutainer', color: '#3b82f6', fill: BLOOD_FILL, label: 'Citrate · Blue' };
-  if (sampleType.includes('heparin') || sampleType.includes('green')) return { kind: 'vacutainer', color: '#10b981', fill: BLOOD_FILL, label: 'Heparin · Green' };
-  if (sampleType.includes('plain') || sampleType.includes('red')) return { kind: 'vacutainer', color: '#ef4444', fill: BLOOD_FILL, label: 'Plain · Red' };
+  if (/\bsugar\b|glucose tolerance|\bogtt\b|\bgtt\b/.test(testName)) {
+    return {
+      kind: "vacutainer",
+      color: "#9ca3af",
+      fill: BLOOD_FILL,
+      label: "Fluoride · Grey",
+    };
+  }
+  // Map the test's specimen/sampleType to the NABL vacutainer cap colour.
+  // Ordered specific → general so e.g. "EDTA Plasma" resolves to EDTA, not
+  // the generic plasma branch below.
+  const raw = (tubeSpecimen(s) ?? "").toLowerCase().trim();
+  // "A + B" ("Serum + 24h Urine") means BOTH containers are drawn; a literal
+  // "Multiple" specimen likewise → the Multiple tube.
+  if (raw === "multiple" || raw.includes("+")) {
+    return {
+      kind: "vacutainer",
+      color: "#6366f1",
+      fill: BLOOD_FILL,
+      label: "Multiple",
+    };
+  }
+  // "A / B" ("Serum/Plasma") means EITHER is acceptable — resolve to the first
+  // option that maps, falling through to the next ("use A, else B").
+  for (const part of raw.split("/")) {
+    const hit = specimenContainer(part.trim());
+    if (hit) return hit;
+  }
   // Department container: the admin-configured colour/label wins (set per
   // department in Branches → Departments), then the sample's own department
   // record, then the built-in convention, then a neutral grey tube.
-  const code = s.department?.code ?? '';
+  const code = s.department?.code ?? "";
   const cfg = deptCfg?.[code];
   const conv = DEPT_VACUTAINER[code];
-  const color = s.department?.containerColor || cfg?.color || conv?.color || '#6b7280';
-  const label = s.department?.containerLabel || cfg?.label || conv?.label || 'Tube';
-  return { kind: 'vacutainer', color, fill: BLOOD_FILL, label };
+  const color =
+    s.department?.containerColor || cfg?.color || conv?.color || "#6b7280";
+  const label =
+    s.department?.containerLabel || cfg?.label || conv?.label || "Tube";
+  return { kind: "vacutainer", color, fill: BLOOD_FILL, label };
 }
 
 interface OrderGroup {
   orderId: string;
+  /** Human-readable order number (LAB-2607-000042); falls back to a short id.
+   *  Shown in the collect drawer's header — the order is what the collector is
+   *  working, while each tube's own barcode sits on its card. */
+  orderNo: string;
   patientName: string;
   patientMeta: string;
   createdAt: string;
   samples: OrderSample[];
   totalVials: number;
+  /** Tubes DRAWN (collected or further). A not-collected tube never counts. */
   collected: number;
+  /** Tubes marked "Can't collect" (rejected before any draw) — a sink: they
+   *  are neither drawn nor pending, and never dispatchable. */
+  notCollected: number;
   /** Server-computed on the embedded order: the require-bill gate is on and
    *  the bill isn't settled — dispatch would be rejected, offer "Bill". */
   paymentHold: boolean;
+  /** FULL display name (never the 15-char cut of formatPatientInfo). */
+  patientFull?: string;
+  patientId?: string;
+  /** The order's daily patient number (on-screen only). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
 }
 
 @Component({
-  selector: 'pf-sample-collection',
+  selector: "pf-sample-collection",
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, BarcodeScannerModalComponent, LoadingLogoComponent, ScreenHeaderComponent, TouchButtonComponent, KpiStripComponent, LabelCardComponent],
+  imports: [DailyNoComponent, SkeletonDetailComponent, SkeletonRowsComponent, BusyDirective, PfKeysDirective, SamplePresetDirective,
+    ZoomSourceDirective,
+    ZoomTargetDirective,
+    FormsModule,
+    DatePipe,
+    AvatarComponent,
+    HeroBandComponent,
+    BarcodeScannerModalComponent,
+    ScreenHeaderComponent,
+    TouchButtonComponent,
+    KpiStripComponent,
+    LabelCardComponent,
+    ScanIconComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.lg:px-10]="!embedded"
-             [class.pt-6]="!embedded" [class.pb-10]="!embedded">
-      <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
-           row entirely. The user clicked Collect on a specific order
-           — show them THAT order's drawer immediately as if it's a
-           dedicated page. The queue UI used to flash for ~500ms while
-           the order data loaded and felt like "two pages" before
-           the drawer appeared.
-           Embedded mode: rendered inside the lab "My Work" Collect pane —
-           suppress our own KPI strip + screen header (the pane supplies its
-           own header) but keep the queue + scan so the tech can draw tubes. -->
-      @if (!deepLinkMode() && !embedded) {
-      <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
-      <pf-screen-header
-        eyebrow="Lab · Collection"
-        title="Sample collection"
-        subtitle="Scan the barcode from reception, or tap a patient to draw vials.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="refresh()" aria-label="Refresh">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12a9 9 0 1 1-3-6.7"/>
-              <path d="M21 4v6h-6"/>
-            </svg>
-          </span>
-          <span class="pf-refresh-txt">Refresh</span>
-        </pf-touch-btn>
-      </pf-screen-header>
-      }
-
-      @if (!deepLinkMode()) {
-      <div class="pf-scan">
-        <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
-                title="Scan with camera" aria-label="Open camera scanner">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
-            <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
-          </svg>
-        </button>
-        <div class="pf-scan__body">
-          <label class="pf-scan__label">Find patient or scan</label>
-          <input type="text" class="pf-scan__input"
-                 placeholder="Name · MRN · phone · order # · barcode"
-                 [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
-                 (keydown.enter)="runSearch()" autofocus aria-label="Search" />
-        </div>
-      </div>
-
-      @if (scannerOpen()) {
-        <pf-barcode-scanner-modal
-          title="Scan vial barcode"
-          (matched)="onScanMatched($event)"
-          (cancelled)="scannerOpen.set(false)">
-        </pf-barcode-scanner-modal>
-      }
-
-      <h3 class="pf-sc__section">
-        Pending collection · {{ filteredGroups().length }} patient<span [class.hidden]="filteredGroups().length === 1">s</span>
-      </h3>
-
-      @if (filteredGroups().length === 0) {
-        <div class="pf-sc__empty">No samples waiting for collection.</div>
-      } @else {
-        <ul class="pf-sc__list">
-          @for (g of filteredGroups(); track g.orderId) {
-            <li>
-              <button type="button" class="pf-sc__card" (click)="openOrder(g.orderId)">
-                <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
-                <div class="pf-sc__who">
-                  <p class="pf-sc__who-name">{{ g.patientName }}</p>
-                  <p class="pf-sc__who-meta">{{ g.patientMeta }}</p>
-                </div>
-                <div class="pf-sc__rack" [attr.aria-label]="g.totalVials + ' vials'">
-                  @for (s of g.samples; track s.id) {
-                    <span class="pf-sc__chip"
-                          [style.background]="tube(s).color"
-                          [class.pf-sc__chip--done]="s.status !== 'pending'"
-                          [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
-                          [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
-                  }
-                </div>
-                <div class="pf-sc__card-tail">
-                  @if (g.collected > 0 && g.collected < g.totalVials) {
-                    <span class="pf-sc__count pf-sc__count--progress">{{ g.collected }}/{{ g.totalVials }}</span>
-                  } @else {
-                    <span class="pf-sc__count">{{ g.totalVials }} vial<span [class.hidden]="g.totalVials === 1">s</span></span>
-                  }
-                  <svg class="pf-sc__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="m9 18 6-6-6-6"/>
-                  </svg>
-                </div>
-              </button>
-            </li>
-          }
-        </ul>
-      }
-      } @else if (!activeGroup()) {
-        <!-- Deep-link mode + drawer not yet ready: render the org's
-             standard loading logo so the page isn't blank while the
-             order fetch resolves. The drawer takes over the moment
-             activeGroup returns. -->
-        <div class="pf-sc__loading">
-          <!-- Full DNA-skeleton + heartbeat-logo variant (showDna). The
-               richer animation is what the user calls out as the
-               "prepare loading" — used here so collection deep-links
-               feel like the same waiting-room treatment as other
-               long-running screens. -->
-          <pf-loading-logo size="xl" color="purple"
-                           [showDna]="true"
-                           [showText]="true"
-                           text="Opening collection…"></pf-loading-logo>
-        </div>
-      }
-    </section>
-
-    <!-- ─── Collect drawer ────────────────────────────────────────────── -->
-    @if (activeGroup(); as g) {
-      <div #drawerEl class="pf-drawer" role="dialog" aria-modal="true" (click)="close()">
-        <div class="pf-drawer__panel" (click)="$event.stopPropagation()">
-          <header class="pf-drawer__head">
-            <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-            <div class="pf-drawer__who">
-              <p class="pf-drawer__name">{{ g.patientName }}</p>
-              <p class="pf-drawer__meta">{{ g.patientMeta }}</p>
-            </div>
-            <div class="pf-drawer__progress">
-              <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
-              <span class="pf-drawer__progress-lbl">vials drawn</span>
-            </div>
-          </header>
-
-          <div class="pf-drawer__progressbar">
-            <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
-          </div>
-
-          <p class="pf-drawer__hint">Tap each vial as you draw it. When every vial is drawn, the order is completed automatically.</p>
-
-          <div class="pf-drawer__tubes">
-            @for (s of g.samples; track s.id) {
-              <button type="button" class="pf-tube"
-                      [class.pf-tube--done]="s.status !== 'pending'"
-                      (click)="toggleCollected(s)">
-                @if (container(s).kind === 'urine_cup') {
-                  <!-- Urine specimen cup: shorter cylinder, wide rim, yellow
-                       screw-cap lid, amber fill. -->
-                  <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true"
-                       [style.--tube-color]="container(s).color">
-                    <defs>
-                      <linearGradient [attr.id]="'lid-' + s.id" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
-                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.2"/>
-                        <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
-                      </linearGradient>
-                      <linearGradient [attr.id]="'cup-' + s.id" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0"    stop-color="#fff" stop-opacity="0.08"/>
-                        <stop offset="0.2"  stop-color="#fff" stop-opacity="0.3"/>
-                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.02"/>
-                        <stop offset="0.85" stop-color="#000" stop-opacity="0.2"/>
-                        <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
-                      </linearGradient>
-                      <linearGradient [attr.id]="'urine-' + s.id" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0"    stop-color="#fcd34d"/>
-                        <stop offset="0.35" stop-color="#f59e0b"/>
-                        <stop offset="1"    stop-color="#b45309"/>
-                      </linearGradient>
-                      <clipPath [attr.id]="'cupclip-' + s.id">
-                        <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
-                      </clipPath>
-                    </defs>
-
-                    <!-- Lid: wider than body, with grip ridges -->
-                    <rect x="6" y="30" width="128" height="42" rx="7"
-                          [attr.fill]="container(s).color"/>
-                    <rect x="6" y="30" width="128" height="42" rx="7"
-                          [attr.fill]="'url(#lid-' + s.id + ')'"/>
-                    <!-- Lid grip texture -->
-                    <g stroke="rgba(0,0,0,0.2)" stroke-width="1" stroke-linecap="round">
-                      <line x1="18" y1="42" x2="18" y2="60"/>
-                      <line x1="30" y1="42" x2="30" y2="60"/>
-                      <line x1="42" y1="42" x2="42" y2="60"/>
-                      <line x1="54" y1="42" x2="54" y2="60"/>
-                      <line x1="66" y1="42" x2="66" y2="60"/>
-                      <line x1="78" y1="42" x2="78" y2="60"/>
-                      <line x1="90" y1="42" x2="90" y2="60"/>
-                      <line x1="102" y1="42" x2="102" y2="60"/>
-                      <line x1="114" y1="42" x2="114" y2="60"/>
-                      <line x1="122" y1="42" x2="122" y2="60"/>
-                    </g>
-                    <!-- Rim shadow under lid -->
-                    <rect x="14" y="64" width="112" height="6" rx="2" fill="#000" opacity="0.25"/>
-
-                    <!-- Cup outline (tapered slightly from rim to base) -->
-                    <path class="pf-vial__outline"
-                          d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
-
-                    <!-- Urine fill clipped to cup shape -->
-                    <g [attr.clip-path]="'url(#cupclip-' + s.id + ')'">
-                      <rect class="pf-vial__blood"
-                            x="14"
-                            [attr.y]="s.status !== 'pending' ? 110 : 220"
-                            width="112"
-                            height="120"
-                            [attr.fill]="'url(#urine-' + s.id + ')'"/>
-                      @if (s.status !== 'pending') {
-                        <ellipse cx="70" cy="110" rx="53" ry="4" fill="#fde68a" opacity="0.6"/>
-                        <ellipse cx="70" cy="112" rx="50" ry="2" fill="#fef3c7" opacity="0.35"/>
-                      }
-                    </g>
-
-                    <!-- Cup reflection highlight -->
-                    <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"
-                          [attr.fill]="'url(#cup-' + s.id + ')'"/>
-
-                    <!-- Volume tick marks on the right (50 / 100 mL) -->
-                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round" font-family="ui-monospace, monospace">
-                      <line x1="116" y1="110" x2="122" y2="110"/>
-                      <line x1="116" y1="150" x2="122" y2="150"/>
-                      <line x1="116" y1="190" x2="122" y2="190"/>
-                    </g>
-
-                    <!-- Tick badge when collected -->
-                    @if (s.status !== 'pending') {
-                      <g class="pf-vial__tick">
-                        <circle cx="118" cy="58" r="18" fill="#10b981"/>
-                        <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
-                        <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                      </g>
-                    }
-                  </svg>
-                } @else {
-                <!-- Vacutainer — proportioned ~ 13×75 mm (1:5.8), with
-                     colored rubber stopper, glass body, hemispherical base,
-                     realistic highlights and a blood fill that rises on tap. -->
-                <svg class="pf-vial" viewBox="0 0 80 320" aria-hidden="true"
-                     [style.--tube-color]="container(s).color">
-                  <defs>
-                    <!-- Stopper (cap) shading -->
-                    <linearGradient [attr.id]="'cap-' + s.id" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
-                      <stop offset="0.35" stop-color="#fff" stop-opacity="0.25"/>
-                      <stop offset="0.65" stop-color="#fff" stop-opacity="0"/>
-                      <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
-                    </linearGradient>
-                    <!-- Glass reflections -->
-                    <linearGradient [attr.id]="'glass-' + s.id" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0"    stop-color="#fff" stop-opacity="0.1"/>
-                      <stop offset="0.18" stop-color="#fff" stop-opacity="0.28"/>
-                      <stop offset="0.32" stop-color="#fff" stop-opacity="0.02"/>
-                      <stop offset="0.68" stop-color="#fff" stop-opacity="0.02"/>
-                      <stop offset="0.82" stop-color="#000" stop-opacity="0.25"/>
-                      <stop offset="1"    stop-color="#000" stop-opacity="0.45"/>
-                    </linearGradient>
-                    <!-- Blood -->
-                    <linearGradient [attr.id]="'blood-' + s.id" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0"    stop-color="#dc2626"/>
-                      <stop offset="0.25" stop-color="#b91c1c"/>
-                      <stop offset="1"    stop-color="#5b1010"/>
-                    </linearGradient>
-                    <!-- Clip to the inside of the glass body so blood never
-                         bleeds outside the tube outline. Tube top extends
-                         to y=50 (under where the cap will sit) so the cap
-                         drawn last cleanly overlaps it. -->
-                    <clipPath [attr.id]="'clip-' + s.id">
-                      <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
-                    </clipPath>
-                  </defs>
-
-                  <!-- ─── Layer 1: Glass tube (drawn first, behind everything) ───
-                       Real vacutainer shape: flat top to meet the cap, then
-                       a long cylinder, then a hemispherical bottom where
-                       the draw collects. The top extends INTO the cap area
-                       (y=50) so the cap drawn later cleanly overlaps and
-                       hides the glass top — same way a rubber stopper sits
-                       on a real tube. -->
-                  <path class="pf-vial__outline"
-                        d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
-
-                  <!-- ─── Layer 2: Blood fill (clipped to tube shape) ─── -->
-                  <g [attr.clip-path]="'url(#clip-' + s.id + ')'">
-                    <rect class="pf-vial__blood"
-                          x="14"
-                          [attr.y]="s.status !== 'pending' ? 130 : 320"
-                          width="52"
-                          height="200"
-                          [attr.fill]="'url(#blood-' + s.id + ')'"/>
-                    @if (s.status !== 'pending') {
-                      <!-- Meniscus curve at liquid surface -->
-                      <path d="M20 130 Q40 124 60 130 L60 134 Q40 128 20 134 Z"
-                            fill="#ef4444" opacity="0.75"/>
-                      <ellipse cx="40" cy="131" rx="18" ry="2.5" fill="#fecaca" opacity="0.35"/>
-                    }
-                  </g>
-
-                  <!-- ─── Layer 3: Glass highlights / reflections ─── -->
-                  <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"
-                        [attr.fill]="'url(#glass-' + s.id + ')'"/>
-
-                  <!-- Thin vertical highlight streak -->
-                  <rect x="25" y="74" width="4" height="220" rx="2"
-                        fill="#fff" opacity="0.18"/>
-                  <!-- Subtle right shadow -->
-                  <rect x="54" y="74" width="3" height="220" rx="1.5"
-                        fill="#000" opacity="0.25"/>
-
-                  <!-- Volume ticks -->
-                  <g opacity="0.35" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" stroke-linecap="round">
-                    <line x1="60" y1="120" x2="64" y2="120"/>
-                    <line x1="60" y1="170" x2="64" y2="170"/>
-                    <line x1="60" y1="220" x2="64" y2="220"/>
-                    <line x1="60" y1="270" x2="64" y2="270"/>
-                  </g>
-
-                  <!-- ─── Layer 4: Stopper (cap) — drawn LAST so it sits ON TOP
-                       of the glass, the same way a real rubber stopper
-                       wraps over the open end of a vacutainer. The cap is
-                       slightly wider than the glass body so it visibly
-                       overhangs on each side. -->
-                  <g>
-                    <!-- Cap body (rounded rectangle a touch wider than the glass tube) -->
-                    <rect x="14" y="20" width="52" height="48" rx="8"
-                          [attr.fill]="tube(s).color"/>
-                    <rect x="14" y="20" width="52" height="48" rx="8"
-                          [attr.fill]="'url(#cap-' + s.id + ')'"/>
-                    <!-- Top dome highlight — fakes a soft dome on the rubber. -->
-                    <ellipse cx="40" cy="26" rx="20" ry="3.5" fill="#fff" opacity="0.22"/>
-                    <!-- Rim shadow at the cap's bottom edge sells the
-                         "cap-on-top-of-tube" silhouette. -->
-                    <rect x="14" y="62" width="52" height="6" rx="2"
-                          fill="#000" opacity="0.32"/>
-                    <!-- Subtle highlight ring on the rim -->
-                    <rect x="14" y="60" width="52" height="2" rx="1"
-                          fill="#fff" opacity="0.18"/>
-                  </g>
-
-                  <!-- Tick badge when collected — drawn last so it pops
-                       above both the cap and the tube body. -->
-                  @if (s.status !== 'pending') {
-                    <g class="pf-vial__tick">
-                      <circle cx="62" cy="46" r="16" fill="#10b981"/>
-                      <circle cx="62" cy="46" r="16" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
-                      <path d="M55 46 l5 5 l10 -10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                    </g>
-                  }
-                </svg>
-                }
-
-                <div class="pf-tube__body">
-                  <p class="pf-tube__label">{{ tube(s).label }}</p>
-                  <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
-
-                  @if (s.tests.length > 0) {
-                    <!-- Every test going into this tube, each with its draw
-                         volume when the test declares one, plus a per-tube
-                         total so the phlebotomist knows how much to pull. -->
-                    <ul class="pf-tube__testlist">
-                      @for (t of s.tests; track t.id) {
-                        <li class="pf-tube__test">
-                          <span class="pf-tube__test-name">{{ t.test?.name ?? t.name }}</span>
-                          @if (t.test?.sampleVolumeMl != null) {
-                            <span class="pf-tube__test-vol">{{ t.test?.sampleVolumeMl }} mL</span>
-                          }
-                        </li>
-                      }
-                    </ul>
-                    @if (drawVolume(s); as vol) {
-                      <p class="pf-tube__draw">Draw ~{{ vol }} mL</p>
-                    }
-                  }
-
-                  <p class="pf-tube__code">{{ s.barcode ?? '—' }}</p>
-
-                  @if (s.status !== 'pending') {
-                    <span class="pf-tube__stamp">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m5 12 4 4L19 6"/>
-                      </svg>
-                      @if (s.status === 'collected') { {{ s.collectedAt | date:'shortTime' }} }
-                      @else { Dispatched }
-                    </span>
-                  } @else {
-                    <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
-                  }
-                </div>
-              </button>
-            }
-          </div>
-
-          <footer class="pf-drawer__foot">
-            @if (isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="undispatchOrder(g)" [disabled]="dispatching()">
-                {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
-              </button>
-            } @else {
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)"
-                      aria-label="Can't collect" data-label="Can't collect">
-                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/>
-                </svg>
-                <span class="pf-btn__text">Can't collect</span>
-              </button>
-            }
-            <!-- Print the order's tube labels (barcode + QR) — available any time
-                 in the drawer so tubes can be labelled before or after the draw. -->
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
-                    aria-label="Print labels" data-label="Print labels">
-              <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
-              </svg>
-              <span class="pf-btn__text">Print labels</span>
-            </button>
-            @if (isDispatched(g)) {
-              <span class="pf-drawer__done-stamp">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11v12M14 9h4l3 3v5a1 1 0 0 1-1 1h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/>
-                </svg>
-                Dispatched to lab
-              </span>
-            } @else if (g.collected === g.totalVials) {
-              <span class="pf-drawer__done-stamp">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m5 12 4 4L19 6"/>
-                </svg>
-                All vials collected
-              </span>
-            } @else {
-              <span class="pf-drawer__remaining">{{ g.totalVials - g.collected }} remaining</span>
-            }
-            <!-- Dispatch right here once everything's drawn (FD/collector handoff
-                 to the lab) — only if the user can dispatch and it's not already.
-                 Under a payment hold the gate would reject the dispatch, so the
-                 slot offers "Bill" (→ billing screen) instead — or a passive
-                 "Payment pending" note for collectors without billing access. -->
-            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold) {
-              @if (canBill()) {
-                <button type="button" class="pf-btn pf-btn-primary" (click)="goToBilling(g)"
-                        aria-label="Bill" data-label="Bill">
-                  <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 5h18v14H3z"/><path d="M3 10h18M7 15h3"/>
-                  </svg>
-                  <span class="pf-btn__text">Bill</span>
-                </button>
-              } @else {
-                <span class="pf-drawer__remaining">Payment pending — dispatch locked</span>
-              }
-            } @else if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()"
-                      aria-label="Dispatch" data-label="Dispatch">
-                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
-                </svg>
-                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch' }}</span>
-              </button>
-            }
-            <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
-                    (click)="close()" [disabled]="g.collected < g.totalVials"
-                    [attr.aria-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'"
-                    [attr.data-label]="g.collected < g.totalVials ? 'Collect all to finish' : 'Done'">
-              @if (g.collected < g.totalVials) {
-                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m17 13 2 2 4-4"/>
-                </svg>
-              } @else {
-                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m5 12 4 4L19 6"/>
-                </svg>
-              }
-              <span class="pf-btn__text">{{ g.collected < g.totalVials ? 'Collect all to finish' : 'Done' }}</span>
-            </button>
-          </footer>
-
-          <!-- Tube labels for printing. Hidden on screen; the global
-               pf-print-label rule reveals ONLY this block during
-               printLabels(). One barcode+QR label per tube, reusing the
-               shared front-desk label card so labels match everywhere. -->
-          <div class="pf-sc-labels pf-print-label" aria-hidden="true">
-            @for (s of g.samples; track s.id; let i = $index) {
-              <pf-label-card [sample]="s" [patient]="s.order?.patient" [index]="i" [printing]="true"></pf-label-card>
-            }
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- ─── Reject-with-reason modal ─────────────────────────────────────
-         Structured reason picker. Opens when the user taps "Can't collect".
-         Reasons: refused, fainted, no_vein, insufficient, wrong_tube, other. -->
-    @if (_rejectModal(); as r) {
-      <div class="pf-rej" role="dialog" aria-modal="true" (click)="cancelReject()">
-        <div class="pf-rej__panel" (click)="$event.stopPropagation()">
-          <header class="pf-rej__head">
-            <h2 class="pf-rej__title">Can't collect for {{ r.group.patientName }}</h2>
-            <p class="pf-rej__sub">Pick a reason — flagged tubes go back into the queue for re-collection.</p>
-          </header>
-          <div class="pf-rej__chips">
-            @for (opt of REJECT_REASONS; track opt.code) {
-              <button type="button" class="pf-rej__chip"
-                      [class.pf-rej__chip--on]="r.reason === opt.code"
-                      (click)="setRejectReason(opt.code)">
-                {{ opt.label }}
-              </button>
-            }
-          </div>
-          @if (r.reason === 'other') {
-            <label class="pf-rej__label">Reason</label>
-            <textarea class="pf-input pf-rej__note" rows="2"
-                      placeholder="Describe what happened…"
-                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
-          } @else if (r.reason) {
-            <label class="pf-rej__label">Notes (optional)</label>
-            <textarea class="pf-input pf-rej__note" rows="2"
-                      placeholder="Anything the lab should know…"
-                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
-          }
-          <footer class="pf-rej__foot">
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="cancelReject()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn-danger"
-                    [disabled]="!canSubmitReject()"
-                    (click)="submitReject()">
-              Reject {{ pendingCount(r.group) }} tube<span [class.hidden]="pendingCount(r.group) === 1">s</span>
-            </button>
-          </footer>
-        </div>
-      </div>
-    }
-  `,
-  styles: [`
-    /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
-     * The page fills the shell's main area exactly: header / KPI strip /
-     * scan strip / section heading are fixed (flex:0 0 auto) and the
-     * pending-queue list (or empty / loading stub) is the ONLY thing that
-     * scrolls, internally. No outer page scroll, no double scrollbars.
-     * The drawer + reject modal are position:fixed siblings of the section
-     * and are unaffected by this flex column. */
-    :host {
-      display: block;
-      height: 100%;
-      min-height: 0;
-    }
-    :host > section {
-      height: 100%;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    /* Fixed (non-scrolling) chrome at the top of the page. */
-    :host > section > pf-kpi-strip,
-    :host > section > pf-screen-header,
-    :host > section > .pf-scan,
-    :host > section > pf-barcode-scanner-modal,
-    :host > section > .pf-sc__section {
-      flex: 0 0 auto;
-    }
-    /* The queue list / empty state / loading stub is the single scroll
-     * region. min-height:0 lets it shrink inside the flex column so the
-     * scrollbar lives here, not on the page. */
-    :host > section > .pf-sc__list,
-    :host > section > .pf-sc__empty,
-    :host > section > .pf-sc__loading {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* ─── Scan strip ─────────────────────────────────────────
-     * Designed as the primary action: big icon, bold label, wide input.
-     * A real vacutainer scanner just types the code into the focused field,
-     * so autofocus + (keydown.enter) = Find.  */
-    .pf-scan {
-      display: flex; align-items: stretch; gap: 14px;
-      padding: 14px 16px;
-      background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(168, 85, 247, 0.05));
-      border: 1px solid rgba(139, 92, 246, 0.28);
-      border-radius: 18px;
-      margin: 0 0 24px;
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.07);
-    }
-    .pf-scan__icon-btn {
-      all: unset;
-      cursor: pointer;
-      width: 54px; height: 54px; border-radius: 14px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(124,58,237,0.08));
-      color: #a78bfa;
-      flex-shrink: 0; align-self: center;
-      transition: background 0.15s ease, transform 0.1s ease;
-    }
-    .pf-scan__icon-btn:hover { background: linear-gradient(135deg, rgba(139,92,246,0.32), rgba(124,58,237,0.16)); }
-    .pf-scan__icon-btn:active { transform: scale(0.96); }
-    .pf-scan__icon-btn:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.7); outline-offset: 2px; }
-    .pf-scan__body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .pf-scan__label {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .pf-scan__input {
-      width: 100%; min-width: 0;
-      height: 32px; padding: 0;
-      background: transparent;
-      border: 0;
-      color: var(--text-primary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 16px; font-weight: 600; letter-spacing: 0.02em;
-      outline: none;
-    }
-    .pf-scan__input::placeholder { color: var(--text-muted); font-weight: 400; letter-spacing: 0.06em; }
-
-    .pf-sc__section { font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted);
-      margin: 18px 2px 10px;
-    }
-    .pf-sc__empty {
-      padding: 28px; text-align: center;
-      background: var(--glass-bg); border: 1px dashed var(--glass-border);
-      border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
-    }
-    /* Deep-link loading stub — centred loading-logo while the
-       drawer's order fetch resolves. */
-    .pf-sc__loading {
-      display: flex; align-items: center; justify-content: center;
-      padding: 64px 24px;
-      min-height: 60dvh;
-    }
-
-    /* Responsive grid: 1 / 2 / 3 columns depending on width. Matches the
-     * auto-flow pattern used by other pages in the app — fills the whole
-     * viewport with responsive padding coming from Tailwind. */
-    .pf-sc__list {
-      list-style: none; padding: 0; margin: 0;
-      display: grid;
-      grid-template-columns: repeat(1, minmax(0, 1fr));
-      gap: 12px;
-    }
-    @media (min-width: 768px) {
-      .pf-sc__list {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-    .pf-sc__list > li { min-width: 0; }
-    /* Card row: Avatar · Name/meta · Rack of chips · Count · Chevron.
-     * position: relative + overflow: hidden keep inner content (hover
-     * translates, long patient names, large racks) from bleeding into the
-     * card's neighbour in the grid. */
-    .pf-sc__card {
-      all: unset;
-      cursor: pointer;
-      position: relative;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-      align-items: center;
-      column-gap: 12px;
-      width: 100%;
-      box-sizing: border-box;
-      padding: 12px 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      overflow: hidden;
-      transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-    .pf-sc__card:hover {
-      border-color: rgba(168, 85, 247, 0.45);
-      background: rgba(168, 85, 247, 0.04);
-      box-shadow: 0 10px 28px rgba(0,0,0,0.22);
-    }
-    .pf-sc__card:active { transform: scale(0.998); }
-    .pf-sc__card:focus-visible { outline: 2px solid rgba(168, 85, 247, 0.7); outline-offset: 2px; }
-
-    .pf-sc__who { min-width: 0; }
-    .pf-sc__who-name {
-      margin: 0; font-weight: 600; font-size: 14.5px;
-      color: var(--text-primary); text-align: left;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .pf-sc__who-meta {
-      margin: 2px 0 0; font-size: 11px; color: var(--text-tertiary);
-      text-align: left;
-      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.03em;
-    }
-
-    /* Tube rack: colored chips shaped like little vials inside a holder.
-     * max-width + overflow keep unusually-large orders (>8 vials) from
-     * pushing the count/chevron off the card edge. */
-    .pf-sc__rack {
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 5px 7px;
-      border-radius: 10px;
-      background: rgba(0,0,0,0.22);
-      border: 1px solid var(--glass-border);
-      max-width: 120px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    .pf-sc__chip {
-      display: inline-block;
-      width: 5px; height: 18px; border-radius: 2px;
-      flex-shrink: 0;
-      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
-    }
-    .pf-sc__chip--done { opacity: 0.3; }
-    /* Outsourced vials carry a pink outline so collectors spot the
-       send-out tubes at a glance in the rack. */
-    .pf-sc__chip--out {
-      width: 7px;
-      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 1.5px #ec4899;
-    }
-
-    .pf-sc__card-tail { display: inline-flex; align-items: center; gap: 8px; }
-    .pf-sc__count {
-      font-size: 10.5px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      padding: 4px 9px; border-radius: 999px;
-      background: rgba(168, 85, 247, 0.14); color: #c4b5fd;
-      border: 1px solid rgba(168, 85, 247, 0.28);
-      letter-spacing: 0.04em;
-      white-space: nowrap;
-    }
-    .pf-sc__count--progress {
-      background: rgba(245, 158, 11, 0.14); color: #fcd34d;
-      border-color: rgba(245, 158, 11, 0.35);
-    }
-    .pf-sc__chev {
-      color: var(--text-muted); opacity: 0.55; flex-shrink: 0;
-      transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-    }
-    .pf-sc__card:hover .pf-sc__chev { color: var(--text-primary); opacity: 1; }
-
-    /* ─── Full-screen stage ──────────────────────────────────── */
-    /* z-index 1000 covers the top nav (top-strip ~50, toasts ~100) so the
-     * collection drawer genuinely takes over the viewport; the backdrop is
-     * opaque so the pending queue behind never peeks through. */
-    .pf-drawer {
-      position: fixed;
-      top: var(--navbar-height, 4rem);
-      right: 0;
-      bottom: 0;
-      left: 0;
-      z-index: 1000;
-      background:
-        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.22) 0%, transparent 55%),
-        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.18) 0%, transparent 55%),
-        #04061a;
-      display: flex; flex-direction: column;
-      animation: pf-drawer-fade 0.22s ease both;
-    }
-    @keyframes pf-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
-    .pf-drawer__panel {
-      width: 100%;
-      flex: 1 1 auto;
-      display: flex; flex-direction: column;
-      animation: pf-drawer-zoom 0.28s cubic-bezier(0.2, 0.85, 0.3, 1) both;
-      min-height: 0;
-    }
-    @keyframes pf-drawer-zoom { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
-
-    .pf-drawer__head {
-      display: flex; align-items: center; gap: 16px;
-      padding: 28px 48px 20px;
-      max-width: 1280px;
-      width: 100%;
-      margin: 0 auto;
-    }
-    .pf-drawer__close {
-      all: unset; cursor: pointer;
-      width: 40px; height: 40px; border-radius: 12px;
-      display: inline-flex; align-items: center; justify-content: center;
-      color: var(--text-secondary);
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--glass-border);
-      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-    }
-    .pf-drawer__close:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); border-color: rgba(255,255,255,0.18); }
-
-    .pf-drawer__who { flex: 1; min-width: 0; }
-    .pf-drawer__name {
-      margin: 0; font-weight: 700; font-size: 28px; letter-spacing: -0.02em;
-      color: var(--text-primary);
-      background: linear-gradient(180deg, var(--text-primary), rgba(255,255,255,0.6));
-      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .pf-drawer__meta { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
-
-    .pf-drawer__progress {
-      text-align: right;
-      padding: 10px 18px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--glass-border);
-      min-width: 120px;
-    }
-    .pf-drawer__progress-num { display: block; font-size: 30px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; line-height: 1; }
-    .pf-drawer__progress-lbl { display: block; margin-top: 4px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.18em; font-weight: 600; }
-
-    .pf-drawer__progressbar {
-      margin: 0 auto;
-      max-width: calc(1280px - 96px);
-      width: calc(100% - 96px);
-      height: 4px; border-radius: 999px;
-      background: rgba(255,255,255,0.06); overflow: hidden;
-    }
-    .pf-drawer__progressbar > span {
-      display: block; height: 100%; border-radius: 999px;
-      background: linear-gradient(90deg, #a78bfa, #22d3ee);
-      box-shadow: 0 0 14px rgba(45, 212, 191, 0.5);
-      transition: width 0.45s cubic-bezier(0.2, 0.85, 0.3, 1);
-    }
-
-    .pf-drawer__hint {
-      margin: 16px auto 0;
-      max-width: calc(1280px - 96px);
-      padding: 0 48px;
-      font-size: 13px; color: var(--text-muted);
-      text-align: center;
-    }
-
-    /* Tubes sit in a centred track. For 1-4 vials we use flex so they
-     * genuinely centre across the screen instead of hugging the left column
-     * of an auto-fill grid. 5+ wraps naturally. */
-    .pf-drawer__tubes {
-      flex: 1 1 auto; overflow-y: auto;
-      padding: 28px 48px 32px;
-      max-width: 1280px;
-      width: 100%;
-      margin: 0 auto;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-content: flex-start;
-      gap: 18px;
-    }
-    .pf-tube { width: min(320px, 100%); }
-
-    .pf-tube {
-      all: unset;
-      position: relative;
-      cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
-      padding: 24px 18px 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      transition: border-color 0.2s ease, transform 0.15s ease, background 0.25s ease, box-shadow 0.25s ease;
-      overflow: hidden;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    /* Send every click through to the button itself. Without this, a tap on
-     * the SVG vial / dept label / "Tap when drawn" pill is absorbed by the
-     * child element and the parent button only registers the SECOND tap.
-     * Single-tap collection was the whole point of this screen. */
-    .pf-tube > * { pointer-events: none; }
-    .pf-tube::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: radial-gradient(80% 60% at 50% 0%, var(--tube-color), transparent 70%);
-      opacity: 0.08;
-      pointer-events: none;
-      transition: opacity 0.25s ease;
-    }
-    .pf-tube:hover:not([disabled]) {
-      border-color: rgba(45, 212, 191, 0.55);
-      box-shadow: 0 18px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(45, 212, 191, 0.15);
-      transform: translateY(-2px);
-    }
-    .pf-tube:hover:not([disabled])::before { opacity: 0.14; }
-    .pf-tube:active:not([disabled]) { transform: translateY(0) scale(0.99); }
-    .pf-tube:focus-visible { outline: 2px solid rgba(45, 212, 191, 0.7); outline-offset: 2px; }
-    .pf-tube[disabled] { cursor: wait; opacity: 0.75; }
-    .pf-tube--done {
-      background: linear-gradient(180deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.02));
-      border-color: rgba(16, 185, 129, 0.45);
-      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.18);
-    }
-    .pf-tube--done::before {
-      background: radial-gradient(80% 60% at 50% 0%, #10b981, transparent 70%);
-      opacity: 0.12;
-    }
-
-    /* ─── Vial illustration ────────────────────────────────── */
-    .pf-vial {
-      width: 88px; height: 280px;
-      flex-shrink: 0;
-      filter: drop-shadow(0 22px 28px rgba(0,0,0,0.55));
-    }
-    /* Urine cup is short and wide — swap the vial's portrait box for a more
-     * squat one so it doesn't get squeezed into a tall-narrow slot. */
-    .pf-vial--cup { width: 150px; height: 236px; }
-    .pf-vial__outline {
-      fill: rgba(255,255,255,0.03);
-      stroke: rgba(255,255,255,0.22);
-      stroke-width: 1.2;
-    }
-    .pf-vial__blood { transition: y 0.75s cubic-bezier(0.25, 0.9, 0.25, 1); }
-    .pf-vial__tick { animation: pf-tick-pop 0.35s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 62px 46px; }
-    @keyframes pf-tick-pop {
-      0%   { transform: scale(0.2); opacity: 0; }
-      60%  { transform: scale(1.1); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .pf-vial__cap { fill: var(--tube-color); }
-    .pf-vial__cap-rim { fill: rgba(0,0,0,0.22); }
-    .pf-vial__glass {
-      fill: rgba(255,255,255,0.05);
-      stroke: rgba(255,255,255,0.2);
-      stroke-width: 0.8;
-    }
-    .pf-vial__blood {
-      transition: y 0.6s cubic-bezier(0.2, 0.85, 0.3, 1);
-    }
-    .pf-vial__tick { animation: pf-tick-pop 0.3s cubic-bezier(0.2, 0.85, 0.3, 1) both; transform-origin: 44px 48px; }
-    @keyframes pf-tick-pop {
-      from { transform: scale(0.3); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-
-    .pf-tube__body {
-      width: 100%;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 3px;
-      min-width: 0;
-      position: relative;
-    }
-    .pf-tube__label {
-      margin: 0;
-      font-weight: 600; font-size: 15px;
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-      text-align: center;
-    }
-    .pf-tube__dept {
-      margin: 0;
-      font-size: 9.5px;
-      color: var(--tube-color, var(--text-tertiary));
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      text-transform: uppercase; letter-spacing: 0.22em; font-weight: 700;
-      opacity: 0.85;
-    }
-    /* Per-tube test list: one row per test, name on the left, its draw
-       volume right-aligned in mono so the numbers line up down the tube. */
-    .pf-tube__testlist {
-      list-style: none;
-      margin: 10px 0 0; padding: 0;
-      width: 100%;
-      display: flex; flex-direction: column;
-      gap: 3px;
-    }
-    .pf-tube__test {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: 10px;
-      font-size: 12.5px;
-      color: var(--text-secondary);
-    }
-    .pf-tube__test-name {
-      min-width: 0; text-align: left;
-      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    }
-    .pf-tube__test-vol {
-      flex-shrink: 0;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px; font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-    }
-    /* Total draw pill — blood-red so it reads as "this much out of the arm". */
-    .pf-tube__draw {
-      margin: 6px 0 0;
-      padding: 3px 10px; border-radius: 999px;
-      font-size: 11px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.05em;
-      color: #fca5a5;
-      background: rgba(220, 38, 38, 0.12);
-      border: 1px solid rgba(220, 38, 38, 0.3);
-    }
-    .pf-tube__code {
-      margin: 4px 0 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
-    }
-    .pf-tube__stamp {
-      margin-top: 10px;
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 11px; border-radius: 999px;
-      font-size: 10.5px; font-weight: 600;
-      color: #6ee7b7;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.06em;
-    }
-    .pf-tube__stamp--pending {
-      color: var(--text-muted);
-      background: rgba(255,255,255,0.02);
-      border-color: var(--glass-border);
-    }
-
-    .pf-drawer__foot {
-      display: flex; align-items: center; gap: 12px;
-      padding: 18px 48px 28px;
-      max-width: 1280px;
-      width: 100%;
-      margin: 0 auto;
-      border-top: 1px solid var(--glass-border);
-      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
-    }
-    /* Below the xl breakpoint the floating bottom-nav pill is visible and
-       sits over the drawer footer. Push the footer up so the buttons clear
-       the pill. At ≥1280px the nav is hidden and no extra room is needed. */
-    @media (max-width: 1279px) {
-      .pf-drawer__foot {
-        padding-bottom: calc(28px + var(--tab-nav-total-height, 0px));
-      }
-    }
-    .pf-drawer__foot .pf-btn-primary { margin-left: auto; min-width: 140px; }
-    .pf-drawer__remaining {
-      font-size: 12px; color: var(--text-muted);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      margin-left: auto; margin-right: 8px;
-    }
-    .pf-drawer__done-stamp {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 600;
-      color: #6ee7b7;
-      padding: 8px 14px; border-radius: 999px;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.4);
-      margin-left: auto; margin-right: 8px;
-    }
-
-    .hidden { display: none; }
-
-    /* Tube-label print block: never shown on screen (it lives inside the
-       drawer purely so barcode/QR render). The global body.pf-printing-label
-       rule + this @media print flip reveal it only while printing. */
-    .pf-sc-labels { display: none; }
-    @media print { .pf-sc-labels { display: block; } }
-
-    /* Footer action buttons: the inline-SVG icon is hidden everywhere by
-       default so desktop (>=641px) keeps the existing TEXT buttons exactly as
-       before. The phone media query below flips this — text out, icon in. */
-    .pf-drawer__foot .pf-btn__icon { display: none; }
-
-    /* ─── Reject-with-reason modal ─────────────────────────── */
-    .pf-rej {
-      position: fixed; inset: 0; z-index: 1100;
-      background: rgba(4, 6, 18, 0.78);
-      backdrop-filter: blur(10px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      animation: pf-drawer-fade 0.2s ease both;
-    }
-    .pf-rej__panel {
-      width: min(540px, 100%);
-      background: var(--bg-primary, #0a0f1f);
-      border: 1px solid var(--glass-border);
-      border-radius: 22px;
-      padding: 22px 24px 20px;
-      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
-      animation: pf-drawer-zoom 0.22s cubic-bezier(0.2, 0.85, 0.3, 1) both;
-    }
-    .pf-rej__title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
-    .pf-rej__sub { margin: 4px 0 14px; font-size: 12.5px; color: var(--text-tertiary); }
-    .pf-rej__chips {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
-    }
-    .pf-rej__chip {
-      all: unset; cursor: pointer;
-      padding: 9px 14px; border-radius: 999px;
-      font-size: 12.5px; font-weight: 600;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    }
-    .pf-rej__chip:hover { border-color: rgba(244, 114, 182, 0.45); }
-    .pf-rej__chip--on {
-      background: rgba(244, 63, 94, 0.18);
-      border-color: rgba(244, 63, 94, 0.55);
-      color: #fda4af;
-    }
-    .pf-rej__label {
-      display: block; margin: 8px 0 4px;
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--text-muted);
-    }
-    .pf-rej__note { width: 100%; resize: vertical; min-height: 48px; }
-    .pf-rej__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
-
-    :host-context([data-theme="light"]) .pf-rej {
-      background: rgba(15, 23, 42, 0.55);
-    }
-    :host-context([data-theme="light"]) .pf-rej__panel {
-      background: #ffffff;
-    }
-    :host-context([data-theme="light"]) .pf-rej__chip--on {
-      background: rgba(244, 63, 94, 0.1);
-      color: #be123c;
-    }
-
-    @media (max-width: 640px) {
-      .pf-drawer__head { padding: 18px 20px 12px; flex-wrap: wrap; }
-      .pf-drawer__progressbar { margin: 0 20px; }
-      .pf-drawer__hint { margin: 12px 20px 0; }
-      .pf-drawer__foot { padding: 14px 20px calc(20px + var(--tab-nav-total-height, 0px)); flex-wrap: wrap; }
-      .pf-drawer__name { font-size: 22px; }
-
-      /* ── Compact mobile tiles ──
-       * One tile per row, row-layout inside: a small vial glyph on the
-       * left so the cap colour stays recognisable at a glance, label /
-       * dept / tests in the middle, and a teal "Tap when drawn" pill on
-       * the right that reads as an action target. Each tile is ~96px
-       * tall so a typical 2-3 tube order fits on a single iPhone screen
-       * with no horizontal swipe. iPad / desktop unchanged. */
-      /* A single full-width column. The base layout is flex-wrap +
-         justify-content:center, which just centres a content-sized
-         tile — leaving the tube narrow and clipping the stamp pill.
-         flex-direction:column + the default align-items:stretch makes
-         every tube fill the width with no reliance on width:100%. */
-      .pf-drawer__tubes {
-        padding: 14px 16px 22px;
-        flex-direction: column;
-        flex-wrap: nowrap;
-        align-items: stretch;
-        justify-content: flex-start;
-        gap: 10px;
-      }
-
-      /* Full-width row tile: fixed-size vial illustration on the LEFT, a
-         flexible (min-width:0) LEFT-aligned text column on the right. The
-         tile fills the drawer width (see the width-enforcing block lower
-         down) — never a centred ~60% card. */
-      .pf-tube {
-        flex-direction: row;
-        align-items: center;
-        gap: 14px;
-        padding: 14px 16px;
-        width: 100%;
-        text-align: left;
-      }
-      .pf-vial {
-        /* Compact glance icon at a FIXED size on the left — cap colour +
-           fill stay readable while the row height stays thumb-friendly. */
-        width: 44px; height: 132px;
-        flex-shrink: 0;
-        align-self: center;
-      }
-      .pf-vial--cup { width: 74px; height: 108px; }
-
-      .pf-tube__body {
-        flex: 1 1 auto;
-        min-width: 0;          /* allow the body to shrink below its content */
-        align-items: flex-start;
-        text-align: left;
-        gap: 2px;
-      }
-      .pf-tube__label  { font-size: 15px; text-align: left; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      /* Dept label ("BIOCHEMISTRY") shown IN FULL — it's short, so let it
-         wrap rather than truncate. Trimmed letter-spacing so the common
-         names fit on a single line on the full-width tile. */
-      .pf-tube__dept   {
-        font-size: 9.5px;
-        text-align: left;
-        max-width: 100%;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        letter-spacing: 0.14em;
-        line-height: 1.4;
-      }
-      /* Test rows tighten up; each name may ellipsis to a single line. */
-      .pf-tube__testlist { margin: 4px 0 0; gap: 2px; }
-      .pf-tube__test { font-size: 12px; }
-      /* Sample barcode is the tube's identity (it replaced the order #) —
-         keep it visible on the compact card, just a notch smaller. */
-      .pf-tube__code { font-size: 10px; margin-top: 3px; }
-
-      /* Action stamp: small teal pill on its own line at the end of the
-         body. It used to be position:absolute, but .pf-tube__body is
-         position:relative — so the stamp anchored INSIDE the body and
-         overlapped the label/dept/tests text. Keeping it in normal flow
-         (left-aligned, below the tests) is overlap-proof. The whole
-         tile is still the click target — the pill just telegraphs it. */
-      /* The status pill ("Tap when drawn" / collected time) sits on its OWN
-         line beneath the text column, LEFT-aligned and sized to its content
-         (not stretched across the tile, not clipped off the right edge). The
-         whole tile remains the tap target — the pill just telegraphs it. */
-      .pf-tube__stamp {
-        position: static;
-        align-self: flex-start;
-        width: auto;
-        max-width: 100%;
-        box-sizing: border-box;
-        justify-content: flex-start;
-        margin-top: 8px;
-        min-height: 30px;
-        padding: 7px 12px;
-        font-size: 10.5px;
-        font-weight: 600;
-        white-space: nowrap;
-        letter-spacing: 0.04em;
-      }
-      .pf-tube__stamp--pending {
-        background: rgba(45, 212, 191, 0.14);
-        border-color: rgba(45, 212, 191, 0.45);
-        color: #5eead4;
-      }
-    }
-    /* Tablet (iPad Mini / Air landscape, iPad portrait) and any shorter
-       viewport — collapse the vial tile + paddings so the whole collect
-       drawer fits the viewport in one screen with no internal scroll.
-       Desktop monitors above ~1180px keep the spacious original layout.   */
-    @media (min-width: 641px) and (max-width: 1180px),
-           (min-width: 641px) and (max-height: 820px) {
-      .pf-drawer__head { padding: 14px 28px 10px; }
-      .pf-drawer__name { font-size: 22px; }
-      .pf-drawer__progress { padding: 8px 14px; min-width: 96px; }
-      .pf-drawer__progress-num { font-size: 24px; }
-      .pf-drawer__progressbar { width: calc(100% - 56px); }
-      .pf-drawer__hint { margin: 6px auto 0; padding: 0 28px; font-size: 11.5px; }
-
-      /* Kill the internal scroll. The flex column above already gives this
-         row a finite height; we just need the children to compress. */
-      .pf-drawer__tubes {
-        overflow: hidden;
-        padding: 10px 28px 10px;
-        gap: 12px;
-        align-content: center;
-        flex-wrap: nowrap;
-      }
-
-      .pf-tube {
-        width: min(180px, 100%);
-        flex: 1 1 0;
-        max-width: 220px;
-        padding: 12px 10px 10px;
-        gap: 6px;
-        border-radius: 16px;
-        overflow: visible;          /* let any sub-pixel vial overflow show, no clipping */
-      }
-      /* Heights derived from viewport height so they always fit. The clamp
-         floor stays large enough to read, the ceiling caps growth on tall
-         desktops. Cup is shorter natively so its ceiling is lower. */
-      .pf-vial      { width: 52px;  height: clamp(120px, 24dvh, 180px); }
-      .pf-vial--cup { width: 96px;  height: clamp(110px, 22dvh, 170px); }
-
-      .pf-tube__label { font-size: 12.5px; }
-      .pf-tube__dept  { font-size: 8px; letter-spacing: 0.16em; }
-      .pf-tube__testlist { margin: 3px 0 0; gap: 2px; }
-      .pf-tube__test { font-size: 11px; }
-      .pf-tube__test-vol { font-size: 9.5px; }
-      .pf-tube__draw  { margin: 4px 0 0; font-size: 10px; padding: 2px 8px; }
-      .pf-tube__code  { font-size: 9.5px; }
-      .pf-tube__stamp { padding: 4px 9px; font-size: 9.5px; }
-
-      .pf-drawer__foot {
-        padding: 10px 28px calc(12px + var(--tab-nav-total-height, 0px));
-      }
-      .pf-drawer__foot .pf-btn-primary { min-width: 120px; }
-    }
-
-    /* iPhone SE / iPhone 14 — even tighter padding so the patient name
-       and progress chip both fit in the header without wrapping into a
-       column. The rack max-width also shrinks so 4+ tube chips don't
-       overflow the order card. */
-    @media (max-width: 400px) {
-      .pf-drawer__head { padding: 14px 12px 10px; gap: 10px; }
-      .pf-drawer__progressbar { margin: 0 12px; }
-      .pf-drawer__hint { margin: 10px 12px 0; }
-      .pf-drawer__tubes { padding: 14px 12px 20px; }
-      .pf-drawer__foot { padding: 12px 12px calc(16px + var(--tab-nav-total-height, 0px)); }
-      .pf-drawer__name { font-size: 19px; }
-      .pf-drawer__progress { padding: 8px 12px; min-width: 0; }
-      .pf-drawer__progress-num { font-size: 22px; }
-      .pf-sc__rack { max-width: 96px; }
-    }
-
-    /* ─── Light mode overrides ──────────────────────────────
-     * Dark mode is tuned for deep navy; light mode needs
-     * inverted reflections, softer shadows, and a brighter
-     * backdrop so the vials don't float on a muddy wash. */
-    :host-context([data-theme="light"]) .pf-sc__card {
-      background: #ffffff;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-    }
-    :host-context([data-theme="light"]) .pf-sc__card:hover {
-      background: #fdf5ff;
-      box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
-    }
-    :host-context([data-theme="light"]) .pf-sc__rack {
-      background: rgba(15, 23, 42, 0.05);
-    }
-    :host-context([data-theme="light"]) .pf-sc__chip {
-      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,0.5);
-    }
-    :host-context([data-theme="light"]) .pf-sc__count {
-      background: rgba(124, 58, 237, 0.1);
-      color: #6d28d9;
-      border-color: rgba(124, 58, 237, 0.3);
-    }
-    :host-context([data-theme="light"]) .pf-sc__count--progress {
-      background: rgba(245, 158, 11, 0.14);
-      color: #b45309;
-      border-color: rgba(245, 158, 11, 0.4);
-    }
-    :host-context([data-theme="light"]) .pf-scan {
-      background: linear-gradient(180deg, rgba(139, 92, 246, 0.1), rgba(168, 85, 247, 0.06));
-      border-color: rgba(124, 58, 237, 0.4);
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.08);
-    }
-
-    :host-context([data-theme="light"]) .pf-drawer {
-      background:
-        radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.12) 0%, transparent 55%),
-        radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.1) 0%, transparent 55%),
-        #f5f7fb;
-    }
-    :host-context([data-theme="light"]) .pf-drawer__close {
-      background: rgba(15, 23, 42, 0.03);
-    }
-    :host-context([data-theme="light"]) .pf-drawer__close:hover {
-      background: rgba(15, 23, 42, 0.07);
-    }
-    :host-context([data-theme="light"]) .pf-drawer__name {
-      background: linear-gradient(180deg, var(--text-primary), rgba(15, 23, 42, 0.55));
-      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    :host-context([data-theme="light"]) .pf-drawer__progress {
-      background: rgba(15, 23, 42, 0.03);
-    }
-    :host-context([data-theme="light"]) .pf-drawer__progressbar {
-      background: rgba(15, 23, 42, 0.06);
-    }
-    :host-context([data-theme="light"]) .pf-drawer__progressbar > span {
-      box-shadow: 0 0 10px rgba(45, 212, 191, 0.4);
-    }
-    :host-context([data-theme="light"]) .pf-drawer__foot {
-      background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04));
-    }
-
-    :host-context([data-theme="light"]) .pf-tube {
-      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55));
-    }
-    :host-context([data-theme="light"]) .pf-tube::before { opacity: 0.1; }
-    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled]) {
-      box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(45, 212, 191, 0.2);
-    }
-    :host-context([data-theme="light"]) .pf-tube:hover:not([disabled])::before { opacity: 0.16; }
-    :host-context([data-theme="light"]) .pf-tube--done {
-      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255,255,255,0.7));
-      border-color: rgba(16, 185, 129, 0.45);
-      box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14);
-    }
-
-    /* Vial glass + streak for light mode. Real vacutainers on a white
-     * counter read as darker outlines with lighter internal reflections,
-     * not white ghosts. */
-    :host-context([data-theme="light"]) .pf-vial {
-      filter: drop-shadow(0 14px 22px rgba(15, 23, 42, 0.22));
-    }
-    :host-context([data-theme="light"]) .pf-vial__outline {
-      fill: rgba(255, 255, 255, 0.7);
-      stroke: rgba(15, 23, 42, 0.22);
-    }
-    :host-context([data-theme="light"]) .pf-vial rect[fill*="glass-"],
-    :host-context([data-theme="light"]) .pf-vial path[fill*="glass-"] {
-      opacity: 0.7;
-    }
-
-    :host-context([data-theme="light"]) .pf-tube__stamp--pending {
-      color: #64748b;
-      background: rgba(15, 23, 42, 0.03);
-      border-color: rgba(15, 23, 42, 0.1);
-    }
-    :host-context([data-theme="light"]) .pf-tube__stamp {
-      color: #047857;
-      background: rgba(16, 185, 129, 0.1);
-      border-color: rgba(16, 185, 129, 0.3);
-    }
-    :host-context([data-theme="light"]) .pf-tube__code {
-      color: #64748b;
-    }
-    :host-context([data-theme="light"]) .pf-tube__draw {
-      color: #b91c1c;
-      background: rgba(220, 38, 38, 0.08);
-      border-color: rgba(220, 38, 38, 0.28);
-    }
-
-    :host-context([data-theme="light"]) .pf-drawer__done-stamp {
-      background: rgba(16, 185, 129, 0.12);
-      color: #047857;
-      border-color: rgba(16, 185, 129, 0.4);
-    }
-
-    :host-context([data-theme="light"]) .pf-sc__vial {
-      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.12);
-    }
-
-    :host-context([data-theme="light"]) .pf-sc__scan {
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-    }
-    :host-context([data-theme="light"]) .pf-sc__scan-input {
-      background: #fff;
-      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
-    }
-    :host-context([data-theme="light"]) .pf-sc__scan-input:focus {
-      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2), inset 0 1px 2px rgba(15, 23, 42, 0.04);
-    }
-
-    :host-context([data-theme="light"]) .pf-sc__match {
-      background: rgba(45, 212, 191, 0.1);
-      border-color: rgba(20, 184, 166, 0.5);
-    }
-    :host-context([data-theme="light"]) .pf-sc__vials {
-      background: rgba(15, 23, 42, 0.04);
-    }
-
-    /* ── Mobile vial-tile width — appended last so no earlier rule or
-       cascade quirk can suppress it. Each tile MUST span the full drawer
-       width (like the queue list cards), never a centred ~60% card —
-       otherwise the body squeezes and the stamp pill clips. */
-    @media (max-width: 640px) {
-      .pf-drawer__tubes {
-        flex-direction: column !important;
-        flex-wrap: nowrap !important;
-        align-items: stretch !important;
-        justify-content: flex-start !important;
-      }
-      .pf-drawer__tubes .pf-tube {
-        width: 100% !important;       /* beats base width:min(320px,100%) */
-        max-width: 100% !important;   /* no narrow cap */
-        align-self: stretch !important;
-        margin-left: 0 !important;    /* no auto-centring */
-        margin-right: 0 !important;
-        box-sizing: border-box !important;
-      }
-    }
-
-    /* ─── Cross-platform additive overrides (ADD ONLY — desktop ≥1280px
-       and the existing rules above are untouched) ───────────────────── */
-
-    /* Phone: the scan strip is the icon button + the input body in one row.
-       Tighten padding a touch; typing + Enter (or the icon's camera scanner)
-       does the lookup. Desktop/iPad row layout is unaffected. */
-    @media (max-width: 640px) {
-      .pf-scan {
-        gap: 12px;
-        padding: 14px;
-      }
-      .pf-scan__icon-btn { align-self: center; }
-      .pf-scan__body { flex: 1 1 140px; }
-      /* Header Refresh → icon-only on phones. */
-      .pf-refresh-txt { display: none; }
-
-      /* Loading stub: use dynamic viewport height so it doesn't jump when
-         mobile browser chrome shows/hides. */
-      .pf-sc__loading { min-height: 60dvh; }
-
-      /* The queue grid's minimum track is 400px (auto-fill minmax(400px,1fr)),
-         which is wider than most phones (iPhone SE 375px, iPhone 14 390px) and
-         forces horizontal page overflow. Collapse to a single shrinkable
-         column on phones so the cards fit with no sideways scroll. Tablet /
-         desktop (>=641px) keep the original multi-column auto-fill layout. */
-      .pf-sc__list { grid-template-columns: minmax(0, 1fr); }
-    }
-
-    /* Touch (coarse pointer): make the order-card tap target comfortable and
-       keep the reject chips at a 44px touch height. Pointer-fine desktop is
-       unaffected. */
-    @media (pointer: coarse) {
-      .pf-sc__card { padding-top: 14px; padding-bottom: 14px; }
-      .pf-rej__chip { padding-top: 12px; padding-bottom: 12px; }
-      /* Keep textarea at 16px so iOS Safari doesn't zoom the viewport on
-         focus (the shared .pf-input may set a smaller size). */
-      .pf-rej__note { font-size: 16px; }
-      /* Drawer close button: 40px is below the 44px touch minimum. */
-      .pf-drawer__close { width: 44px; height: 44px; }
-    }
-
-    /* Touch devices with no real hover: neutralise the lift/translate hover
-       states so they don't "stick" after a tap (the card/tube keep their
-       :active + :focus-visible feedback, which is what matters on touch).
-       Desktop with a real pointer keeps the full hover treatment. */
-    @media (hover: none) {
-      .pf-sc__card:hover {
-        border-color: var(--glass-border);
-        background: var(--glass-bg);
-        box-shadow: none;
-      }
-      .pf-tube:hover:not([disabled]) {
-        transform: none;
-        border-color: var(--glass-border);
-        box-shadow: none;
-      }
-      .pf-tube:hover:not([disabled])::before { opacity: 0.08; }
-    }
-
-    /* Capacitor native: the collect drawer is teleported to <body> and is
-       position:fixed with its own top offset (var(--navbar-height)). The
-       global top safe-area is absorbed on body, but this page's own fixed
-       chrome still needs the notch inset so the close button / patient name
-       don't sit under the status bar. Add it only on native. */
-    :host-context(html.cap-native) .pf-drawer {
-      top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top));
-    }
-    :host-context(html.cap-native) .pf-drawer__head {
-      padding-left: calc(48px + env(safe-area-inset-left));
-      padding-right: calc(48px + env(safe-area-inset-right));
-    }
-    @media (max-width: 640px) {
-      :host-context(html.cap-native) .pf-drawer__head {
-        padding-left: calc(20px + env(safe-area-inset-left));
-        padding-right: calc(20px + env(safe-area-inset-right));
-      }
-    }
-
-    /* Phone (<=640px): collapse the footer action buttons to ICON-ONLY squares
-       to save space. Each keeps its full text in aria-label (a11y) and shows a
-       press-and-hold tooltip via data-label + :active::after — no JS/state.
-       The "Undo dispatch" button + status stamps are intentionally left as-is.
-       Desktop (>=641px) is untouched: text buttons, icons display:none. */
-    @media (max-width: 640px) {
-      .pf-drawer__foot .pf-btn {
-        position: relative;          /* anchor for the press tooltip */
-        width: 46px;                 /* >=44px tap target */
-        min-width: 46px;             /* beats .pf-btn-primary's min-width:140px */
-        height: 46px;
-        padding: 0;
-        flex: 0 0 auto;
-        gap: 0;
-      }
-      .pf-drawer__foot .pf-btn__text { display: none; }
-      .pf-drawer__foot .pf-btn__icon { display: inline-flex; }
-
-      /* Press-and-hold tooltip: a small dark pill above the held button. */
-      .pf-drawer__foot .pf-btn[data-label]:active::after {
-        content: attr(data-label);
-        position: absolute;
-        bottom: calc(100% + 8px);
-        left: 50%;
-        transform: translateX(-50%);
-        white-space: nowrap;
-        padding: 5px 9px;
-        border-radius: 8px;
-        background: rgba(4, 6, 18, 0.95);
-        border: 1px solid var(--glass-border);
-        color: var(--text-primary);
-        font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.4);
-        pointer-events: none;
-        z-index: 10;
-      }
-
-      :host-context([data-theme="light"]) .pf-drawer__foot .pf-btn[data-label]:active::after {
-        background: rgba(255, 255, 255, 0.98);
-        color: #0f172a;
-        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
-      }
-    }
-
-    /* ─────────────────────────────────────────────────────────────────
-       AUTHORITATIVE phone vial-card layout (LAST = wins). Successive passes
-       layered several @media(max-width:640px) blocks; this single block,
-       placed last and scoped under .pf-drawer__tubes (so it out-specifies the
-       base .pf-tube/.pf-vial rules), is the source of truth for the phone tile:
-       a FULL-WIDTH row — fixed vial on the left, left-aligned text column,
-       dept shown in full, status pill on its own line, nothing clipped.
-       >=641px is untouched (gated to <=640). ───────────────────────────── */
-    @media (max-width: 640px) {
-      .pf-drawer__tubes {
-        flex-direction: column !important;
-        flex-wrap: nowrap !important;
-        align-items: stretch !important;
-        justify-content: flex-start !important;
-        max-width: 100% !important;
-        gap: 10px !important;
-      }
-      .pf-drawer__tubes .pf-tube {
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 14px !important;
-        padding: 14px 16px !important;
-        text-align: left !important;
-      }
-      .pf-drawer__tubes .pf-vial {
-        width: 40px !important;
-        height: 120px !important;
-        flex: 0 0 auto !important;
-      }
-      .pf-drawer__tubes .pf-vial--cup {
-        width: 64px !important;
-        height: 100px !important;
-      }
-      .pf-drawer__tubes .pf-tube__body {
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
-        align-items: flex-start !important;
-        text-align: left !important;
-        gap: 2px !important;
-      }
-      .pf-drawer__tubes .pf-tube__dept {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        max-width: 100% !important;
-        letter-spacing: 0.12em !important;
-      }
-      .pf-drawer__tubes .pf-tube__stamp {
-        position: static !important;
-        align-self: flex-start !important;
-        width: auto !important;
-        max-width: 100% !important;
-        justify-content: flex-start !important;
-        margin-top: 8px !important;
-      }
-    }
-
-  `]
+  templateUrl: "./sample-collection.component.html",
+  styleUrl: "./sample-collection.component.scss",
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
+  private readonly labCfg = inject(BranchLabConfigService);
+  /** Show the department on a tube only for standalone labs; an integrated lab
+   *  (all departments run as one lab) hides it. (Cortex OPS-37) */
+  protected readonly showTubeDept = computed(() => this.labCfg.standaloneLab());
   private readonly dialog = inject(DialogService);
+  private readonly process = inject(ProcessWorkflowService);
+  protected readonly scan = inject(ScanService);
 
-  /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
-   *  host supplies its own pane header, so we suppress our KPI strip + screen
-   *  header + outer page padding while keeping the queue + scan + drawer. */
+  /** Rendered embedded inside a host pane: the host supplies its own header, so
+   *  we suppress our KPI strip + screen header + outer page padding while
+   *  keeping the queue + scan + drawer. (My Work no longer embeds it — the band
+   *  "Collect" button opens the full page.) */
   @Input() embedded = false;
+  readonly sampleCollected = output<void>();
 
-  /** Whether this user can dispatch (hand collected tubes to the lab). */
-  readonly canDispatch = computed(() => this.auth.hasPermission('dispatch_sample'));
+  /** Whether this user can dispatch (hand collected tubes to the lab) — needs
+   *  the permission AND the workflow to actually include a dispatch step (else
+   *  the backend rejects it, so the button must not show at all). */
+  readonly canDispatch = computed(
+    () =>
+      this.auth.hasPermission("dispatch_sample") &&
+      this.process.dispatchStepEnabled(),
+  );
+
+  /** True when the workflow actually has a dispatch step (independent of the
+   *  user's permission) — hides ALL dispatch chrome (button + payment-hold note)
+   *  in auto-receive workflows where there's nothing to dispatch. */
+  readonly dispatchStep = computed(() => this.process.dispatchStepEnabled());
   /** Whether this user can take a payment-held order to the billing screen
    *  (route /frontdesk/order needs create_order; create_bill implies desk staff). */
-  readonly canBill = computed(() =>
-    this.auth.hasPermission('create_bill') || this.auth.hasPermission('create_order'));
+  readonly canBill = computed(
+    () =>
+      this.auth.hasPermission("create_bill") ||
+      this.auth.hasPermission("create_order"),
+  );
   /** Payment-held order: jump to the billing screen with the order loaded. */
   goToBilling(g: OrderGroup) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: g.orderId } });
+    this.router.navigate(["/frontdesk/order"], {
+      queryParams: { orderId: g.orderId },
+    });
   }
   private readonly _dispatching = signal(false);
   readonly dispatching = this._dispatching.asReadonly();
 
   /** True once every tube on the order has moved past 'collected' (dispatched
-   *  or further) — used to flip the UI from "collected" to "dispatched". */
+   *  or further) — used to flip the UI from "collected" to "dispatched".
+   *  Defined as "no tube is still pending or awaiting dispatch" rather than a
+   *  fixed done-status whitelist, so a tube in any post-dispatch state
+   *  (received / in-lab / completed …) still counts — otherwise the drawer
+   *  kept offering Dispatch after everything was already dispatched. Matches
+   *  the per-tube "Dispatched" badge, which uses the same rule. */
   isDispatched(g: OrderGroup): boolean {
-    const done = ['dispatched', 'picked_up', 'received', 'completed'];
-    return g.samples.length > 0 && g.samples.every(s => done.includes(s.status));
+    return isOrderDispatched(g.samples);
+  }
+
+  /** Per-tube External mark: THIS tube was brought in from outside — one
+   *  tap collects it as brought-in (no draw, full collect machine on the
+   *  server incl. auto-receive workflows); tapping the mark again reverts
+   *  while the tube hasn't moved past the counter. Per-tube on purpose: an
+   *  order routinely has one walked-in specimen among several draws. */
+  private readonly _sourceBusy = signal(false);
+  readonly sourceBusy = this._sourceBusy.asReadonly();
+  /** Which tube's External mark is saving (its flag shows the busy state). */
+  protected readonly sourceBusyId = signal<string | null>(null);
+  /** The flag shows on tubes that can still be marked: pending and not a
+   *  locked/not-yet-due series time point. */
+  canMarkExternal(s: OrderSample): boolean {
+    return s.status === "pending" && this.tubeState(s).kind !== "locked";
+  }
+  async toggleExternal(s: OrderSample, ev: Event) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    if (this._sourceBusy()) return;
+    const source = s.source === "external" ? "internal" : "external";
+    this._sourceBusy.set(true);
+    this.sourceBusyId.set(s.id);
+    try {
+      const updated = await firstValueFrom(
+        this.api.patch<OrderSample>(`/api/samples/${s.id}/source`, { source }),
+      );
+      // Trust the server's resulting state (auto-receive workflows may land
+      // the tube on 'received' rather than 'collected').
+      this._pending.update((list) =>
+        list.map((x) =>
+          x.id === s.id
+            ? { ...x, status: updated?.status ?? x.status, source: updated?.source ?? null,
+                collectedAt: updated?.collectedAt ?? undefined }
+            : x,
+        ),
+      );
+      this.toasts.success(
+        source === "external"
+          ? "Marked External — no draw needed"
+          : "Back to in-house draw",
+      );
+      if (source === "external") this.sampleCollected.emit();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this._sourceBusy.set(false);
+      this.sourceBusyId.set(null);
+    }
   }
 
   /** Mark every collected tube on this order as dispatched to the lab. */
@@ -1769,12 +516,26 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._dispatching()) return;
     this._dispatching.set(true);
     try {
-      await firstValueFrom(this.api.patch(`/api/orders/${g.orderId}/dispatch`, {}));
+      await firstValueFrom(
+        this.api.patch(`/api/orders/${g.orderId}/dispatch`, {}),
+      );
       // Reflect dispatched status locally so the drawer shows "Dispatched"
       // without a round-trip (pending-collection wouldn't return these anymore).
-      this._pending.update(list => list.map(s =>
-        s.orderId === g.orderId && s.status === 'collected' ? { ...s, status: 'dispatched' } : s));
-      this.toasts.success('Dispatched to lab');
+      this._pending.update((list) =>
+        list.map((s) =>
+          s.orderId === g.orderId && s.status === "collected"
+            ? { ...s, status: "dispatched" }
+            : s,
+        ),
+      );
+      this.toasts.success("Dispatched to lab");
+      // Reached from the front desk (?from=…) → go back there automatically.
+      // In the standalone lab queue (_returnTo null) stay put.
+      if (this._returnTo) {
+        const target = this._returnTo;
+        this._returnTo = null;
+        this.router.navigateByUrl(target);
+      }
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
@@ -1788,10 +549,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._dispatching()) return;
     this._dispatching.set(true);
     try {
-      await firstValueFrom(this.api.patch(`/api/orders/${g.orderId}/undispatch`, {}));
-      this._pending.update(list => list.map(s =>
-        s.orderId === g.orderId && s.status === 'dispatched' ? { ...s, status: 'collected' } : s));
-      this.toasts.success('Dispatch undone');
+      await firstValueFrom(
+        this.api.patch(`/api/orders/${g.orderId}/undispatch`, {}),
+      );
+      this._pending.update((list) =>
+        list.map((s) =>
+          s.orderId === g.orderId && s.status === "dispatched"
+            ? { ...s, status: "collected" }
+            : s,
+        ),
+      );
+      this.toasts.success("Dispatch undone");
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
@@ -1800,12 +568,20 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  /** List → detail zoom (core/navigation/zoom-transition): the tapped
+   *  patient card morphs into the collection view, and closing reverses it. */
+  private readonly zoom = inject(ZoomTransitionService);
   // Set when the user lands here from another screen via ?orderId=… (e.g. FD's
   // "Collect Sample" button). On close, we send them back to that origin
   // instead of leaving them stranded on the queue.
   private _returnTo: string | null = null;
+  /** Queue mode reached from another screen's band "Collect" (?from=…, no
+   *  orderId): the queue band shows Back to that screen. */
+  private readonly _queueFrom = signal<string | null>(null);
+  readonly queueFrom = this._queueFrom.asReadonly();
+  readonly queueBackFn = () => { const t = this._queueFrom(); if (t) this.router.navigateByUrl(t); };
 
-  @ViewChild('drawerEl') private drawerRef?: ElementRef<HTMLElement>;
+  @ViewChild("drawerEl") private drawerRef?: ElementRef<HTMLElement>;
   private teleportedEl: HTMLElement | null = null;
 
   constructor() {
@@ -1817,10 +593,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
+      // The bottom navbar stays visible (owner rule): the drawer is an
+      // .pf-fullscreen view that ends ABOVE it.
       if (!hasDrawer) {
         this.detachTeleport();
         return;
       }
+      // NEW design: no teleport. The drawer stays in the page (under the
+      // shell's stacking context) at a z-index BELOW the docked app bar, so
+      // the bar's own menus (avatar / branch / bell) open above it instead
+      // of behind it. The drawer already ends above the bar (.pf-fullscreen).
+      if (this.theme.isNewDesign()) return;
       // Wait a frame for @if to render the element before reparenting.
       queueMicrotask(() => {
         const el = this.drawerRef?.nativeElement;
@@ -1830,9 +613,35 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         }
       });
     });
+
+    // Repetitive mode: a 1 Hz clock drives the "not due" countdowns and the
+    // due/missed transitions. It runs ONLY while the open drawer holds
+    // pending series tubes — normal orders never tick, and the interval is
+    // cleared the moment the drawer closes or the last series tube is drawn.
+    effect(() => {
+      const g = this.activeGroup();
+      const needsClock =
+        !!g &&
+        g.samples.some(
+          (s) => s.repeatOffsetMin != null && s.status === "pending",
+        );
+      if (needsClock && this._clock == null) {
+        this.nowMs.set(Date.now());
+        this._clock = setInterval(() => this.nowMs.set(Date.now()), 1000);
+      } else if (!needsClock && this._clock != null) {
+        clearInterval(this._clock);
+        this._clock = null;
+      }
+    });
   }
 
-  ngOnDestroy() { this.detachTeleport(); }
+  ngOnDestroy() {
+    if (this._clock != null) {
+      clearInterval(this._clock);
+      this._clock = null;
+    }
+    this.detachTeleport();
+  }
 
   private detachTeleport() {
     if (this.teleportedEl && this.teleportedEl.parentNode === document.body) {
@@ -1841,28 +650,47 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.teleportedEl = null;
   }
 
-  protected readonly scanValue = signal('');
+  protected readonly scanValue = signal("");
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
+  /** The pending queue has answered at least once (success or error). Until
+   *  then the list region is a skeleton of its rows — never the "No samples
+   *  waiting" empty state for a queue that simply hasn't arrived yet. The
+   *  skeleton only appears when the first answer is slower than 150ms (no
+   *  flash for a fast answer) and, once shown, holds 300ms (PF-PATTERN
+   *  "Loading feedback"). */
+  protected readonly queueLoaded = signal(false);
+  protected readonly queueSkeleton = spinDelay(computed(() => !this.queueLoaded()));
+  /** The band / header Refresh button's request is in flight. */
+  protected readonly refreshing = signal(false);
   private readonly _openOrderId = signal<string | null>(null);
   /** Admin-configured container colour/label per department code (Branches →
    *  Departments). Loaded once so the tube guide reflects the lab's own scheme. */
-  private readonly _deptContainers = signal<Record<string, { color?: string | null; label?: string | null }>>({});
+  private readonly _deptContainers = signal<
+    Record<string, { color?: string | null; label?: string | null }>
+  >({});
   /** True when the user landed here via ?orderId=… (e.g. FD's "Collect"
    *  button on an order row). Suppresses the queue list + scan row so
    *  the page reads as a direct order-collection view, not a queue +
    *  popup. Set once in ngOnInit and not cleared until navigation. */
   private readonly _deepLinkMode = signal<boolean>(false);
   readonly deepLinkMode = this._deepLinkMode.asReadonly();
-  protected readonly REJECT_REASONS: ReadonlyArray<{ code: string; label: string }> = [
-    { code: 'refused',      label: 'Patient refused' },
-    { code: 'fainted',      label: 'Patient fainted' },
-    { code: 'no_vein',      label: 'Vein not found' },
-    { code: 'insufficient', label: 'Insufficient sample' },
-    { code: 'wrong_tube',   label: 'Wrong tube' },
-    { code: 'other',        label: 'Other' }
+  protected readonly REJECT_REASONS: ReadonlyArray<{
+    code: string;
+    label: string;
+  }> = [
+    { code: "refused", label: "Patient refused" },
+    { code: "fainted", label: "Patient fainted" },
+    { code: "no_vein", label: "Vein not found" },
+    { code: "insufficient", label: "Insufficient sample" },
+    { code: "wrong_tube", label: "Wrong tube" },
+    { code: "other", label: "Other" },
   ];
-  protected readonly _rejectModal = signal<{ group: OrderGroup; reason: string; note: string } | null>(null);
+  protected readonly _rejectModal = signal<{
+    group: OrderGroup;
+    reason: string;
+    note: string;
+  } | null>(null);
 
   readonly pending = this._pending.asReadonly();
   readonly openOrderId = this._openOrderId.asReadonly();
@@ -1875,19 +703,28 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const p = s.order?.patient;
         g = {
           orderId: s.orderId,
+          orderNo:
+            s.order?.orderNumber ||
+            "#" + s.orderId.replace(/-/g, "").slice(-8).toUpperCase(),
           patientName: formatPatientInfo(p),
-          patientMeta: '',
+          patientFull: (p && patientDisplayName(p)) || undefined,
+          patientId: p?.id,
+          dailyNo: s.order?.dailyNo ?? null,
+          dailyNoDay: s.order?.dailyNoDay ?? null,
+          patientMeta: "",
           createdAt: s.createdAt,
           samples: [],
           totalVials: 0,
           collected: 0,
-          paymentHold: false
+          notCollected: 0,
+          paymentHold: false,
         };
         byOrder.set(s.orderId, g);
       }
       g.samples.push(s);
       g.totalVials++;
-      if (s.status !== 'pending') g.collected++;
+      if (isNotCollected(s)) g.notCollected++;
+      else if (s.status !== "pending") g.collected++;
       if (s.order?.paymentHold) g.paymentHold = true;
     }
     // Meta line = the SAMPLE barcode(s), not the order number — the tube in
@@ -1895,25 +732,49 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // first barcode + a count; each tube's own barcode is on its card/row.
     const list = Array.from(byOrder.values());
     for (const g of list) {
-      const codes = g.samples.map(x => x.barcode).filter((b): b is string => !!b);
-      g.patientMeta = codes.length === 0 ? '—'
-        : codes.length === 1 ? codes[0]
-        : `${codes[0]} +${codes.length - 1}`;
+      const codes = g.samples
+        .map((x) => x.barcode)
+        .filter((b): b is string => !!b);
+      g.patientMeta =
+        codes.length === 0
+          ? "—"
+          : codes.length === 1
+            ? codes[0]
+            : `${codes[0]} +${codes.length - 1}`;
     }
     return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
+
+  /** "12 min waiting" — how long since the order was raised. */
+  protected waitingLabel(g: OrderGroup): string {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min waiting`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} h ${m % 60 > 0 ? (m % 60) + ' m ' : ''}waiting`;
+    return `${Math.floor(h / 24)} d waiting`;
+  }
+  /** Escalating tone for the waiting badge: >30 min amber, >60 min red. */
+  protected waitingTone(g: OrderGroup): 'ok' | 'warn' | 'late' {
+    const m = (Date.now() - new Date(g.createdAt).getTime()) / 60000;
+    return m > 60 ? 'late' : m > 30 ? 'warn' : 'ok';
+  }
 
   /** Same as groups() but filtered by the live search box. Empty input shows all. */
   readonly filteredGroups = computed<OrderGroup[]>(() => {
     const q = this.scanValue().trim().toLowerCase();
     if (!q) return this.groups();
-    return this.groups().filter(g => {
+    return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
-      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
-      return g.samples.some(s =>
-        (s.barcode ?? '').toLowerCase().includes(q) ||
-        (s.order?.patient?.phone ?? '').includes(this.scanValue().trim()) ||
-        (s.order?.patient?.mrn ?? '').toLowerCase().includes(q)
+      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
+      return g.samples.some(
+        (s) =>
+          (s.barcode ?? "").toLowerCase().includes(q) ||
+          (s.order?.patient?.phone ?? "").includes(this.scanValue().trim()) ||
+          (s.order?.patient?.mrn ?? "").toLowerCase().includes(q),
       );
     });
   });
@@ -1922,28 +783,403 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly activeGroup = computed<OrderGroup | null>(() => {
     const id = this._openOrderId();
     if (!id) return null;
-    return this.groups().find(g => g.orderId === id) ?? null;
+    return this.groups().find((g) => g.orderId === id) ?? null;
   });
 
+  // ─── Repetitive mode (Phase 3) ────────────────────────────────────────
+  /** Wall clock, ticked at 1 Hz by the constructor effect ONLY while the
+   *  open drawer contains pending series tubes. */
+  readonly nowMs = signal(Date.now());
+  private _clock: ReturnType<typeof setInterval> | null = null;
+  /** Client-side override: locked 'not-due' tubes force-unlocked by 4 rapid
+   *  taps — they render (and collect) as 'due'. */
+  readonly earlyUnlocked = signal<Set<string>>(new Set());
+  /** Client-side override: 'missed' tubes reopened by a double-tap — they
+   *  render (and collect) as 'due'. */
+  readonly reopened = signal<Set<string>>(new Set());
+  /** Per-sample rapid-tap tracker for the two override gestures. */
+  private readonly _taps = new Map<string, { count: number; lastTs: number }>();
+  /** 4 taps, each ≤1.5s after the previous, unlock a 'not-due' tube. */
+  private static readonly EARLY_UNLOCK_TAPS = 4;
+  private static readonly EARLY_UNLOCK_GAP_MS = 1500;
+  /** Double-tap within 400ms reopens a 'missed' tube. */
+  private static readonly REOPEN_TAP_MS = 400;
+
+  /** Series state per sample of the ACTIVE group, memoized per clock tick /
+   *  data change so the template can call tubeState() freely. Overrides
+   *  (early unlock / reopen) are applied here, converting to 'due'. */
+  private readonly _tubeStates = computed<Map<string, SeriesState>>(() => {
+    const map = new Map<string, SeriesState>();
+    const g = this.activeGroup();
+    if (!g) return map;
+    const now = this.nowMs();
+    const early = this.earlyUnlocked();
+    const reopened = this.reopened();
+    for (const s of g.samples) {
+      let st = seriesState(s, g.samples, now);
+      if (st.kind === "locked" && st.reason === "not-due" && early.has(s.id)) {
+        st = { kind: "due", dueAt: st.dueAt };
+      } else if (st.kind === "missed" && reopened.has(s.id)) {
+        st = { kind: "due", dueAt: st.dueAt };
+      }
+      map.set(s.id, st);
+    }
+    return map;
+  });
+
+  patientTitle(rawName: string): string {
+    if (!rawName) return '—';
+    const parts = rawName.split('|').map(s => s.trim());
+    return parts[0] || rawName;
+  }
+
+  patientSub(rawName: string): string {
+    if (!rawName) return '';
+    const parts = rawName.split('|').map(s => s.trim());
+    if (parts.length > 1) {
+      return parts.slice(1).join(' · ');
+    }
+    return '';
+  }
+
+  /** The tube's series state ('normal' for every non-series tube — all the
+   *  pre-existing template branches key off that). */
+  tubeState(s: OrderSample): SeriesState {
+    return this._tubeStates().get(s.id) ?? { kind: "normal" };
+  }
+
+  /** Drawer order: normal tubes first (existing order), then series tubes by
+   *  (series, ascending offset). */
+  // ─── Context bar (band pill) + VIALS filter (nd pattern) ─────────────
+  /** Status filter for the VIALS card (All · Pending · Drawn · External). */
+  readonly vialFilter = signal<'all' | 'pending' | 'drawn' | 'external'>('all');
+  /** "N samples" chip expanded (lists the sample IDs). */
+  readonly samplesOpen = signal(false);
+  /** Phone: the COLLECTION card opens as a sheet from the bottom bar. */
+  readonly actionsOpen = signal(false);
+  /** Back chevron in the band closes this step (hero-band backAction). */
+  readonly closeFn = () => this.close();
+
+  vialFilterOpts(g: OrderGroup): Array<{ id: 'all' | 'pending' | 'drawn' | 'external'; label: string; count: number }> {
+    const ss = g.samples;
+    return [
+      { id: 'all', label: 'All', count: ss.length },
+      { id: 'pending', label: 'Pending', count: ss.filter(s => s.status === 'pending').length },
+      { id: 'drawn', label: 'Drawn', count: ss.filter(s => isDrawn(s)).length },
+      { id: 'external', label: 'External', count: ss.filter(s => s.source === 'external').length },
+    ];
+  }
+  /** Adaptive tile size from the vial count (usually ≤ 6–7 vials, so use
+   *  the big screen): 1–2 → xl, 3–4 → lg, 5–7 → md, 8+ → sm. */
+  tileSize(g: OrderGroup): 'xl' | 'lg' | 'md' | 'sm' {
+    const n = this.visibleSamples(g).length;
+    return n <= 2 ? 'xl' : n <= 4 ? 'lg' : n <= 7 ? 'md' : 'sm';
+  }
+  /** The vial tiles shown under the current filter. */
+  visibleSamples(g: OrderGroup): OrderSample[] {
+    const f = this.vialFilter();
+    const list = this.orderedSamples(g);
+    if (f === 'pending') return list.filter(s => s.status === 'pending');
+    if (f === 'drawn') return list.filter(s => isDrawn(s));
+    if (f === 'external') return list.filter(s => s.source === 'external');
+    return list;
+  }
+  /** Collection info the vial tiles DON'T already show — only fields the
+   *  collect payload actually carries (order priority, referral, per-test
+   *  fasting flag). Nothing is invented; empty → the panel stays lean. */
+  collectInfo(g: OrderGroup): { urgent: boolean; fasting: string[]; refDoctor: string; refHospital: string } {
+    const o = g.samples.find((x) => !!x.order)?.order;
+    const fasting = new Set<string>();
+    for (const smp of g.samples)
+      for (const t of smp.tests ?? [])
+        if ((t as { test?: { fastingRequired?: boolean; name?: string } }).test?.fastingRequired)
+          fasting.add((t as { test?: { name?: string } }).test?.name ?? "Test");
+    return {
+      // Order priority, normalised: urgent / STAT → Urgent (the lab has Urgent / Normal only).
+      urgent: normalizePriority(o?.priority) === "urgent",
+      fasting: [...fasting],
+      refDoctor: (o?.refDoctorName ?? "").trim(),
+      refHospital: (o?.refHospitalName ?? "").trim(),
+    };
+  }
+  /** Tests carried by one tube (the tile hides them; the panel lists them
+   *  so the collector sees what each tube is for + the volume to draw). */
+  tubeTests(smp: OrderSample): Array<{ name: string; vol: number | null }> {
+    return (smp.tests ?? [])
+      .map((t) => ({
+        name: (t as { test?: { name?: string } }).test?.name ?? t.name,
+        vol: (t as { test?: { sampleVolumeMl?: number | null } }).test?.sampleVolumeMl ?? null,
+      }))
+      .filter((x) => !!x.name);
+  }
+
+  /** Order → drawn → dispatched, from the timestamps the payload carries. */
+  collectTimeline(g: OrderGroup): Array<{ key: string; label: string; at: string | null; done: boolean; note?: string; tone?: "stopped" }> {
+    const o = g.samples.find((x) => !!x.order)?.order;
+    const drawnAts = g.samples.map((x) => x.collectedAt).filter((x): x is string => !!x).sort();
+    const dispAts = g.samples.map((x) => x.dispatchedAt).filter((x): x is string => !!x).sort();
+    const allDrawn = g.collected === g.totalVials;
+    const steps: Array<{ key: string; label: string; at: string | null; done: boolean; note?: string; tone?: "stopped" }> = [
+      { key: "ordered", label: "Ordered", at: o?.createdAt ?? g.createdAt ?? null, done: true },
+      {
+        key: "drawn", label: "Drawn", done: allDrawn,
+        at: allDrawn ? drawnAts[drawnAts.length - 1] ?? null : null,
+        note: allDrawn ? undefined : `${g.collected} of ${g.totalVials}`,
+      },
+    ];
+    // "Can't collect" is its own stop on the timeline — never folded into
+    // Drawn / Dispatched (QA #6).
+    if (g.notCollected > 0) {
+      const reasons = [...new Set(g.samples.filter(isNotCollected).map((x) => (x.rejectedReason ?? "").trim()).filter(Boolean))];
+      steps.push({
+        key: "not_collected", label: "Not collected", at: null, done: false, tone: "stopped",
+        note: `${g.notCollected} of ${g.totalVials}${reasons.length ? " · " + reasons.join(", ") : ""}`,
+      });
+    }
+    steps.push({ key: "dispatched", label: "Dispatched", done: this.isDispatched(g), at: dispAts[dispAts.length - 1] ?? null });
+    return steps;
+  }
+
+  hasCollectInfo(g: OrderGroup): boolean {
+    const i = this.collectInfo(g);
+    return i.urgent || i.fasting.length > 0 || !!i.refDoctor || !!i.refHospital;
+  }
+
+  /** Full patient name for the context chip (falls back to the list name). */
+  patientFullName(g: OrderGroup): string {
+    return g.patientFull || this.patientTitle(g.patientName);
+  }
+  /** The patient chip opens the profile when the user may view patients. */
+  canOpenPatient(g: OrderGroup): boolean {
+    return !!g.patientId && (this.auth.hasPermission('view_patient') || this.auth.hasPermission('register_patient'));
+  }
+  openPatient(g: OrderGroup): void {
+    if (!this.canOpenPatient(g)) return;
+    const id = g.patientId!;
+    this._openOrderId.set(null);
+    this.router.navigate(['/frontdesk/patients', id]);
+  }
+
+  /** Every department on the tube — a shared tube (CBC + HbA1c on one EDTA)
+   *  names them all. */
+  tubeDeptLabel(s: OrderSample): string {
+    return tubeDepartmentLabel(s);
+  }
+
+  orderedSamples(g: OrderGroup): OrderSample[] {
+    return sortForCollection(g.samples);
+  }
+
+  /** Caption chip beside the container name. Offsets >0 always show
+   *  ("+30 min"); the anchor shows "First draw" only once it's no longer
+   *  pending (while pending, the status pill already says it). */
+  captionOffset(s: OrderSample): string | null {
+    const off = s.repeatOffsetMin;
+    if (off == null) return null;
+    if (off > 0) return offsetLabel(off);
+    return s.status !== "pending" ? "First draw" : null;
+  }
+
+  /** Live "m:ss" countdown for the locked-not-due pill. */
+  countdown(msUntilDue: number | undefined): string {
+    return countdownLabel(msUntilDue ?? 0);
+  }
+
+  hasSeries(g: OrderGroup): boolean {
+    return g.samples.some((s) => s.repeatOffsetMin != null);
+  }
+
+  /** Footer Done gate. Non-series groups keep the exact legacy rule (every
+   *  vial drawn). Series groups block only on tubes collectable RIGHT NOW
+   *  ('normal' | 'anchor' | 'due') — locked future offsets and missed
+   *  windows don't hold the collector hostage in the drawer. */
+  doneDisabled(g: OrderGroup): boolean {
+    // A not-collected tube is settled (it waits for Recollect at the desk),
+    // so it doesn't hold the collector in the drawer.
+    if (!this.hasSeries(g)) return g.collected + (g.notCollected ?? 0) < g.totalVials;
+    return g.samples.some((s) => {
+      if (s.status !== "pending") return false;
+      const k = this.tubeState(s).kind;
+      return k === "normal" || k === "anchor" || k === "due";
+    });
+  }
+
+  /** A dispatch / bill action is the footer's call to action right now
+   *  (mirrors the template's footer branches). */
+  dispatchCtaShown(g: OrderGroup): boolean {
+    if (this.isDispatched(g)) return false;
+    if (g.collected === g.totalVials && g.paymentHold && this.dispatchStep()) return this.canBill();
+    if (g.collected === g.totalVials && this.canDispatch()) return true;
+    return this.canPartialDispatch(g);
+  }
+
+  /** Colour discipline: ONLY the main call to action is primary. The
+   *  finish button is it when enabled and no dispatch / bill action is on
+   *  offer (and after dispatch, as before). */
+  finishIsPrimary(g: OrderGroup): boolean {
+    return this.isDispatched(g) || (!this.doneDisabled(g) && !this.dispatchCtaShown(g));
+  }
+
+  doneLabel(g: OrderGroup): string {
+    if (this.doneDisabled(g)) return "Collect all to finish";
+    if (this.hasSeries(g) && g.samples.some((s) => s.status === "pending"))
+      return "Done for now";
+    return "Done";
+  }
+
+  /** Clear all per-drawer client-side series/dispatch state (overrides, tap
+   *  trackers, selection mode) — called on drawer open and close. */
+  private resetSeriesOverrides(): void {
+    this._taps.clear();
+    if (this.earlyUnlocked().size) this.earlyUnlocked.set(new Set());
+    if (this.reopened().size) this.reopened.set(new Set());
+    this.dispatchSelect.set(null);
+  }
+
+  // ─── Partial dispatch (Phase 4) ───────────────────────────────────────
+  /** Non-null while selection mode is active: the set of sample ids chosen
+   *  for a partial dispatch. */
+  readonly dispatchSelect = signal<Set<string> | null>(null);
+
+  collectedCount(g: OrderGroup): number {
+    return countCollected(g.samples);
+  }
+
+  /** "Dispatch tubes…" shows when the workflow has a dispatch step, the user
+   *  may dispatch, there's no payment hold, and the order is PARTIALLY
+   *  collected (≥1 tube 'collected' but not every tube drawn) — the
+   *  all-collected case keeps the classic whole-order Dispatch button. */
+  canPartialDispatch(g: OrderGroup): boolean {
+    return (
+      this.dispatchStep() &&
+      this.canDispatch() &&
+      !g.paymentHold &&
+      !this.isDispatched(g) &&
+      this.collectedCount(g) > 0 &&
+      g.collected < g.totalVials
+    );
+  }
+
+  /** Enter selection mode with every currently-collected tube pre-selected
+   *  (the overwhelmingly common intent: "send what I've drawn so far"). */
+  startPartialDispatch(g: OrderGroup): void {
+    this.dispatchSelect.set(
+      new Set(
+        g.samples.filter((s) => s.status === "collected").map((s) => s.id),
+      ),
+    );
+  }
+
+  cancelPartialDispatch(): void {
+    this.dispatchSelect.set(null);
+  }
+
+  /** One-click (OPS-66): dispatch every currently-collected tube — the
+   *  overwhelmingly common series intent, "send what I've drawn so far". No
+   *  intermediate select-then-confirm step; picking a subset stays available
+   *  via startPartialDispatch()/"Choose". */
+  async dispatchCollected(g: OrderGroup): Promise<void> {
+    if (this._dispatching()) return;
+    const ids = g.samples
+      .filter((s) => s.status === "collected")
+      .map((s) => s.id);
+    await this.dispatchSampleIds(g, ids);
+  }
+
+  /** Confirm the tubes chosen in selection mode ("Choose" path). */
+  async confirmPartialDispatch(g: OrderGroup): Promise<void> {
+    const sel = this.dispatchSelect();
+    if (!sel || sel.size === 0 || this._dispatching()) return;
+    const ids = g.samples
+      .filter((s) => sel.has(s.id) && s.status === "collected")
+      .map((s) => s.id);
+    this.dispatchSelect.set(null);
+    await this.dispatchSampleIds(g, ids);
+  }
+
+  /** Dispatch the given tubes one by one (PATCH /api/samples/{id}/dispatch),
+   *  optimistically flipping each to 'dispatched' and rolling back on error.
+   *  STAYS in the drawer — the _returnTo navigation is exclusive to the
+   *  whole-order dispatchOrder() path. */
+  private async dispatchSampleIds(g: OrderGroup, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    this._dispatching.set(true);
+    let ok = 0;
+    let firstError: string | null = null;
+    for (const id of ids) {
+      // Optimistic flip; sequential PATCH; roll back this tube on failure.
+      this._pending.update((list) =>
+        list.map((x) => (x.id === id ? { ...x, status: "dispatched" } : x)),
+      );
+      try {
+        await firstValueFrom(this.api.patch(`/api/samples/${id}/dispatch`, {}));
+        ok++;
+      } catch (e) {
+        this._pending.update((list) =>
+          list.map((x) => (x.id === id ? { ...x, status: "collected" } : x)),
+        );
+        if (!firstError) firstError = ApiError.from(e).message;
+      }
+    }
+    if (ok > 0) {
+      this.toasts.success(`${ok} tube${ok === 1 ? "" : "s"} dispatched to lab`);
+      this.sampleCollected.emit();
+    }
+    if (firstError) this.toasts.error(firstError);
+    this._dispatching.set(false);
+  }
+
   async ngOnInit() {
+    // Live queue: refetch when an order is created / a tube changes (no
+    // polling) — but NEVER while the drawer is open. Our own collect /
+    // External / dispatch actions echo back as collection events, and a
+    // mid-flow refresh replaces the pending list, dropping the open order's
+    // tubes: activeGroup() goes null, the drawer unmounts (or, deep-linked,
+    // the page falls into the eternal "Opening collection…" loader). close()
+    // already refreshes, so nothing is lost by waiting.
+    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this._openOrderId()) return;
+      this.refresh();
+    });
+    // Per-branch label config (size + code) for direct-to-printer label print.
+    this.labCfg.ensureLoaded();
     // Load the lab's configured container colours (best-effort — falls back to
     // the built-in conventions if it fails or a department has none set).
-    this.api.get<{ code: string; containerColor?: string | null; containerLabel?: string | null }[]>('/api/tenants/departments')
-      .subscribe({ next: list => {
-        const map: Record<string, { color?: string | null; label?: string | null }> = {};
-        for (const d of list ?? []) map[d.code] = { color: d.containerColor, label: d.containerLabel };
-        this._deptContainers.set(map);
-      }, error: () => {} });
+    this.api
+      .get<
+        {
+          code: string;
+          containerColor?: string | null;
+          containerLabel?: string | null;
+        }[]
+      >("/api/tenants/departments")
+      .subscribe({
+        next: (list) => {
+          const map: Record<
+            string,
+            { color?: string | null; label?: string | null }
+          > = {};
+          for (const d of list ?? [])
+            map[d.code] = { color: d.containerColor, label: d.containerLabel };
+          this._deptContainers.set(map);
+        },
+        error: () => {},
+      });
 
-    const oid = this.route.snapshot.queryParamMap.get('orderId');
+    const oid = this.route.snapshot.queryParamMap.get("orderId");
     if (oid) {
       this._openOrderId.set(oid);
       this._deepLinkMode.set(true);
       // Honour an explicit ?from=… if the caller passes one (e.g. lab dispatch
       // counter), otherwise default deep-links back to /frontdesk since that's
       // the only screen that links here today.
-      const from = this.route.snapshot.queryParamMap.get('from');
-      this._returnTo = from && from.startsWith('/') ? from : '/frontdesk';
+      const from = this.route.snapshot.queryParamMap.get("from");
+      this._returnTo = from && from.startsWith("/") ? from : "/frontdesk";
+    } else {
+      // The band "Collect" button (pf-collect-band-button) opens the
+      // unfiltered queue with ?from=… — Back on the queue band returns there.
+      const from = this.route.snapshot.queryParamMap.get("from");
+      this._queueFrom.set(from && from.startsWith("/") && !from.startsWith("//") ? from : null);
     }
 
     // /pending-collection only returns samples currently in pending status.
@@ -1951,69 +1187,303 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the order directly and merge any missing samples in so the drawer can
     // render its tubes regardless of where the order is in the lifecycle.
     try {
-      const list = await firstValueFrom(this.api.get<OrderSample[]>('/api/samples/pending-collection'));
+      const list = await firstValueFrom(
+        this.api.get<OrderSample[]>("/api/samples/pending-collection"),
+      );
       let merged: OrderSample[] = list ?? [];
       if (oid) {
         try {
-          const order = await firstValueFrom(this.api.get<Order>(`/api/orders/${oid}`));
+          const order = await firstValueFrom(
+            this.api.get<Order>(`/api/orders/${oid}`),
+          );
           if (order?.samples?.length) {
-            const have = new Set(merged.map(s => s.id));
+            const have = new Set(merged.map((s) => s.id));
             const extras = order.samples
-              .filter(s => !have.has(s.id))
-              .map(s => ({ ...s, order } as OrderSample));
+              .filter((s) => !have.has(s.id))
+              .map((s) => ({ ...s, order }) as OrderSample);
             if (extras.length) merged = [...merged, ...extras];
           }
-        } catch { /* leave list as-is, drawer will be empty */ }
+        } catch {
+          /* leave list as-is, drawer will be empty */
+        }
       }
       this._pending.set(merged);
     } catch {
       this._pending.set([]);
     }
+    this.queueLoaded.set(true);
   }
 
-  tube(s: OrderSample) { return containerFor(s, this._deptContainers()); }
-  container(s: OrderSample) { return containerFor(s, this._deptContainers()); }
+  tube(s: OrderSample) {
+    return containerFor(s, this._deptContainers());
+  }
+  container(s: OrderSample) {
+    return containerFor(s, this._deptContainers());
+  }
+
+  /** Fluid gradient for the cup/jar graphic: amber for urine, neutral grey
+   *  for sterile jars (body fluid, stool, CSF …). */
+  cupFluid(s: OrderSample): {
+    top: string;
+    mid: string;
+    bottom: string;
+    surface: string;
+    surfaceHi: string;
+  } {
+    return this.container(s).kind === "urine_cup"
+      ? {
+          top: "#fcd34d",
+          mid: "#f59e0b",
+          bottom: "#b45309",
+          surface: "#fde68a",
+          surfaceHi: "#fef3c7",
+        }
+      : {
+          top: "#e2e8f0",
+          mid: "#94a3b8",
+          bottom: "#64748b",
+          surface: "#e2e8f0",
+          surfaceHi: "#f8fafc",
+        };
+  }
+
+  /** Long-press (hold ~2s) a vial to peek its test list; a normal tap collects.
+   *  The list floats as a popover that stays open while held. A move (scroll)
+   *  or early release cancels the peek; once the peek fires, the release's
+   *  click is suppressed so it never also collects. */
+  readonly peekId = signal<string | null>(null);
+  readonly peekPos = signal<{ x: number; y: number } | null>(null);
+  readonly peekTests = signal<string[]>([]);
+  /** Manual-mode "Label by hand" sheet: what to hand-write on each container. */
+  readonly writeUpOpen = signal(false);
+  /** Which vial is mid-hold — drives the progress-fill animation. */
+  readonly holdingId = signal<string | null>(null);
+  private static readonly HOLD_MS = 2000;
+  private _pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _longPressFired = false;
+  private _downX = 0;
+  private _downY = 0;
+
+  onVialDown(s: OrderSample, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return; // primary / touch only
+    this._longPressFired = false;
+    this._downX = ev.clientX;
+    this._downY = ev.clientY;
+    // Float the popover beside the vial (right, or left if no room) so the
+    // holding finger never covers it.
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    const tests = (s.tests ?? [])
+      .map((t) => t.test?.name ?? t.name)
+      .filter((n): n is string => !!n);
+    this.clearPress();
+    this.holdingId.set(s.id); // start the hold-progress fill
+    this._pressTimer = setTimeout(() => {
+      this._longPressFired = true;
+      this.holdingId.set(null);
+      this.peekPos.set({ x, y });
+      this.peekTests.set(tests);
+      this.peekId.set(s.id); // popover shows while held
+    }, SampleCollectionComponent.HOLD_MS);
+  }
+  onVialMove(ev: PointerEvent): void {
+    if (
+      this._pressTimer &&
+      (Math.abs(ev.clientX - this._downX) > 10 ||
+        Math.abs(ev.clientY - this._downY) > 10)
+    ) {
+      this.clearPress();
+    }
+  }
+  onVialUp(): void {
+    this.clearPress();
+  }
+  private clearPress(): void {
+    if (this._pressTimer) {
+      clearTimeout(this._pressTimer);
+      this._pressTimer = null;
+    }
+    this.holdingId.set(null);
+    this.peekId.set(null); // release hides the peek
+  }
+
+  /** The vial's click: suppress it when a long-press just peeked; in
+   *  partial-dispatch selection mode taps only toggle collected tubes; on a
+   *  locked/missed series tube the tap runs the override gesture counters;
+   *  otherwise ('normal' | 'anchor' | 'due') the FIRST tap collects exactly
+   *  as it always has. */
+  onVialClick(s: OrderSample, ev: Event): void {
+    if (this._longPressFired) {
+      this._longPressFired = false;
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+
+    // Selection mode: taps toggle membership of collected tubes; every
+    // other tube is inert until Cancel / confirm.
+    if (this.dispatchSelect() !== null) {
+      if (s.status !== "collected") return;
+      this.dispatchSelect.update((set) => {
+        const next = new Set(set);
+        if (next.has(s.id)) next.delete(s.id);
+        else next.add(s.id);
+        return next;
+      });
+      return;
+    }
+
+    const st = this.tubeState(s);
+
+    if (st.kind === "locked") {
+      if (st.reason === "awaiting-anchor") {
+        this.toasts.info("Draw the first tube of this series first");
+        return;
+      }
+      // Not due yet: 4 rapid taps (≤1.5s between taps) force-unlock early.
+      const now = Date.now();
+      const t = this._taps.get(s.id);
+      const count =
+        t && now - t.lastTs <= SampleCollectionComponent.EARLY_UNLOCK_GAP_MS
+          ? t.count + 1
+          : 1;
+      this._taps.set(s.id, { count, lastTs: now });
+      if (count >= SampleCollectionComponent.EARLY_UNLOCK_TAPS) {
+        this._taps.delete(s.id);
+        this.earlyUnlocked.update((set) => new Set(set).add(s.id));
+        this.toasts.success("Unlocked early — tap to collect");
+      } else if (count === 1) {
+        this.toasts.info(
+          `Not due yet — ${dueClockLabel(st.dueAt ?? now)} (tap 4× to override)`,
+        );
+      }
+      return;
+    }
+
+    if (st.kind === "missed") {
+      // Double-tap (≤400ms) reopens the missed window.
+      const now = Date.now();
+      const t = this._taps.get(s.id);
+      if (t && now - t.lastTs <= SampleCollectionComponent.REOPEN_TAP_MS) {
+        this._taps.delete(s.id);
+        this.reopened.update((set) => new Set(set).add(s.id));
+        this.toasts.success("Missed draw reopened — tap to collect");
+      } else {
+        this._taps.set(s.id, { count: 1, lastTs: now });
+      }
+      return;
+    }
+
+    this._taps.delete(s.id);
+    this.toggleCollected(s);
+  }
+
   /** Total volume to draw for this tube — the sum of its tests' sampleVolumeMl,
    *  skipping tests that don't declare one. Null when NO test declares a
    *  volume, so the "Draw ~N mL" pill is omitted rather than lying with 0. */
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number {
+    return logicalTestCount(tests);
+  }
+
   drawVolume(s: OrderSample): number | null {
     let sum = 0;
     let any = false;
     for (const t of s.tests) {
       const v = t.test?.sampleVolumeMl;
-      if (v != null) { sum += v; any = true; }
+      if (v != null) {
+        sum += v;
+        any = true;
+      }
     }
     return any ? Math.round(sum * 10) / 10 : null;
   }
 
-  openOrder(id: string) { this._openOrderId.set(id); }
+  /** Tube drawn (collected or further) — drives the filled tube, the check
+   *  and the time stamp. A not-collected tube is NOT drawn. */
+  drawn(s: OrderSample): boolean {
+    return isDrawn(s);
+  }
+  /** Tube marked "Can't collect" (rejected before any draw). */
+  notCollected(s: OrderSample): boolean {
+    return isNotCollected(s);
+  }
+  /** "Not collected — Patient refused" / "1 of 2 not collected — …" for the
+   *  drawer's status line; null when every tube is drawable. */
+  notCollectedText(g: OrderGroup): string | null {
+    return notCollectedLabel(g.samples, { full: true });
+  }
+
+  openOrder(id: string) {
+    this.zoom.runLocal('in', () => {
+      this.resetSeriesOverrides();
+      this._openOrderId.set(id);
+    });
+  }
 
   /** Open a specific order's collection drawer (e.g. from a scanned order QR).
    *  Best-effort merges the order's samples in case they aren't in the pending
    *  list (already collected / different lifecycle). */
   async openOrderById(id: string) {
+    this.resetSeriesOverrides();
     this._openOrderId.set(id);
-    this.scanValue.set('');
+    this.scanValue.set("");
     try {
-      const order = await firstValueFrom(this.api.get<Order>(`/api/orders/${id}`));
+      const order = await firstValueFrom(
+        this.api.get<Order>(`/api/orders/${id}`),
+      );
       if (order?.samples?.length) {
-        const have = new Set(this._pending().map(s => s.id));
-        const extras = order.samples.filter(s => !have.has(s.id)).map(s => ({ ...s, order } as OrderSample));
-        if (extras.length) this._pending.update(cur => [...cur, ...extras]);
+        const have = new Set(this._pending().map((s) => s.id));
+        const extras = order.samples
+          .filter((s) => !have.has(s.id))
+          .map((s) => ({ ...s, order }) as OrderSample);
+        if (extras.length) this._pending.update((cur) => [...cur, ...extras]);
       }
-    } catch { /* drawer still shows any pending samples for this order */ }
+    } catch {
+      /* drawer still shows any pending samples for this order */
+    }
+    // The loader under the drawer waits on activeGroup(). If the order has
+    // nothing collectable AND nothing merged (bad id, fully processed order),
+    // activeGroup stays null and the deep-link page would spin forever —
+    // bail back to where the user came from instead.
+    if (!this.activeGroup()) {
+      this.toasts.warning("Nothing left to collect on this order.");
+      this.close();
+    }
   }
 
   /** Resolve a scanned order QR / URL / GUID / invoice number to an order and
    *  open it. Uses the collector-accessible resolve endpoint. */
   private resolveOrderCode(code: string) {
-    this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
-      next: r => { if (r?.orderId) this.openOrderById(r.orderId); else this.toasts.warning('No matching order for that scan.'); },
-      error: () => this.toasts.warning('No matching order for that scan.')
-    });
+    this.api
+      .get<{
+        orderId: string;
+      }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`)
+      .subscribe({
+        next: (r) => {
+          if (r?.orderId) this.openOrderById(r.orderId);
+          else this.toasts.warning("No matching order for that scan.");
+        },
+        error: () => this.toasts.warning("No matching order for that scan."),
+      });
   }
   close() {
-    this._openOrderId.set(null);
+    const open = this._openOrderId();
+    const shut = () => {
+      if (this._openOrderId() !== open) return;   // another order opened meanwhile
+      this.resetSeriesOverrides();
+      this.vialFilter.set('all');
+      this.samplesOpen.set(false);
+      this.actionsOpen.set(false);
+      this._openOrderId.set(null);
+    };
+    // Back to the list it was opened from: reverse the zoom. Leaving for the
+    // front desk is a step → step slide (router), so shut instantly there.
+    if (this._returnTo) shut(); else this.zoom.runLocal('out', shut);
     // Deep-linked from another screen (FD "Collect Sample") — return there
     // rather than leaving the user on an unrelated queue.
     if (this._returnTo) {
@@ -2030,21 +1500,30 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
-    this.api.get<OrderSample[]>('/api/samples/pending-collection').subscribe({
-      next: l => this._pending.set(l ?? [])
+    this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
+      next: (l) => this._pending.set(l ?? []),
     });
   }
 
-  /** Print every tube label for this order (barcode + QR). The hidden
-   *  `.pf-print-label` block in the drawer already holds the rendered labels;
-   *  `printLabelOnly()` toggles the global label-print stylesheet so ONLY those
-   *  labels reach paper — nothing else on the screen prints. */
+  /** Print every tube label for this order — ONLY to this station's label
+   *  printer (LabelPrintService). No printer → a dialog, never a fallback
+   *  print. The hidden `.pf-print-label` block in the drawer is only used when
+   *  a web user explicitly picks the label-sized system dialog. */
   printLabels(g: OrderGroup) {
-    if (!g.samples.length) { this.toasts.warning('No tubes to label'); return; }
-    printLabelOnly();
+    if (this.printing()) return;
+    this.printing.set(true);
+    void this.labelPrint.printTubeLabels({
+      samples: g.samples,
+      fallbackName: g.patientName,
+      systemPrint: () => printTubeLabels(),
+    }).finally(() => this.printing.set(false));
   }
+  /** Print labels is talking to the label printer (busy button). */
+  protected readonly printing = signal(false);
 
-  openScanner() { this.scannerOpen.set(true); }
+  openScanner() {
+    this.scannerOpen.set(true);
+  }
   onScanMatched(code: string) {
     this.scannerOpen.set(false);
     this.scanValue.set(code);
@@ -2058,7 +1537,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    * id matches are handled in-memory against `groups()` since the backend
    * already streams every pending order to this screen.
    */
-  onSearchInput(v: string) { this.scanValue.set(v); }
+  onSearchInput(v: string) {
+    this.scanValue.set(v);
+  }
 
   runSearch() {
     const raw = this.scanValue().trim();
@@ -2069,13 +1550,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (matches.length === 1) {
       // Single hit → open it.
       this._openOrderId.set(matches[0].orderId);
-      this.scanValue.set('');
+      this.scanValue.set("");
       return;
     }
 
     if (matches.length === 0) {
       // Sample vial barcode (PF-… / long digits) → exact barcode lookup.
-      if (this.looksLikeBarcode(raw)) { this.findByBarcode(); return; }
+      if (this.looksLikeBarcode(raw)) {
+        this.findByBarcode();
+        return;
+      }
       // Otherwise treat it as an order QR / URL / GUID / invoice number.
       this.resolveOrderCode(raw);
       return;
@@ -2090,13 +1574,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   private matchGroups(query: string): OrderGroup[] {
     const q = query.toLowerCase();
-    return this.groups().filter(g => {
+    return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
-      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ''))) return true;
-      return g.samples.some(s =>
-        (s.barcode ?? '').toLowerCase().includes(q) ||
-        (s.order?.patient?.phone ?? '').includes(query) ||
-        (s.order?.patient?.mrn ?? '').toLowerCase().includes(q)
+      if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
+      return g.samples.some(
+        (s) =>
+          (s.barcode ?? "").toLowerCase().includes(q) ||
+          (s.order?.patient?.phone ?? "").includes(query) ||
+          (s.order?.patient?.mrn ?? "").toLowerCase().includes(q),
       );
     });
   }
@@ -2104,17 +1590,19 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   findByBarcode() {
     const code = this.scanValue().trim();
     if (!code) return;
-    this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
-      next: s => {
-        if (s) {
-          this._openOrderId.set(s.orderId);
-          this.scanValue.set('');
-        }
-      },
-      error: () => {
-        this.toasts.error('No sample with that barcode');
-      }
-    });
+    this.api
+      .get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`)
+      .subscribe({
+        next: (s) => {
+          if (s) {
+            this._openOrderId.set(s.orderId);
+            this.scanValue.set("");
+          }
+        },
+        error: () => {
+          this.toasts.error("No sample with that barcode");
+        },
+      });
   }
 
   /**
@@ -2125,114 +1613,241 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    * and would make the one just tapped vanish mid-animation.
    */
   toggleCollected(s: OrderSample) {
-    if (s.status === 'pending') this.markCollected(s);
-    else if (s.status === 'collected') this.markPending(s);
-    // any other downstream status is locked — user can't undo from here.
+    if (s.status === "pending") {
+      this.markCollected(s);
+      return;
+    }
+    if (s.status === "collected") {
+      this.markPending(s);
+      return;
+    }
+    // "Can't collect" tube: the patient is back → offer Recollect (the tube
+    // returns to pending with the same barcode — it was never drawn).
+    if (isNotCollected(s)) {
+      void this.recollect(s);
+      return;
+    }
+    // Auto-receive workflows have NO dispatch step: collection immediately marks
+    // the tube 'received' at the lab. The front desk must still be able to undo a
+    // mis-tap, so treat an auto-received tube as un-collectable here — the backend
+    // reverses the auto-receipt. Genuine dispatch-workflow receipts stay locked.
+    if (s.status === "received" && !this.dispatchStep()) {
+      this.markPending(s);
+      return;
+    }
+    // dispatched / picked_up / processing / rejected / validated → locked.
   }
 
   private markCollected(s: OrderSample) {
     const now = new Date().toISOString();
-    this._pending.update(list => list.map(x => x.id === s.id
-      ? { ...x, status: 'collected', collectedAt: now }
-      : x));
+    this._pending.update((list) =>
+      list.map((x) =>
+        x.id === s.id ? { ...x, status: "collected", collectedAt: now } : x,
+      ),
+    );
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
-      error: e => {
+      next: () => {
+        this.sampleCollected.emit();
+      },
+      error: (e) => {
         // Only roll back if the local state still says 'collected'. If the
         // user has already toggled away (rapid tap-back), respect their newer
         // intent — its own PATCH will reconcile against the server.
-        const current = this._pending().find(x => x.id === s.id);
-        if (current?.status !== 'collected') return;
-        this._pending.update(list => list.map(x => x.id === s.id
-          ? { ...x, status: 'pending', collectedAt: undefined }
-          : x));
+        const current = this._pending().find((x) => x.id === s.id);
+        if (current?.status !== "collected") return;
+        this._pending.update((list) =>
+          list.map((x) =>
+            x.id === s.id
+              ? { ...x, status: "pending", collectedAt: undefined }
+              : x,
+          ),
+        );
         this.toasts.error(ApiError.from(e).message);
-      }
+      },
     });
   }
 
   private markPending(s: OrderSample) {
     const prev = { status: s.status, collectedAt: s.collectedAt };
-    this._pending.update(list => list.map(x => x.id === s.id
-      ? { ...x, status: 'pending', collectedAt: undefined }
-      : x));
+    this._pending.update((list) =>
+      list.map((x) =>
+        x.id === s.id ? { ...x, status: "pending", collectedAt: undefined } : x,
+      ),
+    );
 
     this.api.patch<OrderSample>(`/api/samples/${s.id}/uncollect`).subscribe({
-      error: e => {
+      error: (e) => {
         // Same guard as markCollected: only roll back if local state still
         // matches what we attempted, so a fast re-tap isn't fought by the
         // first request's late failure.
-        const current = this._pending().find(x => x.id === s.id);
-        if (current?.status !== 'pending') return;
-        this._pending.update(list => list.map(x => x.id === s.id ? { ...x, ...prev } : x));
-        this.toasts.error(ApiError.from(e).message);
-      }
+        const current = this._pending().find((x) => x.id === s.id);
+        if (current?.status !== "pending") return;
+        const err = ApiError.from(e);
+        // L-a review fix: "Sample is already pending; cannot uncollect."
+        // means a concurrent uncollect (another tap, another tab) already
+        // won the race — the server's TRUE status is pending, same as what
+        // we're already showing. Rolling back to 'collected' here would
+        // show the desk a tile state the server doesn't have; leave it
+        // pending (matches reality) instead of fighting it back.
+        if (/already pending/i.test(err.message)) {
+          this.toasts.error(err.message);
+          return;
+        }
+        this._pending.update((list) =>
+          list.map((x) => (x.id === s.id ? { ...x, ...prev } : x)),
+        );
+        this.toasts.error(err.message);
+      },
     });
   }
 
   /** Open the structured rejection picker for the active order. */
   rejectOrder(g: OrderGroup) {
-    const pending = g.samples.filter(s => s.status === 'pending');
+    const pending = g.samples.filter((s) => s.status === "pending");
     if (pending.length === 0) return;
-    this._rejectModal.set({ group: g, reason: '', note: '' });
+    this._rejectModal.set({ group: g, reason: "", note: "" });
   }
 
   setRejectReason(code: string) {
-    this._rejectModal.update(m => m ? { ...m, reason: code } : m);
+    this._rejectModal.update((m) => (m ? { ...m, reason: code } : m));
   }
   setRejectNote(v: string) {
-    this._rejectModal.update(m => m ? { ...m, note: v } : m);
+    this._rejectModal.update((m) => (m ? { ...m, note: v } : m));
   }
-  cancelReject() { this._rejectModal.set(null); }
+  cancelReject() {
+    this._rejectModal.set(null);
+  }
   pendingCount(g: OrderGroup): number {
-    return g.samples.filter(s => s.status === 'pending').length;
+    return g.samples.filter((s) => s.status === "pending").length;
   }
   canSubmitReject(): boolean {
     const m = this._rejectModal();
     if (!m || !m.reason) return false;
-    if (m.reason === 'other' && m.note.trim().length === 0) return false;
+    if (m.reason === "other" && m.note.trim().length === 0) return false;
     return true;
   }
 
+  /** True while the "Can't collect" submit is in flight (no double submit). */
+  protected readonly rejectBusy = signal(false);
+
+  /**
+   * "Can't collect" submit (QA #6). Marks every pending tube on the order NOT
+   * COLLECTED with the reason (PATCH /api/samples/{id}/reject — the server
+   * keeps it as 'rejected' with no collection stamp), then:
+   *   - reflects the new state locally (tube shows "Not collected — reason"),
+   *   - toasts what happened,
+   *   - returns to where the user came from (the Frontdesk for a deep link),
+   *     or back to the collection queue.
+   * The old code cleared the open order without navigating: on a deep link
+   * (FD "Collect" → /lab/collect?orderId=…) the queue is suppressed, so the
+   * page fell into the "Opening collection…" skeleton for ever — the BLANK
+   * PAGE. When every PATCH fails nothing changed: the dialog stays open with
+   * the error so the user can retry or cancel.
+   */
   async submitReject() {
     const m = this._rejectModal();
-    if (!m || !this.canSubmitReject()) return;
-    const label = this.REJECT_REASONS.find(r => r.code === m.reason)?.label ?? m.reason;
-    const reason = m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
-    const pending = m.group.samples.filter(s => s.status === 'pending');
-    const failures = await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
-    ));
-    const failed = failures.filter((e): e is ApiError => e !== null);
-    const ok = pending.length - failed.length;
-    if (ok > 0) this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} flagged for re-collection`);
-    if (failed.length) this.toasts.error(failed[0].message);
+    if (!m || !this.canSubmitReject() || this.rejectBusy()) return;
+    const label =
+      this.REJECT_REASONS.find((r) => r.code === m.reason)?.label ?? m.reason;
+    const reason =
+      m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
+    const pending = m.group.samples.filter((s) => s.status === "pending");
+    if (pending.length === 0) {
+      this._rejectModal.set(null);
+      return;
+    }
+    this.rejectBusy.set(true);
+    const results = await Promise.all(
+      pending.map((s) =>
+        firstValueFrom(
+          this.api.patch<OrderSample>(`/api/samples/${s.id}/reject`, { reason }),
+        )
+          .then(() => ({ id: s.id, error: null as ApiError | null }))
+          .catch((e) => ({ id: s.id, error: ApiError.from(e) })),
+      ),
+    );
+    this.rejectBusy.set(false);
+    const done = new Set(results.filter((r) => !r.error).map((r) => r.id));
+    const failed = results.filter((r) => !!r.error);
+    if (done.size === 0) {
+      this.toasts.error(failed[0]?.error?.message ?? "Could not mark the tubes not collected");
+      return;
+    }
+    this._pending.update((list) =>
+      list.map((x) =>
+        done.has(x.id)
+          ? { ...x, status: "rejected", rejectedReason: reason, collectedAt: undefined }
+          : x,
+      ),
+    );
+    const n = done.size;
+    this.toasts.success(
+      `${n} tube${n === 1 ? "" : "s"} marked not collected — ${label}`,
+    );
+    if (failed.length) this.toasts.error(failed[0].error!.message);
     this._rejectModal.set(null);
-    this._openOrderId.set(null);
-    this.refresh();
+    this.sampleCollected.emit();
+    // All marked → back to the Frontdesk (deep link) or the queue — never a
+    // dead page. Some failed → stay and refresh so the desk sees what's left.
+    if (failed.length === 0) this.close();
+    else this.refresh();
+  }
+
+  /** Recollect a "Can't collect" tube — the patient is back. The tube returns
+   *  to pending (back in the collection queue) and can be drawn right here. */
+  async recollect(s: OrderSample) {
+    const ok = await this.dialog.confirm({
+      title: "Recollect this tube?",
+      message: `It was marked not collected${s.rejectedReason ? ` (${s.rejectedReason})` : ""}. It goes back to pending so you can draw it now.`,
+      confirmLabel: "Recollect",
+      tone: "primary",
+    });
+    if (!ok) return;
+    try {
+      await firstValueFrom(
+        this.api.patch<OrderSample>(`/api/samples/${s.id}/recollect`, {}),
+      );
+      this._pending.update((list) =>
+        list.map((x) =>
+          x.id === s.id ? { ...x, status: "pending", rejectedReason: undefined } : x,
+        ),
+      );
+      this.toasts.success("Back to pending — tap the tube when drawn");
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    }
   }
 
   // Original free-text dialog kept as fallback for any other call sites.
   async legacyRejectOrder(g: OrderGroup) {
-    const pending = g.samples.filter(s => s.status === 'pending');
+    const pending = g.samples.filter((s) => s.status === "pending");
     if (pending.length === 0) return;
     const reason = await this.dialog.prompt({
       title: `Can't collect for ${g.patientName}?`,
-      message: `Flags ${pending.length} pending vial${pending.length === 1 ? '' : 's'} for re-collection.`,
-      placeholder: 'Patient refused, vein not found, wrong tube, …',
+      message: `Flags ${pending.length} pending vial${pending.length === 1 ? "" : "s"} for re-collection.`,
+      placeholder: "Patient refused, vein not found, wrong tube, …",
       multiline: true,
       required: true,
-      tone: 'danger',
-      confirmLabel: 'Reject vials'
+      tone: "danger",
+      confirmLabel: "Reject vials",
     });
     if (!reason) return;
-    const failures = await Promise.all(pending.map(s =>
-      firstValueFrom(this.api.patch(`/api/samples/${s.id}/reject`, { reason })).then(() => null).catch(e => ApiError.from(e))
-    ));
+    const failures = await Promise.all(
+      pending.map((s) =>
+        firstValueFrom(
+          this.api.patch(`/api/samples/${s.id}/reject`, { reason }),
+        )
+          .then(() => null)
+          .catch((e) => ApiError.from(e)),
+      ),
+    );
     const failed = failures.filter((e): e is ApiError => e !== null);
-    if (failed.length < pending.length) this.toasts.success('Marked for re-collection');
+    if (failed.length < pending.length)
+      this.toasts.success("Marked for re-collection");
     if (failed.length) this.toasts.error(failed[0].message);
-    this._openOrderId.set(null);
-    this.refresh();
+    // close(), not a bare _openOrderId reset: a deep link must navigate back
+    // (the bare reset stranded it on the loader — QA #6).
+    this.close();
   }
 }

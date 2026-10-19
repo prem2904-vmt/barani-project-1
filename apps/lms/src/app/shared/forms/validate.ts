@@ -4,59 +4,167 @@
 // Shared between the admin test-editor (previews what the rule will say)
 // and result-entry (blocks submission on failure).
 
-import { FormField, FormFieldType } from './form-field.model';
+import { FormField, FormFieldType, ValidationConfig } from './form-field.model';
+import { identityKind, isContactNumberField, validateEmail, validateIdentity } from './patient-fields';
+import { indianNational } from '../utils/indian-phone';
 
-export function validateFieldValue(field: FormField, value: unknown): string | null {
-  const v = field.validation;
+export interface CountryPhoneRule {
+  code: string;
+  country: string;
+  flag: string;
+  name: string;
+  maxDigits: number;
+  pattern: RegExp;
+  placeholder: string;
+  errorMessage: string;
+}
+
+/** Phones are Indian mobiles only (owner rule 2026-09-29 — the server's
+ *  IndianPhone rejects anything else), so the dialling-code pickers offer
+ *  +91 alone. The normaliser / search rules live in utils/indian-phone.ts. */
+export const COUNTRY_PHONE_RULES: CountryPhoneRule[] = [
+  {
+    code: '+91',
+    country: 'IN',
+    flag: '🇮🇳',
+    name: 'India',
+    maxDigits: 10,
+    pattern: /^[6-9]\d{9}$/,
+    placeholder: '98765 43210',
+    errorMessage: 'Must be a valid 10-digit Indian phone number starting with 6, 7, 8, or 9'
+  },
+];
+
+export function getCountryPhoneRule(code?: string): CountryPhoneRule {
+  if (!code) return COUNTRY_PHONE_RULES[0];
+  return COUNTRY_PHONE_RULES.find(r => r.code === code) ?? COUNTRY_PHONE_RULES[0];
+}
+
+/** Error for a phone value, or null when valid / empty. The one Indian
+ *  mobile rule (indian-phone.ts): 9876543210, 09876543210, 919876543210,
+ *  +91 98765-43210 … are valid; other countries and malformed numbers are
+ *  not. `forcedCode` is accepted for existing callers (only +91 exists). */
+export function validatePhoneNumber(raw: unknown, forcedCode?: string): string | null {
+  if (raw == null || raw === '') return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  const rule = getCountryPhoneRule(forcedCode);
+  if (!str.replace(/\D/g, '')) return 'Phone number required';
+  return indianNational(str) ? null : rule.errorMessage;
+}
+
+export interface GenericValidationRule {
+  type?: string;
+  value?: unknown;
+  message?: string;
+  errorMessage?: string | null;
+  min?: number | null;
+  max?: number | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  pattern?: string | null;
+}
+
+export interface ValidatableField {
+  type: string;
+  /** Field name / label: identity numbers (ABHA / Aadhaar) and number fields
+   *  that are really phone numbers ("Additional contact") are recognised by it. */
+  name?: string;
+  title?: string;
+  isRequired?: boolean;
+  validation?: ValidationConfig | GenericValidationRule[] | null;
+}
+
+export function validateFieldValue(field: ValidatableField, value: unknown): string | null {
   const empty = isEmpty(value);
 
   if (field.isRequired && empty) {
-    return v?.errorMessage ?? 'Required';
+    return 'Required';
   }
   if (empty) return null;
 
-  if (isNumericType(field.type)) {
-    const n = Number(value);
-    if (!Number.isNaN(n)) {
-      if (v?.min != null && n < v.min) return v.errorMessage ?? `Must be at least ${v.min}`;
-      if (v?.max != null && n > v.max) return v.errorMessage ?? `Must not exceed ${v.max}`;
-    }
+  if (field.type === 'phone' || isContactNumberField(field)) {
+    const phoneErr = validatePhoneNumber(value);
+    if (phoneErr) return phoneErr;
+  }
+  if (field.type === 'email') {
+    const emailErr = validateEmail(value);
+    if (emailErr) return emailErr;
+  }
+  const idKind = identityKind(field);
+  if (idKind) {
+    const idErr = validateIdentity(idKind, value);
+    if (idErr) return idErr;
   }
 
-  if (typeof value === 'string') {
-    if (v?.minLength != null && value.length < v.minLength) {
-      return v.errorMessage ?? `Must be at least ${v.minLength} characters`;
-    }
-    if (v?.maxLength != null && value.length > v.maxLength) {
-      return v.errorMessage ?? `Must not exceed ${v.maxLength} characters`;
-    }
-    if (v?.pattern) {
-      try {
-        if (!new RegExp(v.pattern).test(value)) return v.errorMessage ?? 'Invalid format';
-      } catch { /* malformed pattern — skip */ }
-    }
-  }
+  const v = field.validation;
+  if (!v) return null;
 
-  // Multiselect array bounds piggy-back on min/max (count of selections)
-  if (Array.isArray(value) && isMultiSelectType(field.type)) {
-    const count = value.length;
-    if (v?.min != null && count < v.min) return v.errorMessage ?? `Pick at least ${v.min}`;
-    if (v?.max != null && count > v.max) return v.errorMessage ?? `Pick at most ${v.max}`;
+  if (Array.isArray(v)) {
+    for (const rule of v) {
+      if (!rule) continue;
+      const type = rule.type;
+      const val = rule.value;
+      const msg = rule.message || rule.errorMessage || 'Invalid value';
+
+      if (type === 'required' && empty) return msg;
+      if (type === 'phone') {
+        const phoneErr = validatePhoneNumber(value);
+        if (phoneErr) return msg || phoneErr;
+      }
+      if (type === 'min' && typeof value === 'number' && value < Number(val)) return msg;
+      if (type === 'max' && typeof value === 'number' && value > Number(val)) return msg;
+      if (type === 'minLength' && typeof value === 'string' && value.length < Number(val)) return msg;
+      if (type === 'maxLength' && typeof value === 'string' && value.length > Number(val)) return msg;
+      if (type === 'pattern' && typeof value === 'string') {
+        try {
+          if (!new RegExp(String(val)).test(value)) return msg;
+        } catch { /* skip */ }
+      }
+    }
+  } else {
+    if (isNumericType(field.type)) {
+      const n = Number(value);
+      if (!Number.isNaN(n)) {
+        if (v.min != null && n < v.min) return v.errorMessage ?? `Must be at least ${v.min}`;
+        if (v.max != null && n > v.max) return v.errorMessage ?? `Must not exceed ${v.max}`;
+      }
+    }
+
+    if (typeof value === 'string') {
+      if (v.minLength != null && value.length < v.minLength) {
+        return v.errorMessage ?? `Must be at least ${v.minLength} characters`;
+      }
+      if (v.maxLength != null && value.length > v.maxLength) {
+        return v.errorMessage ?? `Must not exceed ${v.maxLength} characters`;
+      }
+      if (v.pattern) {
+        try {
+          if (!new RegExp(v.pattern).test(value)) return v.errorMessage ?? 'Invalid format';
+        } catch { /* malformed pattern — skip */ }
+      }
+    }
+
+    if (Array.isArray(value) && isMultiSelectType(field.type)) {
+      const count = value.length;
+      if (v.min != null && count < v.min) return v.errorMessage ?? `Pick at least ${v.min}`;
+      if (v.max != null && count > v.max) return v.errorMessage ?? `Pick at most ${v.max}`;
+    }
   }
 
   return null;
 }
 
-export function isNumericType(t: FormFieldType): boolean {
-  return t === 'number';
+export function isNumericType(t: string): boolean {
+  return t === 'number' || t === 'numeric';
 }
-export function isMultiSelectType(t: FormFieldType): boolean {
-  return t === 'multiselect';
+export function isMultiSelectType(t: string): boolean {
+  return t === 'multiselect' || t === 'multi_button_select';
 }
-export function supportsLengthValidation(t: FormFieldType): boolean {
+export function supportsLengthValidation(t: string): boolean {
   return t === 'text' || t === 'textarea' || t === 'phone' || t === 'email';
 }
-export function supportsPatternValidation(t: FormFieldType): boolean {
+export function supportsPatternValidation(t: string): boolean {
   return t === 'text' || t === 'phone' || t === 'email';
 }
 

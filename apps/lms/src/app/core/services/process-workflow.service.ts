@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, enforceCollectInLab } from '../../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
+import { workflowActionOn } from '../modules/lab-features';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -43,14 +44,35 @@ export class ProcessWorkflowService {
    * Is an action (treated as a placeable component) switched on in the active
    * workflow? Screens use this to show/hide their sub-components — e.g. the
    * Frontdesk "Appointments" tab is gated on `appointment`. Safe defaults:
-   * no active workflow, or an action the workflow doesn't mention, ⇒ true
-   * (never hide a component just because the workflow is silent about it).
+   * no active workflow ⇒ true; an action the workflow doesn't mention ⇒ true,
+   * EXCEPT the opt-in `appointment` / `home_visits` (absent = the admin removed
+   * them ⇒ off). Repeatable actions (sample_collection) are on while ANY copy
+   * is on. The ONE rule lives in core/modules/lab-features (workflowActionOn).
    */
   isEnabled(type: string): boolean {
+    return workflowActionOn(this._active(), type);
+  }
+
+  /**
+   * Is "dispatch" a genuine front-desk→lab handoff step in this workflow?
+   *
+   * Unlike {@link isEnabled} (opt-out: silent ⇒ on), dispatch is OPT-IN and must
+   * mirror the backend `SampleService.ShouldAutoReceive`: a tube auto-receives into
+   * the lab on collection — leaving no dispatch step — when the workflow omits/
+   * disables `lab_intake` OR omits/disables `dispatch`. Otherwise dispatch is a
+   * real step. No active workflow ⇒ classic flow, which does include dispatch.
+   *
+   * Where the Sample Collection action is placed (Frontdesk, Lab, Collect, billing
+   * counter, a custom area) is deliberately NOT considered (owner, 2026-09-26):
+   * placement is only a link to the collection page and never changes where the
+   * sample goes. Screens use this to hide the Dispatch button/holds when the
+   * workflow has no dispatch step (else the button rejects every attempt).
+   */
+  dispatchStepEnabled(): boolean {
     const cfg = this._active();
-    if (!cfg) return true;
-    const a = cfg.actions?.find(x => x.type === type);
-    return a ? a.enabled : true;
+    if (!cfg) return true;                 // classic flow — dispatch exists
+    const on = (type: string) => !!cfg.actions?.find(x => x.type === type)?.enabled;
+    return on('lab_intake') && on('dispatch');
   }
 
   /** Which menu/work-area an action is placed in (null if not placed/enabled). */
@@ -59,9 +81,10 @@ export class ProcessWorkflowService {
     return a?.categoryId ?? null;
   }
 
-  /** True when sample collection happens inside the lab (the tube is drawn at the
-   *  bench, so the lab shows a Collect step instead of Lab Intake and the sample
-   *  auto-receives into the work queue). Silent workflow ⇒ false (classic flow). */
+  /** True when a Sample Collection action is placed in the lab work-area — only
+   *  for showing a Collect entry point (link) there. It never affects transport:
+   *  routing is decided by dispatch + lab_intake alone (see dispatchStepEnabled).
+   *  Silent workflow ⇒ false (classic flow). */
   collectsInLab(): boolean {
     return collectsInLab(this._active());
   }
@@ -70,19 +93,24 @@ export class ProcessWorkflowService {
     if (!json) return null;
     try {
       const c = JSON.parse(json) as ProcessWorkflowConfig;
-      return Array.isArray(c?.categories) ? { categories: c.categories ?? [], actions: c.actions ?? [] } : null;
+      // Normalised on READ (system Collect area + its home collection copy), so
+      // every consumer — nav, modes, band Collect — sees the same shape without
+      // a DB write. Saving in the builder persists it.
+      return Array.isArray(c?.categories)
+        ? normalizeWorkflow({ categories: c.categories ?? [], actions: c.actions ?? [] })
+        : null;
     } catch { return null; }
   }
 
   // ── Builder CRUD ─────────────────────────────────────────────────
   list(): Observable<ProcessWorkflowRecord[]> { return this.api.get<ProcessWorkflowRecord[]>('/api/process-workflows'); }
   create(name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    const cfg = enforceCollectInLab(config);
-    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(cfg), branchId });
+    // Saved as the admin arranged it: collection in the Lab no longer forces the
+    // transport pair (dispatch + lab intake) off.
+    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(config), branchId });
   }
   update(id: string, name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    const cfg = enforceCollectInLab(config);
-    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(cfg), branchId });
+    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(config), branchId });
   }
   activate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/activate`, {}); }
   duplicate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/duplicate`, {}); }

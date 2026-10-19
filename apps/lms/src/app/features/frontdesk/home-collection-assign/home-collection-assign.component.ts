@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { busyIdWhile } from '../busy-id';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Appointment, HomeCollectionAgent } from '../../../shared/models/appointment.model';
@@ -6,13 +7,13 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 @Component({
   selector: 'pf-home-collection-assign',
   standalone: true,
-  imports: [ScreenHeaderComponent, TileComponent, TouchButtonComponent, SelectComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
@@ -20,13 +21,13 @@ import { ApiError } from '../../../shared/models/api-response.model';
         eyebrow="Front desk"
         title="Unassigned home collections"
         subtitle="Requests no agent's area covers. Pick an agent to assign each one.">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="load()">Refresh</pf-touch-btn>
+        <pf-touch-btn actions size="sm" variant="ghost" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">Refresh</pf-touch-btn>
       </pf-screen-header>
 
       @if (loading() && items().length === 0) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="4" label="Loading visits…"></pf-skeleton-rows>
           </div>
         </pf-tile>
       } @else if (items().length === 0) {
@@ -58,7 +59,8 @@ import { ApiError } from '../../../shared/models/api-response.model';
                       placeholder="Choose agent" size="sm"
                       (valueChange)="setPick(a.id, $any($event))"></pf-select>
                   </div>
-                  <pf-touch-btn size="sm" variant="primary" class="shrink-0" [disabled]="!pick()[a.id]" (pressed)="assign(a)">Assign</pf-touch-btn>
+                  <pf-touch-btn size="sm" variant="primary" class="shrink-0" [disabled]="!pick()[a.id]"
+                    [busy]="assigningId() === a.id" busyLabel="Assigning…" (pressed)="assign(a)">Assign</pf-touch-btn>
                 </div>
               </div>
             </pf-tile>
@@ -118,10 +120,12 @@ export class HomeCollectionAssignComponent implements OnInit {
     this._pick.update(m => ({ ...m, [apptId]: agentUserId }));
   }
 
+  /** Visit whose Assign request is in flight. */
+  readonly assigningId = signal<string | null>(null);
   assign(a: Appointment) {
     const agentUserId = this._pick()[a.id];
-    if (!agentUserId) return;
-    this.svc.assignAgent(a.id, agentUserId).subscribe({
+    if (!agentUserId || this.assigningId() === a.id) return;
+    this.svc.assignAgent(a.id, agentUserId).pipe(busyIdWhile(this.assigningId, a.id)).subscribe({
       next: () => { this.toast.success('Assigned.'); this.load(); },
       error: e => this.toast.error(ApiError.from(e).message)
     });

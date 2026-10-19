@@ -1,16 +1,19 @@
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import QRCode from 'qrcode';
 import { environment } from '../../../environments/environment';
 import { upiLink } from '../../shared/utils/upi';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface Stage { key: string; label: string; done: boolean; }
 interface TrackResult {
   org?: string; patient?: string; status?: string; rejected?: boolean;
   timeline?: Stage[]; reportReady?: boolean; reportToken?: string; reportPdfUrl?: string;
+  // True when the report is finished at the lab but withheld pending payment.
+  reportReadyAwaitingPayment?: boolean;
   // Payment (only present when there's a balance + the lab configured UPI).
   balanceDue?: number; invoiceNumber?: string; upiVpa?: string; upiPayeeName?: string;
 }
@@ -24,7 +27,7 @@ interface TrackResult {
 @Component({
   selector: 'pf-track',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wrap">
@@ -33,9 +36,9 @@ interface TrackResult {
         @if (!result()) {
           <h1 class="h1">Track your report</h1>
           <p class="sub">Enter your date of birth or registered phone number to view your status.</p>
-          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (YYYY-MM-DD) or phone" autocomplete="off"/>
+          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (DD/MM), last 4 of phone, or invoice no." autocomplete="off"/>
           @if (error()) { <p class="err">{{ error() }}</p> }
-          <button class="btn" [disabled]="busy() || !secret.trim()" (click)="verify()">{{ busy() ? 'Checking…' : 'View status' }}</button>
+          <button class="btn" [disabled]="busy() || !secret.trim()" [pfBusy]="busy()" pfBusyLabel="Checking…" (click)="verify()">{{ busy() ? 'Checking…' : 'View status' }}</button>
         } @else {
           <h1 class="h1">{{ result()!.org || 'Your lab' }}</h1>
           <p class="sub">Status for {{ result()!.patient }}</p>
@@ -74,7 +77,9 @@ interface TrackResult {
           }
 
           @if (result()!.reportReady && (result()!.reportPdfUrl || result()!.reportToken)) {
-            <a class="btn" [href]="result()!.reportPdfUrl || reportUrl(result()!.reportToken!)" target="_blank" rel="noopener">View report</a>
+            <button class="btn" type="button" (click)="openReport()">View report</button>
+          } @else if (result()!.reportReadyAwaitingPayment) {
+            <p class="sub" style="margin-top:14px">Your report is ready. A balance of ₹{{ result()!.balanceDue }} is pending — please pay it (via UPI above, or at the front desk) to unlock and collect your report.</p>
           } @else {
             <p class="sub" style="margin-top:14px">Your report isn't ready yet. Scan again later.</p>
           }
@@ -97,7 +102,7 @@ interface TrackResult {
     .btn { display:inline-flex; align-items:center; justify-content:center; width:100%; margin-top:14px; padding:12px; border-radius:12px; border:none;
       background:linear-gradient(135deg,#7c3aed,#ec4899); color:#fff; font-weight:700; font-size:14px; cursor:pointer; text-decoration:none; box-sizing:border-box; }
     .btn:disabled { opacity:.5; cursor:default; }
-    .err { color:#fca5a5; font-size:13px; margin:6px 0 0; }
+    .err { color:var(--red-text); font-size:13px; margin:6px 0 0; }
     .timeline { list-style:none; padding:0; margin:10px 0 0; }
     .timeline li { display:flex; align-items:center; gap:12px; padding:9px 0; color:rgba(255,255,255,.5); }
     .timeline .lbl { min-width:0; overflow-wrap:anywhere; }
@@ -144,6 +149,7 @@ interface TrackResult {
 export class TrackComponent {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected secret = '';
   protected readonly busy = signal(false);
@@ -154,7 +160,18 @@ export class TrackComponent {
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
-  reportUrl(reportToken: string) { return `${window.location.origin}/reports/public/${reportToken}`; }
+  /** Same-tab handoff to the report. The patient already verified HERE, so
+   *  the secret rides along in navigation state and the report page verifies
+   *  with it silently — no second prompt, no orphan tab. */
+  openReport() {
+    const r = this.result();
+    if (!r) return;
+    if (r.reportToken) {
+      this.router.navigate(['/reports/public', r.reportToken], { state: { secret: this.secret.trim() } });
+    } else if (r.reportPdfUrl) {
+      window.location.href = r.reportPdfUrl;
+    }
+  }
 
   /** upi://pay deep-link for the "Pay via UPI" button (opens the UPI app). */
   upiHref(): string {

@@ -2,8 +2,12 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { canOpenRoute } from '../../core/auth/route-access';
 import { ApiService } from '../../core/services/api.service';
 import { NavBackService } from '../../core/services/nav-back.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 
 interface SeedSummary {
   tenants: number;
@@ -39,9 +43,6 @@ interface Category {
   /** One-line description shown under the pane title — frames what
    *  the user can do in this section. */
   blurb: string;
-  /** Footer bullet points: 2–3 short tips / typical tasks for the
-   *  section. Fills the dead space below sparse tile lists. */
-  tips: string[];
   tiles: Tile[];
 }
 
@@ -59,12 +60,23 @@ interface Category {
 @Component({
   selector: 'pf-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-admin-page">
-      <header class="pf-admin-hdr">
-        <div>
+    <section class="pf-admin-page pf-band-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the settings search, and the category switch
+             inside the pill so any category is one tap away. -->
+        <pf-hero-band [back]="true" placeholder="Search settings — inventory, invoice, patient ID…"
+                      [value]="q()" (valueChange)="setQ($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pf-admin-catseg" size="sm" [options]="categoryOptions" [value]="active()"
+                          (valueChange)="pickCategory($event)"></pf-segmented>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-admin-hdr pf-classic-only">
+        <div class="pf-admin-hdr__left">
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <div class="flex items-center gap-1.5">
             <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Back to overview">
@@ -72,34 +84,39 @@ interface Category {
             </button>
             <h1 class="pf-admin-hdr__title">Admin · <span class="text-gradient">{{ userName() }}</span></h1>
           </div>
+          <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
         </div>
-        <p class="pf-admin-hdr__sub">Pick a category — or search every config screen.</p>
-        <input class="pf-admin-search" type="search" [value]="q()"
-               (input)="setQ($any($event.target).value)"
-               placeholder="Search settings — inventory, invoice, patient ID…"
-               aria-label="Search admin settings" />
+        <div class="pf-admin-hdr__right">
+          <input class="pf-admin-search" type="search" [value]="q()"
+                 (input)="setQ($any($event.target).value)"
+                 placeholder="Search settings — inventory, invoice, patient ID…"
+                 aria-label="Search admin settings" />
+        </div>
       </header>
 
+      <div class="pf-band-body">
       <div class="pf-admin-layout">
         <!-- Category is chosen on the Overview screen and deep-linked via ?cat=;
              the left category rail was redundant with those cards, so this hub
              shows just the selected category full-width. Back returns to it. -->
-        <div class="pf-admin-pane">
+        <div class="pf-admin-pane pf-card">
           @if (q().trim()) {
-            <header class="pf-admin-pane__hdr">
-              <div class="pf-admin-pane__hdr-text">
-                <h2 class="pf-admin-pane__title">Search results</h2>
-                <p class="pf-admin-pane__blurb">{{ results().length }} match{{ results().length === 1 ? '' : 'es' }} for “{{ q() }}”</p>
-              </div>
-              <span class="pf-admin-pane__count">{{ results().length }}</span>
+            <header class="pf-card__head pf-admin-pane__hdr">
+              <span class="pf-card__icon pf-admin-pane__chip">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <h2 class="pf-card__label pf-admin-pane__title">Search results</h2>
+              <p class="pf-card__note pf-admin-pane__blurb">for “{{ q() }}”</p>
+              <span class="pf-admin-pane__count pf-num">{{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }}</span>
             </header>
             <div class="pf-admin-pane__grid">
               @for (r of results(); track r.tile.title) {
                 <a [routerLink]="r.tile.href" [queryParams]="r.tile.queryParams ?? null"
-                   class="pf-admin-tile group press">
-                  <span class="pf-admin-tile__icon" [attr.data-g]="r.cat.gradient">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
-                         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                   class="pf-admin-tile pf-row group press">
+                  <span class="pf-card__icon pf-admin-tile__icon">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="r.tile.iconPath"/>
                       @if (r.tile.iconExtra) { <path [attr.d]="r.tile.iconExtra"/> }
                     </svg>
@@ -110,16 +127,16 @@ interface Category {
                   </div>
                   <span class="pf-admin-tile__arrow">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
                   </span>
                 </a>
               } @empty {
-                <p style="color:var(--text-tertiary);padding:10px 2px">No settings match “{{ q() }}”.</p>
+                <p class="pf-band-empty">No settings match “{{ q() }}”.</p>
               }
             </div>
           } @else if (activeCategory(); as cat) {
-            <header class="pf-admin-pane__hdr">
-              <span class="pf-admin-pane__chip" [attr.data-g]="cat.gradient">
+            <header class="pf-card__head pf-admin-pane__hdr">
+              <span class="pf-card__icon pf-admin-pane__chip">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
                      stroke="currentColor" stroke-width="1.8"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -127,21 +144,19 @@ interface Category {
                   @if (cat.iconExtra) { <path [attr.d]="cat.iconExtra"/> }
                 </svg>
               </span>
-              <div class="pf-admin-pane__hdr-text">
-                <h2 class="pf-admin-pane__title">{{ cat.label }}</h2>
-                <p class="pf-admin-pane__blurb">{{ cat.blurb }}</p>
-              </div>
-              <span class="pf-admin-pane__count">{{ cat.tiles.length }}</span>
+              <h2 class="pf-card__label pf-admin-pane__title">{{ cat.label }}</h2>
+              <p class="pf-card__note pf-admin-pane__blurb">{{ cat.blurb }}</p>
+              <span class="pf-admin-pane__count pf-num">{{ cat.tiles.length }} {{ cat.tiles.length === 1 ? 'setting' : 'settings' }}</span>
             </header>
 
             <div class="pf-admin-pane__grid">
               @for (tile of cat.tiles; track tile.title) {
                 <a [routerLink]="tile.href" [queryParams]="tile.queryParams ?? null"
-                   class="pf-admin-tile group press">
-                  <span class="pf-admin-tile__icon" [attr.data-g]="cat.gradient">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
-                         stroke="currentColor" stroke-width="1.6"
-                         stroke-linecap="round" stroke-linejoin="round">
+                   class="pf-admin-tile pf-row group press">
+                  <span class="pf-card__icon pf-admin-tile__icon">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                         stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="tile.iconPath"/>
                       @if (tile.iconExtra) { <path [attr.d]="tile.iconExtra"/> }
                     </svg>
@@ -152,7 +167,7 @@ interface Category {
                   </div>
                   <span class="pf-admin-tile__arrow">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M5 12h14m-5-6 6 6-6 6"/>
                     </svg>
                   </span>
@@ -160,33 +175,14 @@ interface Category {
               }
             </div>
 
-            <!-- Footer "what's in this section" panel — pads the bottom
-                 of the pane for sparse categories (Identity has only 2
-                 tiles; would otherwise leave a big dark void). -->
-            <aside class="pf-admin-tips">
-              <h3 class="pf-admin-tips__title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 16v-4M12 8h.01"/>
-                </svg>
-                What you can do here
-              </h3>
-              <ul class="pf-admin-tips__list">
-                @for (tip of cat.tips; track tip) {
-                  <li class="pf-admin-tips__item">
-                    <span class="pf-admin-tips__bullet" [attr.data-g]="cat.gradient" aria-hidden="true"></span>
-                    {{ tip }}
-                  </li>
-                }
-              </ul>
-            </aside>
           }
         </div>
+      </div>
       </div>
     </section>
   `,
   styles: [`
+    @use '../../shared/styles/device-tier' as dt;
     /* Page wrapper: claim the full viewport so the rail + pane fill
        the space and there's no big empty band at the bottom. The KPI
        strip + header stay above and the layout flexes to fill what's
@@ -208,13 +204,16 @@ interface Category {
 
     /* Compact header — was a tall greeting card. */
     .pf-admin-hdr {
-      display: flex; flex-wrap: wrap; align-items: baseline;
-      justify-content: space-between; gap: 12px;
-      margin: 10px 0 14px;
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 16px;
+      margin: 8px 0 16px;
+    }
+    .pf-admin-hdr__left {
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .pf-admin-hdr__eyebrow {
       font-size: 11px; font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.16em; text-transform: uppercase;
       color: var(--text-muted);
       margin: 0 0 2px;
@@ -227,7 +226,13 @@ interface Category {
     .pf-admin-hdr__sub {
       font-size: 12.5px;
       color: var(--text-tertiary);
-      margin: 0;
+      margin: 4px 0 0;
+    }
+    .pf-admin-hdr__right {
+      flex: 0 1 auto;
+      min-width: 280px;
+      max-width: 420px;
+      width: 100%;
     }
 
     /* Mobile-only back chevron before the title (phone-only via md:hidden in
@@ -236,10 +241,8 @@ interface Category {
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
     .pf-admin-search {
-      margin-top: 12px;
       width: 100%;
-      max-width: 460px;
-      padding: 10px 14px;
+      padding: 9px 14px;
       border-radius: 12px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
@@ -261,126 +264,17 @@ interface Category {
       .pf-admin-layout { gap: 14px; }
     }
 
-    /* ── Left rail ───────────────────────────────────────── */
-    .pf-admin-rail {
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 10px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      overflow-y: auto;
-    }
-    @media (max-width: 768px) {
-      .pf-admin-rail { flex-direction: row; overflow-x: auto; padding: 8px; }
-    }
-    .pf-admin-rail__btn {
-      display: flex; align-items: center; gap: 10px;
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      background: transparent; border: 0;
-      color: var(--text-secondary);
-      text-align: left; cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .pf-admin-rail__btn:hover {
-      background: rgba(168, 85, 247, 0.06);
-      color: var(--text-primary);
-    }
-    .pf-admin-rail__btn--on {
-      background: linear-gradient(135deg, rgba(168, 85, 247, 0.20), rgba(236, 72, 153, 0.10));
-      color: var(--text-primary);
-      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.32);
-    }
-    .pf-admin-rail__icon {
-      width: 32px; height: 32px; border-radius: 9px;
-      display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-tertiary);
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    /* When the rail button is active, swap to the category's signature
-       gradient so the left + right halves share the same colour cue. */
-    .pf-admin-rail__icon[data-on="true"] {
-      color: #ffffff;
-      border-color: transparent;
-    }
-    .pf-admin-rail__icon[data-on="true"][data-g='violet']  { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-rail__icon[data-on="true"][data-g='fuchsia'] { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-rail__icon[data-on="true"][data-g='pink']    { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-rail__icon[data-on="true"][data-g='rose']    { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-rail__icon[data-on="true"][data-g='amber']   { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-rail__icon[data-on="true"][data-g='emerald'] { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-rail__icon[data-on="true"][data-g='teal']    { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-rail__icon[data-on="true"][data-g='sky']     { background: linear-gradient(135deg, #0284c7, #38bdf8); }
-    .pf-admin-rail__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-    .pf-admin-rail__label { font-size: 13px; font-weight: 600; line-height: 1.2; }
-    .pf-admin-rail__count {
-      font-size: 10.5px; font-weight: 500;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
-    .pf-admin-rail__chev {
-      color: var(--text-muted);
-      opacity: 0; transition: opacity 0.15s;
-    }
-    .pf-admin-rail__btn--on .pf-admin-rail__chev { opacity: 1; }
-    .pf-admin-rail__btn:hover .pf-admin-rail__chev { opacity: 0.7; }
-    @media (max-width: 768px) {
-      .pf-admin-rail__btn { flex: 0 0 auto; min-width: 180px; }
-      .pf-admin-rail__chev { display: none; }
-    }
-
     /* ── Right pane ─────────────────────────────────────── */
-    .pf-admin-pane {
-      padding: 14px 18px 18px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      min-width: 0;
-      overflow-y: auto;
-      display: flex; flex-direction: column;
-    }
-    .pf-admin-pane__hdr {
-      display: flex; align-items: center; gap: 12px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--glass-border);
-      margin-bottom: 16px;
-    }
-    .pf-admin-pane__chip {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: inline-flex; align-items: center; justify-content: center;
-      color: #ffffff; flex-shrink: 0;
-    }
-    .pf-admin-pane__hdr-text { flex: 1; min-width: 0; }
-    .pf-admin-pane__blurb {
-      font-size: 12.5px; color: var(--text-tertiary);
-      margin: 2px 0 0; line-height: 1.35;
-    }
-    .pf-admin-pane__chip[data-g='violet']  { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-pane__chip[data-g='fuchsia'] { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-pane__chip[data-g='pink']    { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-pane__chip[data-g='rose']    { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-pane__chip[data-g='amber']   { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-pane__chip[data-g='emerald'] { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-pane__chip[data-g='teal']    { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-pane__chip[data-g='sky']     { background: linear-gradient(135deg, #0284c7, #38bdf8); }
-    .pf-admin-pane__title {
-      font-size: 16px; font-weight: 700;
-      color: var(--text-primary);
-      margin: 0;
-    }
-    .pf-admin-pane__count {
-      margin-left: auto;
-      font-size: 11px; font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-      padding: 2px 8px; border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
+    /* The pane is ONE kit card: BILLING-style header (violet icon chip +
+       UPPERCASE label + note + a plain muted count), tiles scroll inside. */
+    .pf-admin-pane { min-width: 0; overflow: visible; }
+    .pf-admin-pane__hdr { margin: 0; }
+    .pf-admin-pane__blurb { margin: 0; }
+    .pf-admin-pane__grid { margin-left: 16px; margin-right: 16px; }
+    .pf-admin-pane__grid { margin-top: 16px; }
+    .pf-admin-pane > :last-child { margin-bottom: 16px; }
+    .pf-admin-pane__title { margin: 0; }
+    .pf-admin-pane__count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-admin-pane__grid {
       display: grid;
       /* Larger min so each tile gets more room — 2-up on most desktops,
@@ -393,42 +287,19 @@ interface Category {
 
     /* ── Tile card ──────────────────────────────────────── */
     .pf-admin-tile {
-      display: flex; align-items: center; gap: 16px;
-      padding: 20px;
-      min-height: 110px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--glass-border);
+      gap: 16px; padding: 18px; min-height: 96px; border-radius: var(--pf-radius);
       text-decoration: none;
-      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      transition: border-color var(--pf-dur-fast) ease, transform 100ms ease;
     }
-    .pf-admin-tile:hover {
-      border-color: rgba(168, 85, 247, 0.40);
-      background: rgba(168, 85, 247, 0.06);
-      transform: translateY(-1px);
-    }
+    .pf-admin-tile:hover { border-color: var(--pf-sel-border); transform: translateY(-1px); }
+    .pf-admin-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     /* Tile icon — inherits the active category's signature gradient.
        That single colour family is what makes the pane feel coherent
        (was a jumble of 3 random gradients per tile). */
-    .pf-admin-tile__icon {
-      width: 52px; height: 52px;
-      border-radius: 13px;
-      display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-    }
-    .pf-admin-tile__icon[data-g='violet']   { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-tile__icon[data-g='fuchsia']  { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-tile__icon[data-g='pink']     { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-tile__icon[data-g='rose']     { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-tile__icon[data-g='amber']    { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-tile__icon[data-g='emerald']  { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-tile__icon[data-g='teal']     { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-tile__icon[data-g='sky']      { background: linear-gradient(135deg, #0284c7, #38bdf8); }
+    .pf-admin-tile__icon { width: 44px; height: 44px; border-radius: 12px; }
     .pf-admin-tile__body { flex: 1; min-width: 0; }
     .pf-admin-tile__title {
-      font-weight: 700; font-size: 15.5px; line-height: 1.2; margin: 0;
+      font-weight: 600; font-size: 15px; line-height: 1.2; margin: 0;
       color: var(--text-primary); letter-spacing: -0.01em;
     }
     .pf-admin-tile__sub {
@@ -447,44 +318,6 @@ interface Category {
       transform: translateX(3px);
     }
 
-    /* ── Tips panel below the grid ──────────────────────── */
-    .pf-admin-tips {
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.02);
-      border: 1px dashed var(--glass-border);
-    }
-    .pf-admin-tips__title {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 11px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--text-secondary);
-      margin: 0 0 10px;
-    }
-    .pf-admin-tips__list {
-      list-style: none; padding: 0; margin: 0;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .pf-admin-tips__item {
-      display: flex; align-items: flex-start; gap: 10px;
-      font-size: 12.5px; line-height: 1.45;
-      color: var(--text-secondary);
-    }
-    .pf-admin-tips__bullet {
-      flex-shrink: 0; margin-top: 7px;
-      width: 6px; height: 6px; border-radius: 9999px;
-    }
-    .pf-admin-tips__bullet[data-g='violet']  { background: #a855f7; }
-    .pf-admin-tips__bullet[data-g='fuchsia'] { background: #d946ef; }
-    .pf-admin-tips__bullet[data-g='pink']    { background: #f472b6; }
-    .pf-admin-tips__bullet[data-g='rose']    { background: #fb7185; }
-    .pf-admin-tips__bullet[data-g='amber']   { background: #fbbf24; }
-    .pf-admin-tips__bullet[data-g='emerald'] { background: #10b981; }
-    .pf-admin-tips__bullet[data-g='teal']    { background: #2dd4bf; }
-    .pf-admin-tips__bullet[data-g='sky']     { background: #38bdf8; }
-
     /* ─────────────────────────────────────────────────────────────
        CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (>=1280,
        fine pointer) is untouched by everything below.
@@ -494,20 +327,12 @@ interface Category {
        shifts, chevron reveal) get stuck after a tap on coarse pointers.
        Neutralise them only where there's no true hover — this cannot
        reach a desktop mouse (hover:hover). */
+    @media (prefers-reduced-motion: reduce) {
+      .pf-admin-tile, .pf-admin-tile:hover, .pf-admin-tile__arrow { transition: none; transform: none; }
+    }
     @media (hover: none) {
-      .pf-admin-rail__btn:hover {
-        background: transparent;
-        color: var(--text-secondary);
-      }
-      .pf-admin-rail__btn--on:hover {
-        background: linear-gradient(135deg, rgba(168, 85, 247, 0.20), rgba(236, 72, 153, 0.10));
-        color: var(--text-primary);
-      }
-      .pf-admin-rail__btn:hover .pf-admin-rail__chev { opacity: 0; }
-      .pf-admin-rail__btn--on:hover .pf-admin-rail__chev { opacity: 1; }
       .pf-admin-tile:hover {
-        border-color: var(--glass-border);
-        background: rgba(255, 255, 255, 0.02);
+        border-color: var(--pf-line);
         transform: none;
       }
       .pf-admin-tile:hover .pf-admin-tile__arrow {
@@ -562,7 +387,7 @@ interface Category {
        crams the lone pane into the 200px track and wastes the rest of the width.
        Use one full-width column and let the tiles go 2-up. Bounded so it can
        never touch desktop (>=1280) or phone (<=640). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-admin-layout {
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;
@@ -580,6 +405,14 @@ export class AdminDashboardComponent implements OnInit {
 
   private readonly _summary = signal<SeedSummary | null>(null);
   readonly summary = this._summary.asReadonly();
+
+  // Tenant-scoped counts for the KPI tiles. The /_seed/summary endpoint counts
+  // across ALL tenants (OPS-32: a 1-branch tenant saw "35 branches"), and its
+  // role count only covers global pre-seeded roles (OPS-21: a new custom role
+  // never showed up). These are fetched per-tenant on every visit instead.
+  private readonly _branchCount = signal<number | null>(null);
+  private readonly _deptCount = signal<number | null>(null);
+  private readonly _roleCount = signal<number | null>(null);
   readonly today = new Date();
   readonly userName = () => this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
 
@@ -587,7 +420,9 @@ export class AdminDashboardComponent implements OnInit {
   // Tiles map 1:1 to existing admin routes. Subtitles read live
   // counts from /api/_seed/summary where applicable so the dashboard
   // doubles as a quick status glance.
-  readonly categories: Category[] = [
+  // Tiles are filtered to routes this user can open (ROUTE_ACCESS) — a custom
+  // admin role (e.g. manage_tests only) must not see tiles that land on /403.
+  readonly categories: Category[] = this.openable([
     {
       id: 'people',
       label: 'People & Access',
@@ -595,16 +430,11 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
       iconExtra: 'M2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
       blurb: 'Who can do what — staff, roles and a full audit trail of every change.',
-      tips: [
-        'Invite new staff by email; they pick a password on first sign-in.',
-        'Permissions are bundled into roles (Reception, Lab Tech, Pathologist…).',
-        'The audit trail records every change — who, when, before → after.'
-      ],
       tiles: [
         { title: 'Users & Access', href: '/admin/users', gradient: 'violet',
           iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
           iconExtra: 'M2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM21.5 20a5 5 0 0 0-4.5-4',
-          subtitle: () => `${this._summary()?.preSeededRoles ?? '—'} roles · ${this._summary()?.permissions ?? '—'} permissions` },
+          subtitle: () => `${this._roleCount() ?? '—'} roles · ${this._summary()?.permissions ?? '—'} permissions` },
         { title: 'Audit trail', href: '/admin/audit', gradient: 'rose',
           iconPath: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
           iconExtra: 'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2ZM9 12h6M9 16h6',
@@ -618,15 +448,10 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M4 21V7l8-4 8 4v14',
       iconExtra: 'M9 21v-5h6v5',
       blurb: 'The structure of your lab — branches, departments, collection/billing modes, queues, referrers.',
-      tips: [
-        'Add branches as you grow; toggle front-desk vs dedicated-counter collection per branch.',
-        'Configure queue modes, slots and home-collection agent coverage.',
-        'Maintain the referring hospitals + doctors that send you patients.'
-      ],
       tiles: [
         { title: 'Branches & Departments', href: '/admin/branches', gradient: 'sky',
           iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
-          subtitle: () => `${this._summary()?.branches ?? '—'} branches · ${this._summary()?.departments ?? '—'} departments` },
+          subtitle: () => `${this._branchCount() ?? '—'} branches · ${this._deptCount() ?? '—'} departments` },
         { title: 'Organization & Identity', href: '/admin/organization', gradient: 'sky',
           iconPath: 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2',
           subtitle: () => 'Patient ID format · data tools' },
@@ -648,11 +473,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M3 5h18v14H3z',
       iconExtra: 'M3 10h18M7 15h3',
       blurb: 'Money flow — GST registration, discount policy, invoice numbering, vendor (B2B) wallets.',
-      tips: [
-        'Set GST rate + filing frequency per branch; tax slabs roll up automatically.',
-        'Cap reception discounts to keep margins; require approval above a threshold.',
-        'Vendor wallets let referring hospitals / collection centres run on credit.'
-      ],
       tiles: [
         { title: 'Finance', href: '/finance', gradient: 'emerald',
           iconPath: 'M3 3v18h18', iconExtra: 'M7 14l4-4 3 3 5-6',
@@ -663,6 +483,9 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Daily Statement',  href: '/finance/daily', gradient: 'amber',
           iconPath: 'M4 4h16v16H4z', iconExtra: 'M8 9h8M8 13h8M8 17h5',
           subtitle: () => 'Opening / closing balance · cash count · day closure' },
+        { title: 'Expenses',  href: '/expenses', gradient: 'amber',
+          iconPath: 'M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z', iconExtra: 'M8 8h8M8 12h8M8 16h5',
+          subtitle: () => 'Staff expenses · bills · cashier day closing' },
         { title: 'Vendor Credit Wallets',  href: '/admin/vendors', gradient: 'fuchsia',
           iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
           iconExtra: 'M17 14h.01',
@@ -676,11 +499,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z',
       iconExtra: 'M9 7h6M12 14V10',
       blurb: 'Cross-module platform controls — enable modules, and design the menus/forms staff use.',
-      tips: [
-        'Modules: turn products (Lab, OPD, IPD, Pharmacy…) and their features on or off.',
-        'Process builder: which menus exist, what actions sit inside, and who can use them.',
-        'Form flows: drag-build the Patient Register, Order Create and Appointment fields.'
-      ],
       tiles: [
         { title: 'Process builder', href: '/admin/process', gradient: 'pink',
           iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',
@@ -690,7 +508,18 @@ export class AdminDashboardComponent implements OnInit {
           subtitle: () => `${this._summary()?.workflows ?? '—'} screen forms configured` },
       ]
     },
-  ];
+  ]);
+
+  /** Keep only tiles whose destination route the user can open; drop empty
+   *  categories. */
+  private openable(cats: Category[]): Category[] {
+    // hasAnyPermission already honours '*' (super-admin).
+    const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
+    const out = cats
+      .map(c => ({ ...c, tiles: c.tiles.filter(t => canOpenRoute(t.href, ctx)) }))
+      .filter(c => c.tiles.length > 0);
+    return out.length ? out : cats.slice(0, 1).map(c => ({ ...c, tiles: [] }));
+  }
 
   private readonly _active = signal<string>(this.categories[0].id);
   readonly active = this._active.asReadonly();
@@ -698,6 +527,16 @@ export class AdminDashboardComponent implements OnInit {
     this.categories.find(c => c.id === this._active())
   );
   select(id: string) { this._active.set(id); }
+
+  protected readonly theme = inject(ThemeService);
+  /** Category switch in the band pill (short labels; icons on phones). */
+  readonly categoryOptions: SegmentedOption<string>[] = this.categories.map(c => ({
+    value: c.id,
+    label: ({ people: 'People & Access', org: 'Branches & Org', finance: 'Billing & Finance', automation: 'Platform' } as Record<string, string>)[c.id] ?? c.label,
+    iconPath: [c.iconPath, ...(c.iconExtra ? [c.iconExtra] : [])],
+  }));
+  /** Picking a category from the pill leaves search mode so the pick shows. */
+  pickCategory(id: string) { this._q.set(''); this._active.set(id); }
 
   // Admin-wide tile search: flatten every category's tiles and match on title,
   // subtitle, and category label so a setting is one keystroke away.
@@ -728,5 +567,10 @@ export class AdminDashboardComponent implements OnInit {
     this.api.get<SeedSummary>('/api/_seed/summary').subscribe({
       next: s => this._summary.set(s)
     });
+    // Tenant-scoped KPI counts (re-fetched on every visit, so a newly created
+    // role / branch reflects immediately).
+    this.api.get<unknown[]>('/api/tenants/branches').subscribe({ next: b => this._branchCount.set(b?.length ?? 0) });
+    this.api.get<unknown[]>('/api/tenants/departments').subscribe({ next: d => this._deptCount.set(d?.length ?? 0) });
+    this.api.get<unknown[]>('/api/roles/').subscribe({ next: r => this._roleCount.set(r?.length ?? 0) });
   }
 }

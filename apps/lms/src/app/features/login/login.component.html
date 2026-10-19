@@ -1,170 +1,179 @@
-<section class="pf-auth" [class.pf-auth--native]="isNative()">
-  <!-- Animated mesh background — drops to a single softer blob on
-       Capacitor so the GPU on older iPhones isn't churning on three
-       large blurred gradients during keyboard animation. -->
-  <div class="pf-auth__mesh" aria-hidden="true">
-    <span class="pf-auth__blob pf-auth__blob--1"></span>
-    @if (!isNative()) {
-      <span class="pf-auth__blob pf-auth__blob--2"></span>
-      <span class="pf-auth__blob pf-auth__blob--3"></span>
-    }
-  </div>
+<div class="lg" [class.lg--native]="isNative()" #scroller>
+  <!-- The app's own ambient world (static on touch devices). -->
+  <pf-ambient-bg></pf-ambient-bg>
 
-  <!-- The card stack: brand strip on top, form below. Single column
-       on mobile/native — the marketing "hero panel" is desktop-only
-       so the form is above the fold on a phone. -->
-  <main class="pf-auth__stack">
-    <header class="pf-auth__brand">
-      <pf-logo-mark size="lg" variant="glyph" [pulse]="true" ariaLabel="Prefrontal"></pf-logo-mark>
-      <div class="pf-auth__brand-text">
-        <p class="pf-auth__wordmark">Prefrontal</p>
-        <p class="pf-auth__tagline">Lab software that thinks ahead.</p>
-      </div>
-    </header>
+  <div class="lg__content">
+    <div class="lg__layout">
+      <!-- Brand: tenant-neutral Prefrontal. On wide screens it becomes the
+           left half of the split; on phones a compact row above the card. -->
+      <header class="lg__brand">
+        <div class="lg__id">
+          <pf-logo-mark [size]="wide() ? 'lg' : 'md'" variant="glyph" ariaLabel="Prefrontal"></pf-logo-mark>
+          <p class="lg__wordmark">Prefrontal</p>
+        </div>
+        <p class="lg__tagline">Lab software that thinks ahead.</p>
+        <p class="lg__statement">Orders, samples, results and reports in one calm workspace for the whole lab.</p>
+      </header>
 
-    <form class="pf-auth__form" (ngSubmit)="submit()" novalidate
-          [class.pf-auth__form--busy]="busy()">
-      <h1 class="pf-auth__title">{{ addMode() ? 'Add account' : 'Sign in' }}</h1>
-
-      @if (orgLocked()) {
-        <p class="pf-auth__note">
-          Adding an account to <strong>{{ lockedOrg() }}</strong>. On this device you
-          can only add profiles from your current organization.
-        </p>
-      }
-
-      <label class="pf-auth__field">
-        <span class="pf-auth__field-label">Organization</span>
-        <span class="pf-auth__field-row">
-          @if (orgLocked()) {
-            <!-- Tenant is fixed in add-account mode: show it read-only with a lock. -->
-            <input class="pf-auth__field-input pf-auth__field-input--locked"
-                   type="text"
-                   readonly
-                   aria-readonly="true"
-                   [value]="org()"
-                   name="org" />
-            <span class="pf-auth__field-lock" aria-hidden="true">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
-              </svg>
-            </span>
-          } @else {
-            <input class="pf-auth__field-input"
-                   type="text"
-                   list="pf-orgs"
-                   autocapitalize="off"
-                   autocorrect="off"
-                   spellcheck="false"
-                   enterkeyhint="next"
-                   required
-                   [ngModel]="org()"
-                   (ngModelChange)="org.set($event); error.set(null)"
-                   name="org"
-                   placeholder="Your organization name" />
-            <datalist id="pf-orgs">
-              @for (o of orgs(); track o) { <option [value]="o"></option> }
-            </datalist>
-          }
-        </span>
-      </label>
-
-      <label class="pf-auth__field">
-        <span class="pf-auth__field-label">Username</span>
-        <span class="pf-auth__field-row">
-          <input class="pf-auth__field-input"
-                 type="text"
-                 autocomplete="username"
-                 autocapitalize="off"
-                 autocorrect="off"
-                 spellcheck="false"
-                 enterkeyhint="next"
-                 required
-                 [ngModel]="username()"
-                 (ngModelChange)="username.set($event); error.set(null)"
-                 name="username"
-                 placeholder="your username" />
-        </span>
-      </label>
-
-      <label class="pf-auth__field">
-        <span class="pf-auth__field-label">Password</span>
-        <span class="pf-auth__field-row">
-          <input class="pf-auth__field-input"
-                 [type]="showPassword() ? 'text' : 'password'"
-                 autocomplete="current-password"
-                 autocapitalize="off"
-                 autocorrect="off"
-                 spellcheck="false"
-                 enterkeyhint="go"
-                 required
-                 [ngModel]="password()"
-                 (ngModelChange)="password.set($event); error.set(null)"
-                 name="password"
-                 placeholder="••••••••" />
-          <button type="button" class="pf-auth__eye"
-                  (click)="showPassword.set(!showPassword())"
-                  [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
-            @if (showPassword()) {
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 3l18 18M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6"/>
-                <path d="M9.9 5.1A11 11 0 0 1 12 5c5 0 9 4 10 7a13 13 0 0 1-2.4 3.4M6.4 6.4A13 13 0 0 0 2 12c1 3 5 7 10 7a11 11 0 0 0 4-.7"/>
-              </svg>
+      <main class="lg__card" [attr.aria-busy]="busy()">
+        <div class="lg__head">
+          <h1 class="lg__title">{{ addMode() ? 'Add account' : 'Sign in' }}</h1>
+          <p class="lg__sub">
+            @if (orgLocked()) {
+              Adding a profile to <strong>{{ lockedOrg() }}</strong>. On this device you can only add accounts from this organization.
             } @else {
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
-                <circle cx="12" cy="12" r="3"/>
+              Use your organization’s name and your staff username.
+            }
+          </p>
+        </div>
+
+        @if (notice()) {
+          <div class="lg__notice" role="status">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/>
+            </svg>
+            <span>{{ notice() }}</span>
+          </div>
+        }
+
+        <form class="lg__form" (ngSubmit)="submit()" novalidate autocomplete="on">
+          <!-- Organization -->
+          <div class="lg-field">
+            <label class="lg-field__label" for="lg-org">Organization</label>
+            <div class="lg-field__box" [class.lg-field__box--locked]="orgLocked()"
+                 [class.lg-field__box--error]="errorField() === 'org'">
+              <svg class="lg-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 20V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14"/><path d="M15 10h3a2 2 0 0 1 2 2v8"/><path d="M3 20h18"/><path d="M8 8h3M8 12h3M8 16h3"/>
+              </svg>
+              @if (orgLocked()) {
+                <input id="lg-org" #orgInput class="lg-field__input"
+                       type="text" name="org" readonly aria-readonly="true"
+                       autocomplete="organization" [value]="org()" />
+                <svg class="lg-field__trail" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                </svg>
+              } @else {
+                <input id="lg-org" #orgInput class="lg-field__input"
+                       type="text" name="org"
+                       autocomplete="organization"
+                       autocapitalize="words" autocorrect="off" spellcheck="false"
+                       enterkeyhint="next"
+                       required
+                       [attr.aria-invalid]="errorField() === 'org' ? 'true' : null"
+                       [attr.aria-describedby]="errorField() === 'org' ? 'lg-error' : null"
+                       [ngModel]="org()"
+                       (ngModelChange)="org.set($event); clearError()"
+                       (keydown.enter)="onEnter($event, 'org')"
+                       (focus)="onFieldFocus($event)"
+                       placeholder="Your organization name" />
+              }
+            </div>
+            @if (otherOrgs().length) {
+              <div class="lg-field__recent" role="group" aria-label="Recent organizations">
+                <span class="lg-field__recent-lbl" aria-hidden="true">Recent</span>
+                @for (o of otherOrgs(); track o) {
+                  <button type="button" class="lg-chip" (click)="useOrg(o)">{{ o }}</button>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Username -->
+          <div class="lg-field">
+            <label class="lg-field__label" for="lg-username">Username</label>
+            <div class="lg-field__box" [class.lg-field__box--error]="errorField() === 'username'">
+              <svg class="lg-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>
+              </svg>
+              <input id="lg-username" #userInput class="lg-field__input"
+                     type="text" name="username"
+                     autocomplete="username"
+                     autocapitalize="off" autocorrect="off" spellcheck="false"
+                     enterkeyhint="next"
+                     required
+                     [attr.aria-invalid]="errorField() === 'username' ? 'true' : null"
+                     [attr.aria-describedby]="errorField() === 'username' ? 'lg-error' : null"
+                     [ngModel]="username()"
+                     (ngModelChange)="username.set($event); clearError()"
+                     (keydown.enter)="onEnter($event, 'username')"
+                     (focus)="onFieldFocus($event)"
+                     placeholder="Your username" />
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div class="lg-field">
+            <label class="lg-field__label" for="lg-password">Password</label>
+            <div class="lg-field__box" [class.lg-field__box--error]="errorField() === 'password'">
+              <svg class="lg-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+              </svg>
+              <input id="lg-password" #passInput class="lg-field__input lg-field__input--pw"
+                     [type]="showPassword() ? 'text' : 'password'"
+                     name="password"
+                     autocomplete="current-password"
+                     autocapitalize="off" autocorrect="off" spellcheck="false"
+                     enterkeyhint="go"
+                     required
+                     [attr.aria-invalid]="errorField() === 'password' ? 'true' : null"
+                     [attr.aria-describedby]="errorField() === 'password' ? 'lg-error' : null"
+                     [ngModel]="password()"
+                     (ngModelChange)="password.set($event); clearError()"
+                     (keydown.enter)="onEnter($event, 'password')"
+                     (focus)="onFieldFocus($event)"
+                     placeholder="••••••••" />
+              <button type="button" class="lg-field__eye"
+                      (click)="showPassword.set(!showPassword())"
+                      [attr.aria-pressed]="showPassword()"
+                      [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+                @if (showPassword()) {
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 3l18 18"/><path d="M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6"/>
+                    <path d="M9.9 5.1A11 11 0 0 1 12 5c5 0 9 4 10 7a13 13 0 0 1-2.4 3.4M6.4 6.4A13 13 0 0 0 2 12c1 3 5 7 10 7a11 11 0 0 0 4-.7"/>
+                  </svg>
+                } @else {
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                }
+              </button>
+            </div>
+          </div>
+
+          @if (error()) {
+            <p id="lg-error" class="lg__error" role="alert">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+              </svg>
+              <span>{{ error() }}</span>
+            </p>
+          }
+
+          <!-- Belt-and-braces: type="submit" + (click) so the button
+               works whether the form's ngSubmit fires or not (iOS WKWebView).
+               Both call the same guarded method. -->
+          <button #submitBtn type="submit" class="pf-btn pf-btn--primary lg__submit"
+                  (click)="submit($event)"
+                  [disabled]="working()"
+                  [attr.aria-busy]="working()">
+            @if (working()) {
+              <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
+              <span>{{ addMode() ? 'Adding account…' : 'Signing in…' }}</span>
+            } @else {
+              <span>{{ addMode() ? 'Add account' : 'Sign in' }}</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
               </svg>
             }
           </button>
-        </span>
-      </label>
 
-      @if (error()) {
-        <p class="pf-auth__error" role="alert">
-          <span class="pf-auth__error-icon" aria-hidden="true">!</span>
-          <span class="pf-auth__error-msg">{{ error() }}</span>
-        </p>
-      }
+          @if (addMode()) {
+            <button type="button" class="pf-btn pf-btn--tertiary lg__cancel" (click)="cancelAdd()">Cancel</button>
+          }
+        </form>
 
-      <!-- Belt-and-braces: type="submit" + (click) so the button
-           works whether the form's ngSubmit fires or not. On iOS
-           WKWebView with certain Angular zone configurations,
-           ngSubmit can silently no-op; the (click) handler is the
-           fallback. Both call the same method. -->
-      <button type="submit"
-              class="pf-auth__submit"
-              (click)="submit($event)"
-              [disabled]="busy()">
-        @if (busy()) {
-          <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
-          <span>{{ addMode() ? 'Adding account…' : 'Signing in…' }}</span>
-        } @else {
-          <span>{{ addMode() ? 'Add account' : 'Sign in' }}</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 12h14M13 6l6 6-6 6"/>
-          </svg>
-        }
-      </button>
-
-      <p class="pf-auth__hint">
-        Locked out? Ask your admin to reset your password.
-      </p>
-
-      @if (isNative()) {
-        <!-- Tiny diagnostic strip — visible only on native builds so
-             we can see at a glance which backend the WebView is
-             hitting. If sign-in fails it's usually CORS or the wrong
-             host; this makes that obvious. -->
-        <p class="pf-auth__env">
-          <span class="pf-auth__env-key">api</span>
-          <span class="pf-auth__env-val">{{ apiHost() }}</span>
-        </p>
-      }
-    </form>
-
-    <footer class="pf-auth__foot">
-      <span>Prefrontal LMS · v0.1.0</span>
-    </footer>
-  </main>
-</section>
+        <p class="lg__hint">Locked out? Ask your admin to reset your password.</p>
+      </main>
+    </div>
+  </div>
+</div>

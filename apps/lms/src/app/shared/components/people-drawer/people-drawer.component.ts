@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -9,10 +9,12 @@ import { PeopleDrawerService } from '../../../core/services/people-drawer.servic
 import { PresenceService } from '../../../core/services/presence.service';
 import { isPresenceKey, presenceLabel as presetLabel } from '../../models/presence.model';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { User, userDisplayName } from '../../models/user.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
+import { SkeletonRowsComponent } from '../../primitives/skeleton-kit.component';
 
 /**
  * Global People drawer — slide-out from the right edge. Shows every active
@@ -28,7 +30,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
 @Component({
   selector: 'pf-people-drawer',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent],
+  imports: [SkeletonRowsComponent, FormsModule, DatePipe, AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open()) {
@@ -50,8 +52,8 @@ import { AvatarComponent } from '../../primitives/avatar.component';
               </p>
             </div>
             <button type="button" class="pf-pd__call-btn"
-                    [disabled]="!isOnline(ou.id) || webrtc.inCall()"
-                    [title]="!isOnline(ou.id) ? 'User is offline' : webrtc.inCall() ? 'You are already in a call' : 'Voice call'"
+                    [disabled]="webrtc.inCall()"
+                    [title]="webrtc.inCall() ? 'You are already in a call' : reach.hint(ou.id)"
                     (click)="callActive()" aria-label="Voice call">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -110,7 +112,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
         } @else if (mode() === 'chat') {
           <div #scrollPane class="pf-pd__chat">
             @if (chat.loadingHistory()) {
-              <p class="pf-pd__empty">Loading…</p>
+              <pf-skeleton-rows [rows]="4" [dense]="true" [trailing]="false" label="Loading messages…"></pf-skeleton-rows>
             } @else if (chat.activeMessages().length === 0) {
               <p class="pf-pd__empty">No messages yet. Say hi 👋</p>
             }
@@ -257,7 +259,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
     .pf-pd__chat-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-pd__chat-status { margin: 1px 0 0; font-size: 11px; color: var(--text-tertiary); }
     .pf-pd__call-btn { width: 34px; height: 34px; border-radius: 50%;
-      background: rgba(16, 185, 129, 0.18); color: #10b981;
+      background: rgba(16, 185, 129, 0.18); color: var(--green-text);
       border: 1px solid rgba(16, 185, 129, 0.35);
       display: inline-flex; align-items: center; justify-content: center;
       cursor: pointer; transition: background 0.15s, transform 0.08s; }
@@ -309,6 +311,7 @@ export class PeopleDrawerComponent {
   private readonly auth = inject(AuthService);
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
+  protected readonly reach = inject(CallReachService);
   private readonly presenceSvc = inject(PresenceService);
   protected readonly webrtc = inject(WebrtcService);
   private readonly drawer = inject(PeopleDrawerService);
@@ -355,6 +358,7 @@ export class PeopleDrawerComponent {
       : this.activeUsers();
 
     const presences = this.signaling.userPresences();
+    const reachable = this.reach.reachable();
     const buckets: Record<string, { key: string; label: string; rank: number; users: User[] }> = {
       'in-a-call': { key: 'in-a-call', label: 'On a call',   rank: 1, users: [] },
       'active':    { key: 'active',    label: 'Online now',  rank: 2, users: [] },
@@ -362,7 +366,8 @@ export class PeopleDrawerComponent {
       'offline':   { key: 'offline',   label: 'Offline',     rank: 4, users: [] }
     };
     for (const u of filtered) {
-      const p = presences.get(u.id) ?? 'offline';
+      // No socket but a phone / browser we can ring by push → "Away" (callable).
+      const p = presences.get(u.id) ?? (reachable.has(u.id) ? 'away' : 'offline');
       (buckets[p] ?? buckets['offline']).users.push(u);
     }
     return Object.values(buckets)
@@ -379,6 +384,11 @@ export class PeopleDrawerComponent {
   });
 
   constructor() {
+    // The open drawer shows the active thread (classic design): reads +
+    // alert suppression follow it; closing / destroying unregisters.
+    const unregister = this.chat.registerViewer('reader', () => this.open() ? [this.chat.activeConversationId()] : []);
+    inject(DestroyRef).onDestroy(unregister);
+
     // Auto-scroll the chat pane to bottom whenever messages change.
     effect(() => {
       const _ = this.chat.activeMessages().length; // dependency
@@ -474,9 +484,9 @@ export class PeopleDrawerComponent {
   async callActive(): Promise<void> {
     const ou = this.otherUser();
     if (!ou) return;
-    if (!this.isOnline(ou.id)) { this.toasts.info(`${ou.displayName} is offline.`); return; }
+    // Presence never blocks a call — offline colleagues ring by push.
     try {
-      await this.webrtc.startCall(ou.id, 'admin_internal');
+      await this.webrtc.startCall(ou.id, 'admin_internal', ou.displayName);
       this.toasts.info(`Ringing ${ou.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not start call.');
@@ -490,13 +500,15 @@ export class PeopleDrawerComponent {
    *  Teams-style status (In surgery, On rounds, …) when one is known,
    *  falling back to the plain connection presence. */
   protected presence(userId: string): string {
-    const conn = this.signaling.userPresences().get(userId) ?? 'offline';
-    if (conn === 'offline' || conn === 'in-a-call') return conn;
+    // Offline but reachable by push reads "away" (callable), never "online".
+    const conn = this.reach.displayConnection(userId);
+    // Not connected / on a call wins over a custom status (see messages page).
+    if (conn !== 'active') return conn;
     return this.presenceSvc.statusFor(userId) ?? conn;
   }
   protected presenceLabel(p: string): string {
     if (isPresenceKey(p)) return presetLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
+    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline';
   }
   protected isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);

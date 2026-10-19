@@ -112,10 +112,14 @@
           </button>
         </li>
       } @empty {
+        @if (convSkeleton()) {
+          <li><pf-skeleton-rows [rows]="6" [trailing]="false" label="Loading conversations…"></pf-skeleton-rows></li>
+        } @else {
         <li class="pf-msgs__empty-rail">
           <p>No conversations yet.</p>
           <button type="button" class="pf-msgs__link-btn" (click)="openNewChatModal()">Start one</button>
         </li>
+        }
       }
     </ul>
     } @else {
@@ -290,7 +294,7 @@
       <div #thread class="pf-msgs__scroller" (scroll)="onScrollerScroll()"
            (dragover)="onScrollerDragOver($event)" (drop)="onScrollerDrop($event)">
         @if (chat.loadingHistory()) {
-          <div class="pf-msgs__loading">Loading…</div>
+          <pf-skeleton-rows [rows]="5" [trailing]="false" label="Loading messages…"></pf-skeleton-rows>
         } @else {
           @if (chat.loadingOlder()) {
             <div class="pf-msgs__older-loading"><span class="pf-msgs__typing-dots"><i></i><i></i><i></i></span></div>
@@ -371,7 +375,14 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="pf-msgs__rec-card-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </a>
                   }
-                  @if (m.attachmentUrl) {
+                  @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
+                    <div class="pf-msgs__attach-card pf-msgs__attach-card--gone" role="note">
+                      <div class="pf-msgs__attach-meta">
+                        <span class="pf-msgs__attach-name">{{ m.attachmentName ?? 'Attachment' }}</span>
+                        <span class="pf-msgs__attach-size">No longer available on the server</span>
+                      </div>
+                    </div>
+                  } @else if (m.attachmentUrl) {
                     @if (isImage(m.attachmentMime)) {
                       <a class="pf-msgs__attach-image-link"
                          [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
@@ -386,7 +397,7 @@
                     } @else {
                       <a class="pf-msgs__attach-card"
                          [class.pf-msgs__attach-card--mine]="m.fromUserId === me()"
-                         [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
+                         [href]="fileHref(m.attachmentUrl)" (click)="openAttachment($event, m.attachmentUrl)" target="_blank" rel="noopener">
                         <div class="pf-msgs__attach-icon">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         </div>
@@ -832,7 +843,7 @@
         @for (u of addMemberCandidates(); track u.id) {
           <li>
             <button type="button" class="pf-msgs__picker-row" [disabled]="addMemberBusy()"
-                    (click)="addMember(u.id)">
+                    [pfBusy]="addingMemberId() === u.id" pfBusyLabel="Adding…" (click)="addMember(u.id)">
               <div class="pf-msgs__avatar pf-msgs__avatar--sm">{{ nameInitials(u.displayName) }}</div>
               <div class="pf-msgs__picker-meta">
                 <span class="pf-msgs__picker-name">{{ u.displayName }}</span>

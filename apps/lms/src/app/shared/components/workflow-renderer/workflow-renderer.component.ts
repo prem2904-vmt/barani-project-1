@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, OnChanges, SimpleChanges, TemplateRef, computed, inject, input, output, signal } from '@angular/core';
+import { BusyDirective } from '../../directives/busy.directive';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ConditionLogic,
@@ -13,7 +14,9 @@ import {
   WorkflowTransition
 } from '../../models/workflow.model';
 import { TestParameter } from '../../models/test.model';
-import { DynamicInputComponent } from '../dynamic-input/dynamic-input.component';
+import { DynamicInputComponent, isContactNumberField } from '../dynamic-input/dynamic-input.component';
+import { validateFieldValue } from '../../forms/validate';
+import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 
 export interface WorkflowRendererResources {
   /** When a field has type 'test_parameters', these drive the per-parameter inputs. */
@@ -30,30 +33,73 @@ export interface WorkflowStepCompleteEvent {
 @Component({
   selector: 'pf-workflow-renderer',
   standalone: true,
-  imports: [DynamicInputComponent, NgTemplateOutlet],
+  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let cfg = config();
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
-    } @else if (singlePage()) {
-      <!-- SINGLE-PAGE: the first step's fields are always shown; any later steps
-           are revealed inline by "Add more"; a single Submit finishes (no Next). -->
-      <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: visibleSteps()[0] }"></ng-container>
-
-      @if (moreSteps().length > 0) {
-        @if (showMore()) {
-          @for (s of moreSteps(); track s.id) {
-            <div class="mt-6">
-              <h3 class="text-sm font-semibold text-slate-900 mb-3">{{ s.title }}</h3>
+    } @else if (singlePage() && nd()) {
+      <!-- NEW DESIGN (PF-PATTERN §15): ONE form, every step visible at once
+           as its own section card (violet icon chip + label + "N required").
+           The host lays the cards out (3 / 2 / 1 columns) and owns the
+           actions (the ONE primary sits in the band). Keyboard-first: Enter
+           moves to the next field in reading order; on the last field it
+           asks the host to submit (enterSubmit). Errors are field-level. -->
+      <div class="pf-wr-cards" (keydown)="onNdKey($event)" (focusout)="onNdBlur($event)">
+        @for (s of visibleSteps(); track s.id) {
+          @let req = requiredCount(s);
+          <section class="pf-card pf-wr-card" [attr.data-step]="s.id" [attr.aria-labelledby]="'pf-wr-h-' + s.id">
+            <div class="pf-card__head pf-wr-card__head">
+              <span class="pf-card__icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  @switch (stepKind(s)) {
+                    @case ('identity') { <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/> }
+                    @case ('contact') { <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/> }
+                    @case ('more') { <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/> }
+                    @default { <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/> }
+                  }
+                </svg>
+              </span>
+              <h2 class="pf-card__label pf-wr-card__label" [id]="'pf-wr-h-' + s.id">{{ s.title }}</h2>
+              <span class="pf-wr-card__note">
+                @if (req > 0) { <span class="pf-dot-unpriced" aria-hidden="true"></span>{{ req }} required } @else { Optional }
+              </span>
+              <span class="pf-card__spacer"></span>
+              @if (stepHeaderTpl() && stepHeaderFor() === s.id) {
+                <span class="pf-wr-card__extra"><ng-container *ngTemplateOutlet="stepHeaderTpl()!"></ng-container></span>
+              }
+            </div>
+            <div class="pf-card__body pf-wr-card__body">
               <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
             </div>
-          }
+          </section>
         }
-        <button type="button" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold"
-                style="color: var(--color-primary, #7c3aed);" (click)="toggleMore()">
-          {{ showMore() ? '− Show fewer fields' : '+ Add more details' }}
-        </button>
+      </div>
+      @if (!hideActions()) {
+        <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
+          @for (action of extraActions(); track action.id) {
+            <button type="button" class="pf-btn pf-btn--secondary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
+                    (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
+          }
+          <button type="button" class="pf-btn pf-btn--primary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
+                  (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+        </div>
+      }
+    } @else if (singlePage()) {
+      <!-- SINGLE-PAGE: every step is a visible, titled section (no hidden
+           "Add more" reveal — configured extra fields must be discoverable).
+           One shared header vocabulary; a single Submit finishes (no Next). -->
+      @for (s of visibleSteps(); track s.id; let first = $first) {
+        <div [class.mt-8]="!first">
+          <div class="flex items-center gap-3 mb-4">
+            <h3 class="text-[11px] font-bold uppercase tracking-[0.14em] shrink-0"
+                style="color: var(--text-tertiary, #64748b);">{{ s.title }}</h3>
+            <span class="flex-1 h-px" style="background: var(--glass-border, rgba(148,163,184,0.25));"></span>
+          </div>
+          <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
+        </div>
       }
 
       @if (validationError(); as err) {
@@ -65,11 +111,11 @@ export interface WorkflowStepCompleteEvent {
           <button type="button" class="pf-btn"
                   [class.pf-btn-primary]="action.variant === 'primary'"
                   [class.pf-btn-ghost]="action.variant !== 'primary'"
-                  [disabled]="submitting()"
+                  [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                   (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
         }
         <button type="button" class="pf-btn pf-btn-primary"
-                [disabled]="submitting()"
+                [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                 (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
       </div>
     } @else {
@@ -107,11 +153,11 @@ export interface WorkflowStepCompleteEvent {
               <button type="button" class="pf-btn"
                       [class.pf-btn-primary]="action.variant === 'primary'"
                       [class.pf-btn-ghost]="action.variant !== 'primary'"
-                      [disabled]="submitting()"
+                      [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                       (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
             }
             <button type="button" class="pf-btn pf-btn-primary"
-                    [disabled]="submitting()"
+                    [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                     (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
           </div>
         } @else {
@@ -121,30 +167,35 @@ export interface WorkflowStepCompleteEvent {
       </div>
     }
 
-    <!-- One field grid, reused by both single-page and stepped modes. -->
+    <!-- One field grid, reused by both single-page and stepped modes. The
+         single-page form runs full-bleed, so it steps up to three columns on
+         wide viewports — two viewport-wide inputs read as stretched, three
+         stay proportioned. Stepped mode (drawers, narrower hosts) keeps two. -->
     <ng-template #stepFields let-step>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div [class]="gridClass()">
         @for (f of visibleFields(step); track f.id) {
           @if (f.type === 'test_parameters') {
             @if (testParamFields().length === 0) {
-              <div class="md:col-span-2 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <div [class]="widthClass('full') + ' rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500'">
                 No parameters configured on this test.
               </div>
             } @else {
-              <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div [class]="widthClass('full') + ' grid grid-cols-1 md:grid-cols-2 gap-4'">
                 @for (p of testParamFields(); track p.name) {
-                  <div [class]="widthClass('full')">
+                  <div class="md:col-span-2">
                     <pf-dynamic-input
                       [field]="testParamConfig(p)"
                       [value]="valueFor(step, p.name)"
                       [context]="context()"
+                      [nd]="nd()"
+                      [enterAdvances]="true"
                       (valueChange)="setValue(step, p.name, $event)"></pf-dynamic-input>
                   </div>
                 }
               </div>
             }
           } @else if (f.type === 'tube_collection') {
-            <div class="md:col-span-2 space-y-2">
+            <div [class]="widthClass('full') + ' space-y-2'">
               @if (tubes().length === 0) {
                 <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs text-slate-500 text-center">
                   No tubes in context. Scan a barcode in the previous step to populate.
@@ -166,25 +217,92 @@ export interface WorkflowStepCompleteEvent {
                 }
               }
             </div>
-          } @else {
+          } @else if (isGroupedIdentityField(step, f)) {
+            <!-- the honorific renders as a prefix inside the first-name cell — skip. -->
+          } @else if (isNameRow(step, f)) {
+            <!-- First name with the Title honorific as a compact prefix in the
+                 SAME box row: [Mr. ▾ | First name]. Everything else (Last name,
+                 Sex, …) stays a normal equal-width grid cell, so every box edge
+                 on the form lines up. -->
             <div [class]="widthClass(f.width)">
+              <div class="flex flex-col gap-1.5">
+                <label class="pf-label">
+                  {{ f.title }}
+                  @if (f.isRequired) { <span class="text-red-500">*</span> }
+                </label>
+                <div class="flex items-center gap-2">
+                  @if (groupTitleField(step); as tf) {
+                    <pf-select class="w-[104px] flex-shrink-0"
+                      [options]="fieldSelectOptions(tf)"
+                      [value]="valueFor(step, tf.name)"
+                      [placeholder]="tf.title"
+                      (valueChange)="setValue(step, tf.name, $event)"></pf-select>
+                  }
+                  <input type="text" class="pf-input flex-1 min-w-0" [placeholder]="f.placeholder ?? ''"
+                         [value]="textValue(step, f.name)"
+                         (input)="setValue(step, f.name, $any($event.target).value)" />
+                </div>
+              </div>
+            </div>
+          } @else {
+            <div [class]="nd() ? ndSpan(f) : widthClass(f.width)">
               <pf-dynamic-input
                 [field]="fieldConfig(f)"
                 [value]="valueFor(step, f.name)"
                 [context]="context()"
-                (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
+                [nd]="nd()"
+                [error]="nd() ? fieldError(step, f.name) : null"
+                [defaultCountryCode]="nd() ? $any(context()['defaultPhoneCode'] ?? null) : null"
+                (localErrorChange)="setLocalError(step, f.name, $event)"
+                (valueChange)="setValue(step, f.name, $event)"
+                (dobEstimatedChange)="setValue(step, f.name + DOB_ESTIMATED_SUFFIX, $event)"></pf-dynamic-input>
             </div>
           }
         } @empty {
-          <div class="md:col-span-2 text-sm text-slate-500 py-6 text-center">
+          <div [class]="widthClass('full') + ' text-sm text-slate-500 py-6 text-center'">
             This step has no fields.
           </div>
         }
       </div>
     </ng-template>
-  `
+  `,
+  styles: [`
+    /* New design (§15): section cards — 1 column on phones, 2 on tablets,
+       3 side by side from 1200px, where the row fills the host's height and
+       only a card BODY scrolls (never the page). */
+    .pf-wr-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+    @media (min-width: 768px) { .pf-wr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (min-width: 1200px) {
+      .pf-wr-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr);
+        align-items: stretch; height: 100%; min-height: 0; }
+      .pf-wr-card { min-height: 0; }
+    }
+    .pf-wr-card__head { row-gap: 8px; }
+    .pf-wr-card__note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-wr-card__extra { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+    .pf-wr-card__body { padding: 16px; container-type: inline-size; }
+    /* Fields inside a card: two columns; full-width fields span both. */
+    .pf-wr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+    .pf-wr-span { grid-column: 1 / -1; }
+    @container (max-width: 340px) { .pf-wr-grid { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 640px) {
+      .pf-wr-grid { grid-template-columns: minmax(0, 1fr); }
+      .pf-wr-card__body { padding: 14px; }
+      /* Beat the global phone h2 cap (!important): the card label is 12px. */
+      h2.pf-card__label.pf-wr-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+    }
+    /* Same 44px control height / 12px radius the dynamic inputs use — the
+       renderer's own raw inputs and the title-prefix select must not sit a
+       few pixels off from their neighbours. */
+    :host input.pf-input { height: 44px; }
+    :host ::ng-deep .pf-dd__trigger {
+      height: 44px;
+      border-radius: 12px;
+    }
+  `]
 })
 export class WorkflowRendererComponent implements OnChanges {
+  protected readonly DOB_ESTIMATED_SUFFIX = DOB_ESTIMATED_SUFFIX;
   readonly config = input<WorkflowConfig | null>(null);
   readonly context = input<WorkflowContext>({});
   readonly resources = input<WorkflowRendererResources>({});
@@ -195,6 +313,19 @@ export class WorkflowRendererComponent implements OnChanges {
    *  later steps are revealed inline by "Add more"; one Submit finishes. Used by
    *  the patient-registration form. */
   readonly singlePage = input<boolean>(false);
+  /** New-design markup (PF-PATTERN §14): kit fields, no in-form headings.
+   *  Only meaningful with singlePage. Off by default (workflow preview …). */
+  readonly nd = input<boolean>(false);
+  /** New design: extra header content (e.g. ABHA buttons) for ONE card. */
+  readonly stepHeaderTpl = input<TemplateRef<unknown> | null>(null);
+  /** …the id of the step whose card carries it. */
+  readonly stepHeaderFor = input<string | null>(null);
+  /** New design: Enter on the LAST field — the host submits. */
+  readonly enterSubmit = output<void>();
+  /** The host renders the actions itself (the band's ONE primary). */
+  readonly hideActions = input<boolean>(false);
+  /** Single-page validation failed: which step holds the first problem. */
+  readonly invalid = output<{ stepId: string; fieldName: string; message: string }>();
 
   @Input() initialValues: WorkflowFormValues = {};
 
@@ -220,34 +351,168 @@ export class WorkflowRendererComponent implements OnChanges {
 
   readonly isLastStep = computed(() => this.currentIndex() >= this.visibleSteps().length - 1);
 
-  // ── single-page mode ───────────────────────────────────────────
-  /** Steps after the first — revealed inline by "Add more". */
-  readonly moreSteps = computed<WorkflowStep[]>(() => this.visibleSteps().slice(1));
-  private readonly _showMore = signal(false);
-  readonly showMore = this._showMore.asReadonly();
-  toggleMore(): void { this._showMore.update(v => !v); }
-
-  /** Validate required fields across ALL steps (single-page has no per-step gate).
-   *  Auto-expands "Add more" if a missing required field is in a later step. */
+  /** Validate required fields across ALL steps (single-page has no per-step gate). */
   private validateAll(): boolean {
+    if (this.nd()) return this.validateAllNd();
     const steps = this.visibleSteps();
-    const missing: string[] = [];
-    let missingInMore = false;
     for (let i = 0; i < steps.length; i++) {
       for (const f of this.visibleFields(steps[i])) {
-        if (!f.isRequired || f.type === 'test_parameters') continue;
-        if (this.isEmpty(this.valueFor(steps[i], f.name))) {
-          missing.push(f.title);
-          if (i > 0) missingInMore = true;
+        if (f.type === 'test_parameters') continue;
+        const v = this.valueFor(steps[i], f.name);
+        const err = this.localError(steps[i], f.name) ?? validateFieldValue(f, v);
+        if (err) {
+          const message = `${f.title}: ${err}`;
+          this._validationError.set(message);
+          this.invalid.emit({ stepId: steps[i].id, fieldName: f.name, message });
+          return false;
         }
       }
     }
-    if (missing.length > 0) {
-      if (missingInMore) this._showMore.set(true);
-      this._validationError.set(`Please fill: ${missing.join(', ')}`);
-      return false;
-    }
     this._validationError.set(null);
+    return true;
+  }
+
+  // ── New design (§15): field-level errors + keyboard-first ──────────
+  private readonly host = inject(ElementRef<HTMLElement>);
+  /** `step.name::field` → message, for every invalid field at once. */
+  private readonly _fieldErrors = signal<Record<string, string>>({});
+  readonly fieldErrors = this._fieldErrors.asReadonly();
+  fieldError(step: WorkflowStep, name: string): string | null {
+    return this._fieldErrors()[`${step.name}::${name}`] ?? null;
+  }
+
+  /** Validate every field of every visible step; outline each invalid one
+   *  and move focus to the FIRST (in reading order), scrolled into view. */
+  private validateAllNd(): boolean {
+    const errs: Record<string, string> = {};
+    let first: { step: WorkflowStep; f: WorkflowField; message: string } | null = null;
+    for (const step of this.visibleSteps()) {
+      for (const f of this.visibleFields(step)) {
+        if (f.type === 'test_parameters') continue;
+        const err = this.localError(step, f.name) ?? validateFieldValue(f, this.valueFor(step, f.name));
+        if (!err) continue;
+        errs[`${step.name}::${f.name}`] = err;
+        if (!first) first = { step, f, message: `${f.title}: ${err}` };
+      }
+    }
+    this._fieldErrors.set(errs);
+    if (!first) { this._validationError.set(null); return true; }
+    this._validationError.set(first.message);
+    this.invalid.emit({ stepId: first.step.id, fieldName: first.f.name, message: first.message });
+    const name = first.f.name;
+    const stepId = first.step.id;
+    setTimeout(() => {
+      const root = this.host.nativeElement as HTMLElement;
+      const wrap = root.querySelector<HTMLElement>(`[data-step="${stepId}"] [data-field="${name}"]`)
+        ?? root.querySelector<HTMLElement>(`[data-field="${name}"]`);
+      if (!wrap) return;
+      wrap.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      WorkflowRendererComponent.stopOf(wrap)?.focus();
+    });
+    return false;
+  }
+
+  /** Errors an input reported that its VALUE can't carry (a half-typed or
+   *  impossible DOB, an out-of-range age → the value is null). Kept apart
+   *  from _fieldErrors (which a value change clears). */
+  private readonly _localErrors = signal<Record<string, string>>({});
+  private localError(step: WorkflowStep, name: string): string | null {
+    return this._localErrors()[`${step.name}::${name}`] ?? null;
+  }
+  setLocalError(step: WorkflowStep, name: string, msg: string | null): void {
+    const key = `${step.name}::${name}`;
+    const cur = this._localErrors();
+    if ((cur[key] ?? null) === msg) return;
+    const next = { ...cur };
+    if (msg) next[key] = msg; else delete next[key];
+    this._localErrors.set(next);
+  }
+
+  /** Blur = check THAT field's format (phone length, ABHA / Aadhaar digits,
+   *  email) and show the message under it. Empty fields aren't flagged on
+   *  blur ("Required" waits for submit) so Enter-ing past optional fields
+   *  stays quiet. Focus moving inside the same field (country code ⇄
+   *  number) is not a blur. */
+  onNdBlur(e: FocusEvent): void {
+    const t = e.target as HTMLElement | null;
+    const wrap = t?.closest<HTMLElement>('[data-field]');
+    if (!wrap) return;
+    const to = e.relatedTarget as Node | null;
+    if (to && wrap.contains(to)) return;
+    const name = wrap.getAttribute('data-field');
+    const stepId = wrap.closest<HTMLElement>('[data-step]')?.getAttribute('data-step');
+    const step = this.visibleSteps().find(s => s.id === stepId);
+    const f = step && this.visibleFields(step).find(x => x.name === name);
+    if (!step || !f || f.type === 'test_parameters') return;
+    const v = this.valueFor(step, f.name);
+    if (this.isEmpty(v)) return;
+    const err = validateFieldValue(f, v);
+    const key = `${step.name}::${f.name}`;
+    const cur = this._fieldErrors();
+    if (err) this._fieldErrors.set({ ...cur, [key]: err });
+    else if (cur[key]) { const rest = { ...cur }; delete rest[key]; this._fieldErrors.set(rest); }
+  }
+
+  /** Required fields a card shows in its header ("2 required"). */
+  requiredCount(step: WorkflowStep): number {
+    return this.visibleFields(step).filter(f => f.isRequired).length;
+  }
+
+  /** The card glyph: the registration form's split steps by id, else generic. */
+  stepKind(step: WorkflowStep): 'identity' | 'contact' | 'more' | 'other' {
+    if (step.id.endsWith('__identity')) return 'identity';
+    if (step.id.endsWith('__contact')) return 'contact';
+    if (step.name === 'additional_info') return 'more';
+    return 'other';
+  }
+
+  /** In a card, fields sit two-up; wide controls take the whole row. */
+  ndSpan(f: WorkflowField): string {
+    const wide = f.width === 'full'
+      || ['phone', 'textarea', 'multiselect', 'multi_button_select', 'test_parameters', 'tube_collection'].includes(f.type)
+      || (f.type === 'date' && /(^|_)dob$|date_of_birth|birth_?date/i.test(f.name))
+      || isContactNumberField(f)
+      || (['button_select', 'image_select', 'radio'].includes(f.type) && (f.options?.length ?? 0) > 4);
+    return wide ? 'pf-wr-span' : '';
+  }
+
+  /** The control Enter / validation lands on inside a field. */
+  private static stopOf(wrap: HTMLElement): HTMLElement | null {
+    return wrap.querySelector<HTMLElement>('[data-pf-stop]:not([disabled])')
+      ?? wrap.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), button:not([disabled])');
+  }
+
+  /** Enter = next field in reading order (card by card, top to bottom);
+   *  on the last field it submits. Textareas keep Enter for new lines and
+   *  an open pf-select keeps it for picking. */
+  onNdKey(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+    const t = e.target as HTMLElement | null;
+    if (!t || t.tagName === 'TEXTAREA' || t.closest('pf-select')) return;
+    const wrap = t.closest<HTMLElement>('[data-field]');
+    if (!wrap) return;
+    e.preventDefault();
+    const root = this.host.nativeElement as HTMLElement;
+    const fields = Array.from(root.querySelectorAll<HTMLElement>('[data-field]'));
+    for (let j = fields.indexOf(wrap) + 1; j < fields.length; j++) {
+      const stop = WorkflowRendererComponent.stopOf(fields[j]);
+      if (stop) {
+        stop.focus();
+        if (stop instanceof HTMLInputElement && stop.type !== 'date') { try { stop.select(); } catch { /* not selectable */ } }
+        return;
+      }
+    }
+    this.enterSubmit.emit();
+  }
+
+  /** True when every visible field of the step passes validation — the
+   *  host's section-tab dot (filled = complete, ring = something to finish).
+   *  Pure: never touches the on-screen validation message. */
+  isStepValid(step: WorkflowStep): boolean {
+    for (const f of this.visibleFields(step)) {
+      if (f.type === 'test_parameters') continue;
+      if (this.localError(step, f.name) || validateFieldValue(f, this.valueFor(step, f.name))) return false;
+    }
     return true;
   }
 
@@ -279,7 +544,35 @@ export class WorkflowRendererComponent implements OnChanges {
   // ── rendering helpers ──────────────────────────────────────────
 
   visibleFields(step: WorkflowStep): WorkflowField[] {
-    return step.fields.filter(f => this.evaluateRules(f.showWhen ?? [], 'AND'));
+    return step.fields.filter(f => this.evaluateRules(f.showWhen ?? [], f.showWhenLogic ?? 'AND'));
+  }
+
+  // ── honorific prefix inside the first-name cell ────────────────
+  /** The step's honorific field, if it can ride inside the first-name box. */
+  groupTitleField(step: WorkflowStep): WorkflowField | null {
+    // New design: Title is its own neutral segmented field, not a prefix.
+    if (this.nd()) return null;
+    if (!step.fields.some(f => f.name === 'first_name')) return null;
+    return this.visibleFields(step).find(f => f.name === 'title' && (f.options?.length ?? 0) > 0) ?? null;
+  }
+
+  /** first_name hosts the honorific prefix when a title field shares its step. */
+  isNameRow(step: WorkflowStep, f: WorkflowField): boolean {
+    return f.name === 'first_name' && !!this.groupTitleField(step);
+  }
+
+  /** The title is skipped in the grid — it renders inside the first-name cell. */
+  isGroupedIdentityField(step: WorkflowStep, f: WorkflowField): boolean {
+    return f === this.groupTitleField(step);
+  }
+
+  fieldSelectOptions(f: WorkflowField): PfSelectOption<unknown>[] {
+    return (f.options ?? []).map(o => ({ value: o.value, label: o.label, hint: o.sublabel }));
+  }
+
+  textValue(step: WorkflowStep, fieldName: string): string {
+    const v = this.valueFor(step, fieldName);
+    return v === null || v === undefined ? '' : String(v);
   }
 
   fieldConfig(f: WorkflowField) {
@@ -297,13 +590,19 @@ export class WorkflowRendererComponent implements OnChanges {
     return DynamicInputComponent.fromParameter(p);
   }
 
+  /** Field grid: single-page (full-bleed pages) steps up to 3 columns at xl;
+   *  stepped mode (drawers and narrower hosts) stays at 2. */
+  readonly gridClass = computed(() => this.nd() ? 'pf-wr-grid' : this.singlePage()
+    ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
+    : 'grid grid-cols-1 md:grid-cols-2 gap-4');
+
   widthClass(width: string | undefined): string {
     switch (width) {
       case 'half':    return 'md:col-span-1';
-      case 'third':   return 'md:col-span-1'; // simplified — real 3-col layout is a follow-up
+      case 'third':   return 'md:col-span-1';
       case 'quarter': return 'md:col-span-1';
       case 'full':
-      default:        return 'md:col-span-2';
+      default:        return this.singlePage() ? 'md:col-span-2 xl:col-span-3' : 'md:col-span-2';
     }
   }
 
@@ -317,6 +616,11 @@ export class WorkflowRendererComponent implements OnChanges {
     this._formValues.set(next);
     this.valuesChange.emit(next);
     if (this._validationError()) this._validationError.set(null);
+    if (this._fieldErrors()[key]) {
+      const rest = { ...this._fieldErrors() };
+      delete rest[key];
+      this._fieldErrors.set(rest);
+    }
   }
 
   // ── navigation ─────────────────────────────────────────────────
@@ -345,7 +649,12 @@ export class WorkflowRendererComponent implements OnChanges {
     }
   }
 
+  /** The last action pressed — the one whose button shows the parent's
+   *  `submitting` state as busy dots (the others just stay disabled). */
+  protected readonly lastAct = signal<string | null>(null);
+
   finish(): void {
+    this.lastAct.set('finish');
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.workflowComplete.emit(this._formValues());
@@ -359,6 +668,7 @@ export class WorkflowRendererComponent implements OnChanges {
   }
 
   triggerExtraAction(actionId: string): void {
+    this.lastAct.set(actionId);
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.extraActionClicked.emit({ actionId, values: this._formValues() });
@@ -413,16 +723,14 @@ export class WorkflowRendererComponent implements OnChanges {
   // ── validation ─────────────────────────────────────────────────
 
   private validateStep(step: WorkflowStep): boolean {
-    const missing: string[] = [];
     for (const f of this.visibleFields(step)) {
-      if (!f.isRequired) continue;
-      if (f.type === 'test_parameters') continue; // parameters optionality is test-side
+      if (f.type === 'test_parameters') continue;
       const v = this.valueFor(step, f.name);
-      if (this.isEmpty(v)) missing.push(f.title);
-    }
-    if (missing.length > 0) {
-      this._validationError.set(`Please fill: ${missing.join(', ')}`);
-      return false;
+      const err = validateFieldValue(f, v);
+      if (err) {
+        this._validationError.set(`${f.title}: ${err}`);
+        return false;
+      }
     }
     this._validationError.set(null);
     return true;
@@ -520,6 +828,11 @@ export function splitByStep(values: WorkflowFormValues): Record<string, Record<s
 
 /** Helper for callers: given a workflow config + flat values, produce { standard, metadata }
  *  where metadata bundles every custom field (storageKey starting with `metadata.`). */
+/** Companion form-value key suffix: `<step>::<dobField>#estimated` = true
+ *  when the DOB was synthesised from the age box. Not a field, so
+ *  splitByStorage ignores it; the registration host reads it. */
+export const DOB_ESTIMATED_SUFFIX = '#estimated';
+
 export function splitByStorage(
   cfg: WorkflowConfig,
   values: WorkflowFormValues

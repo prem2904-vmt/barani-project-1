@@ -1,18 +1,23 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { HomeCollectionAgent } from '../../../shared/models/appointment.model';
 import { User, userDisplayName } from '../../../shared/models/user.model';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type AreaMode = 'pincode' | 'radius';
 interface Draft {
@@ -29,9 +34,20 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 @Component({
   selector: 'pf-home-collection-agents',
   standalone: true,
-  imports: [FormsModule, ChipComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
+  imports: [SkeletonTilesComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
+    /* ── ND audit: kit cards ── */
+    .pf-hc-form { margin-bottom: 16px; max-width: 48rem; }
+    .pf-hc-form .pf-section-title { margin: 0; }
+    .pf-hc-form__body { padding: 16px 18px; }
+    .pf-hc-lbl { display: block; margin-bottom: 6px; }
+    .pf-hc-hint { margin-top: 6px; }
+    .pf-hc-card { height: 100%; padding: 14px 16px; overflow: visible; }
+    .pf-hc-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-hc-chip { height: 24px; font-size: 11.5px; gap: 4px; }
+    .pf-hc-area { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-hc-acts { border-top: 1px solid var(--pf-line); }
     /* Phone-only (<=640px): keep this page's OWN text input at >=16px so iOS
        Safari does not auto-zoom on focus. Scoped to this component's instances
        only — does not restyle the global .pf-input primitive elsewhere.
@@ -47,8 +63,29 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): agent search (name, pincodes, area); "Add
+             agent" rides the band's actions. -->
+        <pf-hero-band [back]="true" placeholder="Search agents — name, pincode, area…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!formOpen()"
+                    [class.pf-hb-btn--ghost]="formOpen()" (click)="toggleForm()"
+                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add agent'">
+              @if (formOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ formOpen() ? 'Cancel' : 'Add agent' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Home-collection agents"
         subtitle="Assign staff as home-collection agents and define the area they cover. Requests are auto-routed by area, load-balanced by weight.">
@@ -57,89 +94,101 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (formOpen()) {
-        <pf-tile tone="violet" padding="lg" class="block mb-4 max-w-3xl">
-          <h3 class="pf-section-title mb-3">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section class="pf-card pf-anim-in pf-hc-form" [attr.aria-label]="editing() ? 'Edit area' : 'New agent'">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
+            <h3 class="pf-card__label pf-section-title">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-hc-form__body">
             <div class="sm:col-span-2">
-              <label class="pf-label">Agent (staff member)</label>
+              <label class="pf-field__lbl pf-hc-lbl">Agent (staff member)</label>
               <pf-select [options]="userOptions()" [value]="draft().userId" [disabled]="editing()"
                 placeholder="Pick a user" (valueChange)="patch({ userId: $any($event) })"></pf-select>
             </div>
             <div class="sm:col-span-2">
-              <label class="pf-label">Coverage</label>
-              <pf-segmented [options]="modeOptions" [value]="draft().areaMode" size="sm"
-                (valueChange)="patch({ areaMode: $any($event) })"></pf-segmented>
+              <label class="pf-field__lbl pf-hc-lbl">Coverage</label>
+              <span class="pf-seg" role="radiogroup" aria-label="Coverage">
+                @for (o of modeOptions; track o.value) {
+                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="draft().areaMode === o.value"
+                          (click)="patch({ areaMode: o.value })">{{ o.label }}</button>
+                }
+              </span>
             </div>
 
             @if (draft().areaMode === 'pincode') {
               <div class="sm:col-span-2">
-                <label class="pf-label">Pincodes — list and/or ranges</label>
-                <input type="text" class="pf-input" [ngModel]="draft().pincodes"
+                <label class="pf-field__lbl pf-hc-lbl">Pincodes — list and/or ranges</label>
+                <input type="text" class="pf-input pf-num" [ngModel]="draft().pincodes"
                   (ngModelChange)="patch({ pincodes: $event })" placeholder="600001, 600028, 600001-600050" />
-                <p class="text-[11px] mt-1" style="color: var(--text-tertiary);">
-                  Comma-separated. Use a range with a dash or "to": <code>600001-600050</code> or <code>600001 to 600050</code>.
+                <p class="pf-field__hint pf-hc-hint">
+                  Comma-separated. Use a range with a dash or "to": <span class="pf-num">600001-600050</span> or <span class="pf-num">600001 to 600050</span>.
                 </p>
               </div>
             } @else {
               <div>
-                <label class="pf-label">Centre latitude</label>
+                <label class="pf-field__lbl pf-hc-lbl">Centre latitude</label>
                 <pf-number-input [value]="draft().centerLat" [step]="0.001" [allowEmpty]="true"
                   (valueChange)="patch({ centerLat: $event })"></pf-number-input>
               </div>
               <div>
-                <label class="pf-label">Centre longitude</label>
+                <label class="pf-field__lbl pf-hc-lbl">Centre longitude</label>
                 <pf-number-input [value]="draft().centerLng" [step]="0.001" [allowEmpty]="true"
                   (valueChange)="patch({ centerLng: $event })"></pf-number-input>
               </div>
               <div>
-                <label class="pf-label">Radius (km)</label>
+                <label class="pf-field__lbl pf-hc-lbl">Radius (km)</label>
                 <pf-number-input [value]="draft().radiusKm" [step]="1" [min]="1" [allowEmpty]="true"
                   (valueChange)="patch({ radiusKm: $event })"></pf-number-input>
               </div>
             }
 
             <div>
-              <label class="pf-label">Weight (share of work)</label>
+              <label class="pf-field__lbl pf-hc-lbl">Weight (share of work)</label>
               <pf-number-input [value]="draft().weightage" [step]="1" [min]="1"
                 (valueChange)="patch({ weightage: $event ?? 1 })"></pf-number-input>
             </div>
           </div>
-          <div class="mt-4 flex justify-end gap-2">
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleForm()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" [disabled]="!draft().userId || saving()" (pressed)="save()">
+          <div class="pf-card__foot">
+            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save agent' }}
-            </pf-touch-btn>
+            </button>
           </div>
-        </pf-tile>
+        </section>
       }
 
-      @if (agents().length === 0) {
-        <pf-tile tone="default" padding="xl" class="block">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">No home-collection agents yet.</p>
-        </pf-tile>
+      @if (listSkeleton()) {
+        <!-- First load: the agent cards' shape, not "No agents yet". -->
+        <pf-skeleton-tiles [count]="3" label="Loading agents…"></pf-skeleton-tiles>
+      } @else if (agents().length === 0) {
+        <p class="pf-band-empty">No home-collection agents yet.</p>
+      } @else if (visibleAgents().length === 0) {
+        <p class="pf-band-empty">No agents match "{{ q() }}".</p>
       } @else {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          @for (a of agents(); track a.id) {
-            <pf-tile tone="default" padding="md" class="block h-full">
+          @for (a of visibleAgents(); track a.id) {
+            <div class="pf-card pf-hc-card">
               <div class="flex flex-col justify-between h-full gap-3">
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap min-w-0">
-                    <p class="font-semibold text-[14px] truncate min-w-0" style="color: var(--text-primary);">{{ agentName(a) }}</p>
-                    <pf-chip tone="violet" size="sm">weight {{ a.weightage }}</pf-chip>
-                    @if (!a.isActive) { <pf-chip tone="default" size="sm">inactive</pf-chip> }
+                    <p class="pf-hc-name">{{ agentName(a) }}</p>
+                    <span class="pf-chip pf-chip--static pf-hc-chip">Weight <span class="pf-num">{{ a.weightage }}</span></span>
+                    @if (!a.isActive) { <span class="pf-chip pf-chip--static pf-hc-chip">Inactive</span> }
                   </div>
-                  <p class="text-[12px] mt-1.5" style="color: var(--text-tertiary);">{{ areaSummary(a) }}</p>
+                  <p class="pf-hc-area">{{ areaSummary(a) }}</p>
                 </div>
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-700/30">
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="edit(a)">Edit</pf-touch-btn>
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="remove(a)">Remove</pf-touch-btn>
+                <div class="flex items-center justify-end gap-2 pt-2 pf-hc-acts">
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="edit(a)" aria-label="Edit area" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="pf-rowact__t">Edit</span></button>
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="remove(a)" [disabled]="removingId() === a.id" [pfBusy]="removingId() === a.id" pfBusyLabel="Removing…" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="pf-rowact__t">Remove</span></button>
                 </div>
               </div>
-            </pf-tile>
+            </div>
           }
         </div>
       }
+      </div>
     </section>
   `
 })
@@ -147,6 +196,14 @@ export class HomeCollectionAgentsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (PF-PATTERN). */
+  protected readonly web = webPointerSignal();
+
+  /** Band pill search: agent name/email and the area they cover. */
+  readonly q = signal('');
+  readonly visibleAgents = computed(() => bandFilter(this._agents(), this.q(),
+    a => [this.agentName(a), a.user?.email, this.areaSummary(a)]));
 
   readonly modeOptions: SegmentedOption<AreaMode>[] = [
     { value: 'pincode', label: 'Pincode list' },
@@ -169,13 +226,24 @@ export class HomeCollectionAgentsComponent implements OnInit {
   readonly userOptions = computed<PfSelectOption<string>[]>(() =>
     this._users().filter(u => u.isActive).map(u => ({ value: u.id, label: `${userDisplayName(u)} · ${u.email}` })));
 
+  /** First load: skeleton cards until the agents land (held, no flash). */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  /** The agent whose Remove is running. */
+  readonly removingId = signal<string | null>(null);
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.load();
     this.api.get<User[]>('/api/users/').subscribe({ next: l => this._users.set(l ?? []) });
   }
 
   private load() {
-    this.svc.listAgents().subscribe({ next: l => this._agents.set(l ?? []) });
+    this.svc.listAgents().subscribe({
+      next: l => { this._agents.set(l ?? []); this.listHold.done(); },
+      error: () => this.listHold.done(),
+    });
   }
 
   toggleForm() {
@@ -220,9 +288,11 @@ export class HomeCollectionAgentsComponent implements OnInit {
   }
 
   remove(a: HomeCollectionAgent) {
+    if (this.removingId() === a.id) return;
+    this.removingId.set(a.id);
     this.svc.removeAgent(a.id).subscribe({
-      next: () => { this.toast.success('Removed.'); this.load(); },
-      error: e => this.toast.error(ApiError.from(e).message)
+      next: () => { this.removingId.set(null); this.toast.success('Removed.'); this.load(); },
+      error: e => { this.removingId.set(null); this.toast.error(ApiError.from(e).message); }
     });
   }
 

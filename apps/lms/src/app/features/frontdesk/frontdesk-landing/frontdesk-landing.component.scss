@@ -4,7 +4,453 @@
 @use './styles/stat-row';
 @use './styles/filters';
 @use './styles/cards';
+@use './styles/work-rows';
 @use './styles/widgets';
 @use './styles/drawers-modals';
 @use './styles/mobile';
 @use './styles/flatpickr';
+
+/* ── Designer hero band: full-bleed (Figma 446-113) ─────────────────
+   The band escapes the header's page padding so its gradient runs
+   edge-to-edge like the design; the search pill stays inset. */
+/* padding-top stays Tailwind's pt-4 here — CLASSIC needs that air under
+   the floating pill bar; the new design zeroes it in its own gated block. */
+/* The bleed lives on .pf-page (not just the header) so the header AND the
+   body share ONE gutter — the shared .pf-band-page contract: side padding
+   == --pf-hb-bleed at every breakpoint (Tailwind px-4/md:px-8/lg:px-10 on
+   the header + body are exactly 1rem/2rem/2.5rem). */
+.pf-page {
+  --pf-hb-bleed: 1rem;
+  --pf-card-hover-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
+}
+@media (min-width: 768px) { .pf-page { --pf-hb-bleed: 2rem; } }
+@media (min-width: 1024px) { .pf-page { --pf-hb-bleed: 2.5rem; } }
+/* Phones: the global styles.scss "PAGE PADDING" rule gives every .pf-page
+   a max(12px, safe-area) side gutter. On Frontdesk that stacked UNDER the
+   header's own padding, so the band's 1rem bleed fell 10px short of the
+   screen edge (12 + 14 − 16) — the dark top-corner gap, FD-only. Zero the
+   section's gutter here; the header/body carry it (see _mobile.scss) and
+   it honours the landscape notch like the global rule did. */
+@media (max-width: 640px) {
+  .pf-page {
+    --pf-hb-bleed: max(1rem, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+/* ══ Designer light skin — exact card & row anatomy (Figma 446-113) ══
+   Values pulled from the frame's design context, applied to the live
+   widgets' class hooks. Light theme only; dark keeps the glass look. */
+:host-context(.light.design-new) {
+  /* Page: the frame's white → blush vertical gradient. */
+  .pf-page {
+    background: linear-gradient(to top, #fcf8fe 0%, #fff8ff 55%, #ffffff 100%);
+    min-height: calc(100dvh - var(--pf-botbar-h, 0px));
+  }
+
+  /* Panels: white/80 r20 with the violet-tinted hairline shadow + the
+     designer's wave footer riding the card bottom. */
+  .pf-appt-split__pane {
+    /* 0.8 let the pink blob layer bleed through and the pane bottoms
+       read as "ended early" — the frame's panels stay clean white with
+       the colour wash only OUTSIDE them. */
+    background: rgba(255, 255, 255, 0.92);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(124, 58, 237, 0.15);
+    position: relative;
+  }
+  .pf-appt-split__pane::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0; height: 80px;
+    background: url('/design/card-wave-left.svg') no-repeat bottom center / 100% 80px;
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+  }
+
+  /* Header strip: #f8f8f8, 49px, hairline. */
+  .pf-appt-split__hdr {
+    background: #f8f8f8;
+    border-bottom: 1px solid #fbf9fe;
+    min-height: 49px;
+    border-radius: 20px 20px 0 0;
+  }
+  .pf-appt-split__link--left-icon {
+    background: #eee1fd;
+    border: 1px solid #ecd8ff;
+    border-radius: 8px;
+    width: 28px; height: 28px;
+    color: #7c3aed;
+  }
+
+  /* Section tabs + date range (APPOINTMENTS · IN PROGRESS … / Yesterday ·
+     Today …): ND segmented filters — see the shared block at the end. */
+
+  /* Day strip: 73×40 white shadow tiles; active = violet text + #eee1fd ring. */
+  .pf-daystrip__day {
+    background: #ffffff; border: 1px solid transparent; border-radius: 12px;
+    min-width: 73px; height: 40px;
+    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .pf-daystrip__day:hover:not(.pf-daystrip__day--on) {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, #ffffff);
+    color: var(--text-primary);
+  }
+  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #9ca3af; }
+  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #6b7280; }
+  .pf-daystrip__day--on { border-color: #eee1fd; }
+  .pf-daystrip__day--on .pf-daystrip__dow,
+  .pf-daystrip__day--on .pf-daystrip__n { color: #7c3aed; }
+
+  /* Rows: #fbf9fe r12 soft-shadow cards; 12px medium names; the design
+     carries a plain 20px select circle, no avatar. */
+  .pf-card {
+    background: #fbf9fe;
+    border: 1px solid transparent; border-radius: 12px;
+    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pf-card:hover {
+    border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
+  }
+  .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
+  .pf-card__meta { font-size: 12px; color: #6b7280; }
+  /* Design carries no avatar — remove it AND its grid track, or every
+     child shifts into the empty 40px column (the collapsed-row bug). */
+  .pf-card pf-avatar { display: none; }
+  .pf-card--ip,
+  .pf-card--token-layout { grid-template-columns: 22px 1fr auto auto; }
+  @container (max-width: 420px) {
+    .pf-card--ip,
+    .pf-card--token-layout { grid-template-columns: 1fr; }
+  }
+  .pf-card__sel {
+    width: 20px; height: 20px;
+    border: 1px solid #9ca3af;
+    background: rgba(246, 244, 252, 0.55);
+  }
+  /* Draft cards have no select circle — [text][actions] only. Without
+     this the 4-track override dumped the name into the 22px column. */
+  .pf-card--draft { grid-template-columns: 1fr auto; }
+
+  /* Row action buttons → the frame's violet-outline "Collect →" anatomy. */
+  .pf-ghostbtn {
+    background: #ffffff;
+    border: 1px solid #7c3aed;
+    border-radius: 8px;
+    color: #7c3aed;
+    height: 24px; padding: 0 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .pf-ghostbtn:hover { background: #f8f2ff; }
+}
+
+:host-context(.light.design-new) {
+  /* No air between the navbar and the band (Figma 452-3). The ops-alerts
+     head row is templated out (@if(false)) but its empty grid still
+     stood 18px tall above the band — collapse it too. */
+  .pf-page__header { padding-top: 0 !important; }
+  .pf-head:not(:has(*)) { display: none; }
+
+  /* Right column of a row (Figma 452-3): status word ABOVE the action
+     button, both right-aligned in one stacked cell. */
+  .pf-card__foot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+  }
+  /* The frame's action reads "Collect →" — trailing arrow on the row
+     actions (the series Status button keeps its clock icon instead). */
+  .pf-ghostbtn:not(.pf-ghostbtn--series)::after { content: ' →'; }
+
+  /* Blob tint REMOVED (owner: the page-wide wash wasn't nice) — the
+     band gradient + subtle blush page gradient carry the colour now. */
+  .pf-page { position: relative; overflow-x: clip; }
+  /* Lift ONLY the flow content above the blob layer. A blanket
+     `.pf-page > *` also forced the fixed drawers/backdrops to
+     position: relative, dumping the order drawer into the page flow
+     at the bottom-left — never touch overlay children here. */
+  .pf-page__header,
+  .pf-page__body { position: relative; z-index: 1; }
+  /* The header (band + patient search) must sit ABOVE the body: both were
+     z 1, so the body — later in the DOM — painted over the search's
+     suggestion dropdown in light mode (the dark block has no such lift). */
+  .pf-page__header { z-index: 2; }
+}
+
+/* ══ Designer DARK skin (new design) — same anatomy as the light frame,
+   mapped onto the dark palette: near-black violet page, soft dark panes
+   with violet hairlines, quiet tabs, dot-word statuses, outline actions.
+   Mirrors the .light.design-new block so both themes share one design
+   language. ══ */
+:host-context(.dark.design-new) {
+  .pf-page {
+    /* Flat app dark base — same as Lab; the violet-tinted page gradient
+       read as an unwanted tint (owner). Colour lives in the band only. */
+    background: var(--bg-primary, #0a0a15);
+    min-height: calc(100dvh - var(--pf-botbar-h, 0px));
+  }
+
+  .pf-appt-split__pane {
+    background: rgba(255, 255, 255, 0.045);
+    border: none;
+    border-radius: 20px;
+    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.14), 0 12px 34px rgba(0, 0, 0, 0.35);
+    position: relative;
+  }
+  .pf-appt-split__hdr {
+    background: rgba(255, 255, 255, 0.035);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    min-height: 49px;
+    border-radius: 20px 20px 0 0;
+  }
+  .pf-appt-split__link--left-icon {
+    background: rgba(139, 92, 246, 0.16);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    width: 28px; height: 28px;
+    color: #c4b5fd;
+  }
+
+  /* Section tabs + date range: shared ND block at the end of the file. */
+
+  .pf-daystrip__day {
+    background: rgba(255, 255, 255, 0.05); border: 1px solid transparent; border-radius: 12px;
+    min-width: 73px; height: 40px;
+    box-shadow: none;
+  }
+  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #6b7280; }
+  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #9ca3af; }
+  .pf-daystrip__day--on { border-color: rgba(168, 85, 247, 0.4); }
+  .pf-daystrip__day--on .pf-daystrip__dow,
+  .pf-daystrip__day--on .pf-daystrip__n { color: #c4b5fd; }
+
+  /* Rows: same no-avatar anatomy as the light frame. */
+  .pf-card {
+    background: rgba(255, 255, 255, 0.045);
+    border: none; border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .pf-card__name { font-size: 12px; font-weight: 500; color: #d1d5db; }
+  .pf-card__meta { font-size: 12px; color: #9ca3af; }
+  .pf-card pf-avatar { display: none; }
+  .pf-card--ip,
+  .pf-card--token-layout { grid-template-columns: 22px 1fr auto auto; }
+  @container (max-width: 420px) {
+    .pf-card--ip,
+    .pf-card--token-layout { grid-template-columns: 1fr; }
+  }
+  .pf-card__sel {
+    width: 20px; height: 20px;
+    border: 1px solid #6b7280;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  /* Draft cards: [text][actions] — same fix as the light skin. */
+  .pf-card--draft { grid-template-columns: 1fr auto; }
+  .pf-ghostbtn {
+    background: transparent;
+    border: 1px solid rgba(167, 139, 250, 0.65);
+    border-radius: 8px;
+    color: #c4b5fd;
+    height: 24px; padding: 0 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .pf-ghostbtn:hover { background: rgba(139, 92, 246, 0.14); }
+  .pf-ghostbtn:not(.pf-ghostbtn--series)::after { content: ' →'; }
+
+  /* Same flush seam + stacked right column as light. */
+  .pf-page__header { padding-top: 0 !important; }
+  .pf-head:not(:has(*)) { display: none; }
+  .pf-card__foot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+  }
+}
+
+/* ── Phone (<=640px): the weekday strip ───────────────────────────────
+   The new design gives each day a 73px tile. Seven of those plus gaps is
+   ~559px, so on a 390px phone they overlapped and the last days ran off
+   the edge (owner). Let the strip scroll instead of forcing seven tiles
+   into the width, and snap so a tap always lands cleanly on one.
+   Nothing here applies >=641px. */
+@media (max-width: 640px) {
+  :host-context(.design-new) .pf-daystrip {
+    gap: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  :host-context(.design-new) .pf-daystrip::-webkit-scrollbar { display: none; }
+  :host-context(.design-new) .pf-daystrip__day {
+    flex: 0 0 auto;
+    min-width: 52px;
+    height: 44px;                 /* thumb-sized */
+    padding: 4px 8px;
+    scroll-snap-align: center;
+  }
+  :host-context(.design-new) .pf-daystrip__dow { font-size: 9.5px; letter-spacing: 0.06em; }
+  :host-context(.design-new) .pf-daystrip__n { font-size: 13px; }
+}
+
+/* ══ Card-header filters use shared canonical pf-segmented (32px capsule, violet selected text/count) ══ */
+.pf-tabs {
+  display: inline-flex;
+  vertical-align: middle;
+}
+.pf-hdr-date-pills {
+  display: none !important;
+}
+.pf-tabs__count {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-tabs__count {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.pf-tabs-ignore {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+:host-context(.design-new) {
+  .pf-tabs__btn--on {
+    background: var(--pf-card-bg, #ffffff) !important;
+    color: var(--color-violet-600, #7c3aed) !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    .pf-tabs__count {
+      background: transparent !important;
+      color: var(--color-violet-600, #7c3aed) !important;
+    }
+  }
+}
+
+  /* Header strips: identical height on both cards. */
+  .pf-appt-split__hdr--tabs { min-height: 52px; padding: 8px 12px; gap: 10px; }
+
+  /* Phone list switcher = the same neutral segmented filter (44px). The
+     global new-design `--on` rule would tint it violet, hence !important. */
+  .pf-mtabs { background: var(--pf-chip-bg); border-color: var(--pf-line); border-radius: 12px; padding: 3px; }
+  .pf-mtab { height: 44px; color: var(--text-secondary); }
+  .pf-mtab--on {
+    background: var(--pf-card-bg) !important;
+    background-image: none !important;
+    color: var(--text-primary) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18) !important;
+  }
+  .pf-mtab__count,
+  .pf-mtab--on .pf-mtab__count,
+  .pf-mtab--on .pf-mtab__count[data-tone='warning'] {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    background: none;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+/* ══ Work card header: search, then the filter — ONE row (ND §1) ══
+   Compact kit search (icon + .pf-input, 36px) first, then the tab
+   filter in its own horizontal scroller so it never overflows the card.
+   The search shrinks first; the date range folds into its icon menu
+   when the card is too narrow to hold all three. */
+.pf-work-hdr {
+  gap: 10px;
+  width: 100%;
+}
+.pf-work-find {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 200px;
+  max-width: 260px;
+  min-width: 132px;
+  margin: 0;
+  cursor: text;
+}
+.pf-work-find__icon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-tertiary, var(--text-muted));
+  pointer-events: none;
+}
+.pf-work-find .pf-work-find__input {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px 0 34px;
+  font-size: 13px;
+}
+.pf-work-hdr__filter {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pf-work-hdr__filter::-webkit-scrollbar { display: none; }
+.pf-work-hdr__date {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.pf-work-find--phone { display: none; }
+.pf-work-nomatch {
+  list-style: none;
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* The merged list's "more than loadAll() capped" note — a quiet, honest
+   heads-up, not a warning (no amber/red — it's an expected cap, not an error). */
+.pf-wsec-note {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: var(--pf-radius-sm, 8px);
+  background: var(--pf-chip-bg);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+/* Narrow card: the tabs may scroll inside their own box instead. */
+@container (max-width: 600px) {
+  .pf-work-hdr .pf-work-hdr__filter { flex: 0 1 auto; }
+}
+@container (max-width: 760px) {
+  .pf-work-hdr .pf-hdr-date-pills { display: none !important; }
+  .pf-work-hdr .pf-hdr-filter { display: inline-flex !important; }
+}
+
+/* Phones: pane headers are hidden; the search stacks full width below
+   the list switcher (the filter row). 44px target, 16px text (no iOS zoom). */
+@media (max-width: 640px) {
+  .pf-mtabs {
+    margin-bottom: 8px;
+  }
+  .pf-work-find--phone {
+    display: flex;
+    flex: none;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 10px;
+  }
+  .pf-work-find--phone .pf-work-find__input {
+    min-height: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+}

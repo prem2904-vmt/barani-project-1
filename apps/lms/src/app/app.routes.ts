@@ -1,14 +1,23 @@
 import { inject } from '@angular/core';
+import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
-import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
-import { ShellComponent } from './layout/shell/shell.component';
+import { routeGuards } from './core/auth/route-guards';
+import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
+import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
+import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 
-const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows', 'manage_branches'];
+// Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
+// KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
+// browsing (see RoleSeeder) held by Branch Managers, who must NOT reach tenant
+// config. Their legit destinations — /admin/branches, /admin/audit,
+// home-collection — are separate routes gated on their own perms and surfaced
+// via the "More" nav, so they need no admin-shell access.
 const adminGuard = permissionGuard(ADMIN_PERMS);
 
 // Gate for /set-password: must be signed in, and only relevant while a
@@ -47,14 +56,29 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/reports/public-report/public-report.component').then(m => m.PublicReportComponent)
   },
   {
+    // Public, no-login landing of a Prefrontal Bridge QR (`/b#1.S.C.P.F`,
+    // bridge-api v1 B.6): reads the fragment, hands it to /admin/bridges/add
+    // through sessionStorage (login first if needed). No secret in a URL param.
+    path: 'b',
+    loadComponent: () => import('./features/bridges/bridge-link.page').then(m => m.BridgeLinkPage)
+  },
+  {
     path: '',
-    component: ShellComponent,
+    // Lazy: the authed shell (sidebar, navbar, chat, calls…) stays OUT of the
+    // initial bundle, so the public patient pages above (/reports/public,
+    // /track) and /login boot without it. Signed-in users load it once.
+    loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
     canActivate: [authGuard],
     children: [
       // Landing guard routes to /admin, /frontdesk, /lab/my-work, or /pathologist
       // based on the user's permissions — so a receptionist hitting '/' goes
       // to /frontdesk, not /admin (which would then 403).
       { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
+
+      // In-app branch switch hop (BranchSwitchService): an empty, never-
+      // shown stop so the current screen is re-created — and its guards re-
+      // run — under the new branch without a page reload.
+      { path: '_branch', children: [] },
 
       // Scanned order QR (`/o/:id`) → opens the order (collection drawer if the
       // user can collect, else the patient profile).
@@ -69,23 +93,24 @@ export const appRoutes: Route[] = [
       },
 
       // Admin — gated: hidden from nav + blocked at route level if the user
-      // doesn't hold any admin permission (manage_tests/users/workflows/branches).
+      // doesn't hold any admin-config permission (manage_tests/users/workflows).
+      // Branch browsing (manage_branch/es) is NOT an admin-config perm.
       {
         path: 'admin',
-        canActivate: [adminGuard],
+        canActivate: [...routeGuards('/admin')],
         loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
       },
       {
         // The settings hub (relevance-grouped tiles) — reached from the
         // overview's "Manage settings" + the sidebar "Manage" link.
         path: 'admin/manage',
-        canActivate: [adminGuard],
+        canActivate: [...routeGuards('/admin/manage')],
         loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       },
       {
         // Modules (Extensions) — enable/disable product modules + their features.
         path: 'admin/modules',
-        canActivate: [adminGuard],
+        canActivate: [...routeGuards('/admin/modules')],
         loadComponent: () => import('./features/admin/modules/modules.component').then(m => m.AdminModulesComponent)
       },
       {
@@ -93,17 +118,53 @@ export const appRoutes: Route[] = [
         // world (not the global admin): catalog, report template, lab settings,
         // referrals, notifications, KPIs. Gated on any lab-admin permission.
         path: 'lab/settings',
-        canActivate: [permissionGuard(['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments']), moduleGuard('lab')],
+        canActivate: [...routeGuards('/lab/settings')],
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
+      },
+      {
+        // Lab analyzers (instrument connector): list + setup wizard / status.
+        // `new` opens the wizard for a new instrument.
+        path: 'admin/instruments',
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instruments-list.component').then(m => m.InstrumentsListComponent)
+      },
+      {
+        path: 'admin/instruments/:id',
+        data: { recreateOn: ['id'] },
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instrument-editor.component').then(m => m.InstrumentEditorComponent)
+      },
+      {
+        // Prefrontal Bridges (zero-touch analyzer boxes, bridge-api v1):
+        // list, add (QR / code / nearby / local), one Bridge.
+        path: 'admin/bridges',
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridges-list.component').then(m => m.BridgesListComponent)
+      },
+      {
+        path: 'admin/bridges/add',
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridge-add.component').then(m => m.BridgeAddComponent)
+      },
+      {
+        path: 'admin/bridges/:id',
+        data: { recreateOn: ['id'] },
+        canActivate: [...routeGuards('/admin/bridges')],
+        loadComponent: () => import('./features/admin/bridges/bridge-detail.component').then(m => m.BridgeDetailComponent)
+      },
+      {
+        // Microbiology / Culture bench settings (lock timeout, TAT).
+        path: 'admin/microbiology',
+        canActivate: [...routeGuards('/admin/microbiology')],
+        loadComponent: () => import('./features/lab/culture-settings/culture-settings.component').then(m => m.CultureSettingsComponent)
       },
       // Admin settings placeholders for not-yet-built modules — each opens a
       // "coming soon" hub listing that module's planned config, so the module-
       // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
       // placeholder is visible regardless of entitlement.
-      {
-        path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
+      // OPD admin (OPD dark build) — every route adminGuard + opdGuard; defined
+      // ONCE in features/opd/opd.routes.ts (feature agents never edit here).
+      ...OPD_ADMIN_ROUTES,
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
@@ -134,87 +195,109 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/users',
-        canActivate: [permissionGuard('manage_users')],
+        canActivate: [...routeGuards('/admin/users')],
         loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
       },
       {
         path: 'admin/users/invite',
-        canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
+        canActivate: [...routeGuards('/admin/users/invite')],
+        loadComponent: loadUserInvite
       },
       {
         path: 'admin/users/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/user-edit.component').then(m => m.UserEditComponent)
+        loadComponent: loadUserEdit
       },
       {
         path: 'admin/roles/new',
-        canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        canActivate: [...routeGuards('/admin/roles/new')],
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/roles/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/tests',
-        canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/tests.component').then(m => m.TestsComponent)
+        canActivate: [...routeGuards('/admin/tests')],
+        loadComponent: () => import('./features/admin/tests/tests/tests.component').then(m => m.TestsComponent)
       },
       {
         path: 'admin/tests/new',
-        canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
+        canActivate: [...routeGuards('/admin/tests/new')],
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/tests/:id/edit',
-        canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor.component').then(m => m.TestEditorComponent)
+        canActivate: [permissionGuard(TEST_MASTER_PERMS)],
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/branches',
-        canActivate: [permissionGuard('manage_branches')],
+        canActivate: [...routeGuards('/admin/branches')],
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
         path: 'admin/vendors',
-        canActivate: [permissionGuard('manage_tenant')],
+        canActivate: [...routeGuards('/admin/vendors')],
         loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)
       },
       {
         path: 'admin/referral-labs',
-        canActivate: [permissionGuard('manage_tests')],
+        canActivate: [...routeGuards('/admin/referral-labs')],
         loadComponent: () => import('./features/admin/referral-labs/referral-labs.component').then(m => m.ReferralLabsComponent)
       },
       {
+        // Outsourcing partner prices — what each referral lab charges per
+        // test, effective-dated; the single cost source Analytics' Phase 3
+        // Outsourcing/Profitability tabs read from.
+        path: 'admin/partner-prices',
+        canActivate: [...routeGuards('/admin/partner-prices')],
+        loadComponent: () => import('./features/admin/partner-test-prices/partner-test-prices.component').then(m => m.PartnerTestPricesComponent)
+      },
+      {
         path: 'admin/lab-settings',
-        canActivate: [permissionGuard(['manage_lab_settings', 'manage_branches'])],
+        canActivate: [...routeGuards('/admin/lab-settings')],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
       },
       {
+        // Per-station printing setup — available to any signed-in user (not
+        // admin-only): the printer + label roll are physical to the station.
+        path: 'printing',
+        loadComponent: () => import('./features/admin/label-printer/label-printer.component').then(m => m.LabelPrinterComponent)
+      },
+      {
+        // Per-user digital signature — available to any signed-in user; the
+        // signature is saved to their account and drawn wherever they sign.
+        path: 'signature',
+        loadComponent: () => import('./features/user-signature/my-signature.component').then(m => m.MySignatureComponent)
+      },
+      {
         path: 'admin/organization',
-        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        canActivate: [...routeGuards('/admin/organization')],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
       },
       {
         path: 'admin/billing',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
+        canActivate: [...routeGuards('/admin/billing')],
         loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
       },
       {
         path: 'admin/inventory',
-        canActivate: [permissionGuard('manage_inventory'), moduleGuard('inventory')],
+        canActivate: [...routeGuards('/admin/inventory')],
         loadComponent: () => import('./features/admin/inventory/inventory.component').then(m => m.InventoryComponent)
       },
       {
         path: 'admin/reports',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_tests'])],
+        canActivate: [...routeGuards('/admin/reports')],
+        // Unsaved report-design changes ask before leaving (DialogService).
+        canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
       },
       {
         path: 'admin/referring-network',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_admin'])],
+        canActivate: [...routeGuards('/admin/referring-network')],
         loadComponent: () => import('./features/admin/referring-network/referring-network.component').then(m => m.ReferringNetworkComponent)
       },
       {
@@ -222,22 +305,22 @@ export const appRoutes: Route[] = [
         // Wallets and the Referring Network together (item 141). Each tile links
         // to its existing dedicated page; those routes above are unchanged.
         path: 'admin/partners',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_tests', 'manage_admin'])],
+        canActivate: [...routeGuards('/admin/partners')],
         loadComponent: () => import('./features/admin/partners/partners.component').then(m => m.PartnersComponent)
       },
       {
         path: 'admin/notifications',
-        canActivate: [permissionGuard(['manage_tenant', 'manage_branches'])],
+        canActivate: [...routeGuards('/admin/notifications')],
         loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)
       },
       {
         path: 'admin/workflows',
-        canActivate: [permissionGuard('manage_workflows')],
+        canActivate: [...routeGuards('/admin/workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
       },
       {
         path: 'admin/process',
-        canActivate: [permissionGuard('manage_workflows')],
+        canActivate: [...routeGuards('/admin/process')],
         loadComponent: () => import('./features/admin/process-builder/process-builder.component').then(m => m.ProcessBuilderComponent)
       },
       {
@@ -264,33 +347,33 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'setup',
-        canActivate: [adminGuard],
+        canActivate: [...routeGuards('/setup')],
         loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
       },
       {
         path: 'admin/kpis',
-        canActivate: [adminGuard],
+        canActivate: [...routeGuards('/admin/kpis')],
         loadComponent: () => import('./features/admin/kpis/kpi-config.component').then(m => m.KpiConfigComponent)
       },
       {
         path: 'admin/audit',
-        canActivate: [permissionGuard('view_audit_log')],
+        canActivate: [...routeGuards('/admin/audit')],
         loadComponent: () => import('./features/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
       },
       {
         path: 'admin/appointments',
-        canActivate: [permissionGuard(['manage_branches', 'manage_tenant'])],
+        canActivate: [...routeGuards('/admin/appointments')],
         loadComponent: () => import('./features/admin/appointments-config/appointments-config.component').then(m => m.AppointmentsConfigComponent)
       },
       {
         path: 'admin/home-collection',
-        canActivate: [permissionGuard(['manage_home_collection', 'manage_branches']), moduleGuard('homeCollection')],
+        canActivate: [...routeGuards('/admin/home-collection')],
         loadComponent: () => import('./features/admin/home-collection/home-collection-agents.component').then(m => m.HomeCollectionAgentsComponent)
       },
       {
         // Agent's own home-collection visit list.
         path: 'home-collections',
-        canActivate: [permissionGuard('collect_sample'), workflowGuard('home_visits'), moduleGuard('homeCollection')],
+        canActivate: [...routeGuards('/home-collections')],
         loadComponent: () => import('./features/home-collection/my-home-collections.component').then(m => m.MyHomeCollectionsComponent)
       },
 
@@ -299,7 +382,10 @@ export const appRoutes: Route[] = [
       // gated; child routes inherit auth + add per-action perms.
       {
         path: 'frontdesk',
-        canActivate: [permissionGuard(['register_patient', 'create_order', 'view_patient'])],
+        // Canonical front-desk gate (register/create) — same set the nav item
+        // uses, so "sees Front Desk" == "can open it". Deliberately NOT
+        // view_patient (a read cap lab techs hold, which used to leak them in).
+        canActivate: [...routeGuards('/frontdesk')],
         loadComponent: () => import('./features/frontdesk/frontdesk-shell.component').then(m => m.FrontdeskShellComponent),
         children: [
           // Default = insights landing.
@@ -312,38 +398,40 @@ export const appRoutes: Route[] = [
             path: 'order',
             // Order-create serves walk-ins AND appointment→order conversion —
             // appointment-only tenants (walk_in_order off) must still reach it.
-            canActivate: [permissionGuard('create_order'), workflowGuardAny('walk_in_order', 'appointment')],
+            canActivate: [...routeGuards('/frontdesk/order')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
+          // Legacy OPD desk consult page — OPD-gated (OPD dark build).
+          ...OPD_FRONTDESK_CHILD_ROUTES,
           {
             path: 'billing',
             redirectTo: 'order'
           },
           {
             path: 'appointments',
-            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order']), workflowGuard('appointment')],
+            canActivate: [...routeGuards('/frontdesk/appointments')],
             loadComponent: () => import('./features/frontdesk/appointments-calendar/appointments-calendar.component').then(m => m.AppointmentsCalendarComponent)
           },
           {
             // Live collection queue (token / walk-up / home-collection per branch).
             path: 'queue',
-            canActivate: [permissionGuard(['register_patient', 'create_order', 'view_order', 'collect_sample']), workflowGuard('queue')],
+            canActivate: [...routeGuards('/frontdesk/queue')],
             loadComponent: () => import('./features/frontdesk/collection-queue/collection-queue.component').then(m => m.CollectionQueueComponent)
           },
           {
             // Reception: assign home collections no agent area covered.
             path: 'home-collection',
-            canActivate: [permissionGuard(['manage_home_collection', 'register_patient', 'create_order']), workflowGuard('home_visits'), moduleGuard('homeCollection')],
+            canActivate: [...routeGuards('/frontdesk/home-collection')],
             loadComponent: () => import('./features/frontdesk/home-collection-assign/home-collection-assign.component').then(m => m.HomeCollectionAssignComponent)
           },
           {
             path: 'appointments/new',
-            canActivate: [permissionGuard(['register_patient', 'create_order']), workflowGuard('appointment')],
+            canActivate: [...routeGuards('/frontdesk/appointments/new')],
             loadComponent: () => import('./features/frontdesk/book-appointment/book-appointment.component').then(m => m.BookAppointmentComponent)
           },
           {
             path: 'patients/new',
-            canActivate: [permissionGuard('register_patient'), workflowGuard('patient_registration')],
+            canActivate: [...routeGuards('/frontdesk/patients/new')],
             loadComponent: () => import('./features/frontdesk/patient-register/patient-register.component').then(m => m.PatientRegisterComponent)
           },
           {
@@ -353,7 +441,7 @@ export const appRoutes: Route[] = [
           },
           {
             path: 'post-payment',
-            canActivate: [permissionGuard(['collect_payment', 'create_bill'])],
+            canActivate: [...routeGuards('/frontdesk/post-payment')],
             loadComponent: () => import('./features/frontdesk/post-payment/post-payment.component').then(m => m.PostPaymentComponent)
           }
         ]
@@ -373,7 +461,7 @@ export const appRoutes: Route[] = [
         // enter_result for the result-entry tabs; receive_sample so lab
         // counter / intake-only staff can land on the page and use the
         // embedded "Lab Intake" tab.
-        canActivate: [permissionGuard(['enter_result', 'receive_sample']), workflowGuard('result_entry')],
+        canActivate: [...routeGuards('/lab/my-work')],
         loadComponent: () => import('./features/lab/my-work/my-work.component').then(m => m.MyWorkComponent)
       },
       {
@@ -382,18 +470,18 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/collect',
-        canActivate: [permissionGuard('collect_sample'), workflowGuard('sample_collection')],
+        canActivate: [...routeGuards('/lab/collect')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       // Dedicated-counter landing. Same component as /lab/collect — the
       // separate route exists so we can gate it on `collect_sample` and show
       // it in the top-level sidebar when collection_mode is dedicated_counter.
       {
-        // Dedicated-counter route. `effective: true` honours mode-aware
-        // suppression so a Receptionist (whose seeded role still includes
-        // collect_sample) is bounced when collection_mode = dedicated_counter.
+        // Dedicated-counter route. Purely collect_sample + the workflow's
+        // sample_collection action — a Receptionist who holds collect_sample
+        // collects here too (no role-name suppression).
         path: 'sample-collection',
-        canActivate: [permissionGuard('collect_sample', { effective: true }), workflowGuard('sample_collection')],
+        canActivate: [...routeGuards('/sample-collection')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
       },
       {
@@ -401,17 +489,20 @@ export const appRoutes: Route[] = [
         // disabled mid-flight. Gated by the workflow action + any of the
         // action permissions (send-to-lab / reject / cancel).
         path: 'lost-and-found',
-        canActivate: [permissionGuard(['receive_sample', 'reject_sample', 'cancel_order', 'manage_users']), workflowGuard('lost_and_found')],
+        canActivate: [...routeGuards('/lost-and-found')],
         loadComponent: () => import('./features/lost-and-found/lost-and-found.component').then(m => m.LostAndFoundComponent)
       },
       {
         path: 'lab/receive',
-        canActivate: [permissionGuard('receive_sample'), workflowGuard('lab_intake')],
+        canActivate: [...routeGuards('/lab/receive')],
         loadComponent: () => import('./features/lab/receive-samples/receive-samples.component').then(m => m.ReceiveSamplesComponent)
       },
       {
         path: 'lab/result/:id',
-        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
+        // Another test on the same route = a fresh screen (the id is read once).
+        data: { recreateOn: ['id'] },
+        // A culture test opens the Culture case page instead (one route).
+        canActivate: [permissionGuard(['enter_result', 'edit_result']), cultureResultRedirectGuard],
         loadComponent: () => import('./features/lab/result-entry/result-entry.component').then(m => m.ResultEntryComponent)
       },
       {
@@ -419,19 +510,52 @@ export const appRoutes: Route[] = [
         // the tube. Replaces the old per-test scan-then-enter-then-scan
         // flow for labs that prefer the tube as the unit of work.
         path: 'lab/sample/:sampleId',
-        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
+        // validate_result: the pathologist reviews the tube on this SAME
+        // screen (?validate=1) — read-only + Reject/Validate footer.
+        // A culture-only tube opens the Culture case page (/lab/culture/:id) —
+        // search, scan, notifications, deep links and bookmarks alike.
+        canActivate: [permissionGuard(['enter_result', 'edit_result', 'validate_result']), cultureSampleRedirectGuard],
         loadComponent: () => import('./features/lab/sample-result-entry/sample-result-entry.component').then(m => m.SampleResultEntryComponent)
+      },
+      {
+        // Microbiology culture bench: the staged workspace for one culture case
+        // (Gram → Growth → Identification → AST). Micro-tech only.
+        path: 'lab/culture/:orderTestId',
+        // Another case (or focus stage) = a fresh bench: the draft shelf can
+        // hop case → case (a culture tube's draft redirects here).
+        data: { recreateOn: ['orderTestId', '?stage'] },
+        // Pathologists open it too: culture sign-out lives here (owner).
+        canActivate: [permissionGuard(['culture_workbench', 'validate_result']), moduleGuard('lab')],
+        loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
+      },
+
+      // OPD (OPD dark build): every OPD work-area route incl. the legacy doctor
+      // Consult Room, each behind opdGuard — see features/opd/opd.routes.ts.
+      ...OPD_SHELL_ROUTES,
+
+      // Critical results — the NABL acknowledgement register (lab + pathologist
+      // + quality). Reads: enter_result / validate_result / view_audit_log.
+      {
+        // Analyzer runs that matched no tube (attach to a sample) + QC runs.
+        path: 'lab/analyzer-results',
+        canActivate: [...routeGuards('/lab/analyzer-results')],
+        loadComponent: () => import('./features/lab/analyzer-results/analyzer-results.component').then(m => m.AnalyzerResultsComponent)
+      },
+      {
+        path: 'lab/critical-results',
+        canActivate: [...routeGuards('/lab/critical-results')],
+        loadComponent: () => import('./features/lab/critical-results/critical-results.component').then(m => m.CriticalResultsComponent)
       },
 
       // Pathologist — only doctors with validate_result.
       {
         path: 'pathologist',
-        canActivate: [permissionGuard('validate_result'), workflowGuard('validate')],
+        canActivate: [...routeGuards('/pathologist')],
         loadComponent: () => import('./features/pathologist/pending-validation/pending-validation.component').then(m => m.PendingValidationComponent)
       },
       {
         path: 'pathologist/validate/:id',
-        canActivate: [permissionGuard('validate_result')],
+        canActivate: [permissionGuard('validate_result'), cultureValidateRedirectGuard],
         loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 
@@ -439,7 +563,7 @@ export const appRoutes: Route[] = [
       // count). Gated on any inventory permission.
       {
         path: 'stores',
-        canActivate: [permissionGuard(['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory']), moduleGuard('inventory')],
+        canActivate: [...routeGuards('/stores')],
         loadComponent: () => import('./features/stores/stores.component').then(m => m.StoresComponent)
       },
 
@@ -447,12 +571,7 @@ export const appRoutes: Route[] = [
       // gated purely on tenant entitlement. When a module is off the guard
       // bounces to landing; when on, its "coming soon" shell renders until the
       // real screens ship. Each supplies its catalog id via route data.
-      {
-        path: 'opd',
-        canActivate: [moduleGuard('opd')],
-        data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
+      // (OPD's /opd lives in OPD_SHELL_ROUTES above — gated by the OPD gate.)
       {
         path: 'ipd',
         canActivate: [moduleGuard('ipd')],
@@ -472,25 +591,25 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
 
-      // Reports — only roles that actively deliver reports land here. Lab
-      // techs hold view_report (so they can read a finalized result) but
-      // shouldn't see the delivery queue. The viewer route stays slightly
-      // looser since pathologists / admins reasonably preview reports.
+      // Results — deliver_report runs the delivery desk; view_report alone
+      // (Lab Tech, Branch/Quality Manager) opens it view-only (see
+      // ROUTE_ACCESS['/reports']). The viewer admits the same readers plus
+      // validate_result (pathologists preview a report).
       {
         path: 'reports',
-        canActivate: [permissionGuard('deliver_report'), workflowGuard('results')],
+        canActivate: [...routeGuards('/reports')],
         loadComponent: () => import('./features/reports/report-queue/report-queue.component').then(m => m.ReportQueueComponent)
       },
       {
         path: 'reports/view/:id',
-        canActivate: [permissionGuard(['deliver_report', 'validate_result'])],
+        canActivate: [permissionGuard(['deliver_report', 'view_report', 'validate_result'])],
         loadComponent: () => import('./features/reports/report-viewer/report-viewer.component').then(m => m.ReportViewerComponent)
       },
 
       // Billing counter (separate-counter mode).
       {
         path: 'billing-counter',
-        canActivate: [permissionGuard(['create_bill', 'collect_payment']), workflowGuard('billing')],
+        canActivate: [...routeGuards('/billing-counter')],
         loadComponent: () => import('./features/billing-counter/billing-counter.component').then(m => m.BillingCounterComponent)
       },
 
@@ -500,28 +619,43 @@ export const appRoutes: Route[] = [
       // component gates itself (moduleOff) and skips connecting the hubs.
       {
         path: 'messages',
-        canActivate: [workflowGuard('messages')],
-        loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
+        canActivate: [...routeGuards('/messages')],
+        // New design → the pf-kit screen; classic → the original page.
+        loadComponent: () => import('./features/messages/messages-route.component').then(m => m.MessagesRouteComponent)
       },
 
       // Ops
       {
         path: 'dashboard',
-        canActivate: [permissionGuard(['view_tat_dashboard', 'view_dashboard']), moduleGuard('reports')],
+        canActivate: [...routeGuards('/dashboard')],
         loadComponent: () => import('./features/dashboard/tat-board/tat-board.component').then(m => m.TatBoardComponent)
+      },
+      {
+        path: 'insights',
+        canActivate: [...routeGuards('/insights')],
+        loadComponent: () => import('./features/insights/insights.component').then(m => m.InsightsComponent)
       },
 
       // Finance — hub (end-to-end money in/out by product line) + daily statement.
       {
         path: 'finance',
-        canActivate: [permissionGuard(['collect_payment', 'create_bill', 'manage_tenant'])],
+        canActivate: [...routeGuards('/finance')],
         loadComponent: () => import('./features/finance/finance-hub.component').then(m => m.FinanceHubComponent)
       },
       {
         path: 'finance/daily',
-        canActivate: [permissionGuard(['collect_payment', 'create_bill', 'manage_tenant'])],
+        canActivate: [...routeGuards('/finance/daily')],
         loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
       },
+      {
+        // Expenses — a PRIMARY everyday screen (main nav): My expenses,
+        // All expenses, the cashier's Day closing (expense_viewer / _modifier / _admin).
+        path: 'expenses',
+        canActivate: [...routeGuards('/expenses')],
+        loadComponent: () => import('./features/finance/expenses/expense-tracker.component').then(m => m.ExpenseTrackerComponent)
+      },
+      // Old deep link (Finance → Expense tracker) keeps working.
+      { path: 'finance/expenses', redirectTo: 'expenses', pathMatch: 'full' },
 
       // 403
       {

@@ -1,0 +1,183 @@
+// Pharmacy (OPD Agent D) — shared layout for the pharmacy screens. Built on
+// the pf-kit (band → main card + side card, one primary, neutral selected
+// states, theme tokens only). Component styles pull this in via styleUrls.
+
+:host { display: block; height: 100%; min-height: 0; }
+
+.ph { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+.ph > pf-hero-band { flex: none; position: relative; z-index: 5; }
+
+// Band pill: page search (left) + the pharmacy sections (right).
+.ph-search { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; height: 100%; }
+.ph-search__glass { flex: none; color: var(--text-tertiary); }
+.ph-search__input {
+  flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: 14px; color: var(--text-primary);
+}
+.ph-search__input::placeholder { color: var(--text-muted, #9ca3af); }
+.ph-ctx { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+
+// Body: main + side (400px) at ≥1024px, one column below.
+.ph-body {
+  flex: 1 1 auto; min-height: 0; display: grid; gap: 16px; padding: 0 0 12px;
+  grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr);
+}
+.ph-body--left { grid-template-columns: 360px minmax(0, 1fr); }
+.ph-body--one { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1100px) { .ph-body, .ph-body--left { grid-template-columns: minmax(0, 1fr) 340px; } .ph-body--left { grid-template-columns: 320px minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .ph-body, .ph-body--left { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; overflow-y: auto; }
+  .ph-body > .pf-card { min-height: 360px; }
+}
+
+.ph-grid { flex: 1 1 auto; min-height: 280px; width: 100%; }
+.ph-card-body--flush { padding: 0; }
+.ph-muted { color: var(--text-tertiary); }
+.ph-sub { font-size: 12px; color: var(--text-tertiary); }
+.ph-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.ph-strong { font-weight: 600; color: var(--text-primary); }
+.ph-right { text-align: right; }
+
+// Schedule chip (data, not decoration): prescription-only reads muted red, OTC neutral.
+.ph-sch {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap;
+  border: 1px solid var(--pf-line); color: var(--text-tertiary); background: var(--pf-chip-bg);
+}
+.ph-sch[data-rx='true'] { border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); color: var(--red-text, #dc2626); background: transparent; }
+
+// Pregnancy-safety guard chip (night/safety, critic P0 #1d) — same shape as .ph-sch.
+.ph-preg {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap;
+  border: 1px solid var(--pf-line); color: var(--text-tertiary); background: var(--pf-chip-bg);
+}
+.ph-preg[data-tone='avoid'] { border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); color: var(--red-text, #dc2626); background: transparent; }
+.ph-preg[data-tone='caution'] { border-color: color-mix(in srgb, #d97706 45%, transparent); color: #b45309; background: transparent; }
+:host-context(html.dark) .ph-preg[data-tone='caution'] { color: #fbbf24; }
+
+// Rows (queue / lists).
+.ph-row {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; width: 100%; padding: 10px 12px;
+  border: 1px solid var(--pf-line); border-radius: 12px; background: var(--pf-card-bg);
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.ph-row:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.ph-row[aria-pressed='true'], .ph-row[aria-current='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
+.ph-row__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ph-row__name { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.ph-row__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.ph-row__end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12.5px; }
+.ph-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+// Status word with a dot (list rows, ND §6).
+.ph-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.ph-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--pf-sel-border); }
+.ph-dot[data-tone='done']::before { background: var(--color-primary, #7c3aed); }
+.ph-dot[data-tone='warn']::before { background: var(--amber-text, #d97706); }
+.ph-dot[data-tone='bad']::before { background: var(--red-text, #dc2626); }
+
+// Expiry chip (critic #10) — batch pickers + stock: expired / <30d red, <90d amber.
+.pf-exp-red { color: var(--red-text, #dc2626); font-weight: 600; }
+.pf-exp-amber { color: var(--amber-text, #d97706); font-weight: 600; }
+.pf-exp-ok { color: var(--text-tertiary); }
+
+// Totals block (side card foot).
+.ph-sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; color: var(--text-secondary); grid-column: 1 / -1; }
+.ph-sum > :nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; }
+.ph-total { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; padding-top: 6px; border-top: 1px solid var(--pf-line); }
+.ph-total span { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.ph-total strong { font-size: 22px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+// Note (shield / info).
+.ph-note {
+  display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--pf-card-bg)); border: 1px solid var(--pf-line);
+  font-size: 12.5px; line-height: 1.45; color: var(--text-secondary);
+}
+.ph-note > svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
+.ph-note[data-tone='bad'] { background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--pf-card-bg)); }
+.ph-note[data-tone='bad'] > svg { color: var(--red-text, #dc2626); }
+.ph-note[data-tone='warn'] { background: color-mix(in srgb, var(--amber-text, #d97706) 8%, var(--pf-card-bg)); }
+.ph-note[data-tone='warn'] > svg { color: var(--amber-text, #d97706); }
+
+// Qty stepper.
+.ph-qty { display: inline-flex; align-items: center; border: 1px solid var(--pf-line); border-radius: 10px; overflow: hidden; background: var(--pf-card-bg); }
+.ph-qty button { width: 34px; height: 36px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.ph-qty button:hover:not(:disabled) { background: var(--pf-chip-bg); color: var(--text-primary); }
+.ph-qty button:disabled { opacity: 0.4; cursor: not-allowed; }
+.ph-qty input { width: 52px; height: 36px; border: 0; border-inline: 1px solid var(--pf-line); text-align: center; font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; background: transparent; color: var(--text-primary); }
+
+// Fields.
+.ph-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.ph-fields--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ph-fields > .ph-span { grid-column: 1 / -1; }
+@media (max-width: 640px) { .ph-fields, .ph-fields--3 { grid-template-columns: minmax(0, 1fr); } }
+
+// Drug add dropdown (one row per result).
+.ph-add { position: relative; }
+.ph-add__box { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 1px solid var(--pf-line); border-radius: 12px; background: var(--pf-card-bg); }
+.ph-add__box:focus-within { border-color: var(--pf-sel-border); }
+.ph-add__box input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--text-primary); }
+.ph-add__list {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 20; max-height: 320px; overflow-y: auto;
+  padding: 6px; border-radius: 12px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); box-shadow: var(--pf-shadow-md, 0 10px 30px rgba(0,0,0,.12));
+}
+.ph-add__list--down { bottom: auto; top: calc(100% + 6px); }
+.ph-add__opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ph-add__opt[aria-selected='true'], .ph-add__opt:hover { background: var(--pf-sel-bg); }
+
+// The cart / Rx table (a light grid; the heavy lists use AG-Grid).
+.ph-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
+.ph-table th { position: sticky; top: 0; z-index: 1; background: var(--pf-card-bg); text-align: left; font-size: 12px; font-weight: 500; color: var(--text-tertiary); padding: 8px 10px; border-bottom: 1px solid var(--pf-line); }
+.ph-table td { padding: 10px; border-bottom: 1px solid var(--pf-line); vertical-align: middle; color: var(--text-primary); }
+.ph-table tr:last-child td { border-bottom: 0; }
+.ph-table .r { text-align: right; font-variant-numeric: tabular-nums; }
+.ph-table .ph-low { color: var(--red-text, #dc2626); }
+.ph-table tr[data-skip='true'] td { opacity: 0.55; }
+.ph-tablewrap { border: 1px solid var(--pf-line); border-radius: 12px; overflow: auto; }
+
+// Instruction card (after payment).
+.ph-instr { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--pf-line); border-radius: 12px; }
+.ph-instr__t { font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.ph-instr__t b { color: var(--text-primary); font-weight: 600; margin-right: 6px; }
+.ph-strip { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; }
+.ph-strip__d { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--text-tertiary); }
+.ph-strip__c { width: 100%; aspect-ratio: 1; max-width: 22px; border-radius: 5px; border: 1px solid var(--pf-line); display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ph-strip__c[data-on='true'] { background: var(--color-primary, #7c3aed); border-color: transparent; color: #fff; }
+.ph-strip__c[data-sos='true'] { background: transparent; border: 1.5px dashed var(--color-primary, #7c3aed); color: var(--violet-text, #7c3aed); }
+.ph-strip__c[data-done='true'] { opacity: 0.35; }
+.ph-wa { padding: 10px 12px; border-radius: 12px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; color: var(--text-secondary); }
+
+// The pharmacy section switch in the band pill.
+.ph-empty-pad { padding: 28px 12px; }
+
+// AG-Grid cells: wrapped text keeps a normal line height; every cell centred.
+:host ::ng-deep .ph-grid .ag-cell.ph-wrap { line-height: 1.4; padding-top: 10px; padding-bottom: 10px; }
+:host ::ng-deep .ph-grid .ag-row .ag-cell { display: flex; align-items: center; }
+:host ::ng-deep .ph-grid .ag-row .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+.ph-table .r { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .ph-body { padding-bottom: 84px; }   // clear of the .pf-bottombar
+  // Tables stack: one block per line, labelled cells in a 2-column grid.
+  .ph-tablewrap { overflow: visible; }
+  .ph-table thead { display: none; }
+  .ph-table, .ph-table tbody { display: block; }
+  .ph-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px; border-bottom: 1px solid var(--pf-line); }
+  .ph-table tr:last-child { border-bottom: 0; }
+  .ph-table td, .ph-table td.r { display: block; padding: 0; border: 0; text-align: left; white-space: normal; }
+  .ph-table td:first-child, .ph-table td.ph-td-act { grid-column: 1 / -1; }
+  .ph-table td[data-l]::before { content: attr(data-l); display: block; margin-bottom: 2px; font-size: 11px; color: var(--text-tertiary); }
+  .ph-row { min-height: 60px; }
+  .ph-qty button { width: 44px; height: 44px; }
+  .ph-qty input { height: 44px; font-size: 16px; }
+  .ph-add__box input, .ph-search__input { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .ph-row { transition: none; } }
+
+/* Integrator: walk-in prescription upload row. */
+.ph-rxfile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ph-rxfile__btn { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+.ph-rxfile__btn.is-busy { opacity: .7; cursor: progress; }
+.ph-rxfile__in { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

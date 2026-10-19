@@ -1,0 +1,57 @@
+@import url('tailwindcss');
+@source "../../../libs/shared/src";
+@source "./app/**/*.{html,ts}";
+
+@import '../../../libs/shared/src/lib/styles/pf-theme';
+@import '../../../libs/shared/src/lib/styles/pf-mixins';
+@import '../../../libs/shared/src/lib/styles/pf-kit';
+
+@variant dark (&:where(.dark, .dark *));
+
+html {
+  height: 100%;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-primary, #0a0a15);
+  color: var(--text-primary, #ffffff);
+  font-family: 'Noto Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+  --pf-card-bg: var(--bg-card-solid, #131325);
+  --pf-line: var(--border-muted, rgba(255, 255, 255, 0.12));
+}
+
+:root.dark {
+  --pf-card-bg: #131325;
+  --pf-line: rgba(255, 255, 255, 0.12);
+}
+
+:root.light,
+:root[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-solid: #ffffff;
+  --border-muted: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+  --pf-card-bg: #ffffff;
+  --pf-line: #e2e8f0;
+  --color-primary: #7c3aed;
+}
+
+.pf-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}

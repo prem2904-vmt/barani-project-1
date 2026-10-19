@@ -14,6 +14,10 @@ export interface StoredAccount {
   refreshToken: string;
   hasPin: boolean;
   addedAt: string;
+  /** The saved refresh token was rejected by the auth server (revoked /
+   *  reused). The profile stays listed so its owner can SIGN IN AGAIN from
+   *  the switcher instead of the profile silently vanishing. */
+  expired?: boolean;
 }
 
 /** Pure storage for the Gmail-style multi-account registry (localStorage).
@@ -27,6 +31,16 @@ export class AccountsService {
   private readonly _accounts = signal<StoredAccount[]>(AccountsService.load());
   readonly accounts = this._accounts.asReadonly();
 
+  constructor() {
+    // Other tabs rotate tokens too: keep this tab's copy in sync so it never
+    // writes a stale (already-rotated, i.e. revoked) refresh token back.
+    try {
+      window.addEventListener('storage', (e) => {
+        if (e.key === null || e.key === AccountsService.ACCOUNTS_KEY) this._accounts.set(AccountsService.load());
+      });
+    } catch { /* SSR */ }
+  }
+
   private static load(): StoredAccount[] {
     try {
       const raw = localStorage.getItem(AccountsService.ACCOUNTS_KEY);
@@ -38,6 +52,20 @@ export class AccountsService {
   private persist(list: StoredAccount[]): void {
     this._accounts.set(list);
     try { localStorage.setItem(AccountsService.ACCOUNTS_KEY, JSON.stringify(list)); } catch { /* private mode */ }
+  }
+
+  /** Read-modify-write against the CURRENT stored list (not this tab's
+   *  possibly stale in-memory copy). A tab that wrote its old snapshot back
+   *  used to restore an already-rotated refresh token for another profile —
+   *  Supabase treats that token as revoked, so switching to that profile
+   *  later failed with "session expired" (RCA 2026-09-27). */
+  private mutate(fn: (list: StoredAccount[]) => StoredAccount[]): void {
+    this.persist(fn(AccountsService.load()));
+  }
+
+  /** The freshest stored row for a profile (straight from storage). */
+  fresh(userId: string): StoredAccount | null {
+    return AccountsService.load().find((a) => a.userId === userId) ?? null;
   }
 
   activeUserId(): string | null {
@@ -59,24 +87,29 @@ export class AccountsService {
   }
 
   upsert(acc: StoredAccount): void {
-    const list = this._accounts().filter((a) => a.userId !== acc.userId);
     // Cap for a shared machine — sized for a full lab shift; the switcher
     // list scrolls, so a big roster stays usable. Oldest profile drops first.
-    this.persist([acc, ...list].slice(0, 25));
+    const { expired: _drop, ...clean } = acc;
+    this.mutate((list) => [clean, ...list.filter((a) => a.userId !== acc.userId)].slice(0, 25));
   }
 
   /** Keep a profile's tokens fresh (after refresh grants) without other edits. */
   updateTokens(userId: string, accessToken: string, refreshToken: string): void {
-    this.persist(this._accounts().map((a) =>
-      a.userId === userId ? { ...a, accessToken, refreshToken } : a));
+    this.mutate((list) => list.map((a) =>
+      a.userId === userId ? { ...a, accessToken, refreshToken, expired: false } : a));
+  }
+
+  /** The profile's saved sign-in is dead — keep it listed, flagged. */
+  markExpired(userId: string): void {
+    this.mutate((list) => list.map((a) => (a.userId === userId ? { ...a, expired: true } : a)));
   }
 
   setHasPin(userId: string, hasPin: boolean): void {
-    this.persist(this._accounts().map((a) => (a.userId === userId ? { ...a, hasPin } : a)));
+    this.mutate((list) => list.map((a) => (a.userId === userId ? { ...a, hasPin } : a)));
   }
 
   remove(userId: string): void {
-    this.persist(this._accounts().filter((a) => a.userId !== userId));
+    this.mutate((list) => list.filter((a) => a.userId !== userId));
     if (this.activeUserId() === userId) {
       try { localStorage.removeItem(AccountsService.ACTIVE_KEY); } catch { /* */ }
     }

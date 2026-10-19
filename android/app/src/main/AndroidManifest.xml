@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -22,10 +24,55 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="lab.prefrontal.health" android:pathPrefix="/o/" />
-                <data android:scheme="https" android:host="lab.prefrontal.health" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="med-dev.prefrontal.health" android:pathPrefix="/track/" />
+                <data android:scheme="https" android:host="med-stg.prefrontal.health" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="med-stg.prefrontal.health" android:pathPrefix="/track/" />
             </intent-filter>
         </activity>
+
+        <!-- Incoming calls: intercepts FCM data messages — kind=call-incoming →
+             full-screen ringing notification (Answer / Decline), kind=call-end →
+             dismiss it. Everything else defers to the Capacitor push plugin.
+             Declared here with priority so it wins over the plugin's own
+             MessagingService for MESSAGING_EVENT. -->
+        <service
+            android:name=".calls.PrefrontalMessagingService"
+            android:exported="false">
+            <intent-filter android:priority="1">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Chat notification actions (Reply via RemoteInput / Mark as read):
+             POSTs natively with the reply token, never opens the app. Only our
+             own PendingIntents reach it (not exported). -->
+        <receiver
+            android:name=".chat.ChatReplyReceiver"
+            android:exported="false" />
+
+        <!-- Ongoing call: Android mutes the mic for a process with no visible
+             activity unless a microphone foreground service runs — without it
+             locking the screen mid-call silenced the far side. -->
+        <service
+            android:name=".calls.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Background FCM notifications (delivered while the app is killed)
+             are rendered by the Firebase SDK, not our JS — these defaults stop
+             them falling back to the launcher icon (a white square on API 26+)
+             and to a channel we never created. pf_messages is created on boot
+             by PushService.createChannel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="pf_messages" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -39,7 +86,44 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ runtime notification permission. The push plugin only
+         DISPATCHES the runtime request — without this manifest declaration the
+         request auto-denies with no dialog and FCM never gets a token. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Incoming-call ring: full-screen notification over the lockscreen
+         (Android 14+: Play only grants this to calling apps — declare the
+         calling use case in the Play Console), ringtone vibration, and the
+         ongoing-call microphone foreground service. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- BLE label printing (PrefrontalPrinter plugin) -->
+    <!-- Android 12+ runtime permissions; neverForLocation lets us skip the
+         location grant since we don't derive location from BLE scans. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Legacy (API <= 30) Bluetooth + the location that a BLE scan required. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Location is still needed by Android 10–12 to join a Wi-Fi network by
+         name (WifiNetworkSpecifier, Prefrontal Bridge setup hotspot) and by
+         the BLE scan on ≤ 11 — raised from 30 to 32 for the Bridge. 13+ use
+         NEARBY_WIFI_DEVICES (neverForLocation) instead. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <!-- Prefrontal Bridge (bridge-api v1): mDNS discovery (NsdManager) and
+         joining a Bridge's setup hotspot (WifiNetworkSpecifier). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 </manifest>

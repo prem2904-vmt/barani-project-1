@@ -1,373 +1,463 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandMatch } from '../../../shared/utils/band-search';
+import { DialogService } from '../../../core/services/dialog.service';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
-type Tab = 'alerts' | 'escalations' | 'patient';
-
-interface AlertCfg {
-  eventType: string;
-  inAppEnabled: boolean;
-  whatsappEnabled: boolean;
-  emailEnabled: boolean;
-}
-interface EscalationCfg {
-  eventType: string;
-  reminderIntervalMins: number;
-  maxReminders: number;
-  escalateAfterHrs: number;
-  criticalAfterHrs: number;
-}
-interface PatientTemplate {
+/** One catalog event merged with the tenant's override — mirrors the
+ *  middleware's NotificationCatalogRow. The catalog itself lives in the
+ *  backend (NotificationCatalog.cs) so this page can never drift from what
+ *  the emitters actually fire. */
+interface CatalogRow {
   key: string;
+  module: string;
   label: string;
-  body: string;
-  variables: string[];
+  firesWhen: string;
+  recipients: string;
+  kind: 'instant' | 'overdue';
+  enabled: boolean;
+  thresholdMinutes: number | null;
+  thresholdConfigurable: boolean;
+  /** Patient-safety event: still sends while the master switch is off. */
+  critical?: boolean;
 }
+
+/** GET/POST /api/config/notifications/master — the lab-wide switch. */
+interface MasterView { enabled: boolean; alwaysSends?: string[] }
+
+const MODULE_LABELS: Record<string, string> = {
+  frontdesk:    'Front desk & orders',
+  billing:      'Billing & payments',
+  lab:          'Lab bench',
+  results:      'Results & validation',
+  reports:      'Reports',
+  whatsapp:     'WhatsApp billing',
+  inventory:    'Inventory',
+  appointments: 'Appointments & home collection',
+  team:         'Team & platform'
+};
 
 @Component({
   selector: 'pf-notifications-config',
   standalone: true,
-  imports: [
-    FormsModule,
-    NumberInputComponent,
-    ScreenHeaderComponent,
-    SegmentedComponent,
-    TileComponent,
-    ToggleComponent,
-    TouchButtonComponent
-  ],
+  imports: [SkeletonRowsComponent, FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search every alert; the module filter rides in
+             the pill (a dropdown — eight modules don't fit as chips). -->
+        <pf-hero-band [back]="true" placeholder="Search alerts — what fires, who's notified…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-select class="pf-nc-modsel" size="sm" [options]="moduleOptions()" [value]="moduleFilter() ?? ''"
+                       (valueChange)="setModuleFilter($event || null)"></pf-select>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Notifications"
-        subtitle="How the lab communicates internally and with patients.">
+        subtitle="Every in-app alert the platform can raise — switch them all off at once, switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
       </pf-screen-header>
 
-      <div class="mb-5">
-        <pf-segmented
-          [options]="tabOptions"
-          [value]="tab()"
-          size="md"
-          (valueChange)="setTab($event)">
-        </pf-segmented>
+      <div class="pf-band-body">
+      <!-- Master switch (owner): one lab-wide "All notifications" control above
+           the list. Off = nothing sends (bells, phone / browser pushes, overdue
+           watches) except critical result alerts; the per-alert choices below
+           are kept untouched and come back exactly when it's switched on. -->
+      @if (!loading()) {
+        <div class="pf-card pf-nc-master mb-5" [class.pf-nc-master--off]="!masterOn()">
+          <div class="pf-nc-master__row">
+            <div class="pf-nc-master__icon" aria-hidden="true">
+              @if (masterOn()) {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                </svg>
+              } @else {
+                <!-- bell-off -->
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/>
+                  <path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/>
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                  <path d="m2 2 20 20"/>
+                </svg>
+              }
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="pf-nc-master__title">All notifications</p>
+              <p class="pf-nc-master__sub">
+                @if (masterOn()) {
+                  On for the whole lab — {{ enabledTotal() }} of {{ rows().length }} alerts below are switched on.
+                } @else {
+                  Off for the whole lab — no bells, phone or browser alerts. Your choices below are kept and come back when you switch this on.
+                }
+              </p>
+              <p class="pf-nc-master__note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+                </svg>
+                Critical result alerts always send.
+              </p>
+            </div>
+            <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
+                    [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
+                    [attr.aria-label]="'All notifications — ' + (masterOn() ? 'on' : 'off')"
+                    (click)="toggleMaster()">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- Module filter chips (classic; the new design has them in the pill) -->
+      <div class="pf-nc-chips pf-classic-only mb-5">
+        <button type="button" class="pf-nc-chip" [attr.aria-pressed]="moduleFilter() === null"
+                (click)="setModuleFilter(null)">
+          All
+          <span class="pf-nc-chip__count">{{ rows().length }}</span>
+        </button>
+        @for (m of modules(); track m) {
+          <button type="button" class="pf-nc-chip" [attr.aria-pressed]="moduleFilter() === m"
+                  (click)="setModuleFilter(m)">
+            {{ moduleLabel(m) }}
+            <span class="pf-nc-chip__count">{{ countFor(m) }}</span>
+          </button>
+        }
       </div>
 
-      @if (tab() === 'alerts') {
-        <div class="space-y-2.5">
-          @for (a of alerts(); let i = $index; track a.eventType) {
-            <pf-tile tone="default" padding="md">
-              <div class="flex items-start gap-3 flex-wrap md:flex-nowrap">
-                <div class="pf-alert-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ alertLabel(a.eventType) }}</p>
-                  <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">{{ a.eventType }}</p>
+      @if (loading()) {
+        <!-- The catalogue's shape (module cards of alert rows), not a line of text. -->
+        <pf-skeleton-rows [rows]="6" [avatar]="false" label="Loading the event catalog…"></pf-skeleton-rows>
+      }
 
-                  <div class="pf-channel-grid mt-3 grid grid-cols-3 gap-2">
-                    <div class="pf-channel-cell">
-                      <span class="text-[12px]" style="color: var(--text-secondary);">In-app</span>
-                      <pf-toggle size="sm"
-                                 [checked]="a.inAppEnabled"
-                                 (checkedChange)="patchAlert(i, { inAppEnabled: $event })">
-                      </pf-toggle>
-                    </div>
-                    <div class="pf-channel-cell">
-                      <span class="text-[12px]" style="color: var(--text-secondary);">WhatsApp</span>
-                      <pf-toggle size="sm"
-                                 [checked]="a.whatsappEnabled"
-                                 (checkedChange)="patchAlert(i, { whatsappEnabled: $event })">
-                      </pf-toggle>
-                    </div>
-                    <div class="pf-channel-cell">
-                      <span class="text-[12px]" style="color: var(--text-secondary);">Email</span>
-                      <pf-toggle size="sm"
-                                 [checked]="a.emailEnabled"
-                                 (checkedChange)="patchAlert(i, { emailEnabled: $event })">
-                      </pf-toggle>
-                    </div>
+      @for (m of visibleModules(); track m) {
+        <div class="mb-6" [class.pf-nc-paused]="!masterOn()">
+          <div class="pf-nc-section">
+            <h3 class="pf-nc-section__title">{{ moduleLabel(m) }}</h3>
+            <span class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
+          </div>
+          <div class="space-y-2">
+            @for (r of rowsFor(m); track r.key) {
+              <div class="pf-card pf-nc-card" [class.pf-nc-card--live]="r.critical">
+                <div class="pf-nc-row">
+                  <div class="pf-nc-row__icon" [class.pf-nc-row__icon--overdue]="r.kind === 'overdue'"
+                       [class.pf-nc-row__icon--off]="!r.enabled">
+                    @if (r.kind === 'overdue') {
+                      <!-- clock: something did NOT happen in time -->
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 7v5l3 2"/>
+                      </svg>
+                    } @else {
+                      <!-- bell: something happened -->
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                      </svg>
+                    }
                   </div>
-                </div>
-                <pf-touch-btn size="sm" variant="primary" (pressed)="saveAlert(a)">Save</pf-touch-btn>
-              </div>
-            </pf-tile>
-          }
-        </div>
-      }
 
-      @if (tab() === 'escalations') {
-        <div class="space-y-2.5">
-          @for (e of escalations(); let i = $index; track e.eventType) {
-            <pf-tile tone="default" padding="md">
-              <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ alertLabel(e.eventType) }}</p>
-                <pf-touch-btn size="sm" variant="primary" (pressed)="saveEscalation(e)">Save</pf-touch-btn>
-              </div>
-              <div class="pf-escalation-grid grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                  <label class="pf-label">Reminder</label>
-                  <pf-number-input
-                    [value]="e.reminderIntervalMins"
-                    [min]="0" [step]="5" suffix="min"
-                    (valueChange)="patchEscalation(i, { reminderIntervalMins: $event ?? 0 })">
-                  </pf-number-input>
-                </div>
-                <div>
-                  <label class="pf-label">Max reminders</label>
-                  <pf-number-input
-                    [value]="e.maxReminders"
-                    [min]="0" [max]="10" [step]="1"
-                    (valueChange)="patchEscalation(i, { maxReminders: $event ?? 0 })">
-                  </pf-number-input>
-                </div>
-                <div>
-                  <label class="pf-label">Escalate after</label>
-                  <pf-number-input
-                    [value]="e.escalateAfterHrs"
-                    [min]="0" [step]="1" suffix="hrs"
-                    (valueChange)="patchEscalation(i, { escalateAfterHrs: $event ?? 0 })">
-                  </pf-number-input>
-                </div>
-                <div>
-                  <label class="pf-label">Critical after</label>
-                  <pf-number-input
-                    [value]="e.criticalAfterHrs"
-                    [min]="0" [step]="1" suffix="hrs"
-                    (valueChange)="patchEscalation(i, { criticalAfterHrs: $event ?? 0 })">
-                  </pf-number-input>
-                </div>
-              </div>
-            </pf-tile>
-          }
-        </div>
-      }
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <p class="font-semibold text-[14.5px]" style="color: var(--text-primary);">{{ r.label }}</p>
+                      @if (r.kind === 'overdue') {
+                        <span class="pf-chip pf-chip--static pf-nc-badge">Overdue watch</span>
+                      }
+                      @if (r.critical && !masterOn()) {
+                        <span class="pf-chip pf-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span>
+                      }
+                    </div>
+                    <p class="text-[12.5px] mt-0.5 leading-snug" style="color: var(--text-secondary);">{{ r.firesWhen }}</p>
+                    <p class="text-[11.5px] mt-1" style="color: var(--text-muted);">
+                      Notifies: {{ r.recipients }}
+                    </p>
 
-      @if (tab() === 'patient') {
-        <div class="space-y-3">
-          @for (tpl of patientTemplates(); let i = $index; track tpl.key) {
-            <pf-tile tone="default" padding="md">
-              <div class="flex items-start justify-between gap-2 mb-2 flex-wrap">
-                <div class="min-w-0">
-                  <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ tpl.label }}</p>
-                  <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">
-                    variables: {{ tpl.variables.join(', ') }}
-                  </p>
+                    @if (r.thresholdConfigurable && r.enabled) {
+                      <div class="pf-nc-threshold mt-2.5">
+                        <span class="text-[12px]" style="color: var(--text-secondary);">Alert after</span>
+                        <pf-number-input
+                          [value]="r.thresholdMinutes ?? 0"
+                          [min]="5" [step]="5" suffix="min"
+                          (valueChange)="setThreshold(r, $event)">
+                        </pf-number-input>
+                      </div>
+                    }
+                  </div>
+
+                  <button type="button" class="pf-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
+                          [attr.aria-label]="r.label + (r.enabled ? ' — on' : ' — off')" (click)="setEnabled(r, !r.enabled)">
+                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                  </button>
                 </div>
               </div>
-              <textarea class="pf-input font-mono text-[12px] min-h-[88px]"
-                        [ngModel]="tpl.body" (ngModelChange)="patchPatientTpl(i, $event)"></textarea>
-            </pf-tile>
-          }
-          <p class="text-[12px] px-1" style="color: var(--text-muted);">
-            Templates are stored locally in this demo — WhatsApp provider hook lands in the integration stage.
-          </p>
+            }
+          </div>
         </div>
       }
+      @if (!loading() && q().trim() && !visibleModules().length) {
+        <p class="pf-band-empty">No alerts match "{{ q() }}".</p>
+      }
+      </div>
     </section>
   `,
   styles: [`
-    .pf-alert-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+    .pf-nc-modsel { display: block; min-width: 200px; }
+
+    /* Master switch card — the one lab-wide control, above the list. */
+    .pf-nc-master { padding: 14px 16px; }
+    .pf-nc-master__row { display: flex; align-items: center; gap: 14px; }
+    .pf-nc-master__icon {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
+    }
+    .pf-nc-master--off .pf-nc-master__icon { background: var(--pf-chip-bg); color: var(--text-muted); }
+    .pf-nc-master__title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-nc-master__sub { font-size: 12.5px; line-height: 1.4; margin-top: 2px; color: var(--text-secondary); }
+    .pf-nc-master__note {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+      font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    }
+    .pf-nc-master__note svg { color: var(--violet-text, #7c3aed); flex: none; }
+    .pf-nc-master__switch { min-width: 44px; min-height: 44px; justify-content: center; }
+    /* Master off: the per-alert list stays editable (choices are kept) but
+       reads as paused; critical rows carry an "Always sends" chip. */
+    .pf-nc-paused .pf-nc-card { opacity: 0.6; }
+    .pf-nc-paused .pf-nc-card--live { opacity: 1; }
+    .pf-nc-badge--always { color: var(--text-primary); }
+    @media (max-width: 640px) { .pf-nc-modsel { min-width: 0; width: 100%; } }
+    .pf-nc-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pf-nc-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      cursor: pointer;
+      transition: border-color .15s ease, color .15s ease;
+    }
+    .pf-nc-chip:hover { color: var(--text-primary); }
+    .pf-nc-chip[aria-pressed='true'] {
+      color: var(--text-primary);
+      border-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg);
+    }
+    .pf-nc-chip__count {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+    .pf-nc-chip[aria-pressed='true'] .pf-nc-chip__count { color: var(--text-secondary); }
+
+    .pf-nc-section {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 0 2px 8px;
+    }
+    .pf-nc-section__title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pf-nc-section__meta {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .pf-nc-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .pf-nc-row__icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(236, 72, 153, 0.08));
-      border: 1px solid rgba(236, 72, 153, 0.3);
-      color: #f9a8d4;
       flex-shrink: 0;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
     }
-    .pf-channel-cell {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-radius: 10px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+    /* Overdue watches: the same violet chip — the clock glyph + "Overdue
+       watch" chip say it; no orange (palette only). */
+    .pf-nc-row__icon--off {
+      background: var(--pf-chip-bg);
+      color: var(--text-muted);
     }
 
-    /* ===== Phone overrides (<=640px) — additive only, never touch desktop ===== */
+    .pf-nc-card { padding: 12px 14px; }
+    .pf-nc-badge { height: 22px; font-size: 11px; }
+    .pf-nc-switch { flex: none; min-height: 44px; }
+    @media (pointer: coarse) { .pf-nc-switch { min-width: 44px; min-height: 44px; justify-content: center; } }
+
+    .pf-nc-threshold {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 240px;
+    }
+
+    /* ===== Phone overrides (<=640px) — additive only ===== */
     @media (max-width: 640px) {
-      /* iOS zooms any input/textarea whose font-size < 16px on focus.
-         Scope strictly to this page's textarea so the shared .pf-input
-         primitive is not restyled globally. */
-      :host textarea {
-        font-size: 16px;
-      }
-      /* The Escalations tab uses the shared pf-number-input, whose internal
-         <input> renders at 14px — below iOS's 16px no-zoom floor, so focusing
-         a stepper triggers a jarring auto-zoom. Bump just this page's nested
-         inputs to 16px (page-scoped via :host, so the shared primitive is
-         untouched elsewhere). Root-cause fix is reported as a shared rec. */
+      /* iOS zooms inputs under 16px on focus — scope to this page's nested
+         number-input only, never the shared primitive. */
       :host ::ng-deep pf-number-input input {
         font-size: 16px;
       }
-      /* Channels (In-app / WhatsApp / Email): the 3-up grid squeezed each cell
-         into a narrow third where the switches looked cramped. On phone drop to
-         a single column, but keep it COMPACT — a tight divided list (label left,
-         switch right) instead of three chunky bordered cards. Presentation only;
-         same pf-toggle + handlers. */
-      :host .pf-channel-grid {
-        grid-template-columns: 1fr;
-        gap: 0;
-      }
-      :host .pf-channel-cell {
-        min-height: 0;
-        justify-content: space-between;
-        padding: 7px 2px;
-        background: transparent;
-        border: 0;
-        border-bottom: 1px solid var(--glass-border);
-        border-radius: 0;
-      }
-      :host .pf-channel-cell:last-child {
-        border-bottom: 0;
-      }
+      .pf-nc-row { gap: 10px; }
+      .pf-nc-row__icon { width: 32px; height: 32px; border-radius: 9px; }
     }
 
-    /* ===== Web-below-desktop band (641–1279px): iPad + narrow browsers =====
-       The escalations grid uses md:grid-cols-4, which packs four
-       number-inputs (label + field + steppers + suffix) across a tile.
-       Below desktop that crams each cell to ~140–180px and the "Escalate
-       after"/"Critical after" controls look squeezed. Hold the grid to two
-       columns in this band; desktop (>=1280px) keeps the 4-up layout. */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      :host .pf-escalation-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    /* ===== Coarse-pointer (touch) sizing — phone + tablet ===== */
+    /* ===== Coarse-pointer (touch) sizing ===== */
     @media (pointer: coarse) {
-      :host .pf-channel-cell {
-        min-height: 44px;
-      }
-      /* Block horizontal drag-resize so the template textarea can never push
-         the page sideways on touch; vertical grow still works. */
-      :host textarea {
-        resize: vertical;
-        max-width: 100%;
-      }
+      .pf-nc-chip { min-height: 40px; }
     }
   `]
 })
 export class NotificationsConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
-  readonly tabOptions: SegmentedOption<Tab>[] = [
-    { value: 'alerts',      label: 'Alerts' },
-    { value: 'escalations', label: 'Escalations' },
-    { value: 'patient',     label: 'Patient Messages' }
-  ];
-  private readonly _tab = signal<Tab>('alerts');
-  readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); }
+  /** Lab-wide "All notifications" switch (server-enforced in the single
+   *  notification gate; this only reflects and flips it). */
+  readonly masterOn = signal<boolean>(true);
+  readonly masterSaving = signal<boolean>(false);
+  readonly enabledTotal = computed(() => this._rows().filter(r => r.enabled).length);
 
-  alertLabel(k: string): string {
-    return {
-      critical_value:           'Critical value alert',
-      sample_rejection:         'Sample rejection',
-      report_ready:             'Report ready',
-      tat_breach:               'TAT breach',
-      result_rejected:          'Result rejected by pathologist',
-      sample_ready_collection:  'Sample ready for collection'
-    }[k] ?? k;
-  }
+  private readonly _rows = signal<CatalogRow[]>([]);
+  readonly rows = this._rows.asReadonly();
+  readonly loading = signal<boolean>(true);
 
-  private readonly _alerts = signal<AlertCfg[]>([
-    { eventType: 'critical_value',          inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'sample_rejection',        inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'report_ready',            inAppEnabled: true,  whatsappEnabled: true,  emailEnabled: false },
-    { eventType: 'tat_breach',              inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    { eventType: 'result_rejected',         inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false },
-    // Fires when a new billed order hits the collection queue in
-    // dedicated_counter mode. Notifies every Sample Collector in the branch.
-    { eventType: 'sample_ready_collection', inAppEnabled: true,  whatsappEnabled: false, emailEnabled: false }
+  private readonly _moduleFilter = signal<string | null>(null);
+  readonly moduleFilter = this._moduleFilter.asReadonly();
+  setModuleFilter(m: string | null) { this._moduleFilter.set(m); }
+
+  /** Module keys in backend catalog order (first-seen order of rows). */
+  readonly modules = computed(() => {
+    const seen: string[] = [];
+    for (const r of this._rows()) if (!seen.includes(r.module)) seen.push(r.module);
+    return seen;
+  });
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search over label / fires-when / recipients. */
+  readonly q = signal('');
+  private matches(r: CatalogRow): boolean { return bandMatch(this.q(), r.label, r.firesWhen, r.recipients, this.moduleLabel(r.module)); }
+
+  readonly visibleModules = computed(() => {
+    const f = this._moduleFilter();
+    const mods = f === null ? this.modules() : this.modules().filter(m => m === f);
+    if (!this.q().trim()) return mods;
+    return mods.filter(m => this._rows().some(r => r.module === m && this.matches(r)));
+  });
+  /** Module picker in the pill ('' = All), counts in the label. */
+  readonly moduleOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: `All modules · ${this._rows().length}` },
+    ...this.modules().map(m => ({ value: m, label: `${this.moduleLabel(m)} · ${this.countFor(m)}` })),
   ]);
-  readonly alerts = this._alerts.asReadonly();
-  patchAlert(i: number, p: Partial<AlertCfg>) {
-    this._alerts.update(list => list.map((a, idx) => idx === i ? { ...a, ...p } : a));
-  }
-  saveAlert(a: AlertCfg) {
-    this.api.post('/api/config/notifications', a).subscribe({
-      next: () => this.toasts.success(`Saved ${a.eventType}`),
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
 
-  private readonly _escalations = signal<EscalationCfg[]>([
-    { eventType: 'critical_value', reminderIntervalMins: 15, maxReminders: 3, escalateAfterHrs: 1, criticalAfterHrs: 2 },
-    { eventType: 'tat_breach',     reminderIntervalMins: 30, maxReminders: 2, escalateAfterHrs: 2, criticalAfterHrs: 4 },
-    { eventType: 'sample_rejection', reminderIntervalMins: 60, maxReminders: 2, escalateAfterHrs: 4, criticalAfterHrs: 8 }
-  ]);
-  readonly escalations = this._escalations.asReadonly();
-  patchEscalation(i: number, p: Partial<EscalationCfg>) {
-    this._escalations.update(list => list.map((e, idx) => idx === i ? { ...e, ...p } : e));
-  }
-  saveEscalation(e: EscalationCfg) {
-    this.api.post('/api/config/escalations', e).subscribe({
-      next: () => this.toasts.success(`Saved escalation for ${e.eventType}`),
-      error: err => this.toasts.error(ApiError.from(err).message)
-    });
-  }
-
-  private readonly _patientTemplates = signal<PatientTemplate[]>([
-    {
-      key: 'order_confirmation', label: 'Order confirmation',
-      body: 'Hi {{patient_name}}, your tests are booked. Barcode: {{barcode}}. Expected by {{expected_time}}.',
-      variables: ['patient_name', 'barcode', 'expected_time']
-    },
-    {
-      key: 'appointment_reminder', label: 'Appointment reminder',
-      body: 'Hi {{patient_name}}, your appointment is at {{slot_time}} on {{date}} at {{branch_name}}.',
-      variables: ['patient_name', 'slot_time', 'date', 'branch_name']
-    },
-    {
-      key: 'report_ready', label: 'Report ready',
-      body: 'Hi {{patient_name}}, your report is ready. View online: {{report_link}}',
-      variables: ['patient_name', 'report_link']
-    },
-    {
-      key: 'payment_receipt', label: 'Payment receipt',
-      body: 'Payment of ₹{{amount}} received for order {{order_id}}. Invoice: {{invoice_link}}',
-      variables: ['amount', 'order_id', 'invoice_link']
-    }
-  ]);
-  readonly patientTemplates = this._patientTemplates.asReadonly();
-  patchPatientTpl(i: number, body: string) {
-    this._patientTemplates.update(list => list.map((t, idx) => idx === i ? { ...t, body } : t));
-  }
+  moduleLabel(m: string): string { return MODULE_LABELS[m] ?? m; }
+  /** Rows of a module that pass the pill search (all rows when no query). */
+  rowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m && this.matches(r)); }
+  private allRowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m); }
+  countFor(m: string): number { return this.allRowsFor(m).length; }
+  enabledCount(m: string): number { return this.allRowsFor(m).filter(r => r.enabled).length; }
 
   ngOnInit() {
-    this.api.get<AlertCfg[]>('/api/config/notifications').subscribe({
-      next: list => {
-        if (list && list.length > 0) {
-          this._alerts.update(existing => existing.map(e => list.find(x => x.eventType === e.eventType) ?? e));
-        }
+    this.api.get<CatalogRow[]>('/api/config/notifications/catalog').subscribe({
+      next: rows => { this._rows.set(rows ?? []); this.loading.set(false); },
+      error: e => { this.loading.set(false); this.toasts.error(ApiError.from(e).message); }
+    });
+    this.api.get<MasterView>('/api/config/notifications/master').subscribe({
+      // Missing / older backend → on (the server default).
+      next: m => this.masterOn.set((m as MasterView | null)?.enabled !== false),
+      error: () => this.masterOn.set(true)
+    });
+  }
+
+  /** Flip the master switch. Turning it OFF asks first (it silences the whole
+   *  lab); ON is instant. Never touches the per-alert rows. */
+  async toggleMaster() {
+    if (this.masterSaving()) return;
+    const next = !this.masterOn();
+    if (!next) {
+      const ok = await this.dialog.confirm({
+        title: 'Turn off all notifications?',
+        message: 'No one in the lab gets bells, phone or browser alerts until you switch this back on. Critical result alerts always send. Your individual alert choices are kept.',
+        confirmLabel: 'Turn off',
+        tone: 'danger'
+      });
+      if (!ok) return;
+    }
+    this.masterSaving.set(true);
+    this.masterOn.set(next);
+    this.api.post('/api/config/notifications/master', { enabled: next }).subscribe({
+      next: () => {
+        this.masterSaving.set(false);
+        this.toasts.success(next ? 'All notifications on' : 'All notifications off — critical result alerts still send');
+      },
+      error: e => {
+        this.masterSaving.set(false);
+        this.masterOn.set(!next);
+        this.toasts.error(ApiError.from(e).message);
       }
     });
-    this.api.get<EscalationCfg[]>('/api/config/escalations').subscribe({
-      next: list => {
-        if (list && list.length > 0) {
-          this._escalations.update(existing => existing.map(e => list.find(x => x.eventType === e.eventType) ?? e));
-        }
-      }
+  }
+
+  setEnabled(r: CatalogRow, enabled: boolean) {
+    this.patchRow(r.key, { enabled });
+    this.save({ ...r, enabled }, enabled ? `${r.label} on` : `${r.label} off`);
+  }
+
+  setThreshold(r: CatalogRow, minutes: number | null) {
+    if (minutes == null || minutes < 5) return;
+    if (minutes === r.thresholdMinutes) return;
+    this.patchRow(r.key, { thresholdMinutes: minutes });
+    this.save({ ...r, thresholdMinutes: minutes }, `${r.label}: after ${minutes} min`);
+  }
+
+  private patchRow(key: string, p: Partial<CatalogRow>) {
+    this._rows.update(list => list.map(r => r.key === key ? { ...r, ...p } : r));
+  }
+
+  /** Autosave — one POST per change; always sends the row's full state so a
+   *  toggle never wipes a saved threshold (the backend stores them together). */
+  private save(r: CatalogRow, toast: string) {
+    this.api.post('/api/config/notifications', {
+      eventType: r.key,
+      inAppEnabled: r.enabled,
+      thresholdMinutes: r.thresholdConfigurable ? r.thresholdMinutes : null
+    }).subscribe({
+      next: () => this.toasts.success(toast),
+      error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 }

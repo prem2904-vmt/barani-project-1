@@ -51,6 +51,43 @@
       />
     </noscript>
     <!--
+      Device class BEFORE the first paint (no desktop flash on tablets):
+      html.device-touch + device-tablet / device-phone, or device-desktop.
+      The native app and touch-first browsers (iPad, Android, touch-only)
+      get the tablet / phone layout at EVERY width; a mouse / trackpad keeps
+      the desktop layout. MIRROR of detectDeviceClass() in
+      app/core/services/device-class.ts (device-class.spec.ts keeps the two
+      identical); DeviceClassService keeps it current after boot.
+    -->
+    <script id="pf-device-class">
+      (function () {
+        var cls = 'desktop';
+        try {
+          var w = window, n = w.navigator || {}, ua = n.userAgent || '', tp = n.maxTouchPoints || 0;
+          var mm = function (q) { try { return !!(w.matchMedia && w.matchMedia(q).matches); } catch (e) { return false; } };
+          var native = false, electron = false;
+          try { native = !!(w.Capacitor && w.Capacitor.isNativePlatform && w.Capacitor.isNativePlatform()); } catch (e) {}
+          try { electron = !!(w.electronAPI && w.electronAPI.isElectron); } catch (e) {}
+          var anyCoarse = mm('(any-pointer: coarse)'), coarse = mm('(pointer: coarse)'), anyFine = mm('(any-pointer: fine)');
+          var touch = !electron && (native
+            || (/Macintosh/.test(ua) && tp > 1)
+            || /iPhone|iPad|iPod|Android/.test(ua)
+            || (/X11; Linux/.test(ua) && !/CrOS/.test(ua) && tp > 1)
+            || (anyCoarse && !anyFine)
+            || (coarse && tp > 1 && !anyFine));
+          if (touch) {
+            var s = w.screen || {};
+            var short = s.width && s.height ? Math.min(s.width, s.height) : Math.min(w.innerWidth || 0, w.innerHeight || 0);
+            cls = !short || short >= 600 ? 'tablet' : 'phone';
+          }
+        } catch (e) { cls = 'desktop'; }
+        var root = document.documentElement;
+        if (cls === 'desktop') root.classList.add('device-desktop');
+        else { root.classList.add('device-touch'); root.classList.add('device-' + cls); }
+        root.setAttribute('data-device', cls);
+      })();
+    </script>
+    <!--
       Apply theme BEFORE Angular boots to prevent flash of wrong theme.
       Priority: localStorage override > prefers-color-scheme > dark.
     -->
@@ -72,6 +109,28 @@
           document.documentElement.setAttribute('data-theme-mode', 'system');
         }
       })();
+    </script>
+    <!-- TEMP: Figma html-to-design capture (dev-only, remove after capturing screens) -->
+    <!-- disabled (owner, 2026-09-24): design capture off in the product
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script> -->
+    <!-- TEMP: full-page capture — relax the locked-viewport layout so the page flows full-length. Toggle by adding ?figfull=1 -->
+    <style id="figma-capture-fullpage">
+      /* Unlock nested scroll containers so screens flow full-length; clip X to bound width. */
+      html.figfull, html.figfull * { max-height: none !important; }
+      html.figfull, html.figfull body, html.figfull .shell-stack, html.figfull .shell-main,
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; overflow: visible !important; }
+      html.figfull, html.figfull body { overflow-x: clip !important; }
+      html.figfull .pf-chrome { position: static !important; }
+      /* Common inner scroll panels in this app (frontdesk columns, drawers, lists). */
+      html.figfull [class*="scroll"], html.figfull [class*="__body"], html.figfull [class*="__list"],
+      html.figfull [class*="pane"], html.figfull [class*="column"], html.figfull [class*="panel"] { height: auto !important; max-height: none !important; overflow: visible !important; }
+    </style>
+    <script>
+      // Add ?figfull=1 to any URL to unlock full-page height for capture.
+      if (location.search.indexOf('figfull=1') !== -1 || location.hash.indexOf('figfull=1') !== -1) {
+        document.documentElement.classList.add('figfull');
+      }
     </script>
   </head>
   <body>

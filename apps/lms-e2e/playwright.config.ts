@@ -1,68 +1,63 @@
 import { defineConfig, devices } from '@playwright/test';
 import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
+import { existsSync } from 'node:fs';
 
-// For CI, you may want to set BASE_URL to the deployed application.
+// LMS app served by nx (reused if already running on :4200).
 const baseURL = process.env['BASE_URL'] || 'http://localhost:4200';
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// require('dotenv').config();
+// Captured logged-in state (written by auth.setup.ts). When absent, the
+// `authed` specs skip rather than fail.
+const STORAGE = 'apps/lms-e2e/.auth/user.json';
+const hasStorage = existsSync(STORAGE);
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
   ...nxE2EPreset(__filename, { testDir: './src' }),
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL,
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    ignoreHTTPSErrors: true,
   },
-  /* Run your local dev server before starting the tests */
+  retries: 2,
+  workers: process.env.CI ? 1 : 3,
   webServer: {
     command: 'npx nx run lms:serve',
     url: 'http://localhost:4200',
     reuseExistingServer: true,
     cwd: workspaceRoot,
+    timeout: 180_000,
   },
   projects: [
+    // Unauthenticated smoke — needs no backend.
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    // Uncomment for mobile browsers support
-    /* {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    }, */
-
-    // Uncomment for branded browsers
-    /* {
-      name: 'Microsoft Edge',
-      use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    },
-    {
-      name: 'Google Chrome',
+      name: 'smoke',
+      testMatch: /.*\.smoke\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    } */
+    },
+    // One-time login → saves storageState. Runs only when creds are provided.
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
+    // Authenticated flows — reuse the captured session; skip if none.
+    {
+      name: 'authed',
+      testMatch: /.*\.authed\.spec\.ts/,
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome',
+        storageState: hasStorage ? STORAGE : undefined,
+      },
+    },
+    // RBAC / multi-role — each test signs in as its own seeded role (no shared
+    // session). Verifies who-can-see/do-what per the role→permission matrix.
+    {
+      name: 'rbac',
+      testMatch: /.*\.rbac\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
   ],
 });

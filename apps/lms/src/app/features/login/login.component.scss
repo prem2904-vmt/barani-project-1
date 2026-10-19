@@ -1,414 +1,367 @@
-:host { display: block; min-height: 100vh; min-height: 100dvh; }
+/* ═══════════════════════════════════════════════════════════════════
+   Sign in — new design (pf-kit tokens, light + dark, ambient world).
+   Phone / iPad first. The page is its OWN scroller (html/body never
+   scroll): with the soft keyboard up the focused field is scrolled into
+   the visible viewport, the content keeps its pre-keyboard height
+   (--lg-h, no re-centring jump) and gains the keyboard overlap as a
+   bottom inset (--lg-kb) where the browser overlays the keyboard.
+   ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Page ────────────────────────────────────────────────────────
-   Mobile-first single-column auth screen. The hero panel that
-   desktop has is intentionally absent — on a phone we want the
-   form above the fold without scrolling. */
-.pf-auth {
+:host {
+  display: block;
+  height: 100%;
+  --lg-card-bg: color-mix(in srgb, var(--pf-card-bg, #fff) 94%, transparent);
+  --lg-field-bg: color-mix(in srgb, var(--text-primary) 3%, var(--pf-card-bg, #fff));
+  --lg-field-line: color-mix(in srgb, var(--text-primary) 18%, transparent);
+  --lg-violet: var(--color-primary, #7c3aed);
+  --lg-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+:host-context(:root.dark) {
+  --lg-card-bg: color-mix(in srgb, var(--pf-card-bg, #14141f) 88%, transparent);
+  --lg-field-bg: color-mix(in srgb, #fff 4%, var(--pf-card-bg, #14141f));
+  --lg-field-line: rgba(255, 255, 255, 0.16);
+  --lg-violet: #a78bfa;
+}
+
+.lg {
   position: relative;
-  min-height: 100vh; min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: var(--bg-primary, #050816);
-  color: var(--text-primary, #e5e7eb);
-  /* Safe-area inset for iPhone notch + home indicator. The pf-auth
-     class wins over global rules because it's set inline here. */
-  padding:
-    calc(env(safe-area-inset-top, 0px) + 24px)
-    calc(env(safe-area-inset-right, 0px) + 20px)
-    calc(env(safe-area-inset-bottom, 0px) + 24px)
-    calc(env(safe-area-inset-left, 0px) + 20px);
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
+.lg::-webkit-scrollbar { display: none; }
+.lg ::selection { background: color-mix(in srgb, var(--lg-violet) 26%, transparent); }
 
-/* On Capacitor (iOS Simulator + real device) we get an even tighter
-   padding so the form sits centred without scrolling. */
-.pf-auth--native {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-}
-
-/* ── Background blobs (decorative) ─────────────────────────────── */
-.pf-auth__mesh { position: absolute; inset: 0; pointer-events: none; }
-.pf-auth__blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  will-change: transform;
-}
-.pf-auth__blob--1 {
-  width: 520px; height: 520px;
-  left: -120px; top: -160px;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.55) 0%, transparent 70%);
-  animation: pf-auth-blob 22s ease-in-out infinite;
-}
-.pf-auth__blob--2 {
-  width: 440px; height: 440px;
-  right: -100px; bottom: -120px;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.42) 0%, transparent 70%);
-  animation: pf-auth-blob 26s ease-in-out infinite reverse;
-}
-.pf-auth__blob--3 {
-  width: 380px; height: 380px;
-  right: 15%; top: 25%;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.32) 0%, transparent 70%);
-  animation: pf-auth-blob 30s ease-in-out infinite;
-}
-@keyframes pf-auth-blob {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(40px, 60px) scale(1.05); }
-}
-
-/* ── Stack ─────────────────────────────────────────────────────── */
-.pf-auth__stack {
+.lg__content {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--lg-h, 100%);
+  padding:
+    24px
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px) + var(--lg-kb, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+}
+
+/* margin:auto centres the column, and collapses to the top (scrollable,
+   never clipped) when the content is taller than the viewport. */
+.lg__layout {
+  margin: auto;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
 }
 
-/* ── Brand row ─────────────────────────────────────────────────── */
-.pf-auth__brand {
+/* ── Brand ───────────────────────────────────────────────────────── */
+.lg__brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  text-align: center;
 }
-.pf-auth__brand-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.pf-auth__wordmark {
+.lg__id { display: flex; align-items: center; gap: 4px; }
+.lg__wordmark {
   margin: 0;
-  font-family: 'Noto Sans', 'Inter', system-ui, sans-serif;
-  font-weight: 700;
-  font-size: 20px;
-  letter-spacing: -0.02em;
-  color: var(--text-primary, #f1f5f9);
-  line-height: 1.1;
-}
-.pf-auth__tagline {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--text-tertiary, rgba(148, 163, 184, 0.7));
-}
-
-/* ── Form card ─────────────────────────────────────────────────── */
-.pf-auth__form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 22px 20px 20px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
-    rgba(10, 10, 22, 0.7);
-  border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
-  border-radius: 22px;
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
-  transition: opacity 0.2s;
-}
-.pf-auth__form--busy { opacity: 0.7; pointer-events: none; }
-
-.pf-auth__title {
-  margin: 0 0 4px;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--text-primary, #f8fafc);
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+.lg__tagline {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.lg__statement { display: none; }
+
+/* ── Card ────────────────────────────────────────────────────────── */
+.lg__card {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 24px 20px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--pf-line, #e5e7eb);
+  background: var(--lg-card-bg);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 18px 40px -16px rgba(46, 16, 101, 0.22);
+  animation: lg-rise 480ms var(--lg-ease) both;
+}
+:host-context(:root.dark) .lg__card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 24px 48px -18px rgba(0, 0, 0, 0.65);
+}
+@keyframes lg-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
 }
 
-/* ── Field ─────────────────────────────────────────────────────── */
-.pf-auth__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.lg__head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+.lg__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-primary);
+  text-wrap: balance;
 }
-.pf-auth__field-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-muted, rgba(148, 163, 184, 0.6));
-}
-.pf-auth__field-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-right: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-  border-radius: 12px;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-.pf-auth__field-row:focus-within {
-  border-color: rgba(168, 85, 247, 0.6);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.14);
-}
-.pf-auth__field-input {
-  flex: 1;
-  min-width: 0;
-  height: 48px;
-  padding: 0 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-  border-radius: 12px;
-  color: var(--text-primary, #f8fafc);
-  /* 16px so iOS Safari doesn't zoom on focus. */
-  font-size: 16px;
-  font-weight: 500;
-  outline: none;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-.pf-auth__field-input::placeholder {
-  color: var(--text-muted, rgba(148, 163, 184, 0.4));
-  font-weight: 400;
-}
-.pf-auth__field-input:focus {
-  border-color: rgba(168, 85, 247, 0.6);
-  background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.14);
-}
-/* The password field row hosts the eye button alongside the input. */
-.pf-auth__field-row .pf-auth__field-input {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.pf-auth__field-row .pf-auth__field-input:focus { box-shadow: none; }
-
-/* Add-account mode: banner + locked (read-only) organization field. */
-.pf-auth__note {
-  margin: -4px 0 4px;
-  font-size: 12.5px;
+.lg__sub {
+  margin: 0;
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--text-secondary, #cbd5e1);
+  color: var(--text-secondary);
+  text-wrap: pretty;
 }
-.pf-auth__note strong { color: var(--text-primary, #f8fafc); font-weight: 600; }
-.pf-auth__field-input--locked { color: var(--text-secondary, #cbd5e1); cursor: default; }
-.pf-auth__field-lock {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  color: var(--text-muted, rgba(148, 163, 184, 0.6));
-  flex-shrink: 0;
-}
+.lg__sub strong { color: var(--text-primary); font-weight: 600; }
 
-.pf-auth__eye {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--text-muted, rgba(148, 163, 184, 0.6));
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.pf-auth__eye:active { background: rgba(255,255,255,0.08); color: #c4b5fd; }
-@media (hover: hover) {
-  .pf-auth__eye:hover { background: rgba(255,255,255,0.06); color: #c4b5fd; }
-}
-
-/* ── Submit ────────────────────────────────────────────────────── */
-.pf-auth__submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 50px;
-  margin-top: 6px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.45);
-  transition: filter 0.18s, transform 0.08s;
-}
-.pf-auth__submit:active:not(:disabled) { transform: scale(0.985); filter: brightness(1.04); }
-.pf-auth__submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ── Error pill ────────────────────────────────────────────────── */
-.pf-auth__error {
+/* Session note (expired / suspended / other window): neutral, violet mark. */
+.lg__notice {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin: 0;
-  padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.36);
+  margin: 0 0 18px;
+  padding: 11px 12px;
   border-radius: 12px;
-  color: #fca5a5;
-  font-size: 13px;
-  line-height: 1.4;
+  border: 1px solid color-mix(in srgb, var(--lg-violet) 24%, transparent);
+  background: color-mix(in srgb, var(--lg-violet) 8%, var(--pf-card-bg, #fff));
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.45;
 }
-.pf-auth__error-icon {
-  flex-shrink: 0;
-  width: 20px; height: 20px;
+.lg__notice svg { flex: none; margin-top: 1px; color: var(--lg-violet); }
+
+/* ── Form ────────────────────────────────────────────────────────── */
+.lg__form { display: flex; flex-direction: column; gap: 16px; }
+
+.lg-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.lg-field__label {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+.lg-field__box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--lg-field-line);
+  background: var(--lg-field-bg);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.lg-field__box:hover { border-color: color-mix(in srgb, var(--text-primary) 34%, transparent); }
+.lg-field__box:focus-within {
+  border-color: var(--lg-violet);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lg-violet) 20%, transparent);
+}
+.lg-field__box--error,
+.lg-field__box--error:hover { border-color: var(--red-border, #ef4444); }
+.lg-field__box--error:focus-within {
+  border-color: var(--red-border, #ef4444);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-border, #ef4444) 18%, transparent);
+}
+.lg-field__box--locked {
+  border-style: dashed;
+  background: var(--pf-chip-bg, #f3f4f6);
+}
+.lg-field__icon {
+  flex: none;
+  margin-left: 14px;
+  color: var(--text-tertiary);
+  transition: color 180ms ease;
+}
+.lg-field__box:focus-within .lg-field__icon { color: var(--lg-violet); }
+.lg-field__trail { flex: none; margin-right: 14px; color: var(--text-tertiary); }
+
+.lg-field__input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  margin: 0;
+  padding: 0 14px 0 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  caret-color: var(--lg-violet);
+  font: inherit;
+  /* 16px on every device: iOS zooms the page into any smaller input. */
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.lg-field__input::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; opacity: 1; }
+.lg-field__input[readonly] { color: var(--text-secondary); cursor: default; }
+.lg-field__input--pw { padding-right: 4px; }
+/* Password managers' autofill keeps the theme instead of a yellow/blue slab. */
+.lg-field__input:-webkit-autofill,
+.lg-field__input:-webkit-autofill:hover,
+.lg-field__input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  -webkit-box-shadow: 0 0 0 40px var(--lg-field-bg) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.lg-field__eye {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.25);
-  color: #fef2f2;
-  font-weight: 700;
-  font-size: 12px;
+  width: 44px;
+  height: 44px;
+  margin-right: 1px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
 }
-.pf-auth__error-msg { flex: 1; min-width: 0; word-break: break-word; }
+.lg-field__eye:hover { color: var(--text-primary); background: var(--pf-chip-bg, #f3f4f6); }
+.lg-field__eye:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: -2px; }
 
-/* ── Hint + env strip ──────────────────────────────────────────── */
-.pf-auth__hint {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--text-muted, rgba(148, 163, 184, 0.6));
-  text-align: center;
-}
-.pf-auth__env {
-  margin: 6px 0 0;
-  display: flex;
+/* Remembered organizations — tap to use (never a native datalist). */
+.lg-field__recent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lg-field__recent-lbl { font-size: 12px; color: var(--text-tertiary); }
+.lg-chip {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  color: var(--text-muted, rgba(148, 163, 184, 0.5));
-  opacity: 0.7;
-}
-.pf-auth__env-key {
-  padding: 1px 6px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  letter-spacing: 0.08em;
+  border: 1px solid var(--pf-line, #e5e7eb);
+  background: var(--pf-chip-bg, #f3f4f6);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
 }
-.pf-auth__env-val { word-break: break-all; }
+.lg-chip:hover { border-color: var(--pf-sel-border, #9aa4ae); color: var(--text-primary); }
+.lg-chip:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 2px; }
+:host-context(html.device-touch) .lg-chip { min-height: 44px; }
 
-/* ── Footer ────────────────────────────────────────────────────── */
-.pf-auth__foot {
+/* Inline error — names the problem and the way out. */
+.lg__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--red-border, #ef4444) 34%, transparent);
+  background: color-mix(in srgb, var(--red-border, #ef4444) 8%, var(--pf-card-bg, #fff));
+  color: var(--red-text, #dc2626);
+  font-size: 14px;
+  line-height: 1.45;
+  animation: lg-fade 200ms var(--lg-ease) both;
+}
+.lg__error svg { flex: none; margin-top: 1px; }
+@keyframes lg-fade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The one primary call to action (kit gradient). */
+.pf-btn.lg__submit {
+  width: 100%;
+  height: 50px;
+  min-height: 50px;
+  margin-top: 4px;
+  gap: 8px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--lg-violet) 70%, transparent);
+  transition: filter 150ms ease, transform 150ms var(--lg-ease), box-shadow 150ms ease;
+}
+.pf-btn.lg__submit:hover:not(:disabled) { filter: brightness(1.06); }
+.pf-btn.lg__submit:active:not(:disabled) { transform: scale(0.985); }
+.pf-btn.lg__submit:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 3px; }
+.pf-btn.lg__submit:disabled { opacity: 0.85; cursor: progress; }
+.pf-btn.lg__cancel { width: 100%; height: 44px; font-size: 15px; }
+
+.lg__hint {
+  margin: 18px 0 0;
   text-align: center;
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted, rgba(148, 163, 184, 0.4));
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
 }
 
-/* ── Tablet / desktop refinement ───────────────────────────────── */
-@media (min-width: 768px) {
-  .pf-auth { padding: 48px; }
-  .pf-auth__stack { max-width: 440px; }
-  .pf-auth__form { padding: 28px 26px 24px; }
-  .pf-auth__title { font-size: 26px; }
-  .pf-auth__wordmark { font-size: 22px; }
+/* ── Tablet portrait and up: a little more air ────────────────────── */
+@media (min-width: 640px) {
+  .lg__content { padding-top: 40px; padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px) + var(--lg-kb, 0px)); }
+  .lg__layout { gap: 28px; }
+  .lg__card { padding: 32px 32px 26px; border-radius: 24px; }
+  .lg__wordmark { font-size: 24px; }
 }
 
-/* ── Reduced motion ────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  .pf-auth__blob { animation: none; }
-}
-
-/* ── Light theme ───────────────────────────────────────────────── */
-:host-context([data-theme="light"]) .pf-auth {
-  background: #f5f7fb;
-  color: #0f172a;
-}
-:host-context([data-theme="light"]) .pf-auth__blob { opacity: 0.32; filter: blur(110px); }
-:host-context([data-theme="light"]) .pf-auth__form {
-  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.8));
-  border-color: rgba(15, 23, 42, 0.12);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
-}
-:host-context([data-theme="light"]) .pf-auth__title,
-:host-context([data-theme="light"]) .pf-auth__wordmark { color: #0f172a; }
-:host-context([data-theme="light"]) .pf-auth__tagline,
-:host-context([data-theme="light"]) .pf-auth__field-label,
-:host-context([data-theme="light"]) .pf-auth__hint,
-:host-context([data-theme="light"]) .pf-auth__env { color: #64748b; }
-:host-context([data-theme="light"]) .pf-auth__field-input {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #0f172a;
-}
-:host-context([data-theme="light"]) .pf-auth__field-input::placeholder { color: rgba(15, 23, 42, 0.36); }
-:host-context([data-theme="light"]) .pf-auth__field-row {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(15, 23, 42, 0.12);
-}
-:host-context([data-theme="light"]) .pf-auth__error {
-  background: rgba(248, 113, 113, 0.16);
-  border-color: rgba(248, 113, 113, 0.35);
-  color: #991b1b;
-}
-:host-context([data-theme="light"]) .pf-auth__error-icon {
-  background: rgba(248, 113, 113, 0.18);
-  color: #7f1d1d;
-}
-
-/* ── Touch sizing (coarse pointers only) ───────────────────────────
-   Additive override: on touch input the show/hide-password button
-   must meet the 44px minimum tap target. The base 40px stays for
-   mouse/desktop. Width grows; the field-row keeps the input flexible
-   so layout doesn't shift on wide viewports (this only fires on
-   pointer:coarse, i.e. phones/tablets). */
-@media (pointer: coarse) {
-  .pf-auth__eye {
-    width: 44px;
-    height: 44px;
+/* ── iPad landscape + desktop: brand panel beside the card ──────────── */
+@media (min-width: 1024px) {
+  .lg__layout {
+    max-width: 1000px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 72px;
   }
-}
-
-/* ── Phone (<=640) ─────────────────────────────────────────────────
-   Additive, below-desktop only. Keep the form comfortably within the
-   small viewport: cap the card width to the available space and let
-   the stack scroll within dvh rather than the whole page if content
-   ever exceeds the viewport (e.g. error pill + env strip + keyboard).
-   Desktop (>=1280) is untouched. */
-@media (max-width: 640px) {
-  .pf-auth__stack {
-    max-width: 100%;
-  }
-
-  /* Keyboard-overlap fix: when the on-screen keyboard (or an error
-     pill + env strip) makes the centred card taller than the shrunken
-     viewport, flex `align-items: center` clips the top with no way to
-     reach it. Allow the page to scroll vertically and switch centring
-     to auto margins, which keep the top edge reachable instead of
-     clipping it. Horizontal stays clipped so blobs never cause
-     side-scroll. */
-  .pf-auth {
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
+  .lg__brand {
+    flex: 1;
+    min-width: 0;
     align-items: flex-start;
+    text-align: left;
+    gap: 18px;
   }
-  /* Clip the decorative blobs to the container so the now-scrollable
-     page can't scroll into their overflow. */
-  .pf-auth__mesh {
-    overflow: hidden;
+  .lg__id { gap: 6px; }
+  .lg__wordmark { font-size: 26px; }
+  .lg__tagline {
+    max-width: 14ch;
+    font-size: 48px;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    line-height: 1.04;
+    color: var(--text-primary);
+    text-wrap: balance;
   }
-  /* Centre when there's room; collapse (no clip) when content is tall. */
-  .pf-auth__stack {
-    margin-top: auto;
-    margin-bottom: auto;
+  .lg__statement {
+    display: block;
+    max-width: 38ch;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+  .lg__card { flex: none; width: 420px; }
+}
+
+/* Phones: a lighter blur (it is the costliest GPU op under the keyboard). */
+@media (max-width: 640px) {
+  .lg__card {
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 }
 
-/* ── Electron (desktop shell) ───────────────────────────────────────
-   Electron is desktop-web; the only adjustment needed is guaranteeing
-   dynamic-viewport sizing for the frameless window. Base already uses
-   dvh, so this is a defensive no-op alias kept scoped to the page. */
-:host-context(html.electron) .pf-auth {
-  min-height: 100dvh;
+@media (prefers-reduced-motion: reduce) {
+  .lg__card, .lg__error { animation: none; }
+  .pf-btn.lg__submit, .lg-field__box, .lg-field__icon { transition: none; }
 }

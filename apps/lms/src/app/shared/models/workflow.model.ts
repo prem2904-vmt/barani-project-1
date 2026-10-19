@@ -140,6 +140,8 @@ export interface WorkflowField {
   isEditable: boolean;
   width?: FieldWidth;
   showWhen?: ConditionRule[];
+  /** How multiple showWhen rules combine. Defaults to 'AND' (legacy behaviour). */
+  showWhenLogic?: ConditionLogic;
   validation?: ValidationRule[];
   options?: FieldOption[];
   dataSource?: string;
@@ -190,7 +192,11 @@ export interface WorkflowContext {
   tenantId?: string;
   branchId?: string;
   userId?: string;
+  /** Whole years (workflow rules: "age < 18"). */
   patientAge?: number;
+  /** Fractional years (days / 365.25) for reference-band picks — the
+   *  server's flagging metric (shared/utils/patient-age). */
+  patientBandAge?: number;
   patientSex?: string;
   [key: string]: unknown;
 }

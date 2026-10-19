@@ -8,158 +8,21 @@
 }
 
 /* ── Empty-state tile ───────────────────────────────────────
- * Used by the three FD landing panes (Appointments / In Progress /
- * Completed) when their list is empty. A soft glass card with a tinted
- * icon disc, a clear title, a one-liner explanation and an optional CTA.
- * Each pane gets its own hue via .pf-empty-tile--{appt|ip|done}. */
+ * LAYOUT only: fills the FD landing pane and centres its content. The
+ * look is the kit's ND empty state (.pf-empty: violet icon tile, title,
+ * one-line body, secondary action) — one palette for every pane; the old
+ * per-pane amber / emerald hues are gone (owner). */
 .pf-empty-tile {
-  /* The pane itself is the card now (border + bg). The empty tile sits
+  /* The pane itself is the card (border + bg); the empty state sits
    * inside it, fills the available height and centers content. */
   flex: 1 1 auto;
   align-self: stretch;
   min-height: 200px;
   margin: 0;
   padding: 22px 18px 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
   border-radius: 0 0 13px 13px;
   background: transparent;
   border: 0;
-  position: relative;
-  overflow: hidden;
-}
-.pf-empty-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(70% 60% at 50% 0%, var(--empty-tone, rgba(168, 85, 247, 0.18)), transparent 70%);
-  opacity: 0.5;
-  pointer-events: none;
-}
-.pf-empty-tile__icon {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  background: var(--empty-icon-bg, rgba(168, 85, 247, 0.16));
-  border: 1px solid var(--empty-icon-border, rgba(168, 85, 247, 0.32));
-  color: var(--empty-icon-color, #c4b5fd);
-}
-.pf-empty-tile__title {
-  position: relative;
-  margin: 4px 0 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-.pf-empty-tile__sub {
-  position: relative;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-tertiary);
-  max-width: 260px;
-}
-.pf-empty-tile__cta {
-  position: relative;
-  margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  border-radius: 9999px;
-  background: var(--empty-cta-bg, rgba(168, 85, 247, 0.18));
-  border: 1px solid var(--empty-cta-border, rgba(168, 85, 247, 0.4));
-  color: var(--empty-cta-color, #ddd6fe);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
-}
-.pf-empty-tile__cta:hover {
-  background: var(--empty-cta-bg-hover, rgba(168, 85, 247, 0.28));
-  border-color: var(--empty-cta-border-hover, rgba(168, 85, 247, 0.55));
-  color: #ffffff;
-}
-.pf-empty-tile__cta:active { transform: scale(0.985); }
-
-/* Per-pane tinting — appointments=violet, in-progress=amber,
- * completed=emerald. These match the count-pill tones already used
- * in the pane headers so the panes feel cohesive. */
-.pf-empty-tile--appt {
-  --empty-tone: rgba(168, 85, 247, 0.20);
-  --empty-icon-bg: rgba(168, 85, 247, 0.16);
-  --empty-icon-border: rgba(168, 85, 247, 0.34);
-  --empty-icon-color: #c4b5fd;
-  --empty-cta-bg: rgba(168, 85, 247, 0.18);
-  --empty-cta-border: rgba(168, 85, 247, 0.4);
-  --empty-cta-color: #ddd6fe;
-  --empty-cta-bg-hover: rgba(168, 85, 247, 0.3);
-  --empty-cta-border-hover: rgba(168, 85, 247, 0.6);
-}
-.pf-empty-tile--ip {
-  --empty-tone: rgba(245, 158, 11, 0.20);
-  --empty-icon-bg: rgba(245, 158, 11, 0.16);
-  --empty-icon-border: rgba(245, 158, 11, 0.34);
-  --empty-icon-color: #fcd34d;
-  --empty-cta-bg: rgba(245, 158, 11, 0.18);
-  --empty-cta-border: rgba(245, 158, 11, 0.4);
-  --empty-cta-color: #fde68a;
-  --empty-cta-bg-hover: rgba(245, 158, 11, 0.3);
-  --empty-cta-border-hover: rgba(245, 158, 11, 0.6);
-}
-.pf-empty-tile--done {
-  --empty-tone: rgba(16, 185, 129, 0.20);
-  --empty-icon-bg: rgba(16, 185, 129, 0.16);
-  --empty-icon-border: rgba(16, 185, 129, 0.34);
-  --empty-icon-color: #6ee7b7;
-}
-
-/* Light theme tints — softer pastel surfaces so the tile stays gentle
- * on a white page instead of glowing. */
-:host-context([data-theme="light"]) .pf-empty-tile {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.9));
-  border-color: rgba(15, 23, 42, 0.08);
-}
-:host-context([data-theme="light"]) .pf-empty-tile__icon { color: var(--empty-icon-color); }
-
-:host-context([data-theme="light"]) .pf-empty-tile--appt {
-  --empty-tone: rgba(168, 85, 247, 0.08);
-  --empty-icon-bg: rgba(124, 58, 237, 0.08);
-  --empty-icon-border: rgba(124, 58, 237, 0.2);
-  --empty-icon-color: #7c3aed;
-  --empty-cta-bg: rgba(124, 58, 237, 0.10);
-  --empty-cta-border: rgba(124, 58, 237, 0.25);
-  --empty-cta-color: #6d28d9;
-  --empty-cta-bg-hover: rgba(124, 58, 237, 0.18);
-  --empty-cta-border-hover: rgba(124, 58, 237, 0.45);
-}
-:host-context([data-theme="light"]) .pf-empty-tile--ip {
-  --empty-tone: rgba(245, 158, 11, 0.08);
-  --empty-icon-bg: rgba(217, 119, 6, 0.08);
-  --empty-icon-border: rgba(217, 119, 6, 0.2);
-  --empty-icon-color: #d97706;
-  --empty-cta-bg: rgba(217, 119, 6, 0.10);
-  --empty-cta-border: rgba(217, 119, 6, 0.25);
-  --empty-cta-color: #b45309;
-  --empty-cta-bg-hover: rgba(217, 119, 6, 0.18);
-  --empty-cta-border-hover: rgba(217, 119, 6, 0.45);
-}
-:host-context([data-theme="light"]) .pf-empty-tile--done {
-  --empty-tone: rgba(16, 185, 129, 0.08);
-  --empty-icon-bg: rgba(5, 150, 105, 0.08);
-  --empty-icon-border: rgba(5, 150, 105, 0.2);
-  --empty-icon-color: #059669;
 }
 
 .pf-cards {
@@ -192,7 +55,7 @@
 .pf-card:hover {
   background: var(--glass-bg-hover);
   border-color: rgba(168, 85, 247, 0.45);
-  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08);
+  box-shadow: var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14));
 }
 
 .pf-card:active {
@@ -207,6 +70,9 @@
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(236, 72, 153, 0.06)) !important;
   border-color: rgba(168, 85, 247, 0.5) !important;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+.pf-card--selected:hover {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14));
 }
 
 .pf-card[data-priority='STAT']::before,
@@ -314,12 +180,12 @@
 
 .pf-card__prio[data-prio='STAT'] {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 .pf-card__prio[data-prio='Urgent'] {
   background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
+  color: var(--amber-text);
 }
 
 .pf-card__meta {
@@ -334,7 +200,7 @@
 }
 
 .pf-card__flag--balance {
-  color: #fca5a5;
+  color: var(--red-text);
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 9999px;
@@ -358,7 +224,7 @@
 }
 
 .pf-pipeline__node[data-state='done'] {
-  background: #10b981;
+  background: #5c9e86;
   border-color: transparent;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
 }
@@ -371,7 +237,10 @@
 
 .pf-card__actions {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -418,13 +287,26 @@
 
 .pf-ghostbtn--accent {
   background: rgba(45, 212, 191, 0.12);
-  color: #5eead4;
+  color: var(--teal-text);
   border-color: rgba(45, 212, 191, 0.4);
 }
 
 .pf-ghostbtn--accent:hover {
   background: linear-gradient(135deg, #14b8a6, #2dd4bf);
   color: #04221e;
+  border-color: transparent;
+}
+
+/* "Status" button on repeat-series orders — violet to match the series pills. */
+.pf-ghostbtn--series {
+  background: rgba(167, 139, 250, 0.12);
+  color: var(--violet-text);
+  border-color: rgba(167, 139, 250, 0.4);
+}
+
+.pf-ghostbtn--series:hover {
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  color: #ffffff;
   border-color: transparent;
 }
 
@@ -465,7 +347,7 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #c4b5fd;
+  color: var(--violet-text);
   flex-shrink: 0;
 }
 
@@ -488,19 +370,19 @@
 .pf-toptest-pill__count {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
-  color: #a78bfa;
+  color: var(--violet-text);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
 .pf-tag--ok {
-  color: #5eead4;
+  color: var(--teal-text);
   background: rgba(45, 212, 191, 0.12);
   border: 1px solid rgba(45, 212, 191, 0.35);
 }
 
 .pf-tag--warn {
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.35);
 }
@@ -547,8 +429,8 @@
   gap: 2px;
   padding: 3px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid var(--glass-border);
+  // background: var(--seg-track);
+  // border: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
 .pf-tabs__btn {
@@ -570,7 +452,7 @@
 }
 .pf-tabs__btn:not(.pf-tabs__btn--on):hover { color: var(--text-primary); }
 .pf-tabs__btn--on {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: var(--gradient-primary);
   color: #fff;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
 }
@@ -579,7 +461,9 @@
   box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
 }
 .pf-tabs__count {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  /* Noto Sans tabular numbers — never a monospace chip (ND). */
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   font-weight: 700;
   padding: 1px 7px;
@@ -594,14 +478,14 @@
   color: #fff;
 }
 .pf-tabs__count[data-tone='ok'] {
-  background: rgba(16, 185, 129, 0.16);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #34d399;
+  background: rgba(148, 137, 172, 0.14);
+  border-color: rgba(148, 137, 172, 0.30);
+  color: var(--text-secondary);
 }
 .pf-tabs__count[data-tone='warning'] {
   background: rgba(244, 63, 94, 0.22);
   border-color: rgba(244, 63, 94, 0.45);
-  color: #fda4af;
+  color: var(--rose-text);
   font-weight: 700;
 }
 .pf-tabs__btn--on .pf-tabs__count {
@@ -669,7 +553,7 @@
   color: var(--text-primary);
 }
 .pf-pane-hidden-chip svg { color: var(--text-muted); flex-shrink: 0; }
-.pf-pane-hidden-chip:hover svg { color: #c4b5fd; }
+.pf-pane-hidden-chip:hover svg { color: var(--violet-text); }
 
 /* Chevron next to the count — rotates when this pane is expanded.
  * Only visible at <1024px (accordion mode); the desktop grid hides it. */
@@ -866,57 +750,6 @@
   color: var(--text-muted);
 }
 
-/* Per-tube dept pills inside the in-progress card */
-.pf-card__depts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.pf-card__dept {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-tertiary);
-}
-
-.pf-card__dept--done {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.32);
-  color: #6ee7b7;
-}
-
-.pf-card__dept--validated {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.30), rgba(34, 211, 238, 0.18));
-  border-color: rgba(16, 185, 129, 0.6);
-  color: #ecfdf5;
-  font-weight: 700;
-}
-
-/* Colored dot inside each dept pill */
-.pf-card__dot {
-  font-size: 8px;
-  line-height: 1;
-  color: #f87171;
-}
-
-.pf-card__dot--done {
-  color: #34d399;
-}
-
-.pf-card__dot--validated {
-  color: #67e8f9;
-}
-
 /* Solid primary "Collect" button */
 .pf-btn {
   height: 32px;
@@ -947,9 +780,9 @@
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(16, 185, 129, 0.18));
-  border: 1px solid rgba(34, 211, 238, 0.45);
-  color: #67e8f9;
+  background: rgba(132, 189, 166, 0.14);
+  border: 1px solid rgba(132, 189, 166, 0.38);
+  color: var(--green-text);
 }
 
 /* ── Exception alert chips ───────────────────────────────── */
@@ -1006,12 +839,12 @@
 }
 
 .pf-alert--ready .pf-alert__dot {
-  background: #10b981;
+  background: #5c9e86;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
 }
 
 .pf-alert--ready .pf-alert__count {
-  color: #34d399;
+  color: var(--green-text);
 }
 
 .pf-alert--payments {
@@ -1025,7 +858,7 @@
 }
 
 .pf-alert--payments .pf-alert__count {
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 @keyframes pf-alert-in {
@@ -1094,7 +927,7 @@
  * Compact row with avatar, patient name, and Ready/Download or
  * Delivered chip. */
 .pf-card--completed {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #5c9e86;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1143,78 +976,8 @@
 
 .pf-completed-chip--done {
   background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
+  color: var(--green-text);
   border: 1px solid rgba(16, 185, 129, 0.45);
-}
-
-/* ── Bulk action bar (in In-Progress pane) ────────────────── */
-.pf-bulk-bar {
-  margin: 8px 10px;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
-  border: 1px solid rgba(168, 85, 247, 0.40);
-  border-radius: 12px;
-  flex-wrap: wrap;
-}
-
-.pf-bulk-bar__count {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #c4b5fd;
-}
-
-.pf-bulk-bar__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 9999px;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pf-bulk-bar__btn:not(.pf-bulk-bar__btn--primary):hover {
-  background: var(--bg-hover);
-}
-
-.pf-bulk-bar__btn--primary {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white;
-  border-color: transparent;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
-}
-
-.pf-bulk-bar__btn--primary:hover {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
-  filter: brightness(1.08);
-}
-
-.pf-bulk-bar__clear {
-  margin-left: auto;
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: 0;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  border-radius: 50%;
-}
-
-.pf-bulk-bar__clear:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 @container (max-width: 380px) {
@@ -1324,7 +1087,343 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fbbf24;
+  color: var(--amber-text);
   background: rgba(245, 158, 11, 0.14);
   border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* ═══ Series schedule sheet (repetitive mode) ═════════════════════
+   Centered card on desktop/iPad (same overlay pattern as .pf-cancel,
+   shares the .pf-drawer-bd backdrop); the ≤640px block below docks it
+   to the bottom as a phone sheet. */
+.pf-series {
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(84dvh, 640px);
+  background: var(--bg-card-solid, #14141f);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.pf-series__hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  flex-shrink: 0;
+}
+
+.pf-series__hgroup { min-width: 0; }
+
+.pf-series__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary, #fff);
+}
+
+.pf-series__sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.55));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-series__close {
+  width: 36px;
+  height: 36px;
+  margin: -6px -8px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.55));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pf-series__close:hover {
+  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #fff);
+}
+
+.pf-series__body {
+  padding: 0 20px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pf-series__grp + .pf-series__grp {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+}
+
+.pf-series__grp-name {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+}
+
+.pf-series__grp-dept {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* One time point: offset · due wall-clock · state chip. 44px min row
+   height keeps the sheet comfortably tappable/scannable on touch. */
+.pf-series__row {
+  display: grid;
+  /* The name column is the widest thing here — give it room to breathe
+     and let the due time + chip keep their intrinsic widths. */
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 3px 0;
+}
+
+/* What is drawn (headline) over when it is drawn (subtitle). */
+.pf-series__what {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.pf-series__test {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-series__offset {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.55));
+}
+
+.pf-series__row[data-state="missed"] .pf-series__test {
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+  text-decoration: line-through;
+}
+
+.pf-series__row[data-state="missed"] .pf-series__offset {
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+
+.pf-series__due {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.55));
+}
+
+.pf-series__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-tertiary);
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.pf-series__chip--collected {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--green-text);
+}
+
+.pf-series__chip--due {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: var(--green-text);
+}
+
+.pf-series__chip--missed {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: var(--text-muted);
+}
+
+.pf-series__chip--countdown {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: var(--violet-text);
+}
+
+/* Processed values under a collected time point. */
+.pf-series__results {
+  margin: -2px 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pf-series__result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.pf-series__result-test {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  min-width: 0;
+}
+
+.pf-series__result-vals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pf-series__val {
+  color: var(--text-primary, #fff);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pf-series__val-label {
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+  font-weight: 600;
+  margin-right: 3px;
+}
+
+.pf-series__val-unit {
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.55));
+  font-weight: 500;
+  font-size: 11px;
+  margin-left: 3px;
+}
+
+.pf-series__loading {
+  margin: -2px 0 8px;
+  font-size: 11.5px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+
+.pf-series__foot {
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  flex-shrink: 0;
+}
+
+.pf-series__closecoll {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red-text, #fca5a5);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.pf-series__closecoll:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.pf-series__closecoll:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Phone (≤640px, additive): dock as a bottom sheet — thumb-reachable,
+   rounded top, safe-area padded so the footer clears the home indicator. */
+@media (max-width: 640px) {
+  .pf-series {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    width: 100%;
+    max-height: 86dvh;
+    border-radius: 18px 18px 0 0;
+  }
+  .pf-series__close {
+    width: 44px;
+    height: 44px;
+    margin: -10px -12px 0 0;
+  }
+  .pf-series__body {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .pf-series__foot {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Status chips are TOGGLE filters (aria-pressed): a visible focus ring for
+   keyboard users; the pressed look is .pf-tabs__btn--on above. */
+.pf-tabs__btn:focus-visible {
+  outline: 2px solid var(--accent, #7c3aed);
+  outline-offset: 2px;
+}
+
+/* "All statuses" (no status chip on): a quiet section label above each
+   status's rows so the combined list stays scannable. */
+.pf-wsec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 4px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.pf-wsec:first-child { margin-top: 4px; }
+.pf-wsec__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-tertiary);
 }

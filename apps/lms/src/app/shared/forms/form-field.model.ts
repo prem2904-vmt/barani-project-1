@@ -103,10 +103,23 @@ export interface ValidationConfig {
 
 // ── Reference ranges (lab-specific — keeps test-editor semantics) ─────
 
+/**
+ * One group of patients' reference range — the simple model (owner,
+ * 2026-09-26): Who (`sex`) + Age, `min` = L, `max` = H, `criticalLow` = CL,
+ * `criticalHigh` = CH, and `reportText` printed on the report exactly as
+ * typed. value < L → L, > H → H, < CL / > CH → critical; on a limit = not
+ * flagged. `segment`, `label`, `minOp` / `maxOp` are LEGACY: read (until the
+ * data is migrated), never written by new saves.
+ */
 export interface ReferenceRange {
-  segment: string; // e.g. "Male adult", "Female adult", "0-1 yr"
+  /** Legacy free-text population ("Male adult", "0-1 yr", "prediabetes"). */
+  segment?: string;
   min?: number | null;
   max?: number | null;
+  /** Legacy comparators: only an explicit strict 'gt' / 'lt' still flags the
+   *  limit itself; absent = on the limit is normal. Mirrors mw `RangeDef`. */
+  minOp?: 'gt' | 'gte' | null;
+  maxOp?: 'lt' | 'lte' | null;
   unit?: string | null;
   // Structured selectors. When present the backend picks the band by the
   // patient's sex/age instead of parsing the free-text `segment` label.
@@ -116,6 +129,20 @@ export interface ReferenceRange {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
+  /** Band-scoped panic limits — critical low/high FOR THIS sex/age group
+   *  (owner's model, 2026-09-19: criticals depend on gender and age).
+   *  Absent = fall back to the parameter-level criticalLow/High. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Profile-scoped band (body fluids): only applies when the test is entered
+   *  or reported UNDER the profile with this test code (e.g. CSF analysis).
+   *  Mirrors mw `RangeDef.ProfileCode`. */
+  profileCode?: string | null;
+  /** Legacy: overrides the name printed under this range on the report. */
+  label?: string | null;
+  /** What the report prints as the reference range, exactly as typed.
+   *  Blank = "L–H unit". */
+  reportText?: string | null;
 }
 
 // ── Per-type config blocks (stubs where complex renders aren't needed yet) ─
@@ -230,6 +257,16 @@ export interface FormField {
   validLow?: number | null;
   validHigh?: number | null;
   normalValue?: string | null;
+  /** The test's own embedded option table rows ({code, value, normal,
+   *  active}); `options`/`normalValue` derive from it on save. */
+  optionRows?: import('../models/test.model').TestOptionRow[] | null;
+  /** Name for the shared option group formed by optionRows (see TestParameter). */
+  optionGroupName?: string | null;
+  /** Photos & video at result entry for THIS value (per-row toggle);
+   *  the Parameters-root `attachments: true` marker means every value. */
+  attachments?: boolean;
+  /** Per-value print switch: false = recorded at the bench, never printed. */
+  printOnReport?: boolean;
 
   // Per-type configs (only populated for the matching type)
   defaultUnit?: DurationUnitType | null;

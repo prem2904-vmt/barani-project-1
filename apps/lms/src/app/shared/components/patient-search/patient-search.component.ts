@@ -2,29 +2,45 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Ou
 import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
-import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
+import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
+import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
+import { ScanIconComponent } from '../icons/scan-icon.component';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { PfKeysDirective } from '../numpad/pf-keys.directive';
+import { formatAge } from '../../utils/patient-age';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [AvatarComponent, LoadingLogoComponent],
+  imports: [BusyComponent, AvatarComponent, BarcodeScannerModalComponent, ScanIconComponent, PfKeysDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (scanning()) {
+      <pf-barcode-scanner-modal title="Scan patient ABHA / QR"
+        (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
+    }
     <div class="wrap">
       <!-- Pulsing halo behind the field — draws the eye on the Frontdesk
            landing so the patient search is the unambiguous next action.
            Pauses the animation while the field is focused so it doesn't
            distract the user mid-type. -->
       <span class="pulse" aria-hidden="true" [class.pulse--paused]="_focused()"></span>
-      <div class="field" [class.field-focused]="_focused()">
+      <div class="field" [class.field-focused]="_focused()" [class.field-invalid]="invalid">
         <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/>
           <path d="m20 20-3.5-3.5"/>
         </svg>
+        <!-- PF Keys (tablets): number pad for phone / MRN, ABC for names;
+             ↵ opens the highlighted patient, ↑/↓ move the highlight. -->
         <input #searchInput type="text"
+               pfKeys="patient" pfKeysEnter="Open" pfKeysEnterAria="Open selected patient" [pfKeysArrows]="true"
+               [attr.aria-label]="ariaLabel ?? placeholder"
+               [attr.data-nav]="dataNav ? '' : null"
+               [attr.aria-invalid]="invalid ? 'true' : null"
+               [attr.aria-describedby]="describedBy"
                [placeholder]="placeholder"
                [value]="query()"
                (input)="onInput($event)"
@@ -44,8 +60,14 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         }
         @if (state() === 'loading') {
           <span class="field-spinner">
-            <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
+            <pf-busy label="Searching"></pf-busy>
           </span>
+        }
+        @if (enableScan) {
+          <button type="button" class="field-scan" aria-label="Scan patient ABHA / QR"
+                  (mousedown)="openScanner(); $event.preventDefault()">
+            <pf-scan-icon [size]="18" />
+          </button>
         }
         <!-- Trailing-action slot. Projected actions sit at the right edge of
              the field, after the clear/spinner. Frontdesk uses this for the
@@ -70,7 +92,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
             }
             @case ('loading') {
               <div class="panel-state">
-                <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                <pf-busy></pf-busy>
                 <span>Searching for "<strong>{{ query() }}</strong>"…</span>
               </div>
             }
@@ -96,7 +118,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
                         <p class="row-name">{{ name(p) }}</p>
                         <p class="row-meta">
                           @if (p.phone) { {{ p.phone }} · }
-                          {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
+                          {{ p.sex ?? '—' }} · {{ ageLabel(p) }}
                         </p>
                       </div>
                       @if (i === _highlight()) {
@@ -115,9 +137,9 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     </div>
   `,
   styles: [`
-    :host { display: block; height: 48px; }
+    :host { display: block; width: 100%; min-width: 0; height: 48px; }
 
-    .wrap { position: relative; width: 100%; height: 100%; }
+    .wrap { position: relative; width: 100%; min-width: 0; height: 100%; }
 
     /* ── Pulsing halo behind the field ──────────────────────── */
     .pulse {
@@ -166,6 +188,8 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--glass-bg-hover);
       box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
     }
+    .field.field-invalid { border-color: var(--danger, #ef4444); }
+    .field.field-invalid.field-focused { box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger, #ef4444) 12%, transparent); }
     .field input {
       flex: 1;
       min-width: 0;
@@ -210,6 +234,21 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       background: var(--bg-hover);
       color: var(--text-primary);
     }
+    .field-scan {
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 0;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .field-scan:hover { background: var(--bg-hover); color: var(--color-violet-500, #a855f7); }
     .field-spinner, .panel-spinner {
       width: 18px;
       height: 18px;
@@ -247,11 +286,15 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     @keyframes pf-ps-spin { to { transform: rotate(360deg); } }
 
     /* ── Panel ──────────────────────────────────────────────── */
+    /* PF Keys docked (tablets): the list stays above the keys. */
+    :host-context(html.pf-keys-open) .panel { max-height: min(22rem, calc(100dvh - var(--pf-keys-h, 0px) - 160px)); }
     .panel {
       position: absolute;
       left: 0;
       right: 0;
       top: calc(100% + 12px);
+      width: 100%;
+      box-sizing: border-box;
       z-index: 50;
       max-height: 22rem;
       overflow-y: auto;
@@ -328,7 +371,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: var(--text-tertiary);
     }
-    .row-arrow { color: #c4b5fd; flex-shrink: 0; }
+    .row-arrow { color: var(--violet-text); flex-shrink: 0; }
 
     .panel::-webkit-scrollbar { width: 6px; }
     .panel::-webkit-scrollbar-track { background: transparent; }
@@ -345,10 +388,19 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
   `]
 })
 export class PatientSearchComponent {
+  /** "34y" (infants "8m" / "12d") — the shared patient-age helper, DOB first. */
+  ageLabel(p: { age?: number | null; dateOfBirth?: string | null } | null | undefined): string { return formatAge(p, 'y', '—'); }
   private readonly api = inject(ApiService);
   protected readonly name = patientDisplayName;
 
   @Input() placeholder = 'Search patient by name, MRN, phone, or ABHA';
+  @Input() ariaLabel: string | null = null;
+  @Input() dataNav = false;
+  @Input() invalid = false;
+  @Input() describedBy: string | null = null;
+  /** Show a camera/QR scan button in the field — scan an ABHA (QR or number)
+   *  to look the patient up and open them directly. */
+  @Input() enableScan = false;
   @Output() picked = new EventEmitter<Patient>();
   /** Fires once the field has lost focus (after the click-grace delay).
    *  Consumers that reveal the field on demand use it to collapse. */
@@ -362,6 +414,37 @@ export class PatientSearchComponent {
   protected readonly query = signal('');
   protected readonly _focused = signal(false);
   protected readonly _highlight = signal<number>(-1);
+  protected readonly scanning = signal(false);
+
+  openScanner() { this.scanning.set(true); }
+
+  /**
+   * Scan result (ABHA QR or a plain ABHA/ID number) → look the patient up and,
+   * on a confident match, OPEN them straight away (emit picked). Falls back to
+   * showing the results panel when the scan is ambiguous.
+   */
+  onScanned(text: string) {
+    this.scanning.set(false);
+    const abha = extractAbhaNumber(text || '');
+    const term = abha || (text || '').trim();
+    if (!term) return;
+    this.query.set(term);
+    this._focused.set(true);
+    this._loading.set(true);
+    this._results.set([]);
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}&limit=10`).subscribe({
+      next: list => {
+        this._loading.set(false);
+        const arr = list ?? [];
+        const exact = abha ? arr.find(p => (p.abhaId || '').replace(/\D/g, '') === abha) : undefined;
+        if (exact) { this.pick(exact); return; }      // ABHA match → open patient
+        if (arr.length === 1) { this.pick(arr[0]); return; }
+        this._results.set(arr);
+        this._highlight.set(arr.length ? 0 : -1);
+      },
+      error: () => { this._loading.set(false); this._results.set([]); }
+    });
+  }
 
   private readonly _results = signal<Patient[]>([]);
   private readonly _loading = signal(false);

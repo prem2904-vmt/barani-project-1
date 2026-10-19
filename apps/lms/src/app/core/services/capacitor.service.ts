@@ -4,7 +4,6 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Network } from '@capacitor/network';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
 import { PlatformService } from './platform.service';
 
@@ -82,22 +81,11 @@ export class CapacitorService {
       });
     } catch { /* App plugin not present */ }
 
-    try {
-      await StatusBar.setStyle({ style: Style.Dark });
-      // setBackgroundColor is Android-only; ignore the iOS no-op.
-      await StatusBar.setBackgroundColor({ color: '#1B3A6B' }).catch(() => undefined);
-
-      // Android tablet status-bar overlap: the Android WebView doesn't
-      // reliably report env(safe-area-inset-top), so the CSS floor can't clear
-      // the status bar and the header sits under the clock on tablets. Reserve
-      // the bar natively (overlay off) so content always sits below it; the
-      // .cap-android class zeroes the CSS floor to avoid a double gap. iOS is
-      // untouched — its default overlay + real notch inset already works.
-      if (Capacitor.getPlatform() === 'android') {
-        await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
-        document.documentElement.classList.add('cap-android');
-      }
-    } catch { /* StatusBar plugin only available on native */ }
+    // Status bar (style, colour, Android overlay) and the Android navigation
+    // bar are NOT set here: they follow the ACTIVE theme from ThemeService
+    // (system-bars.ts) — a fixed Style.Dark at boot left white clock text over
+    // the light theme's top band. (`cap-android` comes from the platform class
+    // added above.)
 
     try {
       await LocalNotifications.requestPermissions();

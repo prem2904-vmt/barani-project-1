@@ -4,7 +4,7 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { Order } from '../../shared/models/order.model';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonDetailComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /**
  * Landing for a scanned order QR (`/o/:id`). The single owner of "open an order":
@@ -15,11 +15,11 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
 @Component({
   selector: 'pf-order-open',
   standalone: true,
-  imports: [LoadingLogoComponent],
+  imports: [SkeletonDetailComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col items-center justify-center" style="min-height: 60vh;">
-      <pf-loading-logo size="xl" color="purple" [showDna]="true" [showText]="true" text="Opening order…"></pf-loading-logo>
+      <pf-skeleton-detail [fields]="4" [sections]="2" label="Opening order…"></pf-skeleton-detail>
     </div>
   `
 })

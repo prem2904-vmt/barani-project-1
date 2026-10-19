@@ -1,9 +1,15 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
+  effect,
+  ElementRef,
   inject,
   signal,
+  untracked,
+  viewChild,
 } from "@angular/core";
 import {
   NavigationEnd,
@@ -11,17 +17,26 @@ import {
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs/operators";
+import { NAV_SELECTORS, publishNavInsets } from "./nav-insets";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastService } from "../../core/services/toast.service";
 import { AmbientBgComponent } from "../../shared/components/ambient-bg/ambient-bg.component";
 import { DialogHostComponent } from "../../shared/components/dialog-host/dialog-host.component";
 import { BottomNavComponent } from "../bottom-nav/bottom-nav.component";
 import { TopStripComponent } from "../top-strip/top-strip.component";
+import { ThemeService } from "../../core/services/theme.service";
 import { PatientProfileModalComponent } from "../../shared/components/patient-profile-modal/patient-profile-modal.component";
 import { CallOverlayComponent } from "../../shared/components/call-overlay/call-overlay.component";
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
+import { ChatWindowsComponent } from "../../shared/components/chat-windows/chat-windows.component";
+import { ChatPopupsComponent } from "../../shared/components/chat-popups/chat-popups.component";
 import { SignalingService } from "../../core/services/signaling.service";
+import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
+import { ChatNotifyService } from "../../core/services/chat-notify.service";
+import { UpdateBannerComponent } from "../../shared/components/update-banner/update-banner.component";
+import { BridgeNearbyBannerComponent } from "../../shared/components/bridge-nearby-banner/bridge-nearby-banner.component";
+import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
 // on first shell render (it's @Injectable providedIn root, so the inject()
@@ -33,7 +48,15 @@ import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { CapacitorService } from "../../core/services/capacitor.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
+import { DesignModeBadgeComponent } from "../../shared/components/design-mode-badge/design-mode-badge.component";
+import { DesignModeService } from "../../core/services/design-mode.service";
+import { PatientTimelineComponent } from "../../features/frontdesk/patient-profile/patient-timeline.component";
+import { PatientTimelineService } from "../../features/frontdesk/patient-profile/patient-timeline.service";
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
+import { BranchSwitchService } from "../../core/services/branch-switch.service";
+import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-veil.component";
+import { PageFrameComponent } from "../../shared/components/page-frame/page-frame.component";
+import { PageOpenService } from "../../core/navigation/page-open.service";
 
 @Component({
   selector: "pf-shell",
@@ -46,9 +69,17 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     AmbientBgComponent,
     PatientProfileModalComponent,
     CallOverlayComponent,
+    UpdateBannerComponent,
+    BridgeNearbyBannerComponent,
     PeopleDrawerComponent,
+    ChatWindowsComponent,
+    ChatPopupsComponent,
     BarcodeScannerModalComponent,
+    PatientTimelineComponent,
     SwipeBackDirective,
+    DesignModeBadgeComponent,
+    BranchVeilComponent,
+    PageFrameComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -70,11 +101,15 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
       <!-- Unified chrome card: single navbar row. Tenant + branch
            moved into the top-strip's right cluster; second row removed. -->
-      <div class="pf-chrome">
+      <div class="pf-chrome" [class.pf-chrome--kbd]="kbd.visible()">
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()">
+      <main #main class="shell-main relative" pfSwipeBack data-pf-keys-host [class.shell-main--kbd]="kbd.visible()"
+            [attr.data-bs]="branchSwitch.busy() ? branchSwitch.phase() : null"
+            [attr.data-po]="pageOpen.frame() ? 'frame' : null"
+            [attr.data-po-enter]="pageOpen.entering()"
+            [attr.aria-busy]="branchSwitch.veil() || pageOpen.frame() ? 'true' : null">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages
@@ -92,7 +127,16 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           </a>
         } -->
         <router-outlet></router-outlet>
+        <!-- Page open (PageOpenService): a navigation still on its way draws
+             the DESTINATION's frame — its band + a skeleton of its body —
+             easing in while the screen being left eases out. -->
+        @if (pageOpen.frame(); as frame) { <pf-page-frame [skeleton]="frame"></pf-page-frame> }
+        <!-- Branch switch (BranchSwitchService): the destination skeleton
+             rises over the receding screen, holds while the new branch's
+             data loads, then lifts as the new screen zooms up. -->
+        @if (branchSwitch.busy()) { <pf-branch-veil></pf-branch-veil> }
       </main>
+      <p class="sr-only" role="status" aria-live="polite">{{ branchSwitch.announcement() }}</p>
 
       <pf-bottom-nav></pf-bottom-nav>
 
@@ -107,11 +151,30 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
         <!-- Tenant people drawer: contacts + 1:1 chat + call entry. -->
         <pf-people-drawer></pf-people-drawer>
+
+        <!-- Messenger-style floating chat windows (new design, >=768px).
+             Phones/classic keep the drawer above as the chat surface. -->
+        <pf-chat-windows></pf-chat-windows>
+        <!-- "New message" pop-ups (bottom-right web, top on phones). -->
+        <pf-chat-popups></pf-chat-popups>
       }
 
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
       <pf-patient-profile-modal></pf-patient-profile-modal>
+
+      <!-- Design mode (designer capture prep) — badge lives at shell root so
+           it floats over every screen while the mode is on. -->
+      @if (designMode.enabled()) {
+        <pf-design-mode-badge></pf-design-mode-badge>
+      }
+
+      <!-- Full-screen Patient Timeline — rendered at shell root so it covers the
+           nav. A fixed element nested inside .shell-main is trapped below the
+           chrome's stacking context and can't overlay it. -->
+      @if (patientTimeline.isOpen() && patientTimeline.patientId(); as pid) {
+        <pf-patient-timeline [patientId]="pid" (close)="patientTimeline.close()"></pf-patient-timeline>
+      }
 
       <!-- Global order-QR scanner. Rendered HERE (shell root), not in the
            top-strip: the top-strip sits inside .pf-chrome whose backdrop-filter
@@ -128,11 +191,21 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
 
 
+      <!-- Desktop self-update banner (electron/updater.js). Unconditional —
+           it already renders nothing outside the desktop app / a build with
+           no resolved update channel (UpdaterService.available). -->
+      <pf-update-banner></pf-update-banner>
+
+      <!-- "New Bridge found nearby — Add?" (manage_bridges only; server
+           nearby path, works on the web) + the new-analyzer toast + native
+           Bridge-QR deep links. Renders nothing for everyone else. -->
+      <pf-bridge-nearby-banner></pf-bridge-nearby-banner>
+
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)
            which usually live at the bottom of the page. -->
       <div
-        class="pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24 md:top-auto md:right-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:items-center"
+        class="pf-toasts pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24 md:top-auto md:right-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:items-center"
       >
         @for (t of toasts.toasts(); track t.id) {
           <div
@@ -205,6 +278,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
   `,
   styles: [
     `
+    @use '../../shared/styles/device-tier' as dt;
       .shell-stack {
         position: relative;
         z-index: 1;
@@ -266,23 +340,42 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
      * would notice, and there are none. */
       .pf-chrome {
         position: sticky;
-        /* The body element in styles.scss already absorbs
-           env(safe-area-inset-top) globally for Capacitor's full-bleed
-           WebView, so we DON'T add it again here — that was the source
-           of the ~60px extra empty space on iPad. Plain 8px sticky
-           offset is enough. */
+        /* CLASSIC design (base): the floating glass pill. The body element
+           in styles.scss already absorbs env(safe-area-inset-top) globally
+           for Capacitor's full-bleed WebView, so no extra offset here. */
         top: 8px;
         z-index: 40;
         flex-shrink: 0;
-        /* Tight 4px gap below the status bar — the body already owns
-           the safe-area-inset-top, so the chrome just needs a hair of
-           breathing room, not a big margin. */
         margin: 4px 16px 0;
         border-radius: 24px;
         background: var(--header-bg);
         border: 1px solid var(--header-border);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
+      }
+      /* ── Bottom-navbar EXPERIMENT (desktop, new design, opt-in via
+         avatar menu → "Bottom bar"): the REAL top bar — brand, pages,
+         branch, bell, avatar — docks to the bottom edge instead. ── */
+      :host-context(.design-new.nav-bottom) .pf-chrome {
+        position: fixed;
+        left: 0; right: 0; bottom: 0; top: auto;
+        border-top: 1px solid var(--header-border);
+        border-bottom: none;
+      }
+      /* Content clears the docked bar; the band now starts at the very top. */
+      :host-context(.design-new.nav-bottom) .shell-main {
+        padding-bottom: var(--pf-botbar-h, 57px) !important;
+      }
+
+      /* NEW design (Figma 446-113): a FLUSH full-width bar — no
+         floating-pill margin, radius, or gap; content (the hero band)
+         sits directly against its bottom edge. */
+      :host-context(.design-new) .pf-chrome {
+        top: 0;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        border-bottom: 1px solid var(--header-border);
       }
 
       /* Phone + iPad (≤1279px): drop the top chrome entirely.
@@ -294,7 +387,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
          Desktop (≥1280px) keeps the chrome + its top-strip nav.
          The body already absorbs env(safe-area-inset-top), so pages
          start at the top of the safe area with no double-padding. */
-      @media (max-width: 1279px) {
+      @include dt.tablet-tier {
         .pf-chrome { display: none !important; }
       }
 
@@ -308,6 +401,65 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           padding-left: 64px;   /* clear the full-height left rail */
           padding-bottom: 16px; /* slim gap; no bottom pill on tablet */
         }
+      }
+
+      /* ── Branch switch motion (BranchSwitchService) ─────────────────
+         out: the screen recedes and dims under the rising veil; loading:
+         the re-created screen waits unseen; in: it zooms up into place.
+         The routed page host is not in this component's view, hence
+         ::ng-deep (scoped to <main data-bs> only while a switch runs). */
+      .shell-main[data-bs] { overflow: hidden; }
+      .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        transform-origin: 50% var(--pf-bs-top, 0px);
+        transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 280ms cubic-bezier(0.32, 0.72, 0, 1), filter 280ms ease;
+      }
+      .shell-main[data-bs='out'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        transform: scale(0.965); opacity: 0.35; filter: saturate(0.7);
+      }
+      .shell-main[data-bs='loading'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        opacity: 0; transition: none;
+      }
+      .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        animation: pf-bs-zoom-in 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      pf-branch-veil { top: var(--pf-bs-top, 0px); bottom: auto; height: var(--pf-bs-h, 100%); }
+      @keyframes pf-bs-zoom-in {
+        from { opacity: 0; transform: scale(0.97); }
+        to { opacity: 1; transform: none; }
+      }
+      @keyframes pf-bs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { transition: opacity 120ms linear; transform: none !important; filter: none !important; }
+        .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { animation: pf-bs-fade-in 120ms linear both; }
+      }
+      /* ── Page open (PageOpenService, core/navigation) ────────────────
+         frame: the screen being left eases out under the destination's
+         frame (pf-page-frame). enter: the CSS fallback for the view-
+         transition page-open where the API is missing (older WebKit). */
+      /* !important: a screen that entered with a filled animation (pf-anim-in
+         …) would otherwise keep its animated opacity on top of this. */
+      .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        opacity: 0 !important; transform: scale(0.985); pointer-events: none;
+        transform-origin: 50% var(--pf-po-top, 0px);
+        transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1), transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      .shell-main[data-po-enter='rise'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-po-rise 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      .shell-main[data-po-enter='settle'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-bs-fade-in 200ms ease-out both;
+      }
+      @keyframes pf-po-rise {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { transition: none; transform: none; }
+        .shell-main[data-po-enter] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { animation: none; }
+      }
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
       }
 
       .shell-main {
@@ -326,6 +478,19 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
          the home-indicator inset above the screen edge when idle. */
       :host-context(html.pf-chat-immersive) .shell-main { padding-bottom: 0 !important; }
 
+      /* Immersive sample-collection: while a patient's collection drawer is OPEN
+         (tube-tapping view) the screen owns the whole viewport — hide the desktop
+         top chrome and drop the main's bottom-nav clearance. The queue list (drawer
+         closed) keeps the normal chrome. Toggled by SampleCollectionComponent via
+         html.pf-collect-immersive; bottom-nav hides itself in its own stylesheet. */
+      :host-context(html.pf-collect-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
+      /* OPD consult (features/opd/consult) toggles html.pf-opd-immersive while
+         open: it hides only the TOP chrome. The bottom navbar stays visible
+         (owner rule, PF kit) — the consult ends at the measured --pf-nav-h. */
+      :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
+
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
          • padding-left clears the ~60px rail + its 8px margin.
@@ -335,7 +500,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
            frontdesk panes' bottom border sit on the literal screen
            edge and read as "cut off". 16px gives the border a clear
            gap so the panes visibly end within the screen. */
-      @media (min-width: 641px) and (max-width: 1279px) {
+      @include dt.tablet-band {
         .shell-main {
           /* Clear the 64px full-height left rail. Each routed page
              keeps its own Tailwind lg:px-10 gutter on top of this, so
@@ -384,7 +549,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           margin-left: 24px;
         }
       }
-      @media (min-width: 1280px) {
+      @include dt.desktop-only {
         .shell-main {
           padding-bottom: 0;
         }
@@ -407,15 +572,15 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       /* Icon badge per level */
       .toast-icon[data-level="success"] {
         background: rgba(16, 185, 129, 0.18);
-        color: #34d399;
+        color: var(--green-text);
       }
       .toast-icon[data-level="error"] {
         background: rgba(239, 68, 68, 0.18);
-        color: #f87171;
+        color: var(--red-text);
       }
       .toast-icon[data-level="warning"] {
         background: rgba(245, 158, 11, 0.18);
-        color: #fbbf24;
+        color: var(--amber-text);
       }
       .toast-icon[data-level="info"] {
         background: rgba(99, 102, 241, 0.18);
@@ -447,33 +612,150 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           transform: translateX(0) scale(1);
         }
       }
-    `,
+    
+      /* ── Bottom-navbar experiment, ALL viewports (owner: same thing on
+         iPad and mobile; new design only, classic untouched). Placed
+         last so it out-cascades the ≤1279px display:none rules. ── */
+      :host-context(.design-new.nav-bottom) .pf-chrome {
+        display: block !important;
+        position: fixed;
+        left: 0; right: 0; bottom: 0; top: auto;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid var(--header-border);
+        /* Icons centred in the WHOLE bar (owner, iPad): the reserved
+           home-indicator space is split evenly above and below. */
+        padding-block: calc(var(--pf-home-inset) / 2);
+        z-index: 40;
+        /* The bar's surface lives in styles.scss as --pf-navbar-* (light
+           = the band's wash; dark = its own VERTICAL violet fade, owner).
+           Glassmorphism (owner): translucent base + a blur of whatever is
+           scrolling underneath, so the bar frosts the page instead of
+           capping it. The wash rides on top of the frost. */
+        background-color: var(--pf-navbar-bg-glass);
+        background-image: var(--pf-navbar-wash);
+        backdrop-filter: blur(18px) saturate(1.3);
+        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      }
+      /* OPD consult: under the bottom-navbar experiment the docked bar (the
+         rule above, more specific than the immersive top-chrome hide) STAYS
+         visible — the consult sits above it (height: 100dvh − --pf-nav-h). */
+
+      /* Phones: the home-indicator space goes UNDER the icons (not split
+         above/below), and the ends keep clear of the rounded screen corners. */
+      :host-context(html.device-phone.design-new.nav-bottom) .pf-chrome {
+        padding-top: 0;
+        padding-bottom: var(--pf-home-inset);
+        padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+      }
+      @media (max-width: 640px) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          padding-top: 0;
+          padding-bottom: var(--pf-home-inset);
+          padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+        }
+      }
+      /* Blur is the costliest GPU op on a phone — keep it modest there. */
+      @media (max-width: 640px) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          backdrop-filter: blur(10px) saturate(1.2);
+          -webkit-backdrop-filter: blur(10px) saturate(1.2);
+        }
+      }
+      /* No backdrop-filter support → fall back to the opaque bar rather
+         than a see-through one with unreadable icons. */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          background-color: var(--pf-navbar-bg);
+        }
+      }
+      :host-context(.dark.design-new.nav-bottom) .pf-chrome {
+        border-top-color: var(--pf-navbar-edge);
+        /* Faint violet glow off the top edge, paired with the band's. */
+        box-shadow: var(--pf-navbar-glow, none);
+      }
+      /* Touch devices (iPad, phones, the native app): NO live frost on the
+         docked bar. A fixed, full-width backdrop-filter re-blurs whatever
+         scrolls under it on every frame; on iPad WebKit that layer was the
+         one dropped under GPU pressure — the bar vanished, or only the
+         bell's own (animated) layer was painted (owner, 2026-09-28). The
+         bar takes its opaque surface (the same one the no-backdrop-filter
+         fallback uses) and is promoted as ONE stable layer. will-change
+         (not a translateZ transform) keeps the containing block the blur
+         used to give the bar's fixed children (popover backdrops). */
+      :host-context(html.device-touch.design-new.nav-bottom) .pf-chrome {
+        background-color: var(--pf-navbar-bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        will-change: transform;
+      }
+      /* Soft keyboard up (iPad / phones): the docked bar would ride on top
+         of the keyboard and squeeze the page to a sliver (owner: test search
+         on the iPad). Hide it while typing and give the page its space. */
+      :host-context(.design-new.nav-bottom) .pf-chrome.pf-chrome--kbd { display: none !important; }
+      :host-context(.design-new.nav-bottom) .shell-main.shell-main--kbd { padding-bottom: 12px !important; }
+      /* One bottom surface only: the phone pill / iPad rail steps aside. */
+      :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
+      :host-context(.design-new.nav-bottom) .shell-main {
+        padding-bottom: var(--pf-botbar-h, 58px) !important;
+        padding-left: 0 !important;
+      }
+      /* Toasts clear the docked bar (md+ anchors them bottom-center). */
+      @media (min-width: 768px) {
+        :host-context(.design-new.nav-bottom) .pf-toasts {
+          bottom: calc(var(--pf-botbar-h, 58px) + 16px) !important;
+        }
+      }
+`,
   ],
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);
+  /** Bottom-bar experiment (new design, opt-in via avatar menu). */
+  protected readonly theme = inject(ThemeService);
   readonly scan = inject(ScanService);
+  readonly patientTimeline = inject(PatientTimelineService);
+  protected readonly designMode = inject(DesignModeService);
   /** Drives the offline banner (Network plugin on native, window events on web). */
   protected readonly capacitor = inject(CapacitorService);
   /** When the soft keyboard is up the bottom-nav hides, so shell-main drops its
    *  nav-clearance padding — otherwise that reserved space becomes a dead gap
    *  between the content (e.g. the chat composer) and the keyboard. */
   protected readonly kbd = inject(KeyboardService);
+  /** In-app branch switch: drives the veil + the content zoom out/in. */
+  protected readonly branchSwitch = inject(BranchSwitchService);
+  /** Page open: the destination frame while a navigation is on its way. */
+  protected readonly pageOpen = inject(PageOpenService);
+  private readonly mainEl = viewChild<ElementRef<HTMLElement>>("main");
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
 
-  /** A scanned order QR / barcode → resolve to an order and open it. The
-   *  backend strips the id out of a full /o/{id} or /track/{token} URL. */
+  /** A scanned QR / barcode → open what it points at. Patient ID cards
+   *  encode the app's /p/{id} route and order QRs /o/{id} — those resolve
+   *  LOCALLY; everything else goes to the order resolver (which also strips
+   *  ids out of /track/{token} URLs). The old version sent every scan to the
+   *  ORDER resolver, so patient ID cards did nothing, silently (OPS-50). */
   onScanOrder(code: string) {
     this.scan.close();
+    const app = /\/(p|o)\/([0-9a-f]{8}-[0-9a-f-]{27,})/i.exec(code);
+    if (app) {
+      this.router.navigate([`/${app[1].toLowerCase()}`, app[2]]);
+      return;
+    }
     this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
       next: r => { if (r?.orderId) this.router.navigate(['/o', r.orderId]); },
-      error: () => { /* no match — silently ignore */ }
+      error: () => this.toasts.warning('Scanned code not recognized — try the order QR or the patient ID card.')
     });
   }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
+  /** Live work screens: one branch-scoped socket (/hubs/work) for every
+   *  signed-in user — independent of the Messages module. */
+  private readonly workEvents = inject(WorkEventsService);
+  private readonly chatNotify = inject(ChatNotifyService);
+  private readonly platform = inject(PlatformService);
   protected readonly entitlements = inject(TenantEntitlementsService);
   /** Messages module in the tenant's plan — gates the call overlay, people
    *  drawer, and the chat/signaling hub connection (a gated tenant never
@@ -486,6 +768,49 @@ export class ShellComponent {
   /** Tracks the current URL so the back-chip reacts to navigation. */
   private readonly _url = signal<string>(this.router.url);
   constructor() {
+    // The nav's real footprint → --pf-nav-h / --pf-nav-left on <html>. The
+    // shell renders the nav, so it is the one that measures it: on every
+    // size change of the bar / pill / rail (ResizeObserver), on a viewport
+    // resize, and when <html>'s classes flip (bottom-bar mode, immersive
+    // pages, device class) — which can move the nav without resizing it.
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      const doc = document;
+      let raf = 0;
+      const publish = () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; publishNavInsets(doc, window); });
+      };
+      publishNavInsets(doc, window);
+      const ro = typeof ResizeObserver === "function" ? new ResizeObserver(publish) : null;
+      const observeAll = () => {
+        if (!ro) return;
+        for (const el of Array.from(doc.querySelectorAll<HTMLElement>(NAV_SELECTORS))) ro.observe(el);
+      };
+      observeAll();
+      const mo = new MutationObserver(() => { observeAll(); publish(); });
+      mo.observe(doc.documentElement, { attributes: true, attributeFilter: ["class"] });
+      window.addEventListener("resize", publish);
+      destroyRef.onDestroy(() => {
+        ro?.disconnect();
+        mo.disconnect();
+        window.removeEventListener("resize", publish);
+        if (raf) cancelAnimationFrame(raf);
+      });
+    });
+
+    // The frame covers the VISIBLE part of <main> (it may be scrolled).
+    effect(() => {
+      const on = !!this.pageOpen.frame();
+      untracked(() => {
+        const main = this.mainEl()?.nativeElement;
+        if (!main || !on) return;
+        main.style.setProperty("--pf-po-top", `${main.scrollTop}px`);
+        if (main.clientHeight > 0) main.style.setProperty("--pf-po-h", `${main.clientHeight}px`);
+        else main.style.removeProperty("--pf-po-h");
+      });
+    });
+
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
@@ -498,13 +823,19 @@ export class ShellComponent {
     // own reconnect via withAutomaticReconnect.
     queueMicrotask(async () => {
       try {
-        // Gated tenant → never open the chat/signaling hubs (no presence, no
-        // incoming calls). Wait for entitlements so we decide on real data.
+        // Wait for entitlements so we decide on real data. The SIGNALING hub
+        // (calls/presence) stays gated on the messages module, but the CHAT
+        // hub always connects: it is also the delivery rail for business
+        // notifications (BusinessNotification → live bell + desktop/browser
+        // OS notifications), which every tenant has regardless of plan.
         await this.entitlements.ensureLoaded().catch(() => undefined);
-        if (!this.entitlements.moduleEnabled('messages')) return;
         const token = await this.auth.getAccessToken();
         if (token) {
-          await this.signaling.connect();
+          if (this.entitlements.moduleEnabled('messages')) {
+            await this.signaling.connect();
+          }
+          // Work events first: queues go live even if chat is slow to come up.
+          void this.workEvents.start().catch(() => undefined);
           // Chat connects independently — its own hub, own reconnection.
           await this.chat.connect().catch(() => undefined);
         }
@@ -512,6 +843,16 @@ export class ShellComponent {
         /* hub will retry on next user action */
       }
     });
+
+    // Desktop/browser OS notifications need Notification permission, and
+    // browsers penalise requesting it on load (permanent auto-deny) — so ask
+    // once behind the first user gesture. Native apps have their own push
+    // permission flow (PushService.init) and are left alone.
+    if (!this.platform.isCapacitor() && typeof document !== 'undefined') {
+      document.addEventListener('pointerdown', () => {
+        void this.chatNotify.ensurePermission();
+      }, { once: true, capture: true });
+    }
   }
 
   /** Pages that are themselves top-level landings — no back chip on these. */

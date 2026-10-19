@@ -1,1339 +1,797 @@
-<section class="pf-pp__root bg-[var(--bg-primary)] text-[var(--text-primary)] p-4 md:p-6 lg:p-8 flex flex-col gap-6">
-
-  @if (patient(); as p) {
-
-    <!-- Responsive Grid Layout. The 2-column split holds off until xl (1280px)
-         so iPad-landscape (1024–1279) keeps the roomy single-column stack
-         instead of cramming the cards into 4/8 tracks. -->
-    <div class="pf-pp__grid grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-
-      <!-- Left Column: Patient Quick Info & Vitals (xl:col-span-4) -->
-      <div class="pf-pp__col pf-pp__col--left xl:col-span-4 flex flex-col gap-6 w-full">
-
-        <!-- Demographics Card -->
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-5">
-          
-          <!-- Legacy BACK TO RECENTS pill retired: the header chevron is now the single back affordance at all widths -->
-          <button type="button" class="hidden items-center gap-1.5 text-xs font-semibold tracking-wider font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors w-fit cursor-pointer -mt-1" (click)="back()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m15 18-6-6 6-6"/>
+<!-- Patient profile, CLINICAL-FIRST (docs/PF-PATTERN.md §22): band (back +
+     tenant + actions, ONE primary: New order) whose pill is the CONTEXT BAR
+     → main column: SNAPSHOT (needs attention · in progress now · last visit)
+     over CUMULATIVE RESULTS (analyte × visit grid) ‖ the PATIENT companion
+     (quick actions, timeline, details), collapsible to a strip. ≤900px: one
+     stacked column; ≤640px: results as cards, New order in the bottom bar. -->
+<section class="pf-pp pf-page" (keydown.escape)="onEsc($event)">
+  <pf-hero-band class="pf-pp-band" [back]="true" [backAction]="goBack" [customSearch]="true" [contextBar]="true">
+    <ng-container band-actions>
+      @if (patient(); as p) {
+        @if (canEdit()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-pp-act pf-pp-act--edit pf-pp-in" style="--i: 2"
+                  [class.pf-pp-act--icon]="!web()" aria-label="Edit patient" title="Edit patient" (click)="openEdit(p)">
+            <svg class="pf-pp-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <span class="pf-pp-act__t">Edit patient</span>
+          </button>
+        }
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-pp-act pf-pp-act--icon pf-pp-act--more pf-pp-in" style="--i: 3"
+                aria-label="More actions" title="More actions" aria-haspopup="menu" [attr.aria-expanded]="moreOpen()"
+                (click)="toggleMore()">
+          <svg class="pf-pp-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          <span class="pf-pp-act__t">More</span>
+        </button>
+        @if (!phone() && canNewOrder() && opdGate.visible()) {
+          <!-- OPD dark build: a SEPARATE secondary next to New order (never a
+               fork inside it). -->
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-pp-act pf-pp-act--consult pf-pp-in" style="--i: 3.5"
+                  [class.pf-pp-act--icon]="!web() && narrow()" aria-label="New consultation" title="New consultation" (click)="startConsult(p)">
+            <svg class="pf-pp-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/>
             </svg>
-            BACK TO RECENTS
+            <span class="pf-pp-act__t">New consultation</span>
           </button>
+        }
+        @if (!phone() && canNewOrder()) {
+          <!-- THE primary. Phones: full width in the bottom bar instead. -->
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-pp-act pf-pp-act--new pf-pp-in" style="--i: 4"
+                  [class.pf-pp-act--icon]="!web() && narrow()" aria-label="New order" title="New order" (click)="startOrder(p)">
+            <svg class="pf-pp-act__plus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <span class="pf-pp-act__t">New order</span>
+          </button>
+        }
+      }
+    </ng-container>
 
-          <!-- Top Row: Back button, Patient ID & Edit button -->
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-              @if (navBack.showBack()) {
-                <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center animate-fade-in" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--glass-border); color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);" (click)="navBack.back()" aria-label="Go back">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-              }
-              
-              <!-- Patient ID with copy button -->
-              <div class="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg w-fit">
-                <span class="text-[var(--text-tertiary)] select-none">ID:</span>
-                <span class="font-semibold select-all">{{ p.mrn }}</span>
-                <button type="button" class="inline-flex items-center justify-center p-1 rounded hover:bg-white/10 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-                  (click)="copyToClipboard(p.mrn)" title="Copy Patient ID" aria-label="Copy Patient ID">
-                  @if (copied()) {
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-400">
-                      <path d="M20 6 9 17l-5-5"/>
-                    </svg>
-                  } @else {
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-                    </svg>
-                  }
-                </button>
-              </div>
-            </div>
-
-            @if (canEdit()) {
-              <button type="button" title="Edit patient info"
-                      class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40 transition-colors cursor-pointer"
-                      (click)="openEdit(p)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-                </svg>
-                Edit
+    <!-- CONTEXT BAR: the patient as read-only chips. -->
+    <div band-search class="pf-ctx pf-pp-ctx">
+      @if (patient(); as p) {
+        <span class="pf-pp-who pf-pp-in" style="--i: 0">
+          <span class="pf-ctx__primary pf-pp-name">{{ displayName() }}</span>
+          <span class="pf-pp-identity">
+            <span class="pf-pp-meta pf-num">{{ metaLine() }}</span>
+            @if (p.mrn) {
+              <button type="button" class="pf-pp-copy-id" (click)="copyToClipboard(p.mrn)"
+                      [attr.aria-label]="copied() ? 'Patient ID copied' : 'Copy patient ID'"
+                      [title]="copied() ? 'Patient ID copied' : 'Copy patient ID'">
+                @if (copied()) {
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                } @else {
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                }
               </button>
             }
-          </div>
-
-          <!-- Divider -->
-          <div class="h-px bg-[var(--border-muted)] -mx-6"></div>
-
-          <!-- Main Row: Avatar & Name/Phone/Age/Sex -->
-          <div class="flex items-start gap-4">
-            <pf-avatar [name]="displayName()" [size]="64"></pf-avatar>
-            <div class="flex-1 min-w-0">
-              <h1 class="text-xl font-bold tracking-tight text-[var(--text-primary)] leading-tight truncate">
-                {{ p.displayName }}
-              </h1>
-              
-              <!-- Phone, Age/Sex, and Blood Group below the name -->
-              <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-xs text-[var(--text-secondary)] font-medium">
-                <span>{{ ageLabel(p).toUpperCase() }}/{{ (p.sex?.charAt(0) ?? '—').toUpperCase() }}</span>
-                @if (p.phone) {
-                  <span class="text-[var(--text-tertiary)] select-none">|</span>
-                  <a [href]="'tel:' + p.phone" class="hover:text-[var(--text-primary)] transition-colors font-mono">
-                    {{ p.phone }}
-                  </a>
-                }
-                <span class="text-[var(--text-tertiary)] select-none">|</span>
-                <span>Blood: {{ p.bloodGroup || 'Not recorded' }}</span>
-                @if (p.email) {
-                  <span class="text-[var(--text-tertiary)] select-none">|</span>
-                  <a [href]="'mailto:' + p.email" class="hover:text-[var(--text-primary)] transition-colors truncate max-w-[150px]" title="{{ p.email }}">
-                    {{ p.email }}
-                  </a>
-                }
-              </div>
-              
-              @if (p.isMinor) {
-                <div class="flex items-center gap-2 flex-wrap mt-2">
-                  <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                    MINOR
-                  </span>
-                </div>
-              }
-            </div>
-          </div>
-
-          @if (p.guardianName) {
-            <div class="h-px bg-[var(--border-muted)] -mx-6"></div>
-            <div class="text-xs p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-              <span class="text-[var(--text-tertiary)] block font-medium uppercase tracking-wider text-[9px] mb-0.5">Guardian Details</span>
-              <div class="font-semibold text-[var(--text-primary)]">{{ p.guardianName }} ({{ p.guardianRelationship ?? 'Guardian' }})</div>
-              @if (p.guardianPhone) {
-                <div class="text-[var(--text-secondary)] font-mono mt-0.5">{{ p.guardianPhone }}</div>
-              }
-            </div>
-          }
-
-          <!-- QR Code & Quick Actions -->
-          <div class="flex items-stretch gap-4 mt-2">
-            <!-- Left Side: QR Code box -->
-            <div class="shrink-0 flex flex-col items-center justify-center p-3 rounded-2xl bg-white border border-[var(--glass-border)] shadow-inner text-black" style="width: 136px; height: auto;">
-              <pf-barcode-display mode="qr" [code]="qrValue()" [bare]="true" [showValue]="false" [size]="112"></pf-barcode-display>
-              <span class="text-[9px] font-bold tracking-wider uppercase text-gray-500 mt-1 select-none">Scan Profile</span>
-            </div>
-
-            <!-- Right Side: Stack of buttons one by one -->
-            <div class="flex-1 flex flex-col gap-2 justify-center">
-              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:brightness-110 active:scale-[0.98] text-white font-semibold text-xs transition-all shadow-md shadow-violet-600/10 cursor-pointer" (click)="startOrder(p)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                New Lab Order
-              </button>
-              
-              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="bookAppointment(p)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                Book Appointment
-              </button>
-              
-              @if (entitlements.moduleEnabled('messages')) {
-                <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openChatPicker()">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  </svg>
-                  Send to Chat
-                </button>
-              }
-              
-              @if (canEdit()) {
-                <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="openMerge()">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/>
-                  </svg>
-                  Merge Duplicate
-                </button>
-              }
-              
-              <button type="button" class="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-xl bg-violet-600/5 border border-violet-500/15 text-violet-600 dark:text-violet-300 dark:bg-violet-500/5 dark:border-violet-400/10 hover:bg-violet-600/10 hover:border-violet-500/30 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer" (click)="showIdCard.set(true)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                  <path d="M12 14h.01M12 18h.01M8 14h.01M8 18h.01M16 14h.01M16 18h.01"/>
-                </svg>
-                Print ID Card
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Patient ID card — printable, with a scan-to-open QR. -->
-        <!-- <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
-          <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">ID Card</h3>
-          <pf-patient-id-card [patient]="p"></pf-patient-id-card>
-        </div> -->
-
-        <!-- Vitals Summary Card — not captured by the lab module (OPD/IPD intake). -->
-        <!-- <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-3">
-          <h3 class="text-xs font-bold tracking-wider font-mono text-[var(--text-tertiary)] uppercase">Current Vitals</h3>
-          <p class="text-xs text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3">
-            Not recorded — vitals are captured at OPD/IPD intake, not in the lab workflow.
-          </p>
-        </div> -->
-
-      </div>
-
-      <!-- Right Column: Tabs Navigation and Dynamic Views (lg:col-span-8) -->
-      <div class="pf-pp__col pf-pp__col--right xl:col-span-8 flex flex-col gap-6 w-full">
-
-        <!-- Horizontal Tab Bar (Horizontally scrollable on mobile/tablet) -->
-        <div class="pf-pp__tabbar flex items-center gap-1.5 p-1 bg-[var(--bg-secondary)] border border-[var(--glass-border)] rounded-2xl overflow-x-auto scrollbar-none w-full select-none">
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
-            [ngClass]="activeTab() === 'overview' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
-            (click)="activeTab.set('overview')">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
-              </svg>
-              <span>Overview</span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
-            [ngClass]="activeTab() === 'timeline' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
-            (click)="activeTab.set('timeline')">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-              <span>Visits Timeline</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
-                [ngClass]="activeTab() === 'timeline' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
-                {{ unifiedTimeline().length }}
-              </span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all duration-200"
-            [ngClass]="activeTab() === 'labs' ? 'bg-[var(--bg-card-solid)] border-[var(--glass-border-hover)] text-[var(--text-primary)] shadow-sm border' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border'"
-            (click)="activeTab.set('labs')">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 2v7.31a2 2 0 0 1-.59 1.42l-4.24 4.24a3 3 0 0 0-.81 3.23l.11.27A3 3 0 0 0 7.24 20h9.52a3 3 0 0 0 2.77-1.77l.11-.27a3 3 0 0 0-.81-3.23l-4.24-4.24a2 2 0 0 1-.59-1.42V2"/><path d="M8.5 2h7"/><path d="M6 14h12"/>
-              </svg>
-              <span>Lab Orders</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold"
-                [ngClass]="activeTab() === 'labs' ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-secondary)]' : 'bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]'">
-                {{ history().length }}
-              </span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap opacity-50 cursor-not-allowed border border-transparent text-[var(--text-secondary)]"
-            [disabled]="true">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-              </svg>
-              <span>OPD Records</span>
-              <svg class="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]">
-                {{ clinicalData()?.opdRecords?.length ?? 0 }}
-              </span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap opacity-50 cursor-not-allowed border border-transparent text-[var(--text-secondary)]"
-            [disabled]="true">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 4v16"/><path d="M2 11h18"/><path d="M22 4v16"/><path d="M2 17h20"/><circle cx="8" cy="8" r="2"/>
-              </svg>
-              <span>IPD Admissions</span>
-              <svg class="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]">
-                {{ clinicalData()?.ipdAdmissions?.length ?? 0 }}
-              </span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap opacity-50 cursor-not-allowed border border-transparent text-[var(--text-secondary)]"
-            [disabled]="true">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>
-              </svg>
-              <span>Pharmacy</span>
-              <svg class="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[var(--glass-bg)] text-[var(--text-tertiary)] border border-[var(--glass-border)]">
-                {{ clinicalData()?.prescriptions?.length ?? 0 }}
-              </span>
-            </span>
-          </button>
-
-          <button type="button" class="shrink-0 px-3.5 py-2.5 text-xs md:text-sm font-bold rounded-xl whitespace-nowrap opacity-50 cursor-not-allowed border border-transparent text-[var(--text-secondary)]"
-            [disabled]="true">
-            <span class="flex items-center gap-2">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>
-              </svg>
-              <span>Documents</span>
-              <svg class="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-            </span>
-          </button>
-        </div>
-
-        <!-- Dynamic Tab Content Views -->
-        <div class="pf-pp__tab-content w-full">
-
-          <!-- TAB 1: OVERVIEW -->
-          @if (activeTab() === 'overview') {
-            <div class="flex flex-col gap-6">
-
-              <!-- Real KPIs derived from the patient's actual lab activity. -->
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
-                  <div class="text-2xl font-extrabold text-[var(--text-primary)] tabular-nums">{{ realVisits() }}</div>
-                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Lab visits</div>
-                </div>
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
-                  <div class="text-2xl font-extrabold text-[var(--text-primary)] tabular-nums">{{ realTestsDone() }}</div>
-                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Tests ordered</div>
-                </div>
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
-                  <div class="text-2xl font-extrabold text-violet-400 tabular-nums">{{ realTotalSpent() | inr }}</div>
-                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Total billed</div>
-                </div>
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-4">
-                  <div class="text-sm font-bold text-[var(--text-primary)]">{{ realLastVisit() ? (realLastVisit() | date:'mediumDate') : '—' }}</div>
-                  <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">Last visit</div>
-                </div>
-              </div>
-
-              <!-- Vitals are captured at clinical intake (OPD/IPD), which this lab
-                   module doesn't run — so we show an honest 'not recorded' state
-                   rather than fabricated values. -->
-              <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex items-center gap-3">
-                <span class="p-1.5 rounded-lg bg-[var(--glass-bg)] text-[var(--text-muted)]">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                  </svg>
-                </span>
-                <div>
-                  <h3 class="text-sm font-bold text-[var(--text-primary)]">Vitals & BMI</h3>
-                  <p class="text-xs text-[var(--text-tertiary)]">Not recorded — vitals are captured at OPD/IPD intake.</p>
-                </div>
-              </div>
-
-              <!-- 2-Column Row for Allergies/Precautions & ABHA Card -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                <!-- Allergies and alerts card -->
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
-                  <h3 class="text-sm font-bold text-[var(--text-primary)] pb-2.5 border-b border-[var(--border-muted)] flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
-                    Allergies & Medical Alerts
-                  </h3>
-
-                  <div class="grid grid-cols-1 gap-5">
-                    <!-- Active Allergies -->
-                    <div class="flex flex-col gap-2.5">
-                      <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-                        <svg class="text-rose-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                        </svg>
-                        Active Allergies
-                      </span>
-                      
-                      <div class="text-xs text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3">
-                        Not recorded — allergies are captured at clinical (OPD/IPD) intake.
-                      </div>
-                    </div>
-
-                    <div class="h-px bg-[var(--border-muted)]"></div>
-
-                    <!-- Clinical Risk Assessment / Precautions -->
-                    <div class="flex flex-col gap-2.5">
-                      <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-                        <svg class="text-amber-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        Clinical Precautions & Risk
-                      </span>
-
-                      <div class="flex flex-col gap-2">
-                        <!-- Fall Risk Precaution -->
-                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-xs">
-                          <span class="text-[var(--text-secondary)] flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full" [ngClass]="(p.age ?? 0) > 60 ? 'bg-amber-400' : 'bg-emerald-400'"></span>
-                            Fall Risk Level
-                          </span>
-                          <span class="font-bold text-[10px] uppercase" [ngClass]="(p.age ?? 0) > 60 ? 'text-amber-400' : 'text-emerald-400'">
-                            {{ (p.age ?? 0) > 60 ? 'Moderate' : 'Low Risk' }}
-                          </span>
-                        </div>
-
-                        <!-- Pediatric Precaution -->
-                        @if (p.isMinor) {
-                          <div class="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10 text-xs">
-                            <span class="text-amber-400 flex items-center gap-2">
-                              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                              Pediatric Care Protocol
-                            </span>
-                            <span class="font-bold text-[10px] text-amber-400 uppercase">Guardian Required</span>
-                          </div>
-                        }
-
-                        <!-- General Isolation Precaution -->
-                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-xs">
-                          <span class="text-[var(--text-secondary)] flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            Isolation Status
-                          </span>
-                          <span class="font-bold text-[10px] text-emerald-400 uppercase">Standard</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- ABHA verification card -->
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col gap-4">
-                  <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border-muted)]">
-                    <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                      <svg class="text-emerald-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>
-                      </svg>
-                      ABHA Health Card (ABDM)
-                    </h3>
-                    @if (p.abhaId) {
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1">
-                        <span class="w-1 h-1 rounded-full bg-emerald-400"></span> ACTIVE
-                      </span>
-                    } @else {
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                        UNLINKED
-                      </span>
-                    }
-                  </div>
-
-                  <!-- Interactive Health ID Card Layout -->
-                  <div class="relative overflow-hidden rounded-xl border border-violet-500/20 bg-gradient-to-br from-slate-900 to-indigo-950 p-5 text-white shadow-lg shadow-violet-950/20 flex flex-col gap-4">
-                    <!-- Hologram/Globe watermark element -->
-                    <div class="absolute right-0 bottom-0 w-32 h-32 bg-violet-600/10 rounded-full blur-2xl pointer-events-none"></div>
-                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-pink-600/5 rounded-full blur-2xl pointer-events-none"></div>
-
-                    <!-- Card Header (ABDM Branding) -->
-                    <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
-                      <div class="flex items-center gap-2">
-                        <span class="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center border border-white/20">
-                          <svg class="text-emerald-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                          </svg>
-                        </span>
-                        <div class="leading-none">
-                          <span class="text-[8px] font-mono tracking-widest text-emerald-400 block uppercase font-bold">ABHA HEALTH CARD</span>
-                          <span class="text-[10px] font-bold tracking-tight text-white/90">National Health Authority</span>
-                        </div>
-                      </div>
-                      <div class="text-right">
-                        <span class="text-[7px] text-white/50 block font-mono">GOVERNMENT OF INDIA</span>
-                        <span class="text-[8px] font-bold text-white/80 font-mono">NDHM Registry</span>
-                      </div>
-                    </div>
-
-                    <!-- Card Body (Photo + Info) -->
-                    <div class="flex gap-4 items-start">
-                      <!-- Left: Photo Placeholder & Mini QR -->
-                      <div class="flex flex-col gap-2 shrink-0 items-center">
-                        <div class="w-18 h-18 rounded-lg bg-white/5 border border-white/15 overflow-hidden flex items-center justify-center p-1 relative">
-                          <svg class="text-white/20 w-12 h-12" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                          </svg>
-                          @if (p.abhaId) {
-                            <span class="absolute bottom-1 right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center">
-                              <svg class="text-white" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                                <polyline points="20 6 9 17 4 12"/>
-                              </svg>
-                            </span>
-                          }
-                        </div>
-                        <!-- Mini mock QR Code -->
-                        <div class="w-8 h-8 bg-white p-0.5 rounded border border-white/20 flex flex-wrap items-center justify-center">
-                          <svg width="28" height="28" viewBox="0 0 29 29" class="text-slate-900">
-                            <path fill="currentColor" d="M0 0h9v9H0zm1 1v7h7V1zm11 0h9v9h-9zm1 1v7h7V2zM0 12h9v9H0zm1 1v7h7v-7zm15-3h2v2h-2zm3 0h2v2h-2zm-3 3h2v2h-2zm3 0h2v2h-2zm-6 3h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zm-6 3h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2z"/>
-                          </svg>
-                        </div>
-                      </div>
-
-                      <!-- Right: Detailed Info -->
-                      <div class="flex-1 min-w-0 flex flex-col gap-2.5 text-xs text-white/80">
-                        <div>
-                          <span class="text-[8px] text-white/40 block uppercase tracking-wider">Patient Name</span>
-                          <span class="font-bold text-white tracking-tight text-sm truncate block">{{ displayName() }}</span>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2">
-                          <div>
-                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA ID</span>
-                            <span class="font-mono font-bold text-white/95 truncate block text-[11px]">{{ p.abhaId || 'Not Linked' }}</span>
-                          </div>
-                          <div>
-                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">ABHA Address</span>
-                            <span class="font-mono text-emerald-400 font-bold truncate block text-[10px]">
-                              {{ p.abhaId ? displayName().toLowerCase().replace(' ', '.') + '@abdm' : '—' }}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2">
-                          <div>
-                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">Gender / YOB</span>
-                            <span class="font-semibold block text-[11px]">{{ p.sex || '—' }} · {{ (p.dateOfBirth | date:'yyyy') || '—' }}</span>
-                          </div>
-                          <div>
-                            <span class="text-[8px] text-white/40 block uppercase tracking-wider">Security Code</span>
-                            <span class="font-mono font-bold text-violet-400 block text-[11px]">****{{ p.id.slice(-4) }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Card Footer Status -->
-                    <div class="flex items-center justify-between border-t border-white/10 pt-2.5 text-[9px] font-mono text-white/50">
-                      <span>CARD REF: NHA-{{ p.id.slice(-6).toUpperCase() }}</span>
-                      @if (p.abhaId) {
-                        <span class="text-emerald-400 font-bold flex items-center gap-1">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                          VERIFIED IDENTITY
-                        </span>
-                      } @else {
-                        <span class="text-amber-400 font-bold">IDENTITY LINK PENDING</span>
-                      }
-                    </div>
-                  </div>
-
-                  <!-- Action link button -->
-                  @if (!p.abhaId) {
-                    <div class="flex justify-end">
-                      <button type="button" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                        (click)="toasts.info('ABHA integration workflow initiated. Connecting registry...')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                        Verify & Link ABHA Card
-                      </button>
-                    </div>
-                  }
-                </div>
-
-              </div>
-
-              <!-- 2-Column Row for Recent Lab Orders & Active Medications -->
-              @if (clinicalData(); as clinical) {
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                  <!-- Recent lab orders overview -->
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col justify-between">
-                    <div>
-                      <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                          <svg class="text-violet-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                          </svg>
-                          Recent Lab Orders
-                        </h3>
-                        <button type="button" class="text-xs font-bold text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('labs')">
-                          View All ({{ history().length }}) †’
-                        </button>
-                      </div>
-
-                      @if (history().length === 0) {
-                        <p class="text-sm text-[var(--text-secondary)] text-center py-8">No lab orders on record.</p>
-                      } @else {
-                        <div class="flex flex-col gap-3">
-                          @for (o of history().slice(0, 2); track o.id) {
-                            <div class="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--card-hover-border)] transition-colors flex items-center justify-between gap-4 cursor-pointer" (click)="activeTab.set('labs')">
-                              <div class="min-w-0">
-                                <div class="flex items-center gap-2 mb-1">
-                                  <span class="font-mono text-xs font-bold text-[var(--text-primary)]">#{{ o.id.slice(0, 8) }}</span>
-                                  <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
-                                </div>
-                                <p class="text-xs text-[var(--text-secondary)] truncate">
-                                  {{ orderTests(o).length }} tests · {{ o.createdAt | date:'MMM d, y HH:mm' }}
-                                </p>
-                              </div>
-                              @if (o.totalAmount) {
-                                <span class="font-mono text-sm font-bold text-[var(--text-primary)] shrink-0">{{ o.totalAmount | inr }}</span>
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </div>
-
-                  <!-- Active Medications (Pharmacy) -->
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-md shadow-black/10 flex flex-col justify-between">
-                    <div>
-                      <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                          <svg class="text-emerald-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>
-                          </svg>
-                          Active Medications
-                        </h3>
-                        <button type="button" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer" (click)="activeTab.set('pharmacy')">
-                          View All ({{ clinical.prescriptions.length }}) †’
-                        </button>
-                      </div>
-
-                      @if (clinical.prescriptions.length === 0) {
-                        <p class="text-sm text-[var(--text-secondary)] text-center py-8">No active medications prescribed.</p>
-                      } @else {
-                        <div class="flex flex-col gap-3">
-                          @for (m of clinical.prescriptions.slice(0, 3); track m.name + m.date) {
-                            <div class="p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--card-hover-border)] transition-colors flex items-center justify-between gap-3 cursor-pointer" (click)="activeTab.set('pharmacy')">
-                              <div class="flex items-center gap-3 min-w-0">
-                                <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/>
-                                  </svg>
-                                </span>
-                                <div class="min-w-0 leading-tight">
-                                  <h4 class="text-xs font-bold text-[var(--text-primary)] truncate">{{ m.name }}</h4>
-                                  <p class="text-[10px] text-[var(--text-secondary)] mt-0.5 font-mono">
-                                    {{ m.dosage }} · {{ m.frequency }}
-                                  </p>
-                                  <p class="text-[9px] text-[var(--text-muted)] mt-0.5 truncate">
-                                    {{ m.instructions }} · {{ m.duration }}
-                                  </p>
-                                </div>
-                              </div>
-                              <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0"
-                                [ngClass]="m.status === 'Dispensed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'">
-                                {{ m.status }}
-                              </span>
-                            </div>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </div>
-
-                </div>
-              }
-
-            </div>
-          }
-
-          <!-- TAB 2: VISITS TIMELINE -->
-          @if (activeTab() === 'timeline') {
-            <div class="flex flex-col gap-4">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono">
-                  Patient Journey Timeline
-                </h3>
-                <span class="text-xs text-[var(--text-secondary)]">
-                  {{ unifiedTimeline().length }} events found
-                </span>
-              </div>
-
-              @if (unifiedTimeline().length === 0) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
-                  No visits or orders recorded on timeline.
-                </div>
-              } @else {
-                <div class="relative pl-6 border-l-2 border-[var(--border-muted)] ml-4 flex flex-col gap-6 py-2">
-                  @for (evt of unifiedTimeline(); track evt.id) {
-                    <div class="relative">
-                      <!-- Timeline Node Circle -->
-                      <span class="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-3 bg-[var(--bg-primary)] shadow flex items-center justify-center transition-colors"
-                        [ngClass]="{
-                          'border-violet-500': evt.type === 'lab',
-                          'border-emerald-500': evt.type === 'opd',
-                          'border-amber-500': evt.type === 'ipd'
-                        }">
-                      </span>
-
-                      <!-- Timeline Card -->
-                      <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] hover:border-violet-500/30 rounded-xl p-4 transition-all duration-200 flex flex-col gap-3 shadow cursor-pointer"
-                        (click)="toggleVisitExpand(evt.id)">
-                        
-                        <!-- Card Header -->
-                        <div class="flex items-start justify-between gap-4">
-                          <div>
-                            <span class="text-[10px] font-mono font-bold tracking-wider uppercase"
-                              [ngClass]="{
-                                'text-violet-400': evt.type === 'lab',
-                                'text-emerald-400': evt.type === 'opd',
-                                'text-amber-400': evt.type === 'ipd'
-                              }">
-                              {{ evt.type | uppercase }} EVENT
-                            </span>
-                            <h4 class="text-sm font-bold text-[var(--text-primary)] mt-0.5 leading-tight">
-                              {{ evt.title }}
-                            </h4>
-                            <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                              {{ evt.subtitle }}
-                            </p>
-                          </div>
-                          <div class="text-right shrink-0">
-                            <span class="text-[10px] font-mono font-semibold text-[var(--text-tertiary)] block">
-                              {{ evt.date | date:'MMM d, y' }}
-                            </span>
-                            <span class="text-[10px] font-mono text-[var(--text-muted)] block">
-                              {{ evt.date | date:'HH:mm' }}
-                            </span>
-                          </div>
-                        </div>
-
-                        <!-- Click to Expand Toggle Banner -->
-                        <div class="flex items-center justify-between text-[10px] text-[var(--text-tertiary)] border-t border-[var(--border-muted)] pt-2 mt-1">
-                          <span>ID: {{ evt.id.slice(0, 10).toUpperCase() }}</span>
-                          <span class="inline-flex items-center gap-1 font-semibold text-violet-400">
-                            {{ expandedVisits()[evt.id] ? 'Hide details' : 'View details' }}
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                              [style.transform]="expandedVisits()[evt.id] ? 'rotate(180deg)' : 'none'" class="transition-transform">
-                              <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                          </span>
-                        </div>
-
-                        <!-- Expanded Section details -->
-                        @if (expandedVisits()[evt.id]) {
-                          <div class="border-t border-[var(--border-muted)] pt-3 flex flex-col gap-4 mt-1 bg-[var(--glass-bg)]/30 p-3 rounded-lg animate-[pf-pp-fade_0.2s_ease-out]">
-                            
-                            <!-- LAB DETAILED VIEW -->
-                            @if (evt.type === 'lab') {
-                              <div class="flex flex-col gap-2">
-                                <div class="flex items-center justify-between">
-                                  <span class="text-xs text-[var(--text-tertiary)] font-bold">Ordered Panel Tests:</span>
-                                  <pf-chip [tone]="statusTone(evt.status)" size="sm">{{ evt.status }}</pf-chip>
-                                </div>
-                                <div class="flex flex-col gap-2 mt-1">
-                                  @for (t of orderTests(evt.data); track t.id) {
-                                    <div class="flex items-center justify-between gap-3 text-xs bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-2 rounded-lg">
-                                      <div class="truncate">
-                                        @if (t.test?.code) {
-                                          <span class="font-mono font-bold text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded text-[10px] mr-1.5">{{ t.test!.code }}</span>
-                                        }
-                                        <span class="font-semibold text-[var(--text-secondary)]">{{ t.test?.name }}</span>
-                                      </div>
-                                      <pf-chip [tone]="testStatusTone(t.status)" size="sm">{{ t.status }}</pf-chip>
-                                    </div>
-                                  }
-                                </div>
-                                @if (evt.amount) {
-                                  <div class="flex justify-between items-center text-xs mt-2 border-t border-[var(--border-muted)]/50 pt-2 font-mono">
-                                    <span class="text-[var(--text-tertiary)]">Total Invoice:</span>
-                                    <span class="font-bold text-[var(--text-primary)]">{{ evt.amount | inr }}</span>
-                                  </div>
-                                }
-                              </div>
-                            }
-
-                            <!-- OPD DETAILED VIEW -->
-                            @if (evt.type === 'opd') {
-                              <div class="flex flex-col gap-3 text-xs">
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Symptoms</span>
-                                  <div class="flex flex-wrap gap-1 mt-1">
-                                    @for (sym of evt.data.symptoms; track sym) {
-                                      <span class="bg-[var(--bg-secondary)] border border-[var(--glass-border)] px-2 py-0.5 rounded text-[10px]">{{ sym }}</span>
-                                    }
-                                  </div>
-                                </div>
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Clinical Notes</span>
-                                  <p class="text-[var(--text-secondary)] mt-1 leading-relaxed">{{ evt.data.notes }}</p>
-                                </div>
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Prescribed Medicines</span>
-                                  <div class="flex flex-col gap-1.5 mt-1.5">
-                                    @for (med of evt.data.prescriptions; track med.name) {
-                                      <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-2 rounded-lg flex items-center justify-between">
-                                        <div>
-                                          <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
-                                          <span class="text-[10px] text-[var(--text-tertiary)] block">{{ med.dosage }} · {{ med.frequency }} · {{ med.duration }}</span>
-                                        </div>
-                                        <span class="text-[10px] px-2 py-0.5 rounded"
-                                          [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
-                                          {{ med.status }}
-                                        </span>
-                                      </div>
-                                    }
-                                  </div>
-                                </div>
-                              </div>
-                            }
-
-                            <!-- IPD DETAILED VIEW -->
-                            @if (evt.type === 'ipd') {
-                              <div class="flex flex-col gap-3 text-xs">
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Admission Reason</span>
-                                  <p class="text-[var(--text-secondary)] mt-1 leading-relaxed">{{ evt.data.reason }}</p>
-                                </div>
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Period</span>
-                                  <p class="text-[var(--text-secondary)] mt-1 font-semibold">
-                                    Admitted: {{ evt.data.admissionDate | date:'MMM d, y' }} — Discharged: {{ evt.data.dischargeDate | date:'MMM d, y' }}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Rounds summary</span>
-                                  <div class="relative pl-4 border-l border-amber-500/30 ml-2 mt-2 flex flex-col gap-3.5">
-                                    @for (prog of evt.data.dailyProgress; track prog.date) {
-                                      <div class="relative">
-                                        <span class="absolute -left-[20px] top-1 w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500"></span>
-                                        <span class="text-[9px] text-[var(--text-tertiary)] block font-mono font-medium">{{ prog.date | date:'MMM d, y HH:mm' }}</span>
-                                        <p class="text-[var(--text-secondary)] font-medium mt-0.5">{{ prog.note }}</p>
-                                        <span class="text-[9px] text-[var(--text-muted)] block mt-0.5">By: {{ prog.doctor }}</span>
-                                      </div>
-                                    }
-                                  </div>
-                                </div>
-                              </div>
-                            }
-
-                          </div>
-                        }
-
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
-
-          <!-- TAB 3: LAB ORDERS -->
-          @if (activeTab() === 'labs') {
-            <div class="flex flex-col gap-4">
-              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
-                Lab Investigations & Diagnostics
-              </h3>
-
-              @if (history().length === 0) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
-                  No diagnostic orders yet for this patient.
-                </div>
-              } @else {
-                @for (o of history(); track o.id) {
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-5 shadow flex flex-col gap-4">
-                    
-                    <!-- Top Order Details Row -->
-                    <div class="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-[var(--border-muted)]">
-                      <div>
-                        <div class="flex items-center gap-2">
-                          <span class="font-mono text-sm font-bold text-[var(--text-primary)]">{{ o.createdAt | date:'d MMM y HH:mm' }} · Ref: {{ o.refDoctorName || 'Self Referral' }}</span>
-                          <pf-chip [tone]="statusTone(o.status)" size="sm">{{ o.status }}</pf-chip>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-3">
-                        <div class="text-right">
-                          <span class="text-[10px] text-[var(--text-muted)] block font-mono">PRIORITY: {{ o.priority | uppercase }}</span>
-                          @if (o.totalAmount) {
-                            <span class="font-mono font-bold text-sm text-[var(--text-primary)] block mt-0.5">{{ o.totalAmount | inr }}</span>
-                          }
-                        </div>
-                        <button type="button" title="Repeat this order — re-bills the same tests"
-                                class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-violet-500/40 transition-colors cursor-pointer"
-                                (click)="repeatOrder(o)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 2v6h6"/><path d="M3 8a9 9 0 1 0 2.6-5.3L3 8"/>
-                          </svg>
-                          Repeat
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Tests Table/List -->
-                    @if (orderTests(o).length > 0) {
-                      <div class="flex flex-col gap-3">
-                        <h4 class="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Test Status & Results</h4>
-                        <div class="flex flex-col gap-2">
-                          @for (t of orderTests(o); track t.id) {
-                            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                              <div class="min-w-0">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                  @if (t.test?.code) {
-                                    <span class="font-mono font-bold text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{{ t.test!.code }}</span>
-                                  }
-                                  <span class="font-bold text-[var(--text-primary)]">{{ t?.name ?? 'Unknown test' }}</span>
-                                </div>
-                                <div class="text-[10px] text-[var(--text-tertiary)] mt-0.5">
-                                  Sample Tube Type: {{ t.subOrder?.department?.name ?? 'Lab Sample' }}
-                                </div>
-                              </div>
-
-                              <!-- Observed value & ref range (mock output for completed results) -->
-                              <div class="flex items-center gap-4 flex-wrap md:justify-end">
-                                @if (t.status === 'validated' || t.status === 'completed') {
-                                  <div class="text-right bg-[var(--bg-card-solid)] border border-[var(--glass-border)] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                    <div>
-                                      <span class="text-[10px] text-[var(--text-tertiary)] block font-medium uppercase tracking-wide">Observed</span>
-                                      <span class="font-mono text-sm font-bold text-emerald-400 leading-none">
-                                        {{ t.currentResult || (o.id.charCodeAt(0) % 5 + 4.2).toFixed(1) }}
-                                      </span>
-                                    </div>
-                                    <div class="border-l border-[var(--border-muted)] pl-2 text-left">
-                                      <span class="text-[9px] text-[var(--text-muted)] block">Reference</span>
-                                      <span class="text-[10px] font-mono text-[var(--text-secondary)] leading-none">3.5 - 5.5 g/dL</span>
-                                    </div>
-                                  </div>
-                                }
-                                <pf-chip [tone]="testStatusTone(t.status)" size="sm">{{ t.status }}</pf-chip>
-                              </div>
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    }
-
-                  </div>
-                }
-              }
-            </div>
-          }
-
-          <!-- TAB 4: OPD RECORDS -->
-          @if (activeTab() === 'opd') {
-            <div class="flex flex-col gap-4">
-              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
-                Out-Patient Consultations (OPD)
-              </h3>
-
-              @if (!clinicalData()?.opdRecords?.length) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
-                  No OPD records on record.
-                </div>
-              } @else {
-                @for (opd of clinicalData()?.opdRecords; track opd.id) {
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-5 shadow flex flex-col gap-4">
-                    
-                    <!-- Top header -->
-                    <div class="flex items-start justify-between gap-4 border-b border-[var(--border-muted)] pb-3">
-                      <div>
-                        <span class="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                          {{ opd.id }}
-                        </span>
-                        <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">{{ opd.diagnosis }}</h4>
-                        <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                          Consultant: <span class="text-[var(--text-primary)]">{{ opd.doctorName }}</span> · Dept: {{ opd.department }}
-                        </p>
-                      </div>
-                      <span class="text-xs font-mono font-bold text-[var(--text-tertiary)] bg-[var(--glass-bg)] border border-[var(--glass-border)] px-2.5 py-1 rounded-lg">
-                        {{ opd.date | date:'d MMM y' }}
-                      </span>
-                    </div>
-
-                    <!-- OPD details grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                      
-                      <!-- Symptoms & Assessment -->
-                      <div class="md:col-span-8 flex flex-col gap-3">
-                        <div>
-                          <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Chief Symptoms / Complaints</span>
-                          <div class="flex flex-wrap gap-1.5 mt-1.5">
-                            @for (sym of opd.symptoms; track sym) {
-                              <span class="bg-[var(--glass-bg)] border border-[var(--glass-border)] px-2.5 py-1 rounded-lg text-xs text-[var(--text-secondary)] font-medium">
-                                {{ sym }}
-                              </span>
-                            }
-                          </div>
-                        </div>
-
-                        <div>
-                          <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Physician Consultation Notes</span>
-                          <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-1 p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-                            {{ opd.notes }}
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Vitals at visit -->
-                      <div class="md:col-span-4 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-3.5 flex flex-col gap-2.5">
-                        <span class="text-[9px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Vitals during visit</span>
-                        <div class="flex flex-col gap-2 text-xs font-mono">
-                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
-                            <span class="text-[var(--text-secondary)]">Blood Pressure:</span>
-                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.bloodPressure }}</span>
-                          </div>
-                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
-                            <span class="text-[var(--text-secondary)]">Heart Rate:</span>
-                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.pulseRate }} bpm</span>
-                          </div>
-                          <div class="flex justify-between border-b border-[var(--border-muted)]/40 pb-1">
-                            <span class="text-[var(--text-secondary)]">Temperature:</span>
-                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.temperature }}°F</span>
-                          </div>
-                          <div class="flex justify-between pb-0.5">
-                            <span class="text-[var(--text-secondary)]">Oxygen (SpO2):</span>
-                            <span class="font-bold text-[var(--text-primary)]">{{ opd.vitals.spo2 }}%</span>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <!-- OPD Prescriptions -->
-                    @if (opd.prescriptions.length) {
-                      <div class="border-t border-[var(--border-muted)] pt-3 flex flex-col gap-2">
-                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block mb-1">Prescribed Treatments</span>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          @for (med of opd.prescriptions; track med.name) {
-                            <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 rounded-xl flex items-center justify-between text-xs">
-                              <div>
-                                <span class="font-bold text-[var(--text-primary)] block">{{ med.name }}</span>
-                                <span class="text-[10px] text-[var(--text-secondary)] block mt-0.5">
-                                  Dosage: {{ med.dosage }} · {{ med.frequency }} ({{ med.duration }})
-                                </span>
-                              </div>
-                              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                                [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
-                                {{ med.status }}
-                              </span>
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    }
-
-                  </div>
-                }
-              }
-            </div>
-          }
-
-          <!-- TAB 5: IPD ADMISSIONS -->
-          @if (activeTab() === 'ipd') {
-            <div class="flex flex-col gap-4">
-              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
-                In-Patient Admissions (IPD)
-              </h3>
-
-              @if (!clinicalData()?.ipdAdmissions?.length) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
-                  No IPD records on file. No past admissions.
-                </div>
-              } @else {
-                @for (ipd of clinicalData()?.ipdAdmissions; track ipd.id) {
-                  <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow flex flex-col gap-5">
-                    
-                    <!-- Top Row Header -->
-                    <div class="flex justify-between items-start gap-4 flex-wrap border-b border-[var(--border-muted)] pb-3">
-                      <div>
-                        <span class="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          {{ ipd.id }}
-                        </span>
-                        <h4 class="text-base font-bold text-[var(--text-primary)] mt-1.5">Hospitalization: {{ ipd.diagnosis }}</h4>
-                        <p class="text-xs text-[var(--text-secondary)] mt-0.5 font-medium">
-                          Admitting Physician: <span class="text-[var(--text-primary)]">{{ ipd.admittingDoctor }}</span> · Room: {{ ipd.roomWard }}
-                        </p>
-                      </div>
-                      <div class="text-right">
-                        <span class="text-xs font-mono font-bold px-2 py-1 rounded bg-zinc-500/10 border border-zinc-500/20 text-[var(--text-secondary)]">
-                          {{ ipd.status | uppercase }}
-                        </span>
-                        <span class="text-[10px] text-[var(--text-tertiary)] block mt-1 font-mono">
-                          {{ ipd.admissionDate | date:'d MMM y' }} - {{ ipd.dischargeDate | date:'d MMM y' }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Reason -->
-                    <div>
-                      <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Admission Assessment</span>
-                      <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-1 p-3 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-                        {{ ipd.reason }}
-                      </p>
-                    </div>
-
-                    <!-- Daily progress summary logs -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
-                      <!-- Progress logs timeline -->
-                      <div class="flex flex-col gap-3">
-                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Daily Nursing & Doctor Logs</span>
-                        <div class="relative pl-4 border-l border-amber-500/30 ml-2 mt-1.5 flex flex-col gap-4">
-                          @for (prog of ipd.dailyProgress; track prog.date) {
-                            <div class="relative text-xs">
-                              <span class="absolute -left-[20px] top-1 w-2 h-2 rounded-full bg-amber-400 shadow"></span>
-                              <span class="text-[9px] text-[var(--text-tertiary)] font-mono block">{{ prog.date | date:'MMM d, y' }}</span>
-                              <p class="text-[var(--text-secondary)] font-medium mt-0.5">{{ prog.note }}</p>
-                              <span class="text-[9px] text-[var(--text-muted)] block mt-0.5">Sign: {{ prog.doctor }}</span>
-                            </div>
-                          }
-                        </div>
-                      </div>
-
-                      <!-- Vitals history during hospitalization -->
-                      <div class="flex flex-col gap-3">
-                        <span class="text-[10px] text-[var(--text-tertiary)] font-bold uppercase tracking-wider block">Hospitalization Vitals Log</span>
-                        <div class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-4 flex flex-col gap-3 text-xs">
-                          <table class="w-full font-mono text-[11px] text-left border-collapse">
-                            <thead>
-                              <tr class="border-b border-[var(--border-muted)] pb-2 text-[var(--text-tertiary)]">
-                                <th class="pb-2">Date</th>
-                                <th class="pb-2">BP</th>
-                                <th class="pb-2">Pulse</th>
-                                <th class="pb-2">Temp</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              @for (v of ipd.vitalsHistory; track v.date) {
-                                <tr class="border-b border-[var(--border-muted)]/30 text-[var(--text-secondary)]">
-                                  <td class="py-2">{{ v.date | date:'MMM d' }}</td>
-                                  <td class="py-2 text-[var(--text-primary)] font-bold">{{ v.bp }}</td>
-                                  <td class="py-2">{{ v.pulse }} bpm</td>
-                                  <td class="py-2">{{ v.temp }}°F</td>
-                                </tr>
-                              }
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                    </div>
-
-                  </div>
-                }
-              }
-            </div>
-          }
-
-          <!-- TAB 6: PHARMACY / PRESCRIPTIONS -->
-          @if (activeTab() === 'pharmacy') {
-            <div class="flex flex-col gap-4">
-              <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider font-mono mb-2">
-                Pharmacy & Prescriptions Log
-              </h3>
-
-              @if (!clinicalData()?.prescriptions?.length) {
-                <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-8 text-center text-[var(--text-secondary)] shadow">
-                  No prescriptions on record.
-                </div>
-              } @else {
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  @for (med of clinicalData()?.prescriptions; track med.name + med.date) {
-                    <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] p-4 rounded-2xl shadow flex flex-col justify-between gap-3">
-                      <div>
-                        <div class="flex items-start justify-between gap-3">
-                          <span class="font-bold text-sm text-[var(--text-primary)]">{{ med.name }}</span>
-                          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                            [ngClass]="med.status === 'Dispensed' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'">
-                            {{ med.status }}
-                          </span>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-2 mt-3 text-xs bg-[var(--glass-bg)] border border-[var(--glass-border)] p-2.5 rounded-xl">
-                          <div>
-                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Dosage</span>
-                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.dosage }}</span>
-                          </div>
-                          <div>
-                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Frequency</span>
-                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.frequency }}</span>
-                          </div>
-                          <div class="col-span-2 border-t border-[var(--border-muted)]/40 pt-1.5 mt-0.5">
-                            <span class="text-[9px] text-[var(--text-tertiary)] block uppercase tracking-wider">Instructions</span>
-                            <span class="font-semibold text-[var(--text-secondary)]">{{ med.instructions }}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="flex justify-between items-center text-[10px] text-[var(--text-tertiary)] border-t border-[var(--border-muted)] pt-2.5 mt-1 font-mono">
-                        <span>Prescribed: {{ med.date | date:'MMM d, y' }}</span>
-                        <span>Duration: {{ med.duration }}</span>
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
-
-          <!-- TAB: DOCUMENTS -->
-          @if (activeTab() === 'documents' && patient(); as p) {
-            <pf-patient-documents [patientId]="p.id"></pf-patient-documents>
-          }
-
-        </div>
-
-      </div>
-
+          </span>
+        </span>
+        @if (p.abhaId) {
+          <span class="pf-ctx__chip pf-pp-abha pf-pp-in" style="--i: 1"
+                [title]="p.abhaVerified ? 'ABHA verified' : 'ABHA linked, not verified'">
+            <span class="pf-ctx__k">ABHA</span><span class="pf-num">{{ abhaFormatted() }}</span>
+            @if (p.abhaVerified) {
+              <svg class="pf-pp-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Verified"><path d="M20 6 9 17l-5-5"/></svg>
+            }
+          </span>
+        }
+        @for (f of flags(); track f.key) {
+          <span class="pf-ctx__chip pf-pp-flag pf-pp-in" style="--i: 2" [attr.data-tone]="f.tone" [attr.data-flag]="f.key" [title]="f.title">
+            <span class="pf-pp-flag__dot" aria-hidden="true"></span>{{ f.label }}
+          </span>
+        }
+      } @else {
+        <span class="pf-pp-skel pf-pp-skel--pill" aria-hidden="true"></span>
+      }
     </div>
+  </pf-hero-band>
 
-    <!-- Colleague-picker modal for "Send to chat". Reuses local
-         directory + ChatService.sharePatientWithUser. -->
-    @if (chatPickerOpen()) {
-      <div class="pf-pp__chat-pick-backdrop pf-sheet" (click)="closeChatPicker()">
-        <div class="pf-pp__chat-pick pf-sheet__panel" (click)="$event.stopPropagation()">
-          <header class="pf-pp__chat-pick-hdr">
-            <div>
-              <h3>Send patient to a colleague</h3>
-              <p>{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
-            </div>
-            <button type="button" class="pf-pp__chat-pick-close" (click)="closeChatPicker()" aria-label="Close">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div class="pf-pp__chat-pick-search">
-            <input type="text" placeholder="Search by name or email"
-                   [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
-          </div>
-          <ul class="pf-pp__chat-pick-list">
-            @for (u of chatPickerFiltered(); track u.id) {
-              <li>
-                <button type="button" class="pf-pp__chat-pick-row" [disabled]="chatPickerSending()"
-                        (click)="sendPatientToColleague(u)">
-                  <div class="pf-pp__chat-pick-avatar">
-                    {{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}
-                  </div>
-                  <div class="pf-pp__chat-pick-meta">
-                    <span class="pf-pp__chat-pick-name">{{ u.displayName }}</span>
-                    <span class="pf-pp__chat-pick-email">{{ u.email }}</span>
-                  </div>
-                </button>
-              </li>
-            } @empty {
-              <li class="pf-pp__chat-pick-empty">No colleagues match.</li>
-            }
-          </ul>
+  <div class="pf-body pf-pp-body" [class.pf-pp-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-pp-body--narrow]="narrow()"
+       [class.pf-pp-body--bar]="phone() && !!patient()">
+    <!-- ─── MAIN COLUMN — the ONE route zoom target, skeleton to content ── -->
+    <div class="pf-pp-main" [pfZoomTarget]="zoomKeys()" [attr.aria-busy]="showSkeleton()">
+      @if (showSkeleton()) {
+        <div class="pf-card pf-pp-snap pf-pp-snap--skel" aria-hidden="true">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="pf-pp-pane"><span class="pf-pp-skel" style="width: 40%"></span><span class="pf-pp-skel"></span><span class="pf-pp-skel" style="width: 70%"></span></div>
+          }
         </div>
-      </div>
-    }
-
-    <!-- Merge-duplicate picker. Reuses the chat-picker sheet styling: search
-         the shared /api/patients?q= endpoint, pick the DUPLICATE (source) —
-         its history moves into THIS profile (target) after a danger-confirm. -->
-    @if (mergeOpen()) {
-      <div class="pf-pp__chat-pick-backdrop pf-sheet" (click)="closeMerge()">
-        <div class="pf-pp__chat-pick pf-sheet__panel" (click)="$event.stopPropagation()">
-          <header class="pf-pp__chat-pick-hdr">
-            <div>
-              <h3>Merge a duplicate into {{ displayName() }}</h3>
-              <p>Pick the duplicate record — its orders, bills and appointments move here, then it is deactivated.</p>
-            </div>
-            <button type="button" class="pf-pp__chat-pick-close" (click)="closeMerge()" aria-label="Close">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </header>
-          <div class="pf-pp__chat-pick-search">
-            <input type="text" placeholder="Search patients by name, MRN or phone"
-                   [value]="mergeSearch()" (input)="onMergeSearch($any($event.target).value)" autofocus>
-          </div>
-          <ul class="pf-pp__chat-pick-list">
-            @for (dup of mergeResults(); track dup.id) {
-              <li>
-                <button type="button" class="pf-pp__chat-pick-row" [disabled]="merging()"
-                        (click)="mergeFrom(dup)">
-                  <div class="pf-pp__chat-pick-avatar">
-                    {{ (displayOf(dup).charAt(0) + (displayOf(dup).split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}
-                  </div>
-                  <div class="pf-pp__chat-pick-meta">
-                    <span class="pf-pp__chat-pick-name">{{ displayOf(dup) }}</span>
-                    <span class="pf-pp__chat-pick-email">
-                      {{ dup.mrn || '—' }}@if (dup.phone) { · {{ dup.phone }}}@if (dup.sex) { · {{ dup.sex }}} · {{ ageLabel(dup) }}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            } @empty {
-              <li class="pf-pp__chat-pick-empty">
-                @if (mergeSearch().trim()) { No other patients match. } @else { Search for the duplicate record to merge. }
-              </li>
+        <div class="pf-card pf-pp-gridskel" aria-hidden="true">
+          <div class="pf-pp-skelrows">
+            @for (i of [1, 2, 3, 4, 5]; track i) {
+              <div class="pf-pp-skelrow"><span class="pf-pp-skel" style="width: 55%"></span><span class="pf-pp-skel pf-pp-skel--sm" style="width: 35%"></span></div>
             }
-          </ul>
+          </div>
         </div>
-      </div>
-    }
-
-    @if (showIdCard()) {
-      <div class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" (click)="showIdCard.set(false)">
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow-2xl max-w-sm w-full animate-scale-in" (click)="$event.stopPropagation()">
-          <div class="flex items-center justify-between gap-4 mb-4 border-b border-[var(--glass-border)] pb-3">
-            <h3 class="text-sm font-bold tracking-wider font-mono text-[var(--text-primary)] uppercase flex items-center gap-1.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              Patient ID Card
+      } @else if (!patient()) {
+        <div class="pf-card pf-pp-missing">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
+            <p class="pf-empty__title">Patient not found</p>
+            <p class="pf-empty__body">This record may have been merged or removed.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="goBack()">Back</button>
+          </div>
+        </div>
+      } @else if (detail(); as d) {
+        <!-- ─── DETAIL (zoomed in from a grid row / cell / timeline row) ─── -->
+        <section class="pf-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : 'Trend'">
+          @if (d.kind === 'trend') {
+            <header class="pf-card__head pf-pp-detail__head">
+              <button type="button" class="pf-btn pf-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to results" title="Back to results">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span class="pf-card__label">Trend</span>
+              <span class="pf-pp-detail__t">{{ d.title }}</span>
+            </header>
+            <div class="pf-card__body pf-pp-detail__body pf-pp-detail__body--trend">
+              <pf-lab-trends [patientId]="patient()!.id" [fit]="false" [focus]="{ testId: d.testId, parameter: d.parameter }"></pf-lab-trends>
+            </div>
+          } @else {
+            <div class="pf-card__body pf-pp-detail__body">
+              <pf-lab-orders [orders]="history()" [patientId]="patient()!.id" [detailId]="d.id" [autoReport]="d.report"
+                             (detailChange)="$event === null && closeDetail()"></pf-lab-orders>
+            </div>
+          }
+        </section>
+      } @else {
+        <!-- ─── SNAPSHOT ─────────────────────────────────────────────── -->
+        <section class="pf-card pf-pp-snap" aria-label="Clinical snapshot">
+          <!-- Needs attention: flagged values from the latest visits. -->
+          <div class="pf-pp-pane pf-pp-pane--attn">
+            <h3 class="pf-pp-pane__t">Needs attention
+              @if (attention().length) { <span class="pf-pp-pane__n pf-num">{{ attention().length }}</span> }
             </h3>
-            <button type="button" class="p-1 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer" (click)="showIdCard.set(false)" aria-label="Close">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
+            @if (!canResults()) {
+              <p class="pf-pp-quiet">Results need report access.</p>
+            } @else if (cumLoading()) {
+              <span class="pf-pp-skel" style="width: 80%"></span><span class="pf-pp-skel" style="width: 60%"></span>
+            } @else if (cumFailed()) {
+              <p class="pf-pp-quiet">Couldn’t load results.</p>
+            } @else if (!attention().length) {
+              <p class="pf-pp-calm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                {{ grid().rowCount ? 'Nothing flagged in the latest results' : 'No results yet' }}
+              </p>
+            } @else {
+              <ul class="pf-pp-attn" role="list">
+                @for (a of attention().slice(0, attentionMax()); track a.key; let i = $index) {
+                  <li class="pf-pp-attn__li" [style.--i]="i">
+                    <button type="button" class="pf-pp-attn__row" [attr.data-tone]="a.tone" [pfZoomSource]="[a.key]" (click)="openAttention(a.key, a.orderId)"
+                            [attr.aria-label]="a.title + ' ' + a.value + ' ' + a.unit + ', ' + (a.tone === 'critical' ? 'critical' : a.dir === 'up' ? 'high' : a.dir === 'down' ? 'low' : 'abnormal') + (a.delta ? ', ' + a.delta.text + ' since ' + a.delta.since : '')">
+                      <span class="pf-pp-attn__name">
+                        <span class="pf-pp-attn__dot" aria-hidden="true"></span>{{ a.title }}
+                        @if (a.testName !== a.title) { <span class="pf-pp-attn__test">{{ a.testName }}</span> }
+                      </span>
+                      <span class="pf-pp-attn__val pf-num">
+                        @if (a.dir === 'up') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> }
+                        @if (a.dir === 'down') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> }
+                        {{ a.value }}@if (a.unit) {<span class="pf-pp-attn__unit">{{ a.unit }}</span>}
+                      </span>
+                      <span class="pf-pp-attn__meta pf-num">
+                        @if (a.range) { <span class="pf-pp-mi">Ref {{ a.range }}</span> }
+                        <span class="pf-pp-mi">{{ a.dateLabel }}@if (!a.final) { · prelim }</span>
+                        @if (a.delta; as dl) {
+                          <span class="pf-pp-mi pf-pp-attn__delta" [attr.data-dir]="dl.dir">{{ dl.text }} since {{ dl.since }}</span>
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (attention().length > attentionMax()) {
+                <button type="button" class="pf-btn pf-btn--tertiary pf-pp-pane__more" (click)="abnormalSeed.set(abnormalSeed() + 1)">
+                  Show all {{ attention().length }} in results
+                </button>
+              }
+            }
           </div>
-          <pf-patient-id-card [patient]="p"></pf-patient-id-card>
-        </div>
-      </div>
-    }
-  } @else if (loading()) {
-    <!-- Skeleton Loaders -->
-    <div class="pf-pp__fill grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div class="xl:col-span-4 flex flex-col gap-6 w-full">
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <div class="flex items-center gap-4">
-            <pf-skeleton variant="circle" width="64px" height="64px"></pf-skeleton>
-            <div class="flex-1 flex flex-col gap-2">
-              <pf-skeleton variant="line" width="60%"></pf-skeleton>
-              <pf-skeleton variant="line" width="30%" height="8px"></pf-skeleton>
+
+          <!-- In progress now: live stage + expected TAT. -->
+          <div class="pf-pp-pane pf-pp-pane--prog">
+            <h3 class="pf-pp-pane__t">In progress now
+              @if (active().length) { <span class="pf-pp-pane__n pf-num">{{ active().length }}</span> }
+            </h3>
+            @if (!active().length) {
+              <p class="pf-pp-quiet">Nothing in progress.</p>
+            } @else {
+              <ul class="pf-pp-prog" role="list">
+                @for (a of active().slice(0, 3); track a.order.id) {
+                  <li>
+                    <button type="button" class="pf-pp-prog__row" [pfZoomSource]="[a.order.id]" (click)="openOrder(a.order.id)"
+                            [attr.aria-label]="a.title + ', ' + a.stageLabel + (a.dueLabel ? ', ' + a.dueLabel : '')">
+                      <span class="pf-pp-prog__name">{{ a.title }}</span>
+                      <span class="pf-pp-steps" aria-hidden="true">
+                        @for (s of STAGES; track s; let i = $index) {
+                          <span class="pf-pp-steps__seg" [class.pf-pp-steps__seg--on]="a.stage >= i + 1" [class.pf-pp-steps__seg--now]="a.stage === i + 1"></span>
+                        }
+                      </span>
+                      <span class="pf-pp-prog__meta pf-num">
+                        <span class="pf-pp-status" [attr.data-tone]="a.stage === 3 ? 'amber' : a.stage === 1 ? 'blue' : a.stage === 0 ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ a.stageLabel }}</span>
+                        @if (a.dueLabel) { <span class="pf-pp-prog__due" [class.pf-pp-prog__due--late]="a.overdue">{{ a.dueLabel }}</span> }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (active().length > 3) { <p class="pf-pp-quiet pf-num">+{{ active().length - 3 }} more in the timeline</p> }
+            }
+          </div>
+
+          <!-- Last visit. -->
+          <div class="pf-pp-pane pf-pp-pane--last">
+            <h3 class="pf-pp-pane__t">Last visit</h3>
+            @if (lastVisit(); as lv) {
+              <p class="pf-pp-last__date pf-num">{{ lv.date | date:'d MMM y' }}</p>
+              <p class="pf-pp-last__tests">{{ lv.title }}</p>
+              <p class="pf-pp-last__doc">{{ lv.doctor }}</p>
+              <div class="pf-pp-last__foot">
+                <span class="pf-pp-status" [attr.data-tone]="lv.report === 'ready' ? 'green' : lv.report === 'none' ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ lv.reportLabel }}</span>
+                <button type="button" class="pf-btn pf-btn--secondary pf-pp-last__view" [pfZoomSource]="[lv.order.id]" (click)="openOrder(lv.order.id, !!lv.order.report)">
+                  {{ lv.order.report ? 'View report' : 'View' }}
+                </button>
+              </div>
+            } @else {
+              <p class="pf-pp-quiet">No visits yet.</p>
+            }
+          </div>
+        </section>
+
+        <!-- ─── CUMULATIVE RESULTS ───────────────────────────────────── -->
+        <pf-cumulative-results class="pf-pp-results" [grid]="grid()" [loading]="cumLoading()" [failed]="cumFailed()"
+                               [forbidden]="!canResults()" [truncated]="cumTruncated()" [cards]="phone()" [abnormalSeed]="abnormalSeed()"
+                               (openTrend)="openTrend($event)" (openOrder)="openOrder($event, true)" (retry)="loadResults()"></pf-cumulative-results>
+
+        @if (narrow()) {
+          <!-- Stacked: the companion's content follows the results. -->
+          <section class="pf-card pf-pp-stack" aria-label="Timeline">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="timelineIcon"></ng-container></span>
+              <span class="pf-card__label">Timeline</span>
+              <span class="pf-card__note pf-num">{{ timeline().length }}</span>
+            </header>
+            <div class="pf-card__body">
+              <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
+              <ng-container *ngTemplateOutlet="timelineTpl"></ng-container>
             </div>
-          </div>
-          <div class="h-px bg-[var(--border-muted)]"></div>
-          <pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
-        </div>
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <pf-skeleton variant="line" width="40%"></pf-skeleton>
-          <div class="grid grid-cols-2 gap-3">
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-            <pf-skeleton variant="block" height="50px"></pf-skeleton>
-          </div>
-        </div>
-      </div>
-      <div class="xl:col-span-8 flex flex-col gap-6 w-full">
-        <pf-skeleton variant="block" height="50px"></pf-skeleton>
-        <div class="bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 flex flex-col gap-4">
-          <pf-skeleton variant="line" width="30%"></pf-skeleton>
-          <pf-skeleton variant="line" width="100%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="90%" height="10px"></pf-skeleton>
-          <pf-skeleton variant="line" width="95%" height="10px"></pf-skeleton>
-        </div>
-      </div>
+          </section>
+          <section class="pf-card pf-pp-stack" aria-label="Patient details">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+              <span class="pf-card__label">Details</span>
+            </header>
+            <div class="pf-card__body"><ng-container *ngTemplateOutlet="detailsTpl"></ng-container></div>
+          </section>
+        }
+      }
     </div>
-  } @else {
-    <div class="pf-pp__fill text-center py-16 text-[var(--text-secondary)] bg-[var(--bg-card-solid)] border border-[var(--glass-border)] rounded-2xl p-6 shadow">
-      <svg class="mx-auto text-[var(--text-tertiary)] mb-4" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-        <line x1="9" y1="9" x2="15" y2="9"/>
-        <line x1="9" y1="13" x2="15" y2="13"/>
-        <line x1="9" y1="17" x2="13" y2="17"/>
-      </svg>
-      Patient record not found.
+
+    <!-- ─── PATIENT companion (right; quick actions · timeline · details) ── -->
+    @if (!narrow()) {
+      @if (sideCollapsed()) {
+        <aside class="pf-card pf-pp-strip" aria-label="Patient">
+          <button type="button" class="pf-pp-strip__btn" (click)="toggleSide()"
+                  title="Show timeline and details" aria-label="Show timeline and details" aria-expanded="false">
+            <span class="pf-btn pf-btn--icon pf-pp-strip__expand" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </span>
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+            <span class="pf-pp-strip__label">Patient</span>
+          </button>
+        </aside>
+      } @else {
+        <aside class="pf-card pf-pp-side" aria-label="Patient">
+          <header class="pf-card__head pf-pp-side__head">
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+            <span class="pf-card__label">Patient</span>
+            <span class="pf-card__spacer"></span>
+            <div class="pf-seg pf-pp-seg" role="radiogroup" aria-label="Show" (keydown)="onSideSegKey($event)">
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sideView() === 'timeline'"
+                      [attr.tabindex]="sideView() === 'timeline' ? 0 : -1" (click)="sideView.set('timeline')">
+                Timeline <span class="pf-pp-seg__n pf-num">{{ timeline().length }}</span>
+              </button>
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sideView() === 'details'"
+                      [attr.tabindex]="sideView() === 'details' ? 0 : -1" (click)="sideView.set('details')">Details</button>
+            </div>
+            <button type="button" class="pf-btn pf-btn--icon pf-pp-collapse" (click)="toggleSide()"
+                    title="Hide the patient card" aria-label="Hide the patient card" aria-expanded="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </header>
+          <div class="pf-card__body pf-pp-sidebody">
+            @if (patient()) {
+              <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
+              @if (sideView() === 'timeline') {
+                <ng-container *ngTemplateOutlet="timelineTpl"></ng-container>
+              } @else {
+                <ng-container *ngTemplateOutlet="detailsTpl"></ng-container>
+              }
+            } @else {
+              <span class="pf-pp-skel" style="width: 60%" aria-hidden="true"></span>
+              <span class="pf-pp-skel" aria-hidden="true"></span>
+              <span class="pf-pp-skel" style="width: 80%" aria-hidden="true"></span>
+            }
+          </div>
+        </aside>
+      }
+    }
+  </div>
+
+  <!-- Phones: THE primary, full width above the navbar. -->
+  @if (phone() && canNewOrder() && patient(); as p) {
+    <div class="pf-bottombar pf-pp-bottombar">
+      @if (opdGate.visible()) {
+        <button type="button" class="pf-btn pf-btn--secondary pf-pp-bottombar__consult" aria-label="New consultation" title="New consultation" (click)="startConsult(p)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/>
+          </svg>
+        </button>
+      }
+      <button type="button" class="pf-btn pf-btn--primary pf-pp-bottombar__new" (click)="startOrder(p)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        New order
+      </button>
     </div>
   }
 
+  <!-- Label reprint: off-screen label cards, printed on their own. -->
+  @if (reprintOrder(); as ro) {
+    <div class="pf-print-label pf-pp-reprint" aria-hidden="true">
+      @for (s of ro.samples; track s.id; let i = $index) {
+        <pf-label-card [sample]="s" [patient]="ro.patient" [index]="i" [printing]="true"></pf-label-card>
+      }
+    </div>
+  }
 
+  <!-- More: a menu under the band on web, a sheet on phones. -->
+  @if (moreOpen() && patient(); as p) {
+    <div class="pf-pp-scrim pf-pp-scrim--menu" (click)="closeMore()" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--more" role="menu" aria-label="More actions">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <ul class="pf-pp-menu" role="none">
+        @if (features.appointmentsEnabled()) {
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="appointment" (click)="closeMore(); bookAppointment(p)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Book appointment
+          </button>
+        </li>
+        }
+        @if (entitlements.moduleEnabled('messages')) {
+          <li role="none">
+            <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="chat" (click)="closeMore(); openChatPicker()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Send to a colleague
+            </button>
+          </li>
+        }
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="abha" (click)="closeMore(); abhaWizardOpen.set(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            {{ !p.abhaId ? 'Link ABHA' : !p.abhaVerified ? 'Verify ABHA' : 'Refresh from ABHA' }}
+          </button>
+        </li>
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="idcard" (click)="closeMore(); showIdCard.set(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M14 10h4M14 14h4"/></svg>
+            Print ID card
+          </button>
+        </li>
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="qr" (click)="closeMore(); qrOpen.set(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v7M17 21h4"/></svg>
+            Show QR code
+          </button>
+        </li>
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="timeline"
+                  (click)="closeMore(); openFullTimeline()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
+            Full timeline
+          </button>
+        </li>
+        @if (canEdit()) {
+          <li role="none">
+            <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="merge" (click)="closeMore(); openMerge()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.17 2.87L4 22"/><path d="m20 22-5-5"/></svg>
+              Merge a duplicate
+            </button>
+          </li>
+        }
+      </ul>
+      <div class="pf-pp-sheet__foot">
+        <button type="button" class="pf-btn pf-btn--secondary pf-pp-sheet__cancel" (click)="closeMore()">Cancel</button>
+      </div>
+    </div>
+  }
 
+  <!-- QR (scan to open the profile). -->
+  @if (qrOpen()) {
+    <div class="pf-pp-scrim" (click)="qrOpen.set(false)" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--qr" role="dialog" aria-modal="true" aria-label="Profile QR code">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <ng-container *ngTemplateOutlet="modalHead; context: { label: 'Scan profile', close: closeQr }"></ng-container>
+      <div class="pf-pp-qr">
+        <span class="pf-pp-qr__code"><pf-barcode-display mode="qr" [code]="qrValue()" [bare]="true" [showValue]="false" [size]="200"></pf-barcode-display></span>
+        <p class="pf-pp-qr__t">Scan to open {{ displayName() }}'s profile.</p>
+      </div>
+    </div>
+  }
+
+  <!-- Patient ID card (print). -->
+  @if (showIdCard() && patient(); as p) {
+    <div class="pf-pp-scrim" (click)="showIdCard.set(false)" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal" role="dialog" aria-modal="true" aria-label="Patient ID card">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <ng-container *ngTemplateOutlet="modalHead; context: { label: 'Patient ID card', close: closeIdCard }"></ng-container>
+      <div class="pf-pp-modalbody"><pf-patient-id-card [patient]="p"></pf-patient-id-card></div>
+    </div>
+  }
+
+  <!-- ABHA health card (the official card look). -->
+  @if (abhaCardOpen() && patient(); as p) {
+    <div class="pf-pp-scrim" (click)="abhaCardOpen.set(false)" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--abha" role="dialog" aria-modal="true" aria-label="ABHA health card">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <ng-container *ngTemplateOutlet="modalHead; context: { label: 'ABHA health card', close: closeAbhaCard }"></ng-container>
+      <div class="pf-pp-modalbody">
+        <ng-container *ngTemplateOutlet="abhaCard; context: { $implicit: p }"></ng-container>
+        @if (kyc(); as k) {
+          <dl class="pf-pp-facts pf-pp-facts--kyc">
+            @if (k.address) { <div><dt>Address</dt><dd>{{ k.address }}</dd></div> }
+            @if (k.district) { <div><dt>District</dt><dd>{{ k.district }}</dd></div> }
+            @if (k.state) { <div><dt>State</dt><dd>{{ k.state }}</dd></div> }
+            @if (k.pincode) { <div><dt>Pincode</dt><dd class="pf-num">{{ k.pincode }}</dd></div> }
+          </dl>
+          <p class="pf-pp-explain">Captured from ABHA KYC.</p>
+        }
+      </div>
+    </div>
+  }
+
+  @if (abhaWizardOpen() && patient(); as p) {
+    <pf-abha-wizard [patientId]="p.id" [presetAbha]="p.abhaId || ''" (close)="abhaWizardOpen.set(false)" (done)="onAbhaDone($event)"></pf-abha-wizard>
+  }
+
+  <!-- Send to a colleague. -->
+  @if (chatPickerOpen()) {
+    <div class="pf-pp-scrim" (click)="closeChatPicker()" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-chat-t">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="pf-card__label" id="pf-pp-chat-t">Send to a colleague</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="closeChatPicker()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </header>
+      <p class="pf-pp-pick__lead">{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
+      <div class="pf-pp-pick__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
+               [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
+      </div>
+      <ul class="pf-pp-pick__list">
+        @for (u of chatPickerFiltered(); track u.id) {
+          <li>
+            <button type="button" class="pf-pp-pick__row" [disabled]="chatPickerSending()"
+                    [pfBusy]="chatPickerSending() && sendingToId() === u.id" pfBusyLabel="Sending…" (click)="sendPatientToColleague(u)">
+              <span class="pf-pp-pick__avatar" aria-hidden="true">{{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</span>
+              <span class="pf-pp-pick__meta">
+                <span class="pf-pp-pick__name">{{ u.displayName }}</span>
+                <span class="pf-pp-pick__sub">{{ u.email }}</span>
+              </span>
+            </button>
+          </li>
+        } @empty {
+          <li class="pf-empty pf-empty--compact"><p class="pf-empty__title">No colleagues match</p></li>
+        }
+      </ul>
+    </div>
+  }
+
+  <!-- Merge a duplicate into this record. -->
+  @if (mergeOpen()) {
+    <div class="pf-pp-scrim" (click)="closeMerge()" aria-hidden="true"></div>
+    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-merge-t">
+      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.17 2.87L4 22"/><path d="m20 22-5-5"/></svg></span>
+        <span class="pf-card__label" id="pf-pp-merge-t">Merge a duplicate</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="closeMerge()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </header>
+      <p class="pf-pp-pick__lead">Pick the duplicate record: its orders, bills and appointments move into {{ displayName() }}, then it is deactivated.</p>
+      <div class="pf-pp-pick__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" class="pf-input" placeholder="Search patients by name, MRN or phone" aria-label="Search patients"
+               [value]="mergeSearch()" (input)="onMergeSearch($any($event.target).value)" autofocus>
+      </div>
+      <ul class="pf-pp-pick__list">
+        @for (dup of mergeResults(); track dup.id) {
+          <li>
+            <button type="button" class="pf-pp-pick__row" [disabled]="merging()"
+                    [pfBusy]="merging() && mergingId() === dup.id" pfBusyLabel="Merging…" (click)="mergeFrom(dup)">
+              <span class="pf-pp-pick__avatar" aria-hidden="true">{{ (displayOf(dup).charAt(0) + (displayOf(dup).split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</span>
+              <span class="pf-pp-pick__meta">
+                <span class="pf-pp-pick__name">{{ displayOf(dup) }}</span>
+                <span class="pf-pp-pick__sub pf-num">{{ dup.mrn || '—' }}@if (dup.phone) { · {{ dup.phone }}}@if (dup.sex) { · {{ dup.sex }}} · {{ ageLabel(dup) }}</span>
+              </span>
+            </button>
+          </li>
+        } @empty {
+          <li class="pf-empty pf-empty--compact">
+            <p class="pf-empty__title">@if (mergeSearch().trim()) { No other patients match } @else { Search for the duplicate record }</p>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  <!-- ── Templates ─────────────────────────────────────────────────── -->
+  <ng-template #summaryIcon>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+  </ng-template>
+  <ng-template #timelineIcon>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+  </ng-template>
+
+  <!-- Quick actions for techs (only what this user may do). -->
+  <ng-template #quickTpl>
+    @if (sideQuick().length) {
+      <div class="pf-pp-quick" role="group" aria-label="Quick actions">
+        @for (q of sideQuick(); track q.key) {
+          <button type="button" class="pf-btn pf-btn--secondary pf-pp-quick__btn" [attr.data-q]="q.key"
+                  [disabled]="q.key === 'labels' && reprintLoading()"
+                  [pfBusy]="q.key === 'labels' && reprintLoading()" pfBusyLabel="Printing labels…" (click)="runQuick(q)">
+            @switch (q.key) {
+              @case ('repeat') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg> }
+              @case ('labels') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4.5A1.5 1.5 0 0 1 3 16.5V11a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 1-1.5 1.5H18"/></svg> }
+              @case ('report') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg> }
+            }
+            <span>{{ q.label }}</span>
+          </button>
+        }
+      </div>
+    }
+  </ng-template>
+
+  <!-- Timeline: the patient's REAL history, one feed (no made-up records). -->
+  <ng-template #timelineTpl>
+    @if (!timeline().length) {
+      <div class="pf-empty pf-empty--compact">
+        <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        <p class="pf-empty__title">No history yet</p>
+        <p class="pf-empty__body">Orders, reports and appointments appear here as they happen.</p>
+      </div>
+    } @else {
+      <ol class="pf-tl" aria-label="Timeline">
+        @for (e of timeline(); track e.id; let i = $index) {
+          <li class="pf-tl__li" [style.--i]="i < 12 ? i : 12" [attr.data-kind]="e.kind">
+            <span class="pf-tl__rail" aria-hidden="true">
+              <span class="pf-tl__icon">
+                @switch (e.kind) {
+                  @case ('order') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/></svg> }
+                  @case ('report') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> }
+                  @case ('home') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg> }
+                  @default { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> }
+                }
+              </span>
+            </span>
+            <div class="pf-tl__row" role="button" tabindex="0" [attr.data-kind]="e.kind"
+                 [attr.aria-expanded]="e.orderId ? null : !!expanded()[e.id]"
+                 [attr.aria-label]="(e.orderId ? 'Open ' : '') + e.title + ', ' + e.status"
+                 [pfZoomSource]="e.orderId ? [e.orderId] : []" (click)="onEvent(e)" (keydown)="onEventKey($event, e)">
+              <span class="pf-tl__date pf-num">{{ e.date | date:'d MMM y' }}@if (e.kind !== 'appointment' && e.kind !== 'home') { · {{ e.date | date:'h:mm a' }} }</span>
+              <span class="pf-tl__title">{{ e.title }}</span>
+              <span class="pf-tl__meta pf-num">
+                @for (m of e.meta; track $index) { <span class="pf-pp-mi">{{ m }}</span> }
+              </span>
+              <span class="pf-pp-status pf-tl__status" [attr.data-tone]="e.tone"><span class="pf-pp-dot" aria-hidden="true"></span>{{ e.status }}</span>
+            </div>
+            @if (e.appointment; as ap) {
+              <div class="pf-pp-tlx" [class.pf-pp-tlx--open]="!!expanded()[e.id]" [attr.inert]="expanded()[e.id] ? null : ''">
+                <div class="pf-pp-tlx__in">
+                  <dl class="pf-pp-facts">
+                    <div><dt>When</dt><dd class="pf-num">{{ ap.appointmentDate | date:'d MMM y' }}@if (ap.slotTime) { · {{ ap.slotTime }} }</dd></div>
+                    <div><dt>Type</dt><dd>{{ e.kind === 'home' ? 'Home collection' : 'Visit' }}</dd></div>
+                    @if (ap.refDoctorName) { <div><dt>Doctor</dt><dd>{{ ap.refDoctorName }}</dd></div> }
+                    @if (ap.notes) { <div><dt>Notes</dt><dd>{{ ap.notes }}</dd></div> }
+                  </dl>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ol>
+      <button type="button" class="pf-btn pf-btn--tertiary pf-pp-fulltl" (click)="openFullTimeline()">Open the full timeline</button>
+    }
+  </ng-template>
+
+  <!-- Details: demographics, contact, ABHA, billing, clinical notes. -->
+  <ng-template #detailsTpl>
+    @if (patient(); as p) {
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-who">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-who">Patient</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Age · sex</dt><dd class="pf-num">{{ ageSex() }}</dd></div>
+          @if (p.dateOfBirth) { <div><dt>Date of birth</dt><dd class="pf-num">{{ p.dateOfBirth | date:'d MMM y' }}</dd></div> }
+          <div><dt>Blood group</dt><dd>{{ p.bloodGroup || 'Not recorded' }}</dd></div>
+          <div>
+            <dt>Patient ID</dt>
+            <dd class="pf-pp-idrow">
+              <span class="pf-num">{{ p.mrn || '—' }}</span>
+              @if (p.mrn) {
+                <button type="button" class="pf-btn pf-btn--icon pf-pp-copy" (click)="copyToClipboard(p.mrn)"
+                        [attr.aria-label]="copied() ? 'Copied' : 'Copy patient ID'" [title]="copied() ? 'Copied' : 'Copy patient ID'">
+                  @if (copied()) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  } @else {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  }
+                </button>
+              }
+            </dd>
+          </div>
+          @if (p.createdAt) { <div><dt>Registered</dt><dd class="pf-num">{{ p.createdAt | date:'d MMM y' }}</dd></div> }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-clin">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-clin">Clinical notes</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Allergies</dt><dd>{{ p.hasKnownAllergies ? 'Known allergies (recorded at registration)' : 'None recorded' }}</dd></div>
+          @if (p.isMinor) { <div><dt>Guardian</dt><dd>Required (minor)</dd></div> }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-contact">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-contact">Contact</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Phone</dt><dd>@if (p.phone) { <a class="pf-pp-link pf-num" [href]="'tel:' + p.phone">{{ p.phone }}</a> } @else { Not recorded }</dd></div>
+          @if (p.email) { <div><dt>Email</dt><dd class="pf-pp-wrap">{{ p.email }}</dd></div> }
+          @if (p.guardianName) {
+            <div><dt>Guardian</dt>
+              <dd>{{ p.guardianName }} <span class="pf-pp-sub">({{ p.guardianRelationship ?? 'Guardian' }})</span>
+                @if (p.guardianPhone) { <a class="pf-pp-link pf-pp-block pf-num" [href]="'tel:' + p.guardianPhone">{{ p.guardianPhone }}</a> }
+              </dd>
+            </div>
+          }
+          @if (kyc(); as k) {
+            @if (k.address || k.district || k.state || k.pincode) {
+              <div><dt>Address</dt><dd>{{ kycAddress(k) }}@if (k.pincode) { <span class="pf-num"> {{ k.pincode }}</span> }</dd></div>
+            }
+          }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-idcard">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-idcard">Patient ID card</h3>
+        <p class="pf-pp-none">Name, MRN and a QR that opens this profile when scanned.</p>
+        <div class="pf-pp-sec__acts">
+          <button type="button" class="pf-btn pf-btn--secondary pf-pp-idcard" (click)="showIdCard.set(true)">View card</button>
+        </div>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-abha">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-abha">ABHA</h3>
+        @if (p.abhaId) {
+          <span class="pf-chip pf-chip--static pf-pp-state">
+            @if (p.abhaVerified) {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Linked · KYC verified
+            } @else {
+              <span class="pf-pp-state__ring" aria-hidden="true"></span>
+              Linked · not verified
+            }
+          </span>
+          <dl class="pf-pp-facts">
+            <div><dt>ABHA number</dt><dd class="pf-num">{{ abhaFormatted() }}</dd></div>
+            @if (cardAbhaAddress()) { <div><dt>ABHA address</dt><dd class="pf-pp-wrap">{{ cardAbhaAddress() }}</dd></div> }
+          </dl>
+          <div class="pf-pp-sec__acts">
+            <button type="button" class="pf-btn pf-btn--secondary pf-pp-abha-card" (click)="abhaCardOpen.set(true)">View card</button>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">
+              {{ p.abhaVerified ? 'Refresh from ABHA' : 'Verify ABHA' }}
+            </button>
+          </div>
+        } @else {
+          <p class="pf-pp-none">No ABHA linked yet.</p>
+          <div class="pf-pp-sec__acts">
+            <button type="button" class="pf-btn pf-btn--secondary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">Link ABHA</button>
+          </div>
+        }
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-bill">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-bill">Billing</h3>
+        <dl class="pf-pp-stats">
+          <div><dt>Outstanding</dt><dd class="pf-num" [class.pf-pp-owed]="outstanding() > 0">{{ outstanding() | inr }}</dd></div>
+          <div><dt>Total billed</dt><dd class="pf-num">{{ realTotalSpent() | inr }}</dd></div>
+          <div><dt>Lab visits</dt><dd class="pf-num">{{ realVisits() }}</dd></div>
+          <div><dt>Tests ordered</dt><dd class="pf-num">{{ realTestsDone() }}</dd></div>
+        </dl>
+        @if (unpaidOrders()) {
+          <p class="pf-pp-due"><span class="pf-pp-dot" aria-hidden="true"></span>Payment due on {{ unpaidOrders() }} {{ unpaidOrders() === 1 ? 'order' : 'orders' }}</p>
+        }
+      </section>
+    }
+  </ng-template>
+
+  <ng-template #modalHead let-label="label" let-close="close">
+    <header class="pf-card__head">
+      <span class="pf-card__label">{{ label }}</span>
+      <span class="pf-card__spacer"></span>
+      <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="close()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </header>
+  </ng-template>
+
+  <!-- The official ABHA card look (Ayushman Bharat Health Account / NHA). -->
+  <ng-template #abhaCard let-p>
+    <div class="abc relative overflow-hidden rounded-xl">
+      <div class="flex h-1.5 w-full">
+        <span class="flex-1" style="background:#FF9933"></span>
+        <span class="flex-1 bg-white"></span>
+        <span class="flex-1" style="background:#138808"></span>
+      </div>
+      <div class="p-4 flex flex-col gap-3">
+        <div class="abc__hr flex items-center justify-between gap-2 border-b pb-2.5">
+          <div class="flex items-center gap-2.5">
+            <svg class="abc__brand w-9 h-9 shrink-0" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+              <circle cx="50" cy="50" r="46" stroke="currentColor" stroke-width="4"/>
+              <circle cx="50" cy="50" r="5.5" fill="currentColor"/>
+              @for (s of chakraSpokes; track s) {
+                <line x1="50" y1="6" x2="50" y2="94" stroke="currentColor" stroke-width="1.6" [attr.transform]="'rotate(' + (s * 15) + ' 50 50)'"/>
+              }
+            </svg>
+            <div class="leading-tight">
+              <span class="abc__brand block text-lg font-bold tracking-tight">ABHA</span>
+              <span class="abc__mut block text-[10px] font-semibold -mt-0.5">Ayushman Bharat Health Account</span>
+            </div>
+          </div>
+          <div class="text-right leading-tight shrink-0">
+            <span class="abc__sub block text-[10px] font-bold">National Health Authority</span>
+            <span class="abc__mut block text-[9px]">Government of India</span>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start">
+          <div class="abc__chip relative overflow-hidden flex items-center justify-center shrink-0" style="width:60px;height:74px;border-radius:12px">
+            @if (abhaPhoto(); as ph) {
+              <img [src]="ph" alt="Patient photo" style="width:100%;height:100%;object-fit:cover" />
+            } @else {
+              <svg class="abc__mut" width="38" height="38" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            }
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="abc__mut block text-[10px] font-semibold uppercase tracking-wider">ABHA number</span>
+            <span class="abc__brand block pf-num font-bold text-base tracking-wide">{{ abhaFormatted() }}</span>
+            <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Name</span><span class="block text-[12px] font-semibold pf-pp-wrap">{{ displayName() }}</span></div>
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Date of birth</span><span class="block text-[12px] font-semibold pf-num">{{ (p.dateOfBirth | date:'dd-MM-yyyy') || '—' }}</span></div>
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Gender</span><span class="block text-[12px] font-semibold">{{ p.sex || '—' }}</span></div>
+              <div class="min-w-0"><span class="abc__mut block text-[9px] uppercase tracking-wide">Mobile</span><span class="block text-[12px] font-semibold pf-num">{{ p.phone || '—' }}</span></div>
+            </div>
+          </div>
+          <div class="abc__qr shrink-0 self-start p-1 rounded">
+            @if (abhaQrValue()) {
+              <pf-barcode-display mode="qr" [code]="abhaQrValue()" [bare]="true" [showValue]="false" [size]="82"></pf-barcode-display>
+            }
+          </div>
+        </div>
+        <div class="abc__strip flex items-center justify-between gap-2 rounded-lg px-3 py-2">
+          <div class="min-w-0">
+            <span class="abc__mut block text-[9px] uppercase tracking-wide">ABHA address</span>
+            <span class="abc__brand block text-[12px] font-semibold pf-pp-wrap">{{ cardAbhaAddress() || '—' }}</span>
+          </div>
+          @if (p.abhaVerified) {
+            <span class="abc__ok shrink-0 inline-flex items-center gap-1 text-[10px] font-bold">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              KYC verified
+            </span>
+          }
+        </div>
+      </div>
+    </div>
+  </ng-template>
 </section>

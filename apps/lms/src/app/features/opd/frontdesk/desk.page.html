@@ -1,0 +1,148 @@
+<section class="pf-band-page pf-dk">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/opd" [customSearch]="true">
+      <div band-search class="pf-ob-pill pf-dk-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="pf-dk-search__in" type="text" autocomplete="off" aria-label="Find today's visit"
+               placeholder="Find today's visit — name, MRN, token or visit number" [value]="query()" (input)="query.set($any($event.target).value)" />
+      </div>
+      <ng-container band-actions>
+        <a class="pf-hb-btn pf-hb-btn--ghost press" routerLink="/opd/queue" aria-label="Token queue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
+          <span class="pf-ob-hide-phone">Queue</span>
+        </a>
+        <a class="pf-hb-btn pf-hb-btn--primary press" routerLink="/opd/visit/new" aria-label="New visit" data-cta>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="pf-ob-hide-phone">New visit</span>
+        </a>
+      </ng-container>
+    </pf-hero-band>
+  } @else {
+    <pf-screen-header eyebrow="OPD" title="OPD desk" subtitle="Today's visits at this branch."></pf-screen-header>
+  }
+
+  <div class="pf-band-body pf-band-body--fill">
+    <div class="pf-ob-split pf-ob-split--left">
+      <aside class="pf-card" aria-label="Doctors">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1"/></svg></span>
+          <span class="pf-card__label">Doctors</span>
+          <span class="pf-card__spacer"></span>
+          @if (doctorId()) { <button type="button" class="pf-btn pf-btn--tertiary" (click)="doctorId.set(null)">All</button> }
+        </header>
+        <div class="pf-card__body">
+          <ul class="pf-ob-list">
+            @for (d of board(); track d.id) {
+              <li>
+                <button type="button" class="pf-ob-row" [attr.aria-pressed]="doctorId() === d.id" (click)="pickDoctor(d.id)">
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name">{{ d.name }}</span>
+                    <span class="pf-ob-row__meta">{{ d.department || 'OPD' }}</span>
+                  </span>
+                  <span class="pf-ob-row__side pf-num">
+                    <span>{{ d.waiting + d.vitals }} waiting</span>
+                    @if (d.nowServing) { <span>Now {{ d.nowServing }}</span> }
+                  </span>
+                </button>
+              </li>
+            } @empty {
+              <li class="pf-ob-row__meta">No doctors set up for OPD yet.</li>
+            }
+          </ul>
+        </div>
+      </aside>
+
+      <section class="pf-card" aria-label="Today's visits">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h18v12H3zM3 11h18M8 3v4M16 3v4"/></svg></span>
+          <span class="pf-card__label">Today's visits</span>
+          <pf-segmented class="pf-dk-seg" [options]="filterOptions()" [value]="filter()" mode="text" (valueChange)="filter.set($any($event))" aria-label="Filter visits" />
+        </header>
+        <div class="pf-card__body">
+          @if (error(); as err) {
+            <div class="pf-empty"><p class="pf-empty__title">Today's visits could not load</p><p class="pf-empty__body">{{ err }}</p></div>
+          } @else if (filter() === 'due') {
+            <!-- Payments due: pay-after-consult fees and procedures from the consult (any day). -->
+            <ul class="pf-ob-list" aria-label="Payments due">
+              @for (r of shownDues(); track r.billId) {
+                <li>
+                  <button type="button" class="pf-ob-row" (click)="openDue(r)" [attr.data-due]="r.billId">
+                    <span class="pf-ob-token">{{ r.tokenLabel }}</span>
+                    <span class="pf-ob-row__txt">
+                      <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                      <span class="pf-ob-row__meta pf-num">{{ r.patientMeta }} · {{ r.doctorName }} · {{ dueWhat(r) }} · {{ day(r.visitDate) }}</span>
+                    </span>
+                    <span class="pf-ob-row__side">
+                      <span class="pf-ob-status pf-ob-status--due">{{ r.status === 'partial' ? 'Part paid' : 'To collect' }}</span>
+                      <span class="pf-num"><b>{{ r.balance | inr }}</b>@if (r.totalPaid > 0) { of {{ r.totalPayable | inr }} }</span>
+                    </span>
+                  </button>
+                </li>
+              } @empty {
+                <li><div class="pf-empty pf-empty--compact"><p class="pf-empty__title">Nothing to collect</p>
+                  <p class="pf-empty__body">Pay-after-consult fees and procedures appear here when the doctor completes the consult.</p></div></li>
+              }
+            </ul>
+            @if (shownDues().length) { <p class="pf-dk-duesum pf-num">{{ shownDues().length }} bill{{ shownDues().length === 1 ? '' : 's' }} · {{ dueTotal() | inr }} to collect</p> }
+          } @else if (filter() === 'tobook') {
+            <!-- Procedures the doctor ordered for later: pick a date, book; collected on the day. -->
+            <ul class="pf-ob-list" aria-label="Procedures to book">
+              @for (r of shownToBook(); track r.id) {
+                <li class="pf-dk-book" [attr.data-tobook]="r.id">
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                    <span class="pf-ob-row__meta pf-num">@if (r.mrn) { {{ r.mrn }} · }Ordered by {{ r.doctorName || 'the doctor' }} · {{ day(r.orderedAt) }}</span>
+                  </span>
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name">{{ r.procedureName }}</span>
+                    <span class="pf-ob-row__meta">{{ r.preferredWithin || 'No preferred window' }}@if (r.prepNote) { · {{ r.prepNote }} }</span>
+                  </span>
+                  <span class="pf-ob-row__txt">
+                    <span class="pf-ob-row__name pf-num">{{ r.price | inr }}</span>
+                    <span class="pf-ob-row__meta">{{ toBookPriceText(r) }} · collect on the day</span>
+                  </span>
+                  <span class="pf-dk-book__act">
+                    <pf-date [value]="bookDate()[r.id] ?? null" [min]="today" [max]="maxBookDate" label="Procedure date" (valueChange)="setBookDate(r.id, $event)"></pf-date>
+                    <button type="button" class="pf-btn pf-btn--primary" [disabled]="!bookDate()[r.id] || booking() === r.id" (click)="book(r)">
+                      {{ booking() === r.id ? 'Booking…' : 'Book' }}
+                    </button>
+                  </span>
+                </li>
+              } @empty {
+                <li><div class="pf-empty pf-empty--compact"><p class="pf-empty__title">Nothing to book</p>
+                  <p class="pf-empty__body">When a doctor orders a procedure "for later", it appears here to book a date.</p></div></li>
+              }
+            </ul>
+          } @else if (rows() === null) {
+            <pf-skeleton-rows [rows]="6" label="Loading today's visits…"></pf-skeleton-rows>
+          } @else {
+            <ul class="pf-ob-list" aria-label="Visits">
+              @for (r of shown(); track r.id) {
+                <li>
+                  <button type="button" class="pf-ob-row" (click)="open(r)" [attr.data-visit]="r.id">
+                    <span class="pf-ob-token">{{ r.tokenLabel }}</span>
+                    <span class="pf-ob-row__txt">
+                      <span class="pf-ob-row__name">{{ r.patientName }}</span>
+                      <span class="pf-ob-row__meta pf-num">{{ r.patientMeta }} · {{ r.doctorName }} · {{ r.serviceName ?? r.purpose }}@if (r.isFollowUp) { · follow-up } · {{ time(r.createdAt) }}</span>
+                    </span>
+                    <span class="pf-ob-row__side">
+                      <span [class]="'pf-ob-status pf-ob-status--' + r.status">{{ statusWord(r.status) }}</span>
+                      <span class="pf-num">{{ r.charged | inr }}@if (r.hasLabOrder) { · lab }</span>
+                    </span>
+                  </button>
+                </li>
+              } @empty {
+                <li>
+                  <div class="pf-empty pf-empty--compact">
+                    <p class="pf-empty__title">{{ (rows() ?? []).length ? 'No visit matches' : 'No OPD visits yet today' }}</p>
+                    <a class="pf-btn pf-btn--secondary pf-empty__action" routerLink="/opd/visit/new">Book a visit</a>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </section>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,362 @@
+// The consult (consult v6): a compact one-row patient band, then the centre
+// card (the spaces as a tab strip in its head), an optional patient panel,
+// then the journey dock — all above the bottom navbar, which stays visible.
+// ONE 16px gutter everywhere (edge → centre → panel → edge, band → body,
+// body → dock). Spacing steps: 8 / 12 / 16 / 24 only. pf-kit tokens; light +
+// dark via the app's CSS variables.
+// The centre is the prescription pad (C/O · Dx · Rx · Procedures · Ix · Adv ·
+// F/U · Private note), one scrolling card.
+// Breakpoints: ≤1180 tablet (the vitals take their own scrolling row) ·
+// ≤760 phone (labels above the content; drawers are sheets).
+:host { display: block; }
+
+.cw {
+  // A flex column exactly as tall as the viewport minus the REAL nav (the
+  // shell measures it → --pf-nav-h / --pf-nav-left on <html>). The dock is
+  // its last, normal-flow child, so it can't end under the nav.
+  position: fixed; top: 0; left: var(--pf-nav-left, 0px); right: 0; z-index: 30;
+  height: calc(100dvh - var(--pf-nav-h, 0px)); box-sizing: border-box;
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  background: var(--bg-primary, #f6f4fb); color: var(--text-primary);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.cw--loading { align-items: center; justify-content: center; }
+.cw__skel { display: flex; flex-direction: column; gap: 12px; width: min(640px, 90vw); }
+.cw__skel span { height: 56px; border-radius: 16px; background: var(--pf-chip-bg); animation: cw-pulse 1.2s ease-in-out infinite; }
+@keyframes cw-pulse { 50% { opacity: 0.5; } }
+.cw__grow { flex: 1 1 auto; }
+.cw__muted { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-tertiary); }
+
+// ── Patient band: one compact row (the hero-band surface) ──
+.cw__band {
+  flex: none; position: relative; padding: 8px 16px; min-width: 0;
+  background-color: var(--pf-band-bg, var(--pf-card-bg));
+  background-image: var(--pf-band-fade, none), var(--pf-band-sweep, none);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+}
+.cw__row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cw__iconbtn { width: 36px; height: 36px; flex: none; border: 0; border-radius: 12px; background: transparent; color: var(--text-secondary);
+  display: grid; place-items: center; cursor: pointer; }
+.cw__iconbtn:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+.cw__iconbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.cw__iconbtn--sm { width: 32px; height: 32px; border: 1px solid var(--pf-line); }
+.cw__avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.cw__who { flex: none; min-width: 0; max-width: 340px; display: flex; flex-direction: column; }
+.cw__nameline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cw__name { margin: 0; font-size: 15.5px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.cw__meta { display: flex; flex-wrap: nowrap; white-space: nowrap; font-size: 12px; color: var(--text-tertiary); }
+.cw__meta span + span::before { content: '·'; margin: 0 8px; color: var(--pf-sel-border); }
+.cw__status { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); background: var(--pf-chip-bg); }
+.cw__status[data-status='in_consult'] { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.cw__live { width: 6px; height: 6px; border-radius: 50%; background: #a78bfa; animation: cw-live 1.6s infinite; }
+@keyframes cw-live { 50% { opacity: 0.35; } }
+.cw__vitals { flex: 1 1 auto; min-width: 0; padding-left: 12px; border-left: 1px solid var(--pf-line); }
+.cw__acts { flex: none; display: flex; align-items: center; gap: 8px; }
+.cw__save { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.cw__saveerr { color: var(--red-text, #dc2626); }
+.cw__cmp { position: relative; height: 36px; min-height: 36px; gap: 8px; color: var(--text-primary); border-color: var(--pf-line); background: var(--pf-card-bg); }
+.cw__cmp[aria-pressed='true'] { border-color: var(--color-violet-600, #7c3aed); color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--pf-card-bg)); }
+.cw__ct { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; display: grid; place-items: center; font-size: 10.5px; color: #fff; background: var(--color-violet-600, #7c3aed); }
+.cw__cta { height: 36px; min-height: 36px; }
+.cw__alertdot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); box-shadow: 0 0 0 2px var(--pf-card-bg); }
+.cw__alertdot--amber { background: #f59e0b; }
+
+// ── Band: the patient's name opens the patient panel; Page / Compare are icons ──
+.cw__namebtn { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.cw__namebtn:hover { color: var(--violet-text, #6d28d9); }
+.cw__namebtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
+.cw__ndot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-text, #dc2626); }
+.cw__ndot--amber { background: #f59e0b; }
+.cw__icon { width: 36px; padding: 0; }
+// Compare: a split button — the main part opens compare, ▾ the one-tap presets.
+.cw__split { position: relative; display: inline-flex; height: 36px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+.cw__split--on { border-color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--pf-card-bg)); }
+.cw__split-main, .cw__split-more { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 100%; border: 0; background: none;
+  font: inherit; color: var(--text-primary); cursor: pointer; }
+.cw__split-main { padding: 0 8px 0 12px; border-radius: var(--pf-radius-sm, 10px) 0 0 var(--pf-radius-sm, 10px); }
+.cw__split-more { width: 28px; border-left: 1px solid var(--pf-line); border-radius: 0 var(--pf-radius-sm, 10px) var(--pf-radius-sm, 10px) 0; color: var(--text-secondary); }
+.cw__split--on .cw__split-main { color: var(--violet-text, #6d28d9); }
+.cw__split-main:hover, .cw__split-more:hover { background: var(--pf-chip-bg); }
+.cw__split-main:focus-visible, .cw__split-more:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.cw__pscrim { position: fixed; inset: 0; z-index: 59; }
+.cw__pmenu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; display: grid; width: 240px; padding: 8px; border-radius: 12px;
+  background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18); }
+:host-context(html.dark) .cw__pmenu { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5); }
+.cw__pmh { padding: 4px 8px 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.cw__pmi { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: none;
+  font: inherit; font-size: 13.5px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.cw__pmi:hover:not(:disabled) { background: var(--pf-chip-bg); }
+.cw__pmi:disabled { color: var(--text-tertiary); cursor: default; }
+.cw__pmi[aria-checked='true'] { color: var(--violet-text, #6d28d9); font-weight: 600; }
+.cw__pmi:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.cw__pmc { min-width: 24px; height: 20px; padding: 0 8px; border-radius: 10px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary); background: var(--pf-chip-bg); }
+
+// ── Body: the centre, and the patient card when it docks ──
+.cw__body { flex: 1 1 auto; min-height: 0; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 0px; gap: 0;
+  padding: 16px; transition: grid-template-columns 150ms ease, column-gap 150ms ease; }
+.cw__body--docked { grid-template-columns: minmax(0, 1fr) 320px; column-gap: 16px; }
+@media (prefers-reduced-motion: reduce) { .cw__body { transition: none; } }
+.cw__centre, .cw__right { min-height: 0; min-width: 0; }
+.cw__centre { display: flex; flex-direction: column; }
+
+// The patient card: docked (a column) or a panel over the centre.
+.cw__right { display: flex; }
+.cw__right--float { display: none; }
+.cw__right--float.cw__right--open { display: flex; position: absolute; top: 16px; right: 16px; bottom: 16px; width: min(320px, calc(100% - 32px)); z-index: 12;
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.18); animation: cw-float 220ms var(--pf-spring, ease) both; }
+:host-context(html.dark) .cw__right--float.cw__right--open { box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5); }
+// Outside tap closes the panel (a transparent scrim, rendered only while it is open).
+.cw__scrim { position: absolute; inset: 0; z-index: 11; background: transparent; }
+@keyframes cw-float { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cw__right--float.cw__right--open { animation: none; } }
+
+// ── The prescription pad: rows in printed order (label · content), one form ──
+.pad { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 48px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent; }
+.prow { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); align-items: start; }
+.prow:last-child { border-bottom: 0; }
+.plab { display: flex; align-items: center; gap: 4px; min-height: 42px; padding: 0; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; color: var(--text-tertiary); text-align: left; cursor: pointer; }
+.plab b { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: none; color: var(--violet-text, #6d28d9); }
+.plab:hover { color: var(--text-primary); }
+.plab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 8px; }
+.plab__chev { font-size: 10px; color: var(--text-tertiary); transition: transform 150ms ease; }
+.prow--coll .plab__chev { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .plab__chev { transition: none; } }
+.pbody { display: grid; gap: 8px; min-width: 0; max-width: 900px; }
+.psum { margin: 0; display: flex; align-items: center; min-height: 42px; font-size: 13px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+// C/O: the one-line summary that opens the Findings drawer.
+.pfind { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 42px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--pf-line);
+  background: none; font: inherit; font-size: 13.5px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.pfind:hover { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line)); }
+.pfind:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pfind__w { color: var(--amber-text, #b45309); font-weight: 600; }
+:host-context(html.dark) .pfind__w, :host-context(html.dark) .pfind__rv { color: #fbbf24; }
+.pfind__a { color: var(--text-secondary); }
+.pfind__rv { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--amber-text, #b45309);
+  background: color-mix(in srgb, #f59e0b 12%, transparent); }
+// Added items: editable chips (tap to edit, × to remove).
+.pchips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pchip { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 4px 0 12px; border-radius: var(--pf-radius-chip, 8px);
+  font-size: 13.5px; font-weight: 600; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.pchip__t { display: inline-flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: text; text-align: left; overflow-wrap: anywhere; }
+.pchip__t em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--text-tertiary); }
+.pchip__t small { font-size: 11px; font-weight: 500; opacity: 0.8; }
+.pchip__x { width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: inherit; opacity: 0.75; font-size: 16px; line-height: 1; cursor: pointer; }
+.pchip__x:hover { opacity: 1; color: var(--red-text, #dc2626); }
+.pchip--main { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
+.pchip-edit { width: min(320px, 100%); min-height: 32px; height: 32px; font-size: 13.5px; }
+// One-tap row under the Rx list (Repeat, the diagnosis set, a few usual drugs).
+.pquick { display: flex; flex-wrap: wrap; gap: 8px; }
+.pquick__c { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--pf-line); background: none;
+  font: inherit; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.pquick__c small { font-size: 11px; color: var(--text-tertiary); }
+.pquick__c:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
+.pquick__c--set { border-style: dashed; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--pf-line)); color: var(--violet-text, #6d28d9); }
+// F/U chips (the same .o chip as every option group).
+.popts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 42px; }
+.phint { font-size: 12.5px; color: var(--text-tertiary); }
+.o { height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px); border: 1px solid var(--pf-line); background: none; font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); cursor: pointer; }
+.o[aria-checked='true'] { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9); font-weight: 600;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.o:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pnote { width: 100%; min-height: 42px; font-size: 14px; resize: vertical; border-style: dashed; }
+
+// The Findings drawer (the same right-side panel as the patient card).
+.cw__drawer { position: absolute; top: 16px; right: 16px; bottom: 16px; z-index: 13; width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column;
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.18); animation: cw-float 220ms var(--pf-spring, ease) both; }
+:host-context(html.dark) .cw__drawer { box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5); }
+@media (prefers-reduced-motion: reduce) { .cw__drawer { animation: none; } }
+.cw__drawer--wide { width: min(880px, calc(100% - 32px)); }
+.cw__drawerb { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+// Compare: consults side by side — one column per consult, matching lines on one row.
+.cw__hide-sm { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.cmx { display: grid; grid-template-columns: 168px repeat(var(--cmx-n, 2), minmax(220px, 1fr)); overflow-x: auto; border: 1px solid var(--pf-line);
+  border-radius: 12px; scroll-snap-type: x proximity; }
+.cmx__row, .cmx__sec { display: contents; }
+.cmx__row > *, .cmx__sec > * { padding: 8px 12px; border-bottom: 1px solid var(--pf-line); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.cmx__sec > * { grid-column: 1 / -1; padding-top: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
+.cmx__lbl { position: sticky; left: 0; z-index: 1; color: var(--text-tertiary); background: var(--pf-card-bg); }
+.cmx__cell { color: var(--text-primary); scroll-snap-align: start; }
+.cmx__cell--chg { background: color-mix(in srgb, #f59e0b 12%, transparent); font-weight: 600; }
+.cmx__row--head > * { position: sticky; top: 0; z-index: 2; background: var(--pf-card-bg); }
+.cmx__row--head .cmx__lbl { z-index: 3; }
+.cmx__col { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cmx__col b { font-size: 13.5px; }
+.cmx__col small { flex-basis: 100%; font-size: 11.5px; color: var(--text-tertiary); }
+.cmx__ord { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--color-violet-600, #7c3aed); }
+.cmx__x { margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+.cmx__x:hover { color: var(--red-text, #dc2626); }
+
+// Findings: a compact prefill review — amber edge, tinted, 44px rows.
+.cw__review { display: flex; flex-direction: column; border-radius: 12px; border-left: 3px solid #f59e0b;
+  background: color-mix(in srgb, #f59e0b 8%, var(--pf-card-bg)); overflow: hidden; }
+.cw__rh { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber-text, #b45309); }
+:host-context(html.dark) .cw__rh, :host-context(html.dark) .cw__pf--w .cw__pfv, :host-context(html.dark) .cw__ptag { color: #fbbf24; }
+.cw__pf { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 4px 12px; border-top: 1px solid color-mix(in srgb, #f59e0b 22%, transparent); }
+.cw__pfm { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.cw__pfv { font-size: 13.5px; color: var(--text-primary); overflow-wrap: anywhere; }
+.cw__pf--w .cw__pfv { color: var(--amber-text, #b45309); font-weight: 600; }
+.cw__pfs { font-size: 11.5px; color: var(--text-tertiary); }
+.cw__pfa { flex: none; display: flex; align-items: center; gap: 8px; }
+.cw__sm { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+.cw__xs { height: 28px; min-height: 28px; padding: 0 8px; font-size: 12px; }
+.cw__f { display: flex; flex-direction: column; gap: 8px; }
+.cw__f > span { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+.cw__f--pre .pf-input { border-color: color-mix(in srgb, #f59e0b 45%, transparent); background: color-mix(in srgb, #f59e0b 8%, var(--pf-card-bg)); }
+.cw__ptag { font-style: normal; font-size: 11px; font-weight: 600; color: var(--amber-text, #b45309); margin-left: 8px; }
+.cw__ptag--q { color: var(--text-tertiary); font-weight: 400; }
+.cw__in { width: 100%; font-size: 14.5px; min-height: 44px; }
+.cw__notes { min-height: 120px; }
+// The consult form on the 2-column grid; every option group is the same chip.
+.cw__form { display: flex; flex-direction: column; gap: 8px; }
+.cw__form ::ng-deep {
+  .ofr { gap: 16px 24px; }
+  .ofr-q { padding: 0; border-radius: 0; }
+  .ofr-q.is-addon { padding: 12px; border-radius: 12px; }
+  .ofr-q__q { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+  .ofr-sec-head { padding: 0; font-size: 11px; letter-spacing: 0.08em; color: var(--text-secondary); }
+  .ofr-sec-head:not(:first-child) { margin-top: 0; padding-top: 16px; border-top: 1px solid var(--pf-line); }
+  .pf-input, textarea { width: 100%; min-height: 40px; font-size: 14.5px; }
+  .ofr-unit { max-width: 240px; }
+  // Pick / yes-no / scale: no tray — the same .o chips as the conditions.
+  .ofr-seg { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; border: 0; background: none; box-shadow: none; }
+  .ofr-chips, .ofr-scale { gap: 8px; }
+  .ofr-chip, .ofr-seg .pf-seg__item, .ofr-scale button {
+    height: 34px; min-width: 0; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px); border: 1px solid var(--pf-line);
+    background: none; box-shadow: none; font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  }
+  .ofr-scale button { min-width: 32px; padding: 0 8px; }
+  .ofr-chip[aria-pressed='true'], .ofr-seg .pf-seg__item[aria-pressed='true'], .ofr-scale button[aria-pressed='true'] {
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9); font-weight: 600;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  }
+}
+
+// Diagnosis / tests chips.
+.cw__chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cw__dx { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px 0 12px; border-radius: var(--pf-radius-chip, 8px);
+  font-size: 13.5px; font-weight: 600; color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); overflow-wrap: anywhere; }
+.cw__dx em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--text-tertiary); }
+.cw__dx small { font-size: 11px; font-weight: 500; opacity: 0.8; }
+.cw__dx button { width: 24px; height: 24px; border: 0; border-radius: 8px; background: none; color: inherit; opacity: 0.75; display: grid; place-items: center; cursor: pointer; }
+.cw__opt { min-height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px); border: 1px solid var(--pf-line); background: none; font: inherit;
+  font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.cw__opt:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
+.cw__grp { display: flex; flex-direction: column; gap: 12px; }
+.cw__gh { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.cw__gh span { letter-spacing: 0; text-transform: none; font-weight: 500; }
+.cw__lock { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: var(--pf-chip-bg); font-size: 12px; color: var(--text-secondary); }
+// Follow-up picks: the same chips as every other option group.
+.cw__seg { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-start; padding: 0; border: 0; background: none; box-shadow: none; }
+.cw__seg .pf-seg__item { height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px); border: 1px solid var(--pf-line); background: none; box-shadow: none;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.cw__seg .pf-seg__item[aria-checked='true'] { border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent); color: var(--violet-text, #6d28d9);
+  font-weight: 600; background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+.cw__ordered { min-height: 48px; }
+.cw__x { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); display: grid; place-items: center; cursor: pointer; }
+.cw__x:hover { color: var(--red-text, #dc2626); }
+
+// Prescription one-tap row + the usual banner.
+.cw__favs { display: flex; flex-wrap: wrap; gap: 8px; }
+.cw__fav { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--pf-line); background: none;
+  font: inherit; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.cw__fav:hover { border-color: var(--color-violet-600, #7c3aed); color: var(--text-primary); }
+.cw__fav:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.cw__fav small { font-size: 11.5px; color: var(--text-tertiary); }
+.cw__fav--set { border-style: dashed; border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 50%, var(--pf-line)); color: var(--violet-text, #6d28d9); }
+.cw__banner { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 12px; background: var(--pf-in-tint);
+  border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 25%, transparent); font-size: 13.5px; }
+.cw__banner svg { color: var(--violet-text, #6d28d9); flex: none; }
+.cw__banner span { flex: 1; }
+
+// The centre viewer (a record from the patient card / compare).
+.cw__vbar { flex-wrap: nowrap; min-height: 48px; }
+.cw__vt { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.cw__vt b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.cw__vt span { font-size: 12px; color: var(--text-tertiary); }
+.cw__back { height: 32px; min-height: 32px; }
+.cw__viewer { flex: none; max-height: 100%; overflow-y: auto; padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+.cw__centre--viewing .cw__viewer:last-child { flex: 1; }
+.cw__viewer--none { display: none; }
+.cw__flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.cw__fs { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 12px; border: 1px solid var(--pf-line); border-top: 3px solid var(--color-violet-600, #7c3aed); }
+.cw__fs--now { border-top-color: #ec4899; }
+.cw__fs span { font-size: 12px; color: var(--text-tertiary); }
+.cw__fs b { font-size: 13.5px; font-weight: 600; }
+.cw__cmpgrid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.cw__cp { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+.cw__cp--wide { max-width: 640px; }
+.cw__cpd { font-size: 12px; color: var(--text-tertiary); }
+.cw__cp > .pf-btn { align-self: flex-start; }
+.cw__big { font-size: 36px; font-weight: 700; line-height: 1.1; }
+.cw__big small { font-size: 13px; font-weight: 400; color: var(--text-tertiary); }
+.cw__big--h { color: var(--red-text, #dc2626); }
+.cw__spark { width: 100%; height: 64px; color: var(--red-text, #dc2626); }
+.cw__k { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.cw__kv { display: flex; justify-content: space-between; gap: 16px; font-size: 13.5px; color: var(--text-tertiary); }
+.cw__kv b { color: var(--text-primary); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.cw__kv--warn b { color: var(--amber-text, #b45309); }
+.cw__p { margin: 0; font-size: 14px; }
+.cw__rxl { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 8px 12px; border: 1px solid var(--pf-line); border-radius: 12px; font-size: 13.5px; }
+.cw__rxl span:first-child { color: var(--text-tertiary); }
+// The reused journey viewer: only while a report / image / compared files show.
+.cw__tl { display: none; flex: 1 1 auto; min-height: 0; }
+.cw__tl.cw__tl--on { display: block; }
+
+.cw__dock { flex: none; }
+
+/* Integrator: the media picker the form renderer's mediaRequest opens (visually hidden). */
+.cw__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.cw__upl { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+@media (prefers-reduced-motion: reduce) { .cw__live, .cw__skel span { animation: none; } }
+
+// ── Tablet: the band wraps — the vitals keep ONE scrolling row of 28px chips ──
+@media (max-width: 1180px) {
+  .cw__row { flex-wrap: wrap; row-gap: 8px; }
+  .cw__who { flex: 1 1 auto; max-width: none; }
+  .cw__vitals { order: 3; flex-basis: 100%; padding-left: 0; border-left: 0; }
+  .cw__save { display: none; }
+}
+
+// ── Phone: tab icons + the active label; the patient card is a sheet ──
+@media (max-width: 760px) {
+  .cw__status { display: none; }
+  .cw__acts { order: 2; width: 100%; }
+  .cw__acts > * { flex: 1; }
+  .cw__lab { display: none; }
+  // The presets menu: a bottom sheet.
+  .cw__split { flex: 1; justify-content: center; }
+  .cw__split-main { flex: 1; }
+  .cw__pscrim { z-index: 59; background: rgba(15, 23, 42, 0.32); }
+  .cw__pmenu { position: fixed; top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); width: auto; padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0; }
+  .cw__pmi { min-height: 44px; }
+  .cw__cmp, .cw__cta { justify-content: center; padding: 0 8px; }
+  .cw__body, .cw__body--docked { display: flex; flex-direction: column; overflow-y: auto; padding: 8px; }
+  .cw__centre { flex: none; overflow: visible; }
+  .pad { overflow: visible; padding: 8px 16px 24px; }
+  // Phone: the label sits above the row's content; drawers are full sheets.
+  .prow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .plab { min-height: 32px; }
+  .cw__drawer { position: fixed; top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); width: auto; height: 92dvh; z-index: 35; border-radius: 24px 24px 0 0; }
+  .cw__right, .cw__right--float { display: none; }
+  .cw__right.cw__right--open, .cw__right--float.cw__right--open { display: flex; position: fixed; top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px);
+    width: auto; height: 86dvh; z-index: 35; border-radius: 24px 24px 0 0; box-shadow: 0 -16px 40px rgba(15, 23, 42, 0.22); }
+  .cw__scrim { position: fixed; z-index: 34; background: rgba(15, 23, 42, 0.32); }
+  .cw__viewer { padding: 16px; }
+  .cw__in, .pnote, .pchip-edit, .cw__form ::ng-deep .pf-input { font-size: 16px; }
+  // Compare on a phone: one or two consult columns at a time, swiped sideways.
+  .cmx { grid-template-columns: 96px repeat(var(--cmx-n, 2), minmax(calc((100vw - 136px) / 2), 1fr)); scroll-snap-type: x mandatory; }
+  .cw__hide-sm { display: none; }
+}

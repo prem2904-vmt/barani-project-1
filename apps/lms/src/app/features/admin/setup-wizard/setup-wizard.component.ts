@@ -1,18 +1,21 @@
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { brandingSrc } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Tenant, TenantBrandingMode } from '../../../shared/models/tenant.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
-const BRANDING_NAME_MAX = 10;
+const BRANDING_NAME_MAX = 30;
 
 interface BrandingDraft {
   logoUrl: string;          // base64 data URL or '' for none
@@ -28,31 +31,58 @@ interface BrandingDraft {
 @Component({
   selector: 'pf-setup-wizard',
   standalone: true,
-  imports: [
+  imports: [BusyDirective, 
     FormsModule,
     ScreenHeaderComponent,
     SegmentedComponent,
-    TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): "What to show" (Both / Logo only / Name only) is the
+             page's one switch and decides which fields the form shows, so it
+             owns the pill (tabs-only); Save rides the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="brandingModeOptions"
+                          [value]="branding().brandingMode"
+                          (valueChange)="updateBranding({ brandingMode: $event })"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                    [disabled]="saving() || !dirty()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
+                    aria-label="Save branding" title="Save branding">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save branding' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
 
-      <pf-screen-header
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Branding"
         title="Lab branding"
         subtitle="The logo and short name shown in the top bar. Everything else about your lab is managed under Admin.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-2">
-        <pf-tile tone="default" padding="lg" class="lg:col-span-2 block">
-          <h2 class="section-title">Top-navigation branding</h2>
-          <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-            What appears in the header pill next to your user avatar. All three fields are optional.
-          </p>
+        <section class="pf-card lg:col-span-2 pf-sw-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><circle cx="7" cy="6.5" r=".5"/></svg></span>
+            <h2 class="pf-card__label pf-sw-h">Top-navigation branding</h2>
+            <span class="pf-card__note">What appears in the header pill next to your user avatar. All fields are optional.</span>
+          </div>
+          <div class="pf-card__body pf-sw-body">
 
-          <div class="mt-5">
+          <div class="mt-5 pf-classic-only">
             <label class="pf-label">What to show</label>
             <pf-segmented size="md"
                            [options]="brandingModeOptions"
@@ -71,10 +101,10 @@ interface BrandingDraft {
                    (dragleave)="onLogoDrag($event, false)"
                    (drop)="onLogoDrop($event)">
                 @if (branding().logoUrl) {
-                  <img [src]="branding().logoUrl" alt="Logo preview" class="brand-upload__preview" />
+                  <img [src]="logoSrc() ?? ''" alt="Logo preview" class="brand-upload__preview" />
                   <div class="brand-upload__actions">
-                    <button type="button" class="brand-upload__btn" (click)="openLogoPicker()">Replace</button>
-                    <button type="button" class="brand-upload__btn brand-upload__btn--danger" (click)="clearLogo()">Remove</button>
+                    <button type="button" class="pf-btn pf-btn--secondary brand-upload__btn press" (click)="openLogoPicker()">Replace</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary brand-upload__btn brand-upload__btn--danger press" (click)="clearLogo()">Remove</button>
                   </div>
                 } @else {
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="brand-upload__icon">
@@ -103,7 +133,7 @@ interface BrandingDraft {
             <div class="mt-5">
               <label class="pf-label">
                 Short name
-                <span class="text-[11px] font-mono ml-2" style="color: var(--text-muted);">
+                <span class="pf-sw-count pf-num ml-2">
                   {{ branding().brandingName.length }}/{{ nameMax }}
                 </span>
               </label>
@@ -113,7 +143,7 @@ interface BrandingDraft {
                      [attr.maxlength]="nameMax"
                      placeholder="e.g. APOLLO"
                      (input)="updateBranding({ brandingName: nameIn.value.slice(0, nameMax) })" />
-              <p class="text-[11px] mt-1" style="color: var(--text-muted);">
+              <p class="pf-sw-hint">
                 Hard-capped at {{ nameMax }} characters so the header stays tidy.
               </p>
               @if (nameError()) {
@@ -121,19 +151,22 @@ interface BrandingDraft {
               }
             </div>
           }
-        </pf-tile>
+          </div>
+        </section>
 
-        <pf-tile tone="violet" padding="lg" class="block">
-          <h3 class="section-title">Preview</h3>
-          <p class="text-[11.5px] font-mono mt-2" style="color: var(--text-tertiary);">
-            How your brand appears in the top strip.
-          </p>
+        <section class="pf-card pf-sw-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <h3 class="pf-card__label pf-sw-h">Preview</h3>
+            <span class="pf-card__note">How your brand appears in the top strip.</span>
+          </div>
+          <div class="pf-card__body pf-sw-body">
 
           <div class="brand-preview">
             <div class="brand-preview__slot"
                  [class.brand-preview__slot--empty]="!hasBrand()">
               @if (showLogoPreview()) {
-                <img [src]="branding().logoUrl" alt="" class="brand-preview__logo" />
+                <img [src]="logoSrc() ?? ''" alt="" class="brand-preview__logo" />
               }
               @if (showNamePreview()) {
                 <span class="brand-preview__name">{{ branding().brandingName }}</span>
@@ -143,16 +176,18 @@ interface BrandingDraft {
               }
             </div>
           </div>
-        </pf-tile>
+          </div>
+        </section>
       </div>
 
-      <!-- Save -->
-      <div class="mt-6 flex items-center justify-end">
+      <!-- Save (classic; the new design's Save rides the band) -->
+      <div class="mt-6 flex items-center justify-end pf-classic-only">
         <pf-touch-btn size="md" variant="primary"
-                       [disabled]="saving()"
+                       [disabled]="saving() || !dirty()" [busy]="saving()" busyLabel="Saving…"
                        (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save branding' }}
         </pf-touch-btn>
+      </div>
       </div>
     </section>
   `,
@@ -175,56 +210,48 @@ interface BrandingDraft {
       gap: 8px;
       padding: 22px;
       border-radius: 14px;
-      border: 2px dashed rgba(168, 85, 247, 0.35);
-      background: rgba(168, 85, 247, 0.04);
+      border: 2px dashed var(--pf-line);
+      background: var(--pf-chip-bg);
       min-height: 140px;
       transition: background 0.15s ease, border-color 0.15s ease;
     }
     .brand-upload--dragging {
-      background: rgba(168, 85, 247, 0.12);
-      border-color: #a855f7;
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
     }
     .brand-upload__icon { color: var(--text-muted); }
     .brand-upload__hint { font-size: 13px; color: var(--text-secondary); margin: 0; }
     .brand-upload__meta {
       font-size: 11px;
       color: var(--text-muted);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       margin: 0;
     }
     .brand-upload__link {
       background: none;
       border: none;
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-weight: 600;
       cursor: pointer;
       padding: 0 2px;
       text-decoration: underline;
     }
-    .brand-upload__link:hover { color: #a855f7; }
+    .brand-upload__link:hover { color: var(--violet-text); }
     .brand-upload__preview { max-height: 80px; max-width: 240px; object-fit: contain; }
     .brand-upload__actions { display: flex; gap: 8px; margin-top: 4px; }
-    .brand-upload__btn {
-      padding: 5px 12px;
-      border-radius: 9999px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid var(--glass-border);
-      background: var(--glass-bg);
-      color: var(--text-primary);
-    }
-    .brand-upload__btn:hover { background: var(--glass-bg-hover); }
-    .brand-upload__btn--danger {
-      color: #fca5a5;
-      border-color: rgba(239, 68, 68, 0.4);
-      background: rgba(239, 68, 68, 0.08);
-    }
-    .brand-upload__btn--danger:hover { background: rgba(239, 68, 68, 0.16); }
+    .brand-upload__btn { height: 36px; min-height: 36px; }
+    .brand-upload__btn--danger { color: var(--red-text, #b91c1c); }
+
+    /* New-design cards (kit): the body flows, the page body scrolls on phones. */
+    .pf-sw-card { overflow: visible; }
+    .pf-sw-body { overflow: visible; gap: 0; padding: 14px 16px 18px; }
+    .pf-sw-h { margin: 0; }
+    .pf-sw-count { font-size: 12px; color: var(--text-tertiary); }
+    .pf-sw-hint { margin: 4px 0 0; font-size: 12px; color: var(--text-tertiary); }
 
     .brand-error {
       font-size: 12px;
-      color: #f87171;
+      color: var(--red-text);
       margin: 6px 0 0;
     }
 
@@ -252,7 +279,7 @@ interface BrandingDraft {
       color: var(--text-primary);
       text-transform: uppercase;
     }
-    .brand-preview__name--placeholder { color: #ec4899; letter-spacing: 0.14em; }
+    .brand-preview__name--placeholder { color: var(--violet-text, #6d28d9); letter-spacing: 0.08em; }
 
     /* ════════════════════════════════════════════════════════════
      * RESPONSIVE / CROSS-PLATFORM OVERRIDES (additive only).
@@ -286,7 +313,7 @@ interface BrandingDraft {
 
     /* Only show hover affordances on devices that actually hover. */
     @media (hover: none) {
-      .brand-upload__link:hover { color: #c4b5fd; }
+      .brand-upload__link:hover { color: var(--violet-text); }
       .brand-upload__btn:hover { background: var(--glass-bg); }
       .brand-upload__btn--danger:hover { background: rgba(239, 68, 68, 0.08); }
     }
@@ -302,7 +329,9 @@ interface BrandingDraft {
 export class SetupWizardComponent {
   private readonly api = inject(ApiService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly injector = inject(Injector);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
 
   @ViewChild('logoInput') logoInput?: ElementRef<HTMLInputElement>;
 
@@ -314,12 +343,18 @@ export class SetupWizardComponent {
   readonly nameMax = BRANDING_NAME_MAX;
 
   private readonly _branding = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
+  // Last-saved snapshot — drives the dirty check so Save disables once there are
+  // no unsaved changes (OPS-9).
+  private readonly _savedBaseline = signal<BrandingDraft>({ logoUrl: '', brandingName: '', brandingMode: 'both' });
   private readonly _draggingLogo = signal(false);
   private readonly _logoError = signal<string | null>(null);
   private readonly _nameError = signal<string | null>(null);
   private readonly _saving = signal(false);
 
   readonly branding = this._branding.asReadonly();
+  /** Preview src: a saved "/uploads/…" logo loads through the session;
+   *  a freshly picked file is a data: URL and shows as is. */
+  readonly logoSrc = computed(() => brandingSrc(this.injector, this._branding().logoUrl));
   readonly draggingLogo = this._draggingLogo.asReadonly();
   readonly logoError = this._logoError.asReadonly();
   readonly nameError = this._nameError.asReadonly();
@@ -332,12 +367,20 @@ export class SetupWizardComponent {
     const t = this.tenantState.tenant();
     if (t && !this._seeded) {
       this._seeded = true;
-      this._branding.set({
+      const seed = {
         logoUrl: t.logoUrl ?? '',
         brandingName: t.brandingName ?? '',
         brandingMode: t.brandingMode ?? 'both'
-      });
+      };
+      this._branding.set(seed);
+      this._savedBaseline.set({ ...seed });
     }
+  });
+
+  /** True when the draft differs from the last-saved snapshot (OPS-9). */
+  readonly dirty = computed(() => {
+    const a = this._branding(), b = this._savedBaseline();
+    return a.logoUrl !== b.logoUrl || a.brandingName !== b.brandingName || a.brandingMode !== b.brandingMode;
   });
 
   constructor() { this.tenantState.ensureLoaded(); }
@@ -354,7 +397,12 @@ export class SetupWizardComponent {
   readonly hasBrand = computed(() => this.showLogoPreview() || this.showNamePreview());
 
   updateBranding(patch: Partial<BrandingDraft>) {
-    if ('brandingName' in patch) this._nameError.set(null);
+    if ('brandingName' in patch) {
+      this._nameError.set(null);
+      // Short name is a display label: letters/numbers/spaces + a few brand
+      // punctuation chars only — strip other special characters (OPS-9).
+      patch = { ...patch, brandingName: (patch.brandingName ?? '').replace(/[^\p{L}\p{N} &._'-]/gu, '') };
+    }
     this._branding.update(b => ({ ...b, ...patch }));
   }
   openLogoPicker() { this.logoInput?.nativeElement?.click(); }
@@ -409,6 +457,7 @@ export class SetupWizardComponent {
         logoUrl: br.logoUrl || ''
       }));
       this.tenantState.update(updated);
+      this._savedBaseline.set({ ...this._branding() }); // now pristine (OPS-9)
       this.toasts.success('Branding saved.');
     } catch (e: unknown) {
       const err = ApiError.from(e);

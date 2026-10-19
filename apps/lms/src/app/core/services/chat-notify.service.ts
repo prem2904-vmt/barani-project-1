@@ -51,14 +51,25 @@ export class ChatNotifyService implements OnDestroy {
    * skip the OS notification (it would be redundant) but still bump
    * the title flash for peripheral awareness in tiled-window setups.
    */
-  notify(title: string, body: string, conversationId: string): void {
+  notify(title: string, body: string, conversationId: string): boolean {
     const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
     this.unreadCountForTitle += 1;
     this.startFlashing();
 
-    if (!tabHidden) return;                                      // focused → ping is enough
-    if (typeof Notification === 'undefined') return;
-    if (Notification.permission !== 'granted') return;
+    // Visible tab → the in-app pop-up is the visual (ChatService shows it
+    // when this returns false). Hidden → the OS notification, if allowed.
+    if (!tabHidden) return false;
+    // Desktop app: a native notification with an inline Reply (macOS); the
+    // reply / click come back to ChatService through chatNotify.onAction.
+    const desktop = electronChatNotify();
+    if (desktop) {
+      try {
+        desktop.show({ conversationId, title, body: body.length > 140 ? body.slice(0, 140) + '…' : body });
+        return true;
+      } catch { /* fall back to the web Notification */ }
+    }
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission !== 'granted') return false;
 
     try {
       const n = new Notification(title, {
@@ -69,7 +80,50 @@ export class ChatNotifyService implements OnDestroy {
       });
       n.onclick = () => {
         try { window.focus(); } catch { /* ignore */ }
-        void this.router.navigate(['/messages']);
+        // Land IN the conversation, not on the list.
+        void this.router.navigate(['/messages'], { queryParams: { c: conversationId } });
+        try { n.close(); } catch { /* ignore */ }
+      };
+      return true;
+    } catch { return false; /* Notification ctor can throw on Safari iOS */ }
+  }
+
+  /**
+   * Desktop app: a native chat notification (inline Reply on macOS). The
+   * caller (ChatService, via decideChatAlert) has already decided it should
+   * show; returns false when the bridge is missing so the caller can fall back
+   * to the in-app pop-up. No title flashing — the desktop title is fixed.
+   */
+  notifyDesktop(title: string, body: string, conversationId: string): boolean {
+    const desktop = electronChatNotify();
+    if (!desktop) return false;
+    try {
+      desktop.show({ conversationId, title, body: body.length > 140 ? body.slice(0, 140) + '…' : body });
+      return true;
+    } catch { return false; }
+  }
+
+  /**
+   * OS-level notification for a BUSINESS event (bell catalog types), not chat.
+   * This is the desktop/browser delivery rail: in Electron the Notification
+   * API renders through macOS Notification Center / Windows toasts natively,
+   * and in a browser tab it shows the normal web notification. Caller decides
+   * WHEN (typically only while the window is hidden/unfocused); clicking
+   * focuses the app and opens the notification bell. NOT silent — unlike chat
+   * (which has its own ringtone), the OS sound is the only audible cue here.
+   */
+  notifyBusiness(title: string, body: string): void {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    try {
+      const n = new Notification(title, {
+        body: body.length > 140 ? body.slice(0, 140) + '…' : body,
+        tag: 'pf-bell',                                          // collapse bursts into one
+        icon: '/favicon.ico'
+      });
+      n.onclick = () => {
+        try { window.focus(); } catch { /* ignore */ }
+        window.dispatchEvent(new CustomEvent('pf-open-bell'));
         try { n.close(); } catch { /* ignore */ }
       };
     } catch { /* swallow — Notification ctor can throw on Safari iOS */ }
@@ -109,4 +163,14 @@ export class ChatNotifyService implements OnDestroy {
     }
     this.restore();
   }
+}
+
+/** Electron preload bridge for native chat notifications (null elsewhere). */
+export function electronChatNotify(): {
+  show(info: { conversationId: string; title: string; body: string }): void;
+  onAction(cb: (a: { type: 'reply' | 'open'; conversationId: string; text?: string }) => void): () => void;
+} | null {
+  if (typeof window === 'undefined') return null;
+  const api = (window as unknown as { electronAPI?: { chatNotify?: ReturnType<typeof electronChatNotify> } }).electronAPI;
+  return api?.chatNotify ?? null;
 }

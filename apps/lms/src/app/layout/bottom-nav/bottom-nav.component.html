@@ -2,10 +2,11 @@
      Phone: a horizontally-scrollable strip of nav tabs on the left,
      with Admin (settings wheel) and PF More always pinned to the right.
      iPad rail: a full-height vertical sidebar on the left edge. -->
-<nav class="pf-bottom-nav xl:hidden fixed z-30"
+<nav class="pf-bottom-nav xl:hidden fixed z-[2000]"
      [class.pf-bottom-nav--rail]="railMode()"
      [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
-     [class.pf-bottom-nav--min]="minimized() && !railMode()">
+     [class.pf-bottom-nav--min]="minimized() && !railMode()"
+     [class.pf-bottom-nav--hidden]="lock.locked()">
 
   <div #pill
        class="pf-pill shadow-2xl backdrop-blur-2xl"
@@ -41,12 +42,16 @@
                          shrink-0 text-[11px] font-semibold leading-none transition-colors"
                   [class.pf-nav-btn--compact]="compactMode()"
                   [class.pf-nav-btn--active]="activeIdx() === i">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                 @for(path of n.iconPath; track path) {
+            @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+              <span class="pf-collect-nav-icon w-5 h-5" aria-hidden="true"></span>
+            } @else {
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                @for(path of n.iconPath; track path) {
                   <path [attr.d]="path"/>
-                 }
-            </svg>
+                }
+              </svg>
+            }
             <span class="pf-nav-btn__lbl">{{ n.label }}</span>
           </button>
         }
@@ -125,12 +130,16 @@
                        shrink-0 text-[11px] font-semibold leading-none transition-colors"
                 [class.pf-nav-btn--compact]="compactMode()"
                 [class.pf-nav-btn--active]="activeIdx() === i">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-               @for(path of n.iconPath; track path) {
+          @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+            <span class="pf-collect-nav-icon w-5 h-5" aria-hidden="true"></span>
+          } @else {
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              @for(path of n.iconPath; track path) {
                 <path [attr.d]="path"/>
-               }
-          </svg>
+              }
+            </svg>
+          }
           <span class="pf-nav-btn__lbl">{{ n.label }}</span>
         </button>
       }
@@ -147,7 +156,7 @@
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
             <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
           </svg>
-          <span class="pf-nav-btn__lbl">Admin</span>
+          <span class="pf-nav-btn__lbl">Settings</span>
         </a>
       }
 
@@ -313,17 +322,117 @@
           {{ theme.mode() === 'system' ? 'System' : theme.mode() === 'light' ? 'Light' : 'Dark' }}
         </span>
       </button>
-      <!-- Branch -->
+
+      <!-- Design version / bar position / capture mode. These used to live
+           ONLY in the top chrome's avatar menu — but that chrome is hidden
+           below 1280px, so moving the bar back to the top took them away on
+           phone and iPad entirely (owner). This popover is the one place
+           that is always reachable, so they belong here too. Same services,
+           same state: flipping one here flips it everywhere. -->
+      @if (theme.switchesEnabled) {
       <button type="button" role="menuitem" class="pf-more-item press"
-              (click)="onMoreBranch()">
+              (click)="theme.toggleDesign()" [attr.aria-pressed]="theme.isNewDesign()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-          <circle cx="12" cy="10" r="3"/>
+          <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
+          <path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z"/>
         </svg>
-        <span>Branch</span>
-        <span class="pf-more-item__val">{{ currentBranch() }}</span>
+        <span>Design</span>
+        <span class="pf-more-item__val">{{ theme.isNewDesign() ? 'New' : 'Classic' }}</span>
       </button>
+      @if (theme.isNewDesign()) {
+        <button type="button" role="menuitem" class="pf-more-item press"
+                (click)="theme.toggleBottomNav()" [attr.aria-pressed]="theme.bottomNav()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15h18"/>
+          </svg>
+          <span>Bottom bar</span>
+          <span class="pf-more-item__val">{{ theme.bottomNav() ? 'On' : 'Off' }}</span>
+        </button>
+      }
+      }
+      @if (designMode.available()) {
+        <button type="button" role="menuitem" class="pf-more-item press"
+                (click)="designMode.toggle()" [attr.aria-pressed]="designMode.enabled()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+            <path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+          </svg>
+          <span>Design mode</span>
+          <span class="pf-more-item__val">{{ designMode.enabled() ? 'On' : 'Off' }}</span>
+        </button>
+      }
+      <!-- Branch — real list of the user's branches (OPS-65); tap to expand,
+           pick one to switch. Hidden entirely for single-branch users. -->
+      @if (canSwitchBranch()) {
+        <button type="button" role="menuitem" class="pf-more-item press"
+                [attr.aria-expanded]="branchListOpen()"
+                (click)="toggleBranchList()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span>Branch</span>
+          <span class="pf-more-item__val">{{ currentBranch() }}</span>
+          <svg class="pf-more-item__chev" [class.pf-more-item__chev--open]="branchListOpen()"
+               width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+        @if (branchListOpen()) {
+          <div class="pf-branch-list" role="group" aria-label="Available branches">
+            @for (b of branches(); track b.id) {
+              <button type="button" role="menuitem" class="pf-more-item pf-branch-item press"
+                      [class.pf-branch-item--active]="b.id === activeBranchId()"
+                      (click)="selectBranch(b)">
+                <span class="truncate">{{ b.name }}</span>
+                @if (b.id === activeBranchId()) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m5 12 4 4L19 6"/>
+                  </svg>
+                }
+              </button>
+            }
+          </div>
+        }
+      }
+      @if (desktopWindow.available && !desktopWindow.isFullScreen()) {
+        <!-- Desktop app, windowed: back to kiosk full screen (same item as
+             the top bar's avatar menu; Esc leaves it). -->
+        <div class="pf-more-sep"></div>
+        <button type="button" role="menuitem" class="pf-more-item press" (click)="enterFullScreen()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+          </svg>
+          <span>Full screen</span>
+          <span class="pf-more-item__val">{{ fullScreenKey }}</span>
+        </button>
+      }
+      @if (desktopNotify.active) {
+        <!-- Desktop app: notification switches (same settings as the top
+             bar's avatar menu). -->
+        <div class="pf-more-sep"></div>
+        @for (it of desktopItems; track it.key) {
+          @if (!it.loginOnly || desktopNotify.loginSupported()) {
+            <button type="button" role="menuitemcheckbox" class="pf-more-item press"
+                    [attr.aria-checked]="desktopNotify.settings()[it.key]"
+                    (click)="desktopNotify.set(it.key, !desktopNotify.settings()[it.key])">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                @for (d of it.paths; track $index) { <path [attr.d]="d"/> }
+              </svg>
+              <span>{{ it.label }}</span>
+              <span class="pf-more-item__val">{{ desktopNotify.settings()[it.key] ? 'On' : 'Off' }}</span>
+            </button>
+          }
+        }
+      }
       <div class="pf-more-sep"></div>
       <!-- Multi-account -->
       @if (otherAccounts().length) {
@@ -348,6 +457,31 @@
           <line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>
         </svg>
         <span>Add account</span>
+      </button>
+      @if (showAdminTab()) {
+        <button type="button" role="menuitem" class="pf-more-item press" (click)="goSetup()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/>
+          </svg>
+          <span>Tenant branding</span>
+        </button>
+      }
+      @if (canPrint()) {
+        <button type="button" role="menuitem" class="pf-more-item press" (click)="goPrinting()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z"/>
+          </svg>
+          <span>Print settings</span>
+        </button>
+      }
+      <button type="button" role="menuitem" class="pf-more-item press" (click)="goSignature()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 19c3-1 5-4 7-7s3-5 4-5 1 3-1 7-1 5 1 5 3-2 4-3M3 21h18"/>
+        </svg>
+        <span>My signature</span>
       </button>
       @if (pinFormOpen()) {
         <div class="pf-acct-pinform">

@@ -1,13 +1,21 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
+import { ThemeService } from '../../../core/services/theme.service';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { DestroyRef, ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { patientDisplayName } from '../../../shared/models/patient.model';
+import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
@@ -16,7 +24,15 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { formatAge } from '../../../shared/utils/patient-age';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
@@ -24,6 +40,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   selector: 'pf-receive-samples',
   standalone: true,
   imports: [
+    DailyNoComponent,
+    PfKeysDirective,
+    SamplePresetDirective,
     FormsModule,
     DatePipe,
     AvatarComponent,
@@ -33,8 +52,11 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     TileComponent,
     TouchButtonComponent,
     KpiStripComponent,
-    BarcodeScannerModalComponent
-  ],
+    BarcodeScannerModalComponent,
+    HeroBandComponent,
+    ScanIconComponent,
+    BusyDirective,
+    SkeletonRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded"
@@ -42,12 +64,33 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       @if (!embedded) {
         <div class="pf-rs-chrome">
+          <!-- Common hero search (designer band): scan or type a barcode,
+               Enter receives it. Camera docks as a tool on the bar.
+               New design only; classic keeps its violet scan tile below. -->
+          @if (theme.isNewDesign()) {
+          <pf-hero-band
+            placeholder="Scan or type a barcode (e.g. HAEM260800001)…"
+            [value]="scanValue()"
+            keys="sample" keysEnter="Receive" keysEnterAria="Receive this sample"
+            (valueChange)="scanValue.set($event)"
+            (submitted)="receiveByBarcode()">
+            <!-- The camera FEEDS this field, so it sits inside it, before the
+                 divider (owner) — scanning is just another way to type. -->
+            <ng-container band-inline>
+              <button type="button" class="pf-hb-tool press" (click)="openBarcodeScanner()"
+                      title="Scan with camera" aria-label="Scan with camera">
+                <pf-scan-icon [size]="18" />
+              </button>
+            </ng-container>
+          </pf-hero-band>
+          }
           <pf-kpi-strip screen="receive_samples"></pf-kpi-strip>
           <pf-screen-header
             eyebrow="Lab intake"
             title="Receive samples"
             subtitle="Scan incoming barcodes or batch-receive the in-transit list.">
-            <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+            <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()"
+                          [busy]="refreshing()" busyLabel="Refreshing…">
               <span icon-left aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
@@ -64,47 +107,52 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       <div [class.pf-rs-scroll]="!embedded">
 
-      <!-- Scan hero — hidden when embedded (the parent pane header
-           hosts a camera-icon shortcut that opens the same scanner via
-           openBarcodeScanner(); barcode auto-intakes on match). -->
+      <!-- Standalone intake: the hero band above is the scan/receive field;
+           only the manual-entry affordance remains here. (Embedded: the
+           parent pane header hosts a camera-icon shortcut instead.)
+           Classic design keeps its original violet scan tile. -->
       @if (!embedded) {
-      <pf-tile tone="violet" padding="lg" class="block mb-6">
-        <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
-               style="color: var(--text-muted);">Scan barcode</label>
-        <div class="flex gap-2 pf-rs-scanrow">
-          <div class="scan-field">
-            <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
-              <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-              <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
-              <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-              <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
-            </svg>
-            <input type="text"
-                   placeholder="PF-AP-2026-00001-HAEM"
-                   [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
-                   (keydown.enter)="receiveByBarcode()"
-                   autofocus />
-          </div>
-          <pf-touch-btn size="md" variant="primary"
-                        [disabled]="!scanValue() || busy()"
-                        (pressed)="receiveByBarcode()">
-            Receive
-            <span icon-right aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14"/>
-                <path d="m12 5 7 7-7 7"/>
-              </svg>
-            </span>
-          </pf-touch-btn>
-        </div>
-
-        <div class="manual-toggle">
+        @if (theme.isNewDesign()) {
+        <div class="manual-toggle mb-4">
           <button type="button" class="manual-link" (click)="toggleManual()">
             @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
           </button>
         </div>
-      </pf-tile>
+        } @else {
+        <pf-tile tone="violet" padding="lg" class="block mb-6">
+          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
+                 style="color: var(--text-muted);">Scan barcode</label>
+          <div class="flex gap-2 pf-rs-scanrow">
+            <div class="scan-field">
+              <pf-scan-icon class="scan-icon" [size]="18" />
+              <input type="text" pfKeys="sample" pfSamplePreset pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
+                     aria-label="Sample barcode"
+                     placeholder="HAEM260800001"
+                     [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
+                     (keydown.enter)="receiveByBarcode()"
+                     autofocus />
+            </div>
+            <pf-touch-btn size="md" variant="primary"
+                          [disabled]="!scanValue() || busy()"
+                          [busy]="busy() && busyKey() === 'barcode'" busyLabel="Receiving…"
+                          (pressed)="receiveByBarcode()">
+              Receive
+              <span icon-right aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14"/>
+                  <path d="m12 5 7 7-7 7"/>
+                </svg>
+              </span>
+            </pf-touch-btn>
+          </div>
+
+          <div class="manual-toggle">
+            <button type="button" class="manual-link" (click)="toggleManual()">
+              @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
+            </button>
+          </div>
+        </pf-tile>
+        }
       }
 
       <!-- ─── Package intake (PKG-XXXX) — hidden when embedded ─────
@@ -135,6 +183,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                    (keydown.enter)="previewPackage()"
                    autocomplete="off"/>
           </div>
+          @if (!scan.manualEntry()) {
           <pf-touch-btn size="md" variant="secondary"
                         (pressed)="openPackageScanner()"
                         title="Open camera to scan the package QR">
@@ -149,14 +198,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </span>
             Scan QR
           </pf-touch-btn>
+          }
           <pf-touch-btn size="md" variant="primary"
                         [disabled]="!pkgCode() || pkgBusy()"
+                        [busy]="pkgBusy() && !pkgPreview()" busyLabel="Looking up…"
                         (pressed)="previewPackage()">
             Look up
           </pf-touch-btn>
         </div>
         @if (pkgError()) {
-          <p class="text-[12px] mt-3" style="color: #fca5a5;">{{ pkgError() }}</p>
+          <p class="text-[12px] mt-3" style="color: var(--red-text);">{{ pkgError() }}</p>
         }
         @if (pkgPreview(); as pkg) {
           <div class="pkg-preview">
@@ -166,12 +217,13 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <p class="pkg-preview__sub">
                   {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }}
                   @if (pkg.receivedAt) {
-                    · <span style="color: #6ee7b7;">already received</span>
+                    · <span style="color: var(--green-text);">already received</span>
                   }
                 </p>
               </div>
               <pf-touch-btn size="md" variant="primary"
                             [disabled]="pkgBusy() || !!pkg.receivedAt"
+                            [busy]="pkgBusy()" busyLabel="Receiving…"
                             (pressed)="receivePackage()">
                 @if (pkg.receivedAt) { Received } @else { Receive {{ pkg.orderCount }} order{{ pkg.orderCount === 1 ? '' : 's' }} }
               </pf-touch-btn>
@@ -179,7 +231,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             <ul class="pkg-preview__list">
               @for (o of pkg.orders; track o.id) {
                 <li class="pkg-preview__row">
-                  <span class="pkg-preview__name">{{ o.patientName }}</span>
+                  <span class="pkg-preview__name"><pf-daily-no [of]="o" />{{ o.patientName }}</span>
                   <span class="pkg-preview__meta">
                     #{{ o.id.slice(0, 8) }} · {{ o.sampleCount }} sample{{ o.sampleCount === 1 ? '' : 's' }} · {{ o.status }}
                   </span>
@@ -248,6 +300,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             }
             <pf-touch-btn size="md" variant="primary"
                           [disabled]="!canManualConfirm() || busy()"
+                          [busy]="busy() && busyKey() === 'manual'" busyLabel="Receiving…"
                           (pressed)="receiveByManual()">
               Receive
               <span icon-right aria-hidden="true">
@@ -261,14 +314,20 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         </pf-tile>
       }
 
+      <!-- First load: the queue's own rows as a skeleton (held 600ms). -->
+      @if (queueSkeleton()) {
+        <pf-skeleton-rows class="pf-rs-skel" [rows]="embedded ? 3 : 4" [dense]="embedded"
+                          label="Loading samples to receive…"></pf-skeleton-rows>
+      }
+
       <!-- ─── Dispatched orders (FD has handed off, awaiting arrival) ─── -->
-      @if (dispatchedOrders().length > 0) {
+      @if (dispatchedOrders().length > 0 && !queueSkeleton()) {
         @if (!embedded) {
           <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
             <div class="flex items-center gap-2">
               <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
                     style="color: var(--text-secondary);">Dispatched · awaiting arrival</span>
-              <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ dispatchedOrders().length }} orders</span>
+              <span class="text-[11px] font-mono" style="color: var(--text-muted);">· {{ labCfg.sampleFocused() ? dispatchedTubes().length + ' samples' : dispatchedOrders().length + ' orders' }}</span>
             </div>
             <p class="text-[10.5px] font-mono" style="color: var(--text-muted);">
               Counter staff: log incoming batches as Arrived. Bench tech picks tubes off the arrived queue below.
@@ -276,19 +335,56 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           </div>
         }
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
-          @for (g of dispatchedOrders(); track g.orderId) {
+          @for (g of (labCfg.sampleFocused() ? dispatchedTubes() : dispatchedOrders()); track $index) {
             @if (embedded) {
-              <!-- Compact row: avatar + name + Intake button only. -->
-              <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'">
+              <!-- Compact row: avatar + name + Intake button. Sample-focused →
+                   Sample ID is the headline, patient demoted below. -->
+              <li class="pf-rs-row" [class.pf-rs-row--awaiting]="g.state === 'awaiting'"
+                  [class.pf-rs-row--pending]="g.state === 'ready' || g.state === 'partial'"
+                  [class.pf-rs-row--received]="g.state === 'received'">
                 <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
-                <span class="pf-rs-row__name">{{ g.patientName }}</span>
+                @if (!labCfg.sampleFocused()) {
+                  <!-- Desktop view (single line) -->
+                  <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo"><pf-daily-no [of]="g" />{{ g.patientInfo }}</span>
+                  <!-- Mobile view (split into 2 lines) -->
+                  <div class="pf-rs-row__name-group--mobile">
+                    <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex"><pf-daily-no [of]="g" />{{ g.patientNameAndAgeSex }}</span>
+                    @if (g.patientMrn) {
+                      <span class="pf-rs-row__name-sub">{{ g.patientMrn }}</span>
+                    }
+                  </div>
+                } @else {
+                  <span class="pf-rs-row__id">
+                    <span class="pf-rs-row__sample">{{ g.sampleId || ('#' + g.orderId.slice(0,8)) }}@if (g.totalTubes > 1) { · {{ g.totalTubes }} tubes}</span>
+                    <span class="pf-rs-row__patient"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
+                  </span>
+                }
                 @if (g.state === 'awaiting') {
                   <span class="pf-rs-row__chip" title="Tubes still at FD counter — ask reception to dispatch.">
                     Awaiting
                   </span>
+                } @else if (g.state === 'received') {
+                  <span class="pf-rs-row__chip pf-rs-row__chip--done" [class.pf-rs-done]="theme.isNewDesign()"
+                        title="Received at the lab — drops off this list after 24 h.">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    Received
+                  </span>
                 } @else {
-                  <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
-                          (click)="markArrived(g.orderId)">Intake</button>
+                  <button type="button" class="press" [disabled]="busy()"
+                          [pfBusy]="busy() && busyKey() === rowKey(g)" pfBusyLabel="Receiving…"
+                          [class.pf-rs-row__btn]="!theme.isNewDesign()"
+                          [class.pf-rowact]="theme.isNewDesign()"
+                          [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
+                          [attr.aria-label]="'Receive ' + (g.sampleId || g.patientName || '')" title="Receive">
+                    @if (theme.isNewDesign()) {
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
+                      </svg>
+                    }
+                    <span class="pf-rowact__t">Receive</span>
+                  </button>
                 }
               </li>
             } @else {
@@ -299,7 +395,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     <div class="flex items-center gap-3 flex-1 min-w-0">
                       <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                       <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        @if (!labCfg.sampleFocused()) {
+                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);" [title]="g.patientInfo">{{ g.patientInfo }}</p>
                         <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
                           #{{ g.orderId.slice(0,8) }}
                           @if (g.tubeCount > 0) {
@@ -309,30 +406,86 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                             <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
                           }
                           @if (g.notReadyCount > 0) {
-                            <span class="ml-1" style="color: #fbbf24;">· {{ g.notReadyCount }} not dispatched yet</span>
+                            <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
                           }
-                          @for (lbl of g.testLabels; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
+                          @if (g.testLabels.length > 0) {
+                            <button type="button" (click)="toggleTests(g.orderId, $event)" [attr.aria-expanded]="testsOpen(g.orderId)"
+                                    class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md align-middle"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.22)); color: var(--text-secondary); font-size: 10.5px; font-weight: 600;">
+                              Tests ({{ g.testLabels.length }})
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                                   stroke-linecap="round" stroke-linejoin="round" style="transition: transform .15s ease;"
+                                   [style.transform]="testsOpen(g.orderId) ? 'rotate(90deg)' : 'none'"><path d="M9 6l6 6-6 6"/></svg>
+                            </button>
+                          }
                         </p>
+                        } @else {
+                        <!-- Sample-focused: this order groups several tubes with no
+                             single sample id, so the tube summary (order # · N tubes)
+                             is the headline and the patient name is demoted below. -->
+                        <p class="font-semibold text-[15px] font-mono" style="color: var(--text-primary);">
+                          #{{ g.orderId.slice(0,8) }} · {{ g.totalTubes }} tube{{ g.totalTubes === 1 ? '' : 's' }}
+                        </p>
+                        <p class="text-[11.5px] font-mono mt-0.5" style="color: var(--text-tertiary);">
+                          {{ g.patientName }}
+                          @if (g.tubeCount > 0) {
+                            <span class="ml-1">· {{ g.tubeCount }}/{{ g.totalTubes }} dispatched</span>
+                          }
+                          @if (g.receivedCount > 0) {
+                            <span class="ml-1" style="color: var(--text-tertiary);">· {{ g.receivedCount }} already received</span>
+                          }
+                          @if (g.notReadyCount > 0) {
+                            <span class="ml-1" style="color: var(--amber-text);">· {{ g.notReadyCount }} not dispatched yet</span>
+                          }
+                          @if (g.testLabels.length > 0) {
+                            <button type="button" (click)="toggleTests(g.orderId, $event)" [attr.aria-expanded]="testsOpen(g.orderId)"
+                                    class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md align-middle"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.22)); color: var(--text-secondary); font-size: 10.5px; font-weight: 600;">
+                              Tests ({{ g.testLabels.length }})
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                                   stroke-linecap="round" stroke-linejoin="round" style="transition: transform .15s ease;"
+                                   [style.transform]="testsOpen(g.orderId) ? 'rotate(90deg)' : 'none'"><path d="M9 6l6 6-6 6"/></svg>
+                            </button>
+                          }
+                        </p>
+                        }
+                        @if (testsOpen(g.orderId) && g.testLabels.length > 0) {
+                          <div class="mt-1.5 flex flex-wrap gap-1.5">
+                            @for (lbl of g.testLabels; track lbl) {
+                              <span class="px-2 py-0.5 rounded-md text-[11px]"
+                                    style="background: var(--glass-bg, rgba(255,255,255,0.06)); border: 1px solid var(--glass-border, rgba(148,163,184,0.18)); color: var(--text-secondary);">{{ lbl }}</span>
+                            }
+                          </div>
+                        }
                       </div>
                     </div>
                     @switch (g.state) {
                       @case ('ready') {
-                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
+                                      [busy]="busy() && busyKey() === rowKey(g)" busyLabel="Receiving…"
                                       class="w-full sm:w-auto">
-                          Mark Arrived
+                          Receive
                         </pf-touch-btn>
                       }
                       @case ('partial') {
-                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId)"
+                        <pf-touch-btn size="sm" variant="primary" [disabled]="busy()" (pressed)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
+                                      [busy]="busy() && busyKey() === rowKey(g)" busyLabel="Receiving…"
                                       class="w-full sm:w-auto">
-                          Mark Arrived ({{ g.tubeCount }})
+                          Receive ({{ g.tubeCount }})
                         </pf-touch-btn>
                       }
                       @case ('awaiting') {
                         <span class="px-3 py-1.5 text-[12px] font-medium rounded-md text-center w-full sm:w-auto"
-                              style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;"
+                              style="background: rgba(245, 158, 11, 0.15); color: var(--amber-text);"
                               title="Tubes are still at the FD counter — ask reception to mark them dispatched.">
                           ⚠ Not dispatched yet
+                        </span>
+                      }
+                      @case ('received') {
+                        <span class="px-3 py-1.5 text-[12px] font-semibold rounded-md text-center w-full sm:w-auto"
+                              style="background: rgba(52, 211, 153, 0.15); color: #34d399;"
+                              title="Received at the lab — drops off this list after 24 h.">
+                          ✓ Received
                         </span>
                       }
                     }
@@ -350,7 +503,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
            only rendered if legacy in_transit rows still exist from
            pre-cutover orders so techs can drain them. New orders skip
            it entirely. -->
-      @if (inTransit().length > 0) {
+      @if (inTransit().length > 0 && !queueSkeleton()) {
         <div class="flex items-center justify-between gap-2 flex-wrap mb-3 px-1">
           <div class="flex items-center gap-2">
             <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
@@ -366,6 +519,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </pf-touch-btn>
             <pf-touch-btn size="sm" variant="primary"
                           [disabled]="selectedIds().size === 0 || busy()"
+                          [busy]="busy() && busyKey() === 'selected'" busyLabel="Receiving…"
                           (pressed)="receiveSelected()">
               Pick up {{ selectedIds().size || 0 }} · TAT starts
             </pf-touch-btn>
@@ -375,7 +529,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         <!-- intentionally empty — no in-transit queue any more. -->
       }
 
-      @if (inTransit().length > 0) {
+      @if (inTransit().length > 0 && !queueSkeleton()) {
         <div class="space-y-2.5">
           @for (s of inTransit(); track s.id) {
             <pf-tile [tone]="isSelected(s.id) ? 'violet' : 'default'" padding="md">
@@ -394,16 +548,30 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <pf-avatar [name]="s.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
 
                 <div class="flex-1 min-w-0">
+                  @if (!labCfg.sampleFocused()) {
                   <p class="font-semibold text-[14.5px] truncate"
-                     style="color: var(--text-primary);">{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
+                     style="color: var(--text-primary);"><pf-daily-no [of]="s" />{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
                      style="color: var(--text-tertiary);">
                     {{ s.department?.name }} · {{ s.barcode }}
                     · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
                   </p>
+                  } @else {
+                  <!-- Sample-focused: the tube barcode is the bold headline and the
+                       patient name is demoted below. Falls back to the patient name
+                       as headline only when this tube carries no barcode. -->
+                  <p class="font-semibold text-[14.5px] font-mono truncate"
+                     style="color: var(--text-primary);">{{ s.barcode || (s.order?.patient?.displayName ?? 'Patient') }}</p>
+                  <p class="text-[11.5px] font-mono mt-0.5 truncate"
+                     style="color: var(--text-tertiary);">
+                    <pf-daily-no [of]="s" />{{ s.order?.patient?.displayName ?? 'Patient' }} · {{ s.department?.name }}
+                    · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
+                  </p>
+                  }
                 </div>
 
-                <pf-touch-btn size="sm" variant="primary" (pressed)="receiveOne(s.id)">
+                <pf-touch-btn size="sm" variant="primary" (pressed)="receiveOne(s.id)"
+                              [busy]="receivingId() === s.id" busyLabel="Receiving…">
                   Pick up · TAT starts
                 </pf-touch-btn>
               </div>
@@ -417,6 +585,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
     @if (pkgScannerOpen()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan dispatch package QR"
         (matched)="onPackageScanned($event)"
         (cancelled)="closePackageScanner()">
@@ -425,6 +594,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
     @if (barScannerOpen()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan tube barcode to intake"
         (matched)="onBarcodeScanned($event)"
         (cancelled)="closeBarcodeScanner()">
@@ -459,6 +629,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       border-color: rgba(168, 85, 247, 0.36);
     }
     .pf-rs-row--awaiting { opacity: 0.65; }
+    /* 24-h ledger colours: red = waiting for the lab to receive,
+       green = received (stays visible until the window ages it out). */
+    .pf-rs-row--pending { border-left: 3px solid rgba(248, 113, 113, 0.85); }
+    .pf-rs-row--received { border-left: 3px solid rgba(52, 211, 153, 0.85); background: rgba(52, 211, 153, 0.05); }
+    .pf-rs-row__chip--done { color: #34d399; border-color: rgba(52, 211, 153, 0.45);
+      background: rgba(52, 211, 153, 0.1); display: inline-flex; align-items: center; gap: 4px; }
     .pf-rs-row__name {
       font-size: 13.5px;
       font-weight: 600;
@@ -466,6 +642,42 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .pf-rs-row__name-group--mobile { display: none; }
+
+    @media (max-width: 640px) {
+      .pf-rs-row__name--desktop { display: none; }
+      .pf-rs-row__name-group--mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pf-rs-row__name-main {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pf-rs-row__name-sub {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-tertiary);
+      }
+    }
+
+    /* Sample-focused compact row: Sample ID headline + demoted patient. */
+    .pf-rs-row__id { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+    .pf-rs-row__sample {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px; font-weight: 700; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pf-rs-row__patient {
+      font-size: 11px; color: var(--text-tertiary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .pf-rs-row__btn {
       padding: 5px 14px;
@@ -482,6 +694,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     .pf-rs-row__btn:hover { filter: brightness(1.08); }
     .pf-rs-row__btn:active { transform: scale(0.98); }
     .pf-rs-row__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* First-load skeleton: the list's box, kit rows inside. */
+    .pf-rs-skel {
+      display: block; overflow: hidden; margin-bottom: 12px;
+      border: 1px solid var(--glass-border); border-radius: 16px;
+      background: var(--glass-bg);
+    }
     .pf-rs-row__chip {
       padding: 4px 10px;
       font-size: 11px;
@@ -489,7 +707,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       letter-spacing: 0.04em;
       border-radius: 9999px;
       background: rgba(245, 158, 11, 0.15);
-      color: #fbbf24;
+      color: var(--amber-text);
       border: 1px solid rgba(245, 158, 11, 0.32);
     }
 
@@ -742,6 +960,36 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       .pkg-preview__row { flex-wrap: wrap; }
       .pkg-preview__meta { width: 100%; }
     }
+
+    /* ── New design (owner): palette + pattern ──
+       No coloured stripes (an Urgent order only, where they exist); pending =
+       neutral row + .pf-rowact Receive; received = quieter row, small violet
+       check + muted "Received", no pill, no green/amber/teal. The sample ID
+       is the primary line (16.5 / 600, Noto tabular). */
+    :host-context(.design-new) .pf-rs-row {
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px);
+    }
+    :host-context(.design-new) .pf-rs-row:hover { background: var(--pf-card-bg); border-color: var(--pf-sel-border); }
+    :host-context(.design-new) .pf-rs-row--pending,
+    :host-context(.design-new) .pf-rs-row--received { border-left: 1px solid var(--pf-line); }
+    :host-context(.design-new) .pf-rs-row--received { background: var(--pf-card-bg); }
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__sample,
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name,
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name-main { color: var(--text-tertiary) !important; }
+    :host-context(.design-new) .pf-rs-row__sample {
+      font-family: inherit; font-size: 16.5px; font-weight: 600; letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums; color: var(--text-primary);
+    }
+    :host-context(.design-new) .pf-rs-row__patient { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+    :host-context(.design-new) .pf-rs-row__chip {
+      background: var(--pf-chip-bg); border: 0; color: var(--text-secondary);
+      font-weight: 500; letter-spacing: 0; border-radius: var(--pf-radius-chip, 8px);
+    }
+    :host-context(.design-new) .pf-rs-row__chip.pf-rs-done {
+      background: none; border: 0; padding: 0 4px; gap: 5px; color: var(--text-tertiary);
+      display: inline-flex; align-items: center; font-weight: 500;
+    }
+    :host-context(.design-new) .pf-rs-row__chip.pf-rs-done svg { color: var(--color-violet-600, #7c3aed); }
   `]
 })
 export class ReceiveSamplesComponent implements OnInit {
@@ -753,10 +1001,19 @@ export class ReceiveSamplesComponent implements OnInit {
    * we don't render two stacked headers.
    */
   @Input() embedded = false;
+  readonly sampleReceived = output<void>();
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (pf-kit .pf-rowact). */
+  readonly webPointer = webPointerSignal();
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
+  protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly scan = inject(ScanService);
 
   private readonly _inTransit = signal<OrderSample[]>([]);
   private readonly _dispatched = signal<Order[]>([]);
@@ -771,6 +1028,8 @@ export class ReceiveSamplesComponent implements OnInit {
     const received = samples.filter(s => s.status === 'received' || s.status === 'processing').length;
     const notReady = samples.filter(s => s.status === 'pending' || s.status === 'collected').length;
     const total = samples.length;
+    // Representative sample id for sample-focused rows — prefer a dispatched tube.
+    const primarySample = samples.find(s => s.status === 'dispatched') ?? samples[0];
     // State drives the action button + the row badge:
     //  • 'ready'         — at least one dispatched tube → enable Receive
     //  • 'partial'       — some dispatched, some already received → enable Receive (intake the rest)
@@ -781,20 +1040,99 @@ export class ReceiveSamplesComponent implements OnInit {
     else if (dispatched === 0 && notReady > 0) state = 'awaiting';
     else if (received > 0) state = 'partial';
     else state = 'ready';
+    // Ledger timestamp: the latest dispatch (or receipt) on the order —
+    // drives newest-first ordering.
+    const latestAt = samples.reduce<string | null>((acc, sm) => {
+      const t = (sm.dispatchedAt ?? sm.receivedAtLab) || null;
+      return t && (!acc || t > acc) ? t : acc;
+    }, null) ?? o.createdAt ?? null;
     return {
       orderId: o.id,
+      dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+      patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
+      patientMrn: o.patient?.mrn?.trim() || '',
+      patientNameAndAgeSex: o.patient ? formatPatientNameAgeSex(o.patient) : 'Patient',
       tubeCount: dispatched,
       receivedCount: received,
       notReadyCount: notReady,
       totalTubes: total,
+      sampleId: primarySample?.barcode ?? null,
       state,
+      latestAt,
       testLabels: this.uniqueTestNames(o)
     };
-  }).filter(g => g.state !== 'received'));
+  // 24-h LEDGER (owner 2026-09-20): received orders STAY, turned green,
+  // but SINK below everything still waiting — the live work owns the top,
+  // newest dispatch first within each band. The API window ages received
+  // rows out after 24 h.
+  }).sort((a, b) =>
+    (a.state === 'received' ? 1 : 0) - (b.state === 'received' ? 1 : 0)
+    || (b.latestAt ?? '').localeCompare(a.latestAt ?? '')));
+  /**
+   * Sample-focused intake list: one row per TUBE, not per order. Three tubes
+   * dispatched means three rows and a count of three — the whole point of the
+   * mode. Rows reuse the per-order shape (totalTubes=1 hides the "N tubes"
+   * suffix; state is the TUBE's own), and Intake still calls markArrived on
+   * the order because arrival is a batch event: the courier hands over the
+   * order's tubes together, so sibling rows flip together.
+   */
+  readonly dispatchedTubes = computed(() => this._dispatched().flatMap(o => {
+    const samples = (o.samples ?? []).filter(s =>
+      s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected'
+      || s.status === 'received' || s.status === 'processing');
+    return samples.map(sm => ({
+      orderId: o.id,
+      sampleDbId: sm.id ?? null,
+      key: o.id + ':' + (sm.id ?? sm.barcode ?? ''),
+      dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
+      patientName: patientDisplayName(o.patient ?? null) || 'Patient',
+      patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
+      patientMrn: o.patient?.mrn?.trim() || '',
+      patientNameAndAgeSex: o.patient ? formatPatientNameAgeSex(o.patient) : 'Patient',
+      tubeCount: sm.status === 'dispatched' ? 1 : 0,
+      receivedCount: sm.status === 'received' || sm.status === 'processing' ? 1 : 0,
+      notReadyCount: sm.status === 'pending' || sm.status === 'collected' ? 1 : 0,
+      totalTubes: 1,
+      sampleId: sm.barcode ?? null,
+      state: (sm.status === 'dispatched' ? 'ready'
+        : sm.status === 'received' || sm.status === 'processing' ? 'received'
+        : 'awaiting') as 'ready' | 'awaiting' | 'received',
+      latestAt: (sm.dispatchedAt ?? sm.receivedAtLab) || null,
+      testLabels: this.uniqueTestNames(o),
+    }));
+  // Sample-focused Lab Intake (owner, 2026-10-02): strict ascending order by
+  // sample number — numeric compare, not string, so "26120" < "26126" <
+  // "26202" sorts correctly whatever the digit count. A received tube stays
+  // IN SEQUENCE (just greyed "Received"), never sunk to the bottom — unlike
+  // the order-focused 24-h ledger above, this view's whole point is "what
+  // number comes next", so reordering by status would defeat it. A missing
+  // sample number (shouldn't normally happen) falls back to latestAt so the
+  // sort is still total and stable.
+  }).sort((a, b) =>
+    (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })
+    || (a.latestAt ?? '').localeCompare(b.latestAt ?? '')));
+
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
   protected readonly busy = signal(false);
+  /** WHICH control started the running `busy()` request — only that button
+   *  shows the busy dots; every other one keeps its plain disabled look. */
+  protected readonly busyKey = signal<string | null>(null);
+  /** The legacy per-tube "Pick up" request in flight. */
+  protected readonly receivingId = signal<string | null>(null);
+  /** Refresh (header) is re-reading the queues. */
+  protected readonly refreshing = signal(false);
+  /** First load of the intake queues: a skeleton of the rows on the first
+   *  frame (held 600ms once shown), never a blank list. */
+  private readonly firstLoad = createLoadHold(true);
+  protected readonly queueSkeleton = this.firstLoad.active;
+  private firstLoadPending = 2;
+  /** Busy key of a dispatched row (order, or one tube in sample focus). */
+  protected rowKey(g: { orderId: string }): string {
+    const tube = this.labCfg.sampleFocused() ? this.asTube(g).sampleDbId : undefined;
+    return 'row:' + g.orderId + (tube ? ':' + tube : '');
+  }
 
   // ── Package intake (bulk receive via PKG-XXXX code) ─────
   /** Code reception generated when bundling orders. Lab types or
@@ -872,18 +1210,29 @@ export class ReceiveSamplesComponent implements OnInit {
   );
 
   ngOnInit() {
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('receive', 'collection').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.refresh();
     this.tenantState.ensureLoaded();
+    // Per-branch queue focus (patient vs sample). Additive presentation only.
+    this.labCfg.ensureLoaded();
   }
 
   refresh() {
-    this.api.get<OrderSample[]>('/api/samples/in-transit').subscribe({
+    const done = () => { if (this.firstLoadPending > 0 && --this.firstLoadPending === 0) this.firstLoad.done(); };
+    let open = 2;
+    const refreshDone = () => { if (--open === 0) this.refreshing.set(false); };
+    this.refreshing.set(true);
+    this.api.get<OrderSample[]>('/api/samples/in-transit').pipe(finalize(() => { done(); refreshDone(); })).subscribe({
       next: l => {
-        this._inTransit.set(l ?? []);
+        // Sequence the intake queue by sample number (1, 2, 3 — not the
+        // API's arrival order, which read 3, 1, 2 to the tech).
+        this._inTransit.set([...(l ?? [])].sort((a, b) =>
+          (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true })));
         this._selectedIds.set(new Set());
       }
     });
-    this.api.get<Order[]>('/api/orders/dispatched').subscribe({
+    this.api.get<Order[]>('/api/orders/dispatched').pipe(finalize(() => { done(); refreshDone(); })).subscribe({
       next: l => this._dispatched.set(l ?? [])
     });
   }
@@ -948,6 +1297,7 @@ export class ReceiveSamplesComponent implements OnInit {
         this.pkgCode.set('');
         this.pkgPreview.set(null);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.pkgBusy.set(false);
@@ -980,11 +1330,24 @@ export class ReceiveSamplesComponent implements OnInit {
     this.previewPackage();
   }
 
-  markArrived(orderId: string) {
+  /** Template-side narrowing: the dispatched list is per-ORDER rows in patient
+   *  mode and per-TUBE rows in sample mode; only the latter carry sampleDbId. */
+  asTube(g: unknown): { sampleDbId?: string | null } {
+    return g as { sampleDbId?: string | null };
+  }
+
+  markArrived(orderId: string, sampleId?: string) {
     const order = this._dispatched().find(o => o.id === orderId);
     if (!order) return;
+    this.busyKey.set('row:' + orderId + (sampleId ? ':' + sampleId : ''));
     this.busy.set(true);
-    this.api.patch<{ arrived: number }>(`/api/orders/${orderId}/arrive`, {}).subscribe({
+    // sampleId → intake ONE tube (sample-focused rows are per-tube, and
+    // selecting tube 2 must not receive tubes 1 and 3). Absent → the original
+    // whole-order arrival used by patient-focused rows.
+    const url = sampleId
+      ? `/api/orders/${orderId}/arrive?sampleId=${sampleId}`
+      : `/api/orders/${orderId}/arrive`;
+    this.api.patch<{ arrived: number }>(url, {}).subscribe({
       next: r => {
         this.busy.set(false);
         const n = r?.arrived ?? 0;
@@ -992,6 +1355,7 @@ export class ReceiveSamplesComponent implements OnInit {
         // intermediate in_transit). TAT starts at this moment.
         this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${n} tube${n === 1 ? '' : 's'} received — TAT clock started`);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.busy.set(false);
@@ -1016,6 +1380,7 @@ export class ReceiveSamplesComponent implements OnInit {
         this.busy.set(false);
         this.toasts.success(`${order.patient?.firstName ?? 'Patient'} · ${ids.length} tube${ids.length === 1 ? '' : 's'} received — TAT started`);
         this.refresh();
+        this.sampleReceived.emit();
       },
       error: e => {
         this.busy.set(false);
@@ -1024,7 +1389,9 @@ export class ReceiveSamplesComponent implements OnInit {
     });
   }
 
-  /** Dedup test names across all the order's samples for the meta line. */
+  /** Dedup test names across all the order's samples. The full list is revealed
+   *  behind the per-row "Tests (N)" peek, so we no longer cap it — a long order
+   *  no longer bloats the collapsed row. */
   private uniqueTestNames(o: Order): string[] {
     const names = new Set<string>();
     for (const s of o.samples ?? []) {
@@ -1033,7 +1400,17 @@ export class ReceiveSamplesComponent implements OnInit {
         if (n) names.add(n);
       }
     }
-    return Array.from(names).slice(0, 4);
+    return Array.from(names);
+  }
+
+  /** Per-order "peek" toggle: which rows have their test list expanded. */
+  private readonly _testsOpen = signal<Set<string>>(new Set());
+  testsOpen(orderId: string): boolean { return this._testsOpen().has(orderId); }
+  toggleTests(orderId: string, ev?: Event): void {
+    ev?.stopPropagation();
+    const next = new Set(this._testsOpen());
+    next.has(orderId) ? next.delete(orderId) : next.add(orderId);
+    this._testsOpen.set(next);
   }
 
   isSelected(id: string): boolean { return this._selectedIds().has(id); }
@@ -1050,10 +1427,11 @@ export class ReceiveSamplesComponent implements OnInit {
   receiveByBarcode() {
     const code = this.scanValue().trim();
     if (!code) return;
+    this.busyKey.set('barcode');
     this.busy.set(true);
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
       next: s => this.api.patch<OrderSample>(`/api/samples/${s.id}/receive`).subscribe({
-        next: () => { this.busy.set(false); this.scanValue.set(''); this.toasts.success(`Received ${s.barcode}`); this.refresh(); },
+        next: () => { this.busy.set(false); this.scanValue.set(''); this.toasts.success(`Received ${s.barcode}`); this.refresh(); this.sampleReceived.emit(); },
         error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),
       error: () => { this.busy.set(false); this.toasts.error('Barcode not found'); }
@@ -1061,8 +1439,11 @@ export class ReceiveSamplesComponent implements OnInit {
   }
 
   receiveOne(id: string) {
-    this.api.patch<OrderSample>(`/api/samples/${id}/receive`).subscribe({
-      next: () => { this.toasts.success('Received'); this.refresh(); },
+    this.receivingId.set(id);
+    this.api.patch<OrderSample>(`/api/samples/${id}/receive`).pipe(finalize(() => {
+      if (this.receivingId() === id) this.receivingId.set(null);
+    })).subscribe({
+      next: () => { this.toasts.success('Received'); this.refresh(); this.sampleReceived.emit(); },
       error: e => { this.toasts.error(ApiError.from(e).message); }
     });
   }
@@ -1070,9 +1451,10 @@ export class ReceiveSamplesComponent implements OnInit {
   receiveSelected() {
     const ids = Array.from(this._selectedIds());
     if (ids.length === 0) return;
+    this.busyKey.set('selected');
     this.busy.set(true);
     this.api.post<OrderSample[]>('/api/samples/receive-batch', { sampleIds: ids }).subscribe({
-      next: () => { this.busy.set(false); this.toasts.success(`Received ${ids.length}`); this.refresh(); },
+      next: () => { this.busy.set(false); this.toasts.success(`Received ${ids.length}`); this.refresh(); this.sampleReceived.emit(); },
       error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
@@ -1098,6 +1480,7 @@ export class ReceiveSamplesComponent implements OnInit {
   receiveByManual() {
     if (!this.canManualConfirm()) return;
     const code = this.fullBarcode();
+    this.busyKey.set('manual');
     this.busy.set(true);
     this.api.get<OrderSample>(`/api/samples/by-barcode/${encodeURIComponent(code)}`).subscribe({
       next: s => this.api.patch<OrderSample>(`/api/samples/${s.id}/receive`).subscribe({
@@ -1106,6 +1489,7 @@ export class ReceiveSamplesComponent implements OnInit {
           this.toasts.success(`Received ${s.barcode}`);
           this.seqValue.set('');
           this.refresh();
+          this.sampleReceived.emit();
         },
         error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); }
       }),
@@ -1129,4 +1513,22 @@ export class ReceiveSamplesComponent implements OnInit {
       }
     });
   }
+}
+
+function formatPatientNameAgeSex(
+  p: { firstName?: string; fathersName?: string; displayName?: string; age?: number; dateOfBirth?: string | null; sex?: string } | null | undefined
+): string {
+  if (!p) return '—';
+  const name = patientDisplayName(p as any);
+  const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
+  const age = formatAge(p, 'num', '—');
+  let sexCode = '—';
+  if (p.sex) {
+    const s = p.sex.trim().toLowerCase();
+    if (s.startsWith('m')) sexCode = 'M';
+    else if (s.startsWith('f')) sexCode = 'F';
+    else if (s.startsWith('o')) sexCode = 'O';
+    else sexCode = p.sex.charAt(0).toUpperCase();
+  }
+  return `${truncatedName} | ${age}/${sexCode}`;
 }

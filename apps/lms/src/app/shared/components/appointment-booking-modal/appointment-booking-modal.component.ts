@@ -27,9 +27,14 @@ import { ToastService } from "../../../core/services/toast.service";
 import { Patient, patientDisplayName, formatPatientInfo } from "../../models/patient.model";
 import { Appointment } from "../../models/appointment.model";
 import { Test } from "../../models/test.model";
+import { filterTestList, matchTestSearch } from "../../utils/test-search";
+import { isOffered } from "../../utils/test-pricing";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
-import { LoadingLogoComponent } from "../loading-logo/loading-logo.component";
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../directives/busy.directive';
+import { heldFlag } from '../../../shared/utils/min-duration';
+import { testListUrl } from '../../utils/test-list-url';
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -51,7 +56,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-appointment-booking-modal",
   standalone: true,
-  imports: [CommonModule, AvatarComponent, PatientSearchComponent, LoadingLogoComponent],
+  imports: [SkeletonTilesComponent, BusyDirective, CommonModule, AvatarComponent, PatientSearchComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
@@ -213,9 +218,9 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Time slot</span>
               </div>
 
-              @if (loadingSlots()) {
+              @if (loadingSlotsShown()) {
                 <div class="flex flex-col items-center justify-center py-10 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl flex-1">
-                  <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading slots…"></pf-loading-logo>
+                  <pf-skeleton-tiles [count]="12" min="92px" height="40px" [lines]="1" label="Loading slots…"></pf-skeleton-tiles>
                 </div>
               } @else if (slots().length === 0) {
                 <div class="flex items-center justify-center p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-sm text-[var(--text-muted)] flex-1">
@@ -367,7 +372,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 <input
                   type="text"
                   class="w-full pl-10 pr-4 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--input-text)] rounded-xl text-xs placeholder-[var(--input-placeholder)] focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all duration-200"
-                  placeholder="Search tests by name or code..."
+                  placeholder="Search tests by code, name, short name, profile..."
                   [value]="testQuery()"
                   (input)="setTestQuery($any($event.target).value)"
                   (focus)="testSearchFocused.set(true)"
@@ -460,6 +465,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               type="button"
               class="px-5 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 disabled:opacity-50 disabled:pointer-events-none transition-all duration-200"
               [disabled]="!canSubmit() || saving()"
+              [pfBusy]="saving()" pfBusyLabel="Booking…"
               (click)="submit()"
             >
               {{ saving() ? "Booking…" : "Book appointment" }}
@@ -568,6 +574,9 @@ export class AppointmentBookingModalComponent {
   /** Loading == "haven't fetched the branch config yet" or "still fetching the appointments".
    *  Derived directly from _config and _loadingAppointments so we never end up with a stale loading flag. */
   readonly loadingSlots = computed(() => this._config() === null || this._loadingAppointments());
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingSlotsShown = heldFlag(this.loadingSlots);
   readonly saving = this._saving.asReadonly();
   readonly errorMsg = this._errorMsg.asReadonly();
 
@@ -589,16 +598,9 @@ export class AppointmentBookingModalComponent {
    *  active tests by name. Limited to 25 hits so the list stays a
    *  scannable strip rather than a wall. */
   readonly filteredTests = computed<Test[]>(() => {
-    const q = this.testQuery().trim().toLowerCase();
-    const all = this._tests().filter((t) => t.isActive);
-    const matches = q
-      ? all.filter(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            (t.code ?? "").toLowerCase().includes(q),
-        )
-      : all;
-    return matches.slice(0, 25);
+    // Not offered at this branch (pricing table) → not bookable either.
+    const active = this._tests().filter((t) => t.isActive && isOffered(t));
+    return filterTestList(active, this.testQuery()).slice(0, 25);
   });
   /** Resolved Test objects for the chips above the picker. */
   readonly selectedTests = computed<Test[]>(() => {
@@ -770,7 +772,7 @@ export class AppointmentBookingModalComponent {
    *  cache it on the modal instance for the rest of the session. */
   private loadTestsIfNeeded() {
     if (this._tests().length > 0) return;
-    this.api.get<Test[]>("/api/tests/").subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: (l) => this._tests.set(l ?? []),
       error: () => {
         /* silent — test picker just stays empty */

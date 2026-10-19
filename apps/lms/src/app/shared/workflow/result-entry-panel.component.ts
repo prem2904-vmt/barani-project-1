@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { OrderTest } from '../models/order.model';
+import { lineStatusLabel } from '../utils/line-status';
 
 /**
  * Self-contained result-entry queue — the portable panel for `result_entry`.
@@ -25,7 +26,7 @@ import { OrderTest } from '../models/order.model';
             <li class="rp__row press" (click)="enter(t)">
               <span class="rp__test">{{ t.name }}</span>
               <span class="rp__pt">{{ t.subOrder?.order?.patient?.displayName ?? 'Patient' }}</span>
-              <span class="rp__status" [attr.data-s]="t.status">{{ t.status }}</span>
+              <span class="rp__status" [attr.data-s]="t.status">{{ statusLabel(t.status) }}</span>
             </li>
           }
         </ul>
@@ -39,17 +40,18 @@ import { OrderTest } from '../models/order.model';
     .rp__row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px;
                padding: 9px 11px; border-radius: 9px; background: var(--bg-card-solid, rgba(255,255,255,0.04));
                border: 1px solid var(--glass-border); cursor: pointer; }
-    .rp__row:hover { border-color: #7c3aed; }
+    .rp__row:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
     .rp__test { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rp__pt { font-size: 11.5px; color: var(--text-tertiary); }
     .rp__status { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
                   padding: 2px 7px; border-radius: 999px; color: var(--text-secondary); background: rgba(255,255,255,0.06); }
-    .rp__status[data-s='in_progress'] { color: #c4b5fd; background: rgba(124,58,237,0.18); }
-    .rp__status[data-s='entered'] { color: #6ee7b7; background: rgba(16,185,129,0.15); }
-    .rp__status[data-s='re_entry'] { color: #fca5a5; background: rgba(239,68,68,0.14); }
+    .rp__status[data-s='in_progress'] { color: var(--violet-text); background: rgba(124,58,237,0.18); }
+    .rp__status[data-s='entered'] { color: var(--green-text); background: rgba(16,185,129,0.15); }
+    .rp__status[data-s='re_entry'] { color: var(--red-text); background: rgba(239,68,68,0.14); }
   `]
 })
 export class ResultEntryPanelComponent implements OnInit {
+  readonly statusLabel = lineStatusLabel;
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   readonly rows = signal<OrderTest[]>([]);

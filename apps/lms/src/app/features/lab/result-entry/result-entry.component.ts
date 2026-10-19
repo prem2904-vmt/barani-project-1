@@ -1,24 +1,47 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, effect, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
+import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
+import { TatState, linePriority, tatDetail, tatInfo } from '../../../shared/utils/lab-priority';
 import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
-import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
-import { normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { AuthService } from '../../../core/auth/auth.service';
+import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { effectiveMethodology } from '../../../shared/utils/methodology';
+import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
+import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
+import { paramToField, readParameters } from '../../../shared/utils/test-parameters';
+import { CalcContext, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
+import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
+import { NumpadService } from '../../../shared/components/numpad/numpad.service';
+import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patient-age';
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
+import { PfDateTimeComponent } from '../../../shared/components/pf-date/pf-datetime.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -70,6 +93,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
   selector: 'pf-result-entry',
   standalone: true,
   imports: [
+    DailyNoComponent,
     BarcodeScannerModalComponent,
     TatIndicatorComponent,
     AvatarComponent,
@@ -77,11 +101,23 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     NumPadComponent,
     TileComponent,
     SelectComponent,
-    CultureEntryComponent
+    EditResultDialogComponent,
+    NumpadDirective,
+    NumpadScopeDirective,
+    BusyDirective,
+    SkeletonCardComponent,
+    ReportNotesCardComponent,
+    PfDateComponent,
+    PfTimeComponent,
+    PfDateTimeComponent,
   ],
+  // Technician report notes (Lab settings switch) — one store per screen.
+  providers: [ReportNotesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
+    <!-- pfNumpadScope: the touch numpad's Next walks the parameters down the
+         list and ends on Submit. -->
+    <section class="pf-page" pfNumpadScope="[data-param]" pfNumpadCta=".pf-head__btn--primary">
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
           <button type="button" class="pf-head__back press" (click)="back()" aria-label="Back">
@@ -98,6 +134,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           }
 
           <h1 class="pf-head__title">{{ orderTest()?.test?.name ?? 'Result entry' }}</h1>
+          @if (specimenLabel(); as sp) {
+            <!-- Specimen chosen at the order desk (non-culture; culture shows it on the bench). -->
+            <span class="pf-chip pf-chip--static pf-head__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+          }
 
           @if (autoSavedAgo(); as t) {
             <span class="pf-autosave"><span class="pf-autosave__dot"></span>saved · {{ t }}</span>
@@ -105,8 +145,16 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
           <!-- Primary & secondary actions right-aligned in the header -->
           <div class="pf-head__actions">
+            @if (canEditResult() && editOrderId()) {
+              <!-- Submitted or signed off already? Pull the work back for correction. -->
+              <button type="button" class="pf-head__btn pf-head__btn--ghost press"
+                      (click)="editDialogOpen.set(true)" aria-label="Edit result">
+                Edit
+              </button>
+            }
             <button type="button" class="pf-head__btn pf-head__btn--ghost press"
-                    (click)="rejectSample()" aria-label="Reject sample">
+                    (click)="rejectSample()" aria-label="Reject sample"
+                    [disabled]="rejecting()" [pfBusy]="rejecting()" pfBusyLabel="Rejecting…">
               Reject
             </button>
             <button type="button" class="pf-head__btn pf-head__btn--secondary press"
@@ -117,7 +165,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     class="pf-head__btn pf-head__btn--primary press"
                     [class.pf-head__btn--danger]="hasCritical()"
                     (click)="submit()"
-                    [disabled]="saving() || !canSubmit()">
+                    [disabled]="saving() || !canSubmit()" [pfBusy]="saving()" pfBusyLabel="Submitting…">
               {{ hasCritical() ? 'Submit · notify' : 'Submit' }}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14m-5-6 6 6-6 6"/>
@@ -127,11 +175,21 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
         </div>
       </header>
 
+      @if (editDialogOpen() && editOrderId(); as oid) {
+        <pf-edit-result-dialog
+          [orderId]="oid"
+          title="Send results back for correction"
+          (edited)="onEdited()"
+          (closed)="editDialogOpen.set(false)">
+        </pf-edit-result-dialog>
+      }
+
       <!-- Body: static chrome around a scrolling param list.
            Mobile (<md): single col, FAB opens numpad drawer.
            Tablet / iPad (md to xl-): rail docked on the right.
-           Desktop (xl+): no rail, full-width params. -->
-      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-1 gap-5">
+           Desktop (≥1280px with a mouse, dt.desktop-only on .pf-re-body): no
+           rail, full-width params; touch-first devices keep the rail. -->
+      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] gap-5 pf-re-body">
 
         <!-- LEFT COLUMN — flex column, only params inside scroll -->
         <div class="pf-col-left min-w-0">
@@ -157,20 +215,23 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               <div class="pf-patient-bar">
                 <pf-avatar [name]="patientName()" [size]="40"></pf-avatar>
                 <div class="pf-patient-bar__id">
-                  <p class="pf-patient-bar__name">{{ patientInfoString() }}</p>
+                  <p class="pf-patient-bar__name"><pf-daily-no [of]="dailyNoSrc()" />{{ patientInfoString() }}</p>
                   <p class="pf-patient-bar__meta">
                     {{ t.test?.department?.name ?? '—' }}
                     <span class="pf-patient-bar__sep">·</span> TAT {{ t.test?.tatHours }}h
+                    @if (priority() === 'urgent') {
+                      <span class="pf-patient-bar__sep">·</span> <span class="pf-prio-urgent">Urgent</span>
+                    }
                   </p>
                 </div>
                 <div class="pf-patient-bar__prog">
                   <div class="pf-tat-track">
                     <div class="pf-tat-fill"
-                         [class]="'pf-tat-' + tatLevel()"
+                         [class]="'pf-tat-' + tatState()"
                          [style.width.%]="tatPercent()"></div>
                   </div>
                 </div>
-                <pf-tat-indicator [tatLevel]="tatLevel()" [remainingMinutes]="tatRemaining()"></pf-tat-indicator>
+                <pf-tat-indicator [remainingMinutes]="tatClock().remainingMin" [dueAt]="tatClock().dueAt"></pf-tat-indicator>
               </div>
             </pf-tile>
           }
@@ -178,13 +239,24 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           <!-- Results — the ONLY scrolling area on the page -->
           <!-- Critical values indicate themselves via row tint + flag pill;
                no separate banner needed. -->
-          @if (isCulture()) {
+          @if (recordSkeleton()) {
+            <!-- The result on its way: the results card's shape on the first
+                 frame (held 600ms), never an empty column. -->
+            <pf-tile tone="default" padding="lg" class="pf-col-static pf-re-skel">
+              <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading the result…"></pf-skeleton-card>
+            </pf-tile>
+          } @else if (isCulture()) {
             <pf-tile tone="default" padding="lg" class="pf-col-scrolls">
               <header class="pf-col-scrolls__head pf-results-head">
                 <span class="pf-results-head__eyebrow">Culture &amp; Sensitivity</span>
               </header>
               <div class="pf-col-scrolls__body px-1 pt-2">
-                <pf-culture-entry [value]="cultureValue()" (valueChange)="setCulture($event)"></pf-culture-entry>
+                <!-- Culture is worked on the Culture case page (one screen). -->
+                <button type="button" class="pf-row pf-re-culturelink press" (click)="openCultureBench()"
+                        aria-label="Open this culture on the culture bench">
+                  <span class="pf-row__name">Culture: open on the bench</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
               </div>
             </pf-tile>
           } @else if (parameters().length > 0) {
@@ -276,68 +348,124 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('numeric') {
                                   <input type="number" inputmode="decimal" step="any"
                                          class="pf-rg__input pf-rg__input--num"
+                                         pfNumpad
+                                         [pfNumpadLabel]="p.title || p.name"
+                                         [pfNumpadUnit]="p.unit ?? null"
+                                         [pfNumpadFlag]="flagFor(p)"
+                                         [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
+                                         [class.pf-rg__input--outr]="isOutOfRange(p)"
+                                         [class.pf-rg__input--crit]="isParamCritical(p)"
+                                         [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
+                                         (focus)="setActive(p.name)"
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown)="allowOnlyNumbers($event)"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         (paste)="onNumericPaste($event, p.name)"
+                                         placeholder="—"/>
+                                }
+                                @case ('dropdown') {
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="isQualitative(p)
+                                        ? [{ value: '', label: '—' }, ...optionsFor(p).map(o => ({ value: o, label: o }))]
+                                        : optionsFor(p).map(o => ({ value: o, label: o }))"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
+                                }
+                                @case ('radio') {
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="optionsFor(p).map(o => ({ value: o, label: o }))"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
+                                }
+                                @case ('yesno') {
+                                  <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-select
+                                      placeholder="— Choose —"
+                                      [enterAdvances]="true"
+                                      [options]="[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]"
+                                      [value]="valueOf(p.name) ?? ''"
+                                      (valueChange)="setValue(p.name, $event)">
+                                    </pf-select>
+                                  </div>
+                                }
+                                @case ('textarea') {
+                                  <textarea class="pf-rg__input pf-rg__textarea" rows="1"
+                                            [value]="valueOf(p.name) ?? ''"
+                                            [attr.data-param]="p.name"
+                                            (focus)="setActive(p.name)"
+                                            (input)="setValue(p.name, asInput($event))"
+                                            (keydown.enter)="advanceFrom(p.name)"
+                                            placeholder="—"></textarea>
+                                }
+                                @case ('date') {
+                                  <pf-date class="pf-rg__date" [label]="p.title || p.name"
+                                              [value]="valueOf(p.name) || null"
+                                              [attr.data-param]="p.name"
+                                              (focusin)="setActive(p.name)"
+                                              (valueChange)="setValue(p.name, $event ?? '')"
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-date>
+                                }
+                                @case ('phone') {
+                                  <input type="tel" inputmode="tel" class="pf-rg__input"
+                                         [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
                                          (keydown.enter)="advanceFrom(p.name)"
                                          placeholder="—"/>
                                 }
-                                @case ('dropdown') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    @for (opt of p.options ?? []; track opt) {
-                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
-                                    }
-                                  </select>
-                                }
-                                @case ('radio') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    @for (opt of p.options ?? []; track opt) {
-                                      <option [value]="opt" [selected]="valueOf(p.name) === opt">{{ opt }}</option>
-                                    }
-                                  </select>
-                                }
-                                @case ('yesno') {
-                                  <select class="pf-rg__input pf-rg__select"
-                                          [value]="valueOf(p.name) ?? ''"
-                                          (focus)="setActive(p.name)"
-                                          (change)="setValue(p.name, asSelect($event))">
-                                    <option value="" disabled [selected]="!valueOf(p.name)">— Choose —</option>
-                                    <option value="yes" [selected]="valueOf(p.name) === 'yes'">Yes</option>
-                                    <option value="no"  [selected]="valueOf(p.name) === 'no'">No</option>
-                                  </select>
-                                }
-                                @case ('textarea') {
-                                  <textarea class="pf-rg__input pf-rg__textarea" rows="1"
-                                            [value]="valueOf(p.name) ?? ''"
-                                            (focus)="setActive(p.name)"
-                                            (input)="setValue(p.name, asInput($event))"
-                                            placeholder="—"></textarea>
-                                }
-                                @case ('date') {
-                                  <input type="date" class="pf-rg__input pf-rg__date"
+                                @case ('email') {
+                                  <input type="email" inputmode="email" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
-                                         (change)="setValue(p.name, asInput($event))"/>
+                                         (input)="setValue(p.name, asInput($event))"
+                                         (keydown.enter)="advanceFrom(p.name)"
+                                         placeholder="—"/>
+                                }
+                                @case ('time') {
+                                  <pf-time class="pf-rg__date" [label]="p.title || p.name"
+                                              [value]="valueOf(p.name) || null"
+                                              [attr.data-param]="p.name"
+                                              (focusin)="setActive(p.name)"
+                                              (valueChange)="setValue(p.name, $event ?? '')"
+                                              (keydown.enter)="advanceFrom(p.name)"></pf-time>
+                                }
+                                @case ('datetime') {
+                                  <pf-datetime class="pf-rg__date" [label]="p.title || p.name"
+                                                  [value]="valueOf(p.name) || null"
+                                                  [attr.data-param]="p.name"
+                                                  (focusin)="setActive(p.name)"
+                                                  (valueChange)="setValue(p.name, $event ?? '')"
+                                                  (keydown.enter)="advanceFrom(p.name)"></pf-datetime>
                                 }
                                 @default {
                                   <input type="text" class="pf-rg__input"
                                          [value]="valueOf(p.name) ?? ''"
+                                         [attr.data-param]="p.name"
                                          (focus)="setActive(p.name)"
                                          (input)="setValue(p.name, asInput($event))"
                                          (keydown.enter)="advanceFrom(p.name)"
                                          placeholder="—"/>
                                 }
                               }
+                              @if (calcChipFor(p); as c) {
+                                <span class="pf-rg__calc" [attr.data-kind]="c.kind">{{ c.label }}</span>
+                              }
                               @if (flagFor(p); as fl) {
-                                <span class="pf-rg__flag" [attr.data-tone]="fl.tone">{{ fl.label }}</span>
+                                <span class="pf-rg__flag" [attr.data-tone]="fl.tone" [attr.title]="flagChipTitle(fl)">{{ fl.label }}</span>
                               }
                             </td>
                             <td class="pf-rg__c-unit">{{ p.unit ?? '—' }}</td>
@@ -345,7 +473,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                               @if (refLabel(p); as r) { {{ r }} } @else { — }
                             </td>
                             <td class="pf-rg__c-method">
-                              {{ $any(p)?.methodology ?? '—' }}
+                              {{ methodologyFor(p) }}
                             </td>
                           </tr>
                         }
@@ -380,10 +508,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
                         @case ('dropdown') {
-                          <div (click)="setActive(p.name)">
+                          <div [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                            <!-- Qualitative pos/neg results are optional — prepend a real empty '—' choice. -->
                             <pf-select
                               placeholder="— Choose —"
-                              [options]="(p.options ?? []).map(o => ({ value: o, label: o }))"
+                              [enterAdvances]="true"
+                              [options]="isQualitative(p)
+                                ? [{ value: '', label: '—' }, ...optionsFor(p).map(o => ({ value: o, label: o }))]
+                                : optionsFor(p).map(o => ({ value: o, label: o }))"
                               [value]="valueOf(p.name) ?? ''"
                               (valueChange)="setValue(p.name, $event)">
                             </pf-select>
@@ -431,11 +563,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           </label>
                         }
                         @case ('date') {
-                          <input type="date"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                          <pf-date class="pf-param__date" [label]="p.title || p.name"
+                                      [value]="valueOf(p.name) || null"
+                                      [attr.data-param]="p.name"
+                                      (focusin)="setActive(p.name)"
+                                      (valueChange)="setValue(p.name, $event ?? '')"
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-date>
                         }
                         @case ('section-header') {
                           <h4 class="pf-section-heading">{{ p.title }}</h4>
@@ -472,6 +605,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  inputmode="tel"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
@@ -482,33 +616,39 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                  inputmode="email"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
                                  placeholder="name@example.com"/>
                         }
                         @case ('time') {
-                          <input type="time"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                          <pf-time class="pf-param__date" [label]="p.title || p.name"
+                                      [value]="valueOf(p.name) || null"
+                                      [attr.data-param]="p.name"
+                                      (focusin)="setActive(p.name)"
+                                      (valueChange)="setValue(p.name, $event ?? '')"
+                                      (keydown.enter)="advanceFrom(p.name)"></pf-time>
                         }
                         @case ('datetime') {
-                          <input type="datetime-local"
-                                 class="pf-param__input pf-param__date"
-                                 [value]="valueOf(p.name) ?? ''"
-                                 (focus)="setActive(p.name)"
-                                 (change)="setValue(p.name, asInput($event))"/>
+                          <pf-datetime class="pf-param__date" [label]="p.title || p.name"
+                                          [value]="valueOf(p.name) || null"
+                                          [attr.data-param]="p.name"
+                                          (focusin)="setActive(p.name)"
+                                          (valueChange)="setValue(p.name, $event ?? '')"
+                                          (keydown.enter)="advanceFrom(p.name)"></pf-datetime>
                         }
                         @case ('duration') {
                           <div class="pf-param__duration">
-                            <input type="number"
+                            <input type="text"
                                    inputmode="numeric"
                                    class="pf-param__input pf-param__input--num"
+                                   pfNumpad pfNumpadKeys="digits"
+                                   [pfNumpadLabel]="p.title || p.name"
                                    [value]="durationValueOf(p.name).value ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setDurationValue(p.name, { value: toNumOrNull(asInput($event)) })"
+                                   (keydown)="allowOnlyNumbers($event)"
                                    placeholder="0" />
                             <pf-select
                               [options]="durationUnitsFor(p).map(u => ({ value: u, label: u }))"
@@ -520,12 +660,16 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         @case ('size') {
                           <div class="pf-param__size">
                             @for (i of sizeIndexesFor(p); track i) {
-                              <input type="number"
+                              <input type="text"
                                      inputmode="decimal"
                                      class="pf-param__input pf-param__input--num"
+                                     pfNumpad pfNumpadKeys="digits ."
+                                     [pfNumpadLabel]="p.title || p.name"
+                                     [pfNumpadUnit]="sizeValueOf(p.name).unit"
                                      [value]="sizeValueOf(p.name).values[i] ?? ''"
                                      (focus)="setActive(p.name)"
                                      (input)="setSizeValueAt(p.name, i, toNumOrNull(asInput($event)))"
+                                     (keydown)="allowOnlyNumbers($event)"
                                      placeholder="—"/>
                             }
                             <pf-select
@@ -664,6 +808,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                           <input type="text"
                                  class="pf-param__input"
                                  [value]="valueOf(p.name) ?? ''"
+                                 [attr.data-param]="p.name"
                                  (focus)="setActive(p.name)"
                                  (input)="setValue(p.name, asInput($event))"
                                  (keydown.enter)="advanceFrom(p.name)"
@@ -672,6 +817,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         @case ('textarea') {
                           <textarea class="pf-param__input pf-param__textarea"
                                     [value]="valueOf(p.name) ?? ''"
+                                    [attr.data-param]="p.name"
                                     (focus)="setActive(p.name)"
                                     (input)="setValue(p.name, asArea($event))"
                                     rows="3"
@@ -682,10 +828,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                             <input type="text"
                                    inputmode="decimal"
                                    class="pf-param__input pf-param__input--num"
+                                   pfNumpad
+                                   [pfNumpadLabel]="p.title || p.name"
+                                   [pfNumpadUnit]="p.unit ?? null"
+                                   [pfNumpadFlag]="flagFor(p)"
+                                   [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
+                                   [class.pf-param__input--outr]="isOutOfRange(p)"
+                                   [class.pf-param__input--crit]="isParamCritical(p)"
+                                   [class.pf-param__input--invalid]="isInvalidNumeric(p)"
                                    [value]="valueOf(p.name) ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setValue(p.name, asInput($event))"
+                                   (keydown)="allowOnlyNumbers($event)"
                                    (keydown.enter)="advanceFrom(p.name)"
+                                   (paste)="onNumericPaste($event, p.name)"
                                    [attr.data-param]="p.name"
                                    #numInput
                                    [placeholder]="'—'"/>
@@ -694,9 +850,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                         }
                       }
 
+                      @if (calcChipFor(p); as c) {
+                        <span class="pf-rg__calc" [attr.data-kind]="c.kind">{{ c.label }}</span>
+                      }
                       @if (flagFor(p); as f) {
                         @if (f.tone !== 'critical') {
-                          <span class="pf-flag" [attr.data-tone]="f.tone">
+                          <span class="pf-flag" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">
                             <span class="pf-flag__dot"></span>
                             {{ f.label }}
                           </span>
@@ -737,6 +896,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                      placeholder="Optional · visible to the validating pathologist"/>
             </div>
           </pf-tile>
+
+          <!-- Technician notes that PRINT on the report (Lab settings switch):
+               this test's, its profile's, its department's and the whole
+               report's. Hidden when off and nothing was written. -->
+          @if (orderTest(); as ot) {
+            <pf-report-notes-card class="pf-col-static" [lineIds]="[ot.id]" [showLines]="true" [showProfiles]="true"></pf-report-notes-card>
+          }
         </div>
 
         <!-- RIGHT RAIL: always rendered. On lg+ lives in the grid column.
@@ -776,11 +942,17 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
             <!-- Body: swaps based on active param kind -->
             @switch (railKind()) {
               @case ('numeric') {
-                <pf-num-pad
-                  [value]="(activeParam() ? (valueOf(activeParam()!) ?? '') : '').toString()"
-                  [allowDecimal]="true"
-                  [allowNegative]="false"
-                  (valueChange)="padChange($event)"></pf-num-pad>
+                <!-- Touch devices get the shared result numpad beside the
+                     field itself (pfNumpad) — no second keypad here. -->
+                @if (!touchPad()) {
+                  <pf-num-pad
+                    [value]="(activeParam() ? (valueOf(activeParam()!) ?? '') : '').toString()"
+                    [allowDecimal]="true"
+                    [allowNegative]="false"
+                    (valueChange)="padChange($event)"></pf-num-pad>
+                } @else {
+                  <p class="pf-rail__padhint">Tap a result — the number pad opens beside it.</p>
+                }
               }
 
               @case ('choice') {
@@ -939,8 +1111,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       </button>
     </section>
 
-    @if (!verified() && orderTest()) {
+    @if (!resultEntryUnlocked() && orderTest()) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
         title="Scan vial to open result entry"
         [expectedBarcode]="expectedScanBarcode()"
         (matched)="onResumeScanMatched($event)"
@@ -949,6 +1122,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ── Sent-back banner (result rejected by pathologist) ─────
        Visual pattern copied from sample-result-entry's reject banner. */
     .pf-reject-banner {
@@ -963,7 +1137,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       width: 24px; height: 24px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 13px; font-weight: 700;
       flex-shrink: 0;
     }
@@ -972,7 +1146,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       font-size: 13px; line-height: 1.4;
       color: var(--text-secondary);
     }
-    .pf-reject-banner__text strong { color: #fca5a5; margin-right: 4px; }
+    .pf-reject-banner__text strong { color: var(--red-text); margin-right: 4px; }
 
     /* ── Patient bar (compact one-row banner) ─────────────────── */
     .pf-patient-tile { padding: 10px 14px !important; }
@@ -1021,9 +1195,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .pf-tat-normal { background: linear-gradient(90deg, #10b981, #34d399); box-shadow: 0 0 12px rgba(16, 185, 129, 0.45); }
-    .pf-tat-high   { background: linear-gradient(90deg, #f59e0b, #fbbf24); box-shadow: 0 0 12px rgba(245, 158, 11, 0.45); }
-    .pf-tat-urgent { background: linear-gradient(90deg, #ef4444, #f87171); box-shadow: 0 0 14px rgba(239, 68, 68, 0.55); }
+    /* TAT bar = the clock (on track / due soon / overdue) — not a priority. */
+    .pf-tat-onTrack { background: linear-gradient(90deg, #10b981, #34d399); box-shadow: 0 0 12px rgba(16, 185, 129, 0.45); }
+    .pf-tat-dueSoon { background: linear-gradient(90deg, #f59e0b, #fbbf24); box-shadow: 0 0 12px rgba(245, 158, 11, 0.45); }
+    .pf-tat-overdue { background: linear-gradient(90deg, #ef4444, #f87171); box-shadow: 0 0 14px rgba(239, 68, 68, 0.55); }
+    /* Order priority — the front desk's Urgent (the lab has Urgent / Normal only). */
+    .pf-prio-urgent { color: var(--red-text, #dc2626); font-weight: 600; }
 
 
     /* ── Results head — eyebrow + count + dot pips + % ──────── */
@@ -1254,8 +1431,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       color: #ffffff;
       box-shadow: 0 3px 10px rgba(124, 58, 237, 0.5);
     }
-    .pf-param__req { color: #f87171; font-weight: 700; margin-left: 2px; }
+    .pf-param__req { color: var(--red-text); font-weight: 700; margin-left: 2px; }
     .pf-param__ref {
+      white-space: pre-line;
       margin: 0 0 0 28px;
       font-size: 11px;
       color: var(--text-tertiary);
@@ -1300,6 +1478,22 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       font-weight: 600;
       letter-spacing: -0.01em;
     }
+    /* Live value feedback on the INPUT itself (card view). Amber tint for a
+       plain high/low; red is reserved for critical; dashed red for a value
+       that isn't a parseable number. Beats focus/active borders. */
+    .pf-param__input--outr {
+      border-color: rgba(245, 158, 11, 0.55) !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1) !important;
+    }
+    .pf-param__input--crit {
+      border-color: rgba(239, 68, 68, 0.75) !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16) !important;
+    }
+    .pf-param__input--invalid {
+      border-style: dashed !important;
+      border-color: rgba(239, 68, 68, 0.55) !important;
+    }
     .pf-param__unit {
       position: absolute;
       right: 14px;
@@ -1324,6 +1518,49 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       cursor: pointer;
     }
     .pf-param__date { cursor: pointer; }
+
+    /* ── Kit date/time hosts (grid .pf-rg__date, card .pf-param__date) ──
+       pf-date / pf-time / pf-datetime are generic kit components
+       (own box styling elsewhere in the app); here they sit beside a
+       pf-select dropdown (grid: 'dropdown'/'radio'/'yesno'; card:
+       'dropdown') and must look like ONE of that row's fields — same
+       border, height, radius and padding as the pf-select trigger
+       (select.component.ts), never their own separate box. Scoped to
+       THESE two host classes only — pf-date/time elsewhere (vendors,
+       audit log, dynamic-input, …) are untouched. */
+    .pf-rg__date, .pf-param__date { display: block; width: 100%; }
+    .pf-rg__date ::ng-deep .pf-date__in,
+    .pf-rg__date ::ng-deep .pf-time__in,
+    .pf-param__date ::ng-deep .pf-date__in,
+    .pf-param__date ::ng-deep .pf-time__in {
+      height: 38px;
+      padding: 0 40px 0 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--input-text);
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .pf-param--active .pf-param__date ::ng-deep .pf-date__in,
+    .pf-param--active .pf-param__date ::ng-deep .pf-time__in {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(168, 85, 247, 0.45);
+    }
+    /* An invalid typed date/time (pf-date/pf-time's own validation) must
+       still show red — our higher-specificity border override above would
+       otherwise beat the kit's plain .pf-input--error rule. */
+    .pf-rg__date ::ng-deep .pf-date__in.pf-input--error,
+    .pf-rg__date ::ng-deep .pf-time__in.pf-input--error,
+    .pf-param__date ::ng-deep .pf-date__in.pf-input--error,
+    .pf-param__date ::ng-deep .pf-time__in.pf-input--error {
+      border-color: var(--red-border, #ef4444);
+    }
+    /* pf-datetime pairs a date + a time box side by side — each inner
+       box still matches the single-field dimensions above; just let the
+       pair share the row width evenly. */
+    .pf-rg__date ::ng-deep .pf-datet, .pf-param__date ::ng-deep .pf-datet { width: 100%; }
+    .pf-rg__date ::ng-deep .pf-datet > *, .pf-param__date ::ng-deep .pf-datet > * { flex: 1 1 0; }
 
     /* ── Button-select pills (type: buttonSelect) ────────────── */
     .pf-param__btnsel { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1619,7 +1856,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.12);
       border: 1px solid rgba(239, 68, 68, 0.35);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 11.5px;
       font-weight: 500;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -1682,7 +1919,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     .pf-view-toggle__btn:hover { color: var(--text-primary); }
     .pf-view-toggle__btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
 
     .pf-result-grid-wrap {
@@ -1702,7 +1939,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       padding: 9px 10px;
       font-size: 10.5px; font-weight: 800;
       letter-spacing: 0.14em; text-transform: uppercase;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0.06));
       border-bottom: 1px solid rgba(168, 85, 247, 0.4);
       position: sticky; top: 0; z-index: 1;
@@ -1768,12 +2005,29 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       background: rgba(168, 85, 247, 0.1);
     }
     .pf-rg__input--num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Live value feedback on the INPUT itself (grid view) — mirrors the card
+       view: amber = high/low, red = critical, dashed red = not a number. */
+    .pf-rg__input--outr {
+      border-color: rgba(245, 158, 11, 0.55) !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+    }
+    .pf-rg__input--crit {
+      border-color: rgba(239, 68, 68, 0.75) !important;
+      background: rgba(239, 68, 68, 0.1) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14);
+    }
+    .pf-rg__input--invalid {
+      border-style: dashed !important;
+      border-color: rgba(239, 68, 68, 0.55) !important;
+    }
     .pf-rg__select { font-weight: 500; }
     .pf-rg__textarea { resize: vertical; min-height: 32px; }
     .pf-rg__c-unit, .pf-rg__c-range, .pf-rg__c-method {
       color: var(--text-tertiary);
       font-size: 12px;
     }
+    /* A typed report text keeps its line breaks. */
+    .pf-rg__c-range { white-space: pre-line; }
     .pf-rg__flag {
       display: inline-block;
       margin-left: 6px;
@@ -1782,10 +2036,25 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       letter-spacing: 0.12em; text-transform: uppercase;
       border-radius: 9999px;
     }
-    .pf-rg__flag[data-tone='low']      { background: rgba(59, 130, 246, 0.16); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
-    .pf-rg__flag[data-tone='high']     { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); }
-    .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .pf-rg__flag[data-tone='low']      { background: rgba(59, 130, 246, 0.16); color: var(--blue-text); border: 1px solid rgba(59, 130, 246, 0.4); }
+    .pf-rg__flag[data-tone='high']     { background: rgba(245, 158, 11, 0.16); color: var(--amber-text); border: 1px solid rgba(245, 158, 11, 0.4); }
+    .pf-rg__flag[data-tone='critical'] { background: rgba(239, 68, 68, 0.18);  color: var(--red-text); border: 1px solid rgba(239, 68, 68, 0.45); }
+    .pf-rg__flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.16); color: var(--green-text); border: 1px solid rgba(16, 185, 129, 0.4); }
+
+    /* Calculated-field chip: Auto = formula live, Manual = tech override,
+       Not calculable = validity gate failed — never a partial number. */
+    .pf-rg__calc {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 8px;
+      font-size: 9.5px; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+    .pf-rg__calc[data-kind='auto']   { background: rgba(139, 92, 246, 0.14); color: var(--violet-text, #a78bfa); border: 1px solid rgba(139, 92, 246, 0.38); }
+    .pf-rg__calc[data-kind='manual'] { background: rgba(148, 163, 184, 0.14); color: var(--text-secondary, rgba(255,255,255,0.7)); border: 1px solid rgba(148, 163, 184, 0.35); }
+    .pf-rg__calc[data-kind='na']     { background: transparent; color: var(--text-muted, rgba(255,255,255,0.45)); border: 1px dashed rgba(148, 163, 184, 0.4); text-transform: none; letter-spacing: 0.02em; }
 
     /* ── Live flag pill ─────────────────────────────────────── */
     .pf-flag {
@@ -1811,12 +2080,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       animation: none;
     }
     .pf-flag__dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
-    .pf-flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.14);  color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-    .pf-flag[data-tone='low']      { background: rgba(245, 158, 11, 0.14);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
-    .pf-flag[data-tone='high']     { background: rgba(245, 158, 11, 0.14);  color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+    .pf-flag[data-tone='normal']   { background: rgba(16, 185, 129, 0.14);  color: var(--green-text); border-color: rgba(16, 185, 129, 0.3); }
+    .pf-flag[data-tone='low']      { background: rgba(245, 158, 11, 0.14);  color: var(--amber-text); border-color: rgba(245, 158, 11, 0.3); }
+    .pf-flag[data-tone='high']     { background: rgba(245, 158, 11, 0.14);  color: var(--amber-text); border-color: rgba(245, 158, 11, 0.3); }
     .pf-flag[data-tone='critical'] {
       background: rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: rgba(239, 68, 68, 0.4);
       animation: pf-flag-crit 1.6s ease-in-out infinite, pf-flag-in 0.25s ease both;
       box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
@@ -1875,6 +2144,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
 
     /* ── Right rail: lg+ is docked in the grid column, <lg is a bottom drawer ── */
+    .pf-rail__padhint { margin: 12px 4px 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
     .pf-rail {
       display: block;
       min-height: 0;
@@ -1989,10 +2259,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-rail__close,
       .pf-rail-backdrop { display: none !important; }
     }
-    /* Desktop (xl+) has a real keyboard — the whole rail is hidden so the
-       params get the full viewport width. */
-    @media (min-width: 1280px) {
+    /* Desktop (≥1280px with a mouse) has a real keyboard — the whole rail
+       is hidden so the params get the full viewport width. Touch-first
+       devices (html.device-touch) keep the rail at every width. */
+    @include dt.desktop-only {
       .pf-rail { display: none !important; }
+      /* Was the template's xl:grid-cols-1 (a Tailwind utility can't tell a
+         tablet from a desktop). Unlayered, so it beats lg:grid-cols-[…]. */
+      .pf-page__body.pf-re-body { grid-template-columns: repeat(1, minmax(0, 1fr)); }
     }
 
     /* ── Rail header row: eyebrow + close (mobile only) ── */
@@ -2373,6 +2647,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       flex-shrink: 0;
     }
     @media (min-width: 768px) { .pf-head__title { font-size: 26px; } }
+    .pf-head__spec { height: 26px; font-size: 11.5px; flex: none; }
     .pf-head__sep { color: var(--text-muted); opacity: 0.6; }
     .pf-head__sub {
       margin: 0;
@@ -2442,12 +2717,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 
     .pf-head__btn--ghost {
       background: transparent;
-      color: #fca5a5;
+      color: var(--red-text);
       border-color: transparent;
     }
     .pf-head__btn--ghost:hover:not(:disabled) {
       background: rgba(239, 68, 68, 0.12);
-      color: #fca5a5;
+      color: var(--red-text);
     }
     :root.light .pf-head__btn--ghost { color: #b91c1c; }
 
@@ -2488,7 +2763,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       background: rgba(16, 185, 129, 0.14);
       border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #34d399;
+      color: var(--green-text);
       font-size: 10px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       text-transform: none;
@@ -2543,13 +2818,20 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-rg__input,
       .pf-rg__textarea,
       .pf-rg__select { font-size: 16px; }
+      /* The kit date/time boxes aren't .pf-rg__input/.pf-param__input any
+         more (one border, matched to pf-select — see the rule above), so
+         they need their own zoom-guard bump here. */
+      .pf-rg__date ::ng-deep .pf-date__in,
+      .pf-rg__date ::ng-deep .pf-time__in,
+      .pf-param__date ::ng-deep .pf-date__in,
+      .pf-param__date ::ng-deep .pf-time__in { font-size: 16px; }
     }
 
     /* Touch sizing: on coarse pointers the header pills + the back button
        are below the 44px minimum tap target. Grow their height (and the
        view-toggle hit area) without disturbing the mouse/desktop layout.
        Padding-only growth keeps the pill shape; line-height stays intact. */
-    @media (pointer: coarse) and (max-width: 1279px) {
+    @media (pointer: coarse) { @include dt.tablet-tier {
       .pf-head__back { height: 44px; padding: 0 16px; }
       .pf-head__btn { height: 44px; padding: 0 18px; }
       /* Icon-only view toggle: full 44px tap target on touch. */
@@ -2577,7 +2859,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-btnsel__opt,
       .pf-param__filebtn { min-height: 44px; }
       .pf-param__canvas-clear { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
-    }
+    } }
 
     /* Touch (no real hover): neutralise the :hover background swaps on the
        primary controls so a tap doesn't leave them "stuck" in a hover tint
@@ -2619,16 +2901,48 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 })
 export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiService);
+  /** Touch device → the shared result numpad replaces the rail keypad. */
+  readonly touchPad = inject(NumpadService).touch;
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly scan = inject(ScanService);
+  private readonly tenantState = inject(TenantStateService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;
 
+  private readonly auth = inject(AuthService);
+
+  // ── Post-result edit ──────────────────────────────────
+  // edit_result: Lab Technician, Pathologist, Lab Admin — never front desk.
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  readonly editDialogOpen = signal(false);
+  /** The dialog acts on the ORDER — read it off this test's sample. */
+  readonly editOrderId = computed(() =>
+    this._ot()?.subOrder?.orderId ?? this._ot()?.subOrder?.order?.id ?? null);
+
+  /** Re-opened work changes this test's status/assignee — reload it. */
+  onEdited() {
+    this.editDialogOpen.set(false);
+    const id = this._ot()?.id;
+    if (!id) return;
+    this.api.get<OrderTest>(`/api/results/${id}`).subscribe({
+      next: t => this._ot.set(t),
+      error: () => { /* the dialog's toast already reported the outcome */ }
+    });
+  }
+
   private readonly _ot = signal<OrderTest | null>(null);
+  /** The line's tube (carries its order's daily patient number). */
+  readonly dailyNoSrc = computed(() => this._ot()?.subOrder ?? null);
+  /** First-load skeleton for the result (PF-PATTERN "Loading feedback"). */
+  private readonly recordHold = createLoadHold(true);
+  readonly recordSkeleton = this.recordHold.active;
+  /** Reject-sample request in flight (after the reason prompt). */
+  readonly rejecting = signal(false);
   private readonly _saving = signal(false);
   private readonly _values = signal<Record<string, unknown>>({});
   // Backend field errors from the last submit, keyed by param name. Surfaced
@@ -2642,6 +2956,19 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly mobileRailOpen = this._mobileRailOpen.asReadonly();
 
   readonly orderTest = this._ot.asReadonly();
+
+  /** Technician report notes of this test's order (re-read when its status
+   *  changes: submit / validate / Edit result lock or unlock them). */
+  protected readonly notes = inject(ReportNotesStore);
+  private notesKey = '';
+  private readonly _notesSync = effect(() => {
+    const ot = this._ot();
+    const oid = ot?.subOrder?.orderId ?? ot?.subOrder?.order?.id ?? null;
+    const key = oid ? `${oid}|${ot?.id}:${ot?.status}` : '';
+    if (key === this.notesKey) return;
+    this.notesKey = key;
+    void this.notes.load(oid);
+  });
   readonly saving = this._saving.asReadonly();
   readonly activeParam = this._active.asReadonly();
   readonly note = this._note.asReadonly();
@@ -2661,13 +2988,77 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     try { localStorage.setItem('pf-result-view', mode); } catch { /* no-op */ }
   }
 
+  /** Restricts keydown events for numeric parameters to valid numbers (digits 0-9, decimal point, minus) and navigation keys, preventing letter input. */
+  allowOnlyNumbers(event: KeyboardEvent) {
+    const key = event.key;
+    if (
+      [
+        'Backspace',
+        'Tab',
+        'Enter',
+        'Escape',
+        'Delete',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Home',
+        'End',
+      ].includes(key) ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const target = event.target as HTMLInputElement | null;
+    const val = target?.value || '';
+
+    if (key === '.' && !val.includes('.')) {
+      return;
+    }
+    if (key === '-' && !val.includes('-')) {
+      return;
+    }
+    if (!/^[0-9]$/.test(key)) {
+      event.preventDefault();
+    }
+  }
+
+  /** Paste into a numeric field: strip everything that isn't a digit, dot or
+   *  leading minus so "one hundred" or "12 mg/dL" can never land as the raw
+   *  value. A clean numeric paste falls through to the browser default. */
+  onNumericPaste(event: ClipboardEvent, name: string) {
+    const input = event.target as HTMLInputElement | null;
+    const raw = event.clipboardData?.getData('text') ?? '';
+    let cleaned = raw.replace(/[^0-9.\-]/g, '');
+    const neg = cleaned.startsWith('-');
+    cleaned = cleaned.replace(/-/g, '');
+    const [head, ...rest] = cleaned.split('.');
+    cleaned = (neg ? '-' : '') + head + (rest.length ? '.' + rest.join('') : '');
+    if (cleaned === raw) return; // already numeric — let the default paste run
+    event.preventDefault();
+    if (!input) return;
+    let next = cleaned;
+    try {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      next = input.value.slice(0, start) + cleaned + input.value.slice(end);
+    } catch {
+      /* selection API unavailable (type=number) — replace wholesale */
+    }
+    input.value = next;
+    this.setValue(name, next);
+  }
+
   private readonly _paramsBlob = computed<TestParametersBlob | null>(() => {
     const raw = this._ot()?.test?.parameters;
     if (!raw) return null;
     try { return JSON.parse(raw) as TestParametersBlob; } catch { return null; }
   });
   readonly allParameters = computed<TestParameter[]>(() => {
-    const params = this._paramsBlob()?.parameters ?? [];
+    // The ONE list (legacy `fields[]` twins folded in by the shared reader).
+    const params = readParameters(this._paramsBlob());
     // A non-culture test with no configured parameter schema would otherwise
     // dead-end at "No parameter schema — this test has no inputs" and be
     // impossible to fill. Fall back to a single generic "Result" field so the
@@ -2681,18 +3072,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // ── Microbiology Culture & Sensitivity ───────────────────────────────
   readonly microFormat = computed<string | null>(() => this._paramsBlob()?.microFormat ?? null);
   readonly isCulture = computed(() => this.microFormat() === 'culture_sensitivity');
-  /** The current result as a culture structure (the whole `values` payload). */
-  readonly cultureValue = computed<CultureResult>(() => (this._values() as CultureResult) ?? {});
-  setCulture(v: CultureResult) { this._values.set(v as Record<string, unknown>); }
-  /** Ready to submit a culture: no growth, or at least one named organism. */
-  readonly cultureReady = computed(() => {
-    const m = this._values() as CultureResult;
-    if (m?.noGrowth) return true;
-    return (m?.organisms ?? []).some(o => (o.name ?? '').trim().length > 0);
-  });
-  // FormField[] parallel to `parameters`, carries showWhen + richer type.
-  // Older tests without the new editor saved only `parameters`, so this may be empty.
-  private readonly _fields = computed<FormField[]>(() => this._paramsBlob()?.fields ?? []);
+  /** "Specimen: Urine" — chosen at the order desk; culture keeps it on the bench. */
+  readonly specimenLabel = computed(() => this.isCulture() ? null : chosenSpecimen(this.orderTest()));
+  /** Culture tests are entered on the Culture case page, never here. */
+  openCultureBench() {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) void this.router.navigate(['/lab/culture', id]);
+  }
+  // Form view of the SAME parameters (rich type, showWhen, validation) —
+  // derived, never a second stored list.
+  private readonly _fields = computed<FormField[]>(() =>
+    readParameters(this._paramsBlob()).map((p, i) => paramToField(p, i)));
   private readonly _fieldByName = computed<Map<string, FormField>>(() => {
     const map = new Map<string, FormField>();
     for (const f of this._fields()) map.set(f.name, f);
@@ -2801,7 +3191,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
   readonly canSubmit = computed(() =>
     this.isCulture()
-      ? this.cultureReady()
+      ? false                       // culture submits on the Culture case page
       : (this.filledCount() === this.requiredCount() &&
          this.requiredCount() > 0 &&
          !this.hasValidationErrors())
@@ -2814,13 +3204,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return Math.max(0, (Date.now() - new Date(ral).getTime()) / 60000);
   });
   readonly tatBudgetMin = computed(() => (this._ot()?.test?.tatHours ?? 0) * 60);
-  readonly tatRemaining = computed(() => this.tatBudgetMin() - this.tatElapsedMin());
-  readonly tatLevel = computed<'urgent' | 'high' | 'normal'>(() => {
-    const r = this.tatRemaining();
-    if (r <= 0) return 'urgent';
-    if (r <= 60) return 'high';
-    return 'normal';
-  });
+  /** TAT clock (from lab receipt). A clock, never a priority. */
+  readonly tatClock = computed(() => tatInfo(this._ot()?.subOrder?.receivedAtLab, this._ot()?.test?.tatHours));
+  readonly tatState = computed<TatState>(() => this.tatClock().state);
+  /** The ORDER's priority, normalised: Urgent (urgent / STAT) or Normal. */
+  readonly priority = computed(() => linePriority(this._ot()));
   readonly tatPercent = computed(() => {
     const b = this.tatBudgetMin();
     if (!b) return 0;
@@ -2829,22 +3217,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   readonly patientName = computed(() => patientDisplayName(this._ot()?.subOrder?.order?.patient) || '—');
   readonly patientSex  = computed(() => this._ot()?.subOrder?.order?.patient?.sex ?? '—');
-  readonly patientAge  = computed(() => this._ot()?.subOrder?.order?.patient?.age ?? '—');
+  readonly patientAge  = computed(() => formatAge(this._ot()?.subOrder?.order?.patient, 'num', '—'));
   readonly patientInfoString = computed(() => formatPatientInfo(this._ot()?.subOrder?.order?.patient));
 
   readonly subtitle = computed(() => {
     if (!this._ot()) return 'Capturing parameter values for this test.';
-    const rem = this.tatRemaining();
-    const state =
-      this.tatLevel() === 'urgent' ? 'past TAT' :
-      this.tatLevel() === 'high'   ? `${Math.round(rem)}m remaining` :
-      `${Math.round(rem)}m to go`;
-    return `Enter parameter values. Currently ${state}.`;
+    return `Enter parameter values. ${tatDetail(this.tatClock().remainingMin)}.`;
   });
 
   readonly panelTone = computed<TileTone>(() => {
-    const l = this.tatLevel();
-    return l === 'urgent' ? 'rose' : l === 'high' ? 'amber' : 'violet';
+    // Tint follows the ORDER priority (Urgent = rose); TAT has its own chip.
+    return this.priority() === 'urgent' ? 'rose' : 'violet';
   });
 
   readonly criticalFlags = computed<Array<TestParameter & { value: string }>>(() => {
@@ -2959,6 +3342,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
     this.api.get<OrderTest>(`/api/results/${id}`).subscribe({
       next: t => {
+        this.recordHold.done();
         this._ot.set(t);
         const raw = t.currentResult;
         if (raw) {
@@ -2971,15 +3355,25 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         // Seed the right-rail target with the first numeric param so the pad has something to drive.
         const firstNumeric = this.parameters().find(p => this.inputKindFor(p) === 'numeric');
         if (firstNumeric) this._active.set(firstNumeric.name);
+        // Calculated test → fetch tube siblings and prefill from the formula.
+        this.initCalc();
       },
-      error: () => this.toasts.error('Could not load result entry')
+      error: () => { this.recordHold.done(); this.toasts.error('Could not load result entry'); }
     });
-    setInterval(() => this._now.set(Date.now()), 10_000);
+    // Cleared on destroy: the route recreates this screen per test
+    // (data.recreateOn), so a leaked ticker would pile up per switch.
+    const tick = setInterval(() => this._now.set(Date.now()), 10_000);
+    this.destroyRef.onDestroy(() => clearInterval(tick));
   }
+  private readonly destroyRef = inject(DestroyRef);
 
   // ── Re-scan gate ──────────────────────────────────────
   private readonly _verified = signal(false);
   readonly verified = this._verified.asReadonly();
+  // In manual mode there is no vial QR to scan, so the re-scan gate must not
+  // block: manual tenants count as always-verified. In scan mode this is
+  // exactly `_verified()`, so that path is unchanged.
+  readonly resultEntryUnlocked = computed(() => this._verified() || this.scan.manualEntry());
   readonly expectedScanBarcode = computed(() => this._ot()?.subOrder?.barcode ?? '');
 
   onResumeScanMatched(code: string) {
@@ -3003,12 +3397,16 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // InputKind here — silent fall-through would hide data-entry bugs.
   inputKindFor(p: TestParameter): InputKind {
     const field = this._fieldByName().get(p.name);
-    const t = field?.type ?? p.type;
+    // Widened: catalog data carries type strings ('options', 'choice') the
+    // FormFieldType union doesn't know.
+    const t = (field?.type ?? p.type) as string;
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':
       case 'number':          return 'numeric';
-      case 'text':            return 'text';
+      // Qualitative positive/negative-ish parameters (by options OR type)
+      // render as a dropdown, never a free text box.
+      case 'text':            return resolveParamEntryKind(p) === 'select' ? 'dropdown' : 'text';
       case 'textarea':        return 'textarea';
       case 'voice-text':      return 'voice-text';
       case 'phone':           return 'phone';
@@ -3016,7 +3414,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'date':            return 'date';
       case 'time':            return 'time';
       case 'datetime':        return 'datetime';
-      case 'select':          return 'dropdown';
+      case 'select':
+      // "options"/"choice": the option-group mapper / option-table catalogs
+      // write these — a curated list must never render as a text box.
+      case 'options':
+      case 'choice':          return 'dropdown';
       case 'multiselect':     return 'chips-multi';
       case 'buttonSelect':
       case 'button_select':   return 'buttonSelect';
@@ -3046,16 +3448,46 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'table':
       case 'recursive':
       case 'recursivePages':  return 'stub';
-      default:                return 'text';
+      default:
+        // 'dropdown' / 'qualitative' / capitalised spellings / unknown types
+        // carrying options — the shared resolver decides.
+        switch (resolveParamEntryKind(p)) {
+          case 'select':   return 'dropdown';
+          case 'number':   return 'numeric';
+          case 'textarea': return 'textarea';
+          case 'date':     return 'date';
+          case 'checkbox': return 'yesno';
+          default:         return 'text';
+        }
     }
+  }
+
+  /** True when the parameter is a qualitative pos/neg-style result — its
+   *  dropdown then carries a real empty '—' choice (these are optional). */
+  isQualitative(p: TestParameter): boolean {
+    return !!qualitativeOptionsFor(p);
+  }
+
+  /** Dropdown options: the schema's own list, or the qualitative default
+   *  pair when only the type marks the field qualitative. */
+  optionsFor(p: TestParameter): string[] {
+    return choiceOptionsFor(p);
   }
 
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
     const r = this.rangeFor(p);
-    if (r && r.min != null && r.max != null) {
+    // The group's typed report text prints exactly as typed (simple model),
+    // line breaks included (the cells are white-space: pre-line), `{u}` →
+    // the value's unit.
+    const typed = normalizeReportText(fillUnit(r?.reportText, p.unit));
+    if (typed) return typed;
+    // Route through the shared formatter so one-sided bands ("< 200",
+    // "≤ 140") get a label too — they used to render blank here.
+    const text = formatRange(r);
+    if (r && text) {
       const seg = r.segment ? this.prettySegment(r.segment) : '';
-      return `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
+      return `${text}${p.unit ? ' ' + p.unit : ''}${seg ? ' · ' + seg : ''}`;
     }
     if (p.criticalLow !== undefined && p.criticalHigh !== undefined) return `${p.criticalLow}–${p.criticalHigh}`;
     return '';
@@ -3073,11 +3505,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
    * every patient against whatever band happened to be first.
    */
   private rangeFor(p: TestParameter): ReferenceRange | undefined {
-    const ageRaw = this._ot()?.subOrder?.order?.patient?.age;
-    const ageYears = typeof ageRaw === 'number' ? ageRaw : null;
+    // DOB-derived fractional age — the server's band-pick metric.
+    const ageYears = bandAgeYears(this._ot()?.subOrder?.order?.patient);
     const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
     return selectReferenceRange(p.referenceRanges, sex, ageYears);
   }
+
+  /** The bench chip. A value that is still the one SAVED with the result
+   *  shows mw's saved verdict (snapshot `flagged`); a value being typed gets
+   *  the shared live hint (patient band, band → param criticals, strict). */
+  /** Chip tooltip: what H / L / critical mean (QA 2026-09-24). */
+  readonly flagChipTitle = flagChipTitle;
 
   flagFor(p: TestParameter): Flag | null {
     if (this.inputKindFor(p) !== 'numeric') return null;
@@ -3086,16 +3524,53 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const v = parseFloat(String(raw));
     if (Number.isNaN(v)) return null;
 
-    if (p.criticalLow  !== undefined && v < p.criticalLow)  return { tone: 'critical', label: `Critical · below ${p.criticalLow}` };
-    if (p.criticalHigh !== undefined && v > p.criticalHigh) return { tone: 'critical', label: `Critical · above ${p.criticalHigh}` };
-
-    const r = this.rangeFor(p);
-    if (r && r.min != null && r.max != null) {
-      if (v < r.min) return { tone: 'low',  label: 'Low' };
-      if (v > r.max) return { tone: 'high', label: 'High' };
-      return { tone: 'normal', label: 'Normal' };
+    const ot = this._ot();
+    const saved = savedFlagOf(parseResultSnapshot(ot?.currentResult), p.name);
+    if (saved && saved.flag != null && String(saved.value ?? '') === String(raw)) {
+      const code = flagCodeOf(saved.flag);
+      // Lab badge keeps the direction: CL / CH (legacy rows: C).
+      const crit = criticalBadge(code);
+      if (crit) return { tone: 'critical', label: crit };
+      if (code === 'L') return { tone: 'low', label: 'Low' };
+      if (code === 'H') return { tone: 'high', label: 'High' };
+      if (code === 'A') return { tone: 'high', label: 'Abnormal' };
+      if (code === 'N') return { tone: 'normal', label: 'Normal' };
+      return null;
     }
-    return null;
+
+    const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
+      bandAgeYears(ot?.subOrder?.order?.patient), ot?.profileCode);
+    if (!lf) return null;
+    if (lf.code === 'CL' || lf.code === 'CH') return { tone: 'critical', label: `${lf.code} · ${lf.code === 'CL' ? 'below' : 'above'} ${lf.limit}` };
+    if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
+    if (lf.code === 'H') return { tone: 'high', label: 'High' };
+    return { tone: 'normal', label: 'Normal' };
+  }
+
+  /** Methodology for one value — HYBRID: the value's own override, else the
+   *  test-level default (shared resolver, same as the report). */
+  methodologyFor(p: TestParameter): string {
+    return effectiveMethodology(p, this._ot()?.test) || '—';
+  }
+
+  /** Softer amber input tint for plain high/low (red stays critical-only). */
+  isOutOfRange(p: TestParameter): boolean {
+    const tone = this.flagFor(p)?.tone;
+    return tone === 'low' || tone === 'high';
+  }
+
+  /** A numeric parameter holding a non-parseable value — near-impossible past
+   *  the keydown/paste guards, but IME/autofill can slip through. Shown as a
+   *  subtle invalid state and blocks submit. */
+  isInvalidNumeric(p: TestParameter): boolean {
+    if (this.inputKindFor(p) !== 'numeric') return false;
+    const raw = this._values()[p.name];
+    if (raw === undefined || raw === null || raw === '') return false;
+    return Number.isNaN(Number(String(raw).trim()));
+  }
+
+  private hasInvalidNumeric(): boolean {
+    return this.parameters().some(p => this.isInvalidNumeric(p));
   }
 
   valueOf(name: string | null): string | undefined {
@@ -3403,6 +3878,169 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   setValue(name: string, value: string) {
     this.clearServerError(name);
     this._values.update(s => ({ ...s, [name]: value }));
+    // Calculated test: typing into the formula's target field is an override;
+    // clearing it hands the field back to the formula. Typing anywhere else
+    // (a same-test input the formula reads) re-runs the prefill.
+    if (this._calcDef()) {
+      const target = this.calcTargetParam();
+      if (target?.name === name) {
+        this._calcOverridden.set(value !== '' && value != null);
+        if (value === '' || value == null) this.applyCalcPrefill();
+      } else {
+        this.applyCalcPrefill();
+      }
+    }
+  }
+
+  // ── Calculated result (profile formulas — VLDL = TG/5, eGFR…) ────────
+  // This screen holds ONE test, so sibling inputs come from the tube's other
+  // tests: fetched once, values read from their saved result snapshots. The
+  // computed value is a PREFILL — overridable, autosaved like typed input.
+  private readonly _calcDef = computed(() => parseCalc(this._ot()?.test?.calculation));
+  private readonly _calcSiblings = signal<OrderTest[] | null>(null);
+  private readonly _calcOverridden = signal(false);
+
+  private readonly _calcConstants = computed<Record<string, number>>(() => {
+    const raw = this.tenantState.tenant()?.calcConstants;
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(obj))
+        if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+      return out;
+    } catch { return {}; }
+  });
+
+  /** The field the formula writes into — this test's first numeric param. */
+  private calcTargetParam(): TestParameter | null {
+    return this.parameters().find(p => this.inputKindFor(p) === 'numeric') ?? null;
+  }
+
+  /** A sibling's saved value: handles both snapshot shapes
+   *  ({p:{value,unit}} and flat {p:value}); param null → first numeric-ish. */
+  private siblingValue(t: OrderTest, param: string | null): number | null {
+    if (!t.currentResult) return null;
+    let values: Record<string, unknown>;
+    try { values = (JSON.parse(t.currentResult) as { values?: Record<string, unknown> })?.values ?? {}; }
+    catch { return null; }
+    const read = (v: unknown): number | null => {
+      const raw = v != null && typeof v === 'object' ? (v as { value?: unknown }).value : v;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number(String(raw).trim());
+      return Number.isFinite(n) ? n : null;
+    };
+    if (param) {
+      const want = param.trim().toLowerCase();
+      for (const [k, v] of Object.entries(values))
+        if (k.trim().toLowerCase() === want) return read(v);
+      return null;
+    }
+    for (const v of Object.values(values)) {
+      const n = read(v);
+      if (n != null) return n;
+    }
+    return null;
+  }
+
+  private calcContext(): CalcContext {
+    const self = this._ot();
+    const selfCode = self?.test?.testCode?.trim().toUpperCase() ?? null;
+    const siblings = this._calcSiblings() ?? [];
+    const consts = this._calcConstants();
+    const patient = self?.subOrder?.order?.patient;
+    // Formula AGE: whole years from the DOB (shared helper; as before for
+    // every patient with a stored age), never a stale stored value.
+    const age = ageInYears(patient);
+    const findSibling = (code: string) =>
+      siblings.find(t => t.test?.testCode?.trim().toUpperCase() === code) ?? null;
+    return {
+      value: ref => {
+        const sep = ref.indexOf(':');
+        const code = (sep < 0 ? ref : ref.slice(0, sep)).trim().toUpperCase();
+        const param = sep < 0 ? null : ref.slice(sep + 1);
+        if (code === selfCode) {
+          // Same-test input (rare): read the live form value.
+          const want = param?.trim().toLowerCase();
+          const p = want
+            ? this.parameters().find(x => x.name.trim().toLowerCase() === want
+                || (x.title ?? '').trim().toLowerCase() === want)
+            : this.calcTargetParam();
+          const raw = p ? this._values()[p.name] : undefined;
+          if (raw === undefined || raw === null || raw === '') return null;
+          const n = Number(String(raw).trim());
+          return Number.isFinite(n) ? n : null;
+        }
+        const t = findSibling(code);
+        return t ? this.siblingValue(t, param) : null;
+      },
+      constant: name => consts[name],
+      age,
+      sex: patient?.sex ?? null,
+      uln: code => {
+        const t = findSibling(code.trim().toUpperCase());
+        const raw = t?.test?.parameters;
+        if (!raw) return null;
+        try {
+          const params = (JSON.parse(raw) as TestParametersBlob).parameters ?? [];
+          const p = params.find(x => (x.referenceRanges?.length ?? 0) > 0);
+          if (!p) return null;
+          const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
+          return selectReferenceRange(p.referenceRanges, sex,
+            bandAgeYears(this._ot()?.subOrder?.order?.patient))?.max ?? null;
+        } catch { return null; }
+      },
+    };
+  }
+
+  /** Fill the target field from the formula unless the tech has overridden. */
+  private applyCalcPrefill() {
+    const def = this._calcDef();
+    if (!def || this._calcOverridden()) return;
+    const target = this.calcTargetParam();
+    if (!target) return;
+    const res = evaluateCalc(def, this.calcContext());
+    const next = res.value != null ? String(res.value) : '';
+    const cur = String(this._values()[target.name] ?? '');
+    if (cur === next) return;
+    this._values.update(s => ({ ...s, [target.name]: next }));
+  }
+
+  /** After load: fetch tube siblings for the inputs, then decide auto vs
+   *  overridden exactly like the sample screen — a stored value matching the
+   *  formula stays live; a differing one was deliberate. */
+  private initCalc() {
+    const def = this._calcDef();
+    const sampleId = this._ot()?.subOrderId ?? this._ot()?.subOrder?.id;
+    if (!def || !sampleId) return;
+    this.tenantState.ensureLoaded();
+    this.api.get<{ tests?: OrderTest[] }>(`/api/samples/${sampleId}/tests`).subscribe({
+      next: full => {
+        const selfId = this._ot()?.id;
+        this._calcSiblings.set((full?.tests ?? []).filter(t => t.id !== selfId));
+        const target = this.calcTargetParam();
+        const cur = target ? String(this._values()[target.name] ?? '') : '';
+        if (cur) {
+          const res = evaluateCalc(def, this.calcContext());
+          this._calcOverridden.set(res.value == null || String(res.value) !== cur);
+        }
+        this.applyCalcPrefill();
+      },
+      error: () => this._calcSiblings.set([]),
+    });
+  }
+
+  /** Chip beside the calculated field: how the current value got there. */
+  calcChipFor(p: TestParameter): { kind: 'auto' | 'manual' | 'na'; label: string } | null {
+    const def = this._calcDef();
+    if (!def) return null;
+    const target = this.calcTargetParam();
+    if (!target || target.name !== p.name) return null;
+    if (this._calcOverridden()) return { kind: 'manual', label: 'Manual' };
+    const res = evaluateCalc(def, this.calcContext());
+    if (res.invalid) return { kind: 'na', label: 'Not calculable' };
+    if (res.value != null) return { kind: 'auto', label: 'Calculated' };
+    return { kind: 'auto', label: 'Auto' };
   }
 
   setNote(n: string) { this._note.set(n); }
@@ -3466,27 +4104,43 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   advanceFrom(name: string) {
-    // Called from Enter key — prefer the immediate next param (even if filled) if the current is filled.
+    // Called from Enter in ANY input kind. Walk the parameters in document
+    // order (wrapping past the end) and land on the FIRST one that actually
+    // has a focusable input rendered — kinds without a native focus target
+    // (chips, toggles, canvas…) are skipped so Enter never dead-ends.
     const params = this.parameters();
     const idx = params.findIndex(p => p.name === name);
     if (idx < 0) return;
-    const next = params.slice(idx + 1).concat(params.slice(0, idx))
-      .find(p => {
-        const kind = this.inputKindFor(p);
-        return kind === 'numeric' || kind === 'text';
-      });
-    if (!next) return;
-    this._active.set(next.name);
-    this.focusInput(next.name);
+    const candidates = params.slice(idx + 1).concat(params.slice(0, idx));
+    for (const p of candidates) {
+      if (this.isLayoutKind(this.inputKindFor(p))) continue;
+      if (this.focusParam(p.name)) return;
+    }
+  }
+
+  /** Focus the rendered input for a parameter (input/textarea/select, or the
+   *  pf-select trigger inside a data-param wrapper). Scrolls it into view so
+   *  Enter-Enter-Enter feels seamless on the bench iPad. Returns false when
+   *  no focusable element exists for this parameter in the current view. */
+  private focusParam(name: string): boolean {
+    const host = this.host.nativeElement as HTMLElement;
+    const el = host.querySelector(`[data-param="${CSS.escape(name)}"]`) as HTMLElement | null;
+    if (!el) return false;
+    const target = el.matches('input, textarea, select, button, [tabindex]')
+      ? el
+      : el.querySelector<HTMLElement>('input, textarea, select, button, [tabindex]');
+    if (!target) return false;
+    this._active.set(name);
+    target.focus();
+    if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'number')) {
+      target.select();
+    }
+    target.scrollIntoView({ block: 'nearest' });
+    return true;
   }
 
   private focusInput(name: string) {
-    // Try numeric-ref first.
-    const byRef = this.numInputs?.find(r => r.nativeElement.getAttribute('data-param') === name);
-    if (byRef) { byRef.nativeElement.focus(); return; }
-    // Fall back to querying any input with matching data-param.
-    const el = this.host.nativeElement.querySelector(`[data-param="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
-    if (el) el.focus();
+    this.focusParam(name);
   }
 
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
@@ -3502,6 +4156,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (!id || this._saving()) return;
     if (!this.canSubmit()) {
       this.toasts.warning(`Fill all ${this.requiredCount()} required parameters before submit.`);
+      return;
+    }
+    // A numeric parameter holding a non-parseable value must never be
+    // submitted as the result — the input already shows the invalid state.
+    if (this.hasInvalidNumeric()) {
+      this.toasts.warning('One or more numeric results are not valid numbers — fix them before submitting.');
       return;
     }
     this._saving.set(true);
@@ -3543,7 +4203,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       confirmLabel: 'Reject sample'
     });
     if (!reason) return;
-    this.api.post(`/api/results/${id}/reject-sample`, { reason }).subscribe({
+    this.rejecting.set(true);
+    this.api.post(`/api/results/${id}/reject-sample`, { reason }).pipe(finalize(() => this.rejecting.set(false))).subscribe({
       next: () => { this.toasts.success('Sample rejected'); this.back(); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });

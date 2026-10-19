@@ -1,10 +1,13 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface InvItem { id: string; name: string; uom: string; }
 
@@ -17,50 +20,58 @@ interface InvItem { id: string; name: string; uom: string; }
 @Component({
   selector: 'pf-test-consumables',
   standalone: true,
-  imports: [FormsModule],
+  imports: [SkeletonRowsComponent, BusyDirective, FormsModule, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="rounded-xl border p-4 mt-5" style="border-color:var(--glass-border);background:var(--glass-bg)">
-      <div class="flex items-center justify-between gap-3 mb-1">
-        <h3 class="text-sm font-bold" style="color:var(--text-primary)">Consumables</h3>
-        <span class="text-[11px]" style="color:var(--text-muted)">used by this test</span>
-      </div>
-      <p class="text-[13px] mb-3" style="color:var(--text-tertiary)">
+    <div class="pf-tc">
+      <p class="pf-tc__hint">
         Items consumed per test (tubes, gloves, kits…). Auto-deducted at sample collection; if any is out of stock the test can't be ordered (when inventory is enabled).
       </p>
 
       @if (!testId()) {
-        <p class="text-[13px]" style="color:var(--text-muted)">Save the test first, then add its consumables.</p>
+        <p class="pf-tc__hint">Save the test first, then add its consumables.</p>
       } @else if (loading()) {
-        <p class="text-[13px]" style="color:var(--text-tertiary)">Loading…</p>
+        <pf-skeleton-rows [rows]="3" [dense]="true" [avatar]="false" label="Loading consumables…"></pf-skeleton-rows>
       } @else {
-        <div class="space-y-2" style="max-width:560px">
+        <div class="pf-tc__list">
           @for (line of lines(); track $index) {
-            <div class="flex items-center gap-2">
-              <select class="inp" [ngModel]="line.itemId" (ngModelChange)="setLine($index,'itemId',$event)">
-                <option value="">Item…</option>
-                @for (it of items(); track it.id) { <option [value]="it.id">{{ it.name }} ({{ it.uom }})</option> }
-              </select>
-              <input class="inp" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
-              <button type="button" class="text-sm px-2" style="color:var(--red)" (click)="removeLine($index)">✕</button>
+            <div class="pf-row pf-tc__row">
+              <pf-select class="pf-tc__item" [options]="itemOptions()" [searchable]="true" [value]="line.itemId || null"
+                         placeholder="Item…" (valueChange)="setLine($index, 'itemId', $any($event) ?? '')"></pf-select>
+              <input class="pf-input pf-num pf-tc__qty" type="number" min="0" step="0.001" inputmode="decimal"
+                     [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index, 'qtyPerTest', +$event)"
+                     placeholder="qty / test" aria-label="Quantity per test" />
+              <button type="button" class="pf-tc__x press" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
             </div>
           }
           @if (!items().length) {
-            <p class="text-[13px]" style="color:var(--text-muted)">No inventory items yet — add them under Admin → Inventory first.</p>
+            <p class="pf-tc__hint">No inventory items yet — add them under Admin → Inventory first.</p>
           }
-          <div class="flex gap-3 pt-1">
-            <button type="button" class="text-xs font-semibold" style="color:var(--violet-400)" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
+          <div class="pf-tc__acts">
+            <button type="button" class="pf-btn pf-btn--tertiary press" [disabled]="!items().length" (click)="addLine()">+ Add item</button>
+            <!-- Secondary: the editor's band owns the ONE primary (Save). -->
+            <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+              {{ saving() ? 'Saving…' : 'Save consumables' }}
+            </button>
           </div>
-          <button type="button" class="mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="saving()" (click)="save()">
-            {{ saving() ? 'Saving…' : 'Save consumables' }}
-          </button>
         </div>
       }
     </div>
   `,
   styles: [`
-    .inp { flex:1; padding:7px 10px; border-radius:9px; background:var(--bg-card-solid,#14141f); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13px; }
-    .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); }
+    .pf-tc { display: flex; flex-direction: column; gap: 12px; }
+    .pf-tc__hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); max-width: 640px; }
+    .pf-tc__list { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+    .pf-tc__row { gap: 8px; padding: 6px 8px; }
+    .pf-tc__item { flex: 1 1 auto; min-width: 0; }
+    .pf-tc__qty { width: 120px; flex: none; text-align: right; }
+    .pf-tc__x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px;
+      border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+    .pf-tc__x:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
+    .pf-tc__acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 4px; }
+    @media (max-width: 640px) { .pf-tc__row { flex-wrap: wrap; } .pf-tc__qty { flex: 1 1 auto; width: auto; } }
   `]
 })
 export class TestConsumablesComponent {
@@ -70,6 +81,9 @@ export class TestConsumablesComponent {
   readonly testId = input<string | null>(null);
   readonly items = signal<InvItem[]>([]);
   readonly lines = signal<{ itemId: string; qtyPerTest: number }[]>([]);
+  /** pf-select options (no native select): "Name (uom)". */
+  readonly itemOptions = computed<PfSelectOption[]>(() =>
+    this.items().map(it => ({ value: it.id, label: `${it.name} (${it.uom})` })));
   readonly loading = signal(true);
   readonly saving = signal(false);
 

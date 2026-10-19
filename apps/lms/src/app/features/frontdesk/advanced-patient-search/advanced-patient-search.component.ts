@@ -10,7 +10,13 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { formatAge } from '../../../shared/utils/patient-age';
+import { phoneLast10 } from '../../../shared/utils/indian-phone';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -67,7 +73,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [DatePipe, AvatarComponent, SelectComponent, LoadingLogoComponent],
+  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -117,7 +123,7 @@ const PAGE_SIZE = 20;
 
               <label class="pf-aps-field" style="grid-area: name">
                 <span class="pf-aps-lbl">Patient name</span>
-                <input type="text" class="pf-aps-inp" placeholder="First or father's name"
+                <input type="text" class="pf-aps-inp" placeholder="First or last name"
                        [value]="filters().name"
                        (input)="setFilter('name', $any($event.target).value)" />
               </label>
@@ -240,13 +246,11 @@ const PAGE_SIZE = 20;
                   </div>
                   @if (filters().dateRange === 'custom') {
                     <div class="pf-aps-custom-range">
-                      <input type="date" class="pf-aps-inp pf-aps-inp--sm" aria-label="From"
-                             [value]="filters().dateFrom"
-                             (input)="setFilter('dateFrom', $any($event.target).value)" />
+                      <pf-date label="From" [value]="filters().dateFrom || null"
+                                  (valueChange)="setFilter('dateFrom', $event ?? '')"></pf-date>
                       <span class="pf-aps-range-sep" aria-hidden="true">→</span>
-                      <input type="date" class="pf-aps-inp pf-aps-inp--sm" aria-label="To"
-                             [value]="filters().dateTo"
-                             (input)="setFilter('dateTo', $any($event.target).value)" />
+                      <pf-date label="To" [value]="filters().dateTo || null"
+                                  (valueChange)="setFilter('dateTo', $event ?? '')"></pf-date>
                     </div>
                   }
                 </div>
@@ -266,9 +270,9 @@ const PAGE_SIZE = 20;
                       (click)="reset()">Clear</button>
               <button type="button" class="pf-aps-btn pf-aps-btn--primary"
                       [disabled]="loading() || !hasAnyFilter()"
+                      [pfBusy]="loading()" pfBusyLabel="Searching…"
                       (click)="runSearch()">
                 @if (loading()) {
-                  <pf-loading-logo size="micro" color="white" [inline]="true"></pf-loading-logo>
                   Searching…
                 } @else {
                   Search
@@ -279,6 +283,9 @@ const PAGE_SIZE = 20;
 
           <section class="pf-aps-results">
             @switch (resultState()) {
+              @case ('loading') {
+                <pf-skeleton-table [rows]="6" [cols]="5" label="Searching patients…"></pf-skeleton-table>
+              }
               @case ('idle') {
                 <div class="pf-aps-empty">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -344,7 +351,7 @@ const PAGE_SIZE = 20;
                           </td>
                           <td>
                             <span class="pf-aps-mono">
-                              {{ h.patient.age ?? '—' }}@if (h.patient.age != null) {y} / {{ h.patient.sex ?? '—' }}
+                              {{ ageLabel(h.patient) }} / {{ h.patient.sex ?? '—' }}
                             </span>
                           </td>
                           <td>
@@ -377,6 +384,18 @@ const PAGE_SIZE = 20;
                               </svg>
                               Order
                             </button>
+                            @if (showConsult) {
+                            <button type="button" class="pf-aps-row-btn"
+                                    title="New consultation" (click)="onConsult(h.patient)">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                   stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/>
+                                <path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/>
+                              </svg>
+                              Consult
+                            </button>
+                            }
+                            @if (features.appointmentsEnabled()) {
                             <button type="button" class="pf-aps-row-btn"
                                     title="Book appointment" (click)="onBookAppointment(h.patient)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -386,6 +405,7 @@ const PAGE_SIZE = 20;
                               </svg>
                               Book
                             </button>
+                            }
                           </td>
                         </tr>
                       }
@@ -399,9 +419,9 @@ const PAGE_SIZE = 20;
                     @if (hasMore()) {
                       <button type="button" class="pf-aps-btn pf-aps-btn--ghost"
                               [disabled]="loadingMore()"
+                              [pfBusy]="loadingMore()" pfBusyLabel="Loading more…"
                               (click)="loadMore()">
                         @if (loadingMore()) {
-                          <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
                           Loading…
                         } @else {
                           Load {{ remaining() }} more
@@ -478,7 +498,7 @@ const PAGE_SIZE = 20;
       border-radius: 10px;
       background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.25);
     }
     .pf-aps-title {
@@ -848,7 +868,7 @@ const PAGE_SIZE = 20;
     .pf-aps-err {
       flex: 1;
       font-size: 12.5px;
-      color: #fca5a5;
+      color: var(--red-text);
       font-weight: 500;
     }
 
@@ -1002,7 +1022,7 @@ const PAGE_SIZE = 20;
     :host ::ng-deep .pf-aps-name mark,
     :host ::ng-deep .pf-aps-mono mark {
       background: rgba(168, 85, 247, 0.18);
-      color: #ddd6fe;
+      color: var(--violet-text);
       padding: 1px 3px;
       border-radius: 4px;
       font-weight: 600;
@@ -1067,12 +1087,12 @@ const PAGE_SIZE = 20;
       border-color: var(--glass-border);
     }
     .pf-aps-row-btn--accent {
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-aps-row-btn--accent:hover {
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.32);
-      color: #ddd6fe;
+      color: var(--violet-text);
     }
 
     .pf-aps-table-foot {
@@ -1137,7 +1157,11 @@ const PAGE_SIZE = 20;
   `]
 })
 export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
+  /** "34y" (infants "8m" / "12d") — the shared patient-age helper, DOB first. */
+  ageLabel(p: { age?: number | null; dateOfBirth?: string | null } | null | undefined): string { return formatAge(p, 'y', '—'); }
   private readonly api = inject(ApiService);
+  /** Appointments on? (the ONE lab-feature rule) — hides the Book button. */
+  protected readonly features = inject(LabFeaturesService);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly document = inject(DOCUMENT);
   // Whether we've moved this component's host element to <body>. We do this
@@ -1157,10 +1181,14 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
    * navigation so the user lands back on their last result set.
    */
   @Input() preset: AdvancedFilters | null = null;
+  /** OPD dark build: show the row's "Consult" action. Parent gates this on
+   *  OpdGateService.visible() — the modal itself stays OPD-unaware. */
+  @Input() showConsult = false;
 
   @Output() closed = new EventEmitter<void>();
   @Output() picked = new EventEmitter<Patient>();
   @Output() newOrder = new EventEmitter<Patient>();
+  @Output() consult = new EventEmitter<Patient>();
   @Output() bookAppointment = new EventEmitter<Patient>();
   /** Fires whenever a search executes successfully — parent uses this to
    *  serialise the active filters into the URL for back-button restoration. */
@@ -1195,9 +1223,8 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   readonly remaining = computed(() => Math.min(PAGE_SIZE, this._total() - this._results().length));
 
   readonly branchOptions = computed<PfSelectOption<string>[]>(() => {
-    // De-dupe defensively by branch id — the API can return the same
-    // branch via multiple sub-branch joins which made the dropdown
-    // grow on every re-open.
+    // De-dupe defensively by branch id — a duplicated branch row made the
+    // dropdown grow on every re-open.
     const seen = new Set<string>();
     const opts: PfSelectOption<string>[] = [{ value: '', label: 'Any branch' }];
     for (const b of this._branches()) {
@@ -1219,7 +1246,10 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
       .slice(0, 200);
   });
 
-  readonly resultState = computed<'idle' | 'empty' | 'results'>(() => {
+  readonly resultState = computed<'loading' | 'idle' | 'empty' | 'results'>(() => {
+    // A search in flight with nothing on screen yet draws the table's shape
+    // (never a "No patients found" flash before the answer lands).
+    if (this._loading() && this._results().length === 0) return 'loading';
     if (!this._hasSearched()) return 'idle';
     if (this._results().length === 0) return 'empty';
     return 'results';
@@ -1445,7 +1475,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   private loadTests() {
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: list => this._tests.set((list ?? []).filter(t => t.isActive)),
       error: () => this._tests.set([])
     });
@@ -1483,10 +1513,12 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   // ── Result-row helpers ─────────────────────────────────────
+  /** Same mobile = same last 10 digits (indian-phone.ts), so 9876543210,
+   *  09876543210 and +91 98765-43210 all mark +919876543210 as exact. */
   isExactMobile(h: SearchHit): boolean {
     const filter = this.filters().phone.replace(/\D/g, '');
     if (!filter || !h.patient.phone) return false;
-    return h.patient.phone.replace(/\D/g, '') === filter;
+    return phoneLast10(h.patient.phone) === phoneLast10(filter);
   }
 
   highlightedName(p: Patient): string {
@@ -1498,7 +1530,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
 
   highlightedPhone(p: Patient): string {
     const phone = p.phone ?? '';
-    const q = this.filters().phone.replace(/\D/g, '');
+    const q = phoneLast10(this.filters().phone);
     if (!q) return this.escapeHtml(phone);
     // Highlight the digit-run match within the formatted phone.
     const idx = phone.replace(/\D/g, '').indexOf(q);
@@ -1513,6 +1545,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   // back-button restore.
   onView(p: Patient)            { this.picked.emit(p); }
   onNewOrder(p: Patient)        { this.newOrder.emit(p); }
+  onConsult(p: Patient)         { this.consult.emit(p); }
   onBookAppointment(p: Patient) { this.bookAppointment.emit(p); }
 
   // ── Local utilities ────────────────────────────────────────

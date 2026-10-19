@@ -22,6 +22,7 @@ export interface AuditLogPage {
  *  reader-friendly labels for the filter dropdown. */
 export const AUDIT_ENTITY_TYPES: { value: string; label: string }[] = [
   { value: '', label: 'All record types' },
+  { value: 'Auth', label: 'Sign-in & security' },
   { value: 'OrderTestResultEntity', label: 'Result value' },
   { value: 'OrderTestEntity', label: 'Test (order)' },
   { value: 'OrderSampleEntity', label: 'Sample' },

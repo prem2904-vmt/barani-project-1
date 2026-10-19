@@ -1,203 +1,304 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Permission, Role } from '../../../shared/models/user.model';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
+import { PfSelectOption } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-catalog';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { OPD_PERMISSION_CODES } from '../../opd/shared/opd-permissions';
+
+/** A permission joined with its plain-language catalog entry. */
+interface PermRow {
+  perm: Permission;
+  title: string;
+  what: string;
+  sensitive: boolean;
+}
+interface PermGroupView {
+  key: string;
+  label: string;
+  blurb: string;
+  items: PermRow[];
+  granted: number;
+}
+
+/**
+ * Role editor — plain-language RBAC (owner's 2026-09-20 brief).
+ *
+ * Design rules (industry RBAC-UX practice, adapted to a lab):
+ *  - every permission reads as WHAT THE USER CAN DO, one sentence, no codes
+ *    up front (the code stays as small print for support conversations);
+ *  - permissions group by the lab's own workflow (front desk → collection →
+ *    bench → sign-out → reports), not by technical module;
+ *  - pre-seeded roles carry a one-breath description of WHO that person is;
+ *  - high-impact grants (money overrides, config, two-person-rule bypass)
+ *    are visibly flagged;
+ *  - a live "this role can…" summary keeps the big picture while toggling.
+ */
 @Component({
   selector: 'pf-role-editor',
   standalone: true,
   imports: [
     FormsModule,
-    ChipComponent,
     ScreenHeaderComponent,
-    TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent,
+    BusyDirective,
+    SkeletonFormComponent,
+    SkeletonCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
+             the CONTEXT BAR (the role as read-only chips + grant count). -->
+        <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=roles'" [customSearch]="true" [contextBar]="true">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
+                    [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
+                    [attr.aria-label]="saving() ? 'Saving' : (editing()?.id ? 'Save' : 'Create role')"
+                    [title]="editing()?.id ? 'Save' : 'Create role'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              {{ saving() ? 'Saving…' : (editing()?.id ? 'Save' : 'Create role') }}
+            </button>
+          </ng-container>
+          <div band-search class="pf-ctx pf-uf-ctx">
+            <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
+            <span class="pf-ctx__primary pf-uf-ctx__name">
+              <span class="pf-uf-ctx__text">{{ editing()?.name || newRoleName().trim() || 'New role' }}</span>
+              @if (editing()?.id) { <span class="pf-uf-ctx__badge" role="note">{{ typeLabel() }}</span> }
+              @if (!editing()?.id) {
+                <button type="button" class="pf-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </button>
+              }
+            </span>
+          </div>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Roles"
         [title]="heading()"
+        parentRoute="/admin/users?tab=roles"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="save()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </pf-screen-header>
 
-      @if (!editing()?.id) {
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <label class="pf-label">Role name <span style="color: var(--danger, #ef4444); font-weight:700;">*</span></label>
-          <input type="text" class="pf-input" [class.pf-input-error]="!!nameError()"
-                 [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
-                 placeholder="e.g. Billing Supervisor" />
-          @if (nameError()) { <p class="text-[12px] mt-1" style="color: var(--danger, #ef4444);">{{ nameError() }}</p> }
-        </pf-tile>
-      } @else if (editing()?.isPreSeeded) {
-        <pf-tile tone="violet" padding="md" class="block mb-4">
-          <div class="flex items-center gap-2 flex-wrap">
-            <pf-chip tone="violet" size="sm">Pre-seeded</pf-chip>
-            <p class="text-[13px]" style="color: var(--text-secondary);">
-              System role — the name is locked. Editing the permissions saves a copy for your organization only; other organizations are unaffected.
-            </p>
+      <div class="pf-band-body">
+        @if (recordSkeleton()) {
+          <!-- Opening the role editor: its own shape until the role + the
+               permission catalogue land (PF-PATTERN "Loading feedback") —
+               never the create form flashing before an existing role. -->
+          <div class="pf-uf-body pf-re-loading">
+            <div class="pf-uf-grid2">
+              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="2" [cols]="1" label="Loading role…"></pf-skeleton-form></div></section>
+              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="6" [boxed]="false" label="Loading permissions…"></pf-skeleton-card></div></section>
+            </div>
           </div>
-        </pf-tile>
-      }
-
-      <pf-tile tone="default" padding="lg" class="block">
-        <h3 class="section-title">Permissions</h3>
-        <p class="text-[12px] mt-1 mb-4" style="color: var(--text-tertiary);">
-          {{ grantedCount() }} of {{ permissions().length }} granted
-        </p>
-
-        <div class="space-y-5">
-          @for (group of permissionGroups(); track group.module) {
-            <div>
-              <h4 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
-                  style="color: var(--text-muted);">{{ group.module }}</h4>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                @for (p of group.items; track p.id) {
-                  <label class="perm-row">
-                    <input type="checkbox"
-                           [checked]="isGranted(p.id)"
-                           (change)="toggle(p.id, $event)" />
-                    <span>
-                      <span class="font-medium" style="color: var(--text-primary);">{{ p.name }}</span>
-                      <span class="block text-[11px] font-mono" style="color: var(--text-muted);">{{ p.code }}</span>
-                    </span>
+        } @else {
+        <div class="pf-uf-body">
+          <div class="pf-uf-grid2">
+            @if (!editing()?.id) {
+              <!-- ROLE (create) -->
+              <section class="pf-card pf-uf-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                  <h2 class="pf-card__label pf-uf-h">Role</h2>
+                  <span class="pf-card__note"><span class="pf-uf-req">*</span> required</span>
+                </div>
+                <div class="pf-card__body">
+                  <label class="pf-field">
+                    <span class="pf-field__lbl">Role name <span class="pf-uf-req">*</span></span>
+                    <input type="text" #nameInput class="pf-input pf-re-name" [class.pf-input--error]="!!nameError()"
+                           [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
+                           placeholder="e.g. Billing Supervisor" />
+                    @if (nameError()) { <p class="pf-uf-err">{{ nameError() }}</p> }
                   </label>
+                  <!-- Role type (OPD build): 'Doctor' reveals the doctor-details
+                       section in Create User. OPD dark build: shown only while the
+                       OPD gate is open (a new role is 'general' otherwise, as today). -->
+                  @if (opdGate.visible()) {
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Role type</span>
+                      <span class="pf-seg re-type" role="radiogroup" aria-label="Role type">
+                        @for (o of roleTypeOptions; track o.value) {
+                          <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
+                                  (click)="roleType.set($any(o.value))">{{ o.label }}</button>
+                        }
+                      </span>
+                      <p class="pf-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
+                    </div>
+                  }
+                </div>
+              </section>
+            } @else {
+              <!-- WHO this role is — the one-breath answer before any toggles. -->
+              <section class="pf-card pf-uf-card">
+                <div class="pf-card__head">
+                  <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                  <h2 class="pf-card__label pf-uf-h">Who this is</h2>
+                </div>
+                <div class="pf-card__body">
+                  <p class="re-who__text">
+                    @if (roleWho(editing()!.name); as who) { {{ who }} }
+                    @else { A custom role for your organisation — the summary updates as you switch permissions. }
+                  </p>
+                  @if (editing()!.isPreSeeded) {
+                    <p class="pf-field__hint">System role — the name is locked. Editing the permissions saves a copy for your organisation only.</p>
+                  }
+                </div>
+              </section>
+            }
+
+            <!-- Live capability summary — the big picture while toggling. -->
+            <section class="pf-card pf-uf-card">
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                <h2 class="pf-card__label pf-uf-h">This role can work in</h2>
+                <span class="pf-card__spacer"></span>
+                <span class="re-sum__count"><span class="pf-num">{{ grantedCount() }}</span> of <span class="pf-num">{{ permissions().length }}</span> permissions</span>
+              </div>
+              <div class="pf-card__body">
+                <div class="re-sum">
+                  @if (capabilityChips().length === 0) {
+                    <span class="re-sum__none">Nothing yet — switch permissions on below.</span>
+                  }
+                  @for (c of capabilityChips(); track c) {
+                    <span class="pf-chip pf-chip--static re-sum__chip">{{ c }}</span>
+                  }
+                </div>
+                @if (!editing()?.id && templateRoles().length > 0) {
+                  <!-- Start from a known role: the fastest way to a correct
+                       custom role is copying the closest real one, then trimming. -->
+                  <div class="pf-field">
+                    <span class="pf-field__lbl">Start from an existing role <span class="re-optional">optional</span></span>
+                    <div class="re-templates">
+                      @for (r of templateRoles(); track r.id) {
+                        <button type="button" class="pf-tile-sel re-template press" (click)="applyTemplate(r)"
+                                [attr.aria-pressed]="templateApplied() === r.id">
+                          <span class="re-template__name">{{ r.name }}</span>
+                          <span class="re-template__who">{{ roleWho(r.name) }}</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          </div>
+
+          <!-- PERMISSIONS -->
+          <section class="pf-card pf-uf-card">
+            <div class="pf-card__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              <h2 class="pf-card__label pf-uf-h">What can this person do?</h2>
+              <span class="pf-card__spacer"></span>
+              <input type="search" class="pf-input re-search" aria-label="Find a permission"
+                     placeholder="Find a permission — try “discount” or “sign out”"
+                     [ngModel]="search()" (ngModelChange)="search.set($event)" />
+            </div>
+            <div class="pf-card__body">
+              <div class="re-groups">
+                @for (group of groupViews(); track group.key) {
+                  <div class="re-group">
+                    <div class="re-group__head">
+                      <div class="re-group__title-wrap">
+                        <h3 class="re-group__title">{{ group.label }}</h3>
+                        <p class="re-group__blurb">{{ group.blurb }}</p>
+                      </div>
+                      <div class="re-group__tools">
+                        <span class="re-group__count pf-num">{{ group.granted }}/{{ group.items.length }}</span>
+                        @if (group.granted < group.items.length) {
+                          <button type="button" class="pf-btn pf-btn--tertiary re-group__link" (click)="grantGroup(group, true)">Grant all</button>
+                        }
+                        @if (group.granted > 0) {
+                          <button type="button" class="pf-btn pf-btn--tertiary re-group__link" (click)="grantGroup(group, false)">Clear</button>
+                        }
+                      </div>
+                    </div>
+                    <div class="re-perm-grid">
+                      @for (row of group.items; track row.perm.id) {
+                        <button type="button" class="pf-toggle pf-uf-sw re-perm" role="switch"
+                                [attr.aria-checked]="isGranted(row.perm.id)" (click)="setGranted(row.perm.id, !isGranted(row.perm.id))">
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                          <span class="pf-uf-sw__txt">
+                            <span class="pf-uf-sw__name re-perm__title">
+                              {{ row.title }}
+                              @if (row.sensitive) { <span class="pf-chip pf-chip--static re-perm__flag">High impact</span> }
+                            </span>
+                            <span class="pf-uf-sw__what">{{ row.what }}</span>
+                            <span class="pf-uf-sw__code pf-num">{{ row.perm.code }}</span>
+                          </span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+                @if (groupViews().length === 0) {
+                  <p class="re-empty">Nothing matches “{{ search() }}”.</p>
                 }
               </div>
             </div>
-          }
+          </section>
         </div>
-      </pf-tile>
+        }
+      </div>
     </section>
   `,
-  styles: [`
-    .pf-input-error { border-color: var(--danger, #ef4444) !important; }
-    .section-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-      margin: 0;
-    }
-    .perm-row {
-      display: inline-flex;
-      align-items: flex-start;
-      gap: 8px;
-      font-size: 13px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
-    }
-    .perm-row:hover:not(.locked) {
-      border-color: rgba(168, 85, 247, 0.35);
-      background: rgba(168, 85, 247, 0.05);
-    }
-    .perm-row.locked { cursor: not-allowed; opacity: 0.6; }
-    .perm-row input[type="checkbox"] { margin-top: 2px; }
-
-    /* ----- Cross-platform overrides (additive only; desktop >=1280 untouched) ----- */
-
-    /* Touch devices: enlarge permission rows + checkboxes to >=44px tap targets */
-    @media (pointer: coarse) {
-      :host .perm-row {
-        min-height: 44px;
-        align-items: center;
-        padding: 12px 14px;
-      }
-      :host .perm-row input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
-        margin-top: 0;
-        flex: 0 0 auto;
-      }
-    }
-
-    /* Touch / no-hover: kill sticky hover highlight from base rule */
-    @media (hover: none) {
-      :host .perm-row:hover:not(.locked) {
-        border-color: var(--glass-border);
-        background: var(--glass-bg);
-      }
-    }
-
-    /* Phone (<=640): rows span full width; long permission codes must
-       truncate/wrap instead of pushing the row (and page) wider */
-    @media (max-width: 640px) {
-      :host .perm-row {
-        display: flex;
-        width: 100%;
-        min-width: 0;
-      }
-      :host .perm-row > span {
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      :host .perm-row > span > .font-mono {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    }
-
-    /* Web-below-desktop band (641-1279, incl. iPad + narrow browser):
-       the 2-col permission grid uses inline-flex rows whose default
-       min-width:auto lets a long mono permission code overflow its grid
-       track and push horizontal page scroll. Fill the track and let the
-       code truncate so the grid stays aligned with no page scroll. */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      :host .perm-row {
-        display: flex;
-        width: 100%;
-        min-width: 0;
-      }
-      :host .perm-row > span {
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      :host .perm-row > span > .font-mono {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    }
-  `]
+  styleUrls: ['./user-form.styles.scss', './role-editor.component.scss']
 })
 export class RoleEditorComponent implements OnInit {
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  /** The pill's pencil: put the caret in the name field. */
+  editName(): void {
+    const el = this.nameInput()?.nativeElement;
+    if (el) { el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); el.focus(); el.select(); }
+  }
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly theme = inject(ThemeService);
+  /** OPD dark build: Doctor role type + OPD permission codes only when OPD is visible. */
+  protected readonly opdGate = inject(OpdGateService);
 
   private readonly _editing = signal<Role | null>(null);
   private readonly _permissions = signal<Permission[]>([]);
   private readonly _grantedIds = signal<Set<string>>(new Set());
   private readonly _saving = signal(false);
+  /** Opening the editor: skeleton until its data lands (held, no flash). */
+  private readonly recordHold = createLoadHold(true);
+  readonly recordSkeleton = this.recordHold.active;
   private readonly _allRoles = signal<Role[]>([]);
   private readonly _nameError = signal<string | null>(null);
 
   readonly newRoleName = signal('');
+  /** Role type for a new role (OPD build): 'general' | 'doctor'. */
+  readonly roleType = signal<'general' | 'doctor'>('general');
+  readonly roleTypeOptions: PfSelectOption[] = [
+    { value: 'general', label: 'General' },
+    { value: 'doctor', label: 'Doctor' },
+  ];
+  readonly search = signal('');
+  readonly templateApplied = signal<string | null>(null);
   readonly nameError = this._nameError.asReadonly();
   readonly editing = this._editing.asReadonly();
   readonly permissions = this._permissions.asReadonly();
@@ -206,42 +307,117 @@ export class RoleEditorComponent implements OnInit {
   readonly heading = computed(() => {
     const r = this._editing();
     if (!r) return 'Create role';
-    return `Permissions — ${r.name}`;
+    return r.name;
   });
   readonly subtitle = computed(() => {
     const r = this._editing();
-    if (!r) return 'Pick a name and toggle the permissions this role should grant.';
-    return 'Toggle the capabilities for this role. Changes take effect immediately on save.';
+    if (!r) return 'Name the role, then grant what this person should be able to do.';
+    return 'Every permission says what it lets the person do. Changes apply on save.';
   });
 
-  readonly permissionGroups = computed(() => {
-    const groups = new Map<string, Permission[]>();
-    for (const p of this._permissions()) {
-      if (!groups.has(p.module)) groups.set(p.module, []);
-      groups.get(p.module)!.push(p);
+  /** Context-bar "Type": pre-seeded system role vs this lab's own. */
+  readonly typeLabel = computed(() => {
+    const r = this._editing();
+    if (!r) return 'Custom';
+    return r.isPreSeeded ? 'Pre-seeded' : 'Custom';
+  });
+
+  roleWho(name: string): string | null {
+    return ROLE_INFO[name] ?? null;
+  }
+
+  /** Pre-seeded roles offered as starting points when creating. */
+  readonly templateRoles = computed<Role[]>(() =>
+    this._allRoles().filter(r => r.isPreSeeded && !!ROLE_INFO[r.name]));
+
+  /** Permissions joined with the plain-language catalog, in workflow order. */
+  readonly groupViews = computed<PermGroupView[]>(() => {
+    const q = this.search().trim().toLowerCase();
+    const byGroup = new Map<string, PermRow[]>();
+    for (const perm of this._permissions()) {
+      const info = PERMISSION_INFO[perm.code];
+      const row: PermRow = {
+        perm,
+        title: info?.title ?? perm.name,
+        what: info?.what ?? (perm.description || 'Added after this screen — see the code below.'),
+        sensitive: info?.sensitive === true,
+      };
+      if (q && !(`${row.title} ${row.what} ${perm.code} ${perm.name}`.toLowerCase().includes(q))) continue;
+      const key = info?.group ?? 'other';
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key)!.push(row);
     }
-    return Array.from(groups.entries()).map(([module, items]) => ({ module, items }));
+    const granted = this._grantedIds();
+    return PERMISSION_GROUPS
+      .filter(g => (byGroup.get(g.key)?.length ?? 0) > 0)
+      .map(g => ({
+        key: g.key, label: g.label, blurb: g.blurb,
+        items: byGroup.get(g.key)!,
+        granted: byGroup.get(g.key)!.filter(r => granted.has(r.perm.id)).length,
+      }));
   });
 
-  readonly grantedCount = computed(() => this._grantedIds().size);
+  /** "This role can work in …" — one chip per workflow area with any grant. */
+  private static readonly CHIP_LABELS: Record<string, string> = {
+    frontdesk: 'Front desk', orders: 'Orders', billing: 'Billing',
+    collection: 'Sample collection', bench: 'Results entry', signout: 'Doctor sign-out',
+    reports: 'Reports', inventory: 'Inventory', oversight: 'Oversight',
+    setup: 'Configuration', alerts: 'Alerts',
+  };
+  readonly capabilityChips = computed<string[]>(() => {
+    const granted = this._grantedIds();
+    const areas = new Set<string>();
+    for (const perm of this._permissions()) {
+      if (!granted.has(perm.id)) continue;
+      areas.add(PERMISSION_INFO[perm.code]?.group ?? 'other');
+    }
+    return PERMISSION_GROUPS
+      .filter(g => areas.has(g.key))
+      .map(g => RoleEditorComponent.CHIP_LABELS[g.key] ?? g.label);
+  });
+
+  /** Granted among the LISTED permissions (hidden OPD codes stay granted —
+   *  saves send every granted id — but are not counted while OPD is dark). */
+  readonly grantedCount = computed(() => {
+    const g = this._grantedIds();
+    return this._permissions().filter(p => g.has(p.id)).length;
+  });
 
   ngOnInit() {
-    this.api.get<Permission[]>('/api/permissions').subscribe({
-      next: l => this._permissions.set(l ?? [])
+    const backHandler = () => {
+      this.back();
+      return true;
+    };
+    this.navBack.registerBackInterceptor(backHandler);
+    this.destroyRef.onDestroy(() => {
+      this.navBack.clearBackInterceptor(backHandler);
     });
 
     const id = this.route.snapshot.paramMap.get('id');
+    // First load: permissions + roles (+ this role's grants) — then the form.
+    let left = id ? 3 : 2;
+    const landed = () => { if (--left === 0) this.recordHold.done(); };
+    this.destroyRef.onDestroy(() => this.recordHold.cancel());
+
+    this.api.get<Permission[]>('/api/permissions').subscribe({
+      next: l => { this._permissions.set((l ?? []).filter(p => this.opdGate.visible() || !OPD_PERMISSION_CODES.has(p.code))); landed(); },
+      error: () => landed(),
+    });
+
     // Load the full roles list always — for edit it identifies the role, and for
     // create it lets us reject a duplicate name before hitting the server.
     this.api.get<Role[]>('/api/roles/').subscribe({
       next: roles => {
         this._allRoles.set(roles ?? []);
         if (id) this._editing.set((roles ?? []).find(x => x.id === id) ?? null);
-      }
+        landed();
+      },
+      error: () => landed(),
     });
     if (id) {
       this.api.get<string[]>(`/api/roles/${id}/permissions`).subscribe({
-        next: ids => this._grantedIds.set(new Set(ids ?? []))
+        next: ids => { this._grantedIds.set(new Set(ids ?? [])); landed(); },
+        error: () => landed(),
       });
     }
   }
@@ -250,13 +426,35 @@ export class RoleEditorComponent implements OnInit {
 
   isGranted(pid: string) { return this._grantedIds().has(pid); }
   toggle(pid: string, ev: Event) {
-    const checked = (ev.target as HTMLInputElement).checked;
+    this.setGranted(pid, (ev.target as HTMLInputElement).checked);
+  }
+  /** Switch one permission on / off (the slate switch rows). */
+  setGranted(pid: string, on: boolean) {
     const next = new Set(this._grantedIds());
-    if (checked) next.add(pid); else next.delete(pid);
+    if (on) next.add(pid); else next.delete(pid);
+    this._grantedIds.set(next);
+  }
+  grantGroup(group: PermGroupView, on: boolean) {
+    const next = new Set(this._grantedIds());
+    for (const r of group.items) {
+      if (on) next.add(r.perm.id); else next.delete(r.perm.id);
+    }
     this._grantedIds.set(next);
   }
 
-  back() { this.router.navigateByUrl('/admin/users'); }
+  /** Copy a seeded role's grants as the starting point for a new role. */
+  applyTemplate(r: Role) {
+    this.api.get<string[]>(`/api/roles/${r.id}/permissions`).subscribe({
+      next: ids => {
+        this._grantedIds.set(new Set(ids ?? []));
+        this.templateApplied.set(r.id);
+        this.toasts.success(`Copied ${r.name}'s permissions — trim from here`);
+      },
+      error: () => this.toasts.error('Could not load that role’s permissions.')
+    });
+  }
+
+  back() { this.navBack.backTo('/admin/users?tab=roles'); }
 
   save() {
     const editing = this._editing();
@@ -280,7 +478,7 @@ export class RoleEditorComponent implements OnInit {
       if (this._allRoles().some(r => r.name.trim().toLowerCase() === name.toLowerCase())) {
         this._saving.set(false); this._nameError.set(`A role named "${name}" already exists.`); return;
       }
-      this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids }).subscribe({
+      this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids, kind: this.roleType() === 'doctor' ? 'doctor' : null }).subscribe({
         next: r => { this._saving.set(false); this.toasts.success(`Role ${r.name} created`); this.back(); },
         error: e => {
           this._saving.set(false);

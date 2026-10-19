@@ -6,6 +6,11 @@ export interface Bill {
   type: string;
   /** Server-allocated invoice number (prefix + running counter). */
   invoiceNumber?: string;
+  /** Resolved by the server: the user who ACTUALLY billed / collected the last
+   *  payment. The invoice prints THIS name + signature — never those of
+   *  whoever happens to download the PDF later. */
+  cashierName?: string | null;
+  cashierSignatureUrl?: string | null;
   supplierGstin?: string;
   placeOfSupply?: string;
   isInterstate: boolean;
@@ -18,7 +23,11 @@ export interface Bill {
   totalSgst: number;
   totalIgst: number;
   totalTax: number;
+  /** Whole-rupee bill total (owner round-off rule). */
   totalPayable: number;
+  /** ±0.xx taking taxable + GST to the whole-rupee payable (server-derived;
+   *  absent/0 on bills raised before round-off). Read via billRoundOff(). */
+  roundOff?: number;
   totalPaid: number;
   balance: number;
   status: string;

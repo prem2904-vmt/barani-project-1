@@ -1,0 +1,337 @@
+<section class="pf-tm pf-band-page px-4 md:px-8 pt-6 pb-10">
+  @if (theme.isNewDesign()) {
+    <!-- Band pill (owner): the search, the view switch and "Show inactive"
+         ride inside the pill; the page's buttons sit top-right on the band.
+         In a side view (option groups / microbiology / pricing) the same
+         search drives that panel. -->
+    <pf-hero-band [back]="true" [placeholder]="bandPlaceholder()"
+                  [value]="bandValue()" (valueChange)="onBandSearch($event)">
+      <ng-container band-tools>
+        @if (narrow() && gridView()) {
+          <!-- Narrow widths: the DEPARTMENTS side card opens as a sheet. -->
+          <button type="button" class="pf-chip pf-tm-deptchip press" (click)="openDeptSheet()"
+                  aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()"
+                  [attr.aria-pressed]="!!selectedDept()" [title]="selectedDept() ? 'Departments · ' + selectedDept() : 'Departments'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <span class="pf-tm-deptchip__t">Departments</span>
+          </button>
+        }
+        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()"
+                      (valueChange)="setView($event)"></pf-segmented>
+      </ng-container>
+      <ng-container band-actions>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
+                [pfBusy]="restoring()" pfBusyLabel="Restoring…" (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+          </svg>
+          {{ restoring() ? 'Restoring…' : 'Restore to default' }}
+        </button>
+        @if (dirtyCount() > 0) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="saving()"
+                  (click)="discardChanges()" title="Discard changes" aria-label="Discard changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+            Discard
+          </button>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" title="Save changes" aria-label="Save changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
+            </svg>
+            Save changes ({{ dirtyCount() }})
+          </button>
+        }
+        @if (pricingView() && pricingDirty() > 0) {
+          <!-- Pricing edits: the band owns Save (the ONE primary) + Discard. -->
+          <span class="pf-savestate pf-tm-pricestate" role="status" aria-live="polite">
+            <span class="pf-savestate__dot" aria-hidden="true"></span>
+            <span class="pf-num">{{ pricingDirty() }}</span>&nbsp;unsaved
+          </span>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-tm-pricediscard press" [disabled]="pricingSaving()"
+                  (click)="pricingTable()?.discard()" title="Discard price changes" aria-label="Discard price changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            Discard
+          </button>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
+                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
+            </svg>
+            {{ pricingSaving() ? 'Saving…' : 'Save changes' }}
+          </button>
+        }
+        @if (ogView()) {
+          <!-- ONE primary: while grid edits wait "Save changes" is it; while a
+               panel editor is open, that editor's save is it. -->
+          <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
+                  [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="newOptionGroup()"
+                  title="New option group" aria-label="New option group">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+            New option group
+          </button>
+        } @else {
+          <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
+                  [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="openCreate()"
+                  title="Create" aria-label="Create">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+            Create
+          </button>
+        }
+      </ng-container>
+    </pf-hero-band>
+  }
+  <pf-screen-header class="pf-classic-only"
+    eyebrow="Admin"
+    title="Test Master"
+    subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
+    <div actions class="flex flex-wrap items-center gap-2 justify-end">
+      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" [busy]="restoring()" busyLabel="Restoring…" (pressed)="restoreDefaults()">
+        {{ restoring() ? 'Restoring…' : 'Restore to default' }}
+      </pf-touch-btn>
+      @if (dirtyCount() > 0) {
+        <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
+        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
+      }
+      <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
+        <span icon-left aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14"/><path d="M5 12h14"/>
+          </svg>
+        </span>
+        Create
+      </pf-touch-btn>
+    </div>
+  </pf-screen-header>
+
+  <!-- View switch -->
+  <div class="pf-tm-tabs mb-4 pf-classic-only">
+    @for (v of views; track v.value) {
+      <button type="button"
+              class="pf-tm-tab"
+              [class.pf-tm-tab--active]="!ogView() && !microView() && !pricingView() && type() === v.value"
+              (click)="setType(v.value)">
+        {{ v.label }}
+      </button>
+    }
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="ogView()"
+            (click)="openOgView()">
+      Option groups
+    </button>
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="microView()"
+            (click)="openMicroView()">
+      Microbiology
+    </button>
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="pricingView()"
+            (click)="openPricingView()">
+      Pricing
+    </button>
+  </div>
+
+  <!-- Everything under the band: the grid view FILLS the body (the grid
+       scrolls itself); the side views scroll the body. -->
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView()">
+  @if (ogView()) {
+    <!-- Shared option-group vocabularies, derived live from this tenant's
+         tests — edit once, changes every linked parameter. -->
+    <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                            (editingChange)="panelEditing.set($event)"></pf-option-groups-panel>
+  } @else if (microView()) {
+    <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
+    <pf-micro-masters-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                            (editingChange)="panelEditing.set($event)"></pf-micro-masters-panel>
+  } @else if (pricingView()) {
+    <!-- The per-tenant pricing table: the ONE place prices live (₹1 default,
+         per-branch when the tenant runs branch isolation). -->
+    <pf-pricing #pricingTable [embedded]="true" [bandActions]="theme.isNewDesign()"
+                [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                (editingChange)="panelEditing.set($event)"></pf-pricing>
+  } @else {
+  <!-- Test Master updates for tests this lab changed (one per copy, branch
+       copies named) — Accept all / Dismiss all. Hidden when none wait. -->
+  <pf-catalog-proposals-panel [proposals]="proposals()" [tests]="allTests()"
+                              (changed)="onProposalsChanged()"></pf-catalog-proposals-panel>
+  <!-- Two jobs on one screen (PF-PATTERN): DEPARTMENTS is a FILTER
+       companion, so it sits on the LEFT (read left to right: filter, then
+       content); the grid is the MAIN card on the right. Styled like BILLING. It collapses to a slim strip (remembered per
+       user); on narrow widths it is a sheet opened from the band pill. -->
+  <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()" [class.pf-tm-panels--narrow]="narrow()">
+    <!-- ── SIDE card (LEFT): DEPARTMENTS — the filter comes first ── -->
+    @if (narrow()) {
+      @if (deptSheetOpen()) {
+        <div class="pf-sheet-backdrop pf-tm-sheet-backdrop" (click)="closeDeptSheet()"></div>
+        <aside class="pf-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments"
+               (keydown.escape)="closeDeptSheet()">
+          <span class="pf-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
+          <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
+          <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+        </aside>
+      }
+    } @else if (sideCollapsed()) {
+      <aside class="pf-card pf-tm-strip" aria-label="Departments">
+        <button type="button" class="pf-tm-strip__btn" (click)="toggleSide()"
+                title="Show departments" aria-label="Show departments" aria-expanded="false">
+          <span class="pf-btn pf-btn--icon pf-tm-strip__expand" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
+          <span class="pf-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          </span>
+          <span class="pf-tm-strip__label">Departments</span>
+          @if (selectedDept()) { <span class="pf-tm-strip__dot" aria-hidden="true"></span> }
+        </button>
+      </aside>
+    } @else {
+      <aside class="pf-card pf-tm-side" aria-label="Departments">
+        <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
+        <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+      </aside>
+    }
+
+    <!-- ── MAIN card (RIGHT): the test grid ──────────────── -->
+    <section class="pf-card pf-tm-main" aria-label="Test Master">
+      <header class="pf-card__head pf-tm-main__head">
+        <span class="pf-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/>
+          </svg>
+        </span>
+        <span class="pf-card__label">{{ type() === 'package' ? 'Packages' : type() === 'profile' ? 'Profiles' : 'Tests' }}</span>
+        <span class="pf-card__note pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
+        <span class="pf-tm-count pf-num">{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
+        <!-- Status filter: the Active/Inactive switch. All (default) keeps
+             switched-off tests listed, greyed, so nothing ever disappears. -->
+        <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()"
+                      [value]="statusFilter()" (valueChange)="statusFilter.set($event)"
+                      aria-label="Filter by status"></pf-segmented>
+        @if (narrow() && !theme.isNewDesign()) {
+          <button type="button" class="pf-btn pf-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
+                  aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()">Departments</button>
+        }
+        <div class="pf-tm-search pf-classic-only">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          <input type="text" class="pf-tm-search__input"
+                 [placeholder]="'Search ' + (type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests') + '…'"
+                 [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          @if (search()) {
+            <button type="button" class="pf-tm-search__clear" (click)="search.set('')" aria-label="Clear search">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          }
+        </div>
+      </header>
+      <div class="pf-tm-main__body">
+        @if (listSkeleton()) {
+          <!-- First load: the grid's shape, not an empty grid. -->
+          <pf-skeleton-table class="pf-tm-grid-skel" [rows]="12" [cols]="6" label="Loading tests…"></pf-skeleton-table>
+        }
+        <ag-grid-angular
+          [singleClickEdit]="isCoarse"
+          class="pf-tm-grid"
+          [theme]="gridTheme()"
+          [rowData]="rowData()"
+          [columnDefs]="phoneTrim(colDefs())"
+          [defaultColDef]="defaultColDef"
+          [getRowId]="getRowId"
+          [getRowClass]="getRowClass"
+          [context]="gridContext"
+          [animateRows]="true"
+          [stopEditingWhenCellsLoseFocus]="true"
+          (gridReady)="onGridReady($event)"
+          (cellValueChanged)="onCellValueChanged($event)">
+        </ag-grid-angular>
+      </div>
+    </section>
+  </div>
+
+  <ng-template #deptHead let-sheet="sheet">
+    <header class="pf-card__head pf-tm-side__head">
+      <span class="pf-card__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </span>
+      <span class="pf-card__label">Departments</span>
+      <span class="pf-card__spacer"></span>
+      @if (sheet) {
+        <button type="button" class="pf-btn pf-btn--icon pf-tm-side__close" (click)="closeDeptSheet()" aria-label="Close departments">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      } @else {
+        <button type="button" class="pf-btn pf-btn--icon pf-tm-side__collapse" (click)="toggleSide()"
+                title="Hide departments" aria-label="Hide departments" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      }
+    </header>
+  </ng-template>
+
+  <ng-template #deptBody>
+    @if (listSkeleton()) {
+    <!-- First open: the departments are on their way with the grid. -->
+    <div class="pf-card__body">
+      <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
+    </div>
+    } @else {
+    <ul class="pf-card__body pf-tm-dept-list">
+      <li class="pf-tm-dept-row">
+        <button type="button" class="pf-tm-dept" [attr.aria-pressed]="!selectedDept()" (click)="pickDept(null)">
+          <span class="pf-tm-dept-name">All</span>
+          <span class="pf-tm-dept-count pf-num">{{ typeTests().length }}</span>
+        </button>
+      </li>
+      @for (d of departments(); track d.key) {
+        <li class="pf-tm-dept-row" [class.pf-tm-dept-row--off]="!!d.id && !d.isActive">
+          <button type="button" class="pf-tm-dept" [attr.aria-pressed]="selectedDept() === d.key"
+                  (click)="pickDept(d.key)">
+            <span class="pf-tm-dept-name">
+              <span class="pf-tm-dept-text">{{ d.name }}</span>
+              @if (d.code) { <span class="pf-tm-dept-code pf-num">{{ d.code }}</span> }
+              @if (d.id && !d.isActive) { <span class="pf-tm-dept-off">Off</span> }
+            </span>
+            <span class="pf-tm-dept-count pf-num">{{ d.count }}</span>
+          </button>
+          @if (d.id) {
+            <!-- Kit switch (violet ON) — its own target. -->
+            <button type="button" class="pf-toggle pf-tm-dept-switch" role="switch" [attr.aria-checked]="d.isActive"
+                    (click)="toggleDept(d)"
+                    [title]="d.isActive ? 'Turn department off' : 'Turn department on'"
+                    [attr.aria-label]="'Department ' + d.name + ' on'">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+            </button>
+          } @else {
+            <span class="pf-tm-dept-switch-gap" aria-hidden="true"></span>
+          }
+        </li>
+      }
+      @if (departments().length === 0) {
+        <li class="pf-tm-dept-empty">No departments yet.</li>
+      }
+    </ul>
+    }
+  </ng-template>
+  }
+  </div>
+</section>

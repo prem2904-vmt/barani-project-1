@@ -1,37 +1,79 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { firstValueFrom } from 'rxjs';
+import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
+import { completedTubeStatus, planReadiness, ReportReadiness, reportReadinessUrl } from '../../../shared/utils/report-readiness';
+import { istDayStart, labDaysAgo } from '../../../shared/utils/lab-clock';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
+import { ScanService } from '../../../core/services/scan.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { DelegateModalComponent } from './delegate-modal.component';
+import { CulturePanelComponent } from '../culture-panel/culture-panel.component';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
 import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
-import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { Department } from '../../../shared/models/tenant.model';
-import { OrderSample, OrderTest } from '../../../shared/models/order.model';
-import { formatPatientInfo } from '../../../shared/models/patient.model';
+import { OrderSample, OrderTest, logicalTestCount } from '../../../shared/models/order.model';
+import { formatPatientInfo, formatPatientMeta } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { CollectBandButtonComponent } from '../../../shared/components/collect-band-button/collect-band-button.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { plural } from '../../../shared/utils/plural';
+import { lineDepartment } from '../../../shared/utils/shared-tube';
+import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
+import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+
+/** The departments of a tube's lines, "Haematology · Biochemistry" — a
+ *  shared tube (integrated lab) carries several. */
+function linesDeptLabel(tests: Array<{ test?: unknown; subOrder?: unknown }>): string {
+  const names = tests.map(t => lineDepartment(t as never).name ?? '').filter(Boolean);
+  return [...new Set(names)].join(' · ');
+}
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
+/** Sticky "keep Lab Intake open" choice (new design only). */
+const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
+/** Collection companion collapsed to its strip (remembered per user). */
+const COLLECT_COLLAPSED_KEY = 'pf-lms.my-work.collect-collapsed';
 
-type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected';
-type Level = 'urgent' | 'high' | 'normal';
-type Bucket = { level: Level; items: Enriched[] };
-type Enriched = OrderTest & { _level: Level; _remainingMin: number };
+type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
+/** Queue groups are the ORDER's priority (Urgent / Normal — the only two
+ *  the lab has). TAT is a separate clock chip, never a group or "priority". */
+type Bucket = { priority: OrderPriority; label: 'Urgent' | 'Normal'; items: Enriched[] };
+type Enriched = WorkLine;
 
 interface CounterSpec {
   id: 'pending' | 'critical' | 'in_progress' | 'done' | 'all';
@@ -50,16 +92,110 @@ const COUNTERS: CounterSpec[] = [
 @Component({
   selector: 'pf-my-work',
   standalone: true,
-  imports: [
+  imports: [DailyNoComponent, BusyDirective, 
+    PfKeysDirective,
+    SamplePresetDirective,
+    TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, NumPadComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SelectComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent
-  ],
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
+    ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
+    <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
-      <!-- KPI strip: not on phone (status lives in the header Stats popover). -->
-      @if (!isPhone()) {
+      <!-- Common hero search (designer band): intake receive — scan or type
+           a sample ID and Enter receives it into the lab. New design only;
+           classic keeps its original header/scan row below. -->
+      @if (theme.isNewDesign()) {
+      <!-- The ONE search bar (owner): behaves like the page's scan bar —
+           Enter opens result entry for the sample. Intake-receive keeps
+           its own box inside the Lab Intake pane. Refresh rides the band
+           as the screen's primary action. -->
+      <pf-hero-band
+        [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
+        [value]="scan()"
+        keys="sample" keysEnter="Open" keysEnterAria="Open this sample"
+        (valueChange)="setScan($event)"
+        (submitted)="scanSubmit()">
+        <!-- The camera FEEDS this field, so it sits inside it, before the
+             divider (owner) — scanning is just another way to type. -->
+        <ng-container band-inline>
+          @if (!scanSvc.manualEntry()) {
+          <button type="button" class="pf-hb-tool press" (click)="openBarSearchScanner()"
+                  title="Scan with camera" aria-label="Scan with camera">
+            <pf-scan-icon [size]="18" />
+          </button>
+          }
+          <!-- Stats rides in the bar too (owner): with the header title gone
+               it was floating alone on its own row between the search and the
+               tabs. Phone-only — above 640px the inline KPI chips carry the
+               same numbers, so CSS keeps this hidden there. -->
+          <div class="pf-kpi-statbtn-m">
+            <button #kpiBtn type="button" class="pf-kpi-statbtn"
+                    [class.is-open]="kpiOpen()"
+                    aria-label="Stats"
+                    [attr.aria-expanded]="kpiOpen()"
+                    (click)="kpiOpen.set(!kpiOpen())">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </button>
+            @if (kpiOpen()) {
+              <div #kpiPop class="pf-kpi-portal">
+                <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
+                <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats"
+                     [style.top.px]="kpiPos().top" [style.right.px]="kpiPos().right">
+                  @for (c of counters; track c.id) {
+                    <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
+                            [attr.data-tone]="c.tone"
+                            (click)="setCounter(c.id); kpiOpen.set(false)">
+                      <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
+                      <span class="pf-kpi-stat__label">{{ c.label }}</span>
+                      <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </ng-container>
+        <ng-container band-tools>
+          <!-- Every filter on the screen lives INSIDE the search bar (owner):
+               the workbench tabs are a filter over the same queue, so they
+               belong here next to the other tools, not as a second strip.
+               Phones already have the .pf-mtabs strip below, which is the
+               better phone control — rendering both would be two tab rows
+               stacked on a 390px screen. -->
+          @if (!isPhone()) {
+          <pf-segmented class="pf-mw-seg" [options]="tabOptions()" [value]="tab()" size="sm"
+                        (valueChange)="setTab($any($event))"></pf-segmented>
+          }
+        </ng-container>
+        <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
+             it's the least-used control on the screen. -->
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+            </svg>
+            Refresh
+          </button>
+          <!-- Band "Collect" (ND §1): only when the Lab area holds collection.
+               With the embedded Collection companion on screen it opens THAT
+               (focuses its search) instead of leaving My Work. -->
+          <pf-collect-band-button area="lab" [inPlace]="showCollect() ? focusCollectFn : null" />
+        </ng-container>
+      </pf-hero-band>
+      }
+
+      <!-- KPI strip: not on phone (status lives in the header Stats popover),
+           and not in the new design — the live queue counters and tabs
+           already carry these numbers (owner: the static strip isn't needed). -->
+      @if (!isPhone() && !theme.isNewDesign()) {
         <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
       }
 
@@ -69,10 +205,12 @@ const COUNTERS: CounterSpec[] = [
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
-        <!-- Phone-only (<=640px) Stats icon — sits next to Refresh, matched in
-             size/shape (same pattern as the Report queue stats button). Each is
-             a direct [actions] element so the header lays them out with the
-             standard gap. Hidden above 640px, where the inline chips show. -->
+        <!-- Phone-only (<=640px) Stats icon. CLASSIC keeps it here in the
+             header actions. The new design renders the same control inside
+             the search bar instead (owner) — the header is title-less there,
+             so this button was left floating alone on its own row. Only one
+             branch ever renders, so #kpiBtn still resolves. -->
+        @if (!theme.isNewDesign()) {
         <div actions class="pf-kpi-statbtn-m">
           <button #kpiBtn type="button" class="pf-kpi-statbtn"
                   [class.is-open]="kpiOpen()"
@@ -104,7 +242,9 @@ const COUNTERS: CounterSpec[] = [
             </div>
           }
         </div>
-        <pf-touch-btn actions variant="secondary" size="sm" (pressed)="refresh()" aria-label="Refresh">
+        }
+        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                      [busy]="loading()" busyLabel="Refreshing…">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
             <path d="M21 3v5h-5"/>
@@ -121,7 +261,9 @@ const COUNTERS: CounterSpec[] = [
            behind the Stats toggle above (pf-kpi-collapsed). -->
       <!-- Inline counter filter row: not on phone (status + filtering live in
            the header Stats popover there). -->
-      @if (!isPhone()) {
+      <!-- New design: hidden (owner) — the band tabs already filter the queue
+           and carry the counts. The filter stays on 'all'. -->
+      @if (!isPhone() && !theme.isNewDesign()) {
         <div class="pf-counter-row" role="tablist" aria-label="Filter queue">
           @for (c of counters; track c.id) {
             <button type="button"
@@ -140,36 +282,28 @@ const COUNTERS: CounterSpec[] = [
 
       <!-- Scan bar — primary entry point. Clean compact pill, camera
            shortcut on the right, manual-entry inline link below. -->
-      <div class="pf-scan-row">
+      <div class="pf-scan-row pf-classic-only">
         <div class="pf-scan">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
             <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
           </svg>
-          <input type="text"
+          <input type="text" pfKeys="sample" pfSamplePreset pfKeysEnter="Open" pfKeysEnterAria="Open this sample"
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
-                 [placeholder]="'Scan a barcode or type a sample ID (e.g. ' + sampleIdExample() + ')…'"
+                 [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
                  class="pf-scan__input"/>
-          <button type="button"
-                  class="pf-scan__manual press"
-                  (click)="toggleManual()"
-                  [attr.aria-expanded]="manualMode()"
-                  aria-label="Toggle manual entry">
-            @if (manualMode()) { Close manual } @else { Manual entry }
-          </button>
+          @if (!scanSvc.manualEntry()) {
           <button type="button"
                   class="pf-scan__camera press"
                   (click)="openBarSearchScanner()"
                   aria-label="Scan with camera">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="7" width="18" height="13" rx="2"/>
-              <path d="M8 7 10 4h4l2 3"/>
-              <circle cx="12" cy="13" r="3.5"/>
-            </svg>
+            <pf-scan-icon [size]="18" />
           </button>
+          }
         </div>
-        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()"
+                      [busy]="scanning()" busyLabel="Opening…">
           Open
           <span icon-right>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -179,138 +313,188 @@ const COUNTERS: CounterSpec[] = [
         </pf-touch-btn>
       </div>
 
-      @if (manualMode()) {
-        <pf-tile tone="default" padding="lg" class="block mb-5">
-          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 block"
-                 style="color: var(--text-muted);">Manual barcode entry</label>
-
-          <div class="seg-row">
-            <span class="seg seg--locked seg--dept">{{ selectedDeptSampleCode() || '01' }}</span>
-            <span class="seg-sep">·</span>
-            <span class="seg seg--locked">{{ yy() }}</span>
-            <span class="seg-sep">·</span>
-            <input class="seg seg--input"
-                   inputmode="numeric"
-                   pattern="[0-9]*"
-                   [attr.maxlength]="numberWidth()"
-                   [placeholder]="'0'.repeat(numberWidth())"
-                   [ngModel]="seqValue()"
-                   (ngModelChange)="onSeqChange($event)" />
-          </div>
-
-          <div class="manual-meta">
-            <div class="dept-picker">
-              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
-                     style="color: var(--text-muted);">Department</label>
-              <pf-select
-                [options]="deptOptions()"
-                [value]="selectedDeptCode()"
-                placeholder="Select department"
-                (valueChange)="onDeptChange($event)"></pf-select>
-            </div>
-            <div class="preview">
-              <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1.5 block"
-                     style="color: var(--text-muted);">Preview</label>
-              <div class="preview-code">{{ fullManualBarcode() }}</div>
-            </div>
-          </div>
-
-          @if (isTouch()) {
-            <div class="numpad-wrap">
-              <pf-num-pad
-                [value]="seqValue()"
-                [allowDecimal]="false"
-                [allowNegative]="false"
-                [maxLength]="numberWidth()"
-                (valueChange)="onSeqChange($event)"></pf-num-pad>
-            </div>
-          }
-
-          <div class="manual-actions">
-            @if (seqValue().length > 0 && seqValue().length < numberWidth()) {
-              <span class="seq-hint">{{ numberWidth() - seqValue().length }} more digit{{ numberWidth() - seqValue().length === 1 ? '' : 's' }}</span>
-            }
-            <pf-touch-btn size="md" variant="primary"
-                          [disabled]="!canManualConfirm()"
-                          (pressed)="submitManual()">
-              Open
-              <span icon-right aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                </svg>
-              </span>
-            </pf-touch-btn>
-          </div>
-        </pf-tile>
-      }
+      <!-- The segmented "manual barcode entry" panel was removed: the scan box
+           above already accepts a typed sample ID (and Enter submits it), so the
+           panel duplicated the same job with a second, fiddlier control. -->
 
       <!-- 2-col layout: Lab Intake on the left, My Work / Queue tabs on
            the right. Same pattern as the Frontdesk landing splitter so
            the techs see the intake queue and their bench work side by
            side without tab-switching. Single drag handle in the middle. -->
-      <!-- Phone-only (<=640px) single-pane tab control: Intake / My Work /
-           Queue. Hidden above 640px, where all panes lay out together.
+      <!-- Phone-only (<=640px) single-pane tab control: Intake / Queue /
+           My Work / Done. Hidden above 640px, where all panes lay out together.
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
+      <!-- New design shows ICONS, not words (owner): five labelled tabs on a
+           390px phone left "CULTU…" truncated and every label cramped. The
+           count stays — that is the part you actually read. Classic keeps
+           its words (CSS swaps which of the two shows). -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
         @if (showCollect()) {
+        <!-- Collection companion (collect in the Lab, no dispatch/intake):
+             takes the first tab exactly like Lab Intake does. -->
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
-                (click)="setMobileTab('intake')">Collect</button>
+                aria-label="Collection" title="Collection"
+                (click)="setMobileTab('intake')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/>
+            <path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/>
+          </svg>
+          <span class="pf-mtab__label">Collect</span>
+        </button>
         } @else if (showIntake()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
-                (click)="setMobileTab('intake')">Intake</button>
-        }
-        <button type="button" role="tab" class="pf-mtab press"
-                [class.pf-mtab--on]="mobileTab() === 'mywork'"
-                [attr.aria-selected]="mobileTab() === 'mywork'"
-                (click)="setMobileTab('mywork')">
-          My Work
-          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
+                aria-label="Intake" title="Intake"
+                (click)="setMobileTab('intake')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
+          </svg>
+          <span class="pf-mtab__label">Intake</span>
         </button>
+        }
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'queue'"
                 [attr.aria-selected]="mobileTab() === 'queue'"
+                aria-label="Queue" title="Queue"
                 (click)="setMobileTab('queue')">
-          Queue
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h10"/>
+          </svg>
+          <span class="pf-mtab__label">Queue</span>
           <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
         </button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'mywork'"
+                [attr.aria-selected]="mobileTab() === 'mywork'"
+                aria-label="My Work" title="My Work"
+                (click)="setMobileTab('mywork')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+            <path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/>
+          </svg>
+          <span class="pf-mtab__label">My Work</span>
+          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
+        </button>
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'completed'"
+                [attr.aria-selected]="mobileTab() === 'completed'"
+                aria-label="Done" title="Done"
+                (click)="setMobileTab('completed')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>
+          </svg>
+          <span class="pf-mtab__label">Done</span>
+          <span class="pf-mtab__count">{{ countFor('completed') }}</span>
+        </button>
+        @if (showCulturePane() || cultureAsTab()) {
+          <button type="button" role="tab" class="pf-mtab press"
+                  [class.pf-mtab--on]="mobileTab() === 'culture'"
+                  [attr.aria-selected]="mobileTab() === 'culture'"
+                  aria-label="Culture bench" title="Culture bench"
+                  (click)="setMobileTab('culture')">
+            <!-- Petri dish. -->
+            <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/>
+            </svg>
+            <span class="pf-mtab__label">{{ cultureAsTab() ? 'Culture' : 'Culture Bench' }}</span>
+            <span class="pf-mtab__count">{{ cultureCount() }}</span>
+          </button>
+        }
       </div>
 
       <div class="pf-mw-split" #mwSplit
            [class.pf-mw-split--dragging]="mwDragging()">
 
-        <!-- LEFT: Collect (collect-in-lab) OR Lab Intake. Shown when either
-             mode is active; on phones this pane shows under the first tab.
-             Hidden entirely when neither lab_intake nor collect-in-lab apply. -->
-        @if (showLeftPane()) {
-
-        <!-- Collect-in-lab: the tube is drawn at the bench. Embed the sample
-             collection screen (its own KPI/header suppressed) so the tech draws
-             + prints labels here; the backend auto-receives into the queue. -->
+        <!-- LEFT companion slot — depends on the workflow (owner 2026-09-27):
+               • collection placed in the Lab AND no dispatch/intake step
+                 (tubes auto-receive at collection) → the COLLECTION card:
+                 find patient / scan → pending list → collect in place;
+               • dispatch + Lab Intake on → the Lab Intake card (below);
+               • neither → nothing; the work pane runs full width.
+             On phones the card shows under the first tab. -->
         @if (showCollect()) {
-        <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
+        @if (!collectOpen()) {
+        <button type="button" class="pf-mw-rail press" (click)="expandCollect()"
+                title="Open Collection" aria-label="Open Collection">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+          <span class="pf-mw-rail__label">Collection</span>
+        </button>
+        } @else {
+        <section #collectPane class="pf-mw-pane pf-mw-collect" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
-            <span class="pf-mw-pane__title">Collect</span>
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/></svg></span> }
+            <span class="pf-mw-pane__title">Collection</span>
+            @if (theme.isNewDesign() && !isPhone()) {
+            <button type="button" class="pf-mw-pin pf-mw-collect__hide press" (click)="collapseCollect()"
+                    title="Hide Collection" aria-label="Hide Collection">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m14 6-6 6 6 6"/>
+              </svg>
+            </button>
+            }
           </header>
-          <div class="pf-mw-pane__body">
-            <pf-sample-collection [embedded]="true"></pf-sample-collection>
+          <div class="pf-mw-pane__body pf-mw-collect__body">
+            <!-- Collected tubes auto-receive (no dispatch/intake), so every
+                 collect refreshes the queue + counts straight away. -->
+            <pf-sample-collection [embedded]="true" (sampleCollected)="onSampleReceived()"></pf-sample-collection>
           </div>
         </section>
-        } @else {
+        }
+        } @else if (showIntake()) {
 
         <!-- Lab Intake — header hosts an inline scan bar: barcode icon,
              manual-typing input, camera shortcut, and a Receive button.
              Hits Enter or clicks Receive to intake. The camera button opens
              the same scanner the standalone /lab/receive page uses. -->
+        @if (!intakeOpen()) {
+        <!-- Collapsed: a labelled rail. Techs who never receive samples get
+             the whole width back; one click brings intake back (owner). -->
+        <button type="button" class="pf-mw-rail press" (click)="expandIntake()"
+                title="Open Lab Intake" aria-label="Open Lab Intake">
+          <pf-scan-icon [size]="16" />
+          <span class="pf-mw-rail__label">Lab Intake</span>
+        </button>
+        } @else {
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/></svg></span> }
             <span class="pf-mw-pane__title">Lab Intake</span>
+            <!-- Pin = keep it open next time; chevron = back to the rail. -->
+            @if (theme.isNewDesign() && !isPhone()) {
+            <button type="button" class="pf-mw-pin press" [class.pf-mw-pin--on]="intakePinned()"
+                    (click)="toggleIntakePin()"
+                    [title]="intakePinned() ? 'Unpin Lab Intake' : 'Keep Lab Intake open'"
+                    [attr.aria-pressed]="intakePinned()"
+                    [attr.aria-label]="intakePinned() ? 'Unpin Lab Intake' : 'Keep Lab Intake open'">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"/><path d="M12 15v5"/>
+              </svg>
+            </button>
+            <button type="button" class="pf-mw-pin press" (click)="collapseIntake()"
+                    title="Hide Lab Intake" aria-label="Hide Lab Intake">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m14 6-6 6 6 6"/>
+              </svg>
+            </button>
+            }
             <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
               <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
                    search to an icon by default; tapping expands the full-width
@@ -332,43 +516,36 @@ const COUNTERS: CounterSpec[] = [
                   </svg>
                 }
               </button>
-              <svg class="pf-mw-scan__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-                   aria-hidden="true">
-                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
-                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
-                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-                <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
-              </svg>
+              <pf-scan-icon class="pf-mw-scan__icon" [size]="14" />
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
-                     [placeholder]="'Scan or type ' + sampleIdExample()"
+                     pfKeys="sample" pfSamplePreset pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
+                     [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
                      (keydown.enter)="intakeReceive()" />
+              @if (!scanSvc.manualEntry()) {
               <button type="button" class="pf-mw-scan__cam press" (click)="openIntakeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="7" width="18" height="13" rx="2"/>
-                  <path d="M8 7 10 4h4l2 3"/>
-                  <circle cx="12" cy="13" r="3.5"/>
-                </svg>
+                <pf-scan-icon [size]="14" />
               </button>
-              <button type="button" class="pf-mw-scan__btn press"
+              }
+              <button type="button" class="press"
+                      [class.pf-mw-scan__btn]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
                       [disabled]="!intakeScanInput().trim()"
                       (click)="intakeReceive()">Receive</button>
             </div>
           </header>
           <div class="pf-mw-pane__body">
-            <pf-receive-samples #intakeRef [embedded]="true"></pf-receive-samples>
+            <pf-receive-samples #intakeRef [embedded]="true" (sampleReceived)="onSampleReceived()"></pf-receive-samples>
           </div>
         </section>
         }
+        }
 
-        <!-- Drag handle -->
+        <!-- Drag handle — only when the left column actually holds a pane. -->
+        @if (leftPaneOpen()) {
         <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
-             aria-label="Resize Lab Intake / Workbench"
+             [attr.aria-label]="showCollect() ? 'Resize Collection / Workbench' : 'Resize Lab Intake / Workbench'"
              [attr.aria-valuenow]="mwSplitPct()" aria-valuemin="20" aria-valuemax="80" tabindex="0"
              (pointerdown)="onMwSplitPointerDown($event)"
              (pointermove)="onMwSplitPointerMove($event)"
@@ -382,17 +559,26 @@ const COUNTERS: CounterSpec[] = [
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
-                 [class.pf-mw-pane--solo]="!showLeftPane()"
-                 [class.pf-mobile-hide]="mobileTab() === 'intake'">
+                 [class.pf-mw-pane--solo]="!leftPaneOpen() && !showCulturePane()"
+                 [class.pf-mobile-hide]="mobileTab() === 'intake' || (mobileTab() === 'culture' && !cultureAsTab())">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
-              <button type="button" role="tab" class="pf-mw-tab press"
-                      [class.pf-mw-tab--on]="tab() === 'my_work'"
-                      [attr.aria-selected]="tab() === 'my_work'"
-                      (click)="setTab('my_work')">
-                My Work
-                <span class="pf-mw-tab__count">{{ countFor('my_work') }}</span>
-              </button>
+              <!-- New design drives these from the search bar's segmented
+                   control; the header just names what you're looking at.
+                   Classic keeps the tab strip here. -->
+              @if (theme.isNewDesign()) {
+                <span class="pf-card__icon pf-mw-icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    @switch (tab()) {
+                      @case ('service_queue') { <path d="M4 6h16M4 12h16M4 18h10"/> }
+                      @case ('completed') { <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/> }
+                      @case ('culture') { <circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/> }
+                      @default { <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/> }
+                    }
+                  </svg>
+                </span>
+                <span class="pf-mw-pane__title">{{ tabLabel() }}</span>
+              } @else {
               <button type="button" role="tab" class="pf-mw-tab press"
                       [class.pf-mw-tab--on]="tab() === 'service_queue'"
                       [attr.aria-selected]="tab() === 'service_queue'"
@@ -400,9 +586,26 @@ const COUNTERS: CounterSpec[] = [
                 Queue
                 <span class="pf-mw-tab__count">{{ countFor('service_queue') }}</span>
               </button>
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'my_work'"
+                      [attr.aria-selected]="tab() === 'my_work'"
+                      (click)="setTab('my_work')">
+                My Work
+                <span class="pf-mw-tab__count">{{ countFor('my_work') }}</span>
+              </button>
+              <!-- Work this tech has finished: submitted or since validated. Its
+                   Edit action pulls a whole tube back into their own My Work. -->
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'completed'"
+                      [attr.aria-selected]="tab() === 'completed'"
+                      (click)="setTab('completed')">
+                Completed
+                <span class="pf-mw-tab__count">{{ countFor('completed') }}</span>
+              </button>
+              }
               <!-- Supervisor view: also show tubes other techs already claimed,
                    so stuck work (tech on leave) can be found and delegated. -->
-              @if (tab() === 'service_queue') {
+              @if (tab() === 'service_queue' && !theme.isNewDesign()) {
                 <button type="button" class="pf-mw-claimed-toggle press"
                         [class.pf-mw-claimed-toggle--on]="showClaimed()"
                         (click)="toggleShowClaimed()">
@@ -411,11 +614,129 @@ const COUNTERS: CounterSpec[] = [
               }
             </div>
             <p class="pf-mw-pane__meta">
-              {{ rows().length }} items
+              @if (tab() === 'culture') {
+                {{ plural(cultureCount(), 'case') }}
+              } @else {
+              <!-- Sample-focused branches count TUBES — the unit of work on this
+                   screen in that mode — not the tests inside them. -->
+              {{ paneCountLabel() }}
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
+              }
             </p>
           </header>
           <div class="pf-mw-pane__body">
+      <!-- Kept mounted (not @if'd) so the bench keeps feeding its count to the
+           tab pill even while another tab is showing. -->
+      @if (cultureAsTab()) {
+        <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
+          <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+        </div>
+      }
+      @if (tab() !== 'culture') {
+      @if (tab() === 'completed') {
+      <!-- ── Completed: this tech's finished tubes, newest first ──────
+           Read-only history with ONE action: Edit re-opens the whole tube
+           (the unit of entry) back into this same tech's My Work after a
+           mandatory reason, which the backend records in the audit trail. -->
+      <div class="pf-mw-completed-hdr">
+        <p class="pf-mw-completed-cap">Showing {{ completedWindowLabel() }}.</p>
+        <pf-segmented class="pf-mw-completed-seg" size="sm" [options]="completedWindowOptions"
+                      [value]="completedWindow()" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
+      </div>
+      @if (completedLoading() && completedTubes().length === 0) {
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          @for (i of [0,1,2]; track i) {
+            <pf-tile tone="default" padding="md">
+              <pf-skeleton variant="line" width="55%"></pf-skeleton>
+              <div class="mt-2"><pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton></div>
+            </pf-tile>
+          }
+        </div>
+      } @else if (completedTubes().length === 0) {
+        <pf-tile tone="default" padding="xl">
+          <p class="text-center text-sm" style="color: var(--text-tertiary);">
+            Nothing completed {{ completedWindow() === 'today' ? 'today' : 'in the last 7 days' }}.
+          </p>
+        </pf-tile>
+      } @else {
+        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
+          @for (tube of completedTubes(); track tube.sampleId) {
+            <li>
+              <div class="pf-tq pf-tq--done" [pfZoomSource]="tube.sampleId">
+                <span class="pf-tq__cap" aria-hidden="true"></span>
+                <div class="pf-tq__main pf-tq__main--link" role="link" tabindex="0"
+                     [attr.aria-label]="'View results for ' + (tube.barcode || tube.sampleId)"
+                     title="View results (read-only)"
+                     (click)="viewCompletedTube(tube)"
+                     (keydown.enter)="viewCompletedTube(tube)">
+                  <div class="pf-tq__line">
+                    <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
+                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status !== 'validated' && !theme.isNewDesign()"
+                          [class.pf-tq__tag--validated]="tube.status === 'validated'"
+                          [attr.title]="tube.status === 'partial' ? tube.openLines + ' test(s) on this sample are not validated yet' : null">
+                      {{ tube.status === 'validated' ? 'Validated' : tube.status === 'partial' ? 'Partly validated · ' + tube.openLines + ' open' : 'Submitted' }}
+                    </span>
+                  </div>
+                  <p class="pf-tq__sub">
+                    <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
+                    <span class="pf-tq__extra">
+                      @if (tube.patientMeta) {
+                        <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
+                      }
+                      <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                    </span>
+                  </p>
+                  <p class="pf-tq__note pf-done__tests">{{ tube.testNames }}</p>
+                </div>
+                <div class="pf-tq__side">
+                  <span class="pf-tq__stat">
+                    {{ tube.completedAt | date:'d MMM, h:mm a' }}
+                    @if (!theme.isNewDesign()) {
+                      <span class="pf-tq__stat-u">{{ testCount(tube.tests) }} {{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                    }
+                  </span>
+                  <div class="pf-tq__acts">
+                  @if (tube.status === 'validated' || tube.status === 'partial') {
+                    <button type="button" class="pf-tq__act--print" title="Print report"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                            [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                            [disabled]="printingTubeId() === tube.sampleId"
+                            [pfBusy]="printingTubeId() === tube.sampleId" pfBusyLabel="Opening the report…"
+                            [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
+                            (click)="printCompletedTube(tube)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9V2h12v7"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8" rx="1"/>
+                      </svg>
+                      <span class="pf-tq__act-t pf-rowact__t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
+                    </button>
+                  }
+                  @if (canEditResult()) {
+                    <button type="button" title="Edit results"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                            [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                            [disabled]="reopeningTubeId() === tube.sampleId"
+                            [pfBusy]="reopeningTubeId() === tube.sampleId" pfBusyLabel="Opening…"
+                            [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
+                            (click)="editCompletedTube(tube)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20h9"/>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                      </svg>
+                      <span class="pf-tq__act-t pf-rowact__t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
+                    </button>
+                  }
+                  </div>
+                </div>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+      } @else {
       @if (loading() && rows().length === 0) {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           @for (i of [0,1,2,3]; track i) {
@@ -435,34 +756,35 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
 
-      @for (bucket of buckets(); track bucket.level) {
+      @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-6">
             <div class="flex items-center gap-3 mb-3 px-1">
-              <span class="pf-dot" [attr.data-level]="bucket.level"></span>
+              <span class="pf-dot" [attr.data-priority]="bucket.priority"></span>
               <h3 class="text-[11px] font-mono uppercase tracking-[0.18em]"
                   style="color: var(--text-secondary);">
-                {{ bucket.level }} · {{ bucket.items.length }}
+                {{ bucket.label }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
               </h3>
             </div>
 
             <!-- Group by patient/order so a single patient with 3 tests is one
                  expandable card, not 3 floating cards across columns. -->
-            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            @if (!labCfg.sampleFocused()) {
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md" class="block">
                     <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                             (click)="toggleExpand(g.orderId)">
                       <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <!-- Line 1: standard patient format — Name(≤15 chars)+.. | age/sex | P-ID -->
-                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);">{{ g.patientInfo }}</p>
+                        <p class="text-[15px] font-semibold truncate" style="color: var(--text-primary);"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientInfo }}</p>
                         <!-- Line 2: TAT urgency + how many tests ride on this card.
                              Expand the card (or open the tube) for test names + barcodes. -->
                         <div class="flex items-center gap-2 flex-wrap mt-1">
-                          <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
-                          <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                          <pf-tat-indicator [remainingMinutes]="g.remainingMin" [dueAt]="g.dueAt"/>
+                          @if (!theme.isNewDesign()) { <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span> }
                         </div>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -481,21 +803,28 @@ const COUNTERS: CounterSpec[] = [
                            tube for combined entry (Fix 6 contract). -->
                       <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
                         @for (tube of tubesIn(g.items); track tube.sampleId) {
-                          <li class="rounded-lg p-2.5 pf-tube-tile"
+                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [pfZoomSource]="tube.sampleId"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                              [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                              [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
+                              role="button" tabindex="0"
+                              [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
+                              (click)="onCardActivate(tube, g.patientName, $event)"
+                              (keydown.enter)="onCardActivate(tube, g.patientName)"
+                              (keydown.space)="onCardActivate(tube, g.patientName)"
                               style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                             <div class="flex items-center gap-2 mb-1.5">
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
-                                {{ tube.deptName || 'Tube' }} · {{ tube.tests.length }} test{{ tube.tests.length === 1 ? '' : 's' }}
+                                {{ tube.deptName || 'Tube' }}@if (!theme.isNewDesign()) { · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }} }
                               </span>
                               @if (tube.hasDraft && !tube.allDone) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
-                                      style="background: rgba(245, 158, 11, 0.16); color: #fbbf24;">Draft</span>
+                                      style="background: rgba(245, 158, 11, 0.16); color: var(--amber-text);">Draft</span>
                               }
                               @if (tab() === 'service_queue' && tube.assignedTo) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-medium rounded truncate" style="max-width: 110px;
-                                      background: rgba(139, 92, 246, 0.16); color: #c4b5fd;">{{ assigneeName(tube.assignedTo) }}</span>
+                                      background: rgba(139, 92, 246, 0.16); color: var(--violet-text);">{{ assigneeName(tube.assignedTo) }}</span>
                               }
                               <!-- Sample ID (tube barcode) — always rendered so the tech can
                                    match the physical tube; 'no label' for unprinted samples. -->
@@ -533,41 +862,37 @@ const COUNTERS: CounterSpec[] = [
                                   <span class="flex-1 truncate" style="color: var(--text-primary);">→ {{ t.test?.name ?? 'Test' }}</span>
                                   @if (t.status === 'validated') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓</span>
+                                          style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓</span>
                                   } @else if (t.status === 'entered') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(168, 85, 247, 0.15); color: #c4b5fd;">⏳</span>
+                                          style="background: rgba(168, 85, 247, 0.15); color: var(--violet-text);">⏳</span>
                                   } @else if (t.status === 're_entry') {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded"
-                                          style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">↻</span>
+                                          style="background: rgba(239, 68, 68, 0.15); color: var(--red-text);">↻</span>
                                   }
                                 </li>
                               }
                             </ul>
+                            <!-- The CARD itself is the primary action (opens the
+                                 tube, or claims it from the queue), so only the
+                                 secondary Delegate button remains here. -->
                             <div class="flex justify-end gap-2">
                               @switch (tab()) {
                                 @case ('service_queue') {
-                                  @if (!tube.assignedTo || tube.assignedTo === myUserId()) {
-                                    <button type="button" class="pf-scan-hint pf-scan-hint--btn press" (click)="openClaim(tube, g.patientName)">Pick · view tests</button>
-                                  }
                                   <!-- Routing pool/others' work is supervisor-grade
                                        (backend enforces reassign_result) — don't
                                        show a button that would 403. -->
                                   @if (canReassign()) {
-                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests); $event.stopPropagation()">Delegate</button>
                                   }
                                 }
                                 @default {
                                   @if (!tube.allDone) {
-                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests)">Delegate</button>
+                                    <button type="button" class="pf-delegate-btn press" (click)="openDelegate(tube.tests); $event.stopPropagation()">Delegate</button>
                                   }
-                                  @if (tube.rejections.length > 0) {
-                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Re-enter tube</pf-touch-btn>
-                                  } @else if (tube.allDone) {
+                                  @if (tube.allDone) {
                                     <span class="px-2 py-0.5 text-[11px] font-medium rounded"
-                                          style="background: rgba(16, 185, 129, 0.15); color: #34d399;">✓ All entered</span>
-                                  } @else {
-                                    <pf-touch-btn variant="primary" size="sm" (pressed)="pickTube(tube)">Open tube</pf-touch-btn>
+                                          style="background: rgba(16, 185, 129, 0.15); color: var(--green-text);">✓ All entered</span>
                                   }
                                 }
                               }
@@ -580,22 +905,134 @@ const COUNTERS: CounterSpec[] = [
                 </li>
               }
             </ul>
+            } @else {
+            <!-- Sample-focused: one row PER TUBE across ALL patients, keyed by
+                 Sample ID. The tube (sample) is the bold headline; the patient
+                 is demoted to a small secondary line. Same tests + same actions
+                 and CSS as the patient-first tube tile. -->
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [pfTileGrid]="theme.isNewDesign()">
+              @for (tube of sampleRows(bucket.items); track tube.sampleId) {
+                <li>
+                  <!-- Designed for touch FIRST, so the mouse gets the same
+                       layout rather than a second one: nothing is hidden behind
+                       hover. The row is the primary target (open / pick); the
+                       one secondary action lives in its own trailing zone,
+                       separated by a hairline, always visible, with a 44px hit
+                       area. Hover and press only add FEEDBACK — never reveal
+                       content — so the card is identical on a bench tablet and
+                       a desktop. -->
+                  <div class="pf-tq" [pfZoomSource]="tube.sampleId"
+                       [class.pf-tq--urgent]="bucket.priority === 'urgent'"
+                       [class.pf-tq--rejected]="tube.rejections.length > 0"
+                       [class.pf-tq--picking]="pickingTubeId() === tube.sampleId"
+                       [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                       [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
+                       [class.pf-tq--holding]="holdingPeekId() === tube.sampleId"
+                       [class.pf-tq--done]="tube.allDone">
+                    <span class="pf-tq__cap" aria-hidden="true"></span>
+
+                    <!-- Primary zone: the whole block opens / picks the tube. -->
+                    <div class="pf-tq__main"
+                         role="button" tabindex="0"
+                         [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
+                         (pointerdown)="onCardDown(tube, $event)" (pointerup)="onCardUp()"
+                         (pointercancel)="onCardUp()" (pointerleave)="onCardUp()"
+                         (pointermove)="onCardMove($event)"
+                         (click)="onCardActivate(tube, tube.patientName, $event)"
+                         (keydown.enter)="onCardActivate(tube, tube.patientName)"
+                         (keydown.space)="onCardActivate(tube, tube.patientName)">
+                      <div class="pf-tq__line">
+                        <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
+                        @if (tube.hasDraft && !tube.allDone) {
+                          <span class="pf-tq__tag pf-tq__tag--draft">Draft</span>
+                        }
+                        @if (tube.rejections.length > 0) {
+                          <span class="pf-tq__tag pf-tq__tag--warn">Re-entry</span>
+                        }
+                        @if (!tube.allDone) {
+                          <pf-tat-indicator class="pf-tq__tat" [remainingMinutes]="tube.remainingMin" [dueAt]="tube.dueAt"/>
+                        }
+                        @if (tab() === 'service_queue' && tube.assignedTo) {
+                          <span class="pf-tq__tag">{{ assigneeName(tube.assignedTo) }}</span>
+                        }
+                      </div>
+                      <p class="pf-tq__sub">
+                        <span class="pf-tq__who"><pf-daily-no [of]="tube.tests[0]?.subOrder" />{{ tube.patientName }}</span>
+                        @if (tube.patientMeta) {
+                          <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
+                        }
+                        <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                      </p>
+                      @if (tube.rejections.length > 0) {
+                        <p class="pf-tq__note">
+                          @for (r of tube.rejections; track r.testName) {
+                            <span class="pf-tq__note-test">{{ r.testName }}</span>{{ r.reason }}
+                          }
+                        </p>
+                      }
+                    </div>
+
+                    <!-- Trailing zone: count is a read-only stat; Delegate is a
+                         real button with its own hit area, permanently visible. -->
+                    <div class="pf-tq__side">
+                      @if (tube.allDone) {
+                        <span class="pf-tq__stat pf-tq__stat--done">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                          <span class="pf-tq__stat-u">done</span>
+                        </span>
+                      } @else if (!theme.isNewDesign()) {
+                        <span class="pf-tq__stat">
+                          {{ testCount(tube.tests) }}
+                          <span class="pf-tq__stat-u">{{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                        </span>
+                      }
+                      @if (tab() === 'service_queue' ? canReassign() : !tube.allDone) {
+                        <button type="button" title="Delegate"
+                                [class.pf-tq__act]="!theme.isNewDesign()" [class.pf-rowact]="theme.isNewDesign()"
+                                [class.pf-rowact--icon]="theme.isNewDesign() && !webPointer()"
+                                [attr.aria-label]="'Delegate ' + (tube.barcode || tube.sampleId)"
+                                (click)="openDelegate(tube.tests); $event.stopPropagation()">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M18 8h4m-2-2v4"/>
+                          </svg>
+                          <span class="pf-tq__act-t pf-rowact__t">Delegate</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </li>
+              }
+            </ul>
+            }
+
+            <!-- Hold-to-peek popover for queue cards — floats beside the held
+                 card; hidden on release. Fixed-position so it escapes any
+                 overflow:hidden ancestors. -->
+            @if (cardPeekId()) {
+              <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+                   [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+                <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+                <ul>
+                  @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+                </ul>
+              </div>
+            }
             <!-- Legacy flat per-test grid (kept hidden behind a flag for rollback). -->
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md">
                     <div class="flex items-start gap-3">
                       <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
                           <p class="text-[15px] font-semibold truncate"
                              style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</p>
-                          <pf-tat-indicator [tatLevel]="t._level" [remainingMinutes]="t._remainingMin"/>
+                          <pf-tat-indicator [remainingMinutes]="t._remainingMin" [dueAt]="t._dueAt"/>
                         </div>
                         <p class="text-[12px] font-mono mt-0.5"
                            style="color: var(--text-tertiary);">
-                          {{ t.subOrder?.order?.patient?.displayName ?? '—' }}
+                          <pf-daily-no [of]="t.subOrder" />{{ t.subOrder?.order?.patient?.displayName ?? '—' }}
                           · {{ t.test?.department?.name ?? '—' }}
                           · rec'd {{ t.subOrder?.receivedAtLab ? (t.subOrder?.receivedAtLab | date:'shortTime') : '—' }}
                         </p>
@@ -648,13 +1085,45 @@ const COUNTERS: CounterSpec[] = [
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
       }
+      }
+      }
           </div>
         </section>
+
+        <!-- CULTURE BENCH: micro-tech third pane — the multi-stage culture
+             bench, persistent beside the queue (not a tab). Additive; only
+             rendered when the Lab microbiology feature is on AND the user holds
+             culture_workbench. On phones it's the "Culture Bench" mobile tab. -->
+        @if (showCulturePane()) {
+        <!-- Its own resize handle (desktop only; hidden on phones). -->
+        <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
+             aria-label="Resize Culture Bench"
+             (pointerdown)="onCulturePointerDown($event)"
+             (pointermove)="onCulturePointerMove($event)"
+             (pointerup)="onCulturePointerUp($event)"
+             (pointercancel)="onCulturePointerUp($event)"
+             (lostpointercapture)="onCulturePointerUp($event)">
+          <span class="pf-mw-handle__grip" aria-hidden="true"></span>
+        </div>
+        <section class="pf-mw-pane pf-mw-culture"
+                 [style.--culture-w.px]="cultureWidth()"
+                 [class.pf-mobile-hide]="mobileTab() !== 'culture'">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="pf-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg></span> }
+            <span class="pf-mw-pane__title">Culture Bench</span>
+            <span class="pf-mw-culture__count">{{ cultureCount() }}</span>
+          </header>
+          <div class="pf-mw-pane__body">
+            <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+          </div>
+        </section>
+        }
       </div>
     </section>
 
     @if (scanTarget(); as t) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="scanExpected()"
         (matched)="onScanMatched($event)"
@@ -666,6 +1135,7 @@ const COUNTERS: CounterSpec[] = [
       <!-- Search-bar camera mode: no expected code, any scan drops into
            the input and routes through the same claim-by-scan gate. -->
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan any vial barcode"
         (matched)="onBarSearchMatched($event)"
         (cancelled)="closeBarSearchScanner()">
@@ -675,66 +1145,30 @@ const COUNTERS: CounterSpec[] = [
     @if (delegateTarget(); as t) {
       <pf-delegate-modal
         [testName]="delegateLabel()"
+        [busyId]="delegatingTo()"
         (chose)="onDelegate($event)"
         (cancelled)="cancelDelegate()">
       </pf-delegate-modal>
     }
 
-    <!-- Pick → see the tube's tests → claim it into My Work. Centered modal on
-         web/iPad; full-width bottom-sheet on phones. -->
-    @if (claimTarget(); as c) {
-      <div class="pf-claim" role="dialog" aria-modal="true" aria-labelledby="pf-claim-title">
-        <div class="pf-claim__backdrop" (click)="cancelClaim()"></div>
-        <div class="pf-claim__sheet">
-          <header class="pf-claim__hdr">
-            <div class="pf-claim__hdr-main">
-              <p class="pf-claim__eyebrow">{{ c.deptName || 'Tube' }}{{ c.barcode ? ' · ' + c.barcode : '' }}</p>
-              <h2 id="pf-claim-title" class="pf-claim__title">{{ c.patientName }}</h2>
-            </div>
-            <button type="button" class="pf-claim__close press" (click)="cancelClaim()" aria-label="Close">✕</button>
-          </header>
-          <p class="pf-claim__lead">{{ c.tests.length }} test{{ c.tests.length === 1 ? '' : 's' }} to be taken on this tube:</p>
-          <ul class="pf-claim__tests">
-            @for (t of c.tests; track t.id) {
-              <li class="pf-claim__test">
-                <span class="pf-claim__test-name">{{ t.test?.name ?? 'Test' }}</span>
-                @if (t.test?.department?.name || t.subOrder?.department?.name; as d) {
-                  <span class="pf-claim__test-dept">{{ d }}</span>
-                }
-              </li>
-            }
-          </ul>
-          <div class="pf-claim__actions">
-            @if (allowNoScanClaim()) {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="confirmClaim()">
-                {{ claiming() ? 'Claiming…' : 'Claim into my work' }}
-              </button>
-            } @else {
-              <button type="button" class="pf-claim__go press" [disabled]="claiming()" (click)="startClaimScan()">
-                {{ claiming() ? 'Claiming…' : 'Scan tube to claim' }}
-              </button>
-            }
-          </div>
-          <p class="pf-claim__foot">
-            @if (allowNoScanClaim()) { The tube moves into My Work — you can scan or type it later to enter results. }
-            @else { Scan this tube's barcode to confirm you have the right sample — it then moves into My Work. }
-          </p>
-        </div>
-      </div>
-    }
+    <!-- (The intermediate "Scan tube to claim" card was removed — "Pick" claims
+         directly, or opens the scanner below when a scan is required.) -->
 
     <!-- Scan gate for claiming: the modal only emits matched when the scanned
          code equals THIS tube's barcode, so a tech can't claim the wrong tube. -->
     @if (claimScanning() && claimTarget(); as c) {
       <pf-barcode-scanner-modal
+        [manualOnly]="scanSvc.manualEntry()"
         title="Scan vial to claim"
         [expectedBarcode]="c.barcode"
         (matched)="onClaimScanned()"
         (cancelled)="cancelClaimScan()">
       </pf-barcode-scanner-modal>
     }
+
   `,
   styles: [`
+
     /* No page-level scroll — :host fills the routed area, the inner
      * <section> chains flex so the splitter takes the remaining height
      * and each pane scrolls its own body. Mirrors Frontdesk landing. */
@@ -777,9 +1211,37 @@ const COUNTERS: CounterSpec[] = [
       background: var(--glass-bg);
       overflow: hidden;
     }
-    /* Lab Intake disabled → the work pane is the only pane; fill the whole row
-       (overrides the desktop :first-of-type 33% width). */
+    /* Lab Intake disabled or collapsed to its rail → the work pane fills the
+       whole row (overrides the desktop :first-of-type 33% width). */
     .pf-mw-pane--solo { flex: 1 1 100% !important; max-width: 100% !important; }
+
+    /* Collapsed Lab Intake. Stacked layouts (<1024px) get a slim horizontal
+       strip; desktop turns it into a vertical spine beside the workbench. */
+    .pf-mw-rail {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px;
+      border: 1px solid var(--glass-border); border-radius: 14px;
+      background: var(--glass-bg); color: var(--text-tertiary);
+      cursor: pointer; transition: color 160ms ease, border-color 160ms ease;
+    }
+    .pf-mw-rail:hover { color: var(--text-primary); border-color: rgba(124, 58, 237, 0.35); }
+    .pf-mw-rail__label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    /* Pin / hide controls in the intake header. */
+    .pf-mw-pin {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+      border: 1px solid transparent; background: transparent;
+      color: var(--text-tertiary); cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .pf-mw-pin:hover { background: rgba(124, 58, 237, 0.10); color: var(--text-primary); }
+    .pf-mw-pin--on {
+      color: #7c3aed; background: rgba(124, 58, 237, 0.10);
+      box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.26);
+    }
     .pf-mw-pane__hdr {
       display: flex;
       align-items: center;
@@ -799,6 +1261,15 @@ const COUNTERS: CounterSpec[] = [
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-secondary);
+    }
+    /* Culture-as-tab (new design). Stays mounted while other tabs show so
+     * the bench keeps reporting its case count to the tab pill. */
+    .pf-mw-culturetab { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+    .pf-mw-culturetab--off { display: none; }
+    /* Culture pane header count chip. */
+    .pf-mw-culture__count {
+      margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+      color: var(--violet-text, #7c3aed); background: rgba(124, 58, 237, 0.14);
     }
     /* Lab Intake header — has the title on the left and an inline scan
      * bar on the right (icon + manual-typing input + camera shortcut +
@@ -856,7 +1327,7 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-mw-scan__cam:hover {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-mw-scan__btn {
       padding: 6px 14px;
@@ -893,6 +1364,11 @@ const COUNTERS: CounterSpec[] = [
       overflow-y: auto;
       padding: 14px 16px 16px;
     }
+    /* Collection companion: the embedded collect screen owns its own scroll
+       (find field fixed, pending list scrolls), so the body doesn't. */
+    .pf-mw-collect__body { display: flex; flex-direction: column; overflow: hidden; padding: 12px 14px 14px; }
+    .pf-mw-collect__body > pf-sample-collection { flex: 1 1 auto; min-height: 0; }
+    .pf-mw-collect__hide { margin-left: auto; }
 
     /* Tab cluster (right pane header) */
     .pf-mw-tabs {
@@ -901,7 +1377,7 @@ const COUNTERS: CounterSpec[] = [
       gap: 2px;
       padding: 3px;
       border-radius: 9999px;
-      background: rgba(0, 0, 0, 0.18);
+      background: var(--seg-track);
       border: 1px solid var(--glass-border);
     }
     .pf-mw-tab {
@@ -955,6 +1431,12 @@ const COUNTERS: CounterSpec[] = [
         flex: 1;
         min-height: 0;
       }
+      /* Collapsed intake becomes a vertical spine on the left. */
+      .pf-mw-rail {
+        flex-direction: column; align-self: stretch;
+        width: 42px; padding: 14px 0; margin-right: 10px; gap: 12px;
+      }
+      .pf-mw-rail__label { writing-mode: vertical-rl; text-orientation: mixed; }
       .pf-mw-pane:first-of-type {
         flex: 0 0 33%;
         min-width: 0;
@@ -962,6 +1444,11 @@ const COUNTERS: CounterSpec[] = [
       .pf-mw-pane:not(:first-of-type) {
         flex: 1 1 0;
         min-width: 0;
+      }
+      /* Culture Bench is the third column — user-resizable via its own drag
+         handle (width persisted in the --culture-w CSS var, desktop only). */
+      .pf-mw-pane.pf-mw-culture {
+        flex: 0 0 var(--culture-w, 340px);
       }
       .pf-mw-handle {
         flex: 0 0 8px;
@@ -1021,7 +1508,7 @@ const COUNTERS: CounterSpec[] = [
       border-radius: 9999px;
       background: rgba(236, 72, 153, 0.08);
       border: 1px dashed rgba(236, 72, 153, 0.35);
-      color: #f472b6;
+      color: var(--pink-text);
       font-size: 11.5px;
       font-weight: 500;
     }
@@ -1116,7 +1603,7 @@ const COUNTERS: CounterSpec[] = [
       box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
     .pf-scan__icon {
-      color: #a78bfa;
+      color: var(--violet-text);
       flex: 0 0 auto;
       margin-right: 10px;
     }
@@ -1151,11 +1638,11 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-scan__manual:hover {
       background: var(--glass-bg-hover);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border-color: var(--glass-border);
     }
     .pf-scan__manual[aria-expanded='true'] {
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: rgba(168, 85, 247, 0.12);
       border-color: rgba(168, 85, 247, 0.32);
     }
@@ -1174,7 +1661,7 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-scan__camera:hover {
       background: var(--glass-bg-hover);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border-color: var(--glass-border);
     }
     .pf-scan__camera:active { transform: scale(0.95); }
@@ -1280,7 +1767,7 @@ const COUNTERS: CounterSpec[] = [
       letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
     }
@@ -1291,9 +1778,9 @@ const COUNTERS: CounterSpec[] = [
       border-radius: 9999px;
       flex-shrink: 0;
     }
-    .pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
-    .pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
-    .pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+    /* Group dot = ORDER priority: Urgent red, Normal quiet. */
+    .pf-dot[data-priority='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
+    .pf-dot[data-priority='normal'] { background: #94a3b8; box-shadow: none; }
 
     /* Tube tile gets a soft red wash when any of its tests are in
        re_entry — pulls the eye to it without screaming. */
@@ -1314,6 +1801,208 @@ const COUNTERS: CounterSpec[] = [
     .pf-tube-tile:hover {
       border-color: rgba(168, 85, 247, 0.45) !important;
       box-shadow: 0 6px 18px rgba(124, 58, 237, 0.18);
+    }
+    /* Hold-to-peek progress: a violet bar fills across the card's bottom over
+       the 2s hold (same gesture as the collection vials); when it completes,
+       the test list pops beside the card. No textual hint by design. */
+    .pf-tube-tile { user-select: none; -webkit-touch-callout: none; }
+    /* The whole card is the button now, so say so on hover/focus. */
+    .pf-tube-tile--tappable { cursor: pointer; }
+    .pf-tube-tile--tappable:focus-visible {
+      outline: 2px solid rgba(139, 92, 246, 0.7);
+      outline-offset: 2px;
+    }
+    .pf-tube-tile::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: var(--color-violet-500, #8b5cf6); border-radius: 3px;
+      opacity: 0; pointer-events: none;
+    }
+    .pf-tube-tile--holding {
+      border-color: rgba(139, 92, 246, 0.55) !important;
+    }
+    .pf-tube-tile--holding::after { opacity: 1; animation: pf-card-hold-fill 2s linear forwards; }
+    @keyframes pf-card-hold-fill { from { width: 0; } to { width: 100%; } }
+
+    /* ── Queue row (sample-focused My Work / Queue) ────────────────────
+       ONE layout for touch and mouse. Nothing is hover-revealed: a hidden
+       affordance is unreachable on a bench tablet, and a coarse-pointer
+       fallback would mean maintaining two designs. Instead the row splits
+       into a primary zone (tap = open/pick) and a trailing action zone with
+       its own 44px target; hover and press add feedback only.
+
+       Depth comes from a hairline + 1px inset highlight rather than a heavy
+       panel, and URGENT (order priority) is a red 3px cap stripe down the left edge — a nod to
+       the tube's own cap — so colour never floods the surface. */
+    .pf-tq {
+      --tq-accent: rgba(148, 163, 184, 0.5);
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.022));
+      border: 1px solid rgba(255,255,255,0.075);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      overflow: hidden;
+      transition: border-color .18s ease, box-shadow .22s ease;
+    }
+    .pf-tq:hover { border-color: rgba(255,255,255,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 6px 20px rgba(0,0,0,0.26); }
+    .pf-tq--done { opacity: 0.6; }
+    /* Completed tubes are READ-ONLY, not dead (owner): the 0.6 fade made the
+       sample ID and patient line hard to read on a tab people actually use
+       to look things up. The green cap stripe and the Validated/Submitted
+       tag carry "done" instead. New design only — classic keeps the fade. */
+    :host-context(.design-new) .pf-tq--done { opacity: 1; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag { color: #0f9d6f; }
+    .pf-tq--rejected { border-color: rgba(242, 85, 90, 0.34); }
+
+    /* Cap stripe = order priority (Urgent only). TAT lives in its own chip. */
+    .pf-tq__cap { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tq-accent); }
+    .pf-tq--urgent { --tq-accent: #f2555a; }
+    .pf-tq--done   { --tq-accent: #34d399; }
+
+    /* Primary zone — the tap target for open / pick. */
+    .pf-mw-completed-hdr { display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+    .pf-mw-completed-cap { margin: 0; font-size: 11.5px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
+    .pf-mw-completed-seg { flex: 0 0 auto; }
+    .pf-tq__main {
+      flex: 1 1 auto; min-width: 0;
+      padding: 13px 12px 13px 16px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .16s ease;
+    }
+    .pf-tq__main:hover  { background: rgba(255,255,255,0.028); }
+    .pf-tq__main:active { background: rgba(255,255,255,0.055); }
+    .pf-tq__main:focus-visible { outline: 2px solid rgba(139,92,246,0.75); outline-offset: -2px; border-radius: 12px; }
+
+    .pf-tq__line { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .pf-tq__id {
+      flex: 0 1 auto; min-width: 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+      color: var(--text-primary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* Status is micro-type, not chips — colour carries the meaning. */
+    .pf-tq__tag {
+      flex: 0 0 auto;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted);
+      max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-tq__tag--draft { color: #f0a03c; }
+    .pf-tq__tag--warn  { color: #f2555a; }
+
+    .pf-tq__sub {
+      margin: 5px 0 0;
+      font-size: 12.5px; line-height: 1.4;
+      color: var(--text-muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pf-tq__who { color: var(--text-secondary); font-weight: 500; }
+    .pf-tq__sep { margin: 0 6px; opacity: 0.45; }
+
+    .pf-tq__note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+    /* Completed rows list every test on the tube — cap it at two lines so a
+       12-analyte panel can't stretch the card. */
+    .pf-done__tests {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .pf-tq__note-test { color: #f2555a; font-weight: 600; margin-right: 6px; }
+
+    /* Trailing zone — separated by a hairline so it reads as its own control. */
+    .pf-tq__side {
+      flex: 0 0 auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 12px;
+      border-left: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.12);
+    }
+    .pf-tq__stat {
+      display: inline-flex; align-items: baseline; gap: 4px;
+      font-size: 15px; font-weight: 650; line-height: 1;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+    .pf-tq__stat-u { font-size: 10px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.02em; }
+    .pf-tq__stat--done { color: #34d399; align-items: center; }
+    .pf-tq__stat--done .pf-tq__stat-u { color: #34d399; opacity: 0.8; }
+
+    /* Print + Edit sit side by side (one row), not stacked. */
+    .pf-tq__acts { display: flex; align-items: center; gap: 8px; }
+
+    .pf-tq__act {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      min-height: 30px; padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11.5px; font-weight: 500;
+      color: var(--text-secondary);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .pf-tq__act:hover  { color: var(--text-primary); background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.16); }
+    .pf-tq__act:active { background: rgba(255,255,255,0.18); }
+    .pf-tq__act:focus-visible { outline: 2px solid rgba(139,92,246,0.75); outline-offset: 2px; }
+
+    /* Hold-to-peek progress — same 2s gesture as the collection vials. */
+    .pf-tq__main::after {
+      content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+      background: var(--tq-accent); opacity: 0; pointer-events: none;
+    }
+    .pf-tq--holding .pf-tq__main::after { opacity: 1; animation: pf-card-hold-fill 2s linear forwards; }
+    .pf-tq--holding { border-color: rgba(255,255,255,0.2); }
+    .pf-tq--picking { animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    :host-context([data-theme="light"]) .pf-tq {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.09);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    :host-context([data-theme="light"]) .pf-tq:hover { border-color: rgba(15,23,42,0.16); box-shadow: 0 6px 20px rgba(15,23,42,0.09); }
+    :host-context([data-theme="light"]) .pf-tq__main:hover  { background: rgba(15,23,42,0.02); }
+    :host-context([data-theme="light"]) .pf-tq__main:active { background: rgba(15,23,42,0.045); }
+    :host-context([data-theme="light"]) .pf-tq__side { background: rgba(15,23,42,0.025); border-left-color: rgba(15,23,42,0.07); }
+    :host-context([data-theme="light"]) .pf-tq__act { background: rgba(15,23,42,0.04); border-color: rgba(15,23,42,0.10); }
+
+    /* Touch: same layout, bigger targets — never a different design. */
+    @media (pointer: coarse) {
+      .pf-tq__act { min-height: 40px; padding: 8px 12px; }
+      .pf-tq__side { padding: 10px; gap: 9px; }
+    }
+    /* Narrow: drop the Delegate label to the icon so the row never wraps. */
+    @media (max-width: 460px) {
+      .pf-tq__act-t { display: none; }
+      .pf-tq__act { padding: 8px; min-width: 40px; }
+      .pf-tq__main { padding: 12px 10px 12px 14px; }
+    }
+
+    .pf-cardpeek {
+      position: fixed; z-index: 100;
+      width: 260px; max-height: 52dvh; overflow-y: auto;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--bg-elevated, #0f172a);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
+      box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    }
+    .pf-cardpeek__h {
+      margin: 0 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary);
+    }
+    .pf-cardpeek ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .pf-cardpeek li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.3; }
+    :host-context([data-theme="light"]) .pf-cardpeek {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.14);
+      box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
     }
     .pf-tube-tile.pf-tube-tile--picking {
       animation: pf-tube-pick 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -1360,7 +2049,7 @@ const COUNTERS: CounterSpec[] = [
       height: 18px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.22);
-      color: #fca5a5;
+      color: var(--red-text);
       font-size: 11px;
       font-weight: 700;
       flex-shrink: 0;
@@ -1370,7 +2059,7 @@ const COUNTERS: CounterSpec[] = [
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-tube-reject__list {
       list-style: none;
@@ -1615,7 +2304,7 @@ const COUNTERS: CounterSpec[] = [
       }
       .pf-kpi-statbtn.is-open {
         border-color: rgba(168, 85, 247, 0.55);
-        color: #c4b5fd;
+        color: var(--violet-text);
         background: rgba(124, 58, 247, 0.16);
       }
       /* Popover is teleported to <body>; positioned via inline top/right from
@@ -1661,7 +2350,7 @@ const COUNTERS: CounterSpec[] = [
         padding: 3px;
         margin-bottom: 12px;
         border-radius: 9999px;
-        background: rgba(0, 0, 0, 0.18);
+        background: var(--seg-track);
         border: 1px solid var(--glass-border);
       }
       .pf-mtab {
@@ -1690,6 +2379,29 @@ const COUNTERS: CounterSpec[] = [
         color: #fff;
         box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
       }
+      /* NB: the gradient on .pf-mtab--on is already quieted in BOTH themes
+         by the global primary-colour rule in styles.scss
+         (:root.{light,dark}.design-new button[class*="--on"]), which
+         outranks anything scoped here. Classic still gets the gradient. */
+      /* ── Completed cards: sample ID + name, nothing else (owner) ──
+         On a phone the card was carrying the ID, the status word, the
+         patient, their age/sex, the department, the full test names, the
+         completed timestamp AND a test count. Sample ID and who it belongs
+         to is what you scan a finished list for; the rest is desk detail.
+         The print / edit actions stay. Classic and >=641px keep it all. */
+      :host-context(.design-new) .pf-tq--done .pf-tq__extra,
+      :host-context(.design-new) .pf-tq--done .pf-done__tests,
+      :host-context(.design-new) .pf-tq--done .pf-tq__stat { display: none; }
+
+      /* Classic keeps the words; the new design shows the icon instead
+         (owner: five labels do not fit a 390px phone). */
+      .pf-mtab__ico { display: none; flex-shrink: 0; }
+      .pf-mtab__label {
+        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      :host-context(.design-new) .pf-mtab__ico { display: block; }
+      :host-context(.design-new) .pf-mtab__label { display: none; }
+      :host-context(.design-new) .pf-mtab { gap: 5px; padding: 8px 4px; }
       .pf-mtab__count {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
         font-size: 10.5px;
@@ -1773,7 +2485,7 @@ const COUNTERS: CounterSpec[] = [
       border: 1px solid var(--glass-border);
     }
     .pf-mw-claimed-toggle--on {
-      color: #c4b5fd; border-color: rgba(139, 92, 246, 0.45);
+      color: var(--violet-text); border-color: rgba(139, 92, 246, 0.45);
       background: rgba(139, 92, 246, 0.12);
     }
 
@@ -1812,36 +2524,425 @@ const COUNTERS: CounterSpec[] = [
       .pf-claim { padding: 14px 12px calc(var(--tab-nav-total-height) + 12px); }
       .pf-claim__sheet { max-width: none; max-height: 80dvh; }
     }
+
+    /* ════ New-design remap (owner): pf-kit tiles, palette only ════
+       Queue / My Work / Done tiles become calm nd cards: neutral surface,
+       hairline border, 12px radius, small soft shadow; Noto Sans with
+       tabular numbers for sample IDs. The left cap stripe keeps ONLY the
+       functional priority colour (Urgent red); done is a
+       violet mark, not green. Counter chips lose their colour dots. */
+    :host-context(.design-new) .pf-tq {
+      background: var(--pf-card-bg, var(--bg-card-solid));
+      border: 1px solid var(--pf-line, var(--border-muted));
+      border-radius: var(--pf-radius, 12px);
+      box-shadow: var(--pf-shadow-sm);
+    }
+    :host-context(.design-new) .pf-tq:hover { border-color: var(--pf-sel-border); box-shadow: var(--pf-shadow-sm); }
+    :host-context(.design-new) .pf-tq__main:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
+    :host-context(.design-new) .pf-tq--done { --tq-accent: var(--color-violet-500, #8b5cf6); }
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag,
+    :host-context(.design-new) .pf-tq__stat--done { color: var(--violet-text, #6d28d9) !important; }
+    :host-context(.design-new) .pf-tq__id,
+    :host-context(.design-new) .pf-mw-completed-cap {
+      font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.01em;
+    }
+    :host-context(.design-new) .pf-tq__id { font-size: 13.5px; }
+    :host-context(.design-new) .pf-tq__who { font-weight: 500; }
+    :host-context(.design-new) .pf-tq__act {
+      border-radius: var(--pf-radius-sm, 10px);
+      color: var(--text-secondary);
+    }
+    /* Counter chips: neutral, no colour dots; selected = neutral raised. */
+    :host-context(.design-new) .pf-counter__dot,
+    :host-context(.design-new) .pf-kpi-stat__dot { display: none !important; }
+    :host-context(.design-new) .pf-counter--on,
+    :host-context(.design-new) .pf-kpi-stat.is-on {
+      background: var(--pf-sel-bg) !important;
+      color: var(--text-primary) !important;
+      box-shadow: none !important;
+    }
+    :host-context(.design-new) .pf-counter__value,
+    :host-context(.design-new) .pf-kpi-stat__value { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    /* ════ Round 2 (owner): tiles + buttons in OUR theme (Order & Payments) ════
+       Panes = nd cards; pane header = the BILLING-style header; the queue
+       tile = the catalogue row (small violet code, primary name, muted meta,
+       right-aligned value); buttons = nd secondary outline / neutral icon. */
+    :host-context(.design-new) .pf-mw-pane,
+    :host-context(.design-new) .pf-mw-rail {
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line);
+      border-radius: var(--pf-radius-card, 16px); box-shadow: var(--pf-shadow-sm);
+    }
+    :host-context(.design-new) .pf-mw-pane__hdr {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+      border-bottom: 1px solid var(--pf-line);
+      padding: 12px 14px;
+    }
+    :host-context(.design-new) .pf-mw-pane__title {
+      font-size: 12px; font-weight: 500; letter-spacing: 0.1em; color: var(--text-secondary);
+    }
+    /* Pin / hide = neutral icon buttons; pinned = neutral selected. */
+    :host-context(.design-new) .pf-mw-pin {
+      width: 32px; height: 32px; border-radius: var(--pf-radius-sm, 10px);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-secondary);
+    }
+    :host-context(.design-new) .pf-mw-pin:hover { border-color: var(--pf-sel-border); background: var(--pf-card-bg); color: var(--text-primary); }
+    :host-context(.design-new) .pf-mw-pin--on {
+      color: var(--text-primary); background: var(--pf-sel-bg); border-color: var(--pf-sel-border); box-shadow: none;
+    }
+    /* Pane tabs (Queue / My Work / Completed): underline like the catalogue tabs. */
+    :host-context(.design-new) .pf-mw-tab {
+      background: transparent !important; border: 0 !important; border-radius: 0 !important;
+      box-shadow: none !important; color: var(--text-tertiary) !important; font-weight: 500;
+      padding: 8px 2px 10px;
+    }
+    :host-context(.design-new) .pf-mw-tab--on {
+      color: var(--text-primary) !important; font-weight: 600;
+      box-shadow: inset 0 -2px 0 var(--color-violet-600, #7c3aed) !important;
+    }
+    :host-context(.design-new) .pf-mw-tab__count { background: transparent !important; color: var(--violet-text, #7c3aed) !important; font-size: 11px; }
+    /* Intake scan bar: stock input look + nd buttons. */
+    :host-context(.design-new) .pf-mw-scan {
+      border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+    }
+    :host-context(.design-new) .pf-mw-scan__btn {
+      border-radius: var(--pf-radius-sm, 10px) !important;
+      background: transparent !important; border: 1px solid var(--color-violet-600, #7c3aed) !important;
+      color: var(--violet-text, #6d28d9) !important; font-weight: 600; box-shadow: none !important;
+    }
+
+    /* Queue tile = the catalogue row. */
+    :host-context(.design-new) .pf-tq { border-radius: var(--pf-radius-sm, 10px); }
+    :host-context(.design-new) .pf-tq__main { padding: 10px 12px 10px 14px; }
+    :host-context(.design-new) .pf-tq__line { gap: 8px; }
+    :host-context(.design-new) .pf-tq__id {
+      font-size: 11.5px !important; font-weight: 500; color: var(--violet-text, #7c3aed);
+    }
+    :host-context(.design-new) .pf-tq__sub { margin-top: 3px; font-size: 12px; color: var(--text-tertiary); }
+    :host-context(.design-new) .pf-tq__who { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+    :host-context(.design-new) .pf-tq__tag {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 6px; background: var(--pf-chip-bg); color: var(--text-secondary);
+    }
+    :host-context(.design-new) .pf-tq__tag--warn { background: var(--error-bg, rgba(239, 68, 68, 0.12)); color: var(--error-text, #b91c1c); }
+    :host-context(.design-new) .pf-tq__tag--draft { background: var(--pf-chip-bg); color: var(--text-secondary); }
+    /* Trailing zone: no dark slab — a hairline and a right-aligned value. */
+    :host-context(.design-new) .pf-tq__side {
+      background: transparent; border-left: 1px solid var(--pf-line);
+      flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px 8px 12px;
+    }
+    :host-context(.design-new) .pf-tq__stat {
+      font-size: 13px; font-weight: 600; color: var(--text-primary); align-items: baseline;
+    }
+    :host-context(.design-new) .pf-tq__stat-u { font-size: 11px; color: var(--text-muted); }
+
+    /* ════ Round 3 (owner): exactly the BILLING header + calm rows ════ */
+    /* Pane header = BILLING header: violet icon chip + the title only. */
+    :host-context(.design-new) .pf-mw-pane__hdr { gap: 10px; }
+    :host-context(.design-new) .pf-mw-icon { flex: none; }
+    :host-context(.design-new) .pf-mw-pane .pf-mw-pane__title {
+      font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0.08em !important;
+      color: var(--text-secondary) !important; text-transform: uppercase;
+    }
+    /* The item count is plain muted text on the right — no pill. */
+    :host-context(.design-new) .pf-mw-pane__meta {
+      margin: 0 0 0 auto; padding: 0; background: none; border: 0; border-radius: 0;
+      font-size: 12px; font-weight: 400; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+      font-family: inherit; letter-spacing: 0; text-transform: none;
+    }
+    :host-context(.design-new) .pf-mw-culture__count {
+      background: none; padding: 0; border-radius: 0; font-weight: 400; color: var(--text-tertiary);
+    }
+    /* Completed: palette only — neutral status chips (validated = violet
+       check-dot), no green / red, no colour stripe. */
+    :host-context(.design-new) .pf-tq--done .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag,
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag--warn {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--pf-chip-bg) !important; color: var(--text-secondary) !important;
+    }
+    :host-context(.design-new) .pf-tq__tag--validated::before {
+      content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed);
+    }
+    :host-context(.design-new) .pf-tq--done .pf-tq__stat { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+
+    /* Phone icon strip: same language. */
+    :host-context(.design-new) .pf-mtab,
+    :host-context(.design-new) .pf-mtab.pf-mtab--on {
+      background: transparent !important; background-image: none !important;
+      box-shadow: none !important; color: var(--text-secondary) !important;
+    }
+    :host-context(.design-new) .pf-mtab__ico {
+      width: 28px; height: 28px; padding: 5px; box-sizing: border-box; border-radius: 8px;
+      color: var(--text-tertiary);
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__ico {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
+    }
+    :host-context(.design-new) .pf-mtab__count,
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__count {
+      font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 500;
+      font-size: 11px; letter-spacing: 0; padding: 1px 7px;
+      background: var(--pf-chip-bg, rgba(100,116,139,0.12)); border: 0;
+      color: var(--text-tertiary);
+    }
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__count { color: var(--text-primary); }
+
+    /* ════ Round 5 (owner) ════
+       Pane header = BILLING header: ONLY the icon chip is tinted. The
+       classic tab-strip track (.pf-mw-tabs pill) and the header wash go. */
+    :host-context(.design-new) .pf-mw-tabs {
+      background: none !important; border: 0 !important; padding: 0 !important;
+      border-radius: 0 !important; gap: 10px; box-shadow: none !important;
+    }
+    :host-context(.design-new) .pf-mw-pane__hdr { background: var(--pf-card-bg) !important; }
+    :host-context(.design-new) .pf-mw-pane .pf-mw-pane__title { background: none !important; padding: 0 !important; }
+    /* Row actions: .pf-rowact (kit) — flex row so text buttons sit side by side. */
+    :host-context(.design-new) .pf-tq__acts { gap: 8px; }
+    /* Queue "done" stat: palette only — violet check, never green. */
+    :host-context(.design-new) .pf-tq__stat--done,
+    :host-context(.design-new) .pf-tq__stat--done .pf-tq__stat-u { color: var(--violet-text, #6d28d9); }
+    /* Group dots: NORMAL is neutral; red only for Urgent (order priority). */
+    :host-context(.design-new) .pf-dot[data-priority='normal'] { background: var(--pf-toggle-on, #aeb8c2); box-shadow: none; }
+    :host-context(.design-new) .pf-dot[data-priority='urgent'] { box-shadow: none; }
+
+    /* ════ Adaptive tile grid (owner): 3 / 2 / 1 by the LIST's width ════
+       In a grid cell the tile stacks: content on top (name wraps, never
+       truncates), the trailing zone becomes a bottom row with the action
+       at the bottom-right — so "Delegate" never squeezes the name. */
+    :host-context(.design-new) .pf-tilegrid .pf-tq { flex-direction: column; height: 100%; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__main { flex: 1 1 auto; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__sub { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side {
+      border-left: 0; padding: 0 10px 10px 14px; justify-content: flex-start; flex-wrap: wrap;
+    }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side > :last-child { margin-left: auto; }
+    :host-context(.design-new) .pf-tilegrid .pf-tq__side:empty { display: none; }
+
+    /* ════ Round 6 (owner): the SAMPLE ID is the primary line ════
+       15px / 600 / normal text colour, Noto tabular — the biggest thing
+       on the tile. Patient name 13/500 secondary, meta 12 muted. */
+    :host-context(.design-new) .pf-tq__id {
+      font-family: inherit !important; font-size: 15px !important; font-weight: 600 !important;
+      color: var(--text-primary) !important; font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+    }
+    :host-context(.design-new) .pf-tq__who { font-size: 13px !important; font-weight: 500 !important; color: var(--text-secondary) !important; }
+    :host-context(.design-new) .pf-tq__sub,
+    :host-context(.design-new) .pf-tq__note { font-size: 12px; color: var(--text-muted); }
+    /* Stripe only where it means something: an Urgent order (red). */
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent) .pf-tq__cap { background: transparent; }
+    .pf-tq__tat { margin-left: auto; }
+    /* Intake scan field: kit input + a real secondary Receive. */
+    :host-context(.design-new) .pf-mw-scan:focus-within {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+    }
+    :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 28px; min-height: 28px; padding: 0 12px; }
+    @media (pointer: coarse) {
+      :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 40px; min-height: 40px; }
+    }
+
   `]
 })
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Bottom-bar draft shelf: tubes with saved-but-unsubmitted results. */
+  private readonly draftShelf = inject(DraftShelfService);
+  private readonly _draftShelfSync = effect(() => {
+    const bySample = new Map<string, { barcode: string; patient: string; draft: boolean; allDone: boolean }>();
+    for (const t of this._rows()) {
+      const sid = t.subOrder?.id ?? t.id;
+      const e = bySample.get(sid) ?? {
+        barcode: t.subOrder?.barcode ?? sid,
+        patient: t.subOrder?.order?.patient?.displayName ?? '',
+        draft: false, allDone: true,
+      };
+      if (t.status === 'in_progress' && !!t.currentResult) e.draft = true;
+      if (t.status !== 'entered' && t.status !== 'validated') e.allDone = false;
+      bySample.set(sid, e);
+    }
+    this.draftShelf.publish('lab', Array.from(bySample.entries())
+      .filter(([, e]) => e.draft && !e.allDone)
+      .map(([sid, e]) => ({
+        id: 'lab:' + sid,
+        label: e.barcode,
+        sub: e.patient,
+        verb: 'Resume result for',
+        link: ['/lab/sample', sid] as const,
+      })));
+  });
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Row actions: text buttons on web (fine pointer + hover), icon buttons
+   *  on touch — the Order & Payments device-mode query (pf-kit .pf-rowact). */
+  readonly webPointer = webPointerSignal();
+  /** "1 sample" / "2 samples". */
+  protected readonly plural = plural;
+  /** Pane-header count text (sample-focused branches count tubes). */
+  readonly paneCountLabel = computed(() => this.labCfg.sampleFocused()
+    ? plural(this.sampleCountIn(this.rows()), 'sample')
+    : plural(this.rows().length, 'item'));
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+  /** List → detail zoom: gated opens (scan / claim / reason) re-arm the
+   *  tapped tile right before navigating (core/navigation/zoom-transition). */
+  private readonly zoom = inject(ZoomTransitionService);
+  private readonly injector = inject(Injector);
   private readonly process = inject(ProcessWorkflowService);
+  protected readonly labCfg = inject(BranchLabConfigService);
+  protected readonly scanSvc = inject(ScanService);
+  private readonly entitlements = inject(TenantEntitlementsService);
 
-  /** Collect-in-lab: sample collection is placed in the lab work-area, so the
-   *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
-   *  print label) instead of Lab Intake, and collection auto-receives into the
-   *  work queue (backend SampleService). Takes priority over showIntake so a
-   *  stale config (collect in lab but intake still on) still shows Collect. */
-  readonly showCollect = computed(() => this.process.collectsInLab());
+  /** The Culture tab is micro-tech only: the Lab "microbiology" feature must be
+   *  on AND the user must hold culture_workbench. A regular tech never sees it. */
+  readonly showCulture = computed(() =>
+    this.entitlements.featureOn('lab', 'microbiology') && this.auth.hasPermission('culture_workbench'));
+  /** New design folds the bench into the workbench tab strip so the screen
+   *  keeps two columns instead of three. Classic keeps the third pane. */
+  readonly cultureAsTab = computed(() => this.showCulture() && this.theme.isNewDesign());
+  /** Classic-only standalone third pane. */
+  readonly showCulturePane = computed(() => this.showCulture() && !this.theme.isNewDesign());
+  /** Live count for the Culture pill (fed by the culture panel on load). */
+  readonly cultureCount = signal(0);
 
+  /** The workbench tabs as the search bar's filter strip (new design). The
+   *  dots double as the legend for the queue's own colour coding. */
+  readonly tabOptions = computed<SegmentedOption<Tab>[]>(() => {
+    // New design: palette only — no colour dots, the counts carry it.
+    const nd = this.theme.isNewDesign();
+    const dot = (c: string) => (nd ? undefined : c);
+    const ico = (paths: string[]) => (nd ? paths : undefined);
+    const opts: SegmentedOption<Tab>[] = [
+      {
+        value: 'service_queue',
+        label: 'Queue',
+        dot: dot('#a78bfa'),
+        count: this.countFor('service_queue'),
+        iconPath: ico(['M4 6h16M4 12h16M4 18h10']),
+      },
+      {
+        value: 'my_work',
+        label: 'My Work',
+        dot: dot('#f59e0b'),
+        count: this.countFor('my_work'),
+        iconPath: ico(['M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M14 3v5h5', 'm9 14 2 2 4-4']),
+      },
+      {
+        value: 'completed',
+        label: 'Completed',
+        dot: dot('#10b981'),
+        count: this.countFor('completed'),
+        iconPath: ico(['M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'm8.5 12.5 2.5 2.5 4.5-5']),
+      },
+    ];
+    if (this.cultureAsTab()) {
+      opts.push({
+        value: 'culture',
+        label: 'Culture',
+        dot: dot('#38bdf8'),
+        count: this.cultureCount(),
+        iconPath: ico([
+          'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0',
+          'M8.4 10a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0',
+          'M13.5 13.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0-2.2 0',
+        ]),
+      });
+    }
+    return opts;
+  });
+  /** Pane title in the new design — the bar owns the switching, the header
+   *  just says which list is on screen. */
+  readonly tabLabel = computed(() =>
+    this.tabOptions().find(o => o.value === this.tab())?.label ?? 'Queue');
+
+  // ── Lab Intake: rail ⇄ open, with a pin ──────────────────────────
+  // Most techs never receive samples, so a permanent intake column is
+  // wasted width (owner). New design collapses it to a labelled rail;
+  // one click opens it for this visit, the pin makes that stick.
+  // Classic and phones are untouched — there the pane is always open.
+  private readonly _intakePinned = signal<boolean>(this.readIntakePin());
+  readonly intakePinned = this._intakePinned.asReadonly();
+  private readonly _intakeExpanded = signal<boolean>(this.readIntakePin());
+  readonly intakeOpen = computed(() =>
+    !this.theme.isNewDesign() || this.isPhone() || this._intakeExpanded());
+  /** The left column takes space only when its companion (Collection or Lab
+   *  Intake) is shown AND open. */
+  readonly leftPaneOpen = computed(() =>
+    this.showCollect() ? this.collectOpen() : this.showIntake() && this.intakeOpen());
+
+  private readIntakePin(): boolean {
+    try { return localStorage.getItem(INTAKE_PIN_KEY) === '1'; } catch { return false; }
+  }
+  expandIntake(): void { this._intakeExpanded.set(true); }
+  collapseIntake(): void {
+    this._intakeExpanded.set(false);
+    this._intakePinned.set(false);
+    try { localStorage.removeItem(INTAKE_PIN_KEY); } catch { /* ignore */ }
+  }
+  toggleIntakePin(): void {
+    const on = !this._intakePinned();
+    this._intakePinned.set(on);
+    try {
+      if (on) localStorage.setItem(INTAKE_PIN_KEY, '1');
+      else localStorage.removeItem(INTAKE_PIN_KEY);
+    } catch { /* ignore */ }
+  }
+
+  // ── Left companion slot: decided by the workflow (owner 2026-09-27) ──
+  /** Collection companion: sample collection is placed (enabled) in the Lab
+   *  work-area AND the workflow has no dispatch/intake step — tubes are
+   *  auto-received the moment they are drawn, so Lab Intake has nothing to do
+   *  and the tech collects right here. */
+  readonly showCollect = computed(() =>
+    !!this.process.collectsInLab?.() && !this.process.dispatchStepEnabled());
   /** Lab Intake is a placeable workflow action — hide the intake pane/tab when
-   *  an admin switches `lab_intake` OFF in /admin/process, or when collection
-   *  happens in the lab (Collect replaces intake). */
+   *  an admin switches `lab_intake` OFF in /admin/process, or when the
+   *  Collection companion owns the slot. */
   readonly showIntake = computed(() => !this.showCollect() && this.process.isEnabled('lab_intake'));
-
-  /** Either left pane (Collect or Lab Intake) occupies the split's left slot. */
+  /** Either companion occupies the left slot (else the work pane is full width). */
   readonly showLeftPane = computed(() => this.showCollect() || this.showIntake());
+
+  // Collection companion: open by default (collecting is the point of it);
+  // collapses to the same labelled strip as Lab Intake, remembered per user.
+  private readonly _collectCollapsed = signal<boolean>(this.readCollectCollapsed());
+  readonly collectOpen = computed(() =>
+    !this.theme.isNewDesign() || this.isPhone() || !this._collectCollapsed());
+  private readCollectCollapsed(): boolean {
+    try { return localStorage.getItem(COLLECT_COLLAPSED_KEY) === '1'; } catch { return false; }
+  }
+  private setCollectCollapsed(v: boolean): void {
+    this._collectCollapsed.set(v);
+    try {
+      if (v) localStorage.setItem(COLLECT_COLLAPSED_KEY, '1');
+      else localStorage.removeItem(COLLECT_COLLAPSED_KEY);
+    } catch { /* ignore */ }
+  }
+  expandCollect(): void { this.setCollectCollapsed(false); }
+  collapseCollect(): void { this.setCollectCollapsed(true); }
+
+  private readonly collectPane = viewChild<ElementRef<HTMLElement>>('collectPane');
+  /** Band "Collect" while the companion is on screen: open it (desktop strip
+   *  or the phone tab) and put the cursor in its find-patient / scan field,
+   *  instead of navigating away from My Work. */
+  focusCollect(): void {
+    this.expandCollect();
+    if (this.isPhone() && this.mobileTab() !== 'intake') this.setMobileTab('intake');
+    setTimeout(() => {
+      this.collectPane()?.nativeElement
+        .querySelector<HTMLInputElement>('.pf-scan__input')?.focus();
+    }, 0);
+  }
+  readonly focusCollectFn = () => this.focusCollect();
 
   // Rejected tab dropped — re-entry rows now show inline in My Work
   // with their rejection reason in the tube tile, so the tech sees WHY
   // the pathologist sent it back without switching tabs.
-  readonly tabOptions = [
-    { value: 'my_work'       as Tab, label: 'My Work' },
-    { value: 'service_queue' as Tab, label: 'Queue' }
-  ];
 
   /** ViewChild ref to the embedded Lab Intake component so the pane
    *  header's inline scan bar can trigger the camera scanner OR pass a
@@ -1921,6 +3022,44 @@ export class MyWorkComponent implements OnInit {
     this._mwDragging.set(false);
     this.persistMwSplit(this._mwSplitPct());
   }
+
+  // Culture (3rd) pane width — its own drag handle, persisted in px. Consumed
+  // via a CSS var so it only applies in the desktop 3-column layout.
+  private static readonly CULTURE_W_KEY = 'pf.lms.lab.cultureWidth';
+  private readonly _cultureWidth = signal<number>(this.loadCultureWidth());
+  readonly cultureWidth = this._cultureWidth.asReadonly();
+  private _cultureActivePointerId: number | null = null;
+
+  private loadCultureWidth(): number {
+    try {
+      const raw = localStorage.getItem(MyWorkComponent.CULTURE_W_KEY);
+      const n = raw ? Number(raw) : 340;
+      return Number.isFinite(n) && n >= 260 && n <= 680 ? n : 340;
+    } catch { return 340; }
+  }
+  onCulturePointerDown(ev: PointerEvent) {
+    const t = ev.currentTarget as HTMLElement;
+    t.setPointerCapture(ev.pointerId);
+    this._cultureActivePointerId = ev.pointerId;
+    this._mwDragging.set(true);
+    ev.preventDefault();
+  }
+  onCulturePointerMove(ev: PointerEvent) {
+    if (this._cultureActivePointerId !== ev.pointerId) return;
+    const split = (ev.currentTarget as HTMLElement).parentElement;
+    if (!split) return;
+    const rect = split.getBoundingClientRect();
+    // Handle sits to the LEFT of the culture pane → dragging left widens it.
+    this._cultureWidth.set(Math.max(260, Math.min(680, rect.right - ev.clientX)));
+  }
+  onCulturePointerUp(ev: PointerEvent) {
+    if (this._cultureActivePointerId !== ev.pointerId && ev.type !== 'lostpointercapture') return;
+    const t = ev.currentTarget as HTMLElement;
+    if (t.hasPointerCapture(ev.pointerId)) t.releasePointerCapture(ev.pointerId);
+    this._cultureActivePointerId = null;
+    this._mwDragging.set(false);
+    try { localStorage.setItem(MyWorkComponent.CULTURE_W_KEY, String(this._cultureWidth())); } catch { /* ignore */ }
+  }
   readonly counters = COUNTERS;
 
   private readonly _tab = signal<Tab>('my_work');
@@ -1934,7 +3073,7 @@ export class MyWorkComponent implements OnInit {
   // apply inside @media (max-width:640px)), so desktop is untouched.
   // Switching to My Work / Queue reuses the existing setTab() so the
   // right pane loads the matching data — no new fetch logic.
-  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue'>('intake');
+  protected readonly mobileTab = signal<'intake' | 'mywork' | 'queue' | 'completed' | 'culture'>('intake');
   protected readonly kpiOpen = signal(false);
 
   // ── Stats popover teleport (phone) ──────────────────────────────
@@ -1971,15 +3110,19 @@ export class MyWorkComponent implements OnInit {
     }
     this.kpiTeleported = null;
   }
-  /** When the left pane (Collect or Lab Intake) is switched off, don't strand
-   *  the phone view on the now-hidden first tab. */
+  /** When the left companion (Collection or Lab Intake) is switched off,
+   *  don't strand the phone view on the now-hidden first tab. */
   private readonly _intakeTabGuard = effect(() => {
     if (!this.showLeftPane() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
   });
-  setMobileTab(t: 'intake' | 'mywork' | 'queue') {
+  setMobileTab(t: 'intake' | 'mywork' | 'queue' | 'completed' | 'culture') {
     this.mobileTab.set(t);
     if (t === 'mywork') this.setTab('my_work');
     else if (t === 'queue') this.setTab('service_queue');
+    else if (t === 'completed') this.setTab('completed');
+    // Classic: 'culture' is a standalone pane, so no setTab. New design:
+    // the bench is a workbench tab, so the phone tab must select it.
+    else if (t === 'culture' && this.cultureAsTab()) this.setTab('culture');
   }
 
   private readonly _counter = signal<CounterSpec['id']>('all');
@@ -1995,13 +3138,8 @@ export class MyWorkComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
 
-  protected readonly manualMode = signal(false);
-  protected readonly seqValue = signal('');
   protected readonly departments = signal<Department[]>([]);
   protected readonly selectedDeptCode = signal<string>('');
-  protected readonly isTouch = signal<boolean>(
-    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  );
   /** Phone viewport — drives DOM-level removal of chrome that belongs only on
    *  larger screens (the KPI strip + inline counter filter row, both replaced
    *  by the header Stats popover on phone). Kept in sync via matchMedia. */
@@ -2019,13 +3157,6 @@ export class MyWorkComponent implements OnInit {
   /** 2-digit year suffix (YY). */
   readonly yy = computed(() => (this.currentYear % 100).toString().padStart(2, '0'));
 
-  readonly deptOptions = computed<PfSelectOption<string>[]>(() =>
-    this.departments().map(d => ({
-      value: d.code,
-      label: `${d.sampleCode != null ? d.sampleCode.toString().padStart(2, '0') : '··'} · ${d.name}`,
-    }))
-  );
-
   /** The selected department's 2-digit sample code — the prefix of the new
    *  short barcode. Null when the admin hasn't assigned one yet. */
   readonly selectedDeptSampleCode = computed(() => {
@@ -2035,50 +3166,12 @@ export class MyWorkComponent implements OnInit {
       : null;
   });
 
-  /** New short sample barcode: DD(dept) + YY(year) + running number. */
-  readonly fullManualBarcode = computed(() => {
-    const dd = this.selectedDeptSampleCode() ?? '——';
-    const seq = (this.seqValue() || '').padStart(this.numberWidth(), '0');
-    return `${dd}${this.yy()}${seq}`;
-  });
-
   /** Example sample id for the scan/search placeholders, e.g. 012600001. */
   readonly sampleIdExample = computed(() => {
     const dd = this.selectedDeptSampleCode() ?? '01';
     const seq = ''.padStart(this.numberWidth(), '0').replace(/0$/, '1');
     return `${dd}${this.yy()}${seq}`;
   });
-
-  readonly canManualConfirm = computed(() =>
-    this.seqValue().length === this.numberWidth() &&
-    !!this.selectedDeptSampleCode()
-  );
-
-  toggleManual() {
-    const next = !this.manualMode();
-    this.manualMode.set(next);
-    if (next) {
-      this.tenantState.ensureLoaded();
-      if (this.departments().length === 0) this.loadDepartments();
-    }
-  }
-
-  onSeqChange(v: string) {
-    this.seqValue.set((v ?? '').replace(/\D/g, '').slice(0, this.numberWidth()));
-  }
-
-  onDeptChange(code: string) {
-    this.selectedDeptCode.set(code);
-    try { localStorage.setItem(LAST_DEPT_KEY, code); } catch { /* ignore */ }
-  }
-
-  submitManual() {
-    if (!this.canManualConfirm()) return;
-    const code = this.fullManualBarcode();
-    this.setScan(code);
-    this.scanSubmit();
-    this.seqValue.set('');
-  }
 
   private loadDepartments() {
     const branchId = this.auth.user()?.branchId;
@@ -2102,28 +3195,238 @@ export class MyWorkComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
-  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0 });
+  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0, completed: 0, culture: 0 });
   countFor(t: Tab): number { return this._counts()[t]; }
+
+  // ── Completed tab ────────────────────────────────────────────
+  // This tech's finished work (status entered/validated, resulted within
+  // the window), fetched lazily from its own endpoint and grouped into
+  // tubes. Kept in its own signal so opening the tab never disturbs the
+  // queue rows the other tabs share.
+  // Default TODAY only (owner 2026-10-09: it used to always show the last 7
+  // days, so a tube finished last week was still sitting in "Completed").
+  // No existing way to widen the range existed, so a small Today/7-days
+  // toggle is added — the same small range-toggle pattern the frontdesk
+  // right panel's date filter uses, kept intentionally tiny here (one
+  // tech's own recent work, not a whole-branch work list).
+  readonly completedWindowOptions: SegmentedOption<'today' | '7d'>[] = [
+    { value: 'today', label: 'Today' },
+    { value: '7d', label: '7 days' },
+  ];
+  private readonly _completedWindow = signal<'today' | '7d'>('today');
+  readonly completedWindow = this._completedWindow.asReadonly();
+  /** IST calendar days the server resolves `days` against (OrderRepository.
+   *  ListCompletedByTechAsync) — 1 = today only, never a rolling 24h. */
+  readonly completedDays = computed(() => this._completedWindow() === 'today' ? 1 : 7);
+  readonly completedWindowLabel = computed(() => this._completedWindow() === 'today' ? 'today' : 'the last 7 days');
+  setCompletedWindow(w: 'today' | '7d') {
+    if (this._completedWindow() === w) return;
+    this._completedWindow.set(w);
+    this.loadCompleted();
+  }
+  private readonly _completed = signal<OrderTest[]>([]);
+  private readonly _completedLoading = signal(false);
+  readonly completedLoading = this._completedLoading.asReadonly();
+  private readonly _reopeningTubeId = signal<string | null>(null);
+  readonly reopeningTubeId = this._reopeningTubeId.asReadonly();
+  private readonly _printingTubeId = signal<string | null>(null);
+  readonly printingTubeId = this._printingTubeId.asReadonly();
+
+  /** Print a completed (validated) tube's report DIRECTLY — build the report PDF
+   *  and open the browser print dialog on it, no navigation to the viewer. */
+  printCompletedTube(tube: { sampleId: string; barcode: string; tests: OrderTest[] }) {
+    const t0 = tube.tests?.[0];
+    const orderId = t0?.subOrder?.orderId ?? t0?.subOrder?.order?.id;
+    if (!orderId) { this.toasts.error('No order found for this sample.'); return; }
+    this._printingTubeId.set(tube.sampleId);
+    this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`).subscribe({
+      next: async rep => {
+        try {
+          if (!rep) { await this.explainNoReport(orderId); return; }
+          await this.printReport(rep);
+        } finally { this._printingTubeId.set(null); }
+      },
+      error: async e => {
+        // No report yet is NOT an error to toast blankly: say why (lines
+        // still open on which tube), offer a preliminary report when some
+        // tubes are fully validated, or "Generate now" when all are.
+        try {
+          if (ApiError.from(e).code === 'not_found') await this.explainNoReport(orderId);
+          else this.toasts.error(ApiError.from(e).message);
+        } finally { this._printingTubeId.set(null); }
+      },
+    });
+  }
+
+  private async printReport(rep: Record<string, unknown>) {
+    // Letterpad setting on → asks letterhead vs plain paper for this job.
+    const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
+    if (url === null) return;   // dismissed
+    if (url) printPdfBlobUrl(url, { revokeOnDone: true });
+    else this.toasts.error('Could not build the report to print.');
+  }
+
+  /** generate / generate/partial guard (ReportsController). */
+  private readonly canReleaseReport = computed(() =>
+    this.auth.hasPermission('deliver_report') || this.auth.hasPermission('validate_result'));
+
+  /** Print found no report: ask the server why (GET /api/reports/readiness)
+   *  and act on it — never just "No report for this order". */
+  private async explainNoReport(orderId: string) {
+    let r: ReportReadiness | null = null;
+    try { r = await firstValueFrom(this.api.get<ReportReadiness>(reportReadinessUrl(orderId))); }
+    catch (e) { this.toasts.error(ApiError.from(e).message); return; }
+    if (!r) { this.toasts.error('Order not found.'); return; }
+    const plan = planReadiness(r, this.canReleaseReport());
+    if (plan.kind === 'ready') {
+      const rep = await firstValueFrom(this.api.get<Record<string, unknown> | null>(`/api/reports/by-order/${orderId}`));
+      if (rep) await this.printReport(rep);
+      return;
+    }
+    if (plan.kind === 'generate') {
+      // Print means print: every test is already validated, so generate the
+      // final report (the same call "Generate now" used) and print it
+      // straight away — no confirm dialog in the way (owner 2026-10-09). If
+      // generation turns out to be impossible after all (e.g. a line got
+      // un-validated a moment ago), releaseAndPrint's own catch still surfaces
+      // a clear toast — never a silent no-op.
+      await this.releaseAndPrint('/api/reports/generate', { orderId, type: 'final' });
+      return;
+    }
+    const actions: { value: string; label: string; variant?: 'primary' | 'secondary' }[] = [];
+    if (plan.kind === 'partial') actions.push({ value: 'partial', label: 'Print preliminary report', variant: 'primary' });
+    if (plan.openSampleId) actions.push({ value: 'open', label: 'Open pending sample', variant: plan.kind === 'partial' ? 'secondary' : 'primary' });
+    const res = await this.dialog.actions({ title: plan.title, message: plan.message, items: plan.items, actions, cancelLabel: 'Close' });
+    if (res.action === 'partial') {
+      await this.releaseAndPrint('/api/reports/generate/partial', { orderId, sampleIds: plan.partialSampleIds });
+    } else if (res.action === 'open' && plan.openSampleId) {
+      void this.router.navigate(['/lab/sample', plan.openSampleId], { queryParams: { view: 1 } });
+    }
+  }
+
+  private async releaseAndPrint(url: string, body: unknown) {
+    try {
+      const rep = await firstValueFrom(this.api.post<Record<string, unknown>>(url, body));
+      if (rep) await this.printReport(rep);
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    }
+  }
+
+  /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
+   *  front desk never does, so the action simply doesn't render for them. */
+  readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+
+  /** One row per TUBE: the same grouping key the other tabs use
+   *  (subOrder id), plus the patient line, the test names, when it was
+   *  finished and whether it is merely submitted or already validated. */
+  readonly completedTubes = computed(() => {
+    // Belt-and-braces on the API's ?days window: the Completed tab only
+    // ever shows this many IST calendar days, whatever the server returns.
+    // An IST-day-aligned cutoff, not a rolling `Date.now() - N*24h` one — the
+    // same mirror relationship as everywhere else "today" is computed
+    // client-side (shared/utils/lab-clock.ts, the TS twin of the server's
+    // LabClock): days=1 must mean exactly TODAY, never drift across the IST
+    // midnight boundary depending on what time it is right now.
+    const cutoff = istDayStart(labDaysAgo(Math.max(0, this.completedDays() - 1))).getTime();
+    const bySample = new Map<string, OrderTest[]>();
+    for (const t of this._completed()) {
+      const done = t.validatedAt ?? t.resultedAt;
+      if (done && new Date(done).getTime() < cutoff) continue;
+      const sid = t.subOrder?.id ?? t.id;
+      if (!bySample.has(sid)) bySample.set(sid, []);
+      bySample.get(sid)!.push(t);
+    }
+    return Array.from(bySample.entries()).map(([sampleId, tests]) => {
+      const first = tests[0];
+      const patient = first.subOrder?.order?.patient;
+      const stamps = tests
+        .map(t => t.validatedAt ?? t.resultedAt)
+        .filter((d): d is string => !!d)
+        .map(d => new Date(d).getTime());
+      return {
+        sampleId,
+        tests,
+        barcode: first.subOrder?.barcode ?? '',
+        deptName: linesDeptLabel(tests),
+        patientName: patient?.displayName ?? 'Patient',
+        patientMeta: patient ? formatPatientMeta(patient) : '',
+        testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
+        // A tube reads as validated only once every test on it is signed —
+        // including lines that are not this tech's (subOrder.openLines):
+        // 8 of 13 urine lines validated is "partly validated", not done.
+        status: completedTubeStatus(tests.map(t => t.status),
+          Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0))),
+        openLines: Math.max(0, ...tests.map(t => t.subOrder?.openLines ?? 0)),
+        completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
+      };
+    }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  });
+
+  private loadCompleted() {
+    this._completedLoading.set(true);
+    this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays()}`).subscribe({
+      next: l => {
+        this._completed.set(l ?? []);
+        this._completedLoading.set(false);
+        this._counts.update(c => ({ ...c, completed: this.completedTubes().length }));
+      },
+      error: () => this._completedLoading.set(false)
+    });
+  }
+
+  /** Edit a finished tube: mandatory reason (the app's themed prompt), then
+   *  the backend re-opens every submitted/validated test on it back to THIS
+   *  tech — audited — and we drop the user into My Work where it landed. */
+  /** Open the sample's results READ-ONLY (owner 2026-09-20): inspect what
+   *  was entered without reopening anything for edit. */
+  viewCompletedTube(tube: { sampleId: string }) {
+    void this.router.navigate(['/lab/sample', tube.sampleId], { queryParams: { view: 1 } });
+  }
+
+  async editCompletedTube(tube: { sampleId: string; barcode: string; tests: OrderTest[] }) {
+    const reason = await this.dialog.prompt({
+      title: 'Re-open for editing?',
+      message: `${tube.barcode || tube.sampleId} · ${tube.tests.length} result(s) go back into your My Work. The reason is recorded in the audit trail.`,
+      placeholder: 'e.g. wrong sample, typo in Hb…',
+      multiline: true,
+      required: true,
+      confirmLabel: 'Re-open'
+    });
+    if (!reason || !reason.trim()) return;
+
+    this._reopeningTubeId.set(tube.sampleId);
+    this.api.post<{ reopened: number }>(`/api/results/tube/${tube.sampleId}/reopen-mine`, { reason: reason.trim() })
+      .subscribe({
+        next: res => {
+          this._reopeningTubeId.set(null);
+          const n = res?.reopened ?? tube.tests.length;
+          this.toasts.success(`${n} result${n === 1 ? '' : 's'} re-opened — back in your My Work`);
+          this.loadCompleted();
+          this.refreshAllCounts();
+          // The point of re-opening is to correct the values, so go straight
+          // to the tube's RESULT page. My Work is set behind the navigation,
+          // so backing out of the result screen lands on the work it joined.
+          this.setTab('my_work');
+          if (this.mobileTab() === 'completed') this.mobileTab.set('mywork');
+          this.zoom.rearm(tube.sampleId);
+          this.router.navigate(['/lab/sample', tube.sampleId]);
+        },
+        error: e => {
+          this._reopeningTubeId.set(null);
+          this.toasts.error(ApiError.from(e).message);
+        }
+      });
+  }
 
   readonly buckets = computed<Bucket[]>(() => {
     const enriched: Enriched[] = this.enrich(this._rows());
     const filtered = this.filterByCounter(enriched);
-    return [
-      { level: 'urgent' as const, items: filtered.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, items: filtered.filter(e => e._level === 'high') },
-      { level: 'normal' as const, items: filtered.filter(e => e._level === 'normal') }
-    ];
+    return groupByPriority(filtered);
   });
 
   private enrich(rows: OrderTest[]): Enriched[] {
-    return rows.map(t => {
-      const ral = t.subOrder?.receivedAtLab;
-      const budget = (t.test?.tatHours ?? 0) * 60;
-      const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
-      const remaining = budget - elapsed;
-      const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-      return { ...t, _level: level, _remainingMin: remaining };
-    });
+    return enrichWorkLines(rows);
   }
 
   /** Counter-tile filter runs on top of the segmented tab filter. */
@@ -2159,16 +3462,17 @@ export class MyWorkComponent implements OnInit {
   /**
    * Group bucket items by orderId so the queue shows one card per patient
    * with all their tests nested inside instead of one floating card per
-   * test. The card's TAT level is the worst (most-urgent) of any test in
-   * the order so a patient with one breached test isn't buried.
+   * test. The card's TAT chip is the soonest-due test in the order so a
+   * patient with one overdue test isn't buried; cards sort by that due time.
    */
   patientGroups(items: Enriched[]): Array<{
     orderId: string;
     patientName: string;
     patientInfo: string;
     items: Enriched[];
-    level: Level;
-    remainingMin: number;
+    priority: OrderPriority;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const byOrder = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -2176,9 +3480,8 @@ export class MyWorkComponent implements OnInit {
       if (!byOrder.has(oid)) byOrder.set(oid, []);
       byOrder.get(oid)!.push(t);
     }
-    const levelRank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
     return Array.from(byOrder.entries()).map(([orderId, group]) => {
-      const worst = [...group].sort((a, b) => levelRank[a._level] - levelRank[b._level])[0];
+      const worst = soonestDue(group);
       const patient = worst.subOrder?.order?.patient;
       return {
         orderId,
@@ -2186,10 +3489,11 @@ export class MyWorkComponent implements OnInit {
         // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
         patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
         items: group,
-        level: worst._level,
-        remainingMin: Math.min(...group.map(t => t._remainingMin))
+        priority: group.some(t => t._priority === 'urgent') ? 'urgent' as const : 'normal' as const,
+        remainingMin: worst._remainingMin,
+        dueAt: worst._dueAt
       };
-    });
+    }).sort(comparePriorityThenDue);
   }
 
   // Expand/collapse state per order id within My Work.
@@ -2201,23 +3505,42 @@ export class MyWorkComponent implements OnInit {
     this._expanded.set(next);
   }
 
-  toneFor(level: Level): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  toneFor(priority: OrderPriority): TileTone {
+    return priority === 'urgent' ? 'rose' : 'default';
   }
 
   ngOnInit() {
     // Re-fetch the active workflow so a `lab_intake` toggle in /admin/process
     // reflects here (hides/shows the Lab Intake pane) on each visit.
     this.process.refreshActive();
+    // Per-branch queue focus (patient vs sample). Additive presentation only.
+    this.labCfg.ensureLoaded();
     this.refresh();
     this.refreshAllCounts();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('my_work', 'receive').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+    // Departments feed sampleIdExample(), the "e.g. 012600001" hint in the scan
+    // box. The removed Manual-entry toggle used to be the only thing that
+    // loaded them, which would have frozen the hint at its '01' fallback.
+    this.tenantState.ensureLoaded();
+    if (this.departments().length === 0) this.loadDepartments();
     this._phoneMq?.addEventListener('change', e => this.isPhone.set(e.matches));
+  }
+
+  onSampleReceived() {
+    this.refresh();
+    this.refreshAllCounts();
   }
 
   refresh() {
     // Intake tab embeds the ReceiveSamplesComponent which manages its own
     // data; nothing to fetch here.
     if (this._tab() === 'intake') { this._loading.set(false); return; }
+    // The culture bench loads its own cases; it has no queue endpoint.
+    if (this._tab() === 'culture') { this._loading.set(false); return; }
+    // Completed keeps its own list + endpoint; loading it here would
+    // overwrite the queue rows the other tabs render from.
+    if (this._tab() === 'completed') { this._loading.set(false); this.loadCompleted(); return; }
     const url = this.endpointFor(this._tab());
     this._loading.set(true);
     this.api.get<OrderTest[]>(url).subscribe({
@@ -2227,10 +3550,23 @@ export class MyWorkComponent implements OnInit {
   }
 
   private refreshAllCounts() {
+    // Completed has a dedicated endpoint and counts TUBES (its rows), so it
+    // can't ride the endpointFor loop below.
+    if (this._tab() !== 'completed') {
+      this.api.get<OrderTest[]>(`/api/results/completed?days=${this.completedDays()}`).subscribe({
+        next: l => {
+          const tubes = new Set((l ?? []).map(t => t.subOrder?.id ?? t.id));
+          this._counts.update(c => ({ ...c, completed: tubes.size }));
+        }
+      });
+    }
     for (const t of ['my_work', 'service_queue', 'rejected'] as Tab[]) {
       this.api.get<OrderTest[]>(this.endpointFor(t)).subscribe({
         next: l => {
-          const count = (l ?? []).filter(x => this.matchesTab(x, t)).length;
+          const matched = (l ?? []).filter(x => this.matchesTab(x, t));
+          // Badge must match what the list shows: SAMPLES in sample-focused mode
+          // (the "N samples" label uses sampleCountIn), else individual tests.
+          const count = this.labCfg.sampleFocused() ? this.sampleCountIn(matched) : matched.length;
           this._counts.update(c => ({ ...c, [t]: count }));
         }
       });
@@ -2314,7 +3650,7 @@ export class MyWorkComponent implements OnInit {
       // sample and open result entry directly (so any valid code opens the
       // tests, not only rows already assigned here).
       this.api.get<{ sampleId: string; orderId: string }>(
-        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).subscribe({
+        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).pipe(busyWhile(this.scanning)).subscribe({
         next: r => {
           if (r?.sampleId) {
             this._scan.set('');
@@ -2330,7 +3666,7 @@ export class MyWorkComponent implements OnInit {
       return;
     }
     const scannedBarcode = hit.subOrder?.barcode ?? q;
-    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
+    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).pipe(busyWhile(this.scanning)).subscribe({
       next: () => { this._scan.set(''); this.enterJustScanned(hit); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -2343,6 +3679,8 @@ export class MyWorkComponent implements OnInit {
   // the user is actually the assignee (auto-assigned or delegated) —
   // which prevents cross-tech scanning.
   private readonly _scanTarget = signal<OrderTest | null>(null);
+  /** The scan bar's lookup / claim request is running (Open button busy). */
+  readonly scanning = signal(false);
   readonly scanTarget = this._scanTarget.asReadonly();
   readonly scanExpected = computed(() => this._scanTarget()?.subOrder?.barcode ?? '');
 
@@ -2412,6 +3750,15 @@ export class MyWorkComponent implements OnInit {
    * can render a status pill instead of an Open button when the whole
    * tube is already entered/validated.
    */
+  /** Distinct tubes among `items` — the count shown in sample-focused mode.
+   *  Same grouping key as tubesIn (subOrder id, falling back to the test id
+   *  for legacy rows) so the badge always matches the rows rendered. */
+  sampleCountIn(items: ReadonlyArray<OrderTest>): number {
+    const ids = new Set<string>();
+    for (const t of items) ids.add(t.subOrder?.id ?? t.id);
+    return ids.size;
+  }
+
   tubesIn(items: Enriched[]): Array<{
     sampleId: string;
     deptName: string;
@@ -2421,6 +3768,8 @@ export class MyWorkComponent implements OnInit {
     hasDraft: boolean;
     assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const bySample = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -2430,9 +3779,9 @@ export class MyWorkComponent implements OnInit {
     }
     return Array.from(bySample.entries()).map(([sampleId, tests]) => {
       const first = tests[0];
-      const deptName = first.subOrder?.department?.name ?? first.test?.department?.name ?? '';
+      const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
-      const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
+      const allDone = tests.every(x => x.status === 'entered' || isSignedOrSkipped(x.status));
       // A half-finished tube: partial values saved (draft keeps CurrentResult
       // and status in_progress) but not yet submitted. Badged so the tech can
       // spot what they left off.
@@ -2447,7 +3796,54 @@ export class MyWorkComponent implements OnInit {
       const rejections = tests
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
-      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
+      // TAT chip: the soonest-due OPEN test on the tube (done lines don't count).
+      const open = tests.filter(x => x.status !== 'entered' && x.status !== 'validated');
+      const due = soonestDue(open.length ? open : tests);
+      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections,
+               remainingMin: due._remainingMin, dueAt: due._dueAt };
+    // Sequence by sample number — the queue reads 26034, 26035, 26036, not the
+    // insertion order the grouping map happened to preserve.
+    }).sort((a, b) => (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
+  }
+
+  /**
+   * Sample-focused rows for the whole bucket. Reuses tubesIn's grouping (one
+   * row per tube/sampleId across ALL patients in the bucket, since a sample
+   * belongs to exactly one order/patient) and augments each tube with the
+   * patient it belongs to — derived the same way patientGroups does, from the
+   * tube's tests' order/patient. Consumed only when labCfg.sampleFocused().
+   */
+  sampleRows(items: Enriched[]): Array<{
+    sampleId: string;
+    deptName: string;
+    barcode: string;
+    tests: Enriched[];
+    allDone: boolean;
+    hasDraft: boolean;
+    assignedTo: string | null;
+    rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
+    patientName: string;
+    patientInfo: string;
+    patientMeta: string;
+  }> {
+    // Within the priority group: soonest due first (overdue on top), then
+    // sample number for a stable read.
+    const tubes = this.tubesIn(items).sort((a, b) =>
+      ((a.remainingMin ?? Infinity) - (b.remainingMin ?? Infinity))
+      || (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
+    return tubes.map(tube => {
+      const patient = tube.tests[0]?.subOrder?.order?.patient;
+      return {
+        ...tube,
+        patientName: patient?.displayName ?? 'Patient',
+        // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
+        patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
+        // Age/sex + MRN on their own, so the queue row can emphasise the NAME
+        // and trail the identifiers in a muted run instead of one flat string.
+        patientMeta: patient ? formatPatientMeta(patient) : ''
+      };
     });
   }
 
@@ -2479,6 +3875,77 @@ export class MyWorkComponent implements OnInit {
   private readonly _pickingTubeId = signal<string | null>(null);
   readonly pickingTubeId = this._pickingTubeId.asReadonly();
 
+  // ── Hold-to-peek on queue cards ───────────────────────────
+  // Press-and-hold a sample-focused queue card (~2s, progress bar fills along
+  // the card's bottom edge) to peek its test list — the same gesture as the
+  // collection screen's vials, deliberately without a textual hint. Moving
+  // (scrolling) or releasing early cancels; holds that start on a button
+  // (Pick / Delegate) are ignored so their taps behave normally.
+  readonly cardPeekId = signal<string | null>(null);
+  readonly cardPeekPos = signal<{ x: number; y: number } | null>(null);
+  readonly cardPeekTests = signal<string[]>([]);
+  readonly holdingPeekId = signal<string | null>(null);
+  private static readonly CARD_HOLD_MS = 2000;
+  private _cardPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private _cardDownX = 0;
+  private _cardDownY = 0;
+
+  onCardDown(tube: { sampleId: string; tests: Enriched[] }, ev: PointerEvent): void {
+    if (ev.button != null && ev.button !== 0) return;
+    if ((ev.target as HTMLElement).closest('button')) return; // buttons keep their taps
+    this._cardDownX = ev.clientX; this._cardDownY = ev.clientY;
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const W = 260;
+    let x = r.right + 10;
+    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    const names = (tube.tests ?? [])
+      .map(t => t.test?.name ?? (t as { name?: string }).name)
+      .filter((n): n is string => !!n);
+    this.clearCardPress();
+    this.holdingPeekId.set(tube.sampleId);
+    this._cardPressTimer = setTimeout(() => {
+      this.holdingPeekId.set(null);
+      this.cardPeekPos.set({ x, y });
+      this.cardPeekTests.set(names);
+      this.cardPeekId.set(tube.sampleId); // shows while held
+    }, MyWorkComponent.CARD_HOLD_MS);
+  }
+  onCardMove(ev: PointerEvent): void {
+    if (this._cardPressTimer
+        && (Math.abs(ev.clientX - this._cardDownX) > 10 || Math.abs(ev.clientY - this._cardDownY) > 10)) {
+      this.clearCardPress();
+    }
+  }
+  onCardUp(): void { this.clearCardPress(); }
+
+  /**
+   * The card IS the primary action — "Open tube" / "Pick · view tests" buttons
+   * were removed, so tapping anywhere on the card does what they did: claim it
+   * from the service queue, or open it for entry in My Work. Delegate stops
+   * propagation, and a completed long-press (hold-to-peek) is swallowed so a
+   * peek never doubles as a tap.
+   */
+  onCardActivate(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[]; assignedTo?: string | null; allDone?: boolean },
+                 patientName: string, ev?: Event): void {
+    if (this.cardPeekId() || this.holdingPeekId()) { this.clearCardPress(); return; }
+    if (ev && (ev.target as HTMLElement).closest('button')) return;
+    if (this.tab() === 'service_queue') {
+      // Someone else's claimed tube isn't ours to pick up.
+      if (tube.assignedTo && tube.assignedTo !== this.myUserId()) return;
+      this.openClaim(tube, patientName);
+      return;
+    }
+    if (tube.allDone) return;   // nothing left to enter
+    this.pickTube(tube);
+  }
+  private clearCardPress(): void {
+    if (this._cardPressTimer) { clearTimeout(this._cardPressTimer); this._cardPressTimer = null; }
+    this.holdingPeekId.set(null);
+    this.cardPeekId.set(null); // release hides the peek
+  }
+
   // ── Claim-into-my-queue popup ─────────────────────────────
   // Picking a tube from the service queue first shows the tech WHAT tests
   // are on the tube, then claims the whole tube into "My Work" (the tech can
@@ -2498,10 +3965,23 @@ export class MyWorkComponent implements OnInit {
   private readonly _claimScanning = signal(false);
   readonly claimScanning = this._claimScanning.asReadonly();
 
+  /** Display count where a PROFILE counts as ONE test. */
+  testCount(tests: Array<{ packageTestId?: string | null }>): number { return logicalTestCount(tests); }
+
   openClaim(tube: { sampleId: string; deptName: string; barcode: string; tests: Enriched[] }, patientName: string) {
     this._claimTarget.set({ ...tube, patientName });
+    // Skip the intermediate "Scan tube to claim" card — go straight to the
+    // action: a direct claim when no scan is required (or the tube has no
+    // barcode), otherwise straight to the scanner (the scan itself is the
+    // verification; the card just added a click).
+    if (this.allowNoScanClaim() || !tube.barcode) this.confirmClaim();
+    else this.startClaimScan();
   }
   cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
+  /** This tube's claim request is running (its card shows the held look). */
+  claimingTube(sampleId: string): boolean {
+    return this._claiming() && this._claimTarget()?.sampleId === sampleId;
+  }
 
   /** Open the scan gate for the pending claim. Tubes with no printed barcode
    *  (legacy/seeder samples) can't be scan-verified, so they fall back to a
@@ -2512,7 +3992,7 @@ export class MyWorkComponent implements OnInit {
     if (!c.barcode) { this.confirmClaim(); return; }
     this._claimScanning.set(true);
   }
-  cancelClaimScan() { this._claimScanning.set(false); }
+  cancelClaimScan() { this._claimScanning.set(false); this._claimTarget.set(null); }
   /** Correct tube scanned — commit the claim. */
   onClaimScanned() { this._claimScanning.set(false); this.confirmClaim(); }
 
@@ -2534,6 +4014,7 @@ export class MyWorkComponent implements OnInit {
         // straight into result entry instead of parking it in My Work and
         // demanding a second scan to open it (the claim scan already
         // verified the tube; the server remembers via scanVerifiedAt/By).
+        this.zoom.rearm(c.sampleId);
         this.router.navigate(['/lab/sample', c.sampleId], { state: { justScanned: true } });
       },
       error: e => { this._claiming.set(false); this.toasts.error(ApiError.from(e).message); }
@@ -2542,6 +4023,7 @@ export class MyWorkComponent implements OnInit {
 
   private enterJustScanned(t: OrderTest) {
     const sid = t.subOrder?.id;
+    this.zoom.rearm(sid);
     if (sid) this.router.navigate(['/lab/sample', sid], { state: { justScanned: true } });
     else this.router.navigate(['/lab/result', t.id], { state: { justScanned: true } });
   }
@@ -2565,12 +4047,17 @@ export class MyWorkComponent implements OnInit {
   }
   cancelDelegate() { this._delegateTests.set(null); }
 
+  /** The user a running delegation is going to (the modal's busy row). */
+  readonly delegatingTo = signal<string | null>(null);
+
   onDelegate(toUserId: string) {
     const list = this._delegateTests();
-    if (!list?.length) return;
+    if (!list?.length || this.delegatingTo()) return;
+    this.delegatingTo.set(toUserId);
     let done = 0, failed = 0, lastError = '';
     const finish = () => {
       if (done + failed < list.length) return;
+      this.delegatingTo.set(null);
       this._delegateTests.set(null);
       if (failed) this.toasts.error(
         failed === list.length ? lastError

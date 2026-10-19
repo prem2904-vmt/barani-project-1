@@ -1,41 +1,155 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import {
+  AllCommunityModule,
+  ColDef,
+  GridApi,
+  ICellRendererParams,
+  ModuleRegistry,
+  colorSchemeDark,
+  colorSchemeLight,
+  themeQuartz,
+} from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { UserAccountActionsService } from './user-account-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { ROLE_INFO } from './permission-catalog';
+import { UserBranchScope, branchScopeChips } from './branch-scope';
+import { UserDepartmentsRow, departmentNames } from './consultant-departments';
+import { Department } from '../../../shared/models/tenant.model';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { prefetch, prefetchWhenIdle } from '../../../shared/utils/prefetch';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
+import {
+  ROLE_EDITOR_PREFETCH_KEY, USER_EDIT_PREFETCH_KEY, USER_INVITE_PREFETCH_KEY,
+  loadRoleEditor, loadUserEdit, loadUserInvite,
+} from './user-editors.loader';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 type Tab = 'users' | 'roles';
+
+const svg = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON_CALL = svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>');
+const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
+const ICON_KEY = svg('<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>');
+const ICON_SHIELD = svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>');
+const ICON_TRASH = svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>');
+
+/** A tenant's own CUSTOM role — the only kind DELETE /api/roles/{id} accepts.
+ *  Built-ins are the shared pre-seeded rows AND a tenant's customised copy of
+ *  one (same seeded name, isPreSeeded false) — the server answers 400 for both. */
+export function isDeletableRole(r: Pick<Role, 'isPreSeeded' | 'tenantId' | 'name'>): boolean {
+  return !r.isPreSeeded && !!r.tenantId && !(r.name in ROLE_INFO);
+}
+
+/** Kit row action (PF-PATTERN): a 32px secondary TEXT button on web, a
+ *  neutral 44px ICON button on touch (label kept for AT + tooltip). */
+function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
+  return b;
+}
+
+const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
+  fontFamily: "'Noto Sans', system-ui, sans-serif",
+  fontSize: 13,
+  rowHeight: 52,
+  headerHeight: 40,
+  borderRadius: 12,
+  accentColor: '#7c3aed',
+});
+
+const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
+  fontFamily: "'Noto Sans', system-ui, sans-serif",
+  fontSize: 13,
+  rowHeight: 52,
+  headerHeight: 40,
+  borderRadius: 12,
+  accentColor: '#a855f7',
+});
 
 @Component({
   selector: 'pf-users-access',
   standalone: true,
   imports: [
     FormsModule,
-    AvatarComponent,
-    ChipComponent,
+    AgGridAngular,
     ScreenHeaderComponent,
     SegmentedComponent,
-    TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent,
+    SkeletonTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the search and the Users / Roles switch ride
+             inside the pill; Create user / Create role sits top-right. -->
+        <pf-hero-band [back]="true"
+                      [placeholder]="tab() === 'users' ? 'Search users — name, username, email…' : 'Search roles…'"
+                      [value]="search()" (valueChange)="onSearch($event)">
+          <span band-inline class="pf-ua-count">
+            @if (tab() === 'users') {
+              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
+            } @else {
+              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+            }
+          </span>
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="setTab($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            @if (tab() === 'users') {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openInvite()"
+                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
+                      title="Create user" aria-label="Create user">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create user
+              </button>
+            } @else {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openNewRole()"
+                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
+                      title="Create role" aria-label="Create role">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create role
+              </button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Users & Access"
         subtitle="Create users, assign roles, and control permissions across your branches.">
@@ -62,179 +176,81 @@ type Tab = 'users' | 'roles';
         }
       </pf-screen-header>
 
-      <div class="mb-5 pf-tabbar">
-        <pf-segmented
-          [options]="tabOptions"
-          [value]="tab()"
-          size="md"
-          (valueChange)="setTab($event)">
-        </pf-segmented>
-      </div>
+      <div class="pf-classic-only flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div class="pf-tabbar">
+          <pf-segmented
+            [options]="tabOptions"
+            [value]="tab()"
+            size="md"
+            (valueChange)="setTab($event)">
+          </pf-segmented>
+        </div>
 
-      @if (tab() === 'users') {
-        <div class="mb-4">
-          <input type="text" class="pf-input max-w-md" placeholder="Search name or email…"
+        <div class="flex items-center gap-3 ml-auto">
+          <span class="text-[12px] pf-num" style="color: var(--text-muted);">
+            @if (tab() === 'users') {
+              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
+            } @else {
+              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+            }
+          </span>
+          <input type="text" class="pf-input w-64" placeholder="Search name or username…"
                  [ngModel]="search()" (ngModelChange)="onSearch($event)" />
         </div>
+      </div>
 
-        @if (filteredUsers().length === 0) {
-          <pf-tile tone="default" padding="xl">
-            <div class="text-center py-6">
-              <p class="text-[14px]" style="color: var(--text-secondary);">No users found.</p>
-            </div>
-          </pf-tile>
-        } @else {
-          <div class="space-y-2.5">
-            @for (u of filteredUsers(); track u.id) {
-              <pf-tile [tone]="u.isActive ? 'default' : 'default'" padding="md">
-                <div class="flex items-center gap-3 flex-wrap md:flex-nowrap pf-user-row">
-                  <pf-avatar [name]="u.displayName" [size]="44"></pf-avatar>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ u.displayName }}</p>
-                      @if (u.isActive) {
-                        <pf-chip tone="emerald" size="sm">Active</pf-chip>
-                      } @else {
-                        <pf-chip tone="default" size="sm">Inactive</pf-chip>
-                      }
-                    </div>
-                    <p class="text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
-                      {{ u.username || u.email || 'no login' }} · {{ u.phone || 'no phone' }}
-                    </p>
-                  </div>
-                  <div class="pf-row-actions">
-                    @if (u.isActive) {
-                      @if (canCall(u) && u.authId) {
-                        <pf-touch-btn size="sm" variant="ghost"
-                                      [disabled]="!isOnline(u.authId)"
-                                      [title]="isOnline(u.authId) ? 'Voice call ' + u.displayName : u.displayName + ' is offline'"
-                                      (pressed)="callUser(u)">
-                          <span icon-left aria-hidden="true">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
-                            </svg>
-                          </span>
-                          Call
-                        </pf-touch-btn>
-                      }
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="editUser(u)">Edit</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="resetPassword(u)">Reset password</pf-touch-btn>
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivate(u)">Deactivate</pf-touch-btn>
-                    } @else {
-                      <pf-touch-btn size="sm" variant="secondary" (pressed)="reactivate(u)">Reactivate</pf-touch-btn>
-                    }
-                  </div>
-                </div>
-              </pf-tile>
-            }
-          </div>
-        }
-      } @else {
-        <div class="mb-4 text-[12px] font-mono" style="color: var(--text-muted);">
-          {{ roles().length }} roles configured
-        </div>
-
-        <div class="space-y-2.5">
-          @for (r of roles(); track r.id) {
-            <pf-tile [tone]="r.isPreSeeded ? 'violet' : 'default'" padding="md">
-              <div class="flex items-center gap-3 flex-wrap md:flex-nowrap pf-role-row">
-                <div class="pf-role-badge" [class.pf-role-seeded]="r.isPreSeeded">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 7h-9"/>
-                    <path d="M14 17H5"/>
-                    <circle cx="17" cy="17" r="3"/>
-                    <circle cx="7" cy="7" r="3"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <p class="font-semibold text-[15px]" style="color: var(--text-primary);">{{ r.name }}</p>
-                    @if (r.isPreSeeded) {
-                      <pf-chip tone="violet" size="sm">Pre-seeded</pf-chip>
-                    } @else {
-                      <pf-chip tone="emerald" size="sm">Custom</pf-chip>
-                    }
-                  </div>
-                  <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
-                    Scope: {{ r.scope }}
-                  </p>
-                </div>
-                <div class="pf-row-actions">
-                  <pf-touch-btn size="sm" variant="secondary" (pressed)="openRole(r)">Manage permissions</pf-touch-btn>
-                </div>
-              </div>
-            </pf-tile>
+      <!-- The grid fills the band body and scrolls itself (no page scroll). -->
+      <div class="pf-band-body pf-band-body--fill">
+      @if (tab() === 'users') {
+        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
+             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          @if (listSkeleton()) {
+            <!-- First load: the grid's shape (PF-PATTERN "Loading feedback"). -->
+            <pf-skeleton-table class="pf-ua-gridskel" [rows]="10" [cols]="5" label="Loading users…"></pf-skeleton-table>
           }
+          <ag-grid-angular
+            style="width: 100%; height: 100%;"
+            [theme]="gridTheme()"
+            [rowData]="filteredUsers()"
+            [columnDefs]="userColDefs()"
+            [context]="gridContext"
+            [animateRows]="true"
+            [rowSelection]="'single'">
+          </ag-grid-angular>
+        </div>
+      } @else {
+        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
+             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
+          @if (listSkeleton()) {
+            <pf-skeleton-table class="pf-ua-gridskel" [rows]="8" [cols]="4" label="Loading roles…"></pf-skeleton-table>
+          }
+          <ag-grid-angular
+            style="width: 100%; height: 100%;"
+            [theme]="gridTheme()"
+            [rowData]="filteredRoles()"
+            [columnDefs]="roleColDefs()"
+            [context]="gridContext"
+            [animateRows]="true"
+            [rowSelection]="'single'">
+          </ag-grid-angular>
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
-    .pf-role-badge {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      flex-shrink: 0;
+    /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
+    .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
+    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
+    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
+    .pf-ua-count {
+      font-size: 12px; font-variant-numeric: tabular-nums;
+      color: var(--text-muted); white-space: nowrap; padding: 0 6px;
     }
-    .pf-role-seeded {
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(168, 85, 247, 0.1));
-      border-color: rgba(168, 85, 247, 0.35);
-      color: #c4b5fd;
-    }
-
-    /* The action wrapper is transparent to layout by default so desktop/iPad
-       rows render byte-identically (buttons stay direct flex children of the
-       row via display:contents). Only the phone block below turns it into a
-       real flex cluster. */
-    .pf-row-actions { display: contents; }
-
-    /* ── Phone (<=640): additive, scoped to this page only ─────────────
-       Desktop/iPad layout is left byte-for-byte unchanged. */
     @media (max-width: 640px) {
-      /* Search field: 16px min font-size stops iOS focus-zoom. Scoped to
-         this page's search input only — the shared .pf-input primitive is
-         not touched (raised globally would be a styles.scss change). */
-      :host input.pf-input {
-        font-size: 16px;
-      }
-      /* The search input keeps Tailwind's max-w-md on desktop; on phone let
-         it span the row so the field stays comfortably tappable/legible. */
-      :host input.pf-input.max-w-md {
-        max-width: 100%;
-      }
-
-      /* User / role rows wrap on phone (Tailwind flex-wrap). When the action
-         cluster wraps to its own line, make it span the full width and align
-         right so the buttons sit under the text instead of crowding the
-         avatar/badge. Buttons share the row and stay >=44px (sz-sm). */
-      :host .pf-row-actions {
-        width: 100%;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-      /* pf-touch-btn host is inline-block with an internal width:100% button;
-         let each chip size to its label and never overflow the row. */
-      :host .pf-row-actions pf-touch-btn {
-        flex: 0 1 auto;
-        min-width: 0;
-        max-width: 100%;
-      }
-
-      /* The segmented tab bar can be wider than a small phone; let it scroll
-         horizontally on its own rather than pushing the page sideways. */
-      :host .pf-tabbar {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
+      .pf-ua-count { display: none; }
+      :host input.pf-input { font-size: 16px; }
+      :host .pf-tabbar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
   `]
 })
@@ -242,12 +258,20 @@ export class UsersAccessComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  protected readonly theme = inject(ThemeService);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
+  private readonly reach = inject(CallReachService);
   private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
+  private readonly accountActions = inject(UserAccountActionsService);
   private readonly entitlements = inject(TenantEntitlementsService);
+
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  /** Row actions: TEXT on web (fine pointer + hover), ICON on touch. */
+  readonly web = webPointerSignal();
 
   /** Returns true if calling this user makes sense: the Messages module is in
    *  the plan (calls are part of it), the user is active, and not yourself. */
@@ -255,22 +279,21 @@ export class UsersAccessComponent implements OnInit {
     return this.entitlements.moduleEnabled('messages') && u.isActive && u.id !== this.auth.user()?.id;
   }
 
-  /** Online presence check — used to disable the Call button when offline. */
+  /** Online presence check (live socket). Informational only — presence
+   *  never disables the Call button (offline colleagues ring by push). */
   isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);
   }
 
+  /** Call-button tooltip: "Voice call …" / "Will ring their devices" / … */
+  callHint(u: User): string {
+    return u.authId ? this.reach.hint(u.authId, u.displayName) : `Voice call ${u.displayName}`;
+  }
+
   async callUser(u: User): Promise<void> {
     if (!this.canCall(u) || !u.authId) return;
-    if (!this.isOnline(u.authId)) {
-      this.toasts.info(`${u.displayName} is offline.`);
-      return;
-    }
     try {
-      // SignalR addresses users by Supabase sub (== UserEntity.AuthId), not
-      // the prefrontal UserEntity.Id. SubClaimUserIdProvider on the server
-      // registers each connection under its sub claim, so this id matches.
-      await this.webrtc.startCall(u.authId, 'admin_internal');
+      await this.webrtc.startCall(u.authId, 'admin_internal', u.displayName);
       this.toasts.info(`Ringing ${u.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not place call.');
@@ -287,91 +310,487 @@ export class UsersAccessComponent implements OnInit {
   private readonly _users = signal<User[]>([]);
   private readonly _roles = signal<Role[]>([]);
   private readonly _search = signal('');
+  /** Each user's branch scope (the Branches column), keyed by user id. */
+  private readonly _scopes = signal<Map<string, UserBranchScope>>(new Map());
+  /** Each consultant's departments (the Departments column), keyed by user id. */
+  private readonly _depts = signal<Map<string, UserDepartmentsRow>>(new Map());
+  private readonly _deptNames = signal<Map<string, string>>(new Map());
+  /** A user's department names for the Departments column (empty = none assigned). */
+  userDepartments(userId: string | undefined): string[] {
+    return userId ? departmentNames(this._depts().get(userId), this._deptNames()) : [];
+  }
 
   readonly users = this._users.asReadonly();
   readonly roles = this._roles.asReadonly();
   readonly search = this._search.asReadonly();
 
-  readonly filteredUsers = computed(() => {
+  readonly filteredUsers = computed<(User & { branchScope?: UserBranchScope })[]>(() => {
     const s = this._search().toLowerCase();
-    return s
-      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
+    const scopes = this._scopes();
+    const list = s
+      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
+          || branchScopeChips(scopes.get(u.id)).some(c => c.toLowerCase().includes(s)))
       : this._users();
+    return scopes.size ? list.map(u => ({ ...u, branchScope: scopes.get(u.id) })) : list;
   });
 
-  ngOnInit() {
-    this.api.get<User[]>('/api/users/').subscribe({ next: l => {
-      this._users.set(l ?? []);
-      // The users list carries each user's persisted presenceStatus —
-      // seed the presence map so people lists show statuses set before
-      // this session's SignalR connection existed.
-      this.presence.seedFromUsers(l ?? []);
-    } });
-    this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
+  readonly filteredRoles = computed(() => {
+    const s = this._search().toLowerCase();
+    return s
+      ? this._roles().filter(r => r.name.toLowerCase().includes(s) || (r.scope ?? '').toLowerCase().includes(s))
+      : this._roles();
+  });
+
+  private userCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;min-width:0;gap:10px;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    const name = u.displayName || u.firstName || u.username || 'User';
+
+    const avatar = document.createElement('div');
+    // Designer avatar: flat soft-violet disc, violet initials (no gradient —
+    // the gradient is reserved for the ONE primary action).
+    avatar.className = 'pf-ua-avatar';
+    avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);color:var(--violet-text, #6d28d9);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;';
+    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    avatar.textContent = initials;
+    wrap.appendChild(avatar);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-weight:500;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.textContent = name;
+    wrap.appendChild(nameSpan);
+
+    return wrap;
+  };
+
+  /** Branches column: "All branches", or one chip per branch / lab. */
+  private userBranchesCellRenderer = (params: ICellRendererParams<User & { branchScope?: UserBranchScope }>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-ua-branches';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
+    for (const label of branchScopeChips(params.data?.branchScope)) {
+      const chip = document.createElement('span');
+      chip.className = 'pf-chip pf-chip--static pf-ua-branch';
+      chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
+      chip.textContent = label;
+      wrap.appendChild(chip);
+    }
+    return wrap;
+  };
+
+  /** Departments column: one static chip per department the consultant covers. */
+  private userDepartmentsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-ua-depts';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
+    for (const label of this.userDepartments(params.data?.id)) {
+      const chip = document.createElement('span');
+      chip.className = 'pf-chip pf-chip--static pf-ua-dept';
+      chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
+      chip.textContent = label;
+      wrap.appendChild(chip);
+    }
+    return wrap;
+  };
+
+  private userStatusCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    // Kit switch (.pf-toggle[role=switch]) — ON = brand violet, never green.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pf-toggle pf-ua-status';
+    btn.setAttribute('role', 'switch');
+    btn.setAttribute('aria-checked', String(!!u.isActive));
+    btn.setAttribute('aria-label', `${u.isActive ? 'Active' : 'Inactive'} — ${u.isActive ? 'deactivate' : 'reactivate'} ${u.displayName || u.username || 'user'}`);
+    btn.title = u.isActive ? 'Active' : 'Inactive';
+    btn.innerHTML = '<span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ctx = params.context as { toggleActive?: (u: User, el?: HTMLElement) => void };
+      ctx?.toggleActive?.(u, btn);
+    });
+    wrap.appendChild(btn);
+    return wrap;
+  };
+
+  private userActionsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
+    if (!params.data) return wrap;
+
+    const u = params.data;
+    const ctx = params.context as {
+      canCall?: (u: User) => boolean;
+      callHint?: (u: User) => string;
+      callUser?: (u: User) => void;
+      editUser?: (u: User, el?: HTMLElement) => void;
+      resetPassword?: (u: User, el?: HTMLElement) => void;
+      warmUserEdit?: () => void;
+    };
+
+    const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
+    if (u.isActive && ctx?.canCall?.(u) && u.authId) {
+      const callBtn = rowAction(web, 'Call', ICON_CALL,
+        ctx?.callHint?.(u) ?? `Voice call ${u.displayName}`);
+      callBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx.callUser?.(u); });
+      wrap.appendChild(callBtn);
+    }
+
+    const editBtn = rowAction(web, 'Edit', ICON_EDIT, `Edit ${u.displayName || u.username || 'user'}`);
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.editUser?.(u, editBtn); });
+    editBtn.addEventListener('pointerenter', () => ctx?.warmUserEdit?.());
+    editBtn.addEventListener('focus', () => ctx?.warmUserEdit?.());
+    wrap.appendChild(editBtn);
+
+    const pwdBtn = rowAction(web, 'Reset password', ICON_KEY, `Reset password for ${u.displayName || u.username || 'user'}`);
+    pwdBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.resetPassword?.(u, pwdBtn); });
+    wrap.appendChild(pwdBtn);
+
+    return wrap;
+  };
+
+  private roleTypeCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
+    if (!params.data) return wrap;
+
+    const r = params.data;
+    // Neutral static chip; the small violet dot marks a pre-seeded role. No green.
+    const badge = document.createElement('span');
+    badge.className = 'pf-chip pf-chip--static pf-ua-type';
+    badge.style.cssText = 'cursor:default;height:26px;';
+    if (r.isPreSeeded) {
+      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--color-violet-600, #7c3aed);display:inline-block;flex-shrink:0;" aria-hidden="true"></span>Pre-seeded';
+    } else {
+      badge.textContent = 'Custom';
+    }
+    wrap.appendChild(badge);
+    return wrap;
+  };
+
+  private roleScopeCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;font-size:13px;color:var(--text-secondary);font-weight:500;';
+    if (!params.data) return wrap;
+
+    const scope = params.data.scope;
+    const label = scope ? scope.charAt(0).toUpperCase() + scope.slice(1) : 'Tenant';
+    wrap.textContent = label;
+    return wrap;
+  };
+
+  private roleActionsCellRenderer = (params: ICellRendererParams<Role>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;justify-content:flex-end;width:100%;';
+    if (!params.data) return wrap;
+
+    const r = params.data;
+    const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
+    const btn = rowAction(web, 'Manage permissions', ICON_SHIELD, `Manage permissions for ${r.name}`);
+    const roleCtx = params.context as { openRole?: (r: Role, el?: HTMLElement) => void; warmRoleEditor?: () => void };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      roleCtx?.openRole?.(r, btn);
+    });
+    btn.addEventListener('pointerenter', () => roleCtx?.warmRoleEditor?.());
+    btn.addEventListener('focus', () => roleCtx?.warmRoleEditor?.());
+    wrap.appendChild(btn);
+
+    if (isDeletableRole(r)) {
+      // ND danger row action: same kit button, red text (no filled red).
+      const del = rowAction(web, 'Delete', ICON_TRASH, `Delete ${r.name}`);
+      del.classList.add('pf-ua-del');
+      del.style.color = 'var(--red-text, #dc2626)';
+      del.style.marginLeft = '8px';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const ctx = params.context as { deleteRole?: (r: Role, el?: HTMLElement) => void };
+        ctx?.deleteRole?.(r, del);
+      });
+      wrap.appendChild(del);
+    }
+    return wrap;
+  };
+
+  readonly userColDefs = computed<ColDef<User>[]>(() => { const web = this.web();
+    // Re-render the Departments column once the pools / names land.
+    this._depts(); this._deptNames();
+    return [
+    {
+      headerName: 'User',
+      colId: 'displayName',
+      field: 'displayName',
+      cellRenderer: this.userCellRenderer,
+      flex: 1.2,
+      minWidth: 220,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Username / Email',
+      colId: 'username',
+      valueGetter: p => p.data?.username || p.data?.email || 'no login',
+      flex: 1,
+      minWidth: 180,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Branches',
+      colId: 'branches',
+      valueGetter: p => branchScopeChips((p.data as { branchScope?: UserBranchScope } | undefined)?.branchScope).join(', '),
+      cellRenderer: this.userBranchesCellRenderer,
+      flex: 1.2,
+      minWidth: 200,
+      autoHeight: true,
+      sortable: true,
+      filter: true,
+    },
+    {
+      // Consultants' departments (validator pools). Empty = every department.
+      headerName: 'Departments',
+      colId: 'departments',
+      valueGetter: p => this.userDepartments(p.data?.id).join(', '),
+      cellRenderer: this.userDepartmentsCellRenderer,
+      flex: 1,
+      minWidth: 180,
+      autoHeight: true,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Phone',
+      colId: 'phone',
+      valueGetter: p => p.data?.phone || 'no phone',
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Status',
+      colId: 'status',
+      field: 'isActive',
+      cellRenderer: this.userStatusCellRenderer,
+      width: 100,
+      sortable: true,
+      filter: false,
+    },
+    {
+      headerName: '',
+      colId: 'actions',
+      cellRenderer: this.userActionsCellRenderer,
+      minWidth: web ? 300 : 170,
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ]; });
+
+  readonly roleColDefs = computed<ColDef<Role>[]>(() => { const web = this.web(); return [
+    {
+      headerName: 'Role Name',
+      colId: 'name',
+      field: 'name',
+      flex: 1,
+      minWidth: 200,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Who this is',
+      colId: 'who',
+      valueGetter: p => ROLE_INFO[p.data?.name ?? ''] ?? 'Custom role — open it to see exactly what it grants.',
+      flex: 2,
+      minWidth: 320,
+      wrapText: true,
+      autoHeight: true,
+      sortable: false,
+      filter: false,
+      cellStyle: { lineHeight: '1.5', fontSize: '12.5px', color: 'var(--text-tertiary)', paddingTop: '8px', paddingBottom: '8px' },
+    },
+    {
+      headerName: 'Type',
+      colId: 'isPreSeeded',
+      field: 'isPreSeeded',
+      cellRenderer: this.roleTypeCellRenderer,
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Scope',
+      colId: 'scope',
+      field: 'scope',
+      cellRenderer: this.roleScopeCellRenderer,
+      width: 150,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: '',
+      colId: 'actions',
+      cellRenderer: this.roleActionsCellRenderer,
+      width: web ? 300 : 120,
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+    },
+  ]; });
+
+  readonly gridContext = {
+    web: () => this.web(),
+    canCall: (u: User) => this.canCall(u),
+    callHint: (u: User) => this.callHint(u),
+    callUser: (u: User) => this.callUser(u),
+    editUser: (u: User, el?: HTMLElement) => this.editUser(u, el),
+    resetPassword: (u: User, el?: HTMLElement) => this.holdBusy(el, () => this.resetPassword(u)),
+    deactivate: (u: User) => this.deactivate(u),
+    reactivate: (u: User) => this.reactivate(u),
+    toggleActive: (u: User, el?: HTMLElement) => this.holdBusy(el, () => this.toggleUserActive(u)),
+    openRole: (r: Role, el?: HTMLElement) => this.openRole(r, el),
+    deleteRole: (r: Role, el?: HTMLElement) => this.holdBusy(el, () => this.deleteRole(r)),
+    warmUserEdit: () => { void prefetch(USER_EDIT_PREFETCH_KEY, loadUserEdit); },
+    warmRoleEditor: () => { void prefetch(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor); },
+  };
+
+  // ── Loading feedback (PF-PATTERN "Loading feedback") ──
+  private readonly pageOpen = inject(PageOpenService);
+  private readonly destroyRef = inject(DestroyRef);
+  /** First load: skeleton rows over the grid until users + roles land. */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  /** A DOM-built row action whose request is running: aria-busy + disabled
+   *  the same frame (repeat presses ignored), released when it settles. */
+  private async holdBusy(el: HTMLElement | undefined, work: () => Promise<unknown>): Promise<void> {
+    if (el?.getAttribute('aria-busy') === 'true') return;
+    const btn = el instanceof HTMLButtonElement ? el : null;
+    el?.setAttribute('aria-busy', 'true');
+    el?.classList.add('pf-is-busy');
+    if (btn) btn.disabled = true;
+    try { await work(); } finally {
+      el?.removeAttribute('aria-busy');
+      el?.classList.remove('pf-is-busy');
+      if (btn) btn.disabled = false;
+    }
   }
 
-  setTab(t: Tab) { this._tab.set(t); }
+  ngOnInit() {
+    let firstLoads = 2;
+    const landed = () => {
+      if (--firstLoads > 0) return;
+      this.listHold.done();
+      // The grid is on screen: warm the editors' code while the browser is idle.
+      const cancels = [
+        prefetchWhenIdle(USER_EDIT_PREFETCH_KEY, loadUserEdit),
+        prefetchWhenIdle(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor),
+      ];
+      this.destroyRef.onDestroy(() => cancels.forEach(c => c()));
+    };
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
+    this.route.queryParams.subscribe(params => {
+      if (params['tab'] === 'roles' || params['tab'] === 'users') {
+        this._tab.set(params['tab']);
+      }
+    });
+
+    this.api.get<User[]>('/api/users/').subscribe({ next: l => {
+      this._users.set(l ?? []);
+      this.presence.seedFromUsers(l ?? []);
+      landed();
+    }, error: () => landed() });
+    this.api.get<Role[]>('/api/roles/').subscribe({ next: l => { this._roles.set(l ?? []); landed(); }, error: () => landed() });
+    this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({
+      next: l => this._scopes.set(new Map((l ?? []).map(s => [s.userId, s]))),
+      error: () => { /* older server: the column stays empty */ },
+    });
+    this.api.get<UserDepartmentsRow[]>('/api/users/departments').subscribe({
+      next: l => this._depts.set(new Map((l ?? []).map(r => [r.userId, r]))),
+      error: () => { /* older server: the column stays empty */ },
+    });
+    this.api.get<Department[]>('/api/tenants/departments').subscribe({
+      next: l => this._deptNames.set(new Map((l ?? []).map(d => [d.id, d.name]))),
+      error: () => {},
+    });
+  }
+
+  setTab(t: Tab) {
+    this._tab.set(t);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: t },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
+  }
   onSearch(v: string) { this._search.set(v); }
 
   openInvite() { this.router.navigateByUrl('/admin/users/invite'); }
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
-  openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
-  editUser(u: User) { this.router.navigate(['/admin/users', u.id, 'edit']); }
+  /** Hover / focus of Create user / Create role: warm that editor's code. */
+  warmInvite() { void prefetch(USER_INVITE_PREFETCH_KEY, loadUserInvite); }
+  warmRoleEditor() { void prefetch(ROLE_EDITOR_PREFETCH_KEY, loadRoleEditor); }
+  /** Row actions are DOM-built: the pressed button turns "held" the same
+   *  frame, until the editor's navigation settles. */
+  openRole(r: Role, el?: HTMLElement) {
+    this.pageOpen.markSource(el);
+    this.router.navigate(['/admin/roles', r.id, 'edit']);
+  }
+  editUser(u: User, el?: HTMLElement) {
+    this.pageOpen.markSource(el);
+    this.router.navigate(['/admin/users', u.id, 'edit']);
+  }
 
-  async reactivate(u: User) {
+  /** Delete a custom role (DialogService confirm, danger tone). The server
+   *  refuses a role that is still assigned (409, with the user count) rather
+   *  than silently stripping access — its message is shown as-is. */
+  async deleteRole(r: Role) {
+    if (!isDeletableRole(r)) return;
     const ok = await this.dialog.confirm({
-      title: `Reactivate ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'They regain access immediately with their previous roles.',
-      confirmLabel: 'Reactivate',
+      title: `Delete ${r.name}?`,
+      message: 'The role and its permissions are removed for good. A role that is still assigned to someone can\'t be deleted — move those users to another role first.',
+      tone: 'danger',
+      confirmLabel: 'Delete role',
     });
     if (!ok) return;
-    this.api.patch(`/api/users/${u.id}`, { isActive: true }).subscribe({
-      next: () => {
-        this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
-        this.toasts.success('User reactivated');
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    try {
+      await firstValueFrom(this.api.delete(`/api/roles/${r.id}`));
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+      return;
+    }
+    this._roles.update(list => list.filter(x => x.id !== r.id));
+    this.toasts.success(`Role "${r.name}" deleted`);
+  }
+
+  toggleUserActive(u: User): Promise<void> {
+    if (u.isActive) {
+      return this.deactivate(u);
+    } else {
+      return this.reactivate(u);
+    }
+  }
+
+  // Reset / deactivate / reactivate: shared with the Edit-user band.
+  async reactivate(u: User) {
+    if (await this.accountActions.reactivate(u))
+      this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
   }
 
   async resetPassword(u: User) {
-    const ok = await this.dialog.confirm({
-      title: `Reset password for ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'A new temporary password is generated and shown once — share it securely. They must change it at next login.',
-      confirmLabel: 'Reset password',
-    });
-    if (!ok) return;
-    // Readable temp password that satisfies the 8+ char policy; the user is
-    // forced to change it on first login (MustChangePassword set server-side).
-    const temp = 'Pf-' + Math.random().toString(36).slice(2, 8) + Math.floor(10 + Math.random() * 89);
-    this.api.post(`/api/users/${u.id}/reset-password`, { newPassword: temp }).subscribe({
-      next: () => {
-        this.dialog.confirm({
-          title: 'Password reset',
-          message: `Temporary password for ${u.displayName}:\n\n${temp}\n\nShare it securely — it won't be shown again.`,
-          confirmLabel: 'Done',
-        });
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    await this.accountActions.resetPassword(u);
   }
 
   async deactivate(u: User) {
-    // Destructive, one-click, no undo path in the UI — confirm first (same
-    // pattern as the data-wipe tile).
-    const ok = await this.dialog.confirm({
-      title: `Deactivate ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'They lose access immediately. Their history and assignments are kept.',
-      tone: 'danger',
-      confirmLabel: 'Deactivate',
-    });
-    if (!ok) return;
-    this.api.delete(`/api/users/${u.id}`).subscribe({
-      next: () => {
-        this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
-        this.toasts.success('User deactivated');
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    if (await this.accountActions.deactivate(u))
+      this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
   }
 }

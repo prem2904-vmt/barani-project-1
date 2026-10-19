@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
 import { FormFieldCategory, FormFieldType } from './form-field.model';
 import { fieldTypesByCategory } from './field-registry';
-import { PfSelectOptGroup, SelectComponent } from '../primitives/select.component';
+import { PfSelectOptGroup, PfSelectSize, SelectComponent } from '../primitives/select.component';
 
 const CATEGORY_LABELS: Record<FormFieldCategory, string> = {
   input:    'Input',
@@ -18,6 +18,7 @@ const CATEGORY_LABELS: Record<FormFieldCategory, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-select
+      [size]="size"
       [options]="[]"
       [groups]="groupOptions()"
       [value]="value"
@@ -30,6 +31,7 @@ const CATEGORY_LABELS: Record<FormFieldCategory, string> = {
 })
 export class FieldTypePickerComponent {
   @Input() value: FormFieldType | '' = '';
+  @Input() size: PfSelectSize = 'md';
   @Input() placeholder = 'Select field type…';
   @Input() disabled = false;
   @Input() ariaLabel?: string;

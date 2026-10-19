@@ -14,11 +14,12 @@ import {
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { FieldTypePickerComponent, getFieldType, hasOptions as registryHasOptions } from '../../../shared/forms';
 import { ConditionBuilderComponent } from './condition-builder.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
 
 type FieldCategory =
   | 'text' | 'numeric' | 'options' | 'boolean'
@@ -61,46 +62,65 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
     FieldTypePickerComponent,
     ScreenHeaderComponent,
     SelectComponent,
-    TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 field-editor-page">
+    <section class="px-4 md:px-8 pt-6 pb-10 field-editor-page" [class.pf-band-page]="theme.isNewDesign()">
 
-      <pf-screen-header
+      @if (theme.isNewDesign()) {
+        <!-- ND "Editors": band = back (to the workflow) · tenant · the ONE
+             primary; pill = CONTEXT BAR (the field + where it lives). -->
+        <pf-hero-band class="pf-fe-band" [back]="true" [backAction]="backFn" [customSearch]="true" [contextBar]="true">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-fe-save" [disabled]="!canSave()" (click)="submit()"
+                    [attr.aria-label]="mode() === 'edit' ? 'Save changes' : 'Add field'" [title]="mode() === 'edit' ? 'Save changes' : 'Add field'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                @if (mode() === 'edit') { <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/> }
+                @else { <path d="M12 5v14"/><path d="M5 12h14"/> }
+              </svg>
+              {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
+            </button>
+          </ng-container>
+          <!-- The pill = the field label + a tiny muted Type badge (PF-PATTERN
+               §14). Form / step / key are shown in the form itself. -->
+          <div band-search class="pf-ctx pf-fe-ctx">
+            <span class="pf-ctx__primary">
+              <span class="pf-fe-ctx__name">{{ draft().title?.trim() || (mode() === 'edit' ? 'Edit field' : 'New field') }}</span>
+              <span class="pf-fe-ctx__badge" data-k="Type" title="Field type">{{ typeLabel() }}</span>
+            </span>
+          </div>
+        </pf-hero-band>
+      }
+
+      <pf-screen-header class="pf-classic-only"
         [eyebrow]="eyebrow()"
         [title]="title()"
         [subtitle]="subtitle()">
-        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="cancel()">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
+        <pf-touch-btn actions size="sm" variant="ghost" (pressed)="cancel()">Back</pf-touch-btn>
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave()" (pressed)="submit()">
           {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-fe-body" [class.pf-band-body]="theme.isNewDesign()">
       <!-- Basics -->
-      <pf-tile tone="default" padding="lg" class="block mb-4">
-        <h3 class="section-title">Basics</h3>
-        <div class="mt-4 space-y-3">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="pf-label">Label <span class="text-red-500">*</span></label>
-              <input type="text" class="pf-input"
-                     [ngModel]="draft().title"
-                     (ngModelChange)="setTitle($event)" />
-            </div>
-            <div>
-              <label class="pf-label">Name
-                <span style="color: var(--text-muted);" class="font-normal">(storage key — fixed)</span>
-              </label>
-              <input type="text" class="pf-input font-mono"
+      <section class="pf-card pf-fe-card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12z"/><circle cx="7.5" cy="7.5" r=".5"/></svg></span>
+          <h2 class="pf-card__label pf-fe-h">Basics</h2>
+          @if (stepTitle()) { <span class="pf-card__note">{{ screenLabel() }} · step “{{ stepTitle() }}”</span> }
+        </div>
+        <div class="pf-card__body pf-fe-cardbody">
+          <div class="pf-fe-grid2">
+            <label class="pf-field">
+              <span class="pf-field__lbl">Label <span class="pf-fe-req" aria-hidden="true">*</span></span>
+              <input type="text" class="pf-input" [ngModel]="draft().title" (ngModelChange)="setTitle($event)" />
+            </label>
+            <label class="pf-field">
+              <span class="pf-field__lbl">Name <span class="pf-fe-mut">(storage key — fixed)</span></span>
+              <input type="text" class="pf-input pf-num"
                      [class.pf-input--error]="!!nameError()"
                      [ngModel]="draft().name"
                      [readonly]="mode() === 'edit'"
@@ -108,332 +128,216 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
               @if (nameError(); as ne) {
                 <p class="pf-field-error">{{ ne }}</p>
               }
+            </label>
+          </div>
+
+          <div class="pf-fe-grid2">
+            <div class="pf-field">
+              <span class="pf-field__lbl">Type <span class="pf-fe-req" aria-hidden="true">*</span></span>
+              <!-- Shared field-type picker (full taxonomy; registry-disabled
+                   types filtered out). Only the storage Name stays fixed. -->
+              <pf-field-type-picker [value]="$any(draft().type)" (valueChange)="setType($any($event))"></pf-field-type-picker>
+            </div>
+            <div class="pf-field">
+              <span class="pf-field__lbl">Width</span>
+              <pf-select [options]="widthSelectOptions" [value]="draft().width ?? 'full'"
+                         (valueChange)="patch({ width: $any($event) })"></pf-select>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="pf-label">Type <span class="text-red-500">*</span></label>
-              <!-- Shared field-type picker: lists the full 27-type taxonomy
-                   grouped by Input / Choice / Layout / Media / Advanced.
-                   Types flipped off in field-registry.ts are filtered out.
-                   Editable for standard fields too — only the storage Name
-                   (the DB-column binding) stays fixed. -->
-              <pf-field-type-picker
-                [value]="$any(draft().type)"
-                (valueChange)="setType($any($event))">
-              </pf-field-type-picker>
-            </div>
-            <div>
-              <label class="pf-label">Width</label>
-              <pf-select
-                [options]="widthSelectOptions"
-                [value]="draft().width ?? 'full'"
-                (valueChange)="patch({ width: $any($event) })"></pf-select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <label class="inline-flex items-center gap-2 text-sm check-row">
-              <input type="checkbox"
-                     [ngModel]="!!draft().isRequired"
-                     (ngModelChange)="patch({ isRequired: $event })" />
+          <div class="pf-fe-switches">
+            <button type="button" class="pf-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="!!draft().isRequired"
+                    (click)="patch({ isRequired: !draft().isRequired })">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               <span>Required</span>
-            </label>
-            <label class="inline-flex items-center gap-2 text-sm check-row"
-                   [class.opacity-50]="mode() === 'edit'">
-              <input type="checkbox"
-                     [ngModel]="isCustom()"
-                     [disabled]="mode() === 'edit'"
-                     (ngModelChange)="setStandard(!$event)" />
-              <span>Custom field <span style="color: var(--text-muted);">(stores to metadata)</span></span>
-            </label>
+            </button>
+            <button type="button" class="pf-toggle pf-fe-toggle" role="switch" [attr.aria-checked]="isCustom()"
+                    [disabled]="mode() === 'edit'" (click)="setStandard(isCustom())">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+              <span>Custom field <span class="pf-fe-mut">(stores to metadata)</span></span>
+            </button>
           </div>
         </div>
-      </pf-tile>
+      </section>
 
       @if (category() === 'text') {
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="section-title">Hints</h3>
-          <div class="mt-4 space-y-3">
-            <div>
-              <label class="pf-label">Placeholder</label>
-              <input type="text" class="pf-input"
-                     [ngModel]="draft().placeholder"
-                     (ngModelChange)="patch({ placeholder: $event })" />
-            </div>
-            <div>
-              <label class="pf-label">Helper text</label>
-              <input type="text" class="pf-input"
-                     [ngModel]="draft().helperText"
-                     (ngModelChange)="patch({ helperText: $event })" />
-            </div>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Hints</h2>
           </div>
-        </pf-tile>
+          <div class="pf-card__body pf-fe-cardbody">
+            <label class="pf-field">
+              <span class="pf-field__lbl">Placeholder</span>
+              <input type="text" class="pf-input" [ngModel]="draft().placeholder" (ngModelChange)="patch({ placeholder: $event })" />
+            </label>
+            <label class="pf-field">
+              <span class="pf-field__lbl">Helper text</span>
+              <input type="text" class="pf-input" [ngModel]="draft().helperText" (ngModelChange)="patch({ helperText: $event })" />
+            </label>
+          </div>
+        </section>
       }
 
       @if (category() === 'numeric') {
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="section-title">Numeric config</h3>
-          <div class="mt-4 space-y-4">
-            <div>
-              <label class="pf-label">Unit</label>
-              <input type="text" class="pf-input max-w-[200px]"
-                     [ngModel]="draft().unit"
-                     (ngModelChange)="patch({ unit: $event })" />
-            </div>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Numeric config</h2>
+          </div>
+          <div class="pf-card__body pf-fe-cardbody">
+            <label class="pf-field pf-fe-unit">
+              <span class="pf-field__lbl">Unit</span>
+              <input type="text" class="pf-input" [ngModel]="draft().unit" (ngModelChange)="patch({ unit: $event })" />
+            </label>
 
-            <div>
-              <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2" style="color: var(--text-muted);">
-                Reference ranges
-              </p>
+            <div class="pf-fe-sub">
+              <h3 class="pf-fe-h3">Reference ranges</h3>
               @for (range of draft().referenceRanges ?? []; let i = $index; track i) {
-                <div class="flex gap-2 items-end mb-2 range-row">
-                  <div class="flex-1">
-                    <label class="text-[11px]" style="color: var(--text-muted);">Segment</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="range.segment"
-                           (ngModelChange)="patchRange(i, { segment: $event })"
+                <div class="range-row">
+                  <label class="pf-field pf-fe-grow">
+                    <span class="pf-field__lbl">Segment</span>
+                    <input type="text" class="pf-input" [ngModel]="range.segment" (ngModelChange)="patchRange(i, { segment: $event })"
                            placeholder="normal | adult_male | adult_female | child" />
-                  </div>
-                  <div class="w-24">
-                    <label class="text-[11px]" style="color: var(--text-muted);">Min</label>
-                    <input type="number" class="pf-input" step="any"
-                           [ngModel]="range.min"
-                           (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
-                  </div>
-                  <div class="w-24">
-                    <label class="text-[11px]" style="color: var(--text-muted);">Max</label>
-                    <input type="number" class="pf-input" step="any"
-                           [ngModel]="range.max"
-                           (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
-                  </div>
-                  <button type="button" class="field-remove" (click)="removeRange(i)" aria-label="Remove">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                    </svg>
+                  </label>
+                  <label class="pf-field pf-fe-num">
+                    <span class="pf-field__lbl">Min</span>
+                    <input type="number" class="pf-input pf-num" step="any" [ngModel]="range.min" (ngModelChange)="patchRange(i, { min: numOrUndef($event) })" />
+                  </label>
+                  <label class="pf-field pf-fe-num">
+                    <span class="pf-field__lbl">Max</span>
+                    <input type="number" class="pf-input pf-num" step="any" [ngModel]="range.max" (ngModelChange)="patchRange(i, { max: numOrUndef($event) })" />
+                  </label>
+                  <button type="button" class="field-remove" (click)="removeRange(i)" aria-label="Remove range" title="Remove range">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                   </button>
                 </div>
               }
-              <pf-touch-btn size="sm" variant="ghost" (pressed)="addRange()">
-                <span icon-left aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14"/><path d="M5 12h14"/>
-                  </svg>
-                </span>
-                Add range
-              </pf-touch-btn>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-fe-add" (click)="addRange()">+ Add range</button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label class="pf-label">Critical low</label>
-                <input type="number" class="pf-input" step="any"
-                       [ngModel]="draft().criticalLow"
-                       (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
-              </div>
-              <div>
-                <label class="pf-label">Critical high</label>
-                <input type="number" class="pf-input" step="any"
-                       [ngModel]="draft().criticalHigh"
-                       (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
-              </div>
+            <div class="pf-fe-grid2">
+              <label class="pf-field">
+                <span class="pf-field__lbl">Critical low</span>
+                <input type="number" class="pf-input pf-num" step="any" [ngModel]="draft().criticalLow" (ngModelChange)="patch({ criticalLow: numOrUndef($event) })" />
+              </label>
+              <label class="pf-field">
+                <span class="pf-field__lbl">Critical high</span>
+                <input type="number" class="pf-input pf-num" step="any" [ngModel]="draft().criticalHigh" (ngModelChange)="patch({ criticalHigh: numOrUndef($event) })" />
+              </label>
             </div>
           </div>
-        </pf-tile>
+        </section>
       }
 
       @if (category() === 'options') {
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="section-title">Options</h3>
-          <div class="mt-4 space-y-3">
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Options</h2>
+          </div>
+          <div class="pf-card__body pf-fe-cardbody">
             @for (opt of draft().options ?? []; let i = $index; track i) {
-              <div class="flex gap-2 items-end option-row">
-                <div class="flex-1">
-                  <label class="text-[11px]" style="color: var(--text-muted);">Label</label>
-                  <input type="text" class="pf-input"
-                         [ngModel]="opt.label"
-                         (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
-                </div>
-                <div class="w-36">
-                  <label class="text-[11px]" style="color: var(--text-muted);">Value</label>
-                  <input type="text" class="pf-input font-mono"
-                         [ngModel]="opt.value"
-                         (ngModelChange)="patchOption(i, { value: $event })" />
-                </div>
-                <button type="button" class="field-remove" (click)="removeOption(i)" aria-label="Remove">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                  </svg>
+              <div class="option-row">
+                <label class="pf-field pf-fe-grow">
+                  <span class="pf-field__lbl">Label</span>
+                  <input type="text" class="pf-input" [ngModel]="opt.label" (ngModelChange)="patchOption(i, { label: $event, value: $event })" />
+                </label>
+                <label class="pf-field pf-fe-val">
+                  <span class="pf-field__lbl">Value</span>
+                  <input type="text" class="pf-input pf-num" [ngModel]="opt.value" (ngModelChange)="patchOption(i, { value: $event })" />
+                </label>
+                <button type="button" class="field-remove" (click)="removeOption(i)" aria-label="Remove option" title="Remove option">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
               </div>
             }
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="addOption()">
-              <span icon-left aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14"/><path d="M5 12h14"/>
-                </svg>
-              </span>
-              Add option
-            </pf-touch-btn>
+            <button type="button" class="pf-btn pf-btn--tertiary pf-fe-add" (click)="addOption()">+ Add option</button>
 
-            <div>
-              <label class="pf-label">Normal value <span class="font-normal" style="color: var(--text-muted);">(optional)</span></label>
-              <pf-select
-                [options]="normalValueSelectOptions()"
-                [value]="(draft().normalValue ?? '') + ''"
-                placeholder="—"
-                (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
+            <div class="pf-field pf-fe-normal">
+              <span class="pf-field__lbl">Normal value <span class="pf-fe-mut">(optional)</span></span>
+              <pf-select [options]="normalValueSelectOptions()" [value]="(draft().normalValue ?? '') + ''" placeholder="—"
+                         (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
           </div>
-        </pf-tile>
+        </section>
       }
 
       @if (category() === 'boolean') {
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="section-title">Labels</h3>
-          <div class="mt-4 space-y-3">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label class="pf-label">Positive label</label>
-                <input type="text" class="pf-input"
-                       [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'"
-                       (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
-              </div>
-              <div>
-                <label class="pf-label">Negative label</label>
-                <input type="text" class="pf-input"
-                       [ngModel]="(draft().options?.[1]?.label) ?? 'No'"
-                       (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
-              </div>
+        <section class="pf-card pf-fe-card">
+          <div class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3"/></svg></span>
+            <h2 class="pf-card__label pf-fe-h">Labels</h2>
+          </div>
+          <div class="pf-card__body pf-fe-cardbody">
+            <div class="pf-fe-grid2">
+              <label class="pf-field">
+                <span class="pf-field__lbl">Positive label</span>
+                <input type="text" class="pf-input" [ngModel]="(draft().options?.[0]?.label) ?? 'Yes'" (ngModelChange)="patchOption(0, { label: $event, value: $event })" />
+              </label>
+              <label class="pf-field">
+                <span class="pf-field__lbl">Negative label</span>
+                <input type="text" class="pf-input" [ngModel]="(draft().options?.[1]?.label) ?? 'No'" (ngModelChange)="patchOption(1, { label: $event, value: $event })" />
+              </label>
             </div>
-            <div class="max-w-[220px]">
-              <label class="pf-label">Normal value</label>
-              <pf-select
-                [options]="booleanNormalSelectOptions()"
-                [value]="(draft().normalValue ?? '') + ''"
-                placeholder="—"
-                (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
+            <div class="pf-field pf-fe-normal">
+              <span class="pf-field__lbl">Normal value</span>
+              <pf-select [options]="booleanNormalSelectOptions()" [value]="(draft().normalValue ?? '') + ''" placeholder="—"
+                         (valueChange)="patch({ normalValue: $any($event) || undefined })"></pf-select>
             </div>
           </div>
-        </pf-tile>
+        </section>
       }
 
-      <pf-tile tone="default" padding="lg" class="block">
-        <h3 class="section-title">Show when</h3>
-        <div class="mt-4">
-          <pf-condition-builder
-            [rules]="draft().showWhen ?? []"
-            [fields]="availableFields()"
-            emptyLabel="Always visible."
-            (rulesChange)="onConditionsChange($event)">
-          </pf-condition-builder>
+      <section class="pf-card pf-fe-card">
+        <div class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <h2 class="pf-card__label pf-fe-h">Show when</h2>
         </div>
-      </pf-tile>
+        <div class="pf-card__body pf-fe-cardbody">
+          <pf-condition-builder [rules]="draft().showWhen ?? []" [fields]="availableFields()" emptyLabel="Always visible."
+            (rulesChange)="onConditionsChange($event)"></pf-condition-builder>
+        </div>
+      </section>
+      </div>
     </section>
   `,
   styles: [`
-    .section-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-      margin: 0;
-    }
-    .pf-input--error {
-      border-color: #f87171 !important;
-    }
-    .pf-field-error {
-      margin: 4px 0 0;
-      font-size: 12px;
-      color: #f87171;
-    }
+    .pf-fe-ctx__badge { flex: none; margin-left: 6px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--pf-line);
+      background: var(--pf-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); }
+    .pf-fe-body { display: flex; flex-direction: column; gap: 14px; }
+    .pf-fe-card .pf-card__body { overflow: visible; }
+    .pf-fe-cardbody { gap: 14px; padding: 14px 16px 16px; }
+    .pf-fe-h { margin: 0; }
+    .pf-fe-h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-fe-sub { display: flex; flex-direction: column; gap: 10px; }
+    .pf-fe-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+    .pf-fe-switches { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+    .pf-fe-toggle { min-height: 40px; font-size: 13px; }
+    .pf-fe-req { color: var(--red-text, #b91c1c); }
+    .pf-fe-mut { color: var(--text-tertiary); font-weight: 400; }
+    .pf-fe-unit { max-width: 220px; }
+    .pf-fe-normal { max-width: 320px; }
+    .pf-fe-add { align-self: flex-start; height: 34px; min-height: 34px; font-size: 12.5px; }
+    .range-row, .option-row { display: flex; align-items: flex-end; gap: 8px; }
+    .pf-fe-grow { flex: 1 1 auto; }
+    .pf-fe-num { width: 110px; flex: none; }
+    .pf-fe-val { width: 170px; flex: none; }
+    .pf-field-error { margin: 4px 0 0; font-size: 12px; color: var(--red-text); }
     .field-remove {
-      width: 32px;
-      height: 32px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      background: transparent;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: background 0.15s ease, color 0.15s ease;
-      flex-shrink: 0;
+      width: 40px; height: 40px; flex: none; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary); background: transparent; border: 1px solid transparent; cursor: pointer;
     }
-    .field-remove:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: #fca5a5;
-      border-color: rgba(239, 68, 68, 0.3);
-    }
-
-    /* ===========================================================
-       CROSS-PLATFORM — additive only. Desktop-web (>=1280) and
-       the base rules above are intentionally left untouched.
-       =========================================================== */
-
-    /* Gate the hover affordance so touch devices don't get a
-       stuck hover state on the remove button. */
-    @media (hover: none) {
-      .field-editor-page .field-remove:hover {
-        background: transparent;
-        color: var(--text-muted);
-        border-color: transparent;
-      }
-    }
-
-    /* Touch sizing: bump the remove button to a 44px tap target
-       on coarse pointers (phones / tablets). */
-    @media (pointer: coarse) {
-      .field-editor-page .field-remove {
-        width: 44px;
-        height: 44px;
-      }
-    }
-
-    /* Phone (<=640): the inline editor rows (reference ranges,
-       options) pack a flex-1 field plus fixed-width fields plus a
-       remove button into one line. Below 640 that overflows, so
-       wrap to a fluid two-up / stacked layout. The remove button
-       stays inline and pinned to the right. */
+    @media (hover: hover) { .field-remove:hover { color: var(--red-text); border-color: var(--pf-line); } }
+    @media (pointer: coarse) { .field-remove { width: 44px; height: 44px; } }
     @media (max-width: 640px) {
-      .field-editor-page .range-row,
-      .field-editor-page .option-row {
-        flex-wrap: wrap;
-      }
-      /* let the labelled inputs grow instead of staying at their
-         fixed w-24 / w-36 desktop widths */
-      .field-editor-page .range-row > div,
-      .field-editor-page .option-row > div {
-        flex: 1 1 8rem;
-        width: auto;
-        min-width: 0;
-      }
-      /* segment / label field takes a full row of its own */
-      .field-editor-page .range-row > div:first-child,
-      .field-editor-page .option-row > div:first-child {
-        flex-basis: 100%;
-      }
-      /* remove button hangs to the right of the wrapped row */
-      .field-editor-page .range-row > .field-remove,
-      .field-editor-page .option-row > .field-remove {
-        margin-left: auto;
-      }
-    }
-
-    /* Touch: give the bare Required / Custom checkbox rows a real 44px
-       tap target and enlarge the native checkbox hit area. Desktop keeps
-       its compact rows (this only applies to coarse pointers). */
-    @media (pointer: coarse) {
-      .field-editor-page .check-row {
-        min-height: 44px;
-      }
-      .field-editor-page .check-row input[type='checkbox'] {
-        width: 20px;
-        height: 20px;
-        flex-shrink: 0;
-      }
+      .pf-fe-grid2 { grid-template-columns: 1fr; }
+      .range-row, .option-row { flex-wrap: wrap; }
+      .range-row > .pf-field, .option-row > .pf-field { flex: 1 1 8rem; width: auto; min-width: 0; }
+      .range-row > .pf-field:first-child, .option-row > .pf-field:first-child { flex-basis: 100%; }
+      .range-row > .field-remove, .option-row > .field-remove { margin-left: auto; }
+      .pf-fe-unit, .pf-fe-normal { max-width: none; }
     }
   `]
 })
@@ -442,6 +346,9 @@ export class FieldEditorComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
   protected readonly builder = inject(WorkflowBuilderService);
+  protected readonly theme = inject(ThemeService);
+  /** Band back chevron: return to this field's workflow editor. */
+  readonly backFn = () => this.backToBuilder();
 
   readonly typeMeta = TYPE_META;
   readonly widths = WIDTHS;
@@ -479,6 +386,19 @@ export class FieldEditorComponent implements OnInit {
     const screen = this._screen() ?? '';
     const stepName = this.builder.workflow()?.steps.find(s => s.id === this._stepId())?.title ?? '';
     return stepName ? `Workflow · ${screen} · ${stepName}` : `Workflow · ${screen}`;
+  });
+  /** Context-bar chips: the form, the step and the field type. */
+  readonly screenLabel = computed(() => {
+    const t = this.builder.workflow()?.title;
+    if (t) return t;
+    const sc = this._screen() ?? '';
+    return sc.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  });
+  readonly stepTitle = computed(() =>
+    this.builder.workflow()?.steps.find(s => s.id === this._stepId())?.title ?? '');
+  readonly typeLabel = computed(() => {
+    const t = this._draft().type;
+    return TYPE_META.find(m => m.type === t)?.label ?? getFieldType(t as never)?.label ?? String(t ?? '—');
   });
   readonly subtitle = computed(() =>
     this.mode() === 'edit'

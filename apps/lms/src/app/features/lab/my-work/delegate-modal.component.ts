@@ -3,7 +3,9 @@ import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { User, userDisplayName } from '../../../shared/models/user.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 // Lightweight supervisor delegation picker. Lists active users in the
 // tenant; on pick, fires (chose) with the target user id. The caller
@@ -13,7 +15,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 @Component({
   selector: 'pf-delegate-modal',
   standalone: true,
-  imports: [AvatarComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, AvatarComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-dl" role="dialog" aria-modal="true" aria-label="Delegate test">
@@ -41,7 +43,8 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
         <ul class="pf-dl__list" role="listbox">
           @for (u of filtered(); track u.id) {
             <li>
-              <button type="button" class="pf-dl__item press" (click)="chose.emit(u.id)">
+              <button type="button" class="pf-dl__item press" (click)="chose.emit(u.id)"
+                      [disabled]="!!busyId" [pfBusy]="busyId === u.id" pfBusyLabel="Delegating…">
                 <pf-avatar [name]="u.displayName" [size]="36"></pf-avatar>
                 <div class="min-w-0 flex-1 text-left">
                   <p class="pf-dl__name">{{ u.displayName }}</p>
@@ -51,10 +54,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
             </li>
           } @empty {
             <li class="pf-dl__empty">
-              @if (loading()) {
+              @if (loadingShown()) {
                 <div class="flex justify-center py-2">
-                  <pf-loading-logo size="sm" color="purple"
-                                   [showText]="true" text="Loading…"></pf-loading-logo>
+                  <pf-skeleton-rows [rows]="3" [dense]="true" [trailing]="false" label="Loading people…"></pf-skeleton-rows>
                 </div>
               }
               @else if (loadError()) { {{ loadError() }} }
@@ -155,6 +157,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 })
 export class DelegateModalComponent implements OnInit {
   @Input() testName = 'Test';
+  /** The user the caller is delegating to while its request runs: that row
+   *  shows the busy state and the list can't be picked again meanwhile. */
+  @Input() busyId: string | null = null;
   @Output() chose = new EventEmitter<string>();
   @Output() cancelled = new EventEmitter<void>();
 
@@ -162,6 +167,9 @@ export class DelegateModalComponent implements OnInit {
   private readonly _users = signal<User[]>([]);
   private readonly _query = signal('');
   readonly loading = signal(true);
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingShown = heldFlag(this.loading);
   readonly loadError = signal<string | null>(null);
 
   readonly filtered = () => {

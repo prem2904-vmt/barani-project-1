@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { Notification } from '../../models/user.model';
+import { NotifRoute, notificationRoute } from './notification-route';
+import { canonicalNotificationType } from '../../utils/notification-type';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../models/api-response.model';
+import { DesktopNotifyService } from '../../../core/services/desktop-notify.service';
 
 type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 
@@ -53,7 +61,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
                 <button type="button"
                         class="pf-bell-row"
                         [class.is-unread]="!n.isRead"
-                        (click)="markRead(n)">
+                        (click)="onRow(n)">
                   <span class="pf-type-icon" [attr.data-tone]="toneFor(n.type)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <g [innerHTML]="pathFor(n.type)"></g>
@@ -71,6 +79,18 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
                       {{ n.createdAt | date:'shortTime' }} · {{ typeLabel(n.type) }}
                     </p>
                   </div>
+                  @if (canAcknowledge(n)) {
+                    <!-- NABL: the explicit acknowledgement — reading the bell is
+                         not it. Records who saw the critical value and when. -->
+                    <button type="button" class="pf-bell-ack press" [disabled]="acking() === n.id"
+                            (click)="$event.stopPropagation(); acknowledge(n)"
+                            [attr.aria-label]="'Acknowledge critical result: ' + n.title">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                      {{ acking() === n.id ? 'Acknowledging…' : 'Acknowledge' }}
+                    </button>
+                  } @else if (linkFor(n)) {
+                    <svg class="pf-bell-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  }
                 </button>
               }
             }
@@ -169,7 +189,7 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-mark-all {
       font-size: 11px;
       font-weight: 600;
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: none;
       border: none;
       padding: 4px 8px;
@@ -220,6 +240,17 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-bell-row.is-unread:hover {
       background: linear-gradient(90deg, rgba(124, 58, 237, 0.1), var(--bg-hover) 60%);
     }
+    .pf-bell-ack {
+      flex-shrink: 0; align-self: center; display: inline-flex; align-items: center; gap: 5px;
+      min-height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 600;
+      color: var(--red-text, #b91c1c); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); cursor: pointer;
+    }
+    .pf-bell-ack:hover:not(:disabled) { background: color-mix(in srgb, var(--red-text, #dc2626) 8%, transparent); }
+    .pf-bell-ack:disabled { opacity: 0.6; cursor: default; }
+    @media (hover: none) and (pointer: coarse) { .pf-bell-ack { min-height: 44px; } }
+    .pf-bell-chev { flex-shrink: 0; align-self: center; color: var(--text-muted); opacity: 0.6; }
+    .pf-bell-row:hover .pf-bell-chev { opacity: 1; color: var(--text-secondary); }
 
     .pf-type-icon {
       display: inline-flex;
@@ -234,27 +265,27 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-type-icon[data-tone='rose'] {
       background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.08));
       border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
+      color: var(--red-text);
     }
     .pf-type-icon[data-tone='amber'] {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.08));
       border: 1px solid rgba(245, 158, 11, 0.3);
-      color: #fcd34d;
+      color: var(--amber-text);
     }
     .pf-type-icon[data-tone='emerald'] {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
       border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #6ee7b7;
+      color: var(--green-text);
     }
     .pf-type-icon[data-tone='violet'] {
       background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.08));
       border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-type-icon[data-tone='sky'] {
       background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.08));
       border: 1px solid rgba(56, 189, 248, 0.3);
-      color: #7dd3fc;
+      color: var(--sky-text);
     }
 
     .pf-unread-dot {
@@ -270,8 +301,15 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 export class NotificationBellComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  private readonly critical = inject(CriticalResultsService);
+  private readonly toasts = inject(ToastService);
 
   private readonly _items = signal<Notification[]>([]);
+  /** Critical rows acknowledged in this session (the button hides once done). */
+  private readonly _acked = signal<Set<string>>(new Set());
+  readonly acking = signal<string | null>(null);
   private readonly _open = signal(false);
   readonly items = this._items.asReadonly();
   readonly open = this._open.asReadonly();
@@ -280,6 +318,19 @@ export class NotificationBellComponent implements OnInit {
     const n = this.unreadCount();
     return n > 99 ? '99+' : n.toString();
   });
+
+  constructor() {
+    // Desktop app: unread bell rows → dock / taskbar badge (0 when the bell
+    // goes away, i.e. sign-out).
+    const desktop = inject(DesktopNotifyService);
+    if (desktop.active) {
+      effect(() => {
+        const n = this.unreadCount();
+        untracked(() => desktop.setBellUnread(n));
+      });
+      inject(DestroyRef).onDestroy(() => desktop.setBellUnread(0));
+    }
+  }
 
   ngOnInit(): void { this.load(); }
 
@@ -295,6 +346,35 @@ export class NotificationBellComponent implements OnInit {
     if (this._open()) this.load();
   }
 
+  /** A tap on a system push with no dedicated screen lands here: the push
+   *  service broadcasts pf-open-bell so the tapped notification is visible. */
+  @HostListener('window:pf-open-bell')
+  onOpenRequest() {
+    if (!this._open()) { this._open.set(true); this.load(); }
+  }
+
+  /** Desktop app: a click on a native bell notification → open that event's
+   *  screen (same routing as tapping the row) and mark it read; no dedicated
+   *  screen → open the bell. One bell instance handles it. */
+  @HostListener('window:pf-open-notification', ['$event'])
+  onOpenNotification(ev: Event) {
+    ev.stopImmediatePropagation();
+    const d = (ev as CustomEvent<{ type: string; referenceType: string | null; referenceId: string | null }>).detail
+      ?? { type: '', referenceType: null, referenceId: null };
+    const row = this._items().find(n => !n.isRead && (n.referenceId ?? null) === d.referenceId
+      && canonicalNotificationType(n.type) === canonicalNotificationType(d.type));
+    const link = notificationRoute(d.type, d.referenceType, d.referenceId, this.auth.hasPermission('validate_result'));
+    if (row) this.markRead(row);
+    if (link) this.router.navigate(link.commands, link.queryParams ? { queryParams: link.queryParams } : {});
+    else this.onOpenRequest();
+  }
+
+  /** Live badge: ChatService broadcasts this when a BusinessNotification
+   *  arrives over SignalR — refetch so the count/list update without a
+   *  reload on every platform. */
+  @HostListener('window:pf-notification-received')
+  onLiveNotification() { this.load(); }
+
   @HostListener('document:click', ['$event'])
   onDocClick(ev: MouseEvent) {
     if (!this._open()) return;
@@ -303,6 +383,51 @@ export class NotificationBellComponent implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape() { if (this._open()) this._open.set(false); }
+
+  /** Tap a notification: mark it read and, when it points at something with a
+   *  screen, jump there (OPS-60). Falls back to just marking read. */
+  onRow(n: Notification) {
+    this.markRead(n);
+    const link = this.linkFor(n);
+    if (link) {
+      this._open.set(false);
+      this.router.navigate(link.commands, link.queryParams ? { queryParams: link.queryParams } : {});
+    }
+  }
+
+  /** Navigation target for a notification, or null when there's no dedicated
+   *  screen (see notificationRoute). */
+  linkFor(n: Notification): NotifRoute | null {
+    return notificationRoute(n.type, n.referenceType, n.referenceId, this.auth.hasPermission('validate_result'));
+  }
+
+  /** Critical bells (critical_value / critical_unvalidated) referencing an
+   *  order test, for a user who may act on results. */
+  canAcknowledge(n: Notification): boolean {
+    const t = canonicalNotificationType(n.type);
+    if (t !== 'critical_value' && t !== 'critical_unvalidated') return false;
+    if (n.referenceType !== 'order_test' || !n.referenceId) return false;
+    if (this._acked().has(n.referenceId)) return false;
+    return this.auth.hasAnyPermission?.(['enter_result', 'validate_result']) ?? false;
+  }
+
+  /** Explicit acknowledgement from the bell: writes the NABL record (via
+   *  'bell'), then the row is read. A record already acknowledged by this
+   *  user (or one that never existed — a legacy bell) just marks read. */
+  acknowledge(n: Notification) {
+    const ref = n.referenceId;
+    if (!ref || this.acking()) return;
+    this.acking.set(n.id);
+    this.critical.acknowledgeOrderTest(ref, 'bell').subscribe({
+      next: touched => {
+        this.acking.set(null);
+        this._acked.update(s => new Set(s).add(ref));
+        this.markRead(n);
+        this.toasts.success(touched.length ? 'Critical result acknowledged' : 'Already acknowledged');
+      },
+      error: e => { this.acking.set(null); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
 
   markRead(n: Notification) {
     if (n.isRead) return;
@@ -318,30 +443,38 @@ export class NotificationBellComponent implements OnInit {
     this._items.update(list => list.map(n => ({ ...n, isRead: true })));
   }
 
+  // Icon / tone / label match the CANONICAL key, so legacy "lms."-prefixed
+  // rows (most of dev's tat_breach / report_ready / sample_rejection) render
+  // like new ones instead of as a generic bell.
   toneFor(type: string): TypeTone {
-    switch (type) {
+    switch (canonicalNotificationType(type)) {
       case 'critical_value':   return 'rose';
       case 'result_rejected':  return 'rose';
       case 'sample_rejection': return 'amber';
       case 'tat_breach':       return 'amber';
       case 'report_ready':     return 'emerald';
+      // Urgent-priority order ready to report — amber (same urgency tone as
+      // tat_breach/sample_rejection), distinct from the routine report_ready.
+      case 'urgent_report_ready': return 'amber';
       default:                 return 'violet';
     }
   }
 
   typeLabel(type: string): string {
-    switch (type) {
+    const t = canonicalNotificationType(type);
+    switch (t) {
       case 'critical_value':   return 'critical value';
       case 'sample_rejection': return 'sample rejected';
       case 'report_ready':     return 'report ready';
+      case 'urgent_report_ready': return 'urgent — ready to report';
       case 'tat_breach':       return 'TAT breach';
       case 'result_rejected':  return 'result rejected';
-      default:                 return type.replace(/_/g, ' ');
+      default:                 return t.replace(/_/g, ' ');
     }
   }
 
   pathFor(type: string): string {
-    switch (type) {
+    switch (canonicalNotificationType(type)) {
       // critical value — heart-pulse
       case 'critical_value':
         return '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27"/>';
@@ -350,6 +483,9 @@ export class NotificationBellComponent implements OnInit {
         return '<path d="M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z"/><path d="M2 22 22 2"/>';
       // report ready — file check
       case 'report_ready':
+      // urgent order ready to report — same file-check (it IS a report-ready
+      // moment), amber tone above is what marks it urgent.
+      case 'urgent_report_ready':
         return '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>';
       // TAT breach — clock with alert
       case 'tat_breach':

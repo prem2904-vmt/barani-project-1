@@ -1,0 +1,203 @@
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { Observable } from 'rxjs';
+import { ApiService } from '../../../../core/services/api.service';
+import { ToastService } from '../../../../core/services/toast.service';
+import { DialogService } from '../../../../core/services/dialog.service';
+import { AuthService } from '../../../../core/auth/auth.service';
+import { ApiError } from '../../../../shared/models/api-response.model';
+import { CatalogProposal, Test } from '../../../../shared/models/test.model';
+import {
+  proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel, proposalDatesLine, proposalDiffRows,
+} from '../../../../shared/utils/catalog-proposals';
+
+/**
+ * Test Master updates waiting for this lab (copy-on-write, phase 5).
+ *
+ * A master edit goes live instantly for every test the lab has NOT changed.
+ * For a test the lab (or one of its branches) HAS its own copy of, the change
+ * arrives here as a proposal — one per copy, so a branch's copy shows with
+ * its branch. The lab accepts or dismisses each one, or all at once.
+ *
+ * A quiet strip above the Test Master grid; "Review" expands into the per-row
+ * list — each request with its dates ("Master updated 24 Sep, after your change
+ * on 20 Sep") and the side-by-side difference (Field · Yours · Master). Accept =
+ * the copy takes the master's current version (it then reads the master again);
+ * Dismiss = keep yours until the master changes again. Hidden when nothing waits.
+ */
+import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
+@Component({
+  selector: 'pf-catalog-proposals-panel',
+  standalone: true,
+  imports: [BusyDirective],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    @if (proposals().length > 0) {
+      <section class="pf-card pf-cp" aria-label="Test Master updates">
+        <div class="pf-card__head pf-cp__bar">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
+          </svg></span>
+          <span class="pf-card__label">Master updates</span>
+          <span class="pf-card__note pf-cp__title">
+            <span class="pf-num">{{ proposals().length }}</span> update{{ proposals().length === 1 ? '' : 's' }}
+            for tests you changed
+          </span>
+          <!-- Secondary / tertiary only: the band's Create / Save owns the ONE primary. -->
+          <button type="button" class="pf-btn pf-btn--tertiary pf-cp__btn press" (click)="open.set(!open())" [attr.aria-expanded]="open()">
+            {{ open() ? 'Hide' : 'Review' }}
+          </button>
+          <button type="button" class="pf-btn pf-btn--tertiary pf-cp__btn press" [disabled]="busy()" [pfBusy]="busyKey() === 'dismiss-all'" pfBusyLabel="Dismissing…" (click)="dismissAll()">Dismiss all</button>
+          <button type="button" class="pf-btn pf-btn--secondary pf-cp__btn press" [disabled]="busy()" [pfBusy]="busyKey() === 'accept-all'" pfBusyLabel="Accepting…" (click)="acceptAll()">Accept all</button>
+        </div>
+        @if (open()) {
+          <ul class="pf-cp__list">
+            @for (p of rows(); track p.id) {
+              <li class="pf-cp__row">
+                <div class="pf-cp__head">
+                  <div class="pf-cp__what">
+                    <span class="pf-cp__name">{{ p.name }}</span>
+                    @if (p.code) { <span class="pf-cp__code pf-num">{{ p.code }}</span> }
+                  </div>
+                  <span class="pf-cp__tag">{{ p.kind }}</span>
+                  <span class="pf-cp__tag pf-cp__tag--branch">{{ p.branch }}</span>
+                  <span class="pf-cp__spacer"></span>
+                  <button type="button" class="pf-rowact pf-cp__act" [class.pf-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busyKey() === 'dismiss:' + p.id" pfBusyLabel="Dismissing…" (click)="dismiss(p.id)"
+                          [attr.aria-label]="'Dismiss the update for ' + p.name"
+                          title="Keep your version. A later master change will ask again.">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    <span class="pf-rowact__t">Dismiss</span></button>
+                  <button type="button" class="pf-rowact pf-cp__act" [class.pf-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busyKey() === 'accept:' + p.id" pfBusyLabel="Accepting…" (click)="accept(p.id)"
+                          [attr.aria-label]="'Accept the master version of ' + p.name"
+                          title="Take the master's current version of this test. Prices stay as they are.">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    <span class="pf-rowact__t">Accept</span></button>
+                </div>
+                @if (p.dates) { <p class="pf-cp__dates">{{ p.dates }}</p> }
+                @if (p.diff.length > 0) {
+                  <div class="pf-cp__diffwrap">
+                    <table class="pf-cp__diff">
+                      <thead><tr><th scope="col">Field</th><th scope="col">Yours</th><th scope="col">Master</th></tr></thead>
+                      <tbody>
+                        @for (d of p.diff; track d.field) {
+                          <tr>
+                            <th scope="row">{{ d.label }}</th>
+                            <td class="pf-cp__yours">{{ d.yours }}</td>
+                            <td class="pf-cp__master">{{ d.master }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  `,
+  styles: [`
+    :host { display: block; }
+    .pf-cp { margin-bottom: 12px; }
+    .pf-cp__bar { flex-wrap: wrap; }
+    .pf-cp__title { font-size: 12.5px; color: var(--text-secondary); }
+    .pf-cp__btn { height: 36px; min-height: 36px; }
+    .pf-cp__list { list-style: none; margin: 0; padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px;
+      max-height: 40dvh; overflow-y: auto; }
+    .pf-cp__row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--pf-radius-sm);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); }
+    .pf-cp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-cp__spacer { flex: 1 1 auto; }
+    .pf-cp__dates { margin: 0; font-size: 12px; color: var(--text-secondary); }
+    .pf-cp__diffwrap { overflow-x: auto; }
+    .pf-cp__diff { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pf-cp__diff th, .pf-cp__diff td { text-align: left; padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--pf-line); }
+    .pf-cp__diff thead th { border-top: 0; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-cp__diff tbody th { font-weight: 500; color: var(--text-secondary); white-space: nowrap; width: 1%; }
+    .pf-cp__yours { color: var(--text-primary); }
+    .pf-cp__master { color: var(--text-primary); font-weight: 600; }
+    .pf-cp__what { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .pf-cp__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-cp__code { font-size: 12px; color: var(--text-tertiary); }
+    .pf-cp__tag { font-size: 12px; padding: 2px 8px; border-radius: var(--pf-radius-chip, 8px); color: var(--text-secondary);
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line); white-space: nowrap; }
+    @media (max-width: 640px) { .pf-cp__head .pf-cp__spacer { display: none; } }
+  `],
+})
+export class CatalogProposalsPanelComponent {
+  private readonly api = inject(ApiService);
+  private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
+  private readonly auth = inject(AuthService);
+
+  /** Pending proposals for this lab. */
+  readonly proposals = input<CatalogProposal[]>([]);
+  /** The loaded catalogue — names the test each proposal is about. */
+  readonly tests = input<Test[]>([]);
+  /** Something was accepted/dismissed: the host reloads tests + proposals. */
+  readonly changed = output<void>();
+
+  /** Row actions: text on web, icon on touch. */
+  readonly web = webPointerSignal();
+  readonly open = signal(false);
+  readonly busy = signal(false);
+  /** Which action is running (its button shows the busy dots). */
+  readonly busyKey = signal<string | null>(null);
+
+  private readonly branchNames = computed(() =>
+    new Map((this.auth.user?.()?.branches ?? []).map(b => [b.id, b.name] as const)));
+
+  readonly rows = computed(() => this.proposals().map(p => {
+    const t = proposalTest(p, this.tests());
+    return {
+      id: p.id,
+      name: t?.name ?? p.testName ?? p.catalogKey,
+      code: t?.testCode ?? p.testCode ?? '',
+      kind: proposalKindLabel(p),
+      branch: proposalBranchLabel(p, this.branchNames()),
+      dates: proposalDatesLine(p),
+      diff: proposalDiffRows(p),
+    };
+  }));
+
+  accept(id: string) { this.run(this.api.post(proposalPath(id, 'accept'), {}), 'Update accepted', 'accept:' + id); }
+  dismiss(id: string) { this.run(this.api.post(proposalPath(id, 'dismiss'), {}), 'Update dismissed', 'dismiss:' + id); }
+
+  async acceptAll() {
+    const n = this.proposals().length;
+    const ok = await this.dialog.confirm({
+      title: `Accept all ${n} Test Master update${n === 1 ? '' : 's'}?`,
+      message: 'Each of your changed tests takes the Admin Test Master\'s current version and follows the master again. Your own edits to those tests are replaced. Prices are not affected.',
+      confirmLabel: 'Accept all',
+      cancelLabel: 'Not now',
+      tone: 'primary',
+    });
+    if (!ok) return;
+    this.run(this.api.post(proposalPath(null, 'accept-all'), {}), 'All updates accepted', 'accept-all');
+  }
+
+  async dismissAll() {
+    const n = this.proposals().length;
+    const ok = await this.dialog.confirm({
+      title: `Dismiss all ${n} Test Master update${n === 1 ? '' : 's'}?`,
+      message: 'Your changed tests stay exactly as they are. If the master changes them again you will be asked again; you can also revert any of them to the master later.',
+      confirmLabel: 'Dismiss all',
+      cancelLabel: 'Not now',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.run(this.api.post(proposalPath(null, 'dismiss-all'), {}), 'All updates dismissed', 'dismiss-all');
+  }
+
+  private run(call: Observable<unknown>, done: string, key: string) {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.busyKey.set(key);
+    call.subscribe({
+      next: () => { this.busy.set(false); this.busyKey.set(null); this.toasts.success(done); this.changed.emit(); },
+      error: e => { this.busy.set(false); this.busyKey.set(null); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+}

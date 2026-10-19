@@ -1,0 +1,118 @@
+<section class="pf-page">
+  <pf-screen-header class="px-4 md:px-8 pt-6"
+    [eyebrow]="'Frontdesk · Consultation'"
+    [title]="'New consultation'"
+    [subtitle]="'Register an OPD consultation'">
+  </pf-screen-header>
+
+  <!-- Same two-column frame as order-create: work area (left) + summary rail. -->
+  <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5 max-w-screen-2xl mx-auto w-full">
+
+    <!-- LEFT COLUMN -->
+    <div class="pf-col space-y-4 min-w-0">
+
+      <!-- Controls row: patient search / selected patient (mirrors order-create). -->
+      <div class="pf-controls-row">
+        <div class="pf-controls-row__patient">
+          @if (patient(); as p) {
+            @if (isChangingPatient()) {
+              <div class="pf-patient-search-inline">
+                <pf-patient-search
+                  placeholder="Search by name, MRN, phone, ABHA…"
+                  (picked)="attachPatient($event)">
+                  <button trailing type="button" class="pf-patient__cancel-btn press" (click)="cancelChangePatient()" aria-label="Cancel change patient">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </pf-patient-search>
+              </div>
+            } @else {
+              <div class="pf-patient-inline">
+                <pf-avatar [name]="p.displayName" [size]="32" class="shrink-0"></pf-avatar>
+                <div class="min-w-0 flex-1">
+                  <p class="pf-patient__name">{{ formatPatient(p) }}</p>
+                </div>
+                <button type="button" class="pf-patient__change press" (click)="changePatient()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 20h4L20 8l-4-4L4 16v4Zm11-13 4 4"/>
+                  </svg>
+                </button>
+              </div>
+            }
+          } @else {
+            <pf-patient-search
+              placeholder="Search patient by name, MRN, phone, or ABHA…"
+              (picked)="attachPatient($event)">
+            </pf-patient-search>
+          }
+        </div>
+      </div>
+
+      <!-- Consultation work area — the OPD counterpart to the test picker.
+           (Doctor + fee are placeholders for the consultation spec.) -->
+      <section class="pf-cw">
+        <header class="pf-cw__head">
+          <h2 class="pf-cw__title">Consultation</h2>
+        </header>
+
+        <label class="pf-cw__field">
+          <span class="pf-cw__label">Consulting doctor</span>
+          <pf-select class="pf-cw__input" [options]="doctorOptions()" [value]="doctorId() ?? ''"
+                     [searchable]="true" placeholder="Select a doctor…"
+                     (valueChange)="onDoctor($event)"></pf-select>
+          @if (doctors().length === 0) {
+            <span class="pf-cw__hint">No doctors onboarded for this branch yet.</span>
+          }
+        </label>
+
+        <label class="pf-cw__field">
+          <span class="pf-cw__label">Consultation fee (₹)</span>
+          <input type="number" min="0" class="pf-cw__input" [value]="fee()" (input)="onFee($any($event.target).value)" />
+        </label>
+
+        <!-- Procedures placeholder — the catalog arrives later. -->
+        <div class="pf-cw__field">
+          <span class="pf-cw__label">Procedures</span>
+          <div class="pf-cw__placeholder">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>
+            </svg>
+            <span>Procedures coming soon</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT RAIL — summary / fee (mirrors the order-create cart/bill rail). -->
+    <aside class="pf-col min-w-0">
+      <div class="pf-csum">
+        <header class="pf-csum__head">
+          <h3 class="pf-csum__title">Summary</h3>
+        </header>
+
+        @if (patient(); as p) {
+          <div class="pf-csum__patient">{{ formatPatient(p) }}</div>
+        } @else {
+          <p class="pf-csum__empty">Select a patient to begin.</p>
+        }
+
+        <div class="pf-csum__lines">
+          <div class="pf-csum__line">
+            <span>Consultation</span>
+            <span>₹{{ fee() }}</span>
+          </div>
+        </div>
+        <div class="pf-csum__total">
+          <span>Total</span>
+          <span>₹{{ total() }}</span>
+        </div>
+
+        <button type="button" class="pf-csum__submit press" [disabled]="!canSubmit() || submitting()" (click)="submit()"
+                [pfBusy]="submitting()" pfBusyLabel="Creating…">
+          {{ submitting() ? 'Creating…' : 'Create consultation' }}
+        </button>
+      </div>
+    </aside>
+  </div>
+</section>

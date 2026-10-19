@@ -1,16 +1,33 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { NATIVE_BARS_HOST } from './system-bars.token';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
+/** 'new' = the designer port (Figma 452-3); 'classic' = the pre-port look
+ *  kept around so long-time users don't feel the change. */
+export type DesignVersion = 'new' | 'classic';
 
 const STORAGE_KEY = 'pf-theme';
+const DESIGN_KEY = 'pf-design';
 const MEDIA_QUERY = '(prefers-color-scheme: light)';
+
+/**
+ * UI switches lock (owner, 2026-09-24): everyone runs the NEW design with the
+ * BOTTOM bar. The Classic/New switch, the Bottom-bar switch and Design mode
+ * (capture) are hidden and stored preferences are ignored. Classic's code is
+ * untouched — flip this to true to bring the switches back.
+ */
+export const UI_SWITCHES_ENABLED = false;
 
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   private readonly doc = inject(DOCUMENT);
   private readonly win = this.doc.defaultView;
+  /** OS chrome (status bar, Android nav bar, Electron window) — follows
+   *  every resolved-theme change from here, the ONE place themes resolve. */
+  private readonly barsHost = inject(NATIVE_BARS_HOST, { optional: true });
+  private barsSync?: Promise<((t: ResolvedTheme) => Promise<void>) | null>;
 
   private readonly _mode = signal<ThemeMode>(this.readStoredMode());
   private readonly _resolved = signal<ResolvedTheme>(this.resolve(this._mode()));
@@ -18,6 +35,18 @@ export class ThemeService {
   readonly mode = this._mode.asReadonly();
   readonly resolved = this._resolved.asReadonly();
   readonly isDark = computed(() => this._resolved() === 'dark');
+
+  private readonly _design = signal<DesignVersion>(this.readStoredDesign());
+  readonly design = this._design.asReadonly();
+  readonly isNewDesign = computed(() => this._design() === 'new');
+
+  /** EXPERIMENT (owner preview): bottom navbar — pages left, chat dock
+   *  right. New design only; off by default. */
+  private readonly _bottomNav = signal<boolean>(this.readStoredBottomNav());
+  readonly bottomNav = this._bottomNav.asReadonly();
+
+  /** Whether the design / bottom-bar switches are offered at all. */
+  readonly switchesEnabled = UI_SWITCHES_ENABLED;
 
   private readonly _mediaListener = (e: MediaQueryListEvent) => {
     if (this._mode() === 'system') {
@@ -27,9 +56,25 @@ export class ThemeService {
 
   constructor() {
     this.apply(this._resolved());
+    this.applyDesign(this._design());
     const mq = this.mediaQuery();
     if (mq && typeof mq.addEventListener === 'function') {
       mq.addEventListener('change', this._mediaListener);
+    }
+  }
+
+  /** Status bar / Android nav bar / Electron window → the resolved theme.
+   *  Native / Electron only (a plain browser never loads the bridge). The
+   *  bridge is a lazy chunk, loaded once; calls land in order, so a quick
+   *  light→dark→light ends on light. On resume it re-resolves (a 'system'
+   *  scheme may have flipped while suspended) and re-applies. Never throws. */
+  private syncBars(theme: ResolvedTheme): void {
+    const w = this.win as { Capacitor?: { isNativePlatform?: () => boolean }; electronAPI?: unknown } | null;
+    if (this.barsHost || w?.Capacitor?.isNativePlatform?.() || w?.electronAPI) {
+      (this.barsSync ??= import('./system-bars')
+        .then((m) => m.connectSystemBars(this.barsHost, () => this.apply(this.resolve(this._mode()))))
+        .catch(() => null))
+        .then((sync) => sync?.(theme));
     }
   }
 
@@ -48,6 +93,46 @@ export class ThemeService {
     this.setMode('system');
   }
 
+  setDesign(version: DesignVersion): void {
+    this._design.set(version);
+    try { this.win?.localStorage.setItem(DESIGN_KEY, version); } catch { /* ignore */ }
+    this.applyDesign(version);
+  }
+
+  toggleDesign(): void {
+    this.setDesign(this._design() === 'new' ? 'classic' : 'new');
+  }
+
+  private applyDesign(version: DesignVersion): void {
+    const root = this.doc.documentElement;
+    root.classList.toggle('design-new', version === 'new');
+    root.classList.toggle('design-classic', version === 'classic');
+    root.setAttribute('data-design', version);
+    // Bottom-nav experiment rides the same boot path.
+    root.classList.toggle('nav-bottom', this._bottomNav());
+  }
+
+  toggleBottomNav(): void {
+    const next = !this._bottomNav();
+    this._bottomNav.set(next);
+    try { this.win?.localStorage.setItem('pf-bottom-nav', next ? '1' : '0'); } catch { /* ignore */ }
+    this.doc.documentElement.classList.toggle('nav-bottom', next);
+  }
+
+  private readStoredBottomNav(): boolean {
+    if (!UI_SWITCHES_ENABLED) return true;
+    try { return this.win?.localStorage.getItem('pf-bottom-nav') === '1'; } catch { return false; }
+  }
+
+  private readStoredDesign(): DesignVersion {
+    if (!UI_SWITCHES_ENABLED) return 'new';
+    try {
+      const raw = this.win?.localStorage.getItem(DESIGN_KEY);
+      if (raw === 'new' || raw === 'classic') return raw;
+    } catch { /* ignore */ }
+    return 'new';
+  }
+
   private resolve(mode: ThemeMode): ResolvedTheme {
     if (mode === 'light') return 'light';
     if (mode === 'dark') return 'dark';
@@ -64,6 +149,7 @@ export class ThemeService {
 
   private apply(resolved: ResolvedTheme): void {
     this._resolved.set(resolved);
+    this.syncBars(resolved);
     const root = this.doc.documentElement;
     const useVT = typeof (this.doc as Document & { startViewTransition?: () => unknown }).startViewTransition === 'function';
 

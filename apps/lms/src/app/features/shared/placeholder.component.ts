@@ -7,8 +7,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   template: `
     <section class="p-8 max-w-3xl">
       <div class="pf-card">
-        <h1 class="text-xl font-semibold text-slate-900">{{ title() }}</h1>
-        <p class="mt-2 text-sm text-slate-600">{{ description() }}</p>
+        <h1 class="text-xl font-semibold text-slate-900" style="color: var(--text-primary, #e2e8f0);">{{ title() }}</h1>
+        <p class="mt-2 text-sm text-slate-600" style="color: var(--text-secondary, #94a3b8);">{{ description() }}</p>
         <p class="mt-4 text-xs text-slate-400">Screen shell in place · full UI ships in the next stage.</p>
       </div>
     </section>

@@ -1,65 +1,9 @@
-/* ── Ref hospital + ref doctor row ──────────────────────── */
-.pf-refrow__field { position: relative; min-width: 0; }
-.pf-refrow__filter-hint {
-  font-weight: 400; font-size: 10px;
-  color: var(--color-primary, #7c3aed); margin-left: 6px;
-  text-transform: none; letter-spacing: 0;
-  font-style: italic;
-}
-
-/* ── Ref doctor autocomplete ────────────────────────────── */
-.pf-refdoc { position: relative; }
-.pf-refdoc__opt { font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
-.pf-refdoc__field {
-  position: relative;
-  display: flex; align-items: center;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 0 10px 0 36px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.pf-refdoc__field:focus-within {
-  border-color: rgba(168, 85, 247, 0.55);
-  box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
-}
-.pf-refdoc__icon {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  color: var(--text-tertiary);
-}
-.pf-refdoc__input {
-  flex: 1; min-width: 0; height: 46px;
-  background: transparent; border: none; outline: none;
-  color: var(--text-primary); font-size: 13.5px;
-}
-.pf-refdoc__input::placeholder { color: var(--text-muted); }
-.pf-refdoc__clear {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--glass-bg-hover);
-  border: none; color: var(--text-secondary); cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  margin-left: 4px;
-}
-.pf-refdoc__pop {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
-  background: var(--bg-card-solid, #14142a);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  padding: 6px;
-  max-height: 240px; overflow-y: auto;
-}
-.pf-refdoc__pop-item {
-  display: block; width: 100%; padding: 8px 10px;
-  background: transparent; border: none; text-align: left;
-  color: var(--text-primary); font-size: 13px; cursor: pointer;
-  border-radius: 8px;
-}
-.pf-refdoc__pop-item:hover { background: var(--glass-bg-hover); }
-
+@use '../../../shared/styles/device-tier' as dt;
 /* ── Category tabs (Recent / Favourites / Packages / All) ── */
 .pf-tabs {
-  display: flex; align-items: stretch; gap: 4px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
   padding: 4px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -68,121 +12,248 @@
   overflow-x: auto;
   scrollbar-width: none;
 }
-.pf-tabs::-webkit-scrollbar { display: none; }
+
+.pf-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .pf-tabs__btn {
-  flex: 1 1 0; min-width: 110px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  flex: 1 1 0;
+  min-width: 110px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
-  background: transparent; border: 1px solid transparent;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--text-tertiary); font-size: 12.5px; font-weight: 500;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
 }
-.pf-tabs__btn:not(.pf-tabs__btn--on):hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+
+.pf-tabs__btn:not(.pf-tabs__btn--on):hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
 .pf-tabs__btn--on {
   background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
-  color: var(--text-primary); font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 600;
 }
+
 .pf-tabs__btn--on:hover {
   background: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);
   color: var(--text-primary);
 }
+
 .pf-tabs__count {
-  min-width: 18px; padding: 1px 6px;
+  min-width: 18px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent);
   color: var(--color-primary, #7c3aed);
-  font-size: 10.5px; font-weight: 700;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+}
+
+/* ── Department quick-filter pills ── */
+.pf-deptpills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 4px 2px;
+}
+
+.pf-deptpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+
+.pf-deptpill:hover {
+  color: var(--text-primary);
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.pf-deptpill--on,
+.pf-deptpill[aria-pressed='true'] {
+  color: #fff !important;
+  background: var(--color-primary, #7c3aed) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28) !important;
+}
+
+.pf-deptpill__code {
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pf-deptpill--on .pf-deptpill__code,
+.pf-deptpill[aria-pressed='true'] .pf-deptpill__code {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #fff !important;
 }
 
 /* ── Horizontal rail of test cards ── */
+/* Catalog list — dense single-line rows on phone/tablet (design "3× density"):
+   one full-width row per test, stacked vertically instead of a horizontal card
+   scroll. Desktop (≥1024) keeps the multi-column card grid from the mockup.
+   Pure layout — no data, colour or binding change. The card's inner wrappers are
+   flattened with `display:contents` so code / name / TAT / price / star line up
+   as one row via `order`, with no template edit needed. */
 .pf-rail {
-  display: flex; gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  padding: 6px 4px 14px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+  overflow-x: hidden;
+  padding: 4px 2px 12px;
 }
+
+.pf-rail-card__title-row {
+  display: contents;
+}
+
+.pf-rail-card__price-row {
+  display: contents;
+}
+
+.pf-rail-card__title-row>span:first-child {
+  order: 1;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__star {
+  order: 5;
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__tat {
+  order: 3;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__price {
+  order: 4;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__badge-pkg {
+  order: 1;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__pkg-count {
+  order: 3;
+  flex-shrink: 0;
+}
+
 @media (min-width: 1024px) {
+
+  /* WEB browse catalog = a grid of the SAME dense rows as phone/tablet, laid
+     2–3 across to use the wide column — not sparse KPI-style cards. Each cell is
+     one scannable line (code · name · TAT · price · ★). Rows flow and the left
+     column scrolls; the cart rail stays put. */
   .pf-rail {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    grid-auto-rows: 140px;
-    gap: 10px;
-    max-height: calc(140px * 2 + 10px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-snap-type: none;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 8px;
   }
-  .pf-rail-card {
-    flex: none;
-    align-self: start;
-    min-height: 140px;
-    max-height: 140px;
-    height: 140px;
+
+  .pf-rail::-webkit-scrollbar {
+    width: 6px;
+    height: auto;
   }
-  .pf-rail::-webkit-scrollbar { width: 6px; height: auto; }
-  .pf-rail::-webkit-scrollbar-track { background: transparent; }
+
+  .pf-rail::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   .pf-rail::-webkit-scrollbar-thumb {
-    background: rgba(168, 85, 247, 0.32); border-radius: 999px;
+    background: rgba(168, 85, 247, 0.32);
+    border-radius: 999px;
   }
-}
-.pf-rail::-webkit-scrollbar { height: 6px; }
-.pf-rail::-webkit-scrollbar-track { background: transparent; }
-.pf-rail::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.32); border-radius: 999px;
 }
 
 .pf-rail-card {
   position: relative;
-  flex: 0 0 200px;
-  scroll-snap-align: start;
-  display: flex; flex-direction: column;
-  padding: 5px 8px 0px;
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: 12px;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.08s;
   overflow: hidden;
 }
-@media (min-width: 640px) {
-  .pf-rail-card { flex: 0 0 220px; }
+
+.pf-rail-card:not(.pf-rail-card--on):hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(168, 85, 247, 0.40);
 }
-.pf-rail-card:not(.pf-rail-card--on):hover { background: var(--glass-bg-hover); border-color: rgba(168, 85, 247, 0.40); }
-.pf-rail-card:active { transform: scale(0.98); }
+
+.pf-rail-card:active {
+  transform: scale(0.98);
+}
+
 .pf-rail-card--on {
   background: color-mix(in srgb, #10b981 14%, transparent);
   border-color: rgba(16, 185, 129, 0.45);
 }
+
 .pf-rail-card--pkg {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(236, 72, 153, 0.02) 100%), var(--glass-bg);
   border-color: rgba(245, 158, 11, 0.22);
   box-shadow: 0 4px 15px rgba(245, 158, 11, 0.03);
   transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1),
-              border-color 0.15s,
-              box-shadow 0.15s,
-              background-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background-color 0.15s;
 }
+
 .pf-rail-card--pkg:hover:not(.pf-rail-card--on) {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(236, 72, 153, 0.05) 100%), var(--glass-bg-hover);
   border-color: rgba(245, 158, 11, 0.45);
   box-shadow: 0 8px 24px rgba(245, 158, 11, 0.08);
   transform: translateY(-2px) scale(1.01);
 }
+
 .pf-rail-card--pkg.pf-rail-card--on {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(245, 158, 11, 0.03) 100%), var(--glass-bg);
   border-color: rgba(16, 185, 129, 0.55);
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
 }
+
 .pf-rail-card--pkg.pf-rail-card--on:hover {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(245, 158, 11, 0.05) 100%), var(--glass-bg-hover);
   border-color: rgba(16, 185, 129, 0.7);
@@ -192,10 +263,15 @@
 
 /* Star sits in the title row and shows only on hover/focus. */
 .pf-rail-card__star {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: transparent; border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
   color: var(--text-muted);
-  display: inline-flex; align-items: center; justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, transform 0.08s;
   opacity: 1;
@@ -204,11 +280,27 @@
   flex-shrink: 0;
   margin-left: 12px;
 }
-.pf-rail-card__star:hover { background: var(--glass-bg-hover); color: #fbbf24; }
-.pf-rail-card__star--on { color: #fbbf24; opacity: 1; visibility: visible; }
 
-.pf-rail-card--on { background: color-mix(in srgb, #10b981 14%, transparent); border-color: rgba(16, 185, 129, 0.45); }
-.pf-rail-card--on:hover { background: color-mix(in srgb, #10b981 20%, transparent); border-color: rgba(16, 185, 129, 0.6); }
+.pf-rail-card__star:hover {
+  background: var(--glass-bg-hover);
+  color: var(--amber-text);
+}
+
+.pf-rail-card__star--on {
+  color: var(--amber-text);
+  opacity: 1;
+  visibility: visible;
+}
+
+.pf-rail-card--on {
+  background: color-mix(in srgb, #10b981 14%, transparent);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.pf-rail-card--on:hover {
+  background: color-mix(in srgb, #10b981 20%, transparent);
+  border-color: rgba(16, 185, 129, 0.6);
+}
 
 .pf-rail-card__badge-pkg {
   display: inline-flex;
@@ -220,24 +312,27 @@
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   text-transform: uppercase;
 }
+
 .pf-rail-card__pkg-count {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-secondary, #4b5563);
-  background: var(--glass-bg-hover, rgba(0,0,0,0.04));
+  background: var(--glass-bg-hover, rgba(0, 0, 0, 0.04));
   padding: 1px 6px;
   border-radius: 5px;
 }
+
 .pf-rail-card__title-row {
-  display: flex;
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
 }
+
 .pf-rail-card__code {
   display: inline-flex;
   align-items: center;
@@ -252,46 +347,57 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+
 .pf-rail-card__name {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
-  font-size: 13.5px; font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.25;
-  white-space: normal;
+  line-height: 1.3;
+  white-space: nowrap;
   overflow: hidden;
-  min-height: 3em;
-  max-height: 3em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
 }
+
 .pf-rail-card__price-row {
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
   margin-top: 8px;
-  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
+
 .pf-rail-card__tat {
   font-size: 10.5px;
   color: var(--text-tertiary);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
 .pf-rail-card__footer {
   margin-top: 6px;
-  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
+
 .pf-rail-card__price {
   margin: 0;
-  font-size: 14px; font-weight: 700;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
 .pf-rail-card__on-tag {
-  font-size: 10.5px; font-weight: 700;
-  color: #10b981;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--green-text);
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.18);
@@ -299,17 +405,22 @@
 }
 
 .pf-empty-line {
-  text-align: center; padding: 18px 8px;
-  color: var(--text-tertiary); font-size: 13px;
+  text-align: center;
+  padding: 18px 8px;
+  color: var(--text-tertiary);
+  font-size: 13px;
 }
 
 /* ── Dept header above each catalog group ───────────────── */
 .pf-dept-hdr {
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 4px 4px 8px;
   border-bottom: 1px dashed var(--glass-border);
   margin-bottom: 8px;
 }
+
 .pf-dept-hdr__name {
   font-size: 11px;
   font-weight: 800;
@@ -317,6 +428,7 @@
   text-transform: uppercase;
   color: var(--text-secondary);
 }
+
 .pf-dept-hdr__count {
   padding: 1px 8px;
   font-size: 10.5px;
@@ -329,11 +441,28 @@
 /* WORK page → non-scroll app layout: the page fills the shell main area
    and never scrolls itself; scrolling happens INSIDE the left rail column
    and the cart column. */
-:host { display: block; height: 100%; overflow: hidden; }
-.pf-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.pf-page__header { flex-shrink: 0; }
+:host {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pf-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pf-page__header {
+  flex-shrink: 0;
+}
+
 /* pf-screen-header is the fixed top chrome → never shrinks/scrolls. */
-:host > .pf-page > pf-screen-header { flex: 0 0 auto; }
+:host>.pf-page>pf-screen-header {
+  flex: 0 0 auto;
+}
+
 /* The grid body fills remaining height; columns scroll internally. */
 .pf-page__body {
   flex: 1 1 auto;
@@ -342,470 +471,121 @@
   padding-bottom: 16px;
   overflow: hidden;
 }
-/* Left rail column scrolls internally (controls + search + tabs/rail). */
-.pf-col {
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
-}
-.pf-col::-webkit-scrollbar { width: 6px; }
-.pf-col::-webkit-scrollbar-track { background: transparent; }
-.pf-col::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.32); border-radius: 999px; }
-
-/* Cart side column (≥1024) scrolls internally instead of sticky-paging the
-   whole document, so the page stays non-scroll. */
-@media (min-width: 1024px) {
-  .pf-cart {
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
-  }
-  .pf-cart__card {
-    position: static;
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
-  }
-  .pf-cart__card::-webkit-scrollbar { width: 6px; }
-  .pf-cart__card::-webkit-scrollbar-track { background: transparent; }
-  .pf-cart__card::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.32); border-radius: 999px; }
-}
-
-/* Phone / iPad-portrait (<1024): single column. The left column still scrolls
-   internally; the cart lives in the FAB-triggered bottom-sheet drawer. */
-@media (max-width: 1023px) {
-  .pf-page__body { grid-template-rows: minmax(0, 1fr); }
-}
-
-/* ── Compact page header ─────────────────────────────────── */
-.pf-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 6px 0 10px;
-}
-.pf-head__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  align-self: center;
-  flex-shrink: 0;
-}
-.pf-head__back:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-.pf-head__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  line-height: 1.1;
-  flex-shrink: 0;
-}
-@media (min-width: 768px) { .pf-head__title { font-size: 26px; } }
-.pf-head__sub {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* ── Floating cart button ── */
-.pf-cart-fab {
+/* Sticky cart BAR (mockup) — phone + iPad-portrait; floats just above the
+   bottom-nav pill and spans the width. Replaces the old floating FAB. Tap
+   anywhere → the Review & Pay step. Hidden at lg+ (persistent cart rail). */
+.pf-cartbar {
   position: fixed;
-  right: 16px;
-  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  left: 12px;
+  right: 12px;
+  bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
   z-index: 46;
-  width: 60px;
-  height: 60px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+}
+
+.pf-cartbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--bg-card-solid, #1c1728);
+  border: 1px solid var(--color-primary, #7c3aed);
+  box-shadow: 0 12px 32px -8px rgba(124, 58, 237, 0.55);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.08s ease;
+}
+
+/* PF Keys docked (tablets): the cart bar rides directly above the keys
+   (the navbar steps aside like it does for any keyboard). */
+:host-context(html.pf-keys-open) .pf-cartbar { bottom: calc(var(--pf-keys-h, 0px) + 8px); }
+
+.pf-cartbar--skel .pf-cartbar__inner { border-color: var(--glass-border); box-shadow: none; cursor: default; }
+.pf-cartbar:not(.pf-cartbar--skel) { animation: pf-oc-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) { .pf-cartbar:not(.pf-cartbar--skel) { animation: none; } }
+
+.pf-cartbar__inner:active {
+  transform: scale(0.99);
+}
+
+.pf-cartbar__icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow:
-    0 14px 36px rgba(124, 58, 237, 0.55),
-    0 0 0 0 rgba(168, 85, 247, 0.45);
-  transition:
-    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.3s ease,
-    background 0.25s ease;
-  animation: pf-cart-breathe 2.6s ease-in-out infinite;
 }
-@keyframes pf-cart-breathe {
-  0%, 100% {
-    box-shadow:
-      0 14px 36px rgba(124, 58, 237, 0.55),
-      0 0 0 0 rgba(168, 85, 247, 0.45);
-  }
-  50% {
-    box-shadow:
-      0 16px 40px rgba(124, 58, 237, 0.65),
-      0 0 0 12px rgba(168, 85, 247, 0);
-  }
-}
-.pf-cart-fab:hover {
-  box-shadow: 0 18px 42px rgba(124, 58, 237, 0.7);
-  animation-play-state: paused;
-}
-.pf-cart-fab:active { transform: scale(0.93); }
-.pf-cart-fab--open {
-  background: linear-gradient(135deg, #ef4444, #db2777);
-  transform: rotate(45deg);
-  animation: none;
-}
-.pf-cart-fab__badge {
+
+.pf-cartbar__badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 9999px;
-  background: #ffffff;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #fff;
   color: #7c3aed;
-  font-size: 11.5px;
+  font-size: 10px;
   font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  text-align: center;
   font-variant-numeric: tabular-nums;
-  border: 2px solid var(--bg-primary);
-}
-.pf-cart-fab--open .pf-cart-fab__badge {
-  transform: rotate(-45deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .pf-cart-fab { animation: none; }
-}
-@media (min-width: 1024px) {
-  .pf-cart-fab { display: none; }
 }
 
-/* ── Patient row ────────────────────────────────────────── */
-.pf-patient {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-}
-.pf-patient__name {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.pf-patient__meta {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-.pf-patient__change {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.pf-patient__change:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-
-.pf-patient__cancel-btn {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  color: #fca5a5;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  padding: 0;
-}
-.pf-patient__cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #ffffff;
-  transform: scale(1.05);
-}
-.pf-patient__cancel-btn:active {
-  transform: scale(0.95);
-}
-
-
-.pf-controls-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  position: relative;
-  z-index: 20;
-}
-@media (min-width: 1024px) {
-  .pf-controls-row {
-    grid-template-columns: 2fr 1.5fr 1.5fr;
-    align-items: center;
-    gap: 12px;
-  }
-}
-
-/* ── Referring toggle (tablet/phone) ──────────────────────────
-   Below lg the patient + two referring fields can't share a row without
-   truncating. Default: show the patient field + a toggle chip; the two
-   referring fields are hidden. Tapping the chip (pf-controls-row--refopen)
-   reveals the referring inputs full-width (stacked) and collapses the
-   patient field for the moment. The toggle itself is hidden at lg+. */
-.pf-ref-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  align-self: start;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--input-bg, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--input-border, var(--glass-border));
-}
-.pf-ref-toggle svg { color: var(--text-muted); flex-shrink: 0; }
-.pf-ref-toggle--on { color: var(--brand, #a855f7); border-color: rgba(168, 85, 247, 0.4); }
-.pf-ref-toggle--on svg { color: var(--brand, #a855f7); }
-.pf-ref-toggle__dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--brand, #a855f7);
-}
-
-@media (max-width: 1023px) {
-  /* Referring fields hidden until the toggle opens them. */
-  .pf-controls-row .pf-refrow__field { display: none; }
-  .pf-controls-row--refopen .pf-refrow__field { display: block; }
-  /* When open, hand the row to the referring inputs; hide the patient block
-     + toggle-collapses to reclaim the vertical space for typing. */
-  .pf-controls-row--refopen .pf-controls-row__patient { display: none; }
-}
-@media (min-width: 1024px) {
-  .pf-ref-toggle { display: none; }
-}
-
-/* ── Inline Patient Picker & Card ── */
-.pf-patient-inline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 48px;
-  padding: 0 14px;
-  background: var(--input-bg, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--input-border, var(--glass-border));
-  border-radius: 12px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-}
-.pf-patient-inline .pf-patient__name {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pf-patient-inline .pf-patient__change {
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background 0.15s, color 0.15s;
-}
-.pf-patient-inline .pf-patient__change:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-primary);
-}
-.pf-patient-search-inline {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Search + Priority share a row ─────────────────────── */
-.pf-search-row {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-  position: relative;
-  z-index: 5;
-}
-.pf-search-row .pf-search {
+.pf-cartbar__info {
   flex: 1 1 auto;
   min-width: 0;
-}
-@media (min-width: 480px) {
-  .pf-search-row .pf-search { min-width: 260px; }
-}
-.pf-search-row .pf-priority__toggle {
-  flex-shrink: 0;
-  height: 48px;
-  padding: 4px;
-}
-.pf-search-row .pf-priority__opt { height: 40px; }
-
-/* ── Search ── */
-.pf-search {
-  position: relative;
-  border-radius: 12px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
-}
-.pf-search:focus-within {
-  border-color: rgba(168, 85, 247, 0.65);
-  box-shadow: 0 0 0 4px rgba(124, 58, 247, 0.16);
-  background-color: var(--glass-bg-hover);
-}
-.pf-search__icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
-.pf-search__input {
-  width: 100%;
-  height: 46px;
-  padding: 0 40px 0 40px;
-  border-radius: 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 13.5px;
-  outline: none;
-}
-.pf-search__input::placeholder { color: var(--text-muted); }
-.pf-search__clear {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.pf-search__clear:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-
-/* ── Priority toggle ────────────────────────────────────── */
-.pf-priority {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 2px 0;
+  flex-direction: column;
+  gap: 1px;
 }
-.pf-priority__label {
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.pf-priority__toggle {
-  position: relative;
-  display: inline-flex;
-  padding: 4px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-}
-.pf-priority__opt {
-  position: relative;
-  z-index: 1;
-  height: 36px;
-  padding: 0 18px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
+
+.pf-cartbar__line1 {
   font-size: 13px;
-  font-weight: 600;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: color 0.2s ease;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
-.pf-priority__opt:hover { color: var(--text-primary); }
-.pf-priority__opt--on { color: #ffffff; }
-.pf-priority__toggle[data-active='Normal']::before,
-.pf-priority__toggle[data-active='Urgent']::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  height: calc(100% - 8px);
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.25s;
+
+.pf-cartbar__line2 {
+  font-size: 11px;
+  color: var(--text-muted);
 }
-.pf-priority__toggle[data-active='Urgent']::before {
-  transform: translateX(100%);
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
-  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.45);
+
+.pf-cartbar__cta {
+  flex-shrink: 0;
+  padding: 10px 15px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .pf-cartbar {
+    display: none;
+  }
 }
 
 /* ── Eyebrow + counts ───────────────────────────────────── */
 .pf-eyebrow {
   margin: 0;
   font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
 .pf-catalog-count {
   display: inline-block;
   padding: 1px 8px;
@@ -816,9 +596,10 @@
   font-variant-numeric: tabular-nums;
   margin-left: 4px;
 }
+
 .pf-filter-hint {
   font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
 
@@ -835,17 +616,23 @@
   cursor: pointer;
   transition: transform 0.08s, background 0.2s, border-color 0.2s, box-shadow 0.25s;
 }
+
 .pf-pkg:hover {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.24), rgba(236, 72, 153, 0.12));
   border-color: rgba(168, 85, 247, 0.5);
   box-shadow: 0 8px 22px rgba(124, 58, 237, 0.22);
 }
-.pf-pkg:active { transform: scale(0.98); }
+
+.pf-pkg:active {
+  transform: scale(0.98);
+}
+
 .pf-pkg--on {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.42), rgba(236, 72, 153, 0.22));
   border-color: rgba(168, 85, 247, 0.85);
   box-shadow: 0 10px 28px rgba(124, 58, 237, 0.3);
 }
+
 .pf-pkg__check {
   flex-shrink: 0;
   width: 22px;
@@ -858,13 +645,20 @@
   justify-content: center;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.45);
 }
-.pf-pkg__name { margin: 0; font-size: 14px; font-weight: 600; }
+
+.pf-pkg__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .pf-pkg__meta {
   margin: 2px 0 0;
   font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
+
 .pf-pkg__price {
   margin: 0;
   font-size: 16px;
@@ -886,13 +680,21 @@
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
 }
-.pf-test:hover { background: var(--glass-bg-hover); }
-.pf-test:active { transform: scale(0.99); }
+
+.pf-test:hover {
+  background: var(--glass-bg-hover);
+}
+
+.pf-test:active {
+  transform: scale(0.99);
+}
+
 .pf-test--on {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.1));
   border-color: rgba(168, 85, 247, 0.55);
   box-shadow: 0 8px 22px rgba(124, 58, 237, 0.25);
 }
+
 .pf-test__badge {
   width: 36px;
   height: 36px;
@@ -901,43 +703,37 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   font-weight: 700;
   color: var(--text-secondary);
   flex-shrink: 0;
   transition: background 0.2s;
 }
+
 .pf-test--on .pf-test__badge {
   background: var(--gradient-primary);
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.45);
 }
-.pf-test__name { margin: 0; font-size: 13.5px; font-weight: 600; }
+
+.pf-test__name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
 .pf-test__meta {
   margin: 2px 0 0;
   font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
+
 .pf-test__price {
   font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-/* ── Cart ── */
-.pf-cart { position: relative; }
-.pf-cart__card {
-  position: sticky;
-  top: 12px;
-  padding: 18px;
-  border-radius: 22px;
-  background: var(--bg-card);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
 }
 
 .pf-cart-backdrop {
@@ -948,7 +744,16 @@
   z-index: 44;
   animation: pf-bd-in 0.2s ease both;
 }
-@keyframes pf-bd-in { from { opacity: 0 } to { opacity: 1 } }
+
+@keyframes pf-bd-in {
+  from {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
 
 .pf-cart-drawer {
   position: fixed;
@@ -965,16 +770,26 @@
   animation: pf-drawer-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   overflow-y: auto;
 }
+
 @keyframes pf-drawer-up {
-  from { transform: translateY(120%) scale(0.97); opacity: 0; }
-  to   { transform: translateY(0) scale(1);      opacity: 1; }
+  from {
+    transform: translateY(120%) scale(0.97);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
+
 .pf-cart-drawer__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
 }
+
 .pf-cart-drawer__close {
   width: 32px;
   height: 32px;
@@ -994,6 +809,7 @@
   font-weight: 700;
   color: var(--text-primary);
 }
+
 .pf-cart-clear {
   height: 28px;
   padding: 0 10px;
@@ -1004,7 +820,11 @@
   font-size: 11.5px;
   cursor: pointer;
 }
-.pf-cart-clear:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+
+.pf-cart-clear:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
 
 .pf-cart-list {
   list-style: none;
@@ -1016,12 +836,22 @@
   max-height: 320px;
   overflow-y: auto;
 }
+
+/* Opening a draft / order: skeleton rows where its tests will land, then
+   the real rows rise in (owner: animation + skeleton, never the PF logo). */
+.pf-cart-skel { list-style: none; padding: 4px 0; }
+.pf-us__tile-skel { margin: 2px 0; }
+.pf-oc-body:not([aria-busy]) .pf-crt { animation: pf-oc-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes pf-oc-row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pf-oc-body:not([aria-busy]) .pf-crt { animation: none; } }
+
 .pf-cart-empty {
   padding: 24px 0;
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
 }
+
 .pf-cart-row {
   display: flex;
   align-items: center;
@@ -1031,21 +861,33 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
 }
-.pf-cart-name { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+.pf-cart-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .pf-cart-meta {
   margin: 1px 0 0;
   font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
+
 .pf-cart-amount {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
 /* Member test covered by a package/profile in the cart — shown, but not billed
    separately (#38–44). Muted so it reads as "included, no charge". */
-.pf-cart-row--included { opacity: 0.82; }
+.pf-cart-row--included {
+  opacity: 0.82;
+}
+
 .pf-cart-amount--included {
   font-size: 11px;
   font-weight: 600;
@@ -1053,7 +895,11 @@
   text-transform: uppercase;
   color: var(--emerald-400, #34d399);
 }
-.pf-cart-meta--included { color: var(--emerald-400, #34d399); }
+
+.pf-cart-meta--included {
+  color: var(--emerald-400, #34d399);
+}
+
 .pf-cart-remove {
   width: 28px;
   height: 28px;
@@ -1066,81 +912,11 @@
   align-items: center;
   justify-content: center;
 }
-.pf-cart-remove:hover { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
 
-/* ── Package suggestion banner ─────────────────────────── */
-.pf-pkg-suggest {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
-  border: 1px solid rgba(168, 85, 247, 0.40);
+.pf-cart-remove:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--red-text);
 }
-.pf-pkg-suggest__hdr {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-primary, #7c3aed);
-}
-.pf-pkg-suggest__icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 18px; height: 18px;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white; border-radius: 50%; font-size: 11px;
-}
-.pf-pkg-suggest__sub {
-  margin: 4px 0 10px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-.pf-pkg-suggest__list {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.pf-pkg-suggest__row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-}
-.pf-pkg-suggest__name {
-  margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.pf-pkg-suggest__meta {
-  margin: 2px 0 0; font-size: 11px; color: var(--text-secondary);
-  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-}
-.pf-pkg-suggest__sep { opacity: 0.6; }
-.pf-pkg-suggest__strike {
-  text-decoration: line-through; opacity: 0.7;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-.pf-pkg-suggest__price {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-weight: 700; color: var(--text-primary);
-}
-.pf-pkg-suggest__save {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  background: rgba(16, 185, 129, 0.18);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  border-radius: 9999px;
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-}
-.pf-pkg-suggest__apply {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  color: white;
-  border: 0; border-radius: 9999px;
-  font-size: 11.5px; font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.32);
-}
-.pf-pkg-suggest__apply:hover { filter: brightness(1.08); }
 
 .pf-cart-totals {
   padding-top: 12px;
@@ -1149,6 +925,7 @@
   flex-direction: column;
   gap: 6px;
 }
+
 .pf-cart-line {
   display: flex;
   justify-content: space-between;
@@ -1156,6 +933,7 @@
   font-size: 12.5px;
   color: var(--text-secondary);
 }
+
 .pf-cart-line--total {
   margin-top: 6px;
   padding-top: 10px;
@@ -1165,191 +943,339 @@
   color: var(--text-primary);
 }
 
-/* Front-desk inline payment: give the right column a touch more room for the
-   payment-mode tiles + cash num-pad beside the test list. */
-@media (min-width: 1024px) {
-  .pf-page__body--billing { grid-template-columns: 1fr minmax(420px, 480px); }
+/* Post-payment actions (Print / Show invoice / New order). */
+.pf-paid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-/* Post-payment actions (Print / Show invoice / New order). */
-.pf-paid { display: flex; flex-direction: column; gap: 10px; }
-.pf-paid__msg { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #34d399; }
+.pf-paid__msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--green-text);
+}
+
 /* Post-payment Total / Paid / Balance-due breakdown (advance + full). */
 .pf-paid__summary {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 12px 14px; border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(148, 163, 184, 0.06);
 }
+
 .pf-paid__sumline {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 13px; color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
 }
-.pf-paid__sumline span:last-child { color: var(--text-primary, #e2e8f0); font-weight: 600; }
+
+.pf-paid__sumline span:last-child {
+  color: var(--text-primary, #e2e8f0);
+  font-weight: 600;
+}
+
 .pf-paid__sumline--due {
-  padding-top: 6px; margin-top: 2px;
+  padding-top: 6px;
+  margin-top: 2px;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
   font-weight: 700;
 }
-.pf-paid__sumline--due span { color: var(--color-primary, #a78bfa); }
-.pf-paid__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.pf-paid__sumline--due span {
+  color: var(--color-primary, #a78bfa);
+}
+
+.pf-paid__sumline--done {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  font-weight: 700;
+}
+
+.pf-paid__sumline--done span:last-child {
+  color: var(--emerald-400, #34d399) !important;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-paid__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .pf-paid__btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 10px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
   border: 1px solid rgba(139, 92, 246, 0.4);
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(217, 70, 239, 0.08));
-  color: #a78bfa;
+  color: var(--violet-text);
+  transition: all 0.15s ease;
 }
-.pf-paid__btn svg { flex-shrink: 0; }
-.pf-paid__btn:hover { background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899)); color: #fff; border-color: transparent; }
+
+.pf-paid__btn svg {
+  flex-shrink: 0;
+}
+
+.pf-paid__btn:hover {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #fff;
+  border-color: transparent;
+}
+
 /* WhatsApp share — green accent so it reads as the "send to patient" action. */
 .pf-paid__btn--wa {
   border-color: rgba(37, 211, 102, 0.45);
   background: linear-gradient(135deg, rgba(37, 211, 102, 0.16), rgba(18, 140, 126, 0.08));
   color: #25d366;
 }
+
 .pf-paid__btn--wa:hover {
-  background: linear-gradient(135deg, #25d366, #128c7e); color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #fff;
+  border-color: transparent;
+}
+
+.pf-paid__btn--full {
+  grid-column: span 2;
+}
+
+.pf-paid__btn--collect {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1));
+  color: var(--blue-text, #3b82f6);
+}
+
+.pf-paid__btn--collect:hover {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #ffffff;
+}
+
+.pf-paid__btn--cta {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.35);
+  padding: 12px;
+  font-size: 14px;
+}
+
+.pf-paid__btn--cta:hover {
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
 }
 
 /* In-app invoice preview (Show invoice). */
-.pf-invprev { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.pf-invprev__bd { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.pf-invprev__panel {
-  position: relative; z-index: 1; display: flex; flex-direction: column;
-  width: min(820px, 100%); height: min(92dvh, 1040px);
-  background: var(--bg-card-solid, #14141f); border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
-  border-radius: 18px; overflow: hidden; box-shadow: 0 28px 70px rgba(0,0,0,0.6);
+.pf-invprev {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
-.pf-invprev__hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.1)); font-weight: 800; color: var(--text-primary); }
-.pf-invprev__close { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: transparent; color: var(--text-secondary); cursor: pointer; }
+
+.pf-invprev__bd {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.pf-invprev__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  height: min(92dvh, 1040px);
+  background: var(--bg-card-solid, #14141f);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6);
+}
+
+.pf-invprev__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.pf-invprev__close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 /* Desktop/iPad: the scale wrappers are transparent — the iframe keeps its
    original flex:1 / width:100% behaviour. They only become real (scaling) boxes
    at <=640px below, so the desktop preview is byte-for-byte unchanged. */
-.pf-invprev__viewport, .pf-invprev__stage { display: contents; }
-.pf-invprev__frame { flex: 1; width: 100%; border: 0; background: #525659; }
+.pf-invprev__viewport,
+.pf-invprev__stage {
+  display: contents;
+}
+
+.pf-invprev__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #525659;
+}
 
 /* Discount control in the cart summary */
-.pf-cart-disc { align-items: center; }
-.pf-cart-disc__ctl { display: flex; align-items: center; gap: 6px; }
+.pf-cart-disc {
+  align-items: center;
+}
+
+.pf-cart-disc__ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pf-cart-disc__kind {
   display: inline-flex;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  align-items: center;
+  padding: 2.5px;
+  border-radius: 9px;
+  background: var(--input-bg, rgba(20, 20, 40, 0.05));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+.pf-cart-disc__kind:hover {
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
 .pf-cart-disc__kind button {
-  width: 24px;
-  height: 26px;
+  min-width: 28px;
+  height: 25px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: var(--text-tertiary, #64748b);
   background: transparent;
   cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.pf-cart-disc__kind button:hover:not(.pf-cart-disc__kind--on) {
+  color: var(--text-primary);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.pf-cart-disc__kind button.pf-cart-disc__kind--on,
 .pf-cart-disc__kind--on {
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
-  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #ec4899) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
 }
+
 .pf-cart-disc__input {
-  width: 72px;
-  height: 28px;
-  padding: 0 8px;
+  width: 76px;
+  height: 30px;
+  padding: 0 10px;
   text-align: right;
   border-radius: 8px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
-  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  background: var(--input-bg, rgba(255, 255, 255, 0.05));
   color: var(--text-primary);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.pf-cart-disc__input:focus { outline: none; border-color: rgba(139, 92, 246, 0.6); }
-.pf-cart-disc__input--err { border-color: #f87171 !important; }
-.pf-cart-disc__cap { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-.pf-cart-disc__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: #f87171; }
-
-.pf-proceed {
-  margin-top: 16px;
-  width: 100%;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--gradient-primary);
-  color: #ffffff;
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
-  transition: transform 0.08s, box-shadow 0.25s, filter 0.08s;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.15s ease;
 }
-.pf-proceed--ghost {
-  margin-top: 8px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
-  color: var(--text-secondary);
-  border-color: var(--glass-border, rgba(255, 255, 255, 0.12));
-  box-shadow: none;
-}
-.pf-proceed--ghost:hover:not(:disabled) { box-shadow: none; filter: none; background: rgba(139, 92, 246, 0.1); }
-.pf-proceed:hover:not(:disabled) {
-  box-shadow: 0 14px 32px rgba(124, 58, 237, 0.55);
-  transform: translateY(-1px);
-}
-.pf-proceed:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.08); }
-.pf-proceed:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
-.pf-cart-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px auto 0;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.1em;
+.pf-cart-disc__input:focus {
+  outline: none;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2) !important;
+  background: var(--input-bg, #ffffff);
+}
+
+.pf-cart-disc__input:not(:placeholder-shown):not([value="0"]):not([value=""]) {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--violet-text, #7c3aed);
+  font-weight: 800;
+}
+
+.pf-cart-disc__input--err {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+  background: rgba(239, 68, 68, 0.06) !important;
+}
+
+.pf-cart-disc__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--input-bg-disabled, rgba(255, 255, 255, 0.02));
+  border-color: var(--border-muted, rgba(139, 92, 246, 0.12));
+}
+
+.pf-cart-disc__cap {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pf-cart-disc__err {
+  margin: 4px 0 0;
+  font-size: 11.5px;
   font-weight: 600;
-}
-.pf-cart-badge-wrap { display: flex; justify-content: center; }
-.pf-cart-badge--urgent {
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.14);
-  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: var(--red-text);
 }
 
-/* Estimated time-to-report next to the cart total */
-.pf-cart-tat {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-top: 10px;
-  padding: 6px 10px;
-  background: rgba(59, 130, 246, 0.10);
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  border-radius: 9999px;
-  color: #93c5fd;
-  font-size: 11.5px; font-weight: 600;
-}
-
-/* Save / discard draft action row */
-.pf-cart-draftrow {
-  display: flex; gap: 8px; margin-top: 8px;
-}
-.pf-cart-draft {
-  flex: 1;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+/* A bundle beside its own member (old draft / repeat) — flagged, not dropped. */
+.pf-cart-dup {
+  margin: 0 0 8px;
   padding: 8px 10px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 12px; font-weight: 600;
-  cursor: pointer;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red-text) 8%, transparent);
 }
-.pf-cart-draft:hover:not([disabled]) { background: var(--bg-hover); }
-.pf-cart-draft[disabled] { opacity: 0.45; cursor: not-allowed; }
-.pf-cart-draft--ghost { flex: 0 0 auto; color: var(--text-secondary); }
+.pf-cart-dup__msg {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--red-text);
+}
+.pf-cart-dup__msg + .pf-cart-dup__msg { margin-top: 4px; }
 
 /* ════════════════════════════════════════════════════════════════════
    CROSS-PLATFORM OVERRIDES (additive only — desktop-web ≥1280 untouched)
@@ -1360,7 +1286,8 @@
 
 /* --- iOS zoom guard: any focused input <16px makes Safari zoom the page.
        Bump the page's own text inputs to 16px below desktop only. --- */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
+
   :host .pf-search__input,
   :host .pf-refdoc__input,
   :host .pf-refdoc__pop-item,
@@ -1371,9 +1298,14 @@
 
 /* --- Drawer/preview heights: use dvh so the mobile browser URL bar
        collapsing doesn't clip the sheet. Sub-desktop only. --- */
-@media (max-width: 1279px) {
-  :host .pf-cart-drawer { max-height: 75dvh; }
-  :host .pf-invprev__panel { height: min(92dvh, 1040px); }
+@include dt.tablet-tier {
+  :host .pf-cart-drawer {
+    max-height: 75dvh;
+  }
+
+  :host .pf-invprev__panel {
+    height: min(92dvh, 1040px);
+  }
 }
 
 /* --- Phone (≤640): the cart drawer becomes a true full-width bottom
@@ -1388,25 +1320,58 @@
     border-bottom-right-radius: 0;
     padding-bottom: calc(18px + var(--tab-nav-total-height, 0px));
   }
+
   /* Tabs may overflow horizontally — keep them swipeable, edge-to-edge. */
-  :host .pf-tabs__btn { min-width: 96px; }
+  :host .pf-tabs__btn {
+    min-width: 96px;
+  }
 }
 
 /* --- Touch sizing: grow small tap targets to ≥44px on coarse pointers
        (phones/tablets) without changing the dense mouse-driven desktop. --- */
 @media (pointer: coarse) {
-  :host .pf-tabs__btn { min-height: 44px; }
-  :host .pf-rail-card__star { width: 40px; height: 40px; }
-  :host .pf-cart-remove { width: 40px; height: 40px; }
-  :host .pf-cart-drawer__close { width: 40px; height: 40px; }
-  :host .pf-cart-clear { height: 36px; }
+  :host .pf-tabs__btn {
+    min-height: 44px;
+  }
+
+  :host .pf-rail-card__star {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-remove {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-drawer__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-clear {
+    height: 36px;
+  }
+
   :host .pf-patient__change,
-  :host .pf-patient__cancel { min-height: 40px; }
-  :host .pf-cart-disc__kind button { width: 34px; height: 36px; }
-  :host .pf-cart-disc__input { height: 38px; }
-  :host .pf-pkg-suggest__apply { min-height: 40px; }
+  :host .pf-patient__cancel {
+    min-height: 40px;
+  }
+
+  :host .pf-cart-disc__kind button {
+    width: 34px;
+    height: 36px;
+  }
+
+  :host .pf-cart-disc__input {
+    height: 38px;
+  }
+
   :host .pf-refdoc__clear,
-  :host .pf-search__clear { width: 32px; height: 32px; }
+  :host .pf-search__clear {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 /* --- Capacitor native: the FAB and the bottom-sheet are this page's own
@@ -1416,6 +1381,7 @@
 :host-context(html.cap-native) .pf-cart-fab {
   bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
 }
+
 @media (max-width: 640px) {
   :host-context(html.cap-native) .pf-cart-drawer {
     padding-bottom: calc(18px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
@@ -1428,25 +1394,37 @@
        under the FAB. Desktop (≥1024) shows the cart as a side column with no
        FAB, so this never touches it. --- */
 @media (max-width: 640px) {
-  :host .pf-col { padding-bottom: 84px; }
+  :host .pf-col {
+    padding-bottom: 84px;
+  }
 }
+
 /* iPad band has no bottom pill — drop the FAB lower and reserve matching room. */
 @media (min-width: 641px) and (max-width: 1023px) {
-  :host .pf-cart-fab { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
-  :host .pf-col { padding-bottom: 96px; }
+  :host .pf-cart-fab {
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  :host .pf-col {
+    padding-bottom: 96px;
+  }
 }
 
 /* --- Invoice preview: on phones the centered modal wastes space and the PDF
        reads small. Promote it to a full-screen sheet; pad the header for the
        status bar on native so the close button never sits under the notch. --- */
 @media (max-width: 640px) {
-  :host .pf-invprev { padding: 0; }
+  :host .pf-invprev {
+    padding: 0;
+  }
+
   :host .pf-invprev__panel {
     width: 100%;
     height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
   }
+
   :host-context(html.cap-native) .pf-invprev__hdr {
     padding-top: calc(12px + env(safe-area-inset-top, 0px));
   }
@@ -1464,8 +1442,10 @@
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y pinch-zoom;
-    background: #525659; /* letterbox around the scaled page */
+    background: #525659;
+    /* letterbox around the scaled page */
   }
+
   :host .pf-invprev__stage {
     display: block;
     /* 794×1123 = A4 @ ~96dpi, scaled so the scroller sizes correctly and
@@ -1474,6 +1454,7 @@
     height: calc(1123px * var(--pf-inv-scale, 1));
     margin: 0 auto;
   }
+
   :host .pf-invprev__frame {
     flex: none;
     width: 794px;
@@ -1487,10 +1468,24 @@
        page up to the coarse-pointer floor without disturbing the dense
        mouse-driven desktop. --- */
 @media (pointer: coarse) {
-  :host .pf-invprev__close { width: 44px; height: 44px; }
-  :host .pf-refdoc__pop-item { min-height: 44px; display: flex; align-items: center; }
-  :host .pf-cart-draft { min-height: 44px; }
-  :host .pf-paid__btn { min-height: 44px; }
+  :host .pf-invprev__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  :host .pf-refdoc__pop-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  :host .pf-cart-draft {
+    min-height: 44px;
+  }
+
+  :host .pf-paid__btn {
+    min-height: 44px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1501,12 +1496,21 @@
 
 /* These two helpers are hidden everywhere by default → only the ≤640 block
    below turns them on, so ≥641 never sees them. */
-.pf-tabs__icon { display: none; }
-.pf-az-index { display: none; }
+.pf-tabs__icon {
+  display: none;
+}
+
+.pf-az-index {
+  display: none;
+}
+
 /* Scrub callout never shows above phone (the strip can't be touched there). */
-.pf-az-callout { display: none; }
+.pf-az-callout {
+  display: none;
+}
 
 @media (max-width: 640px) {
+
   /* --- FIX 1: test cards → single-column full-width vertical list (no
          horizontal scroll, no 2-up grid). --- */
   :host .pf-rail {
@@ -1518,14 +1522,17 @@
     padding: 6px 0 12px;
     scroll-snap-type: none;
   }
+
   :host .pf-rail-card {
     flex: 1 1 auto;
     width: 100%;
     max-width: 100%;
-    min-height: 56px;          /* ≥44px tap target */
+    min-height: 56px;
+    /* ≥44px tap target */
     padding: 10px 12px;
     scroll-snap-align: none;
   }
+
   /* Let the name size to its content in list rows instead of a fixed 3em box. */
   :host .pf-rail-card__name {
     min-height: 0;
@@ -1533,19 +1540,29 @@
   }
 
   /* --- FIX 2: chip row → icon-only, 4 across, no horizontal overflow. --- */
-  :host .pf-tabs { overflow-x: hidden; }
+  :host .pf-tabs {
+    overflow-x: hidden;
+  }
+
   :host .pf-tabs__btn {
     flex: 1 1 0;
-    min-width: 0;              /* override the 96px min set elsewhere ≤640 */
+    min-width: 0;
+    /* override the 96px min set elsewhere ≤640 */
     gap: 4px;
     padding: 8px 4px;
   }
+
   :host .pf-tabs__icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-  :host .pf-tabs__label { display: none; }   /* text replaced by the icon */
+
+  :host .pf-tabs__label {
+    display: none;
+  }
+
+  /* text replaced by the icon */
   :host .pf-tabs__count {
     min-width: 0;
     padding: 0 5px;
@@ -1578,6 +1595,7 @@
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
+
   :host .pf-az-index__l {
     width: 22px;
     min-height: 18px;
@@ -1598,8 +1616,12 @@
     pointer-events: none;
     transition: transform 0.08s ease, color 0.08s ease;
   }
+
   /* Re-enable hit-testing for keyboard/AT activation (Enter fires click). */
-  :host .pf-az-index__l:focus-visible { pointer-events: auto; }
+  :host .pf-az-index__l:focus-visible {
+    pointer-events: auto;
+  }
+
   /* Letter currently under the finger — subtly emphasised, iOS-like. */
   :host .pf-az-index__l--on {
     color: var(--text-primary, #fff);
@@ -1630,22 +1652,39 @@
   }
 
   /* Anchor offset so a jumped-to section clears the top chrome / safe area. */
-  :host [data-dept-letter] { scroll-margin-top: 12px; }
+  :host [data-dept-letter] {
+    scroll-margin-top: 12px;
+  }
 }
 
 /* Field-level error: red border on the offending ref input + inline message. */
-.pf-input-error { border-color: var(--danger, #ef4444) !important; }
-.pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
+.pf-input-error {
+  border-color: var(--danger, #ef4444) !important;
+}
+
+.pf-field-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+}
 
 /* Field-level error: red border on the offending ref input + inline message. */
-.pf-input-error { border-color: var(--danger, #ef4444) !important; }
-.pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
+.pf-input-error {
+  border-color: var(--danger, #ef4444) !important;
+}
+
+.pf-field-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+}
 
 /* ── Payment Due Mode styling ── */
 .pf-priority--disabled {
   opacity: 0.6;
   pointer-events: none;
 }
+
 .pf-payment-due-tests {
   border: 1px solid var(--glass-border);
   background: var(--glass-bg);
@@ -1660,17 +1699,22 @@
   backdrop-filter: blur(16px);
   background: var(--bg-card-solid, rgba(20, 20, 42, 0.8));
 }
+
 .pf-collect-icon {
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
 }
-.pf-patient-preview, .pf-tests-preview {
+
+.pf-patient-preview,
+.pf-tests-preview {
   background: var(--glass-bg, rgba(255, 255, 255, 0.03));
 }
+
 .pf-btn-secondary {
   background: transparent;
   color: var(--text-secondary);
   transition: all 0.15s ease;
 }
+
 .pf-btn-secondary:hover {
   background: var(--glass-bg-hover, rgba(255, 255, 255, 0.06));
   color: var(--text-primary);
@@ -1684,34 +1728,39 @@
   border: 1px solid rgba(245, 158, 11, 0.35);
   background: rgba(245, 158, 11, 0.08);
 }
+
 .pf-refund__title {
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 700;
-  color: #fcd34d;
+  color: var(--amber-text);
 }
+
 .pf-refund__modes {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
 }
+
 .pf-refund__chip {
   flex: 1;
   padding: 8px 0;
   border-radius: 9px;
   font-weight: 700;
   font-size: 12.5px;
-  border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-  background: var(--glass-bg, rgba(255,255,255,0.03));
-  color: var(--text-secondary, rgba(255,255,255,0.72));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
   cursor: pointer;
   text-align: center;
 }
+
 .pf-refund__chip--on {
   background: linear-gradient(135deg, #f59e0b, #fbbf24);
   border-color: transparent;
   color: #1a1a1a;
 }
+
 .pf-refund__btn {
   width: 100%;
   padding: 11px;
@@ -1722,6 +1771,7 @@
   color: #1a1a1a;
   cursor: pointer;
 }
+
 .pf-refund__btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1734,7 +1784,7 @@
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   padding: 20px;
-  
+
   h3 {
     margin-top: 0;
   }
@@ -1750,90 +1800,1792 @@
   border: 1px solid var(--glass-border);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.01);
   transition: border-color 0.15s, box-shadow 0.15s;
-  
+
   &:hover {
     border-color: rgba(124, 58, 247, 0.25);
     box-shadow: 0 4px 12px rgba(124, 58, 247, 0.05);
   }
 }
 
-.pf-hdr-collect-btn {
-  display: inline-flex;
+.pf-trend-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #a855f7));
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
-
-  &:hover {
-    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-
-  svg {
-    stroke-width: 2.2;
-  }
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
 }
 
-.pf-hdr-new-btn,
-.pf-hdr-draft-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.05));
+.pf-trend-modal__panel {
+  width: min(520px, calc(100vw - 32px));
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card-solid);
   border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.pf-trend-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.pf-trend-modal__head h3 {
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text-primary);
+}
+
+.pf-trend-modal__head p {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.pf-trend-modal__x {
+  background: none;
+  border: 0;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.pf-trend-modal__dur {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.pf-trend-modal__dur select {
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.pf-trend-modal__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 18px;
+}
+
+.pf-trend-modal__test {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.pf-trend-modal__test-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.pf-trend-modal__test-name span {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.pf-trend-modal__param {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pf-trend-modal__param input {
+  width: 15px;
+  height: 15px;
+  accent-color: #7c3aed;
+}
+
+.pf-trend-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.pf-trend-modal__done {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  border: 0;
+}
+/* Specimen picker on culture cart rows (desk-side choice). */
+.pf-cart-spec { margin-top: 6px; max-width: 230px; }
+.pf-crt:has(.pf-cart-spec) {
+  /* These rows have a title line and a 34px specimen control; reserve room
+     for both so the selector cannot paint into the following cart row. */
+  min-height: 90px;
+}
+/* Required specimen not chosen: the picker's own border turns danger (same
+   language as .pf-input-error) and the inline message sits under it. */
+.pf-cart-spec--err :is(button, input) { border-color: var(--danger, #ef4444) !important; }
+.pf-cart-spec--err .pf-field-error { margin: 4px 0 0; }
+
+/* ════════════════════════════════════════════════════════════════════
+   OPTION A — unified search pill + designer cards (catalogue, billing).
+   Theme tokens only, so light and dark both follow the app theme.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* The band's pill hugs our tiles (designer: 8px inset, 6px rhythm). */
+
+/* ── Pill contents ─────────────────────────────────────────── */
+.pf-us {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+}
+
+.pf-us__icon { flex-shrink: 0; }
+
+.pf-us__tiles { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; }
+
+.pf-us__tile {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 210px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent);
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-us__tile--filled {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 13%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+.pf-us__tile--on { background: var(--color-violet-600, #7c3aed); color: #fff; }
+.pf-us__tile--err { box-shadow: inset 0 0 0 1px var(--error-text, #ef4444); }
+
+.pf-us__tile-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pf-us__tile:not(.pf-us__tile--filled) .pf-us__tile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-us__tile--filled .pf-us__tile-btn:disabled { cursor: default; }
+.pf-us__tile-btn:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 2px; border-radius: 10px; }
+.pf-us__tile-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.pf-us__tile-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+  cursor: pointer;
+}
+.pf-us__tile-x:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent); }
+
+.pf-us__div { flex-shrink: 0; width: 1px; height: 26px; margin: 0 4px; background: var(--border-muted, #e5e7eb); }
+
+.pf-us__field {
+  flex: 1 1 auto;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  color: var(--text-tertiary);
+  cursor: text;
+}
+.pf-us__glass { flex-shrink: 0; }
+.pf-us__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+.pf-us__input::placeholder { color: var(--input-placeholder, var(--text-muted)); }
+.pf-us__input:disabled { cursor: not-allowed; }
+
+.pf-us__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pf-us__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Cart icon badge. */
+.pf-us__cart { position: relative; }
+.pf-us__badge {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-violet-600, #7c3aed);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Scope dropdown under the pill. */
+.pf-us__drop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 14px);
+  z-index: 60;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 40px rgba(31, 17, 71, 0.18);
+}
+.pf-us__drop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.pf-us__drop-esc { border: 0; background: transparent; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--text-tertiary); cursor: pointer; }
+.pf-us__drop-note { margin: 0; padding: 12px 10px; font-size: 13px; color: var(--text-tertiary); }
+.pf-us__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.pf-us__row--hl { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+.pf-us__row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pf-us__row-title { font-size: 14px; font-weight: 500; color: var(--text-primary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-us__row--new .pf-us__row-title::before { content: '“'; }
+.pf-us__row--new .pf-us__row-title::after { content: '”'; }
+.pf-us__row-meta { font-size: 12px; color: var(--text-tertiary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-us__row-cta { flex-shrink: 0; font-size: 12px; color: var(--violet-text, #6d28d9); }
+.pf-us__drop-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-muted);
+}
+.pf-us__drop-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--violet-text, #6d28d9);
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s, background 0.2s, border-color 0.2s;
-
-  &:hover:not(:disabled) {
-    background: var(--glass-bg-hover, rgba(255, 255, 255, 0.1));
-    border-color: rgba(124, 58, 247, 0.35);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 }
+.pf-us__drop-act:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
 
-.pf-hdr-discard-btn {
+/* Compact scope picker — phones only (the tiles collapse into it). */
+/* Band: report ETA pill. */
+.pf-oc-tat {
   display: inline-flex;
   align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 10px;  /* designer's rounded-rectangle language, not a pill */
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--bg-card-solid, #fff) 60%, transparent);
+  border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.26));
+}
+
+/* Phone chips for the picks + field errors under the band. */
+.pf-oc-picks { display: none; }
+.pf-oc-errs { width: 100%; max-width: 1123px; margin: 0 auto; padding: 0 20px 4px; box-sizing: border-box; }
+.pf-oc-errs .pf-field-error { margin: 2px 0 0; }
+
+/* ── Page body: catalogue card + billing card, inner panes scroll ── */
+.pf-oc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 6px 20px 16px;
+}
+.pf-oc-body--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.pf-oc-cat,
+.pf-oc-bill {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--card-border, var(--glass-border));
+  border-radius: 16px;
+}
+.pf-oc-cat { flex: 1 1 auto; }
+
+.pf-oc-cat__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-oc-cat__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 20px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+}
+.pf-oc-cat .pf-payment-due-tests { border: 0; box-shadow: none; background: transparent; margin: 0; border-radius: 0; padding: 20px; }
+.pf-readonly-test-card__price { flex-shrink: 0; margin-left: 16px; font-size: 14px; font-weight: 700; color: var(--violet-text, #7c3aed); }
+
+/* Tabs → underline (designer). */
+.pf-oc-cat .pf-tabs {
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171;
+}
+.pf-oc-cat .pf-tabs__btn {
+  flex: none;
+  min-width: 0;
+  padding: 8px 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+.pf-oc-cat .pf-tabs__btn:not(.pf-tabs__btn--on):hover { background: transparent; color: var(--text-primary); }
+.pf-oc-cat .pf-tabs__btn--on,
+.pf-oc-cat .pf-tabs__btn--on:hover {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--color-violet-600, #7c3aed);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.pf-oc-cat .pf-tabs__count { padding: 0; min-width: 0; background: transparent; color: var(--violet-text, #7c3aed); font-size: 11px; }
+
+.pf-oc-urgent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--red-text, #dc2626);
+  background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--pf-card-bg, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 24%, var(--border-muted, #e5e7eb));
+}
+.pf-oc-urgent-badge__dot { display: inline-block; flex: none; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: currentColor; line-height: 0; }
+
+/* Department chips. */
+.pf-oc-cat .pf-deptpills { flex: none; gap: 8px; padding: 14px 20px 10px; }
+.pf-oc-cat .pf-deptpill {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-muted);
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.pf-oc-cat .pf-deptpill:hover:not([aria-pressed='true']) {
+  border-color: var(--color-primary, #7c3aed);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, var(--bg-card-solid));
+}
+.pf-oc-cat .pf-deptpill[aria-pressed='true'],
+.pf-oc-cat .pf-deptpill--on {
+  background: var(--color-primary, #7c3aed) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28) !important;
+}
+.pf-oc-cat .pf-deptpill__code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #7c3aed);
+  font-size: 11px;
+}
+.pf-oc-cat .pf-deptpill[aria-pressed='true'] .pf-deptpill__code,
+.pf-oc-cat .pf-deptpill--on .pf-deptpill__code {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+
+/* Test rows (designer: 44px rows, 2 across on desktop). */
+.pf-oc-cat .pf-rail { gap: 10px; padding: 4px 0 12px; }
+.pf-oc-cat .pf-rail-card {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--bg-card-solid);
+  border-color: var(--border-muted);
+}
+.pf-oc-cat .pf-rail-card__code {
+  padding: 0;
+  background: transparent;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--violet-text, #7c3aed);
+}
+.pf-oc-cat .pf-rail-card__name { font-size: 13px; font-weight: 500; }
+.pf-oc-cat .pf-rail-card__price { font-size: 13px; font-weight: 600; }
+.pf-rail-card__check { color: var(--color-violet-600, #7c3aed); flex-shrink: 0; }
+
+/* ── Billing card (designer panel) ─────────────────────────── */
+.pf-oc-bill__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--bg-card-solid));
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-oc-bill__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  color: var(--violet-text, #7c3aed);
+}
+.pf-oc-bill__title { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-secondary); }
+.pf-oc-bill__spacer { flex: 1 1 auto; }
+.pf-oc-bill__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+  margin-bottom: 4px;
+}
+.pf-oc-bill__body--cart { overflow: hidden; }
+.pf-oc-bill__foot {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border-muted);
+}
+.pf-oc-bill__foot > :only-child { grid-column: 1 / -1; }
+.pf-oc-bill__foot:empty { display: none; }
+.pf-oc-bill__meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-tertiary); }
+.pf-oc-bill__hint { margin: 0; padding: 12px 0; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+
+.pf-oc-textbtn {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--violet-text, #7c3aed);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Include Trendogram switch. */
+.pf-oc-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pf-oc-switch__track {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--pf-toggle-off, #cbd5e1);
+  border: 1px solid var(--pf-toggle-border, #94a3b8);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pf-oc-switch:hover:not(:disabled) .pf-oc-switch__track {
+  border-color: var(--color-primary, #7c3aed);
+}
+.pf-oc-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28), 0 1px 1px rgba(15, 23, 42, 0.15);
+  transition: left 0.15s ease;
+}
+.pf-oc-switch[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-switch-on, #7c3aed); border-color: var(--pf-switch-on, #7c3aed); box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35); }
+.pf-oc-switch--urgent[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-toggle-urgent, #ef4444) !important; border-color: var(--pf-toggle-urgent, #ef4444) !important; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35); }
+.pf-oc-switch--urgent[aria-checked='true'] { color: var(--red-text, #dc2626); font-weight: 600; }
+.pf-oc-switch[aria-checked='true'] .pf-oc-switch__knob { left: 16px; }
+.pf-oc-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+.pf-oc-switch:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 3px; border-radius: 6px; }
+
+.pf-oc-trend { display: flex; align-items: center; gap: 8px; }
+.pf-oc-trend__dur { flex: 1 1 auto; min-width: 0; }
+.pf-oc-trend__edit {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.26));
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+  color: var(--violet-text, #7c3aed);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Cart rows. */
+.pf-oc-bill .pf-cart-list,
+.pf-cart-drawer .pf-cart-list { margin: 0; }
+.pf-oc-bill .pf-cart-row,
+.pf-cart-drawer .pf-cart-row {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border-muted);
+}
+.pf-cart-collected {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--success-text, #059669);
+  background: var(--success-bg, rgba(16, 185, 129, 0.15));
+  border: 1px solid var(--success-border, rgba(16, 185, 129, 0.3));
+}
+.pf-cart-lock { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; color: var(--warning-text, #f59e0b); }
+.pf-cart-line__save { color: var(--success-text, #10b981); }
+.pf-cart-line--due { font-weight: 700; color: var(--violet-text, #7c3aed); }
+.pf-oc-bill .pf-cart-totals,
+.pf-cart-drawer .pf-cart-totals { margin-top: 0; }
+
+/* Paid: invoice / receipt / share / labels. */
+.pf-oc-paid-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.pf-oc-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pf-oc-act:hover:not(:disabled) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.26)); }
+.pf-oc-act:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-oc-act--wa { color: var(--success-text, #059669); }
+
+/* Footer buttons. */
+.pf-oc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.pf-oc-btn--ghost { border: 1px solid var(--color-violet-600, #7c3aed); background: transparent; color: var(--violet-text, #6d28d9); }
+.pf-oc-btn--primary { border: 0; background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3)); color: #fff; }
+.pf-oc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Checkout drawer (<lg) reuses the billing body: header · scroll · footer. */
+.pf-cart-drawer {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-card-solid);
+}
+.pf-cart-drawer .pf-cart-drawer__close { position: absolute; top: 10px; right: 10px; z-index: 1; }
+.pf-cart-drawer .pf-oc-bill__head { padding-right: 56px; }
+
+/* Trend modal duration row (pf-select). */
+.pf-trend-modal__dur { display: flex; align-items: center; gap: 10px; }
+.pf-trend-modal__dur > span { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pf-trend-modal__dur pf-select { flex: 1 1 auto; min-width: 0; }
+
+/* ── Tablet (641–1023): tiles get narrower ── */
+@media (max-width: 1023px) {
+  .pf-us__tile { max-width: 150px; }
+  .pf-oc-tat { display: none; }
+  .pf-oc-cat__list { padding-bottom: 96px; } /* clear the sticky cart bar */
+}
+/* ── Phone (≤640): icon-only scope tiles + chips for the picks ── */
+@media (max-width: 640px) {
+  /* The global phone rule gives .pf-page a 12px gutter — the band bleeds
+     through it; the cards use it as their gutter. */
+  .pf-oc { --pf-hb-bleed: max(12px, env(safe-area-inset-left)); }
+  .pf-us__div { margin: 0 2px; }
+  .pf-us__field { min-width: 0; }
+  .pf-us__input { font-size: 16px; } /* iOS zoom guard */
+  
+  .pf-oc-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 0 6px;
+  }
+  .pf-oc-pick {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+    color: var(--violet-text, #6d28d9);
+  }
+  .pf-oc-pick__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 70vw;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12.5px;
+  }
+  .pf-oc-pick__btn span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pf-oc-pick__x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+  }
+
+  .pf-oc-body { padding: 4px 0 12px; gap: 12px; }
+  .pf-oc-cat__head { padding: 8px 12px 0; }
+  .pf-oc-cat .pf-tabs { gap: 0; flex: 1 1 auto; }
+  .pf-oc-cat .pf-tabs__btn { flex: 1 1 0; justify-content: center; }
+  .pf-oc-urgent-badge { display: none; }
+  .pf-oc-cat .pf-deptpills { padding: 10px 12px 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pf-oc-cat .pf-deptpill { flex-shrink: 0; }
+  .pf-oc-cat__list { padding: 4px 12px 96px; }
+  .pf-oc-cat .pf-rail-card__name { min-width: 80px; }
+  .pf-oc-errs { padding: 0 0 4px; }
+}
+
+.pf-cartbar__cta { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+/* ════ Round 2 (owner): required patient, touch-first dropdown, focus ring ════ */
+
+
+/* Patient required: amber dashed outline, a dot, and a gentle pulse. */
+.pf-us__tile--req:not(.pf-us__tile--on) {
+  outline: 1.5px dashed var(--warning-text, #d97706);
+  outline-offset: -1.5px;
+  color: var(--warning-text, #b45309);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
+  animation: pf-us-req-pulse 2.4s ease-in-out infinite;
+}
+.pf-us__tile--req.pf-us__tile--on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning, #f59e0b) 55%, transparent); }
+.pf-us__req {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-warning, #f59e0b);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning, #f59e0b) 25%, transparent);
+}
+@keyframes pf-us-req-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warning, #f59e0b) 0%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent); }
+}
+/* Tried to confirm without a patient: shake the tile once. */
+.pf-us__tile--nudge { animation: pf-us-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.pf-us__tile--nudge.pf-us__tile--req:not(.pf-us__tile--on) { outline-color: var(--error-text, #dc2626); }
+@keyframes pf-us-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.pf-oc-need {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 1123px;
+  margin: 0 auto 4px;
+  padding: 0 20px;
+  box-sizing: border-box;
   font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  color: var(--warning-text, #b45309);
+  animation: pf-us-drop-in 180ms ease-out both;
+}
 
-  &:hover {
+/* The results dropdown: fade + short slide down; scrolls inside; sized
+   from the visual viewport (max-height bound in the template). */
+.pf-us__drop {
+  width: min(640px, calc(100vw - 32px));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  animation: pf-us-drop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: top left;
+}
+@keyframes pf-us-drop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pf-us__row { min-height: 44px; }
+.pf-us__drop-act { min-height: 44px; }
+
+/* Tests results: ✓ · code · name · TAT · price, ≥44px touch rows. */
+.pf-us__trow {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.pf-us__trow--in { background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent); }
+.pf-us__trow.pf-us__row--hl { background: color-mix(in srgb, var(--color-primary, #7c3aed) 11%, transparent); }
+/* "↵ Add" on the highlighted row — only while PF Keys is docked (tablets):
+   its Add ↵ key acts on exactly this row. Neutral chip, not primary. */
+.pf-us__tenter { display: none; }
+:host-context(html.pf-keys-open) .pf-us__tenter {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pf-line, #e5e7eb);
+  background: var(--pf-card-bg, #fff); color: var(--text-secondary);
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.pf-us__tcheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  border: 1px solid var(--border-muted);
+  color: var(--text-tertiary);
+}
+.pf-us__trow--in .pf-us__tcheck { border-color: transparent; background: var(--color-violet-600, #7c3aed); color: #fff; }
+.pf-us__tcode {
+  width: 64px;
+  flex-shrink: 0;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--violet-text, #7c3aed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-us__tname {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-us__ttat { flex-shrink: 0; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.pf-us__tprice { flex-shrink: 0; min-width: 60px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+@media (max-width: 640px) {
+  .pf-us__ttat { display: none; }
+  .pf-us__tcode { width: 54px; }
+  .pf-oc-need { padding: 0; }
+}
+
+/* Urgent tag next to the cart count when the order is urgent: show ONLY in mobile view. */
+.pf-oc-urgent-tag {
+  display: none;
+}
+@media (max-width: 640px) {
+  .pf-oc-urgent-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px 0 6px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: #dc2626;
     background: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.45);
-    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    white-space: nowrap;
+    vertical-align: middle;
+
+    .pf-oc-urgent-badge__dot {
+      display: inline-block !important;
+      width: 5px !important;
+      height: 5px !important;
+      min-width: 5px !important;
+      max-width: 5px !important;
+      min-height: 5px !important;
+      max-height: 5px !important;
+      border-radius: 50% !important;
+      background: #dc2626 !important;
+      box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.2) !important;
+      flex: 0 0 5px !important;
+      line-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-us__drop,
+  .pf-oc-need,
+  .pf-us__tile--req:not(.pf-us__tile--on),
+  .pf-us__tile--nudge { animation: none; }
+}
+
+/* ════ Round 3 (owner): readable catalogue rows ════
+   code · name (up to 2 lines) · price · subtle star. No TAT, no member
+   count, no type badge, neutral border (the tab / title says the type).
+   In-cart = violet tint + check. Only the search dropdown, where tests,
+   profiles and packages are MIXED, marks the type with an outline
+   (profile blue / package amber). */
+:host {
+  --pf-type-profile: #2563eb;
+  --pf-type-package: #d97706;
+}
+:host-context(.dark),
+:host-context([data-theme='dark']) {
+  --pf-type-profile: #60a5fa;
+  --pf-type-package: #fbbf24;
+}
+
+.pf-oc-cat__list { container-type: inline-size; }
+.pf-oc-cat .pf-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+@container (min-width: 520px) {
+  .pf-oc-cat .pf-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 1100px) {
+  .pf-oc-cat .pf-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.pf-crow {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: var(--bg-card-solid);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pf-crow:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+/* In cart: filled violet tint + check. */
+.pf-crow--in {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, var(--bg-card-solid));
+  border-color: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 55%, transparent);
+}
+
+.pf-crow__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-crow__main:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: -2px; }
+.pf-crow__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-muted);
+  color: #fff;
+}
+.pf-crow--in .pf-crow__check { border-color: transparent; background: var(--color-violet-600, #7c3aed); }
+.pf-crow__code {
+  flex-shrink: 0;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--violet-text, #7c3aed);
+}
+.pf-crow__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.pf-crow__star {
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.pf-crow:hover .pf-crow__star,
+.pf-crow__star:focus-visible { opacity: 1; }
+.pf-crow__star--fav { color: var(--color-warning, #f59e0b); opacity: 1; }
+
+/* Price: just the price — plain, small, right-aligned, tabular. */
+.pf-price {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Dropdown rows (mixed types): the type is the row outline. */
+.pf-us__trow[data-type='profile'] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-type-profile) 70%, transparent); }
+.pf-us__trow[data-type='package'] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-type-package) 75%, transparent); }
+.pf-us__trow + .pf-us__trow { margin-top: 2px; }
+
+@media (pointer: coarse) {
+  .pf-crow__star { width: 40px; height: 40px; min-width: 40px; min-height: 40px; margin-right: 2px; }
+}
+
+/* ════ Round 4 (owner): two-phase billing card — CART then PAYMENT ════ */
+.pf-oc-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  animation: pf-oc-phase-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-oc-phase[data-phase='pay'] { animation-name: pf-oc-phase-in-up; }
+@keyframes pf-oc-phase-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pf-oc-phase-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Phase 1: compact single-line cart rows (>=44px), ~8-10 fit. */
+.pf-cart-list--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-crt {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  /* Cart rows can contain a specimen picker as well as the title line.
+     Keep their natural height inside the capped flex scroller. */
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+}
+.pf-crt__line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pf-crt__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-crt__code {
+  flex-shrink: 0;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.pf-crt__price { flex-shrink: 0; font-size: 12.5px; }
+.pf-crt--included { background: color-mix(in srgb, var(--color-success, #10b981) 5%, transparent); }
+.pf-crt .pf-cart-remove,
+.pf-crt .pf-cart-lock { width: 32px; height: 32px; flex-shrink: 0; }
+
+/* Phase 2: the cart as one line. */
+.pf-oc-sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-oc-sum:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.pf-oc-sum__text { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pf-oc-sum__edit { font-size: 12px; color: var(--violet-text, #7c3aed); }
+.pf-oc-sum svg { color: var(--violet-text, #7c3aed); flex-shrink: 0; }
+
+/* Phase 1 footer: Total line + Save as draft / Continue. */
+.pf-oc-foot-total {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.pf-oc-bill__foot--cart > .pf-oc-btn:only-of-type { grid-column: 1 / -1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-oc-phase { animation: none; }
+}
+
+/* ════ Round 5 (owner): search focus mode ════ */
+
+/* Filters at the top of the dropdown, sticky inside the panel. */
+.pf-us__drop-top {
+  position: sticky;
+  top: -8px;               /* cancel the panel's 8px padding */
+  z-index: 1;
+  margin: -8px -8px 4px;
+  padding: 8px 8px 6px;
+  background: var(--bg-card-solid);
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-us__filters { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 2px; }
+.pf-us__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-us__chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.pf-us__chips--scroll::-webkit-scrollbar { display: none; }
+.pf-us__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-muted);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.pf-us__chip:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
+.pf-us__chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  color: var(--violet-text, #6d28d9);
+  font-weight: 600;
+}
+.pf-us__chip:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 1px; }
+.pf-us__chip-n { font-size: 10.5px; font-variant-numeric: tabular-nums; opacity: 0.7; }
+@media (pointer: coarse) {
+  .pf-us__chip { height: 38px; min-height: 38px; }
+}
+
+
+/* Band above the scrim; scrim above the cards, cart bar and bottom nav. */
+.pf-oc-band { position: relative; z-index: 71; }
+.pf-oc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(15, 10, 30, 0.28);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+:host-context(.dark) .pf-oc-scrim,
+:host-context([data-theme='dark']) .pf-oc-scrim { background: rgba(0, 0, 0, 0.5); }
+.pf-oc-scrim--on {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 200ms ease, visibility 0s;
+}
+
+
+/* ════ Round 6 (owner): full-width dropdown, one filter row ════ */
+/* Panel spans the pill exactly (left/top/width bound from TS). */
+.pf-us__drop { container: usdrop / inline-size; }
+.pf-us__drop--tests { padding: 8px 10px 10px; }
+
+/* One row: segmented type control left, department chips right. */
+.pf-us__filters {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+.pf-us__seg { flex-shrink: 0; }
+.pf-us__filters .pf-us__chips {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pf-us__filters .pf-us__chips::-webkit-scrollbar { display: none; }
+.pf-us__filters .pf-us__chip {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit; font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  gap: 4px;
+}
+.pf-us__filters .pf-us__chip-n { font-family: inherit; color: var(--text-muted); opacity: 1; }
+.pf-us__filters .pf-us__chip[aria-pressed='true'] .pf-us__chip-n { color: inherit; opacity: 0.75; }
+@container usdrop (max-width: 600px) {
+  .pf-us__filters { flex-wrap: wrap; }
+  .pf-us__filters .pf-us__chips { justify-content: flex-start; flex-basis: 100%; }
+}
+.pf-us__drop--tests .pf-us__drop-top { top: -8px; margin: -8px -10px 4px; padding: 8px 10px 6px; }
+
+/* ════ Round 8 (owner): ONE result per row, full names ════ */
+.pf-us__tlist { display: flex; flex-direction: column; gap: 2px; }
+.pf-us__tlist .pf-us__trow {
+  min-height: 52px;
+  gap: 12px;
+  padding: 6px 12px;
+}
+.pf-us__tlist .pf-us__tcode { width: 72px; }
+.pf-us__tlist .pf-us__tname {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.pf-us__tdept {
+  flex-shrink: 0;
+  max-width: 34%;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-us__tlist .pf-us__tprice { min-width: 72px; }
+@media (max-width: 640px) {
+  .pf-us__tlist .pf-us__tcode { width: 56px; }
+  .pf-us__tlist .pf-us__tname {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  .pf-us__tdept { display: none; }
+}
+
+/* ════ Round 9 (owner): standard band pill + Apple-style search activation ════
+   At rest the pill is the stock pf-hero-band search (height, radius, border,
+   shadow, font, icon) — only the scope tiles and the cart are this screen's.
+   Activation (focus / results open) is a behaviour on top: the field grows
+   a touch and settles on a spring, the page dims + blurs progressively,
+   results fade + scale up from 0.97 with rows staggered ~18ms, and on touch
+   a Cancel slides in. Close is the reverse, quicker. Reduced motion: none. */
+:host {
+  --pf-spring: var(--pf-spring);
+  --pf-spring-bounce: var(--pf-spring-bounce);
+}
+
+/* Match the stock band input + icon (hero-band's .pf-hb__input / __glass). */
+.pf-us__input { font-size: 14px; font-weight: 500; color: #111928; }
+:host-context(.dark) .pf-us__input,
+:host-context([data-theme='dark']) .pf-us__input { color: var(--text-primary, #e5e7eb); }
+.pf-us__input::placeholder { color: #9ca3af; font-weight: 500; }
+.pf-us__glass { color: #5c7185; }
+:host-context(.dark) .pf-us__glass,
+:host-context([data-theme='dark']) .pf-us__glass { color: var(--text-secondary); }
+
+/* Field grows slightly and settles (spring); back quicker. */
+:host ::ng-deep .pf-oc-band .pf-hb__search,
+:host ::ng-deep .pf-oc-band .pf-hb__field {
+  transition: transform 200ms ease-out;
+}
+:host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search {
+  transform: scale(1.012);
+  transition: transform 340ms var(--pf-spring-bounce);
+}
+@media (max-width: 640px) {
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; }
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field {
+    transform: scale(1.012);
+    transition: transform 340ms var(--pf-spring-bounce);
+  }
+}
+
+/* Background dims + blurs progressively; lifts faster on close. */
+.pf-oc-scrim {
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  transition: opacity 200ms ease-in, backdrop-filter 200ms ease-in, -webkit-backdrop-filter 200ms ease-in, visibility 0s linear 200ms;
+}
+.pf-oc-scrim--on {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: opacity 340ms var(--pf-spring), backdrop-filter 340ms var(--pf-spring), -webkit-backdrop-filter 340ms var(--pf-spring), visibility 0s;
+}
+
+/* Results panel: fade + scale up from 0.97 on a spring. */
+.pf-us__drop { transform-origin: top center; animation: pf-us-results-in 320ms var(--pf-spring) both; }
+@keyframes pf-us-results-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+/* Rows arrive staggered (~18ms each, capped). */
+.pf-us__trow { animation: pf-us-row-in 300ms var(--pf-spring) both; animation-delay: calc(var(--pf-i, 0) * 18ms); }
+@keyframes pf-us-row-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Touch: the catalogue card becomes the results. */
+.pf-oc-cat__results {
+  flex: none;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border-muted);
+  animation: pf-us-results-in 320ms var(--pf-spring) both;
+}
+.pf-oc-res__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.pf-oc-res__title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.pf-oc-cat__results .pf-us__filters { padding: 0; }
+.pf-oc-res__list { padding-top: 8px; }
+/* The billing card recedes while the card shows results. */
+.pf-oc-bill { transition: opacity 200ms ease-in, filter 200ms ease-in; }
+.pf-oc-bill--recede {
+  opacity: 0.45;
+  filter: blur(2px);
+  transition: opacity 340ms var(--pf-spring), filter 340ms var(--pf-spring);
+}
+
+/* Cancel (touch): slides in at the field's right. */
+.pf-us__cancel {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--violet-text, #6d28d9);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  animation: pf-us-cancel-in 300ms var(--pf-spring) both;
+}
+@keyframes pf-us-cancel-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Billing: payment rises like an iOS sheet (slight overshoot); the cart
+   collapses up into its summary line; Edit reverses (cart drops back in). */
+.pf-oc-phase--rise { animation: pf-oc-sheet-up 560ms var(--pf-spring-bounce) both; }
+@keyframes pf-oc-sheet-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: none; }
+}
+.pf-oc-phase--rise .pf-oc-sum { transform-origin: top center; animation: pf-oc-sum-collapse 480ms var(--pf-spring) both; }
+@keyframes pf-oc-sum-collapse {
+  from { transform: scaleY(1.8); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.pf-oc-phase--cart {
+  flex: 1 1 auto;
+  min-height: 0;
+  animation: pf-oc-cart-down 520ms var(--pf-spring) both;
+}
+pf-package-suggest { flex: none; margin-top: auto; }
+@keyframes pf-oc-cart-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Phones: full-width pill, 16px input (no iOS zoom), safe-area aware. */
+@media (max-width: 640px) {
+  .pf-us__input { font-size: 16px; }
+  .pf-oc { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pf-oc-cat__results { padding: 10px 12px 8px; }
+  .pf-oc-res__list { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .pf-oc-band .pf-hb__search,
+  :host ::ng-deep .pf-oc-band .pf-hb__field,
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search,
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field { transition: none; transform: none; }
+  .pf-oc-scrim, .pf-oc-scrim--on, .pf-oc-bill, .pf-oc-bill--recede { transition: none; }
+  .pf-us__drop, .pf-us__trow, .pf-oc-cat__results, .pf-us__cancel,
+  .pf-oc-phase--rise, .pf-oc-phase--rise .pf-oc-sum, .pf-oc-phase--cart { animation: none; }
+}
+
+/* ════ Round 10 (owner): primary only for the main CTA; neutral controls ════ */
+/* Tokens come from the pf-kit (shared/styles/_pf-kit.scss, light + dark). */
+:host {
+  --pf-neutral-sel-bg: var(--pf-sel-bg);
+  --pf-neutral-sel-border: var(--pf-sel-border);
+  --pf-neutral-chip-bg: var(--pf-chip-bg);
+  --pf-toggle-on: var(--pf-switch-on);
+}
+
+/* Active scope tile: a subtle violet tint, not a solid primary fill. */
+.pf-us__tile--on {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+
+/* Toggles (Urgent, Include Trendogram): neutral slate; Urgent ON = muted red. */
+.pf-toggle-neutral .pf-oc-switch__track { background: var(--pf-toggle-off, #cbd5e1); border: 1px solid var(--pf-toggle-border, #94a3b8); box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08); }
+.pf-toggle-neutral[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-switch-on, #7c3aed); border-color: var(--pf-switch-on, #7c3aed); box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35); }
+.pf-toggle-neutral.pf-oc-switch--urgent[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-toggle-urgent, #ef4444); border-color: var(--pf-toggle-urgent, #ef4444); box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35); }
+.pf-toggle-neutral .pf-oc-switch__knob { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28), 0 1px 1px rgba(15, 23, 42, 0.15); }
+
+/* ₹ / % discount: a neutral segmented control. */
+.pf-cart-disc__kind { border-color: var(--border-muted); background: var(--pf-neutral-chip-bg); }
+.pf-cart-disc__kind:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.pf-cart-disc__kind button:hover:not([aria-checked='true']) { background: transparent; color: var(--text-primary); }
+.pf-cart-disc__kind button[aria-checked='true'] {
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+.pf-cart-disc__kind button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Department chips (catalogue + search filters) and the type segment:
+   neutral selected state. */
+.pf-deptpill[aria-pressed='true'],
+.pf-oc-cat .pf-deptpill[aria-pressed='true'],
+.pf-deptpill--on {
+  background: var(--color-primary, #7c3aed) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28) !important;
+}
+.pf-deptpill[aria-pressed='true'] .pf-deptpill__code,
+.pf-oc-cat .pf-deptpill[aria-pressed='true'] .pf-deptpill__code,
+.pf-deptpill--on .pf-deptpill__code {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+.pf-us__chip[aria-pressed='true'],
+.pf-us__filters .pf-us__chip[aria-pressed='true'] {
+  background: var(--color-primary, #7c3aed) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28) !important;
+}
+.pf-us__chip[aria-pressed='true'] .pf-us__chip-n {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+}
+:host ::ng-deep .pf-us__seg .seg-item.is-selected {
+  background: var(--bg-card-solid) !important;
+  background-image: none !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18) !important;
+}
+
+/* In-cart: subtle tint + a neutral check (no primary fill). */
+.pf-crow--in {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--bg-card-solid));
+  border-color: var(--pf-neutral-sel-border);
+}
+.pf-crow--in .pf-crow__check,
+.pf-us__trow--in .pf-us__tcheck { background: var(--text-primary); color: var(--bg-card-solid); border-color: transparent; }
+
+/* Phone cart bar: neutral thumbnail + neutral count chip ("Review & Pay"
+   stays the one primary CTA). */
+.pf-cartbar__icon {
+  background: var(--pf-neutral-chip-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-muted);
+}
+.pf-cartbar__badge {
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
+  border: 1px solid var(--border-muted);
+}
+
+/* ── Phones: the SAME scope model as web — four icon buttons in the pill ── */
+.pf-us__filled-dot { display: none; }
+@media (max-width: 640px) {
+  .pf-us__tiles { display: flex; gap: 2px; }
+  .pf-us__tile { max-width: none; border-radius: 10px; }
+  .pf-us__tile-btn { width: 36px; height: 36px; padding: 0; justify-content: center; position: relative; }
+  .pf-us__tile-x { display: none; }
+  .pf-us__tile-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pf-us__tile--filled:not(.pf-us__tile--on) { background: transparent; }
+  .pf-us__filled-dot {
+    display: block;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--violet-text, #6d28d9);
+  }
+  .pf-us__req { position: absolute; top: 4px; right: 4px; }
+  .pf-us__tile--req .pf-us__filled-dot { display: none; }
+  .pf-us__div { margin: 0 4px; }
+}
+
+/* ── Phone "Review & Pay" sheet: ~92% tall, grab handle, inner scroll ── */
+.pf-sheet-handle { display: none; }
+@media (max-width: 1023px) {
+  :host .pf-cart-backdrop { z-index: 79; bottom: var(--pf-nav-h, 0px); }
+  :host .pf-cart-drawer.pf-cart-drawer--tall {
+    top: auto;
+    /* Sits ON TOP of the always-visible bottom navbar. */
+    bottom: var(--pf-nav-h, 0px);
+    left: 0;
+    right: 0;
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
+    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
+    border-radius: 20px 20px 0 0;
+    padding-bottom: 0;
+    z-index: 80;
+  }
+  /* Native's older drawer rule reserves the floating navbar's height inside
+     the sheet. This sheet already ends above that navbar, so keep the space
+     outside the drawer instead of leaving a blank block below its footer. */
+  :host-context(html.cap-native) .pf-cart-drawer.pf-cart-drawer--tall {
+    padding-bottom: 0;
+  }
+  .pf-sheet-handle {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 5px;
+    margin: 8px auto 2px;
+    border-radius: 999px;
+    background: var(--border-muted);
+  }
+  .pf-cart-drawer--tall .pf-oc-bill__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .pf-cart-drawer--tall .pf-oc-bill__body--cart { overflow: hidden; }
+}
+
+
+/* Touch: no native tooltip on cart rows; long names wrap to 2 lines. */
+.pf-crt--wrap .pf-crt__name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: clip;
+  line-height: 1.3;
+}
+
+/* ════ Round 11 (owner): phone sheet header + footer, one-row phone pill ════ */
+.pf-oc-bill__toggles { display: flex; align-items: center; gap: 14px; }
+
+/* Checkout sheet (below lg): row 1 = BILLING + close (40px, never over
+   content), row 2 = the two toggles. Footer is pinned with the bottom
+   safe area; the app bar is hidden while the sheet is open. */
+@media (max-width: 1023px) {
+  .pf-cart-drawer .pf-oc-bill__head { flex-wrap: wrap; row-gap: 10px; padding-right: 60px; }
+  .pf-cart-drawer .pf-oc-bill__toggles {
+    order: 3;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+  }
+  .pf-cart-drawer .pf-cart-drawer__close {
+    top: 17px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .pf-cart-drawer .pf-oc-bill__foot--sticky {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    z-index: 2;
+    background: var(--bg-card-solid);
+    padding-bottom: 14px;   /* the nav below owns the bottom safe area */
+  }
+}
+
+/* Phone pill: ONE row, never wrapping — a compact segmented group of the 4
+   scope icons, then the input fills the rest. Height = the stock band
+   search's phone field. */
+@media (max-width: 640px) {
+  .pf-us { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+  .pf-us__tiles {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--pf-neutral-chip-bg, rgba(127, 127, 127, 0.1));
+  }
+  .pf-us__tile,
+  .pf-us__tile--filled:not(.pf-us__tile--on) { background: transparent; border-radius: 8px; }
+  .pf-us__tile--on { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+  .pf-us__tile-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0;
+  }
+  /* Required Patient: a small amber dot + a thin amber ring (no dashed box). */
+  .pf-us__tile--req:not(.pf-us__tile--on),
+  .pf-us__tile--req.pf-us__tile--on {
+    outline: none;
+    background: transparent;
+    animation: none;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-warning, #f59e0b) 80%, transparent);
+  }
+  .pf-us__tile--req.pf-us__tile--on { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+  .pf-us__req { width: 6px; height: 6px; box-shadow: none; }
+  .pf-us__div { display: none; }
+  .pf-us__field { flex: 1 1 auto; min-width: 0; gap: 6px; }
+  .pf-us__glass { display: none; }
+  .pf-us__input { min-width: 0; }
+}
+@media (max-width: 340px) {
+  .pf-us__tile-btn { width: 32px; height: 32px; min-width: 32px !important; min-height: 32px !important; }
+  .pf-us__tiles { gap: 1px; }
+}
+
+/* ════ Palette rule (owner): primary (violet) + neutrals / slate only. No
+   green / teal decoration. Functional exceptions: red Urgent + validation
+   errors, amber required dot, tube caps. ════ */
+.pf-cart-line__save { color: var(--violet-text, #6d28d9); }
+.pf-cart-collected {
+  color: var(--text-secondary);
+  background: var(--pf-chip-bg);
+  border: 1px solid var(--pf-line);
+}
+.pf-crt--included { background: var(--pf-chip-bg); }
+.pf-cart-amount--included,
+.pf-cart-meta--included { color: var(--text-tertiary) !important; }
+.pf-paid__msg { color: var(--text-primary) !important; }
+.pf-paid__msg svg { color: var(--violet-text, #6d28d9); }
+.pf-paid__sumline--done span:last-child { color: var(--violet-text, #6d28d9) !important; }
+.pf-oc-act--wa { color: var(--text-primary); }
+.pf-collect-icon { box-shadow: var(--pf-shadow-sm) !important; }

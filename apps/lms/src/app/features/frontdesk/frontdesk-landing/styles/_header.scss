@@ -80,7 +80,7 @@
 .pf-head__alert-lbl { color: var(--text-secondary); }
 
 .pf-head__alert--ready {
-  --alert-dot: #34d399;
+  --alert-dot: #84bda6;
   --alert-dot-halo: rgba(16, 185, 129, 0.18);
   border-color: rgba(16, 185, 129, 0.32);
 }
@@ -237,7 +237,7 @@
   border-radius: 9999px;
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.28);
-  color: #34d399;
+  color: var(--green-text);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -254,7 +254,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: #34d399;
+  background: #84bda6;
   box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
 }
 
@@ -268,7 +268,7 @@
 }
 
 .pf-collection__due {
-  color: #fca5a5;
+  color: var(--red-text);
   font-weight: 500;
 }
 

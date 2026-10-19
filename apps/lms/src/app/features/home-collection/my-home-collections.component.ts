@@ -8,13 +8,14 @@ import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.com
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { ChipComponent } from '../../shared/primitives/chip.component';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 import { ApiError } from '../../shared/models/api-response.model';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
+import { busyIdWhile } from '../frontdesk/busy-id';
 
 @Component({
   selector: 'pf-my-home-collections',
   standalone: true,
-  imports: [DatePipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, ChipComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, DatePipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, ChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* WORK page: non-scroll app layout on ALL sizes. The page fills the shell's
@@ -94,7 +95,7 @@ import { ApiError } from '../../shared/models/api-response.model';
             eyebrow="Home collection"
             title="My visits"
             subtitle="Home-collection requests assigned to you. Check in on arrival, then collect the samples.">
-            <pf-touch-btn actions size="sm" variant="ghost" (pressed)="load()">Refresh</pf-touch-btn>
+            <pf-touch-btn actions size="sm" variant="ghost" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">Refresh</pf-touch-btn>
           </pf-screen-header>
         </div>
 
@@ -102,7 +103,7 @@ import { ApiError } from '../../shared/models/api-response.model';
       @if (loading() && items().length === 0) {
         <pf-tile tone="solid" padding="lg" class="block border border-[var(--glass-border)] shadow-lg shadow-black/5">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading visits…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="4" label="Loading visits…"></pf-skeleton-rows>
           </div>
         </pf-tile>
       } @else if (items().length === 0) {
@@ -194,7 +195,7 @@ import { ApiError } from '../../shared/models/api-response.model';
                   </div>
                   <div class="flex-shrink-0 flex flex-wrap items-center gap-2">
                     @if (a.status === 'booked') {
-                      <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" (pressed)="checkInAndCollect(a)">
+                      <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" [busy]="busyId() === a.id" busyLabel="Checking in…" (pressed)="checkInAndCollect(a)">
                         Check in &amp; collect
                       </pf-touch-btn>
                     } @else {
@@ -202,7 +203,7 @@ import { ApiError } from '../../shared/models/api-response.model';
                         Collect samples
                       </pf-touch-btn>
                       @if (a.status === 'checked_in' || a.status === 'in_progress') {
-                        <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" (pressed)="completeVisit(a)">
+                        <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" [busy]="busyId() === a.id" busyLabel="Completing…" (pressed)="completeVisit(a)">
                           Complete visit
                         </pf-touch-btn>
                       }
@@ -239,10 +240,14 @@ export class MyHomeCollectionsComponent implements OnInit {
     });
   }
 
+  /** Visit whose Check-in / Complete request is in flight. */
+  readonly busyId = signal<string | null>(null);
+
   checkInAndCollect(a: Appointment) {
+    if (this.busyId() === a.id) return;
     // Check-in spawns the lab order from the pre-booked tests; the agent then
     // collects the samples on the standard collection screen.
-    this.svc.checkIn(a.id).subscribe({
+    this.svc.checkIn(a.id).pipe(busyIdWhile(this.busyId, a.id)).subscribe({
       next: () => { this.toast.success('Checked in — collect the samples.'); this.goCollect(); },
       error: e => { this.toast.error(ApiError.from(e).message); this.load(); }
     });
@@ -251,7 +256,8 @@ export class MyHomeCollectionsComponent implements OnInit {
   completeVisit(a: Appointment) {
     // Closes the visit once the samples are collected — the appointment moves
     // to `completed` and drops out of the agent's queue on the next load.
-    this.svc.complete(a.id).subscribe({
+    if (this.busyId() === a.id) return;
+    this.svc.complete(a.id).pipe(busyIdWhile(this.busyId, a.id)).subscribe({
       next: () => { this.toast.success('Visit completed.'); this.load(); },
       error: e => { this.toast.error(ApiError.from(e).message); this.load(); }
     });

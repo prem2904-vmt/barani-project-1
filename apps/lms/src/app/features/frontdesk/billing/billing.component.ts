@@ -1,26 +1,33 @@
 import { Location } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
-import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { PrinterService } from '../../../core/printer/printer.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
+import { payBillFromWallet, VendorWalletBalance } from '../../../shared/utils/wallet-payment';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
+import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
+import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
+import { SkeletonTableComponent, BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -31,18 +38,9 @@ interface PayModeDef {
   iconPath: string;
 }
 
-/** Slim shape of /api/vendors used by the billing wallet picker. */
-interface VendorWallet {
-  id: string;
-  name: string;
-  code?: string;
-  totalCredit: number;
-  usedCredit: number;
-  balance: number;
-  outstanding: number;
-  notifyThreshold?: number | null;
-  isActive: boolean;
-}
+/** Slim shape of /api/vendors used by the billing wallet picker (balances
+ *  are ledger-derived on the server). */
+type VendorWallet = VendorWalletBalance;
 
 /** Slim shape of /api/billing/config used to read the
  *  FrontdeskCanSeeWalletBalance flag. */
@@ -68,13 +66,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // page (:host:not(.pf-embedded)) without affecting the inline/embedded use
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
-  imports: [
-    CurrencyInrPipe,
-    NumPadComponent,
+  imports: [SkeletonTableComponent, BusyComponent, BusyDirective,
+    CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    LoadingLogoComponent,
     BarcodeDisplayComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,23 +81,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
         eyebrow="Frontdesk · Billing"
         title="Collect payment"
         [subtitle]="subtitle()">
-        <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
-             after save and raises a billing request instead. Flag is
-             persisted in localStorage via FrontdeskSettingsService. -->
-        <label actions class="pf-collect-toggle"
-               title="When ON, payment is collected at the front desk after each order. When OFF, a separate billing request is raised and the front desk skips this screen.">
-          <input type="checkbox"
-                 [checked]="collectsBilling()"
-                 (change)="setCollectsBilling($any($event.target).checked)" />
-          <span>Front desk collects payment</span>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-               class="pf-collect-toggle__hint" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
-            <path d="M12 17h.01"/>
-          </svg>
-        </label>
         <button actions type="button" class="pf-toolbar-btn pf-no-print"
                 (click)="saveDraft()" [disabled]="paid() || !bill()"
                 title="Save as draft (resume later)">
@@ -119,15 +98,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 (click)="cancel()" title="Leave without collecting payment">
           Cancel
         </button>
-        <pf-touch-btn actions class="pf-bill-back-desktop" size="sm" variant="ghost" (pressed)="back()"
-                      [title]="paid() ? 'Back' : 'Back to the order to add or remove tests'">
-          <span icon-left aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </span>
-          Back
-        </pf-touch-btn>
       </pf-screen-header>
       }
 
@@ -149,6 +119,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
                   </div>
                   <button type="button" class="pf-bill-print-icon pf-no-print"
+                          [disabled]="printing()" [pfBusy]="printing()" pfBusyLabel="Preparing invoice…"
                           (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -204,10 +175,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   <span>Subtotal</span>
                   <span class="tabular-nums">{{ b.subTotal | inr }}</span>
                 </div>
-                @if (b.totalTax > 0) {
+                @if (shownTax() > 0) {
                   <div class="pf-bill-line">
                     <span>GST</span>
-                    <span class="tabular-nums">{{ b.totalTax | inr }}</span>
+                    <span class="tabular-nums">{{ shownTax() | inr }}</span>
                   </div>
                 }
                 <div class="pf-bill-line pf-bill-line--discount">
@@ -225,7 +196,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            inputmode="numeric"
                            min="0"
                            step="1"
-                           [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
+                           [attr.max]="discountKind() === 'percent' ? 100 : preDiscountGross()"
                            [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
@@ -268,7 +239,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                               (click)="refundMode.set(m.key)">{{ m.label }}</button>
                     }
                   </div>
-                  <button type="button" class="pf-refund__btn" [disabled]="refunding()" (click)="doRefund()">
+                  <button type="button" class="pf-refund__btn" [disabled]="refunding()"
+                          [pfBusy]="refunding()" pfBusyLabel="Recording refund…" (click)="doRefund()">
                     {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
                   </button>
                 </div>
@@ -319,12 +291,18 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       <p class="pf-eyebrow mb-0.5">Scan to pay</p>
                       <p class="pf-big-amount">{{ effectivePayable() | inr }}</p>
                     </div>
-                    <div class="pf-qr">
-                      <img class="pf-qr__img" [src]="upiQrUrl()"
-                           alt="Scan to pay via UPI"/>
-                    </div>
+                    @if (upiVpa()) {
+                      <div class="pf-qr">
+                        @if (upiQrUrl()) {
+                          <img class="pf-qr__img" [src]="upiQrUrl()"
+                               alt="Scan to pay via UPI" data-testid="upi-qr"/>
+                        }
+                      </div>
+                    } @else {
+                      <p class="pf-qr__hint" data-testid="upi-missing">No UPI address is set, so no QR is shown. An admin can add it in Admin, Billing.</p>
+                    }
                     <div class="flex flex-col items-center gap-1">
-                      <p class="pf-qr__hint">prefrontal&#64;upi · Chennai Main</p>
+                      @if (upiVpa()) { <p class="pf-qr__hint">{{ upiVpa() }}</p> }
                       <div class="pf-live-badge">
                         <span class="pf-live__dot"></span>
                         <span>Listening for payment…</span>
@@ -368,11 +346,17 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       @else if (changeAmount() === 0) { <span>Exact — no change due</span> }
                       @else { <span>Short by</span><strong>{{ changeAbs() | inr }}</strong> }
                     </div>
-                    <pf-num-pad
+                    <!-- Native numeric field: OS number pad on phones/tablets,
+                         physical keyboard on web — consistent with Order & Payments. -->
+                    <input
+                      class="pf-cash2__input"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      enterkeyhint="done"
                       [value]="cashAmount()"
-                      [allowDecimal]="false"
-                      [compact]="true"
-                      (valueChange)="setCash($event)"></pf-num-pad>
+                      (input)="setCash(cashDigits($event))"
+                      placeholder="Tap to enter amount received"
+                      aria-label="Cash received" />
                   </div>
                 }
                 @case ('wallet') {
@@ -391,7 +375,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                  balance". Never blocks. -->
                             <p class="pf-eyebrow">Outstanding after</p>
                             <p class="pf-wallet-selected__bal">
-                              {{ (v.outstanding + effectivePayable()) | inr }}
+                              {{ (v.outstanding + effectivePayable()) | walletOutstanding }}
                             </p>
                             @if (v.notifyThreshold && (v.outstanding + effectivePayable()) >= v.notifyThreshold) {
                               <p class="pf-wallet-selected__warn">Over the {{ v.notifyThreshold | inr }} alert threshold</p>
@@ -408,7 +392,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                              placeholder="Search vendor by name or code…"/>
                       @if (vendors() === null) {
                         <p class="pf-wallet-empty">
-                          <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                          <pf-busy></pf-busy>
                           Loading vendors…
                         </p>
                       } @else if (filteredVendors().length === 0) {
@@ -428,7 +412,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                                 @if (showWalletBalance()) {
                                   <span class="pf-wallet-row__bal"
                                         [class.pf-wallet-row__bal--low]="v.outstanding > 0">
-                                    {{ v.outstanding | inr }} due
+                                    {{ v.outstanding | walletOutstanding }}
                                   </span>
                                 }
                               </button>
@@ -500,6 +484,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               <pf-touch-btn size="md" variant="primary" [full]="true"
                             (pressed)="confirm()"
                             [disabled]="saving() || !canConfirm()"
+                            [busy]="saving()" busyLabel="Recording payment…"
                             class="mt-3 block pf-bill-confirm">
                 <span icon-left>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -520,8 +505,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       } @else {
         <pf-tile tone="default" padding="xl" class="block">
           <div class="flex justify-center py-8">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Generating bill…"></pf-loading-logo>
+            <pf-skeleton-table [rows]="5" [cols]="3" label="Generating bill…"></pf-skeleton-table>
           </div>
         </pf-tile>
       }
@@ -548,7 +532,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           <p class="pf-pay-modal__sub">{{ invoiceNumber() }} · {{ effectivePayable() | inr }}</p>
 
           <div class="pf-pay-modal__actions">
-            <button type="button" class="pf-pay-modal__btn" (click)="printInvoice()">
+            <button type="button" class="pf-pay-modal__btn" [disabled]="printing()"
+                    [pfBusy]="printing()" pfBusyLabel="Preparing invoice…" (click)="printInvoice()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
@@ -574,34 +559,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
   `,
   styles: [`
-    /* Admin flag in the header: "Frontdesk collects" toggles whether the
-     * Order tab routes here automatically after save. */
-    .pf-collect-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      cursor: pointer;
-      user-select: none;
-    }
-    .pf-collect-toggle:hover { background: var(--glass-bg-hover); }
-    .pf-collect-toggle input[type="checkbox"] {
-      width: 14px;
-      height: 14px;
-      accent-color: #a855f7;
-    }
-    .pf-collect-toggle__hint {
-      color: var(--text-muted);
-      cursor: help;
-    }
-    .pf-collect-toggle:hover .pf-collect-toggle__hint { color: var(--text-secondary); }
-
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-eyebrow {
       margin: 0;
       font-size: 10.5px;
@@ -765,7 +723,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
     .pf-discount__input--err, .pf-discount__input--err:focus { border-color: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18); }
     .pf-discount__cap { font-size: 10px; font-weight: 500; color: var(--text-muted); }
-    .pf-discount__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: #f87171; }
+    .pf-discount__err { margin: 4px 0 0; font-size: 11.5px; font-weight: 600; color: var(--red-text); }
     .pf-discount__rupee {
       position: absolute;
       right: 10px;
@@ -853,7 +811,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       gap: 6px;
     }
     @media (min-width: 640px) {
-      .pf-pay-modes__grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .pf-pay-modes__grid { /* auto-fit: the grid lives in a container that halves at >=768px, so a
+           viewport-keyed 6-up crushed tiles to ~44px on iPad portrait. */
+        grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
     }
     .pf-pay-divider {
       margin: 18px -20px;
@@ -938,6 +898,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-cash2__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
     .pf-cash2__amt { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .pf-cash2__amt--empty { color: var(--text-muted); }
+    .pf-cash2__input { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-primary); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;
+      outline: none; -webkit-appearance: none; transition: border-color .15s ease, box-shadow .15s ease; }
+    .pf-cash2__input::placeholder { font-size: 14px; font-weight: 500; color: var(--text-tertiary, rgba(255,255,255,0.4)); }
+    .pf-cash2__input:focus { border-color: rgba(139,92,246,0.6); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
     .pf-cash2__quick { display: flex; gap: 6px; }
     .pf-cash2__quick button { flex: 1; padding: 8px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
       border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); }
@@ -946,11 +911,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-cash2__change span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
     .pf-cash2__change strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .pf-cash2__change[data-kind="change"] { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.4); }
-    .pf-cash2__change[data-kind="change"] span, .pf-cash2__change[data-kind="change"] strong { color: #34d399; }
+    .pf-cash2__change[data-kind="change"] span, .pf-cash2__change[data-kind="change"] strong { color: var(--green-text); }
     .pf-cash2__change[data-kind="exact"] { background: rgba(52,211,153,0.06); border-color: rgba(52,211,153,0.25); }
-    .pf-cash2__change[data-kind="exact"] span { color: #34d399; }
+    .pf-cash2__change[data-kind="exact"] span { color: var(--green-text); }
     .pf-cash2__change[data-kind="short"] { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.4); }
-    .pf-cash2__change[data-kind="short"] span, .pf-cash2__change[data-kind="short"] strong { color: #f87171; }
+    .pf-cash2__change[data-kind="short"] span, .pf-cash2__change[data-kind="short"] strong { color: var(--red-text); }
     .pf-cash-chip__label {
       margin: 0;
       font-size: 10.5px;
@@ -970,12 +935,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       background: rgba(16, 185, 129, 0.14);
       border-color: rgba(16, 185, 129, 0.3);
     }
-    .pf-cash-chip[data-kind='ok'] .pf-cash-chip__value { color: #34d399; }
+    .pf-cash-chip[data-kind='ok'] .pf-cash-chip__value { color: var(--green-text); }
     .pf-cash-chip[data-kind='short'] {
       background: rgba(239, 68, 68, 0.14);
       border-color: rgba(239, 68, 68, 0.3);
     }
-    .pf-cash-chip[data-kind='short'] .pf-cash-chip__value { color: #f87171; }
+    .pf-cash-chip[data-kind='short'] .pf-cash-chip__value { color: var(--red-text); }
 
     .pf-cash-btn {
       height: 48px;
@@ -1031,7 +996,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       border-radius: 9999px;
       background: rgba(16, 185, 129, 0.08);
       border: 1px solid rgba(16, 185, 129, 0.2);
-      color: #10b981;
+      color: var(--green-text);
       font-size: 11px;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-weight: 600;
@@ -1422,9 +1387,9 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-wallet-row__bal {
       flex: 0 0 auto;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700; color: #6ee7b7;
+      font-weight: 700; color: var(--green-text);
     }
-    .pf-wallet-row__bal--low { color: #fca5a5; }
+    .pf-wallet-row__bal--low { color: var(--red-text); }
     .pf-wallet-empty {
       padding: 14px;
       text-align: center;
@@ -1453,12 +1418,12 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     .pf-wallet-selected__bal {
       margin: 2px 0 0;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 700; font-size: 16px; color: #6ee7b7;
+      font-weight: 700; font-size: 16px; color: var(--green-text);
     }
-    .pf-wallet-selected__bal--low { color: #fca5a5; }
+    .pf-wallet-selected__bal--low { color: var(--red-text); }
     .pf-wallet-selected__warn {
       margin: 4px 0 0;
-      font-size: 11px; color: #fca5a5;
+      font-size: 11px; color: var(--red-text);
     }
     .pf-wallet-change {
       flex: 0 0 auto;
@@ -1475,7 +1440,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     /* ── Refund panel (overpaid after a modify) ─────────────── */
     .pf-refund { margin-top: 14px; padding: 14px; border-radius: 12px;
       border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08); }
-    .pf-refund__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #fcd34d; }
+    .pf-refund__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--amber-text); }
     .pf-refund__modes { display: flex; gap: 8px; margin-bottom: 10px; }
     .pf-refund__chip { flex: 1; padding: 8px 0; border-radius: 9px; font-weight: 700; font-size: 12.5px;
       border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: var(--glass-bg, rgba(255,255,255,0.03)); color: var(--text-secondary, rgba(255,255,255,0.72)); cursor: pointer; }
@@ -1563,7 +1528,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
      * keep a single column. Nothing extra needed for portrait iPad —
      * it already uses both columns. Just ensure the modal stays a
      * centred card (not a phone sheet) and clears safe-area. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
         margin-bottom: env(safe-area-inset-bottom);
       }
@@ -1584,7 +1549,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
      * On touch they were applying on tap-and-hold; neutralise the
      * sticky hover by gating the page's own hover rules. */
     @media (hover: none) {
-      .pf-collect-toggle:hover,
       .pf-mode:not(.pf-mode--on):hover,
       .pf-toolbar-btn:hover:not([disabled]),
       .pf-bill-print-icon:hover,
@@ -1613,7 +1577,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     @media print {
       :host { display: block; background: white; }
       .pf-no-print, pf-screen-header, .pf-discount,
-      .pf-bill-actions, .pf-collect-toggle { display: none !important; }
+      .pf-bill-actions { display: none !important; }
       .grid { display: block !important; }
     }
   `]
@@ -1624,9 +1588,10 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly location = inject(Location);
-  private readonly settings = inject(FrontdeskSettingsService);
   private readonly billingEvents = inject(BillingEventsService);
+  private readonly printer = inject(PrinterService);
 
   /** Embedded mode: render inline (e.g. inside the order screen) without the
    *  page header. The orderId comes from {@link embeddedOrderId} instead of the
@@ -1654,9 +1619,6 @@ export class BillingComponent implements OnInit, OnChanges {
       error: () => { /* keep the current bill on a transient error */ }
     });
   }
-
-  readonly collectsBilling = this.settings.collectsBilling;
-  setCollectsBilling(v: boolean) { this.settings.setCollectsBilling(v); }
 
   readonly modes = PAY_MODES;
   readonly quickAdd = QUICK_ADD;
@@ -1746,17 +1708,49 @@ export class BillingComponent implements OnInit, OnChanges {
     if (this._discountKind() === 'flat') return raw;
     const b = this._bill();
     if (!b) return 0;
-    const base = b.subTotal + b.totalTax;
-    return Math.max(0, Math.min(base, Math.round((base * raw) / 100)));
+    // % of the pre-discount gross, rounded DOWN to the paisa (never up to a
+    // whole rupee — that pushed small bills over the cap).
+    return percentDiscountAmount(this.preDiscountGross(), raw);
   });
-  /** The full invoice total after the reception discount (no payments applied). */
+  /** What the bill becomes once the typed discount is applied — the server's
+   *  own recompute (POST /discount re-splits the lines: discount off the
+   *  taxable value, GST on the rest). Null when no discount is typed. */
+  readonly discountPreview = computed(() => {
+    const d = this.discountNum();
+    return d > 0 ? previewBillForDiscount(this._bill(), d) : null;
+  });
+  /** The full invoice total after the reception discount (no payments applied)
+   *  — exactly the payable the server will hold (never payable − discount). */
   readonly fullTotal = computed(() => {
     const b = this._bill();
     if (!b) return 0;
-    return Math.max(0, b.totalPayable - this.discountNum());
+    return this.discountPreview()?.payable ?? b.totalPayable;
   });
+  /** GST as the bill will carry it (post-discount when a discount is typed). */
+  readonly shownTax = computed(() => this.discountPreview()?.tax ?? this._bill()?.totalTax ?? 0);
+  /** Round-off (±0.xx to the whole-rupee total) as the bill will carry it. */
+  readonly shownRoundOff = computed(() => this.discountPreview()?.roundOff ?? billRoundOff(this._bill()));
   /** Amount already collected (payments − refunds), from the loaded bill. */
   readonly alreadyPaid = computed(() => this._bill()?.totalPaid ?? 0);
+  /** Part-paid bill: the most discount that keeps the payable ≥ what is paid
+   *  (null when nothing is paid — only the role cap applies). */
+  readonly maxDiscountAllowed = computed(() =>
+    this.alreadyPaid() > 0 ? maxDiscountWithinPaid(this._bill(), this.alreadyPaid()) : null);
+  /** The typed discount would take the payable below what is already paid —
+   *  the server refuses it (400 discount_exceeds_balance); block confirm. */
+  readonly discountExceedsPaid = computed(() => {
+    const p = this.discountPreview();
+    return !!p && this.alreadyPaid() > 0 && p.payable < this.alreadyPaid();
+  });
+  /** The refusal, worded as the server words it, plus the most allowed. */
+  readonly discountExceedsPaidMessage = computed(() => {
+    const b = this._bill();
+    if (!this.discountExceedsPaid() || !b) return '';
+    const unpaid = Math.max(0, b.totalPayable - this.alreadyPaid());
+    const max = this.maxDiscountAllowed() ?? 0;
+    const inr = (n: number) => new CurrencyInrPipe().transform(n);
+    return `This discount is more than the unpaid balance of ${inr(unpaid)} — reduce it (at most ${inr(max)}), or record a refund instead.`;
+  });
   /** Outstanding to collect — the difference after prior payments. */
   readonly effectivePayable = computed(() => Math.max(0, this.fullTotal() - this.alreadyPaid()));
   /** Overpayment to refund (e.g. a test was removed after the bill was paid). */
@@ -1847,22 +1841,25 @@ export class BillingComponent implements OnInit, OnChanges {
     return `≈ ${days} day${days === 1 ? '' : 's'} to report`;
   });
 
-  /** UPI deep-link encoded into a real QR (rendered via api.qrserver.com).
-   *  Amount + invoice id are baked in so the patient's UPI app prefills
-   *  everything. payee VPA + name are placeholder constants for now. */
-  readonly upiQrUrl = computed<string>(() => {
-    const amt = this.effectivePayable();
-    const inv = this.invoiceNumber();
-    const params = new URLSearchParams({
-      pa: 'prefrontal@upi',
-      pn: 'Prefrontal Lab',
-      tn: inv,
-      am: String(amt),
-      cu: 'INR'
-    });
-    const upi = `upi://pay?${params.toString()}`;
-    const enc = encodeURIComponent(upi);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${enc}`;
+  /** UPI QR for the payable amount — payee from Admin → Billing (the
+   *  reception-readable visibility slice), invoice no. as the note,
+   *  rendered in the app (no third-party QR service). */
+  private readonly _upiPayee = signal<{ upiVpa?: string | null; upiPayeeName?: string | null } | null>(null);
+  readonly upiVpa = computed(() => (this._upiPayee()?.upiVpa ?? '').trim());
+  readonly upiLink = computed<string | null>(() => {
+    const vpa = this.upiVpa();
+    return vpa ? upiLink(vpa, this._upiPayee()?.upiPayeeName, this.effectivePayable(), this.invoiceNumber()) : null;
+  });
+  readonly upiQrUrl = signal<string | null>(null);
+  private _upiQrSeq = 0;
+  private readonly _upiQrEffect = effect(() => {
+    const link = this.upiLink();
+    const seq = ++this._upiQrSeq;
+    if (!link) { this.upiQrUrl.set(null); return; }
+    upiQrDataUrl(link).then(
+      url => { if (seq === this._upiQrSeq) this.upiQrUrl.set(url); },
+      () => { if (seq === this._upiQrSeq) this.upiQrUrl.set(null); },
+    );
   });
 
   // ── Per-role discount cap (notify rather than silently clamp) ──
@@ -1874,11 +1871,10 @@ export class BillingComponent implements OnInit, OnChanges {
     : this.auth.hasPermission('give_discount') ? this._maxDiscountPct()
     : 0);
   /** Entered discount as a % of the bill's pre-discount total. */
-  readonly discountPct = computed(() => {
-    const b = this._bill();
-    const base = b ? b.subTotal + b.totalTax : 0;
-    return base > 0 ? (this.discountNum() / base) * 100 : 0;
-  });
+  /** The bill's pre-discount gross (price + full-price GST) — the base of
+   *  every discount % here and of the server's cap check. */
+  readonly preDiscountGross = computed(() => billPreDiscountGross(this._bill()));
+  readonly discountPct = computed(() => discountPctOf(this.discountNum(), this.preDiscountGross()));
   /** True when the entered discount exceeds the user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.discountNum() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
@@ -1886,6 +1882,7 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly canConfirm = computed(() => {
     if (this._paid()) return false; // already paid — never let it re-fire
     if (this.discountOverCap()) return false; // discount above this user's limit
+    if (this.discountExceedsPaid()) return false; // below what's already paid
     const m = this._mode();
     if (m === 'cash') return this.cashAmountNum() >= this.effectivePayable();
     if (m === 'wallet') {
@@ -1936,10 +1933,14 @@ export class BillingComponent implements OnInit, OnChanges {
     });
     this.api.get<any>('/api/config/invoice-template').subscribe({ next: t => this.invoiceTpl.set(t), error: () => {} });
     // Per-role discount caps (Level-1 give_discount / Level-2 override_discount).
-    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing').subscribe({
+    // Slim endpoint: the full config GET is admin-gated, so a receptionist's
+    // fetch 403'd and the caps silently fell back to 100%.
+    // Same slice carries the UPI payee for the pay-now QR.
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number; upiVpa?: string | null; upiPayeeName?: string | null }>('/api/config/billing/visibility').subscribe({
       next: c => {
         if (typeof c?.maxDiscountPct === 'number') this._maxDiscountPct.set(c.maxDiscountPct);
         if (typeof c?.overrideDiscountPct === 'number') this._overrideDiscountPct.set(c.overrideDiscountPct);
+        this._upiPayee.set(c ? { upiVpa: c.upiVpa, upiPayeeName: c.upiPayeeName } : null);
       },
       error: () => { /* default 100% cap */ }
     });
@@ -1964,7 +1965,7 @@ export class BillingComponent implements OnInit, OnChanges {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
     // Tests catalogue — used to derive the report TAT estimate.
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: l => this._tests.set(l ?? []),
       error: () => { /* TAT is non-critical; silently skip if it fails */ }
     });
@@ -2063,6 +2064,12 @@ export class BillingComponent implements OnInit, OnChanges {
     });
   }
   setCash(v: string) { this._cash.set(v); }
+
+  /** Cash field is whole rupees — keep only digits so the native OS numpad
+   *  (mobile) or the keyboard (web) can't slip in stray characters. */
+  cashDigits(e: Event): string {
+    return (e.target as HTMLInputElement).value.replace(/\D/g, '');
+  }
   readonly cashNotes = [100, 500, 2000];
   setExactCash() { this._cash.set(String(this.effectivePayable())); }
   addCash(n: number) { this._cash.set(String(this.cashAmountNum() + n)); }
@@ -2082,7 +2089,7 @@ export class BillingComponent implements OnInit, OnChanges {
       return;
     }
     const b = this._bill();
-    const cap = b ? b.subTotal + b.totalTax : Number.POSITIVE_INFINITY;
+    const cap = b ? billPreDiscountGross(b) : Number.POSITIVE_INFINITY;
     const n = Math.min(raw, cap);
     this._discount.set(n === 0 ? '' : String(n));
   }
@@ -2114,6 +2121,7 @@ export class BillingComponent implements OnInit, OnChanges {
   confirm() {
     const b = this._bill();
     if (!b || this._saving()) return;
+    if (this.discountExceedsPaid()) { this.toasts.error(this.discountExceedsPaidMessage()); return; }
     if (!this.canConfirm()) {
       this.toasts.warning('Enter an amount at least equal to the total due.');
       return;
@@ -2132,7 +2140,8 @@ export class BillingComponent implements OnInit, OnChanges {
         // anytime before report delivery).
         const collectAdvance = (bill: Bill) => {
           this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: adv,
+            // Never above what the (recomputed) server bill owes.
+            amount: Math.min(adv, Math.max(0, bill.balance)),
             mode: this._advanceMode(),
             referenceNo: this._referenceNo() || undefined
           }).subscribe({
@@ -2164,46 +2173,58 @@ export class BillingComponent implements OnInit, OnChanges {
         }
         return;
       }
-      this._saving.set(false);
-      this._paid.set(true);
-      this.clearDraft();
-      this.toasts.warning('Marked as Pay later — outstanding balance recorded');
-      this.billingEvents.notifyPayLater();
-      this._paymentDoneOpen.set(true);
+      const markLater = () => {
+        this._saving.set(false);
+        this._paid.set(true);
+        this.clearDraft();
+        this.toasts.warning('Marked as Pay later — outstanding balance recorded');
+        this.billingEvents.notifyPayLater();
+        this._paymentDoneOpen.set(true);
+      };
+      // A typed discount must reach the money on pay-later too (it was
+      // dropped here: the outstanding stayed at the full price).
+      const dLater = this.discountNum();
+      if (dLater > 0) {
+        this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: dLater, reason: 'Reception discount' })
+          .subscribe({
+            next: updated => { this._bill.set(updated); markLater(); },
+            error: e => { this._saving.set(false); this.showDiscountError(e); }
+          });
+      } else {
+        markLater();
+      }
       return;
     }
-    // 'wallet' mode charges the selected vendor's credit BEFORE
-    // recording the payment. If the charge fails (insufficient
-    // balance / inactive wallet), abort without recording payment so
-    // reception can pick a different vendor or mode.
+    // 'wallet' mode bills the selected partner's tab and records the payment
+    // in ONE server transaction (H8). If it fails (inactive wallet,
+    // overpayment), nothing is written, so reception can pick a different
+    // vendor or mode.
     if (this._mode() === 'wallet') {
       const vendor = this.selectedVendor();
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
-      const amount = this.effectivePayable();
       const applyAndPay = (currentBill: Bill) => {
-        this.api.post<unknown>(`/api/vendors/${vendor.id}/charge`, {
-          amount, billId: currentBill.id,
-          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
+        // Charge the SERVER's outstanding on the (recomputed) bill.
+        const amount = Math.max(0, currentBill.balance);
+        // H8: ONE call — the bill payment, the partner's charge ledger row and
+        // the wallet cache commit in one server transaction. It returns the
+        // settled bill AND the partner with its new ledger-derived balance.
+        payBillFromWallet(this.api, currentBill.id, vendor.id, amount, {
+          referenceNo: this._referenceNo() || vendor.code || vendor.name,
+          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`,
         }).subscribe({
-          next: () => {
-            // Wallet charge succeeded → record the bill payment so the
-            // bill is marked paid and the running totals on the FD
-            // landing pick it up.
-            this.api.post<Bill>(`/api/billing/${currentBill.id}/payment`, {
-              amount, mode: 'wallet',
-              referenceNo: this._referenceNo() || vendor.code || vendor.name
-            }).subscribe({
-              next: (updated) => {
-                if (updated) this._bill.set(updated);
-                this._saving.set(false);
-                this._paid.set(true);
-                this.clearDraft();
-                this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
-                this.billingEvents.notifyPaid();
-                this._paymentDoneOpen.set(true);
-              },
-              error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
-            });
+          next: ({ bill: updated, vendor: updatedVendor }) => {
+            // Patch the cached list so every bound view (selected card, wallet
+            // rows) reflects the raised outstanding immediately, no refetch.
+            if (updatedVendor?.id) {
+              this._vendors.update(list => (list ?? []).map(v => v.id === updatedVendor.id ? { ...v, ...updatedVendor } : v));
+            }
+            if (updated) this._bill.set(updated);
+            this._saving.set(false);
+            this._paid.set(true);
+            this.clearDraft();
+            this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
+            this.billingEvents.notifyPaid();
+            this._paymentDoneOpen.set(true);
           },
           error: e => {
             this._saving.set(false);
@@ -2230,7 +2251,10 @@ export class BillingComponent implements OnInit, OnChanges {
       // reopening billing for that patient collects only what's left instead
       // of double-charging (which would push the bill into an overpaid /
       // refund-owed state).
-      const amountDue = this.alreadyPaid() > 0 ? this.effectivePayable() : bill.totalPayable;
+      // The bill passed in is the server's — after POST /discount it is the
+      // RECOMPUTED bill — so its balance is exactly what is owed (it used to
+      // post bill.totalPayable, the pre-discount figure).
+      const amountDue = Math.max(0, bill.balance);
       this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
         amount: amountDue,
         mode: this._mode(),
@@ -2276,8 +2300,7 @@ export class BillingComponent implements OnInit, OnChanges {
    *  history is empty (deep-linked tab), fall back to /frontdesk. */
   back() {
     if (this.embedded) { this.closed.emit(); return; }
-    if (window.history.length > 1) this.location.back();
-    else this.router.navigateByUrl('/frontdesk');
+    this.navBack.backTo('/frontdesk');
   }
 
   /** Leave the collect-payment screen without taking payment. The order itself
@@ -2291,7 +2314,15 @@ export class BillingComponent implements OnInit, OnChanges {
    *  totals, footer) and trigger a download. Built client-side with
    *  jsPDF so we don't need a server round-trip; the structured output
    *  is sharper and more usable than a window.print() screenshot. */
+  /** The invoice PDF is being built (template, QR, logo, printer routing). */
+  readonly printing = signal(false);
   async printInvoice() {
+    if (this.printing()) return;
+    this.printing.set(true);
+    try { await this.buildAndPrintInvoice(); } finally { this.printing.set(false); }
+  }
+
+  private async buildAndPrintInvoice() {
     const b = this._bill();
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {
@@ -2330,17 +2361,19 @@ export class BillingComponent implements OnInit, OnChanges {
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
-        effectivePayable: this.effectivePayable(),
+        // The invoice prints the server bill's payable (source of truth).
+        effectivePayable: b.totalPayable,
         tatLabel: this.tatLabel(),
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: this.auth.user()?.signatureDataUrl || undefined,
         docTitle,
         ...invoiceTemplateFieldsFrom(tpl),
         practice: {
           name: ((tpl?.labName) || this.auth.user()?.tenantName) || undefined,
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined, email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(b, tpl),   // the bill's branch-GST snapshot
         },
       };
       if (this.isNativePlatform()) {
@@ -2365,8 +2398,18 @@ export class BillingComponent implements OnInit, OnChanges {
         generateInvoicePdf({ ...input, action: 'view' });
         return;
       }
-      // Web/desktop: the browser print dialog works.
-      generateInvoicePdf({ ...input, action: 'print' });
+      // Desktop with a chosen invoice printer (Printing settings) → print the
+      // PDF silently to it. Otherwise fall back to the browser print dialog.
+      const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+      const bytes = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
+      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+      const routed = await this.printer.printInvoicePdf(bytes);
+      if (routed.handled) {
+        if (routed.ok) this.toasts.success('Invoice sent to printer');
+        else this.toasts.error(routed.error || 'Invoice print failed');
+      } else {
+        generateInvoicePdf({ ...input, action: 'print' });
+      }
     } catch (err) {
       console.error('[billing] invoice PDF failed', err);
       this.toasts.error('Could not generate invoice PDF');

@@ -1,0 +1,559 @@
+<section class="pf-ie pf-band-page px-4 md:px-8 pt-6 pb-10">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
+      <ng-container band-actions>
+        @if (dirty() || mapsDirty() || imageMapsDirty()) {
+          <span class="pf-savestate"><span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-ie-vh-phone">Unsaved changes</span></span>
+        }
+        @if (!isNew()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="removing()" [pfBusy]="removing()" pfBusyLabel="Removing…"
+                  (click)="remove()" aria-label="Remove instrument" title="Remove instrument">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+            Remove
+          </button>
+        }
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ie-save press"
+                [disabled]="saving() || loading()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
+                [attr.aria-label]="primaryLabel()" [title]="primaryLabel()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+          {{ saving() ? 'Saving…' : primaryLabel() }}
+        </button>
+      </ng-container>
+      <div band-search class="pf-ctx pf-ie-ctx">
+        <span class="pf-ctx__primary">{{ title() }}</span>
+        <span class="pf-ie-ctx__div" aria-hidden="true"></span>
+        <ng-container *ngTemplateOutlet="tabsTpl"></ng-container>
+      </div>
+    </pf-hero-band>
+  }
+  <pf-screen-header class="pf-classic-only" eyebrow="Lab settings · Instruments" [title]="title()" parentRoute="/admin/instruments"></pf-screen-header>
+
+  <ng-template #tabsTpl>
+    <div class="pf-tabs pf-ie-tabs" role="tablist" aria-label="Setup steps">
+      @for (t of tabs(); track t.id) {
+        <button type="button" class="pf-tabs__item" role="tab" [attr.aria-selected]="tab() === t.id" (click)="go(t.id)">
+          <span>{{ t.label }}</span>
+          @if (t.id !== 'status') {
+            <span class="pf-tabs__dot" [class.pf-tabs__dot--ok]="tabDone(t.id)"
+                  [attr.aria-label]="tabDone(t.id) ? 'complete' : 'something to finish'"></span>
+          }
+        </button>
+      }
+    </div>
+  </ng-template>
+
+  <div class="pf-band-body pf-ie__body">
+    <div class="pf-classic-only pf-ie__classic-tabs"><ng-container *ngTemplateOutlet="tabsTpl"></ng-container></div>
+    @if (loading()) {
+      <section class="pf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="6" [cols]="2" label="Loading instrument…"></pf-skeleton-form></div></section>
+    } @else {
+    <div class="pf-ie__split">
+      <section class="pf-card pf-ie__main" [attr.aria-label]="tab()">
+        @switch (tab()) {
+          <!-- ── STATUS ─────────────────────────────────────────────── -->
+          @case ('status') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span>
+              <h2 class="pf-card__label">Recent results</h2>
+              <span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--quiet press" (click)="loadRecent(); refreshRawLog()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+                Refresh
+              </button>
+            </header>
+            <div class="pf-card__body">
+              @if (recentAutoMatchedCount() > 0) {
+                <div class="pf-ie-notice" role="status">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 17h7M15 7h5M15 17h5M11 7l4 10M11 17l4-10"/></svg>
+                  <span>{{ plural(recentAutoMatchedCount(), 'code') }} auto-matched by LOINC — confirm in Code mapping</span>
+                  <button type="button" class="pf-btn pf-btn--quiet press" (click)="go('mapping')">Code mapping</button>
+                </div>
+              }
+              @if (recent().length === 0) {
+                <div class="pf-empty pf-empty--compact">
+                  <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/></svg></span>
+                  <p class="pf-empty__title">No results received yet</p>
+                  <p class="pf-empty__body">Run a sample on the analyzer — each run appears here.</p>
+                </div>
+              } @else {
+                <ul class="pf-ie-msgs" aria-label="Recent messages">
+                  @for (m of recent(); track m.id) {
+                    <li class="pf-row pf-ie-msg">
+                      <span class="pf-ie-msg__main">
+                        <span class="pf-ie-msg__id pf-num">{{ m.isQc ? 'QC' : (m.sampleId || '—') }}</span>
+                        <span class="pf-ie-msg__meta pf-num">{{ fmtIst(m.receivedAt) }} · {{ plural(m.resultCount, 'result') }}{{ (m.unmappedCodes?.length ?? 0) ? ' · ' + (m.unmappedCodes?.length ?? 0) + ' unmapped' : '' }}{{ (m.autoMatchedCodes?.length ?? 0) ? ' · ' + (m.autoMatchedCodes?.length ?? 0) + ' auto-matched' : '' }}</span>
+                        @if (m.preview?.length) {
+                          <span class="pf-ie-msg__prev pf-num">{{ previewText(m) }}</span>
+                        }
+                      </span>
+                      <span class="pf-chip pf-chip--static pf-ie-msg__state">{{ m.state }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (bridge.available) {
+                <h3 class="pf-ie-sub">Raw log on this PC</h3>
+                @if (rawLog().length === 0) {
+                  <p class="pf-field__hint">Nothing logged yet.</p>
+                } @else {
+                  <div class="pf-ie-raw pf-ie-raw--log" role="log" aria-label="Raw log">
+                    @for (e of rawLog(); track $index) {
+                      <div class="pf-ie-raw__line"><span class="pf-ie-raw__at">{{ fmtIst(e.at, 'h:mm:ss a') }} {{ e.dir === 'in' ? '←' : '→' }}</span>@for (sg of rawLogSegments(e); track $index) {<span [class.pf-ie-raw__ctl]="sg.ctrl">{{ sg.text }}</span>}</div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          }
+
+          <!-- ── BASICS ─────────────────────────────────────────────── -->
+          @case ('basics') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4"/></svg></span>
+              <h2 class="pf-card__label">Basics</h2>
+              <span class="pf-card__note">What the analyzer is. Only the name is required.</span>
+            </header>
+            <div class="pf-card__body">
+              <div class="pf-ie-grid">
+                <label class="pf-field pf-ie-span">
+                  <span class="pf-field__lbl">Name <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                  <input class="pf-input" [class.pf-input--error]="!!issueFor('name') && dirty()" [value]="form().name" (input)="patch({ name: $any($event.target).value })" placeholder="e.g. Haematology counter" autocomplete="off" />
+                </label>
+                <label class="pf-field"><span class="pf-field__lbl">Make</span>
+                  <input class="pf-input" [value]="form().make" (input)="patch({ make: $any($event.target).value })" placeholder="e.g. Sysmex" autocomplete="off" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Model</span>
+                  <input class="pf-input" [value]="form().model" (input)="patch({ model: $any($event.target).value })" placeholder="e.g. XN-550" autocomplete="off" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Serial number</span>
+                  <input class="pf-input pf-num" [value]="form().serialNumber" (input)="patch({ serialNumber: $any($event.target).value })" autocomplete="off" /></label>
+              </div>
+            </div>
+          }
+
+          <!-- ── CONNECTION ─────────────────────────────────────────── -->
+          @case ('connection') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0V7ZM12 17v4"/></svg></span>
+              <h2 class="pf-card__label">Connection</h2>
+              <span class="pf-card__note">How the analyzer reaches the lab PC.</span>
+            </header>
+            <div class="pf-card__body">
+              <div class="pf-ie-grid">
+                @if (showConnectedVia()) {
+                  <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Connected through</span>
+                    <pf-select [options]="connectedViaOptions()" [value]="connectedVia()" (valueChange)="setConnectedVia($event)"></pf-select>
+                    @if (connectedVia()) { <p class="pf-field__hint">The Bridge talks to the analyzer on its own network port — no lab PC needed.</p> }
+                  </div>
+                }
+                <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Type</span>
+                  <pf-select [options]="transportOptions()" [value]="form().transport" (valueChange)="patch({ transport: $event })"></pf-select></div>
+                @switch (form().transport) {
+                  @case ('serial') {
+                    <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Port <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                      @if (bridge.available) {
+                        <pf-select [options]="ports()" [value]="form().serial.path" [searchable]="true" [allowCreate]="true" createHint="Use this port name"
+                                   placeholder="Pick the port the cable is on" (valueChange)="patchSerial({ path: $event })"></pf-select>
+                      } @else {
+                        <input class="pf-input pf-num" [value]="form().serial.path" (input)="patchSerial({ path: $any($event.target).value })" placeholder="e.g. COM3 or /dev/ttyUSB0" autocomplete="off" />
+                        <p class="pf-field__hint">The paired desktop app lists the ports it can see.</p>
+                      }
+                      @if (issueFor('serial.path') && dirty()) { <p class="pf-field__hint pf-ie-err">{{ issueFor('serial.path') }}</p> }
+                    </div>
+                    <div class="pf-field"><span class="pf-field__lbl">Baud rate</span>
+                      <pf-select [options]="baudOptions" [value]="form().serial.baudRate" (valueChange)="patchSerial({ baudRate: $event })"></pf-select></div>
+                    <div class="pf-field"><span class="pf-field__lbl">Data bits</span>
+                      <pf-select [options]="dataBitOptions" [value]="form().serial.dataBits" (valueChange)="patchSerial({ dataBits: $event })"></pf-select></div>
+                    <div class="pf-field"><span class="pf-field__lbl">Parity</span>
+                      <pf-select [options]="parityOptions" [value]="form().serial.parity" (valueChange)="patchSerial({ parity: $event })"></pf-select></div>
+                    <div class="pf-field"><span class="pf-field__lbl">Stop bits</span>
+                      <pf-select [options]="stopBitOptions" [value]="form().serial.stopBits" (valueChange)="patchSerial({ stopBits: $event })"></pf-select></div>
+                    <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Flow control</span>
+                      <pf-select [options]="flowOptions" [value]="form().serial.flow" (valueChange)="setFlow($event)"></pf-select></div>
+                  }
+                  @case ('tcp-server') {
+                    <label class="pf-field"><span class="pf-field__lbl">Port the {{ connectedVia() ? 'Bridge' : 'lab PC' }} listens on <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                      <input class="pf-input pf-num" inputmode="numeric" [value]="form().tcpServer.port ?? ''" (input)="patchTcpServer($any($event.target).value)" placeholder="5001" /></label>
+                    <p class="pf-field__hint pf-ie-span">Set the analyzer's LIS host to {{ connectedVia() ? 'the Bridge (192.168.50.1)' : "this PC's IP address" }} and this port.</p>
+                    @if (issueFor('tcpServer.port') && dirty()) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor('tcpServer.port') }}</p> }
+                  }
+                  @case ('tcp-client') {
+                    <label class="pf-field"><span class="pf-field__lbl">Analyzer IP / host <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                      <input class="pf-input pf-num" [value]="form().tcpClient.host" (input)="patchTcpClient({ host: $any($event.target).value })" placeholder="192.168.1.50" autocomplete="off" /></label>
+                    <label class="pf-field"><span class="pf-field__lbl">Port <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                      <input class="pf-input pf-num" inputmode="numeric" [value]="form().tcpClient.port ?? ''" (input)="patchTcpClient({ port: $any($event.target).value })" placeholder="5100" /></label>
+                    @for (f of ['tcpClient.host', 'tcpClient.port']; track f) {
+                      @if (issueFor(f) && dirty()) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor(f) }}</p> }
+                    }
+                  }
+                  @case ('folder') {
+                    <label class="pf-field pf-ie-span"><span class="pf-field__lbl">Folder the analyzer writes to <span class="pf-dot-unpriced" aria-hidden="true"></span></span>
+                      <input class="pf-input" [value]="form().folder.path" (input)="patchFolder({ path: $any($event.target).value })" placeholder="C:/LIS/out" autocomplete="off" /></label>
+                    <label class="pf-field"><span class="pf-field__lbl">File pattern</span>
+                      <input class="pf-input pf-num" [value]="form().folder.pattern" (input)="patchFolder({ pattern: $any($event.target).value })" placeholder="*.txt" autocomplete="off" /></label>
+                    <label class="pf-field"><span class="pf-field__lbl">Move read files to (optional)</span>
+                      <input class="pf-input" [value]="form().folder.moveTo" (input)="patchFolder({ moveTo: $any($event.target).value })" placeholder="C:/LIS/done" autocomplete="off" /></label>
+                    @if (issueFor('folder.path') && dirty()) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor('folder.path') }}</p> }
+                  }
+                }
+              </div>
+            </div>
+          }
+
+          <!-- ── PROTOCOL ───────────────────────────────────────────── -->
+          @case ('protocol') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span>
+              <h2 class="pf-card__label">Protocol</h2>
+              <span class="pf-card__note">The language the analyzer speaks. Not sure? Leave Auto-detect and use Listen.</span>
+            </header>
+            <div class="pf-card__body">
+              <div class="pf-ie-grid">
+                <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Protocol</span>
+                  <pf-select [options]="protocolOptions" [value]="form().protocol" (valueChange)="patch({ protocol: $event })"></pf-select></div>
+                @if (form().protocol === 'astm' || form().protocol === 'auto') {
+                  <label class="pf-field"><span class="pf-field__lbl">ASTM sample ID field (O record)</span>
+                    <input class="pf-input pf-num" inputmode="numeric" [value]="form().astm.sampleIdField" (input)="patchAstm({ sampleIdField: $any($event.target).value })" /></label>
+                  <label class="pf-field"><span class="pf-field__lbl">Component</span>
+                    <input class="pf-input pf-num" inputmode="numeric" [value]="form().astm.sampleIdComponent" (input)="patchAstm({ sampleIdComponent: $any($event.target).value })" /></label>
+                }
+                @if (form().protocol === 'hl7' || form().protocol === 'auto') {
+                  <div class="pf-field pf-ie-span"><span class="pf-field__lbl">HL7 sample ID field</span>
+                    <pf-select [options]="hl7FieldOptions" [value]="form().hl7.sampleIdField" (valueChange)="patchHl7($event)"></pf-select>
+                    <span class="pf-field__hint">OBR-3 is the analyzer's own running sample number (e.g. 10614) — used as-is, unless your tech types or scans the lab's own sample ID into the analyzer at run time, in which case OBR-3 carries that instead.</span></div>
+                }
+                @if (form().protocol === 'text') {
+                  <label class="pf-field pf-ie-span"><span class="pf-field__lbl">Result line pattern</span>
+                    <input class="pf-input pf-ie-code" [value]="form().text.linePattern" (input)="patchText({ linePattern: $any($event.target).value })" autocomplete="off" spellcheck="false" />
+                    <span class="pf-field__hint">Named groups: code, value, unit, flag.</span></label>
+                  <label class="pf-field pf-ie-span"><span class="pf-field__lbl">Sample ID pattern</span>
+                    <input class="pf-input pf-ie-code" [value]="form().text.sampleIdPattern" (input)="patchText({ sampleIdPattern: $any($event.target).value })" autocomplete="off" spellcheck="false" />
+                    <span class="pf-field__hint">Named group: id.</span></label>
+                  <label class="pf-field pf-ie-span"><span class="pf-field__lbl">QC line pattern</span>
+                    <input class="pf-input pf-ie-code" [value]="form().text.qcPattern" (input)="patchText({ qcPattern: $any($event.target).value })" autocomplete="off" spellcheck="false" /></label>
+                  @for (f of ['text.linePattern', 'text.sampleIdPattern', 'text.qcPattern']; track f) {
+                    @if (issueFor(f)) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor(f) }}</p> }
+                  }
+                }
+                <p class="pf-field__hint pf-ie-span">The sample ID the analyzer sends must be the tube barcode Prefrontal printed.</p>
+              </div>
+            </div>
+          }
+
+          <!-- ── LISTEN ─────────────────────────────────────────────── -->
+          @case ('listen') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l3-7 4 14 3-7h7"/></svg></span>
+              <h2 class="pf-card__label">Listen</h2>
+              <span class="pf-card__note">Capture a real run to check the connection and detect the protocol.</span>
+            </header>
+            <div class="pf-card__body">
+              @if (!bridge.available) {
+                <div class="pf-empty pf-empty--compact">
+                  <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+                  <p class="pf-empty__title">Listening runs on the paired desktop app</p>
+                  <p class="pf-empty__body">Open Prefrontal on the lab PC the analyzer is cabled to, then come back to this step there.</p>
+                </div>
+              } @else {
+                <div class="pf-ie-listen-bar">
+                  @if (sessionId()) {
+                    <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="listenBusy()" [pfBusy]="listenBusy()" pfBusyLabel="Stopping…" (click)="stopListen()">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                      Stop listening
+                    </button>
+                    <span class="pf-ie-live" role="status"><span class="pf-ie-live__dot" aria-hidden="true"></span>{{ listenState() === 'listening' || !listenState() ? 'Listening — run a sample on the analyzer' : listenState() }}</span>
+                  } @else {
+                    <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="listenBusy()" [pfBusy]="listenBusy()" pfBusyLabel="Starting…" (click)="startListen()">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l3-7 4 14 3-7h7"/></svg>
+                      Start listening
+                    </button>
+                    <span class="pf-field__hint">Uses {{ connection() }}.</span>
+                  }
+                </div>
+                @if (listenError()) { <p class="pf-field__hint pf-ie-err" role="alert">{{ listenError() }}</p> }
+
+                <h3 class="pf-ie-sub">Raw capture</h3>
+                <div class="pf-ie-raw" role="log" aria-live="polite" aria-label="Raw capture">
+                  @if (!rawText()) { <span class="pf-ie-raw__empty">Nothing received yet.</span> }
+                  @for (sg of rawSegments(); track $index) {<span [class.pf-ie-raw__ctl]="sg.ctrl">{{ sg.text }}</span>}
+                </div>
+
+                <button type="button" class="pf-btn pf-btn--tertiary press pf-ie-self-start" [attr.aria-expanded]="pasteOpen()" (click)="pasteOpen.set(!pasteOpen())">
+                  {{ pasteOpen() ? 'Hide paste box' : 'Paste a sample instead' }}
+                </button>
+                @if (pasteOpen()) {
+                <div class="pf-ie-paste">
+                  <textarea class="pf-input pf-ie-code" rows="5" [value]="pasteText()" (input)="pasteText.set($any($event.target).value)" placeholder="Paste the analyzer's output here" spellcheck="false"></textarea>
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="!pasteText().trim() || previewBusy()" [pfBusy]="previewBusy()" pfBusyLabel="Reading…" (click)="previewPaste()">Read this sample</button>
+                </div>
+                }
+
+                @if (detect(); as d) {
+                  <div class="pf-ie-detect" role="status">
+                    <div class="pf-ie-detect__head">
+                      <span class="pf-ie-detect__t">Detected: <strong>{{ d.protocol === 'unknown' ? 'Unknown' : d.protocol.toUpperCase() }}</strong> <span class="pf-num">· {{ confidencePct(d) }}% sure</span></span>
+                      @if (d.protocol !== 'unknown') {
+                        <button type="button" class="pf-btn pf-btn--quiet press" (click)="useDetected()">Use this</button>
+                      }
+                    </div>
+                    @if (d.reasons.length) {
+                      <ul class="pf-ie-detect__why">@for (r of d.reasons; track $index) { <li>{{ r }}</li> }</ul>
+                    }
+                  </div>
+                }
+
+                @if (previewData().length) {
+                  <h3 class="pf-ie-sub">Parsed results</h3>
+                  <div class="pf-ie-tablewrap">
+                    <table class="pf-ie-table">
+                      <thead><tr><th>Sample ID</th><th>Code</th><th class="pf-ie-r">Value</th><th>Unit</th><th>Flags</th></tr></thead>
+                      <tbody>
+                        @for (r of previewData(); track $index) {
+                          <tr [attr.title]="previewLine(r)">
+                            <td class="pf-num">{{ r.qc ? 'QC' : (r.sampleId || '—') }}</td>
+                            <td class="pf-num">{{ r.code }}</td>
+                            <td class="pf-num pf-ie-r">{{ r.value }}</td>
+                            <td>{{ r.unit }}</td>
+                            <td class="pf-num">{{ r.flags }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  @if (unmappedCandidates().length) {
+                    <button type="button" class="pf-btn pf-btn--quiet press pf-ie-self-start" (click)="addUnmapped(); go('mapping')">
+                      Map {{ plural(unmappedCandidates().length, 'new code') }}
+                    </button>
+                  }
+                }
+              }
+            </div>
+          }
+
+          <!-- ── CODE MAPPING ───────────────────────────────────────── -->
+          @case ('mapping') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7M4 17h7M15 7h5M15 17h5M11 7l4 10M11 17l4-10"/></svg></span>
+              <h2 class="pf-card__label">Code mapping</h2>
+              <span class="pf-card__note">Each analyzer code → the Test Master test it fills. Saved with the band Save.</span>
+              <span class="pf-ie-headacts">
+                <button type="button" class="pf-btn pf-btn--quiet press" (click)="loadCbc()">Load CBC defaults</button>
+                <button type="button" class="pf-btn pf-btn--quiet press" (click)="loadM51()">Load Mindray / Medonic (LOINC)</button>
+                <button type="button" class="pf-btn pf-btn--quiet press" [disabled]="!unmappedCandidates().length" (click)="addUnmapped()">
+                  Add unmapped codes{{ unmappedCandidates().length ? ' (' + unmappedCandidates().length + ')' : '' }}
+                </button>
+                <button type="button" class="pf-btn pf-btn--quiet press" (click)="addRow()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Add row
+                </button>
+              </span>
+            </header>
+            <div class="pf-card__body">
+              @if (maps().length === 0) {
+                <div class="pf-empty pf-empty--compact">
+                  <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7M4 17h7M15 7h5M15 17h5M11 7l4 10M11 17l4-10"/></svg></span>
+                  <p class="pf-empty__title">No codes mapped yet</p>
+                  <p class="pf-empty__body">A CBC counter? Load CBC defaults. Otherwise listen to a run and add its codes.</p>
+                </div>
+              } @else {
+                <div class="pf-ie-tablewrap">
+                  <table class="pf-ie-table pf-ie-maps">
+                    <thead>
+                      <tr><th>Analyzer code</th><th>Test Master test</th><th>Value (optional)</th><th class="pf-ie-r">× Factor</th><th class="pf-ie-r">+ Offset</th><th class="pf-ie-r">Decimals</th><th>Unit</th><th><span class="pf-ie-vh">Remove</span></th></tr>
+                    </thead>
+                    <tbody>
+                      @for (r of maps(); track $index; let i = $index) {
+                        <tr [class.pf-ie-row--err]="!!mapIssueAt(i)">
+                          <td data-l="Analyzer code"><input class="pf-input pf-num" [value]="r.analyzerCode" (input)="onAnalyzerCodeInput(i, $any($event.target).value)" aria-label="Analyzer code" autocomplete="off" /></td>
+                          <td data-l="Test" class="pf-ie-maps__test">
+                            @if (r.loincCandidates?.length && !r.testCatalogKey) {
+                              <pf-select [options]="loincCandidateOptions(r)" [value]="''" [searchable]="true"
+                                         placeholder="Choose (LOINC match)…" (valueChange)="pickLoincCandidate(i, $event)"></pf-select>
+                            } @else {
+                              <pf-select [options]="testOptions()" [value]="r.testCatalogKey" [searchable]="true" placeholder="Pick a test…" (valueChange)="pickTest(i, $event)"></pf-select>
+                              @if (r.loincMatched) {
+                                <span class="pf-chip pf-chip--static pf-ie-loinc-chip" title="Auto-filled from the analyzer's LOINC code">Matched by LOINC</span>
+                              }
+                            }
+                          </td>
+                          <td data-l="Value"><input class="pf-input" [value]="r.parameterName" (input)="patchMap(i, { parameterName: $any($event.target).value })" placeholder="First value" aria-label="Parameter name" autocomplete="off" /></td>
+                          <td data-l="Factor"><input class="pf-input pf-num pf-ie-r" inputmode="decimal" [value]="r.factor" (input)="patchMap(i, { factor: numOrNull($any($event.target).value) ?? 0 })" aria-label="Factor" /></td>
+                          <td data-l="Offset"><input class="pf-input pf-num pf-ie-r" inputmode="decimal" [value]="r.offset" (input)="patchMap(i, { offset: numOrNull($any($event.target).value) ?? 0 })" aria-label="Offset" /></td>
+                          <td data-l="Decimals"><input class="pf-input pf-num pf-ie-r" inputmode="numeric" [value]="r.decimals ?? ''" (input)="patchMap(i, { decimals: numOrNull($any($event.target).value) })" placeholder="As sent" aria-label="Decimals" /></td>
+                          <td data-l="Unit"><input class="pf-input" [value]="r.unit" (input)="patchMap(i, { unit: $any($event.target).value })" aria-label="Target unit" autocomplete="off" /></td>
+                          <td class="pf-ie-maps__rm">
+                            <button type="button" class="pf-btn pf-btn--icon press" (click)="removeRow(i)" [attr.aria-label]="'Remove ' + (r.analyzerCode || 'row')" title="Remove">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                          </td>
+                        </tr>
+                        @if (mapIssueAt(i); as msg) {
+                          <tr class="pf-ie-row-msg"><td colspan="8"><p class="pf-field__hint pf-ie-err">{{ msg }}</p></td></tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <p class="pf-field__hint">Value stored = analyzer value × factor + offset, rounded to the decimals. Example: WBC 7.8 (10³/µL) × 1000 → 7800 cells/µL.</p>
+                @if (loincSkipped().length) {
+                  <p class="pf-field__hint pf-ie-loinc-skip">Skipped: {{ skippedCodesText() }}</p>
+                }
+              }
+
+              <!-- Analyzer IMAGES (histograms / scattergrams) → the profiles
+                   whose report shows them (Custom layout palette + routing). -->
+              <section class="pf-ie-images" aria-label="Analyzer images">
+                <h3 class="pf-ie-images__h">Analyzer images</h3>
+                <p class="pf-field__hint">Graphs this analyzer sends with a run. Map each to the profiles whose report shows it — the profile's Custom layout offers it, and a received graph lands on that profile's tests.</p>
+                @if (isNew()) {
+                  <p class="pf-field__hint">Create the instrument first — then map its graphs here.</p>
+                } @else {
+                  <ul class="pf-ie-imgs">
+                    @for (r of imageMaps(); track r.code; let i = $index) {
+                      <li class="pf-ie-img">
+                        <span class="pf-ie-img__thumb"><img [src]="imageSrc(r)" [alt]="imageLabel(r)" loading="lazy" /></span>
+                        <div class="pf-ie-img__body">
+                          <div class="pf-ie-img__meta">
+                            <span class="pf-ie-img__name">{{ imageLabel(r) }}</span>
+                            <span class="pf-ie-img__sub pf-num">Code {{ r.code }} · {{ r.seen ? 'received ' + r.seen + '× · last ' + fmtIst(r.lastAt) : 'not received yet — sample shown' }}</span>
+                          </div>
+                          <pf-select class="pf-ie-img__profiles" [options]="profileOptions()" [multiple]="true" [searchable]="true" [compactMulti]="true"
+                                     [triggerLabel]="r.profileKeys.length ? 'Change profiles' : 'Map to profiles…'"
+                                     [values]="r.profileKeys" [value]="''" placeholder="Map to profiles…" [attr.aria-label]="'Profiles for ' + imageLabel(r)"
+                                     (valuesChange)="setImageProfiles(i, $event)"></pf-select>
+                          @if (r.profileKeys.length) {
+                            <p class="pf-ie-img__mapped"><span class="pf-ie-img__mk" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Shows on {{ profileNames(r.profileKeys) }}</p>
+                          } @else {
+                            <span class="pf-ie-img__none">Not mapped — no profile shows this graph</span>
+                          }
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                  <div class="pf-ie-imgadd">
+                    <input class="pf-input pf-num" type="text" inputmode="numeric" placeholder="Another image code, e.g. 13001" aria-label="Image code"
+                           [value]="newImageCode()" (input)="newImageCode.set($any($event.target).value)" (keydown.enter)="addImageCode()" />
+                    <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="!newImageCode().trim()" (click)="addImageCode()">Add code</button>
+                  </div>
+                }
+              </section>
+            </div>
+          }
+
+          <!-- ── TWO-WAY WITH THE ANALYZER (ConfigJson `bidirectional`) ── -->
+          @case ('twoway') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+              <h2 class="pf-card__label">Two-way with the analyzer</h2>
+              <span class="pf-card__note">Let the analyzer know which tests each tube needs. Saved with the band Save.</span>
+            </header>
+            <div class="pf-card__body">
+              <pf-instrument-two-way [value]="form().twoWay" [protocol]="form().protocol" [instrumentId]="id()" [tests]="tests()"
+                                     [unsaved]="dirty()" (valueChange)="patchTwoWay($event)" (openMapping)="go('mapping')"></pf-instrument-two-way>
+            </div>
+          }
+
+          <!-- ── DEVICE & PAIRING ───────────────────────────────────── -->
+          @case ('device') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
+              <h2 class="pf-card__label">Device &amp; pairing</h2>
+              <span class="pf-card__note">The lab PC sends results with a device key. It is shown once.</span>
+            </header>
+            <div class="pf-card__body">
+              @if (isNew()) {
+                <p class="pf-field__hint">Create the instrument first — then generate its device key here.</p>
+              } @else {
+                <dl class="pf-ie-kv">
+                  <div><dt>Device key</dt><dd class="pf-num">{{ dto()?.hasDeviceKey ? (dto()?.deviceKeyPrefix ? dto()?.deviceKeyPrefix + '…' : 'Set') : 'Not generated' }}</dd></div>
+                  @if (dto()?.deviceKeyRotatedAt) { <div><dt>Generated</dt><dd class="pf-num">{{ fmtIst(dto()?.deviceKeyRotatedAt) }}</dd></div> }
+                  @if (bridge.available) {
+                    <div><dt>This PC</dt><dd>{{ paired() ? 'Paired · ' + fmtIst(paired()!.pairedAt) : 'Not paired' }}</dd></div>
+                  }
+                </dl>
+                @if (freshKey(); as k) {
+                  <div class="pf-field">
+                    <span class="pf-field__lbl">New device key — copy it now, it is not shown again</span>
+                    <div class="pf-ie-keyrow">
+                      <input class="pf-input pf-num" readonly [value]="k" aria-label="Device key" (focus)="$any($event.target).select()" />
+                      <button type="button" class="pf-btn pf-btn--secondary press" (click)="copyKey()">Copy</button>
+                    </div>
+                  </div>
+                }
+                <div class="pf-ie-actrow">
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="keyBusy()" [pfBusy]="keyBusy()" pfBusyLabel="Generating…" (click)="generateKey()">
+                    {{ dto()?.hasDeviceKey ? 'Rotate key' : 'Generate device key' }}
+                  </button>
+                  @if (bridge.available) {
+                    <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="pairBusy() || keyBusy()" [pfBusy]="pairBusy()" pfBusyLabel="Pairing…" (click)="pairThisPc()">
+                      {{ paired() ? 'Re-pair this PC' : 'Pair this PC' }}
+                    </button>
+                    @if (paired()) {
+                      <button type="button" class="pf-btn pf-btn--danger press" (click)="unpairThisPc()">Unpair</button>
+                    }
+                  }
+                </div>
+                @if (!bridge.available) {
+                  <p class="pf-field__hint">To pair, open this step in the Prefrontal desktop app on the PC the analyzer is cabled to — or paste the key into it.</p>
+                } @else if (!freshKey() && dto()?.hasDeviceKey) {
+                  <p class="pf-field__hint">Pairing uses a fresh key: Pair this PC rotates the key, so any other PC paired with the old key stops until re-paired.</p>
+                }
+              }
+            </div>
+          }
+        }
+        @if (tab() !== 'status') {
+          <div class="pf-card__foot pf-ie-foot">
+            <button type="button" class="pf-btn pf-btn--tertiary press" [disabled]="!prevTab()" (click)="prevTab() && go(prevTab()!.id)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              {{ prevTab()?.label ?? 'Back' }}
+            </button>
+            @if (nextTab(); as n) {
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="go(n.id)">
+                Next: {{ n.label }}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            }
+          </div>
+        }
+      </section>
+
+      <!-- CONNECTOR: what the main card doesn't show — live state. -->
+      <aside class="pf-card pf-ie__side" aria-label="Connector">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/></svg></span>
+          <h2 class="pf-card__label">Connector</h2>
+        </header>
+        <div class="pf-card__body pf-ie-sidebody">
+          @if (isNew()) {
+            <p class="pf-field__hint">Not created yet. {{ connection() }}</p>
+          } @else if (bridge.available && live(); as s) {
+            <span class="pf-ie-status" [attr.data-tone]="liveWord().tone"><span class="pf-ie-status__dot" aria-hidden="true"></span>{{ liveWord().label }} on this PC</span>
+            <dl class="pf-ie-kv">
+              <div><dt>Last message</dt><dd class="pf-num">{{ fmtIst(s.lastMessageAt) || '—' }}</dd></div>
+              <div><dt>Last upload</dt><dd class="pf-num">{{ fmtIst(s.lastUploadAt) || '—' }}</dd></div>
+              <div><dt>Queue</dt><dd class="pf-num">{{ s.queueLength ?? 0 }}</dd></div>
+              <div><dt>Today</dt><dd class="pf-num">{{ plural(s.messagesToday ?? 0, 'message') }}</dd></div>
+            </dl>
+            @if (s.lastError) { <p class="pf-field__hint pf-ie-err">{{ s.lastError }}</p> }
+          } @else {
+            <span class="pf-ie-status" [attr.data-tone]="serverStatus().tone"><span class="pf-ie-status__dot" aria-hidden="true"></span>{{ serverStatus().label }}</span>
+            <dl class="pf-ie-kv">
+              <div><dt>Last seen</dt><dd class="pf-num">{{ fmtIst(dto()?.lastSeenAt) || '—' }}</dd></div>
+              <div><dt>Last result</dt><dd class="pf-num">{{ fmtIst(dto()?.lastMessageAt) || '—' }}</dd></div>
+              @if (dto()?.lastStatus; as hb) {
+                @if (hb.status) { <div><dt>Connector</dt><dd>{{ hb.status }}{{ hb.host ? ' · ' + hb.host : '' }}</dd></div> }
+                @if (hb.queueLength != null) { <div><dt>Queue</dt><dd class="pf-num">{{ hb.queueLength }}</dd></div> }
+                @if (hb.connectorVersion) { <div><dt>Version</dt><dd class="pf-num">{{ hb.connectorVersion }}</dd></div> }
+              }
+              <div><dt>Unmatched</dt><dd class="pf-num">{{ dto()?.unmatchedCount ?? 0 }}</dd></div>
+            </dl>
+            @if (dto()?.lastStatus?.lastError; as err) { <p class="pf-field__hint pf-ie-err">{{ err }}</p> }
+          }
+          <p class="pf-field__hint">{{ connection() }}</p>
+          <dl class="pf-ie-kv"><div><dt>Two-way</dt><dd>{{ twoWayLabel() }}</dd></div></dl>
+          <p class="pf-field__hint">Values arrive as a prefill in result entry — nothing is submitted or validated automatically.</p>
+        </div>
+      </aside>
+    </div>
+    }
+  </div>
+</section>

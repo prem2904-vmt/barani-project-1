@@ -1,10 +1,12 @@
+@use '../../shared/styles/device-tier' as dt;
 /* Top strip bar — fixed 64px+ height so every interactive element
  * inside it can adopt a consistent vertical rhythm. Padding + children
  * (44px pills) = 64px exact. */
 .pf-topstrip-bar {
-  min-height: 64px;
-  padding: 10px 16px 10px 12px;
-  gap: 8px;
+  /* Designer bar: 53px, 20px side padding (Figma 446-113). */
+  min-height: 53px;
+  padding: 6px 20px;
+  gap: 12px;
 }
 @media (max-width: 639px) {
   /* On mobile, reduce padding and gap so brand + tenant + bell + avatar
@@ -93,10 +95,11 @@
   margin-left: -2px;
 }
 .pf-brand-name {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  /* Designer wordmark (Figma 446-113): 18px regular, pink→violet sweep. */
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, #d547c6 0%, #8b49ed 47%, #8749ef 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -396,7 +399,7 @@
    below 1280px (mobile + iPad) because the floating bottom-nav
    already has an Admin tab there; showing both would duplicate. */
 .pf-icon-btn--xl-only { display: none; }
-@media (min-width: 1280px) {
+@include dt.desktop-only {
   .pf-icon-btn--xl-only { display: inline-flex; }
 }
 
@@ -523,7 +526,7 @@
 }
 
 /* ── Presence status (Teams-style presets) ─────────────────────────
-   The dot itself: solid color per preset; DND-grade (dnd / surgery)
+   The dot itself: solid color per preset; DPF-grade (dnd / surgery)
    carries a white dash; Away is a hollow ring. Colors come from
    shared/models/presence.model.ts — keep them in sync. */
 .pf-status-dot {
@@ -658,6 +661,13 @@
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
   text-align: left;
+  text-decoration: none;
+
+  /* Current work area (nav rows in the menu). */
+  &.pf-profile-item--active {
+    color: var(--color-primary, #a855f7);
+    background: var(--bg-active, rgba(124, 58, 237, 0.11));
+  }
 }
 .pf-profile-item:hover {
   background: var(--bg-hover);
@@ -665,10 +675,10 @@
 }
 .pf-profile-item svg { flex-shrink: 0; }
 
-.pf-profile-danger { color: #fca5a5; }
+.pf-profile-danger { color: var(--red-text); }
 .pf-profile-danger:hover {
   background: rgba(239, 68, 68, 0.14);
-  color: #fca5a5;
+  color: var(--red-text);
 }
 
 /* Split tenant cluster: [icon+name] | [Branch · Main ▼] ---------- */
@@ -896,6 +906,22 @@ a.pf-ts-tenant:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Branch switch: the new name slides up into the pill and the pin pulses
+   while the screen re-scopes (BranchSwitchService). */
+.pf-ts-branch__name { animation: pf-ts-branch-swap 360ms cubic-bezier(0.34, 1.36, 0.64, 1) both; }
+@keyframes pf-ts-branch-swap {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.pf-ts-branch--switching { border-color: rgba(168, 85, 247, 0.45); color: var(--text-primary); }
+.pf-ts-branch--switching > svg:first-child { animation: pf-ts-branch-pin 900ms cubic-bezier(0.32, 0.72, 0, 1) infinite; }
+@keyframes pf-ts-branch-pin {
+  0%, 100% { transform: none; }
+  45% { transform: translateY(-2px) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-ts-branch__name, .pf-ts-branch--switching > svg:first-child { animation: none; }
+}
 .pf-ts-branch__chev {
   color: var(--text-muted);
   transition: transform 0.2s ease;
@@ -992,12 +1018,26 @@ a.pf-ts-tenant:hover {
   .pf-ts-tenant__name { font-size: 12.5px !important; max-width: 14ch !important; overflow: hidden; text-overflow: ellipsis; }
 
   /* Branch picker, people icon, bell, profile avatar — hide on phone.
-     Users get to /more, notifications and profile via the bottom-nav. */
+     Users get to /more, notifications and profile via the bottom-nav.
+     NB: only true when pf-bottom-nav is the phone chrome. See the
+     nav-bottom exemption directly below. */
   .pf-ts-branch,
   .pf-icon-btn,
   pf-notification-bell,
   .pf-avatar-btn {
     display: none !important;
+  }
+
+  /* ── nav-bottom: put the bell and the user badge BACK ──────────────
+     The rule above dates from when pf-bottom-nav owned the phone chrome
+     and genuinely carried notifications + profile. In nav-bottom mode
+     pf-bottom-nav is display:none and THIS bar is the only chrome on
+     screen, so that rule was stripping the user badge with nothing left
+     to reach it by — which is why branch switching, Classic/New and
+     design mode all appeared to be missing on mobile (owner). */
+  :host-context(.design-new.nav-bottom) pf-notification-bell,
+  :host-context(.design-new.nav-bottom) .pf-avatar-btn {
+    display: inline-flex !important;
   }
 }
 
@@ -1007,7 +1047,7 @@ a.pf-ts-tenant:hover {
   flex: 0 0 auto;
   width: 26px; height: 26px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10.5px; font-weight: 700; color: #c4b5fd;
+  font-size: 10.5px; font-weight: 700; color: var(--violet-text);
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
@@ -1041,7 +1081,7 @@ a.pf-ts-tenant:hover {
   border: 1px solid var(--glass-border); background: transparent;
   color: var(--text-muted); cursor: pointer;
 }
-.pf-pin-error { margin: 6px 0 0; font-size: 11.5px; color: #f87171; }
+.pf-pin-error { margin: 6px 0 0; font-size: 11.5px; color: var(--red-text); }
 
 .pf-kbd-hint {
   flex: 0 0 auto;
@@ -1069,7 +1109,607 @@ a.pf-ts-tenant:hover {
 
 /* Belt-and-braces: the popover itself never outgrows the viewport. */
 .pf-profile-pop {
-  max-height: calc(100vh - 84px);
+  max-height: calc(100dvh - 84px);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Design-mode state pill in the profile menu */
+.pf-dm-pill {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: 999px;
+  color: var(--text-tertiary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+.pf-dm-pill--on {
+  color: var(--color-violet-300, #c4b5fd);
+  background: rgba(124, 58, 237, 0.16);
+  border-color: rgba(124, 58, 237, 0.45);
+}
+
+/* ── Centered static work-area nav (owner request on the designer bar) ── */
+.pf-topnav-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  align-items: center;
+  gap: 2px;
+}
+.pf-topnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+}
+.pf-topnav-link svg { flex-shrink: 0; opacity: 0.85; }
+
+
+/* NEW design light: designer avatar anatomy on the bar's profile button
+   (Figma 452-3) — soft violet disc, violet initials, no glow. */
+:host-context(.light.design-new) .pf-avatar-circle {
+  background: #eee1fd;
+  color: #7c3aed;
+  border: 1px solid #ecd8ff;
+  box-shadow: none;
+}
+:host-context(.light.design-new) .pf-avatar-btn:hover .pf-avatar-circle {
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
+}
+
+/* CLASSIC right-cluster nav wrapper — the old inline layout (the icon-first
+   pf-topnav-btn styles above are shared). Display stays Tailwind-owned. */
+.pf-topnav-classic {
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* CLASSIC bar rhythm — the pre-designer 64px pill (44px children + padding). */
+:host-context(.design-classic) .pf-topstrip-bar {
+  min-height: 64px;
+  padding: 10px 16px 10px 12px;
+  gap: 8px;
+}
+
+/* CLASSIC brand wordmark — the pre-designer 13/15px bold tracked lockup. */
+:host-context(.design-classic) .pf-brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@media (min-width: 640px) {
+  :host-context(.design-classic) .pf-brand-name { font-size: 15px; }
+}
+.pf-topnav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
+.pf-topnav-link--on { color: #7c3aed; background: rgba(124, 58, 237, 0.10); }
+:root.dark .pf-topnav-link--on,
+:root:not(.light) .pf-topnav-link--on { color: var(--color-primary, #a855f7); background: rgba(168, 85, 247, 0.16); }
+
+/* ── Bottom-navbar experiment: every popover that hangs BELOW the bar
+   flips to open UPWARD when the bar docks at the bottom edge. ── */
+:host-context(.design-new.nav-bottom) .pf-brand-pop,
+:host-context(.design-new.nav-bottom) .pf-profile-pop,
+:host-context(.design-new.nav-bottom) .pf-ts-branch__pop,
+:host-context(.design-new.nav-bottom) [class*='-pop'],
+:host-context(.design-new.nav-bottom) [class*='__pop'] {
+  top: auto !important;
+  bottom: calc(100% + 10px) !important;
+}
+
+/* Bottom-navbar experiment on tablet/phone: the centered nav can't float
+   absolutely (it would overlap brand + utilities) — it joins the flex row
+   and scrolls horizontally if cramped; labels drop on phones. */
+@include dt.tablet-tier {
+  :host-context(.design-new.nav-bottom) .pf-topnav-center {
+    display: flex !important;
+    position: static;
+    transform: none;
+    /* basis 0, NOT auto: with `auto` the nav claims its full content width
+       first and the fixed items after it (chat · bell · user badge) get
+       pushed past the viewport edge. Basis 0 means the nav takes only what
+       is left over, so the badge is always on screen and the icons scroll
+       inside their own strip instead. */
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
+  /* iPad AND phone: the work areas are the only thing allowed to scroll.
+     The right cluster (chat · bell · user badge) is pinned so the profile
+     menu — branch switching, Classic/New, design mode — is always one tap
+     away, on every width where the bar is docked (owner: those options
+     were missing on mobile AND iPad). */
+  :host-context(.design-new.nav-bottom) .pf-ts-right {
+    margin-left: auto; flex-shrink: 0;
+  }
+  /* Flipped upward, the menu only has the space ABOVE the bar to live in.
+     Cap it there and let it scroll, so the entries at the far end of the
+     list (design mode, sign out) can still be reached. */
+  :host-context(.design-new.nav-bottom) .pf-profile-pop {
+    max-height: calc(100dvh - var(--pf-botbar-h, 58px) - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    max-width: min(300px, calc(100vw - 16px));
+  }
+}
+/* End-of-work-areas divider (owner, all widths): one hairline after the
+   last page icon so the pages read as their own group. */
+:host-context(.design-new.nav-bottom) .pf-topnav-center {
+  padding-right: 8px;
+  border-right: 1px solid var(--pf-line, rgba(148, 163, 184, 0.35));
+}
+/* ── Bottom-bar layout (all widths): a plain self-aligning flex row —
+   [pf glyph][pages, LEFT-aligned][spacer][branch][bell][avatar]. The
+   absolute centering is a TOP-bar trick; docked at the bottom the nav
+   simply flows after the brand and the bar lays itself out. ── */
+:host-context(.design-new.nav-bottom) .pf-topnav-center {
+  display: flex !important;
+  position: static;
+  transform: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+  margin-left: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
+
+/* On shrink (iPad AND phone, <1280px): ICONS ONLY across the whole bar —
+   pf glyph without wordmark/heartbeat, page links without labels, branch
+   pill as just the pin. Names come back only at full desktop width. */
+/* iPad (768–1279) + phone: ICONS ONLY — same layout as web on iPad
+   (left-aligned, separate user badge) but every name drops: page labels,
+   brand wordmark/heartbeat, branch name. Just icons. */
+@include dt.tablet-tier {
+  /* Icon-only work areas: every link is the SAME square 44px box (the
+     touch floor, so fine and coarse pointers lay out identically) with
+     the icon dead-centre. The selected pill is drawn inside it, centred
+     on the same point (see the navbar block at the end of this file). */
+  :host-context(.design-new.nav-bottom) .pf-topnav-link {
+    flex: 0 0 44px;
+    width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    padding: 0; gap: 0;
+  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
+  /* One optical scale for the docked bar on iPad + phone (owner,
+     2026-09-28: the pf logo and the avatar towered over the icons).
+     Icons 22 · logo 30 tall · avatar 30 — anchors a touch larger, in
+     proportion; every tap target stays 44px. */
+  :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) .pf-brand-glyph { width: auto; height: 30px; }
+  /* The pf mark sits in the SAME 44px box as every icon button, and the
+     whole row shares one 6px rhythm — no pill padding, no extra margin
+     before the icons (owner: the logo floated apart from the icons). */
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup {
+    flex: 0 0 44px; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center;
+  }
+  :host-context(.design-new.nav-bottom) .pf-brand-chev { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center { margin-left: 0; gap: 6px; }
+  /* Right cluster on the same scale as the work-area icons (owner). */
+  :host-context(.design-new.nav-bottom) .pf-chat-btn svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) pf-notification-bell ::ng-deep .pf-bell-btn > svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { width: 30px; height: 30px; font-size: 11px; }
+  :host-context(.design-new.nav-bottom) .pf-brand-text,
+  :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
+  :host-context(.design-new.nav-bottom) .pf-ts-branch__name,
+  :host-context(.design-new.nav-bottom) .pf-ts-branch__chev { display: none; }
+}
+
+/* Phone only (<768): tighter still — the pf glyph BECOMES the user badge
+   (same button, same profile menu; brand lockup + initials disc go) and
+   the whole bar centers as one group. iPad keeps the web layout. */
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none !important; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-glyph { display: block; }
+  :host-context(.design-new.nav-bottom) .pf-ts-spacer { display: none; }
+  /* The bar used to CENTER its whole group. Once the work areas, the draft
+     chip, chat, the bell and the user badge were all in it, the group was
+     wider than a 390px phone — and a centred overflow spills off BOTH
+     ends, which silently pushed the bell and the pf badge off-screen.
+     That badge is the only way into branch switching, design mode and
+     Classic/New, so losing it took the whole menu with it (owner).
+     Now: left-aligned, the work areas are the one part that scrolls, and
+     the right cluster is pinned where it can always be reached. */
+  :host-context(.design-new.nav-bottom) .pf-topstrip-bar {
+    justify-content: flex-start;
+    gap: 6px;
+    padding-inline: 8px;
+  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center {
+    flex: 1 1 0; min-width: 0; margin-left: 0; justify-content: flex-start;
+  }
+  :host-context(.design-new.nav-bottom) .pf-ts-right {
+    margin-left: auto; flex-shrink: 0;
+  }
+  /* The draft chip yields before the badge does. */
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { flex: 0 1 auto; min-width: 0; }
+  /* Comfortable thumb target for the badge itself. */
+  :host-context(.design-new.nav-bottom) .pf-avatar-btn {
+    flex-shrink: 0; min-width: 44px; min-height: 44px;
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  /* The glyph is a tall mark (228x292), so the default width:30px/height:auto
+     draws it ~38px high — towering over the 18px work-area icons beside it
+     (owner: the logo isn't shrinking to the bar). Drive it from HEIGHT so
+     the aspect ratio sets the width, and match the icon row optically.
+     The 44px tap target is on the button, not the mark. */
+  :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
+    height: 30px; width: auto;
+  }
+}
+
+/* The glyph-as-avatar: hidden by default, shown on shrink (rule above). */
+.pf-avatar-glyph { display: none; width: 30px; height: auto; }
+
+/* Dark-new: the bar avatar matches the soft-violet disc language. */
+:host-context(.dark.design-new) .pf-avatar-circle {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: none;
+}
+
+/* ── Draft tray (bottom bar): divider · "Drafts N" · resume chips ─────
+   Owner 2026-10-02: the old outlined name pills read as clutter. Now a calm,
+   intentional tray — a quiet label, then compact SOLID chips holding only
+   the sample number (tabular figures), each with a small violet dot = work
+   not yet submitted. Neutral at rest (nd chip surface + hairline), lifts on
+   hover / focus, and the draft on stage takes the app's quiet selected look
+   (violet tint + ink + hairline ring, same as the active work area). */
+.pf-draftshelf {
+  display: none; /* only meaningful when the bar is docked (rule below) */
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  /* sits right after the nav's own end-of-work-areas hairline */
+  margin-left: 6px;
+}
+/* Chips scroll here when the bar is tight; the +N chip stays outside. */
+.pf-draftshelf__scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* room for the hover lift + focus ring inside the clipper */
+  padding: 4px 2px;
+  margin: -4px -2px;
+}
+.pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
+:host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
+/* Phones: no room — the shelf is a tablet/web affordance (owner: on a
+   phone bar it just gets clumsy). It briefly had a compact phone chip;
+   that was removed at the owner's call. */
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { display: none; }
+}
+
+/* "Drafts 5" — a quiet caption, not a control. */
+.pf-draftshelf__head {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  flex-shrink: 0; margin-right: 2px;
+  font-size: 11.5px; font-weight: 500; line-height: 1;
+  color: var(--text-tertiary, var(--text-muted));
+  white-space: nowrap;
+}
+.pf-draftshelf__count {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--text-secondary);
+}
+/* Tablets: the label yields first; the count is in the group's name. */
+@media (max-width: 1023px) {
+  .pf-draftshelf__head { display: none; }
+}
+
+.pf-draftshelf__chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px;
+  flex-shrink: 0;
+  height: 28px; padding: 0 10px 0 9px;
+  border-radius: var(--pf-radius-chip, 8px);
+  background: var(--pf-card-bg, var(--bg-card-solid, #fff));
+  border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  color: var(--text-primary);
+  font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition:
+    transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease),
+    box-shadow var(--pf-dur-fast, 200ms) ease,
+    border-color var(--pf-dur-fast, 200ms) ease,
+    background-color var(--pf-dur-fast, 200ms) ease;
+}
+:host-context(.dark) .pf-draftshelf__chip {
+  background: var(--pf-chip-bg, rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: none;
+}
+.pf-draftshelf__lbl { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+/* Unsaved work: the one accent at rest. */
+.pf-draftshelf__dot {
+  width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%;
+  background: var(--color-primary, #7c3aed);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
+:host-context(.dark) .pf-draftshelf__dot { background: #a78bfa; box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.18); }
+
+@media (hover: hover) {
+  .pf-draftshelf__chip:hover:not([aria-current]) {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--pf-line, #e5e7eb));
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+  :host-context(.dark) .pf-draftshelf__chip:hover:not([aria-current]) {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(167, 139, 250, 0.40);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+}
+.pf-draftshelf__chip:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px;
+  transform: translateY(-1px);
+}
+
+/* The draft on stage (aria-current) — and the "+N" chip when that draft
+   is one of the hidden ones. Not a link (no pointer). */
+.pf-draftshelf__chip[aria-current],
+.pf-draftshelf__more[data-current] {
+  background: rgba(124, 58, 237, 0.10);
+  border-color: rgba(124, 58, 237, 0.30);
+  color: #6d28d9; font-weight: 600;
+  box-shadow: none;
+}
+.pf-draftshelf__chip[aria-current] { cursor: default; }
+:host-context(.dark) .pf-draftshelf__chip[aria-current],
+:host-context(.dark) .pf-draftshelf__more[data-current] {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: rgba(168, 85, 247, 0.38);
+  color: #ede9fe;
+}
+
+/* "+N" — same chip, neutral ink, an up-chevron (the menu opens upward). */
+.pf-draftshelf__menu { flex-shrink: 0; }
+.pf-draftshelf__more { gap: 4px; padding: 0 8px 0 10px; color: var(--text-secondary); font-weight: 600; }
+.pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { flex-shrink: 0; opacity: 0.7; transition: transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease); }
+.pf-draftshelf__more[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--pf-line, #e5e7eb));
+  color: var(--text-primary);
+}
+.pf-draftshelf__more[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-draftshelf__chip, .pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { transition: none; }
+  .pf-draftshelf__chip:hover, .pf-draftshelf__chip:focus-visible { transform: none !important; }
+}
+
+/* Touch devices: 44px hit area without growing the 28px chip (the bar's
+   height is fixed) — an invisible, taller hit box around each chip. */
+@media (pointer: coarse) {
+  .pf-draftshelf__chip::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%);
+  }
+  .pf-draftshelf__more { min-width: 44px; justify-content: center; }
+}
+
+/* Chat entry (new design): messenger icon after the bell + unread badge. */
+.pf-chat-btn.pf-chat-btn--active { background: var(--bg-hover); color: var(--violet-text, #7c3aed); }
+.pf-chat-btn__badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.45), 0 0 0 2px var(--header-bg);
+}
+
+/* Avatar-menu section label (Branch, ...). */
+.pf-profile-eyebrow {
+  margin: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Messages dropdown (bell-style panel; auto-flips upward when the
+   bar is docked via the -pop catch-all). ── */
+.pf-msgs-bd { position: fixed; inset: 0; z-index: 39; }
+.pf-msgs-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  z-index: 40;
+}
+.pf-msgs-pop__head {
+  padding: 8px 12px 6px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-msgs-pop__empty { padding: 12px; font-size: 12.5px; color: var(--text-muted); }
+.pf-msgs-pop__item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px; border-radius: 10px;
+  background: transparent; border: none; cursor: pointer; text-align: left;
+}
+.pf-msgs-pop__item:hover { background: var(--bg-hover); }
+.pf-msgs-pop__init {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
+  background: #eee1fd; color: #7c3aed; border: 1px solid #ecd8ff;
+  font-size: 11px; font-weight: 600;
+}
+:root.dark .pf-msgs-pop__init {
+  background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.3);
+}
+.pf-msgs-pop__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.pf-msgs-pop__name { font-size: 12.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Disambiguator (context thread / same-name colleague / group) — quiet. */
+.pf-msgs-pop__disamb { font-weight: 400; color: var(--text-muted); }
+.pf-msgs-pop__item { --pf-pdot-ring: var(--pf-msgs-pop-bg, var(--pf-card-bg, #fff)); }
+.pf-msgs-pop__last { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-msgs-pop__unread {
+  flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9999px; background: var(--gradient-primary); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.pf-msgs-pop__all {
+  display: block; width: 100%; margin-top: 4px; padding: 8px;
+  border: none; border-top: 1px solid var(--border-muted);
+  background: transparent; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: #7c3aed; text-align: center;
+}
+:root.dark .pf-msgs-pop__all { color: #c4b5fd; }
+
+/* Messages panel: search + section labels for the people list. */
+.pf-msgs-pop__search {
+  display: flex; align-items: center; gap: 8px;
+  margin: 2px 6px 6px;
+  padding: 0 10px; height: 32px;
+  border-radius: 9999px;
+  background: var(--bg-input, transparent);
+  border: 1px solid var(--input-border, var(--border-muted));
+  color: var(--text-muted);
+}
+.pf-msgs-pop__search input {
+  flex: 1; min-width: 0;
+  border: none; outline: none; background: transparent;
+  font-size: 12.5px; font-family: inherit; color: var(--text-primary);
+}
+.pf-msgs-pop__sect {
+  margin: 6px 12px 2px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Phone: there is no Messages POPOVER ──────────────────────────────
+   The bar icon routes to /messages instead (see toggleMsgs). This is a
+   belt-and-braces guard so any other caller that raises the panel — the
+   windows' compose path, a stale signal — can't leave an iPad-shaped
+   dropdown floating over a phone screen (owner). */
+@media (max-width: 767px) {
+  :host-context(.design-new) .pf-msgs-pop,
+  :host-context(.design-new) .pf-msgs-bd { display: none !important; }
+}
+
+/* ══ Docked BOTTOM navbar: height + selected indicator (owner, iPad) ══
+   1. Height: one content height at every width (--pf-navbar-h, 56px in
+      styles.scss) — the 44px tap targets plus 6px air. The home-indicator
+      inset is added by the shell's padding, never baked in here.
+   2. Selected: the link box itself stays transparent; a ::before pill is
+      the indicator, absolutely centred on the link, so the icon and the
+      pill share ONE centre however big the touch hit box grows. NEUTRAL
+      raised tab (the ND selected look), not the pink-reading violet fill.
+      Beats the global `a[class*="--on"]` quiet-violet rule on specificity
+      (host-context adds the nav-bottom classes + encapsulation attrs). */
+:host-context(.design-new.nav-bottom) .pf-topstrip-bar {
+  box-sizing: border-box;
+  height: var(--pf-navbar-h, 56px);
+  min-height: var(--pf-navbar-h, 56px);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-link {
+  position: relative;
+  isolation: isolate;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-link::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 32px;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  background: transparent;
+  box-shadow: none;
+  transition: background 140ms ease, box-shadow 140ms ease;
+  pointer-events: none;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-link:hover { background: transparent; }
+@media (hover: hover) {
+  :host-context(.design-new.nav-bottom) .pf-topnav-link:not(.pf-topnav-link--on):hover::before {
+    background: var(--pf-chip-bg, rgba(15, 23, 42, 0.05));
+  }
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-link--on {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-link--on svg { opacity: 1; }
+:host-context(.design-new.nav-bottom) .pf-topnav-link--on::before {
+  background: var(--pf-card-bg, #ffffff);
+  box-shadow: 0 0 0 1px var(--pf-line, #e5e7eb), 0 1px 2px rgba(15, 23, 42, 0.10);
+}
+:host-context(.dark.design-new.nav-bottom) .pf-topnav-link--on {
+  color: #f5f3ff;
+}
+:host-context(.dark.design-new.nav-bottom) .pf-topnav-link--on::before {
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+/* Icon-only widths: the pill is a fixed 40x32 capsule centred on BOTH
+   axes of the 44px square (after the base rule so it wins the cascade). */
+@include dt.tablet-tier {
+  :host-context(.design-new.nav-bottom) .pf-topnav-link::before {
+    left: 50%;
+    right: auto;
+    width: 40px;
+    transform: translate(-50%, -50%);
+  }
 }

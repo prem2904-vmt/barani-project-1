@@ -1,6 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { StoredAccount } from './accounts.service';
+import { SessionService } from './session.service';
 
 /** 15-minute idle lock for shared lab machines. Arms only while a PIN-enabled
  *  account is signed in (locking a PIN-less user would strand them). The lock
@@ -11,8 +12,14 @@ export class LockService {
   private static readonly LOCKED_KEY = 'pf.lockedAt';
 
   private readonly auth = inject(AuthService);
+  private readonly injector = inject(Injector);
   private readonly _locked = signal<boolean>(this.restoreLocked());
-  readonly locked = this._locked.asReadonly();
+  /** The lock only counts when a PIN-enabled account is signed in. A PIN-less
+   *  user (or a signed-out state) is NEVER locked, even if a stale pf.lockedAt
+   *  key lingers — that key belonged to a different session and must not strand
+   *  a user who has no PIN to unlock with. */
+  readonly locked = computed(() =>
+    this._locked() && this.auth.isAuthenticated() && !!this.auth.user()?.hasPin);
 
   /** Profile being switched INTO — drives the full-screen switch screen
    *  (Windows-style: leave the current account, meet the target's PIN gate). */
@@ -35,6 +42,13 @@ export class LockService {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.tick();
     });
+    // A fresh credential sign-in clears any stale idle-lock (raised by
+    // AuthService.signIn) — the person just proved who they are.
+    window.addEventListener('pf:fresh-signin', () => this.clearAfterSwitch());
+    // Signing out ends the lock outright. AuthService already removed the
+    // persisted key; this drops the in-memory flag so the next sign-in on
+    // this tab isn't met by the previous session's PIN gate.
+    window.addEventListener('pf:signed-out', () => this.clearAfterSwitch());
     // Manual lock shortcuts. Browsers NEVER deliver bare ⌘L (address bar), so
     // the working combos are: Ctrl+L (free on every platform, incl. macOS) and
     // ⌘⇧L (delivered + overridable in Safari/Chrome, unlike bare ⌘L). Matching
@@ -81,8 +95,10 @@ export class LockService {
   async abandonToLogin(): Promise<void> {
     this._locked.set(false);
     try { localStorage.removeItem(LockService.LOCKED_KEY); } catch { /* */ }
-    await this.auth.signOut();
-    location.assign('/login');
+    // The full sign-out sequence (revoke, push, sockets, clear, /login with
+    // history replaced) — resolved lazily: SessionService pulls in services
+    // that inject this one.
+    await this.injector.get(SessionService).logout();
   }
 
   private restoreLocked(): boolean {

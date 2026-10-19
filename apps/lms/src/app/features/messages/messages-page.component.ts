@@ -1,5 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { RouterLink, ActivatedRoute } from '@angular/router';
 import {
   ChangeDetectionStrategy, Component, ElementRef, OnInit, OnDestroy, ViewChild,
   computed, effect, inject, signal
@@ -7,6 +7,8 @@ import {
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { UploadsService } from '../../core/services/uploads.service';
+import { isPrivateUploadPath } from '../../shared/utils/upload-fetch';
 import { AuthService } from '../../core/auth/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
@@ -18,14 +20,18 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
-import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
+import { presenceText as presenceDisplayText } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
   id: string;
+  /** Server-composed name (includes the honorific) — preferred for display. */
+  displayName?: string | null;
   firstName: string;
   fathersName: string;
   mrn?: string | null;
@@ -47,7 +53,7 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
@@ -62,9 +68,16 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  renders the locked "upgrade" screen instead of the chat UI, and never
    *  connects the chat/signaling hubs. */
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
+  /** This page's own first conversation-list request is still running. */
+  private readonly convLoading = signal(true);
+  /** First open: the conversation list is on its way → its skeleton, never
+   *  "No conversations yet" (the list has not answered once for this user
+   *  AND this page's own load has not finished). */
+  protected readonly convSkeleton = computed(() => this.convLoading() && !this.chat.conversationsLoaded());
   private readonly presenceSvc = inject(PresenceService);
-  private readonly api = inject(ApiService);
-  private readonly toasts = inject(ToastService);
+  protected readonly api = inject(ApiService);
+  protected readonly uploads = inject(UploadsService);
+  protected readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
   protected readonly ringtone = inject(RingtoneService);
   /** Soft-keyboard visibility — drops the composer's nav-clearance padding so
@@ -106,6 +119,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly addMemberOpen = signal(false);
   protected readonly addMemberSearch = signal('');
   protected readonly addMemberBusy = signal(false);
+  /** The picker row whose add is running (its busy dots). */
+  protected readonly addingMemberId = signal<string | null>(null);
 
   /** Reply / edit / hover-menu state on the composer. */
   protected readonly replyingTo = signal<{ id: string; preview: string; fromName: string } | null>(null);
@@ -174,6 +189,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   private recordStartedAt = 0;
   private recordTimer: ReturnType<typeof setInterval> | null = null;
   private recordStream: MediaStream | null = null;
+  /** False when the recording was cancelled — late `dataavailable` chunks
+   *  must not turn a discarded clip into a message. */
+  private keepRecording = false;
   /** Built-in emoji bank — no third-party dep. ~50 of the most common. */
   protected readonly emojiBank: string[] = [
     '👍','❤️','😂','🙏','🔥','🎉','😍','😊','👏','💯',
@@ -288,19 +306,22 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  otherwise the other user's custom Teams-style status (In surgery,
    *  On rounds, …) when known, falling back to online/away. */
   protected presenceFor(c: Conversation): string | null {
-    if (c.isGroup) return null;
-    const other = c.participants.find(p => p.userId !== this.me());
-    if (!other) return null;
-    const conn = this.signaling.userPresences().get(other.userId) ?? 'offline';
-    if (conn === 'offline' || conn === 'in-a-call') return conn;
-    return this.presenceSvc.statusFor(other.userId) ?? conn;
+    // One resolver for every avatar (PresenceService.displayStatus): not
+    // connected (away / offline) or on a call wins over a custom status — a
+    // disconnected user with "Available" used to show green for 2 minutes.
+    return this.presenceSvc.displayStatus(this.peerId(c));
+  }
+
+  /** The 1:1 peer's AuthId (presence dot); null for groups / notes. */
+  protected peerId(c: Conversation): string | null {
+    if (c.isGroup || c.contextType === 'self') return null;
+    return c.participants.find(p => p.userId !== this.me())?.userId ?? null;
   }
 
   /** Human label for a presence value — custom preset labels first,
    *  then the connection-presence vocabulary. */
   protected presenceText(p: string): string {
-    if (isPresenceKey(p)) return presenceLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
+    return presenceDisplayText(p);
   }
 
   /** Subline beneath name — last message preview or "No messages yet". */
@@ -423,7 +444,15 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  /** Unregisters this page as the surface showing the active thread. */
+  private readonly unregisterViewer: () => void;
+
   constructor() {
+    // While mounted, the page is what shows the active thread: messages that
+    // land in it are read (only while the tab is visible) and don't alert.
+    // Leaving /messages unregisters — the thread no longer swallows
+    // notifications (RCA §3: the sticky activeConversationId did).
+    this.unregisterViewer = this.chat.registerViewer('reader', () => [this.chat.activeConversationId()]);
     // Auto-scroll to bottom whenever messages change or active thread switches —
     // EXCEPT when the change came from a prepend (load-older). In that case
     // onScroll captured the offset and will restore it manually.
@@ -472,7 +501,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       const phone = typeof window !== 'undefined'
         && window.matchMedia('(max-width: 640px)').matches;
       if (typeof document !== 'undefined') {
-        document.documentElement.classList.toggle('pf-chat-immersive', open && phone);
+        // Classic only: the new design never hides the navbar (PF-PATTERN §8).
+        document.documentElement.classList.toggle('pf-chat-immersive', open && phone && this.hidesNavInThread());
       }
       // While a thread is open on phone, route edge-swipe / hardware back through
       // closeConversation() (the thread is a signal, not a route) so swiping back
@@ -499,6 +529,19 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Classic hides the bottom navbar inside an open phone thread
+   *  (html.pf-chat-immersive). The new design overrides this to false: the
+   *  navbar is always visible and the layout fits above it. */
+  protected hidesNavInThread(): boolean { return true; }
+
+  /** Classic auto-sends a voice note the moment recording stops. The new
+   *  design overrides this to true: stop gives a preview (play / discard)
+   *  and nothing leaves until Send / Enter — the chat-windows contract. */
+  protected voicePreviewBeforeSend(): boolean { return false; }
+
+  /** A stopped recording waiting for Send (new design only). */
+  protected readonly voiceDraft = signal<{ file: File; url: string; secs: number } | null>(null);
+
   /** Resize the composer textarea to fit its content (WhatsApp-style):
    *  reset to auto, grow to scrollHeight capped at a max, scroll past the cap. */
   private autoGrowComposer(): void {
@@ -512,6 +555,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterViewer();
+    this.stopRecording(false);
+    this.discardVoiceDraft();
     if (typeof document !== 'undefined') {
       document.documentElement.classList.remove('pf-chat-immersive');
     }
@@ -545,20 +591,32 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Deep link from the bar's Messages panel on phones: /messages?c=<id>
+   *  opens straight into that thread, so tapping a conversation lands on
+   *  the conversation rather than the list (owner: WhatsApp behaviour). */
+  private readonly route = inject(ActivatedRoute);
+
   async ngOnInit(): Promise<void> {
     // Module not in the plan → show the locked screen only; never open the
     // chat/signaling hubs (no presence, no incoming calls for this tenant).
-    if (this.moduleOff()) return;
+    if (this.moduleOff()) { this.convLoading.set(false); return; }
     // Both hubs must be live before the page is usable.
     await Promise.all([
       this.chat.connect().catch(() => undefined),
       this.signaling.connect().catch(() => undefined)
     ]);
+    // `?c=` (in-app links) and `?open=` (older native push payloads).
+    const wanted = this.route.snapshot.queryParamMap.get('c') ?? this.route.snapshot.queryParamMap.get('open');
     await Promise.all([
-      this.chat.loadConversations().catch(() => undefined),
+      this.chat.loadConversations().catch(() => undefined).finally(() => this.convLoading.set(false)),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
       this.loadCallLog().catch(() => undefined)
     ]);
+    // Deep-linked conversation (?c=…) — open it now that the list is in.
+    if (wanted) {
+      const conv = this.chat.conversations().find((c) => c.id === wanted);
+      if (conv) await this.openThread(conv);
+    }
     // Ask for Notification permission once. Landing on /messages counts
     // as the user-gesture browsers want before this prompt fires.
     void this.chatNotify.ensurePermission();
@@ -591,7 +649,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected async callBack(c: CallLog): Promise<void> {
     if (!c.peer.userId) return;
     try {
-      await this.webrtc.startCall(c.peer.userId, 'calls_tab');
+      await this.webrtc.startCall(c.peer.userId, 'calls_tab', c.peer.displayName);
       this.toasts.info(`Ringing ${c.peer.displayName}…`);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
@@ -650,13 +708,14 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const conv = this.chat.activeConversation();
     if (!conv) return;
     this.addMemberBusy.set(true);
+    this.addingMemberId.set(userId);
     try {
       await this.chat.addMember(conv.id, userId);
       this.toasts.info('Member added.');
       this.closeAddMember();
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
-    } finally { this.addMemberBusy.set(false); }
+    } finally { this.addMemberBusy.set(false); this.addingMemberId.set(null); }
   }
 
   protected async removeMember(userId: string): Promise<void> {
@@ -692,6 +751,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   protected async sendDraft(): Promise<void> {
+    if (this.voiceDraft()) { await this.sendVoiceDraft(); return; }
     const body = this.draft().trim();
     const convId = this.chat.activeConversationId();
     const att = this.pendingAttachment();
@@ -891,14 +951,40 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  /** Resolve a /uploads/... path against the API base. Absolute URLs (rare)
-   *  pass through unchanged. */
+  /** Chat files are private uploads: images / voice notes render from a
+   *  blob: URL fetched with the session ('' until it lands — the signal read
+   *  re-renders the bubble). Absolute URLs (rare) pass through. */
   protected resolveAttachmentUrl(url: string | null | undefined): string {
-    if (!url) return '';
-    if (/^https?:\/\//i.test(url)) return url;
-    // Strip trailing /api or /api/ if env.apiUrl includes it; uploads live at root.
-    const base = (this.api as any).baseUrl ?? '';
-    return `${base}${url}`;
+    // Relay model: the file is kept on this device after the first download
+    // (the server deletes it once every recipient has it).
+    return this.chat.history?.mediaSrc(url) ?? this.uploads.src(url);
+  }
+
+  /** The server no longer has this file and this device never kept a copy. */
+  protected attachmentGone(url: string | null | undefined): boolean {
+    return this.chat.history?.mediaState(url) === 'unavailable';
+  }
+
+  /** The one-line "where is my history" note under an empty thread. */
+  protected historyNote(): string {
+    const h = this.chat.history;
+    if (h && !h.persistent()) return 'Messages are kept on this device for this session only.';
+    if (h?.freshStore()) return 'Messages are stored on each device. Earlier ones stay on the devices that received them.';
+    return 'Messages are stored on this device.';
+  }
+
+  /** href for a file card: private files open via a signed URL on click
+   *  (never pre-fetched), anything else links directly. */
+  protected fileHref(url: string | null | undefined): string {
+    return isPrivateUploadPath(url) ? '#' : this.uploads.src(url);
+  }
+
+  /** Open an attachment in a new tab (signed URL for private uploads). */
+  protected openAttachment(ev: Event, url: string | null | undefined): void {
+    if (!isPrivateUploadPath(url)) return;   // plain link — let the anchor navigate
+    ev.preventDefault();
+    if (this.chat.history) void this.chat.history.openMedia(url);
+    else void this.uploads.open(url);
   }
 
   /** True for audio MIME types — drives voice-message bubble render. */
@@ -998,7 +1084,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return '—';
   }
   protected patientName(p: PatientLite): string {
-    const n = `${p.firstName ?? ''} ${p.fathersName ?? ''}`.trim();
+    // Prefer the server-composed name so the honorific ("Dr.", "Mrs.") shows.
+    const n = (p.displayName ?? '').trim() || `${p.firstName ?? ''} ${p.fathersName ?? ''}`.trim();
     return n || '(unknown)';
   }
 
@@ -1060,6 +1147,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  send=false → discard. */
   private stopRecording(send: boolean): void {
     if (!this.recording()) return;
+    this.keepRecording = send;
     this.recording.set(false);
     if (this.recordTimer) { clearInterval(this.recordTimer); this.recordTimer = null; }
     try { this.mediaRecorder?.stop(); } catch { /* ignore */ }
@@ -1070,19 +1158,52 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   /** After MediaRecorder fires onstop, upload + queue the voice clip. */
   private async finalizeRecording(): Promise<void> {
-    if (this.recordChunks.length === 0) return;
+    if (!this.keepRecording || this.recordChunks.length === 0) { this.recordChunks = []; return; }
     const durationSec = Math.max(1, Math.round((Date.now() - this.recordStartedAt) / 1000));
     const mime = this.mediaRecorder?.mimeType?.split(';')[0] ?? 'audio/webm';
     const ext = mime === 'audio/mp4' ? 'm4a' : 'webm';
     const blob = new Blob(this.recordChunks, { type: mime });
     this.recordChunks = [];
     const file = new File([blob], `voice-${durationSec}s.${ext}`, { type: mime });
+    if (this.voicePreviewBeforeSend()) {
+      // Preview: nothing is uploaded until Send / Enter.
+      this.discardVoiceDraft();
+      this.voiceDraft.set({ file, url: URL.createObjectURL(file), secs: durationSec });
+      this.onVoiceDraftReady();
+      return;
+    }
     this.attachmentUploading.set(true);
     try {
       const uploaded = await this.chat.uploadAttachment(file);
       this.pendingAttachment.set(uploaded);
       // Auto-send: voice messages are usually meant to send immediately.
       await this.sendDraft();
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally { this.attachmentUploading.set(false); }
+  }
+
+  /** Hook: the new design moves focus to Send so Enter sends the preview. */
+  protected onVoiceDraftReady(): void { /* classic: nothing */ }
+
+  protected discardVoiceDraft(): void {
+    const d = this.voiceDraft();
+    if (d) { try { URL.revokeObjectURL(d.url); } catch { /* jsdom */ } }
+    this.voiceDraft.set(null);
+  }
+
+  /** Upload + send the previewed voice note (keeps a reply if one is set). */
+  private async sendVoiceDraft(): Promise<void> {
+    const d = this.voiceDraft();
+    const convId = this.chat.activeConversationId();
+    if (!d || !convId) return;
+    const reply = this.replyingTo();
+    this.discardVoiceDraft();
+    this.replyingTo.set(null);
+    this.attachmentUploading.set(true);
+    try {
+      const uploaded = await this.chat.uploadAttachment(d.file);
+      await this.chat.sendMessage(convId, '', reply?.id ?? null, uploaded);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
     } finally { this.attachmentUploading.set(false); }
@@ -1333,11 +1454,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       } else {
         const other = conv.participants.find(p => p.userId !== this.me());
         if (!other) return;
-        if (!this.signaling.onlineUserIds().has(other.userId)) {
-          this.toasts.info(`${other.displayName} is offline.`);
-          return;
-        }
-        await this.webrtc.startCall(other.userId, 'messages');
+        // Presence never blocks a call — an offline peer is rung on their
+        // registered devices by push; the outgoing card says so.
+        await this.webrtc.startCall(other.userId, 'messages', other.displayName);
         this.toasts.info(`Ringing ${other.displayName}…`);
       }
     } catch (err) {

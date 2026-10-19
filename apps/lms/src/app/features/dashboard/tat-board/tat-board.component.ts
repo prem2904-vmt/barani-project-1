@@ -8,6 +8,22 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
+import { TatState } from '../../../shared/utils/lab-priority';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { busyWhile } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
+
+/** The board groups by the TAT CLOCK (overdue / due soon / on track) — never
+ *  called a priority (the lab's priorities are the order's Urgent / Normal).
+ *  The server still sends its legacy `level` words; they're mapped here. */
+type LevelFilter = 'all' | TatState;
+const FROM_SERVER: Record<string, TatState> = { urgent: 'overdue', high: 'dueSoon', normal: 'onTrack' };
 
 interface TatRow {
   orderTestId: string;
@@ -18,7 +34,10 @@ interface TatRow {
   receivedAtLab?: string;
   elapsedMinutes: number;
   remainingMinutes: number | null;
-  level: 'urgent' | 'high' | 'normal';
+  /** Server's legacy TAT word (urgent = overdue, high = within the hour). */
+  level: string;
+  /** Mapped TAT state (client). */
+  tat: TatState;
 }
 interface TatSummary { total: number; urgent: number; high: number; normal: number; }
 
@@ -33,20 +52,48 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    KpiStripComponent
+    KpiStripComponent,
+    HeroBandComponent,
+    SegmentedComponent,
+    BusyDirective,
+    SkeletonRowsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="tat-page px-4 md:px-8 pt-6">
+    <section class="tat-page pf-band-page px-4 md:px-8 pt-6">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): the pill searches the in-flight tests; the
+             urgency filter (dots + counts) rides inside it; Refresh is a
+             quiet band action. -->
+        <pf-hero-band [back]="true" placeholder="Search patient, test or status…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="levelOptions()" [value]="levelFilter()"
+                          (valueChange)="levelFilter.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="refreshing()"
+                    [pfBusy]="refreshing()" pfBusyLabel="Refreshing…" (click)="refresh(true)"
+                    aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              Refresh
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
 
       <div class="tat-chrome">
         <pf-kpi-strip screen="tat_board"></pf-kpi-strip>
 
-        <pf-screen-header
+        <pf-screen-header class="pf-classic-only"
           eyebrow="Live dashboard"
           title="TAT Board"
           subtitle="Turnaround health across in-flight tests. Auto-refresh every 30s.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+          <pf-touch-btn actions size="sm" variant="secondary" [busy]="refreshing()" busyLabel="Refreshing…" (pressed)="refresh(true)">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
@@ -63,7 +110,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
       <!-- Hard-coded KPI tiles removed — admin-configurable KPIs render
            via <pf-kpi-strip screen="tat_board"> at the top of the page. -->
 
-      <div class="tat-scroll pb-10">
+      <div class="tat-scroll pf-band-body pb-10">
       @for (level of levels; track level) {
         @let rowsForLevel = rowsFor(level);
         @if (rowsForLevel.length > 0) {
@@ -95,7 +142,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
                       </p>
                     </div>
 
-                    <pf-tat-indicator [tatLevel]="r.level" [remainingMinutes]="r.remainingMinutes"></pf-tat-indicator>
+                    <pf-tat-indicator [remainingMinutes]="r.remainingMinutes"></pf-tat-indicator>
                   </div>
                 </pf-tile>
               }
@@ -104,7 +151,12 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
         }
       }
 
-      @if (rows().length === 0) {
+      @if (rows().length > 0 && visibleCount() === 0) {
+        <p class="pf-band-empty">No tests match this search / filter.</p>
+      }
+      @if (firstLoad() && rows().length === 0) {
+        <pf-skeleton-rows [rows]="5" label="Loading the TAT board…"></pf-skeleton-rows>
+      } @else if (rows().length === 0) {
         <pf-tile tone="default" padding="xl">
           <div class="text-center py-6">
             <p class="text-[14px]" style="color: var(--text-secondary);">
@@ -140,9 +192,9 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
       border-radius: 9999px;
       display: inline-block;
     }
-    .urg-urgent { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
-    .urg-high   { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); }
-    .urg-normal { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+    .urg-overdue { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+    .urg-dueSoon { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); }
+    .urg-onTrack { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
 
     /* ---- WORK page: non-scroll app layout on all sizes ----
        The page fills the shell main area exactly; the outer page never
@@ -202,8 +254,29 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
 })
 export class TatBoardComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  protected readonly theme = inject(ThemeService);
 
-  readonly levels: Array<'urgent' | 'high' | 'normal'> = ['urgent', 'high', 'normal'];
+  /** Band pill: search (patient / test / status) + urgency filter. */
+  readonly q = signal('');
+  readonly levelFilter = signal<LevelFilter>('all');
+  private readonly matched = computed(() =>
+    bandFilter(this._rows(), this.q(), (r) => [r.patient, r.test, r.status, r.status?.replace(/_/g, ' ')]));
+  readonly visibleCount = computed(() => {
+    const f = this.levelFilter();
+    return this.matched().filter((r) => f === 'all' || r.tat === f).length;
+  });
+  readonly levelOptions = computed<SegmentedOption<LevelFilter>[]>(() => {
+    const m = this.matched();
+    const n = (l: TatState) => m.filter((r) => r.tat === l).length;
+    return [
+      { value: 'all', label: 'All', count: m.length },
+      { value: 'overdue', label: 'Overdue', dot: '#ef4444', count: n('overdue') },
+      { value: 'dueSoon', label: 'Due soon', dot: '#f59e0b', count: n('dueSoon') },
+      { value: 'onTrack', label: 'On track', dot: '#10b981', count: n('onTrack') },
+    ];
+  });
+
+  readonly levels: TatState[] = ['overdue', 'dueSoon', 'onTrack'];
 
   private readonly _summary = signal<TatSummary | null>(null);
   private readonly _rows = signal<TatRow[]>([]);
@@ -217,16 +290,18 @@ export class TatBoardComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() { if (this._interval) clearInterval(this._interval); }
 
-  rowsFor(level: 'urgent' | 'high' | 'normal'): TatRow[] {
-    return this._rows().filter(r => r.level === level);
+  rowsFor(level: TatState): TatRow[] {
+    const f = this.levelFilter();
+    if (f !== 'all' && f !== level) return [];
+    return this.matched().filter(r => r.tat === level);
   }
 
-  levelLabel(level: 'urgent' | 'high' | 'normal'): string {
-    return level === 'urgent' ? 'Urgent' : level === 'high' ? 'High' : 'Within TAT';
+  levelLabel(level: TatState): string {
+    return level === 'overdue' ? 'Overdue' : level === 'dueSoon' ? 'Due soon' : 'On track';
   }
 
-  rowTone(level: 'urgent' | 'high' | 'normal'): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  rowTone(level: TatState): TileTone {
+    return level === 'overdue' ? 'rose' : level === 'dueSoon' ? 'amber' : 'default';
   }
 
   statusTone(status: string): ChipTone {
@@ -240,9 +315,19 @@ export class TatBoardComponent implements OnInit, OnDestroy {
     }
   }
 
-  refresh() {
-    this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat').subscribe({
-      next: r => { this._summary.set(r.summary); this._rows.set(r.rows ?? []); }
+  /** Refresh button pressed: the button is busy until the board answers. */
+  readonly refreshing = signal(false);
+  /** First load: the board's rows as a skeleton, not "No active tests". */
+  private readonly firstHold = createLoadHold(true);
+  readonly firstLoad = this.firstHold.active;
+  /** `manual` = the Refresh button (the 30s poll stays silent). */
+  refresh(manual = false) {
+    const req = this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat');
+    (manual ? req.pipe(busyWhile(this.refreshing)) : req).pipe(finalize(() => this.firstHold.done())).subscribe({
+      next: r => {
+        this._summary.set(r.summary);
+        this._rows.set((r.rows ?? []).map(x => ({ ...x, tat: FROM_SERVER[x.level] ?? 'onTrack' })));
+      }
     });
   }
 }

@@ -13,13 +13,18 @@ import { ProcessWorkflowService } from '../services/process-workflow.service';
  * this action, access is allowed. Only an action that is present AND explicitly
  * disabled is blocked, so a silent/partial workflow can never lock anyone out.
  */
-export const workflowGuard = (actionType: string): CanActivateFn => async () => {
-  const process = inject(ProcessWorkflowService);
-  const router = inject(Router);
-  await process.ensureLoaded();
-  if (process.isEnabled(actionType)) return true;
-  // Feature switched off for this tenant — send them back to the landing.
-  return router.createUrlTree(['/']);
+export type WorkflowGuardFn = CanActivateFn & { readonly workflowActions: readonly string[] };
+
+export const workflowGuard = (actionType: string): WorkflowGuardFn => {
+  const guard: CanActivateFn = async () => {
+    const process = inject(ProcessWorkflowService);
+    const router = inject(Router);
+    await process.ensureLoaded();
+    if (process.isEnabled(actionType)) return true;
+    // Feature switched off for this tenant — send them back to the landing.
+    return router.createUrlTree(['/']);
+  };
+  return Object.assign(guard, { workflowActions: [actionType] });
 };
 
 /**
@@ -28,10 +33,13 @@ export const workflowGuard = (actionType: string): CanActivateFn => async () => 
  * is the target of BOTH walk-in orders and appointment→order conversion, so
  * disabling walk_in_order alone must not break converting an appointment.
  */
-export const workflowGuardAny = (...actionTypes: string[]): CanActivateFn => async () => {
-  const process = inject(ProcessWorkflowService);
-  const router = inject(Router);
-  await process.ensureLoaded();
-  if (actionTypes.some(t => process.isEnabled(t))) return true;
-  return router.createUrlTree(['/']);
+export const workflowGuardAny = (...actionTypes: string[]): WorkflowGuardFn => {
+  const guard: CanActivateFn = async () => {
+    const process = inject(ProcessWorkflowService);
+    const router = inject(Router);
+    await process.ensureLoaded();
+    if (actionTypes.some(t => process.isEnabled(t))) return true;
+    return router.createUrlTree(['/']);
+  };
+  return Object.assign(guard, { workflowActions: [...actionTypes] });
 };

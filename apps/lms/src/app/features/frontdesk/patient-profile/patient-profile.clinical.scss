@@ -1,0 +1,123 @@
+// Patient profile — the CLINICAL parts (snapshot panes + timeline feed),
+// split from patient-profile.component.scss to keep each file in budget.
+// docs/PF-PATTERN.md §22. Tokens only; light + dark; reduced motion in the
+// main file's block and below.
+@use '../../../shared/styles/pf-mixins' as pf;
+
+/* ── SNAPSHOT: three panes in one card ─────────────────────────────── */
+.pf-pp-snap {
+  flex: none; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  max-height: min(290px, 40vh);
+  animation: pf-pp-rise var(--pf-dur, 320ms) var(--pf-spring) both;
+}
+@keyframes pf-pp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.pf-pp-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 12px 14px; overflow-y: auto; overscroll-behavior: contain; }
+.pf-pp-pane + .pf-pp-pane { border-left: 1px solid var(--pf-line); }
+.pf-pp-pane__t { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+.pf-pp-pane__n { font-size: 11.5px; font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+.pf-pp-pane__more { align-self: flex-start; height: 32px; min-height: 32px; padding: 0 6px; font-size: 12.5px; }
+.pf-pp-quiet { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+.pf-pp-calm { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--text-secondary); }
+.pf-pp-calm svg { flex: none; color: var(--violet-text, #7c3aed); }
+
+/* Needs attention rows: dot + analyte · value (toned) · ref · date · delta. */
+.pf-pp-attn { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-pp-attn__li { animation: pf-pp-in var(--pf-dur, 320ms) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 30ms + 80ms); }
+.pf-pp-attn__row {
+  --t: var(--amber-text);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name val' 'meta meta';
+  gap: 1px 12px; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--pf-radius-sm, 10px);
+  background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.pf-pp-attn__row[data-tone='critical'] { --t: var(--red-text); background: color-mix(in srgb, var(--red-text) 6%, transparent); }
+.pf-pp-attn__row:hover { background: var(--pf-chip-bg); }
+.pf-pp-attn__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-pp-attn__name { grid-area: name; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.pf-pp-attn__dot { flex: none; align-self: center; width: 7px; height: 7px; border-radius: 999px; background: var(--t); }
+.pf-pp-attn__test { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.pf-pp-attn__val { grid-area: val; display: inline-flex; align-items: center; gap: 3px; justify-self: end; font-size: 14px; font-weight: 600; color: color-mix(in srgb, var(--t) 80%, var(--text-primary)); white-space: nowrap; }
+.pf-pp-attn__unit { margin-left: 4px; font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+.pf-pp-attn__meta { grid-area: meta; display: flex; flex-wrap: wrap; padding-left: 15px; font-size: 12px; color: var(--text-tertiary); }
+.pf-pp-attn__delta { font-weight: 500; color: var(--text-secondary); }
+
+/* In progress: tests · 4-step stage bar · dot-word stage + ready-by. */
+.pf-pp-prog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-pp-prog__row {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 8px; border: 0; border-radius: var(--pf-radius-sm, 10px);
+  background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.pf-pp-prog__row:hover { background: var(--pf-chip-bg); }
+.pf-pp-prog__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-pp-prog__name { font-size: 13px; font-weight: 600; line-height: 1.3; @include pf.no-truncate; }
+.pf-pp-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.pf-pp-steps__seg { height: 4px; border-radius: 999px; background: var(--pf-chip-bg); box-shadow: inset 0 0 0 1px var(--pf-line); }
+.pf-pp-steps__seg--on { background: color-mix(in srgb, var(--violet-text, #7c3aed) 55%, transparent); box-shadow: none; }
+.pf-pp-steps__seg--now { background: var(--violet-text, #7c3aed); }
+.pf-pp-prog__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; font-size: 12px; }
+.pf-pp-prog__due { color: var(--text-tertiary); }
+.pf-pp-prog__due--late { color: color-mix(in srgb, var(--red-text) 75%, var(--text-primary)); font-weight: 500; }
+
+/* Last visit. */
+.pf-pp-last__date { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.pf-pp-last__tests { margin: 0; font-size: 13px; color: var(--text-primary); @include pf.no-truncate; }
+.pf-pp-last__doc { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+.pf-pp-last__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
+.pf-pp-last__view { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+
+/* Timeline feed: a rail of kind icons, rows zoom into the order. */
+.pf-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pf-tl__li {
+  position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); column-gap: 8px;
+  animation: pf-pp-in var(--pf-dur, 320ms) var(--pf-spring) both; animation-delay: calc(var(--i, 0) * 18ms);
+}
+.pf-tl__li > .pf-pp-tlx { grid-column: 2; }
+.pf-tl__rail { position: relative; display: flex; justify-content: center; }
+.pf-tl__rail::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--pf-line); }
+.pf-tl__li:first-child .pf-tl__rail::before { top: 18px; }
+.pf-tl__li:last-child .pf-tl__rail::before { bottom: calc(100% - 18px); }
+.pf-tl__icon {
+  position: relative; z-index: 1; margin-top: 8px; width: 22px; height: 22px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pf-card-bg); border: 1px solid var(--pf-line); color: var(--text-secondary);
+}
+.pf-tl__li[data-kind='report'] .pf-tl__icon { color: var(--violet-text, #7c3aed); border-color: color-mix(in srgb, var(--violet-text, #7c3aed) 35%, var(--pf-line)); }
+.pf-tl__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'date status' 'title title' 'meta meta';
+  gap: 2px 8px; margin: 2px 0; padding: 8px 10px; border-radius: var(--pf-radius-sm, 10px);
+  color: var(--text-primary); cursor: pointer; transition: background var(--pf-dur-fast) ease;
+}
+.pf-tl__row:hover { background: var(--pf-chip-bg); }
+.pf-tl__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-tl__date { grid-area: date; font-size: 11.5px; color: var(--text-tertiary); }
+.pf-tl__title { grid-area: title; font-size: 13px; font-weight: 600; line-height: 1.3; @include pf.no-truncate; }
+.pf-tl__meta { grid-area: meta; display: flex; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+.pf-tl__status { grid-area: status; justify-self: end; font-size: 12px; }
+.pf-pp-mi + .pf-pp-mi::before { content: '·'; margin: 0 6px; color: var(--text-muted, var(--text-tertiary)); }
+/* Appointment rows expand in place (grid-rows on --pf-spring; inert closed). */
+.pf-pp-tlx { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--pf-dur, 320ms) var(--pf-spring); }
+.pf-pp-tlx--open { grid-template-rows: 1fr; }
+.pf-pp-tlx__in { min-height: 0; overflow: hidden; }
+.pf-pp-tlx--open .pf-pp-tlx__in { padding: 4px 10px 10px; }
+
+
+/* Narrower: attention full width, the other two side by side; phones: one
+   column. (Here, after the base rules, so they win.) */
+@media (max-width: 1100px) {
+  .pf-pp-snap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); max-height: none; overflow: visible; }
+  .pf-pp-pane { overflow: visible; }
+  .pf-pp-pane--attn { grid-column: 1 / -1; border-bottom: 1px solid var(--pf-line); }
+  .pf-pp-pane--prog { border-left: 0 !important; }
+}
+@media (max-width: 640px) {
+  .pf-pp-snap { grid-template-columns: minmax(0, 1fr); }
+  .pf-pp-pane { padding: 12px; border-left: 0 !important; }
+  .pf-pp-pane--attn { border-bottom: 0; }
+  .pf-pp-pane + .pf-pp-pane { border-top: 1px solid var(--pf-line); }
+  .pf-pp-attn__row, .pf-pp-prog__row { min-height: 44px; }
+  .pf-pp-pane__more, .pf-pp-last__view { min-height: 44px; height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-pp-snap, .pf-pp-attn__li, .pf-tl__li { animation: none !important; }
+  .pf-tl__row { transition: none !important; }
+}

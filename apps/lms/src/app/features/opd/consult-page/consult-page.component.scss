@@ -1,0 +1,3268 @@
+@use '../../../shared/styles/device-tier' as dt;
+/* ── Ref hospital + ref doctor row ──────────────────────── */
+.pf-refrow__field {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-refrow__filter-hint {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--color-primary, #7c3aed);
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+}
+
+/* ── Ref doctor autocomplete ────────────────────────────── */
+.pf-refdoc {
+  position: relative;
+}
+
+.pf-refdoc__opt {
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pf-refdoc__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 0 10px 0 36px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pf-refdoc__field:focus-within {
+  border-color: rgba(168, 85, 247, 0.55);
+  box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
+}
+
+.pf-refdoc__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+}
+
+.pf-refdoc__input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13.5px;
+}
+
+.pf-refdoc__input::placeholder {
+  color: var(--text-muted);
+}
+
+.pf-refdoc__clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--glass-bg-hover);
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+}
+
+.pf-refdoc__pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--bg-card-solid, #14142a);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.pf-refdoc__pop-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.pf-refdoc__pop-item:hover {
+  background: var(--glass-bg-hover);
+}
+
+/* ── Category tabs (Recent / Favourites / Packages / All) ── */
+.pf-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pf-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pf-tabs__btn {
+  flex: 1 1 0;
+  min-width: 110px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.pf-tabs__btn:not(.pf-tabs__btn--on):hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-tabs__btn--on {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pf-tabs__btn--on:hover {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 20%, transparent);
+  color: var(--text-primary);
+}
+
+.pf-tabs__count {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent);
+  color: var(--color-primary, #7c3aed);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Department quick-filter pills ── */
+.pf-deptpills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 4px 2px;
+}
+
+.pf-deptpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+
+.pf-deptpill:hover {
+  color: var(--text-primary);
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.pf-deptpill--on {
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #d946ef));
+  border-color: transparent;
+}
+
+.pf-deptpill__code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pf-deptpill--on .pf-deptpill__code {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Horizontal rail of test cards ── */
+/* Catalog list — dense single-line rows on phone/tablet (design "3× density"):
+   one full-width row per test, stacked vertically instead of a horizontal card
+   scroll. Desktop (≥1024) keeps the multi-column card grid from the mockup.
+   Pure layout — no data, colour or binding change. The card's inner wrappers are
+   flattened with `display:contents` so code / name / TAT / price / star line up
+   as one row via `order`, with no template edit needed. */
+.pf-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  padding: 4px 2px 12px;
+}
+
+.pf-rail-card__title-row {
+  display: contents;
+}
+
+.pf-rail-card__price-row {
+  display: contents;
+}
+
+.pf-rail-card__title-row>span:first-child {
+  order: 1;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__star {
+  order: 5;
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__tat {
+  order: 3;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__price {
+  order: 4;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__badge-pkg {
+  order: 1;
+  flex-shrink: 0;
+}
+
+.pf-rail-card__pkg-count {
+  order: 3;
+  flex-shrink: 0;
+}
+
+@media (min-width: 1024px) {
+
+  /* WEB browse catalog = a grid of the SAME dense rows as phone/tablet, laid
+     2–3 across to use the wide column — not sparse KPI-style cards. Each cell is
+     one scannable line (code · name · TAT · price · ★). Rows flow and the left
+     column scrolls; the cart rail stays put. */
+  .pf-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 8px;
+  }
+
+  .pf-rail::-webkit-scrollbar {
+    width: 6px;
+    height: auto;
+  }
+
+  .pf-rail::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .pf-rail::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.32);
+    border-radius: 999px;
+  }
+}
+
+.pf-rail-card {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.08s;
+  overflow: hidden;
+}
+
+.pf-rail-card:not(.pf-rail-card--on):hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(168, 85, 247, 0.40);
+}
+
+.pf-rail-card:active {
+  transform: scale(0.98);
+}
+
+.pf-rail-card--on {
+  background: color-mix(in srgb, #10b981 14%, transparent);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.pf-rail-card--pkg {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(236, 72, 153, 0.02) 100%), var(--glass-bg);
+  border-color: rgba(245, 158, 11, 0.22);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.03);
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background-color 0.15s;
+}
+
+.pf-rail-card--pkg:hover:not(.pf-rail-card--on) {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(236, 72, 153, 0.05) 100%), var(--glass-bg-hover);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.08);
+  transform: translateY(-2px) scale(1.01);
+}
+
+.pf-rail-card--pkg.pf-rail-card--on {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(245, 158, 11, 0.03) 100%), var(--glass-bg);
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
+}
+
+.pf-rail-card--pkg.pf-rail-card--on:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(245, 158, 11, 0.05) 100%), var(--glass-bg-hover);
+  border-color: rgba(16, 185, 129, 0.7);
+  box-shadow: 0 10px 28px rgba(16, 185, 129, 0.16);
+  transform: translateY(-2px) scale(1.01);
+}
+
+/* Star sits in the title row and shows only on hover/focus. */
+.pf-rail-card__star {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, transform 0.08s;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.pf-rail-card__star:hover {
+  background: var(--glass-bg-hover);
+  color: var(--amber-text);
+}
+
+.pf-rail-card__star--on {
+  color: var(--amber-text);
+  opacity: 1;
+  visibility: visible;
+}
+
+.pf-rail-card--on {
+  background: color-mix(in srgb, #10b981 14%, transparent);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.pf-rail-card--on:hover {
+  background: color-mix(in srgb, #10b981 20%, transparent);
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.pf-rail-card__badge-pkg {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #c27803;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+}
+
+.pf-rail-card__pkg-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, #4b5563);
+  background: var(--glass-bg-hover, rgba(0, 0, 0, 0.04));
+  padding: 1px 6px;
+  border-radius: 5px;
+}
+
+.pf-rail-card__title-row {
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pf-rail-card__code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent);
+  color: var(--color-primary, #7c3aed);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pf-rail-card__name {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-rail-card__price-row {
+  /* display set by the dense-row / desktop-card rules above (contents vs flex). */
+  margin-top: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pf-rail-card__tat {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.pf-rail-card__footer {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pf-rail-card__price {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pf-rail-card__on-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--green-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.18);
+  white-space: nowrap;
+}
+
+.pf-empty-line {
+  text-align: center;
+  padding: 18px 8px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Dept header above each catalog group ───────────────── */
+.pf-dept-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 8px;
+  border-bottom: 1px dashed var(--glass-border);
+  margin-bottom: 8px;
+}
+
+.pf-dept-hdr__name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.pf-dept-hdr__count {
+  padding: 1px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+  color: var(--color-primary, #7c3aed);
+}
+
+/* WORK page → non-scroll app layout: the page fills the shell main area
+   and never scrolls itself; scrolling happens INSIDE the left rail column
+   and the cart column. */
+:host {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pf-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pf-page__header {
+  flex-shrink: 0;
+}
+
+/* pf-screen-header is the fixed top chrome → never shrinks/scrolls. */
+:host>.pf-page>pf-screen-header {
+  flex: 0 0 auto;
+}
+
+/* The grid body fills remaining height; columns scroll internally. */
+.pf-page__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 16px;
+  overflow: hidden;
+}
+
+/* Left rail column scrolls internally (controls + search + tabs/rail). */
+.pf-col {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+}
+
+.pf-col::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pf-col::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pf-col::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.32);
+  border-radius: 999px;
+}
+
+/* Cart side column (≥1024) scrolls internally instead of sticky-paging the
+   whole document, so the page stays non-scroll. */
+@media (min-width: 1024px) {
+  .pf-cart {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .pf-cart__card {
+    position: static;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
+  }
+
+  .pf-cart__card::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .pf-cart__card::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .pf-cart__card::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.32);
+    border-radius: 999px;
+  }
+}
+
+/* Phone / iPad-portrait (<1024): single column. The left column still scrolls
+   internally; the cart lives in the FAB-triggered bottom-sheet drawer. */
+@media (max-width: 1023px) {
+  .pf-page__body {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+
+/* ── Compact page header ─────────────────────────────────── */
+.pf-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 0 10px;
+}
+
+.pf-head__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.pf-head__back:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-head__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .pf-head__title {
+    font-size: 26px;
+  }
+}
+
+.pf-head__sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Floating cart button ── */
+/* Sticky cart BAR (mockup) — phone + iPad-portrait; floats just above the
+   bottom-nav pill and spans the width. Replaces the old floating FAB. Tap
+   anywhere → the Review & Pay step. Hidden at lg+ (persistent cart rail). */
+.pf-cartbar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
+  z-index: 46;
+}
+
+.pf-cartbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--bg-card-solid, #1c1728);
+  border: 1px solid var(--color-primary, #7c3aed);
+  box-shadow: 0 12px 32px -8px rgba(124, 58, 237, 0.55);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.08s ease;
+}
+
+.pf-cartbar__inner:active {
+  transform: scale(0.99);
+}
+
+.pf-cartbar__icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-cartbar__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-cartbar__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pf-cartbar__line1 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-cartbar__line2 {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pf-cartbar__cta {
+  flex-shrink: 0;
+  padding: 10px 15px;
+  border-radius: 12px;
+  background: var(--gradient-primary, linear-gradient(135deg, #c13bff, #ff3d81));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .pf-cartbar {
+    display: none;
+  }
+}
+
+/* ── Patient row ────────────────────────────────────────── */
+.pf-patient {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.pf-patient__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pf-patient__meta {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.pf-patient__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pf-patient__change:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-patient__cancel-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: var(--red-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.pf-patient__cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.pf-patient__cancel-btn:active {
+  transform: scale(0.95);
+}
+
+
+.pf-controls-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  position: relative;
+  z-index: 20;
+}
+
+@media (min-width: 1024px) {
+  .pf-controls-row {
+    grid-template-columns: 2fr 1.5fr 1.5fr;
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+/* ── Referring toggle (tablet/phone) ──────────────────────────
+   Below lg the patient + two referring fields can't share a row without
+   truncating. Default: show the patient field + a toggle chip; the two
+   referring fields are hidden. Tapping the chip (pf-controls-row--refopen)
+   reveals the referring inputs full-width (stacked) and collapses the
+   patient field for the moment. The toggle itself is hidden at lg+. */
+.pf-ref-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: start;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--input-border, var(--glass-border));
+}
+
+.pf-ref-toggle svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.pf-ref-toggle--on {
+  color: var(--brand, #a855f7);
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.pf-ref-toggle--on svg {
+  color: var(--brand, #a855f7);
+}
+
+.pf-ref-toggle__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand, #a855f7);
+}
+
+/* OPS-58 — edit referral on an existing/completed order. */
+.pf-refrow__field--edit { display: flex; align-items: end; }
+.pf-ref-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--brand, #a855f7);
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.pf-ref-edit-btn svg { flex-shrink: 0; }
+.pf-ref-edit-actions { display: inline-flex; gap: 8px; align-items: center; }
+.pf-ref-edit-save {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--brand, #a855f7);
+  border: 1px solid transparent;
+}
+.pf-ref-edit-save:disabled { opacity: 0.6; }
+.pf-ref-edit-cancel {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--input-border, var(--glass-border));
+}
+
+@media (max-width: 1023px) {
+
+  /* Referring fields hidden until the toggle opens them. */
+  .pf-controls-row .pf-refrow__field {
+    display: none;
+  }
+
+  .pf-controls-row--refopen .pf-refrow__field {
+    display: block;
+  }
+
+  /* When open, hand the row to the referring inputs; hide the patient block
+     + toggle-collapses to reclaim the vertical space for typing. */
+  .pf-controls-row--refopen .pf-controls-row__patient {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pf-ref-toggle {
+    display: none;
+  }
+}
+
+/* ── Inline Patient Picker & Card ── */
+.pf-patient-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--input-border, var(--glass-border));
+  border-radius: 12px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.pf-patient-inline .pf-patient__name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-patient-inline .pf-patient__change {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pf-patient-inline .pf-patient__change:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-patient-search-inline {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Search + Priority share a row ─────────────────────── */
+.pf-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  position: relative;
+  z-index: 5;
+}
+
+.pf-search-row .pf-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 480px) {
+  .pf-search-row .pf-search {
+    min-width: 260px;
+  }
+}
+
+.pf-search-row .pf-priority__toggle {
+  flex-shrink: 0;
+  height: 48px;
+  padding: 4px;
+}
+
+.pf-search-row .pf-priority__opt {
+  height: 40px;
+}
+
+/* ── Search ── */
+.pf-search {
+  position: relative;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.pf-search:focus-within {
+  border-color: rgba(168, 85, 247, 0.65);
+  box-shadow: 0 0 0 4px rgba(124, 58, 247, 0.16);
+  background-color: var(--glass-bg-hover);
+}
+
+/* Keyboard-first quick-add dropdown (design 1d): type → top hits → ⏎ adds. */
+.pf-search-dd {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--bg-elevated, var(--bg-card-solid, #14141f));
+  border: 1px solid rgba(124, 58, 237, 0.55);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  max-height: 348px;
+  overflow-y: auto;
+}
+
+.pf-search-dd__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.pf-search-dd__row--active {
+  background: var(--glass-bg-hover);
+  border-color: rgba(124, 58, 237, 0.5);
+}
+
+.pf-search-dd__row--on {
+  opacity: 0.9;
+}
+
+.pf-search-dd__code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pf-search-dd__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-search-dd__tat {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  flex-shrink: 0;
+}
+
+.pf-search-dd__price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.pf-search-dd__add {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #7c3aed));
+  color: #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pf-search-dd__add--on {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--green-text, #10b981);
+}
+
+.pf-search-dd__hint {
+  display: flex;
+  gap: 14px;
+  padding: 6px 10px 3px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Web + searching: the dropdown is the whole result list, so the browse picker
+   (tabs + dept chips + grid) is hidden — one search on screen, not two. */
+.pf-picker--hidden {
+  display: none;
+}
+
+.pf-search__icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.pf-search__input {
+  width: 100%;
+  height: 46px;
+  padding: 0 40px 0 40px;
+  border-radius: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  outline: none;
+}
+
+.pf-search__input::placeholder {
+  color: var(--text-muted);
+}
+
+.pf-search__clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pf-search__clear:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Priority toggle ────────────────────────────────────── */
+.pf-priority {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.pf-priority__label {
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.pf-priority__toggle {
+  position: relative;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.pf-priority__opt {
+  position: relative;
+  z-index: 1;
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.pf-priority__opt:hover {
+  color: var(--text-primary);
+}
+
+.pf-priority__opt--on {
+  color: #ffffff;
+}
+
+.pf-priority__toggle[data-active='Normal']::before,
+.pf-priority__toggle[data-active='Urgent']::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.25s;
+}
+
+.pf-priority__toggle[data-active='Urgent']::before {
+  transform: translateX(100%);
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.45);
+}
+
+/* ── Eyebrow + counts ───────────────────────────────────── */
+.pf-eyebrow {
+  margin: 0;
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pf-catalog-count {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px;
+}
+
+.pf-filter-hint {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-tertiary);
+}
+
+/* ── Package cards ──────────────────────────────────────── */
+.pf-pkg {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(236, 72, 153, 0.06));
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.08s, background 0.2s, border-color 0.2s, box-shadow 0.25s;
+}
+
+.pf-pkg:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.24), rgba(236, 72, 153, 0.12));
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.22);
+}
+
+.pf-pkg:active {
+  transform: scale(0.98);
+}
+
+.pf-pkg--on {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.42), rgba(236, 72, 153, 0.22));
+  border-color: rgba(168, 85, 247, 0.85);
+  box-shadow: 0 10px 28px rgba(124, 58, 237, 0.3);
+}
+
+.pf-pkg__check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.45);
+}
+
+.pf-pkg__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pf-pkg__meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-tertiary);
+}
+
+.pf-pkg__price {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Test catalog cards ─────────────────────────────────── */
+.pf-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.25s;
+}
+
+.pf-test:hover {
+  background: var(--glass-bg-hover);
+}
+
+.pf-test:active {
+  transform: scale(0.99);
+}
+
+.pf-test--on {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.1));
+  border-color: rgba(168, 85, 247, 0.55);
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.25);
+}
+
+.pf-test__badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.pf-test--on .pf-test__badge {
+  background: var(--gradient-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.45);
+}
+
+.pf-test__name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.pf-test__meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-tertiary);
+}
+
+.pf-test__price {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Cart ── */
+.pf-cart {
+  position: relative;
+}
+
+.pf-cart__card {
+  position: sticky;
+  top: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.pf-cart-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  z-index: 44;
+  animation: pf-bd-in 0.2s ease both;
+}
+
+@keyframes pf-bd-in {
+  from {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
+
+.pf-cart-drawer {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  max-height: 75dvh;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  z-index: 45;
+  animation: pf-drawer-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  overflow-y: auto;
+}
+
+@keyframes pf-drawer-up {
+  from {
+    transform: translateY(120%) scale(0.97);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.pf-cart-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.pf-cart-drawer__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pf-cart-head {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pf-cart-clear {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.pf-cart-clear:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.pf-cart-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pf-cart-empty {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pf-cart-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.pf-cart-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pf-cart-meta {
+  margin: 1px 0 0;
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-tertiary);
+}
+
+.pf-cart-amount {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Member test covered by a package/profile in the cart — shown, but not billed
+   separately (#38–44). Muted so it reads as "included, no charge". */
+.pf-cart-row--included {
+  opacity: 0.82;
+}
+
+.pf-cart-amount--included {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--emerald-400, #34d399);
+}
+
+.pf-cart-meta--included {
+  color: var(--emerald-400, #34d399);
+}
+
+.pf-cart-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-cart-remove:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--red-text);
+}
+
+/* ── Package suggestion banner ─────────────────────────── */
+.pf-pkg-suggest {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(236, 72, 153, 0.10));
+  border: 1px solid rgba(168, 85, 247, 0.40);
+}
+
+.pf-pkg-suggest__hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-primary, #7c3aed);
+}
+
+.pf-pkg-suggest__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+}
+
+.pf-pkg-suggest__sub {
+  margin: 4px 0 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.pf-pkg-suggest__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pf-pkg-suggest__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+
+.pf-pkg-suggest__name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-pkg-suggest__meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pf-pkg-suggest__sep {
+  opacity: 0.6;
+}
+
+.pf-pkg-suggest__strike {
+  text-decoration: line-through;
+  opacity: 0.7;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.pf-pkg-suggest__price {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pf-pkg-suggest__save {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  background: rgba(16, 185, 129, 0.18);
+  color: var(--green-text);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: 9999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pf-pkg-suggest__apply {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white;
+  border: 0;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.32);
+}
+
+.pf-pkg-suggest__apply:hover {
+  filter: brightness(1.08);
+}
+
+.pf-cart-totals {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pf-cart-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.pf-cart-line--total {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-muted);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Front-desk inline payment: give the right column a touch more room for the
+   payment-mode tiles + cash num-pad beside the test list. */
+@media (min-width: 1024px) {
+  .pf-page__body--billing {
+    grid-template-columns: 1fr minmax(420px, 480px);
+  }
+}
+
+/* Post-payment actions (Print / Show invoice / New order). */
+.pf-paid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pf-paid__msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--green-text);
+}
+
+/* Post-payment Total / Paid / Balance-due breakdown (advance + full). */
+.pf-paid__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.pf-paid__sumline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.pf-paid__sumline span:last-child {
+  color: var(--text-primary, #e2e8f0);
+  font-weight: 600;
+}
+
+.pf-paid__sumline--due {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  font-weight: 700;
+}
+
+.pf-paid__sumline--due span {
+  color: var(--color-primary, #a78bfa);
+}
+
+.pf-paid__sumline--done {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  font-weight: 700;
+}
+
+.pf-paid__sumline--done span:last-child {
+  color: var(--emerald-400, #34d399) !important;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-paid__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pf-paid__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(217, 70, 239, 0.08));
+  color: var(--violet-text);
+  transition: all 0.15s ease;
+}
+
+.pf-paid__btn svg {
+  flex-shrink: 0;
+}
+
+.pf-paid__btn:hover {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #fff;
+  border-color: transparent;
+}
+
+/* WhatsApp share — green accent so it reads as the "send to patient" action. */
+.pf-paid__btn--wa {
+  border-color: rgba(37, 211, 102, 0.45);
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.16), rgba(18, 140, 126, 0.08));
+  color: #25d366;
+}
+
+.pf-paid__btn--wa:hover {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #fff;
+  border-color: transparent;
+}
+
+.pf-paid__btn--full {
+  grid-column: span 2;
+}
+
+.pf-paid__btn--collect {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1));
+  color: var(--blue-text, #3b82f6);
+}
+
+.pf-paid__btn--collect:hover {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #ffffff;
+}
+
+.pf-paid__btn--cta {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.35);
+  padding: 12px;
+  font-size: 14px;
+}
+
+.pf-paid__btn--cta:hover {
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
+}
+
+/* In-app invoice preview (Show invoice). */
+.pf-invprev {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pf-invprev__bd {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.pf-invprev__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  height: min(92dvh, 1040px);
+  background: var(--bg-card-solid, #14141f);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6);
+}
+
+.pf-invprev__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.pf-invprev__close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* Desktop/iPad: the scale wrappers are transparent — the iframe keeps its
+   original flex:1 / width:100% behaviour. They only become real (scaling) boxes
+   at <=640px below, so the desktop preview is byte-for-byte unchanged. */
+.pf-invprev__viewport,
+.pf-invprev__stage {
+  display: contents;
+}
+
+.pf-invprev__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #525659;
+}
+
+/* Discount control in the cart summary */
+.pf-cart-disc {
+  align-items: center;
+}
+
+.pf-cart-disc__ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-cart-disc__kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px;
+  border-radius: 9px;
+  background: var(--input-bg, rgba(20, 20, 40, 0.05));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pf-cart-disc__kind:hover {
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.pf-cart-disc__kind button {
+  min-width: 28px;
+  height: 25px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary, #64748b);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pf-cart-disc__kind button:hover:not(.pf-cart-disc__kind--on) {
+  color: var(--text-primary);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.pf-cart-disc__kind button.pf-cart-disc__kind--on,
+.pf-cart-disc__kind--on {
+  background: linear-gradient(135deg, #7c3aed, #ec4899) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.pf-cart-disc__input {
+  width: 76px;
+  height: 30px;
+  padding: 0 10px;
+  text-align: right;
+  border-radius: 8px;
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.25));
+  background: var(--input-bg, rgba(255, 255, 255, 0.05));
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.15s ease;
+}
+
+.pf-cart-disc__input:focus {
+  outline: none;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2) !important;
+  background: var(--input-bg, #ffffff);
+}
+
+.pf-cart-disc__input:not(:placeholder-shown):not([value="0"]):not([value=""]) {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--violet-text, #7c3aed);
+  font-weight: 800;
+}
+
+.pf-cart-disc__input--err {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+  background: rgba(239, 68, 68, 0.06) !important;
+}
+
+.pf-cart-disc__cap {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pf-cart-disc__err {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--red-text);
+}
+
+.pf-proceed {
+  margin-top: 16px;
+  width: 100%;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
+  transition: transform 0.08s, box-shadow 0.25s, filter 0.08s;
+}
+
+.pf-proceed--ghost {
+  margin-top: 8px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  color: var(--text-secondary);
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.12));
+  box-shadow: none;
+}
+
+.pf-proceed--ghost:hover:not(:disabled) {
+  box-shadow: none;
+  filter: none;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.pf-proceed:hover:not(:disabled) {
+  box-shadow: 0 14px 32px rgba(124, 58, 237, 0.55);
+  transform: translateY(-1px);
+}
+
+.pf-proceed:active:not(:disabled) {
+  transform: scale(0.98);
+  filter: brightness(1.08);
+}
+
+.pf-proceed:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.pf-cart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px auto 0;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.pf-cart-badge-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.pf-cart-badge--urgent {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.14);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+/* Estimated time-to-report next to the cart total */
+.pf-cart-tat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 9999px;
+  color: var(--blue-text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* Save / discard draft action row */
+.pf-cart-draftrow {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pf-cart-draft {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pf-cart-draft:hover:not([disabled]) {
+  background: var(--bg-hover);
+}
+
+.pf-cart-draft[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pf-cart-draft--ghost {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   CROSS-PLATFORM OVERRIDES (additive only — desktop-web ≥1280 untouched)
+   Every rule below is scoped under :host and gated to sub-desktop widths,
+   coarse pointers, or capacitor/electron html classes, so it can never
+   alter the desktop-web layout or leak into another page.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* --- iOS zoom guard: any focused input <16px makes Safari zoom the page.
+       Bump the page's own text inputs to 16px below desktop only. --- */
+@include dt.tablet-tier {
+
+  :host .pf-search__input,
+  :host .pf-refdoc__input,
+  :host .pf-refdoc__pop-item,
+  :host .pf-cart-disc__input {
+    font-size: 16px;
+  }
+}
+
+/* --- Drawer/preview heights: use dvh so the mobile browser URL bar
+       collapsing doesn't clip the sheet. Sub-desktop only. --- */
+@include dt.tablet-tier {
+  :host .pf-cart-drawer {
+    max-height: 75dvh;
+  }
+
+  :host .pf-invprev__panel {
+    height: min(92dvh, 1040px);
+  }
+}
+
+/* --- Phone (≤640): the cart drawer becomes a true full-width bottom
+       sheet and must clear the floating bottom-nav pill. --- */
+@media (max-width: 640px) {
+  :host .pf-cart-drawer {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 82dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: calc(18px + var(--tab-nav-total-height, 0px));
+  }
+
+  /* Tabs may overflow horizontally — keep them swipeable, edge-to-edge. */
+  :host .pf-tabs__btn {
+    min-width: 96px;
+  }
+}
+
+/* --- Touch sizing: grow small tap targets to ≥44px on coarse pointers
+       (phones/tablets) without changing the dense mouse-driven desktop. --- */
+@media (pointer: coarse) {
+  :host .pf-tabs__btn {
+    min-height: 44px;
+  }
+
+  :host .pf-rail-card__star {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-remove {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-drawer__close {
+    width: 40px;
+    height: 40px;
+  }
+
+  :host .pf-cart-clear {
+    height: 36px;
+  }
+
+  :host .pf-patient__change,
+  :host .pf-patient__cancel {
+    min-height: 40px;
+  }
+
+  :host .pf-cart-disc__kind button {
+    width: 34px;
+    height: 36px;
+  }
+
+  :host .pf-cart-disc__input {
+    height: 38px;
+  }
+
+  :host .pf-pkg-suggest__apply {
+    min-height: 40px;
+  }
+
+  :host .pf-refdoc__clear,
+  :host .pf-search__clear {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* --- Capacitor native: the FAB and the bottom-sheet are this page's own
+       fixed chrome — keep them clear of the home-indicator / notch.
+       (Global body already absorbs top/bottom safe-area; these are the
+       page-OWNED fixed elements that still need explicit insets.) --- */
+:host-context(html.cap-native) .pf-cart-fab {
+  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 640px) {
+  :host-context(html.cap-native) .pf-cart-drawer {
+    padding-bottom: calc(18px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* --- FAB clearance: below desktop the left column scrolls internally and the
+       floating cart FAB overlaps its bottom-right (notably the tall "All tests"
+       view). Reserve bottom scroll room so the last test card isn't hidden
+       under the FAB. Desktop (≥1024) shows the cart as a side column with no
+       FAB, so this never touches it. --- */
+@media (max-width: 640px) {
+  :host .pf-col {
+    padding-bottom: 84px;
+  }
+}
+
+/* iPad band has no bottom pill — drop the FAB lower and reserve matching room. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  :host .pf-cart-fab {
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  :host .pf-col {
+    padding-bottom: 96px;
+  }
+}
+
+/* --- Invoice preview: on phones the centered modal wastes space and the PDF
+       reads small. Promote it to a full-screen sheet; pad the header for the
+       status bar on native so the close button never sits under the notch. --- */
+@media (max-width: 640px) {
+  :host .pf-invprev {
+    padding: 0;
+  }
+
+  :host .pf-invprev__panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  :host-context(html.cap-native) .pf-invprev__hdr {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
+
+  /* CONTAIN the A4 PDF inside the phone. The iframe renders the page at its
+     intrinsic 794px CSS width, which otherwise spills past the sheet and clips
+     the right edge ("not aligned"). Scale it to the screen via --pf-inv-scale
+     (set in TS), then let the viewport scroll + pinch-zoom so the whole invoice
+     is visible and zoomable. The wrappers (display:contents at >=641px) become
+     real boxes here. */
+  :host .pf-invprev__viewport {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y pinch-zoom;
+    background: #525659;
+    /* letterbox around the scaled page */
+  }
+
+  :host .pf-invprev__stage {
+    display: block;
+    /* 794×1123 = A4 @ ~96dpi, scaled so the scroller sizes correctly and
+       nothing overflows horizontally at the default fit. */
+    width: calc(794px * var(--pf-inv-scale, 1));
+    height: calc(1123px * var(--pf-inv-scale, 1));
+    margin: 0 auto;
+  }
+
+  :host .pf-invprev__frame {
+    flex: none;
+    width: 794px;
+    height: 1123px;
+    transform-origin: top left;
+    transform: scale(var(--pf-inv-scale, 1));
+  }
+}
+
+/* --- Touch sizing (round 2): bring the remaining sub-44px tap targets on this
+       page up to the coarse-pointer floor without disturbing the dense
+       mouse-driven desktop. --- */
+@media (pointer: coarse) {
+  :host .pf-invprev__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  :host .pf-refdoc__pop-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  :host .pf-cart-draft {
+    min-height: 44px;
+  }
+
+  :host .pf-paid__btn {
+    min-height: 44px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PHONE (≤640) ONLY — three additive presentational fixes. Every rule is
+   gated to ≤640 (or a hide-on-phone element that is display:none above 640),
+   so tablet/desktop (≥641) stay byte-for-byte identical.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* These two helpers are hidden everywhere by default → only the ≤640 block
+   below turns them on, so ≥641 never sees them. */
+.pf-tabs__icon {
+  display: none;
+}
+
+.pf-az-index {
+  display: none;
+}
+
+/* Scrub callout never shows above phone (the strip can't be touched there). */
+.pf-az-callout {
+  display: none;
+}
+
+@media (max-width: 640px) {
+
+  /* --- FIX 1: test cards → single-column full-width vertical list (no
+         horizontal scroll, no 2-up grid). --- */
+  :host .pf-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-x: hidden;
+    overflow-y: visible;
+    padding: 6px 0 12px;
+    scroll-snap-type: none;
+  }
+
+  :host .pf-rail-card {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-height: 56px;
+    /* ≥44px tap target */
+    padding: 10px 12px;
+    scroll-snap-align: none;
+  }
+
+  /* Let the name size to its content in list rows instead of a fixed 3em box. */
+  :host .pf-rail-card__name {
+    min-height: 0;
+    max-height: none;
+  }
+
+  /* --- FIX 2: chip row → icon-only, 4 across, no horizontal overflow. --- */
+  :host .pf-tabs {
+    overflow-x: hidden;
+  }
+
+  :host .pf-tabs__btn {
+    flex: 1 1 0;
+    min-width: 0;
+    /* override the 96px min set elsewhere ≤640 */
+    gap: 4px;
+    padding: 8px 4px;
+  }
+
+  :host .pf-tabs__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :host .pf-tabs__label {
+    display: none;
+  }
+
+  /* text replaced by the icon */
+  :host .pf-tabs__count {
+    min-width: 0;
+    padding: 0 5px;
+    font-size: 9.5px;
+  }
+
+  /* --- FIX 3: iOS-Contacts-style A–Z index pinned to the right edge. The
+         strip is one continuous touch scrubber — press and slide and the list
+         tracks the finger. `touch-action: none` stops the browser from panning
+         /zooming the page while you drag; user-select:none avoids text-select
+         flicker. The whole strip is the touch target. --- */
+  :host .pf-az-index {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    position: fixed;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 40;
+    padding: 8px 4px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--bg-card-solid, #14142a) 70%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :host .pf-az-index__l {
+    width: 22px;
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--color-primary, #7c3aed);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    /* The container owns the drag — letters shouldn't intercept pointer moves
+       (keeps ev.currentTarget on the strip and avoids per-glyph capture). */
+    pointer-events: none;
+    transition: transform 0.08s ease, color 0.08s ease;
+  }
+
+  /* Re-enable hit-testing for keyboard/AT activation (Enter fires click). */
+  :host .pf-az-index__l:focus-visible {
+    pointer-events: auto;
+  }
+
+  /* Letter currently under the finger — subtly emphasised, iOS-like. */
+  :host .pf-az-index__l--on {
+    color: var(--text-primary, #fff);
+    transform: scale(1.35);
+  }
+
+  /* Magnified letter callout, centred over the list while scrubbing. */
+  :host .pf-az-callout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 56px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 41;
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 88%, #000 0%);
+    color: #fff;
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 12px 36px rgba(124, 58, 237, 0.55);
+    pointer-events: none;
+  }
+
+  /* Anchor offset so a jumped-to section clears the top chrome / safe area. */
+  :host [data-dept-letter] {
+    scroll-margin-top: 12px;
+  }
+}
+
+/* Field-level error: red border on the offending ref input + inline message. */
+.pf-input-error {
+  border-color: var(--danger, #ef4444) !important;
+}
+
+.pf-field-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+}
+
+/* Field-level error: red border on the offending ref input + inline message. */
+.pf-input-error {
+  border-color: var(--danger, #ef4444) !important;
+}
+
+.pf-field-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+}
+
+/* ── Payment Due Mode styling ── */
+.pf-priority--disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.pf-payment-due-tests {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  margin-top: 16px;
+}
+
+/* ── Collect Only Mode styling ── */
+.pf-collect-card {
+  backdrop-filter: blur(16px);
+  background: var(--bg-card-solid, rgba(20, 20, 42, 0.8));
+}
+
+.pf-collect-icon {
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15);
+}
+
+.pf-patient-preview,
+.pf-tests-preview {
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+}
+
+.pf-btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.pf-btn-secondary:hover {
+  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary);
+}
+
+/* ── Refund panel (overpaid after a modify) ─────────────── */
+.pf-refund {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.pf-refund__title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--amber-text);
+}
+
+.pf-refund__modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pf-refund__chip {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 12.5px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+  cursor: pointer;
+  text-align: center;
+}
+
+.pf-refund__chip--on {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  border-color: transparent;
+  color: #1a1a1a;
+}
+
+.pf-refund__btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 11px;
+  border: 0;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.pf-refund__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Read-only Tests List (Pending Payment / Settled Mode) ── */
+.pf-payment-due-tests {
+  margin-top: 18px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px;
+
+  h3 {
+    margin-top: 0;
+  }
+}
+
+.pf-readonly-test-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--glass-bg-hover, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.01);
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: rgba(124, 58, 247, 0.25);
+    box-shadow: 0 4px 12px rgba(124, 58, 247, 0.05);
+  }
+}
+
+.pf-hdr-tat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--blue-text, #60a5fa);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.pf-hdr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.3));
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: padding 0.22s ease, background 0.15s ease, border-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  > span {
+    display: inline-block;
+    max-width: 0;
+    margin-left: -6px;
+    overflow: hidden;
+    opacity: 0;
+    white-space: nowrap;
+    transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.22s ease;
+  }
+
+  &:hover,
+  &:focus-visible {
+    padding: 0 14px;
+
+    > span {
+      max-width: 10rem;
+      margin-left: 0;
+      opacity: 1;
+    }
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.14);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: var(--violet-text, #a78bfa);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@media (hover: none) {
+  .pf-hdr-btn {
+    padding: 0 14px;
+    > span {
+      max-width: 10rem;
+      margin-left: 0;
+      opacity: 1;
+    }
+  }
+}
+
+.pf-hdr-btn--wa {
+  border-color: rgba(37, 211, 102, 0.4);
+  color: #25d366;
+
+  &:hover:not(:disabled) {
+    background: rgba(37, 211, 102, 0.14);
+    border-color: #25d366;
+    color: #25d366;
+  }
+}
+
+.pf-hdr-btn--collect {
+  padding: 0 14px;
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: none;
+
+  > span {
+    max-width: 10rem;
+    margin-left: 0;
+    opacity: 1;
+    color: #ffffff;
+  }
+
+  &:hover,
+  &:hover:not(:disabled) {
+    background: var(--gradient-primary, linear-gradient(135deg, #6d28d9, #db2777));
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: none;
+
+    > span {
+      color: #ffffff;
+    }
+  }
+}
+
+.pf-hdr-btn--primary {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5);
+    color: #ffffff;
+  }
+}
+
+.pf-hdr-collect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #a855f7));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  svg {
+    stroke-width: 2.2;
+  }
+}
+
+.pf-hdr-new-btn,
+.pf-hdr-draft-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.2s, border-color 0.2s;
+
+  &:hover:not(:disabled) {
+    background: var(--glass-bg-hover, rgba(255, 255, 255, 0.1));
+    border-color: rgba(124, 58, 247, 0.35);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.pf-hdr-discard-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--red-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: var(--red-text);
+  }
+}
+
+/* ── Trendogram suggestion + customize popup ─────────────────────── */
+.pf-trend-suggest {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+}
+
+.pf-trend-suggest__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.pf-trend-suggest__toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.pf-trend-suggest__icon {
+  color: #a855f7;
+  display: inline-flex;
+}
+
+.pf-trend-suggest__label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pf-trend-suggest__hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.pf-trend-suggest__controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pf-trend-suggest__select {
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.pf-trend-suggest__edit {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: rgba(124, 58, 237, 0.14);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: var(--text-primary);
+}
+
+.pf-trend-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.pf-trend-modal__panel {
+  width: min(520px, calc(100vw - 32px));
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.pf-trend-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.pf-trend-modal__head h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pf-trend-modal__head p {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.pf-trend-modal__x {
+  background: none;
+  border: 0;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.pf-trend-modal__dur {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.pf-trend-modal__dur select {
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.pf-trend-modal__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 18px;
+}
+
+.pf-trend-modal__test {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.pf-trend-modal__test-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.pf-trend-modal__test-name span {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.pf-trend-modal__param {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pf-trend-modal__param input {
+  width: 15px;
+  height: 15px;
+  accent-color: #7c3aed;
+}
+
+.pf-trend-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.pf-trend-modal__done {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  border: 0;
+}
+/* ── OPD consult screen — work area + summary rail (mirrors the order-create
+     frame; the surrounding pf-page / pf-controls-row / pf-patient-* styles are
+     inherited from the copied stylesheet). ─────────────────────────────────── */
+.pf-cw {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pf-cw__head { display: flex; align-items: baseline; gap: 8px; }
+.pf-cw__title { font-size: 15px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+.pf-cw__field { display: flex; flex-direction: column; gap: 6px; }
+.pf-cw__label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-tertiary, #64748b);
+}
+.pf-cw__input {
+  padding: 10px 12px; border-radius: 10px; font-size: 14px;
+  color: var(--text-primary, #e2e8f0);
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--input-border, var(--glass-border, rgba(255, 255, 255, 0.14)));
+}
+.pf-cw__hint { font-size: 12px; color: var(--text-tertiary, #64748b); }
+.pf-cw__placeholder {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  color: var(--text-tertiary, #64748b); background: rgba(148, 163, 184, 0.08);
+  border: 1px dashed var(--glass-border, rgba(255, 255, 255, 0.16));
+  align-self: start;
+}
+
+/* Summary rail — same footprint as the order-create bill rail. */
+.pf-csum {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  position: sticky;
+  top: calc(var(--navbar-height, 4rem) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pf-csum__head { border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08)); padding-bottom: 10px; }
+.pf-csum__title { font-size: 14px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
+.pf-csum__patient { font-size: 13px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
+.pf-csum__empty { font-size: 13px; color: var(--text-tertiary, #64748b); }
+.pf-csum__lines { display: flex; flex-direction: column; gap: 8px; }
+.pf-csum__line { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--text-secondary, #cbd5e1); }
+.pf-csum__total {
+  display: flex; justify-content: space-between; font-size: 15px; font-weight: 800;
+  color: var(--text-primary, #e2e8f0);
+  border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1)); padding-top: 10px;
+}
+.pf-csum__submit {
+  margin-top: 4px; padding: 11px 16px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent;
+  cursor: pointer;
+}
+.pf-csum__submit:disabled { opacity: .55; cursor: default; }

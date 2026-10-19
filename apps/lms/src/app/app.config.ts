@@ -1,9 +1,16 @@
 import {
   ApplicationConfig,
+  ErrorHandler,
+  inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { UploadsService } from './core/services/uploads.service';
+import { RouteReuseStrategy, provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
+import { IdentityRouteReuseStrategy } from './core/navigation/identity-reuse.strategy';
+import { slideTransition } from './core/navigation/slide-transition';
+import { httpActivityInterceptor } from './core/services/http-activity.service';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import {
   HashLocationStrategy,
@@ -14,6 +21,8 @@ import {
 import { APP_BASE_HREF } from '@angular/common';
 import { appRoutes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
+import { opdPreviewInterceptor } from './features/opd/shared/opd-preview.interceptor';
+import { storageErrorInterceptor } from './core/services/storage-error.interceptor';
 
 /**
  * Pick the location strategy at boot. Electron loads the bundle
@@ -34,10 +43,40 @@ function locationStrategyFactory(
   return new PathLocationStrategy(platformLocation, baseHref);
 }
 
+/**
+ * A failed lazy-chunk import means THIS TAB is running a stale build: the
+ * server was redeployed, the hashed chunk files it references are gone, and
+ * every navigation into a not-yet-loaded route dies silently ("the click
+ * does nothing", console: "Importing a module script failed"). The only
+ * cure is picking up the new index.html — reload once, guarded per URL so
+ * a genuinely broken deploy can't put the tab in a reload loop.
+ */
+function isChunkLoadError(err: unknown): boolean {
+  const m = err instanceof Error ? `${err.name} ${err.message}` : String(err ?? '');
+  return /Importing a module script failed|Failed to fetch dynamically imported module|ChunkLoadError|error loading dynamically imported module/i.test(m);
+}
+function reloadOnceForStaleBuild(): void {
+  try {
+    const key = 'pf-chunk-reload:' + location.pathname;
+    if (sessionStorage.getItem(key)) return;   // already tried — don't loop
+    sessionStorage.setItem(key, '1');
+    location.reload();
+  } catch { /* storage unavailable — let the error surface instead */ }
+}
+
+class ChunkAwareErrorHandler extends ErrorHandler {
+  override handleError(error: unknown): void {
+    const inner = (error as { rejection?: unknown })?.rejection ?? error;
+    if (isChunkLoadError(inner)) { reloadOnceForStaleBuild(); return; }
+    super.handleError(error);
+  }
+}
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
+    { provide: ErrorHandler, useClass: ChunkAwareErrorHandler },
     // onSameUrlNavigation: 'reload' fixes the "click Frontdesk twice
     // to load" bug — when reception is already on /frontdesk and taps
     // the nav button again, the router re-fires NavigationEnd events
@@ -45,8 +84,27 @@ export const appConfig: ApplicationConfig = {
     // instead of silently no-op'ing.
     provideRouter(appRoutes,
       withComponentInputBinding(),
-      withRouterConfig({ onSameUrlNavigation: 'reload' })),
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
+      // Lazy-route load failures land here (not in ErrorHandler) — same
+      // stale-build cure.
+      withNavigationErrorHandler(e => {
+        if (isChunkLoadError(e.error)) reloadOnceForStaleBuild();
+      }),
+      withRouterConfig({ onSameUrlNavigation: 'reload' }),
+      // Seamless step-to-step slide (Order & Payments ⇄ Collect); every other
+      // navigation skips the transition. See core/navigation/slide-transition.ts.
+      withViewTransitions({ skipInitialTransition: true, onViewTransitionCreated: slideTransition })),
+    // Record screens that read their id once get a FRESH component when the
+    // record changes (draft shelf A → B); see identity-reuse.strategy.ts.
+    { provide: RouteReuseStrategy, useClass: IdentityRouteReuseStrategy },
+    // httpActivityInterceptor only counts in-flight /api calls (the branch
+    // switch holds its skeleton until the new screen's data has landed).
+    // opdPreviewInterceptor: X-PF-OPD: 1 on API calls only after pf.opd() (OPD dark build).
+    // storageErrorInterceptor: a real storage_error (or a masked HTML 502/503/504
+    // gateway page on an upload) becomes one clear ApiError message everywhere.
+    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, authInterceptor, storageErrorInterceptor])),
+    // Private uploads: register the session-authenticated fetcher the PDF
+    // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
+    provideAppInitializer(() => { inject(UploadsService); }),
     { provide: APP_BASE_HREF, useValue: '/' },
     {
       provide: LocationStrategy,

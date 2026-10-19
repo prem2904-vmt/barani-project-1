@@ -1,33 +1,53 @@
 import { DatePipe } from '@angular/common';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { ThemeService } from '../../../core/services/theme.service';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { SkeletonCardComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { busyIdWhile } from '../busy-id';
 import { skip } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
+import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { WorkStatus, WorkStatusFilter, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { MergedWorkRow, WORK_STATUS_LABEL, sortByDailySerial } from './work-merge';
+import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ToastService } from '../../../core/services/toast.service';
 
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { Appointment, QueueItem, QueueResponse } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { Bill } from '../../../shared/models/bill.model';
-import { Order } from '../../../shared/models/order.model';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { Order, OrderSample } from '../../../shared/models/order.model';
+import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
+import { DialogService } from '../../../core/services/dialog.service';
+import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -85,6 +105,8 @@ interface StaffMember {
  *  There's no backend for drafts — order-create writes them, the Draft tab
  *  reads them. `patient` is a snapshot so we can render without a lookup. */
 interface DraftOrder {
+  /** The localStorage key it lives under (branch-scoped or legacy). */
+  key: string;
   patientId: string;
   patient: Patient;
   testIds: string[];
@@ -93,28 +115,99 @@ interface DraftOrder {
 }
 
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
+import { DraftScope, orderDraftInScope, parseOrderDraftKey } from '../order-create/order-draft';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { savedValueRows } from '../../../shared/utils/result-flag';
+import { OutsourcingService } from '../../../core/services/outsourcing.service';
+import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
+import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
+import { OutsourcedTube, buildFrontdeskMergedWork, filterOutsourced } from '../outsourced/outsourced-view';
+import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
+import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
+import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { testListUrl } from '../../../shared/utils/test-list-url';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { isSignedOrSkipped } from '../../../shared/utils/line-status';
+
+// ── Repetitive mode (series) — schedule-sheet view model ──────────
+/** Sample statuses at/past the lab — the only series time points that can
+ *  already carry entered values worth fetching for the schedule sheet. */
+const SERIES_RESULTED = new Set(['received', 'processing', 'resulted', 'validated', 'completed', 'delivered']);
+
+/** One test's processed values under a collected time-point row. */
+interface SeriesResultTest {
+  name: string;
+  values: Array<{ label: string; value: string; unit: string }>;
+}
+
+interface SeriesSheetRow {
+  sampleId: string;
+  /** What is actually drawn at this time point — the test name(s) on the
+   *  tube. The frontdesk thinks in tests ("OGTT 30 Minutes"), not in
+   *  offsets, so this is the row's headline and the offset is the subtitle. */
+  testLabel: string;
+  offsetLabel: string;
+  /** Wall-clock due time ("HH:mm") — '—' while the anchor is undrawn. */
+  dueLabel: string;
+  state: 'collected' | 'missed' | 'due' | 'countdown' | 'pending';
+  /** Live "−m:ss" until due — only while state === 'countdown'. */
+  countdown: string;
+  results: SeriesResultTest[] | null;
+  resultsLoading: boolean;
+}
+
+interface SeriesSheetGroup {
+  key: string;
+  name: string;
+  deptCode: string;
+  rows: SeriesSheetRow[];
+}
 
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
 })
 export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
+  private readonly dialog = inject(DialogService);
+  private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  /** Bottom-bar draft shelf: publish this screen's parked order drafts. */
+  private readonly draftShelf = inject(DraftShelfService);
+  private readonly _draftShelfSync = effect(() => {
+    this.draftShelf.publish('frontdesk', this.draftOrders().map(d => ({
+      id: 'fd:' + d.patientId,
+      label: d.patient?.displayName || 'Patient',
+      sub: d.testIds.length + (d.testIds.length === 1 ? ' test' : ' tests'),
+      verb: 'Resume order for',
+      at: d.savedAt,
+      link: '/frontdesk/order',
+      queryParams: { patientId: d.patientId },
+    })));
+  });
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
   private readonly billingEvents = inject(BillingEventsService);
+  private readonly work = inject(WorkEventsService);
   // Cached ETag from /api/orders/today; sent as If-None-Match next poll.
   private _ordersEtag: string | null = null;
   // Local content signature used as a belt-and-braces no-op detector when an
@@ -138,6 +231,54 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { id: 'today' as DateRange, label: 'Today' },
     { id: 'custom' as DateRange, label: 'Custom' },
   ];
+
+  readonly apptDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'today', label: 'Today' },
+    { value: 'tomorrow', label: 'Tomorrow' },
+    { value: 'custom', label: this.apptCustomRangeLabel(), clearable: !!this.apptCustomStart() },
+  ]);
+
+  readonly leftTabSegmentOptions = computed<SegmentedOption<'appt' | 'home'>[]>(() => {
+    const opts: SegmentedOption<'appt' | 'home'>[] = [];
+    if (this.showAppt()) {
+      opts.push({ value: 'appt', label: 'Appointments', count: this.visibleAppointments().length });
+    }
+    if (this.showHome()) {
+      opts.push({ value: 'home', label: 'Home collection', count: this.homeCollections().length });
+    }
+    return opts;
+  });
+
+  readonly workDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'today', label: 'Today' },
+    { value: 'custom', label: this.workCustomRangeLabel(), clearable: !!this.workCustomStart() },
+  ]);
+
+  readonly workStatusSegmentOptions = computed<SegmentedOption<WorkStatus>[]>(() => {
+    const opts: SegmentedOption<WorkStatus>[] = [
+      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length, tone: 'active' },
+      { value: 'done', label: 'Completed', count: this.completedOrders().length, tone: 'ok' },
+    ];
+    if (this.showPaymentsDue()) {
+      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueOrders().length, tone: 'warning' });
+    }
+    opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced });
+    return opts;
+  });
+
+  onApptDateOptionClick(e: { value: DateRange; target: HTMLElement; event: MouseEvent }) {
+    if (e.value === 'custom') {
+      this.openApptDatePicker(e.target as HTMLButtonElement, e.event);
+    }
+  }
+
+  onWorkDateOptionClick(e: { value: DateRange; target: HTMLElement; event: MouseEvent }) {
+    if (e.value === 'custom') {
+      this.openWorkDatePicker(e.target as HTMLButtonElement, e.event);
+    }
+  }
 
   readonly dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -230,11 +371,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Placement-aware: the appointment UI lives on Frontdesk only while the action
   // is placed in the frontdesk work-area. Drag it to Lab in /admin/process and it
   // leaves here and renders on the Lab screen instead (no active workflow ⇒ native).
+  // THE lab-feature rule (core/modules/lab-features): Home collection needs the
+  // tenant entitlement AND the workflow's Home Visits action; Appointments the
+  // workflow's Appointment action. Never check either switch on its own here.
+  private readonly features = inject(LabFeaturesService);
   readonly showAppt = computed(() => {
+    if (!this.features.appointmentsEnabled()) return false;
     const cfg = this.process.active();
     return !cfg ? true : this.process.placedIn('appointment') === 'frontdesk';
   });
-  readonly showHome = computed(() => this.process.isEnabled('home_visits'));
+  readonly showHome = computed(() => this.features.homeCollectionEnabled());
   /** The left pane only exists if at least one of its tabs (Appointments /
    *  Home collection) is enabled — otherwise it's hidden and the work pane
    *  fills the row. */
@@ -246,6 +392,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const appt = this.showAppt(), home = this.showHome();
     if (!appt && home && this._leftTab() === 'appt') this._leftTab.set('home');
     else if (!home && appt && this._leftTab() === 'home') this._leftTab.set('appt');
+    // Neither left tab exists: the phone list must not sit on a hidden pane.
+    else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
   setLeftTab(t: 'appt' | 'home') {
     this._leftTab.set(t);
@@ -259,19 +407,48 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing'>(this.loadRightTab());
+  // STATUS chip of the work card — null = no chip on (every status). Status and
+  // the date range are independent, combined filters (work-status-filter.ts).
+  private readonly _rightTab = signal<WorkStatusFilter>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
-  setRightTab(t: 'ip' | 'done' | 'billing') {
-    this._rightTab.set(t);
-    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
-    // when that tab is opened to catch any saved from a prior order-create visit.
-    if (t === 'ip') this.refreshDrafts();
-    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
+  /** Does the list for this status render (its chip on, or no chip on)? */
+  statusShown(s: WorkStatus): boolean { return workStatusShown(this._rightTab(), s); }
+
+  // ── Outsourced tab ─────────────────────────────────────────
+  // Outsourced tests never enter the lab's queues; the front desk tracks
+  // them here and uploads the partner lab's report to complete them.
+  // No filter bar anywhere (owner): the tab lists every outsourced tube with
+  // its status on the row, and the work card's header search narrows it.
+  readonly outsourcing = inject(OutsourcingService);
+
+  // ── Work card header search ────────────────────────────────
+  // ONE compact search in the right card's header row (before the tab
+  // filter) narrows whichever list is active. Tab counts stay totals.
+  readonly workQuery = signal('');
+  setWorkQuery(v: string) {
+    const next = v ?? '';
+    if (next !== this.workQuery()) this.workSel.clear(); // a new search = a new list
+    this.workQuery.set(next);
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' {
+  /** The Outsourced tab shares the same field (its service holds the query). */
+  private readonly _workQueryToOutsourced = effect(() => this.outsourcing.query.set(this.workQuery()));
+
+  /** Tap a status chip: filter to it; tap the SAME chip again: clear the status
+   *  filter (all statuses). The date range is untouched either way. */
+  setRightTab(t: WorkStatus) {
+    this.applyRightTab(toggleWorkStatus(this._rightTab(), t));
+  }
+  private applyRightTab(next: WorkStatusFilter) {
+    if (next !== this._rightTab()) this.workSel.clear();
+    this._rightTab.set(next);
+    // Drafts (localStorage) surface at the top of the In Progress list — re-scan
+    // when that list is shown to catch any saved from a prior order-create visit.
+    if (next === 'ip' || next === null) this.refreshDrafts();
+    try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, workStatusStoreValue(next)); } catch { /* ignore */ }
+  }
+  private loadRightTab(): WorkStatusFilter {
     try {
-      const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
+      return parseWorkStatus(localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY));
     } catch { return 'ip'; }
   }
 
@@ -280,7 +457,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // `pf:order-draft:<patientId>` so reception can resume it later. There's no
   // backend for drafts — we scan localStorage here, drop stale (>7d) and
   // malformed entries, and surface them as their own work-pane tab.
-  private static readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
   private static readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   private readonly _drafts = signal<DraftOrder[]>([]);
   readonly draftOrders = this._drafts.asReadonly();
@@ -289,10 +465,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  (savedAt older than 7 days) and malformed entries. */
   private loadDrafts(): DraftOrder[] {
     const out: DraftOrder[] = [];
+    // Only the ACTIVE branch's parked carts: a Salem draft never lists (or
+    // resumes) in Trichy — the patient is shared, the half-built visit isn't.
+    const u = this.auth.user?.();
+    const scope: DraftScope = {
+      tenantId: u?.tenantId ?? null,
+      branchId: this.auth.activeBranchId?.() ?? u?.branchId ?? null,
+      defaultBranchId: u?.branchId ?? null,
+    };
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (!key || !key.startsWith(FrontdeskLandingComponent.DRAFT_KEY_PREFIX)) continue;
+        const k = parseOrderDraftKey(key);
+        if (!key || !k) continue;
         let raw: string | null;
         try { raw = localStorage.getItem(key); } catch { continue; }
         if (!raw) continue;
@@ -301,8 +486,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           const savedAt = parsed?.savedAt;
           if (typeof savedAt !== 'number' || Date.now() - savedAt > FrontdeskLandingComponent.DRAFT_TTL_MS) continue;
           if (!parsed.patient || !Array.isArray(parsed.testIds)) continue;
+          if (!orderDraftInScope(k.branchId, parsed, scope)) continue;
           out.push({
-            patientId: key.slice(FrontdeskLandingComponent.DRAFT_KEY_PREFIX.length),
+            key,
+            patientId: k.patientId,
             patient: parsed.patient,
             testIds: parsed.testIds.filter(id => typeof id === 'string'),
             savedAt,
@@ -325,7 +512,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Discard a parked draft: drop its localStorage key, reload the list, toast. */
   discardDraft(d: DraftOrder, ev?: Event) {
     ev?.stopPropagation();
-    try { localStorage.removeItem(FrontdeskLandingComponent.DRAFT_KEY_PREFIX + d.patientId); } catch { /* ignore */ }
+    try { localStorage.removeItem(d.key); } catch { /* ignore */ }
     this.refreshDrafts();
     this.toasts.success('Draft discarded');
   }
@@ -345,7 +532,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  back to In progress so the pane never renders an empty/absent tab. */
   private readonly _rightTabGuard = effect(() => {
     if (!this.showPaymentsDue() && this._rightTab() === 'billing') {
-      this._rightTab.set('ip');
+      this._rightTab.set(null);
     }
   });
 
@@ -355,24 +542,29 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing'>(() =>
-    this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out' | 'all'>(() =>
+    this.expandedPane() === 'appt' ? this.leftTab() : (this.rightTab() ?? 'all'));
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
       case 'ip': return 'In progress';
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
+      case 'out': return 'Outsourced';
+      case 'all': return 'All statuses';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out') {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);
-    } else {
+    } else if (this._expandedPane() !== 'work') {
+      // Coming from the appointments list: show this status (never toggle it off).
       this._expandedPane.set('work');
-      this.setRightTab(v);
+      this.applyRightTab(v);
+    } else {
+      this.setRightTab(v);   // same chip again ⇒ all statuses
     }
     this.mobileListOpen.set(false);
   }
@@ -468,6 +660,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
+  /** FIRST-load skeletons for the lists (PF-PATTERN "Loading feedback"):
+   *  their shape instead of an "All caught up" flash before the data lands.
+   *  Later polls / range changes keep the rows on screen. */
+  private readonly apptHold = createLoadHold(true);
+  private readonly homeHold = createLoadHold(true);
+  private readonly ordersHold = createLoadHold(true);
+  /** Payments due (outstanding bills) — first answer. */
+  private readonly billsHold = createLoadHold(true);
+  readonly billsSkel = this.billsHold.active;
+  readonly apptSkel = this.apptHold.active;
+  readonly homeSkel = this.homeHold.active;
+  readonly ordersSkel = this.ordersHold.active;
   
   readonly homeCollections = computed(() => {
     return this._homeCollections().filter(a => this.inApptRange(a.appointmentDate));
@@ -484,13 +688,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly selectedHc = this._selectedHc.asReadonly();
   private readonly _bills = signal<Bill[]>([]);
   private readonly _selectedOrder = signal<Order | null>(null);
+  readonly sampleIdsOpen = signal(false);
 
   readonly appointments = this._appointments.asReadonly();
   readonly orders = this._orders.asReadonly();
   readonly bills = this._bills.asReadonly();
   readonly selectedOrder = this._selectedOrder.asReadonly();
 
-  readonly firstName = computed(() => this.auth.user()?.firstName || this.auth.user()?.displayName?.split(' ')[0] || 'there');
+  // Always the FIRST word only — profiles routinely carry the full name in
+  // firstName, which made the greeting read "Good day, First Last".
+  readonly firstName = computed(() => {
+    const raw = this.auth.user()?.firstName || this.auth.user()?.displayName || 'there';
+    return raw.trim().split(/\s+/)[0] || 'there';
+  });
 
   /** Today's date — shown as a small eyebrow above the greeting. */
   readonly today = new Date();
@@ -550,6 +760,38 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly apptBounds = computed(() => this.getRangeBounds(this._apptDateRange(), this._apptCustomStart(), this._apptCustomEnd()));
   readonly workBounds = computed(() => this.getRangeBounds(this._workDateRange(), this._workCustomStart(), this._workCustomEnd()));
 
+  /** Mon–Sun strip for the week that contains today. Clicking a day scopes the
+   *  Appointments pane to that single day (reuses the custom-range mechanism). */
+  readonly weekDays = computed<Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }>>(() => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const mondayOffset = (base.getDay() + 6) % 7;   // 0 = Monday
+    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset);
+    const b = this.apptBounds();
+    const singleDay = (b.end - b.start) === 86_400_000;
+    const out: Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + i); d.setHours(0, 0, 0, 0);
+      const ms = d.getTime();
+      out.push({
+        dow: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+        n: d.getDate(),
+        ms,
+        iso: this.toIsoDay(d),
+        isToday: ms === base.getTime(),
+        selected: singleDay && ms === b.start,
+      });
+    }
+    return out;
+  });
+
+  /** Scope the Appointments pane to a single day picked from the weekday strip. */
+  selectApptDay(iso: string) {
+    this._apptCustomStart.set(iso);
+    this._apptCustomEnd.set(iso);
+    this._apptDateRange.set('custom');
+    this.refresh();
+  }
+
   private inApptRange(d: Date | string | undefined): boolean {
     if (!d) return false;
     const when = new Date(d).getTime();
@@ -576,14 +818,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   // Filtered lists -------------------------------------------
   // Show only appointments that are still actionable on the desk.
-  // Checked-in patients have moved to In-progress (the order takes over);
-  // cancelled appointments shouldn't clutter the queue. Both stay
-  // visible on the calendar route, just not on the operational landing.
+  // Show the actionable appointments on the operational landing: booked (needs
+  // check-in), confirmed, and checked-in. Checked-in ones STAY here (as a
+  // "Resume order" card) because check-in no longer auto-creates an order — if
+  // the FD backs out of the order page the patient must still be reachable.
+  // Terminal states (completed / cancelled / no-show) drop off (they remain on
+  // the calendar route), as do home collections.
   readonly visibleAppointments = computed(() =>
     this._appointments().filter(a =>
       this.inApptRange(a.appointmentDate)
-      && a.status !== 'checked_in'
       && a.status !== 'cancelled'
+      && a.status !== 'completed'
+      && a.status !== 'no_show'
       && a.collectionType !== 'home_collection'
     )
   );
@@ -598,10 +844,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         && o.status !== 'cancelled';
       if (!active) return false;
 
-      // If the order is partially validated and we are viewing today's work,
-      // it should be visible in the queue (since today's validation activity
-      // brought it into the Today feed).
-      if (o.status === 'partially_validated' && this.workBounds().isToday) {
+      // A partially-validated order genuinely touched TODAY (a line just
+      // validated) belongs in Today's queue even if it was created earlier —
+      // but an old straggler merely swept in by the today-feed's 30-day
+      // ready-for-handover floor (OrderRepository.TodayQuery) must still
+      // respect the date range like everything else (owner 2026-10-09).
+      if (o.status === 'partially_validated' && hadTodayActivity(o.updatedAt, this.workBounds())) {
         return true;
       }
 
@@ -620,11 +868,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** "Completed" — orders that are BOTH report-generated (validated /
    *  delivered / completed) AND payment-completed (no outstanding balance).
    *  Drives the third FD pane next to In Progress so reception can see at a
-   *  glance which patients are ready to hand over. Sorted ascending by
-   *  creation time so the oldest ready-for-handover sits on top. */
+   *  glance which patients are ready to hand over. Sorted by the same
+   *  business-day → #N ledger order as every other tab of this list (owner,
+   *  2026-10-02 — `sortByDailySerial`, work-merge.ts), not a bare creation-
+   *  time compare. */
   readonly completedOrders = computed(() => {
     const unpaid = this._unpaidOrderIds();
-    return this._orders().filter(o => {
+    const bounds = this.workBounds();
+    const filtered = this._orders().filter(o => {
       const done = o.status === 'validated'
         || o.status === 'delivered' || o.status === 'completed';
       if (!done) return false;
@@ -632,11 +883,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       // stays in Payments due until it's settled, not here.
       if (unpaid.has(o.id)) return false;
       // A report completed TODAY for an order created on an earlier day must
-      // still surface for hand-over. The Today feed includes such orders (see
-      // ListTodayAsync), so don't gate completed work by creation date in the
-      // today view; only constrain by creation date for historical ranges.
-      return this.workBounds().isToday ? true : this.inWorkRange(o.createdAt);
-    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      // still surface for hand-over — but "created on an earlier day" is NOT
+      // the same as "merely present in the today feed": that feed also carries
+      // in up to 30 days of still-undelivered ready-for-handover stragglers
+      // (OrderRepository.TodayQuery) regardless of when they last moved, which
+      // is exactly what let 20+ old orders leak into Completed (owner
+      // 2026-10-09). `hadTodayActivity` checks the order's OWN last-touched
+      // time, so only a GENUINE today hand-over gets the bonus; a stale one
+      // falls back to its creation date like every other historical range.
+      return inWorkWindow(o.createdAt, bounds, hadTodayActivity(o.updatedAt, bounds));
+    });
+    return sortByDailySerial(filtered);
   });
   /** Subset of completedOrders still needing delivery (for the alert
    *  chip + ready count). */
@@ -654,18 +911,147 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const map = this._billingOrdersMap();
     const ordersToday = this._orders();
     const pendingBills = this._bills().filter(b => b.balance > 0);
+    const bounds = this.workBounds();
     const list: Order[] = [];
     for (const b of pendingBills) {
       let o = ordersToday.find(ord => ord.id === b.orderId);
       if (!o) {
         o = map[b.orderId];
       }
-      if (o) {
+      // The date range applies to every status (work-status-filter.ts). The
+      // Today bonus is real activity (hadTodayActivity), never bare presence
+      // in the today feed — that feed also carries in up to 30 days of
+      // still-undelivered stragglers regardless of when they last moved
+      // (owner 2026-10-09; same fix as completedOrders above).
+      if (o && inWorkWindow(o.createdAt, bounds, hadTodayActivity(o.updatedAt, bounds))) {
         list.push(o);
       }
     }
-    return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    // Same business-day → #N ledger order as every other tab (owner,
+    // 2026-10-02 — sortByDailySerial, work-merge.ts).
+    return sortByDailySerial(list);
   });
+  /** Ids of the orders in the current work feed (today's feed / the range). */
+  private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
+  /** The Outsourced list follows the same date range (its own tube rows);
+   *  while the merged ("no chip") view is showing, also keeps the WHOLE
+   *  window fully loaded (merged-outsourced-loader.ts — see there for why
+   *  and exactly when it re-fires: init, date-range change, refresh, chip
+   *  toggle). */
+  private readonly _outsourcedWindow = wireMergedOutsourcedLoader(
+    this._rightTab, this.workBounds, this._feedIds, this.outsourcing,
+  );
+  private readonly _clearOutsourcedWindow = inject(DestroyRef).onDestroy(() => this.outsourcing.dateWindow.set(null));
+  /** "All statuses" (no chip on): the same combined list, deduped — an
+   *  in-progress order with a balance is listed once, under In progress. */
+  readonly shownPaymentsDueOnly = computed(() => {
+    if (this._rightTab() !== null) return this.shownPaymentsDue();
+    const ip = new Set(this.shownInProgress().map(o => o.id));
+    return this.shownPaymentsDue().filter(o => !ip.has(o.id));
+  });
+  /** Nothing at all for the chosen dates (the all-statuses empty state). */
+  readonly allStatusesEmpty = computed(() =>
+    this.visibleOrders().length === 0 && this.draftOrders().length === 0
+    && this.completedOrders().length === 0
+    && (!this.showPaymentsDue() || this.paymentsDueOrders().length === 0)
+    && this.outsourcing.visible().length === 0);
+
+  /** The active list, narrowed by the work card's header search. */
+  readonly shownDrafts = computed(() => {
+    const q = this.workQuery();
+    return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q));
+  });
+  /** Same business-day → #N ledger order as every other tab of this list
+   *  (owner, 2026-10-02 — `sortByDailySerial`, work-merge.ts): `visibleOrders`
+   *  itself carries no particular order (whatever the feed returned). */
+  readonly shownInProgress = computed(() =>
+    sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery())));
+  readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
+  readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+
+  // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
+  // With every status chip off, the four feeds used to render as four
+  // separate sections (an order could repeat across them). Now: ONE list,
+  // each order once, by the day's arrival order (#1, #2 … — work-merge.ts).
+  // A chip still filters to a single status exactly as before — this signal
+  // is only consulted when `rightTab()` is null.
+  readonly WORK_STATUS_LABEL = WORK_STATUS_LABEL;
+  /** The merge itself (grouping outsourced tubes by order, annotating or
+   *  synthesizing a row) is pulled out to `buildFrontdeskMergedWork`
+   *  (outsourced-view.ts) — pure and unit-tested on its own, without this
+   *  (huge, heavily-injected) component. `windowed()` — not `visible()` —
+   *  because the merged list needs BOTH outsourced statuses (an order that
+   *  is only outsourced must still get a row once its tube is completed),
+   *  never just whichever status the dedicated Outsourced tab's own filter
+   *  happens to be showing. The work card's free-text search is applied to
+   *  the tubes HERE (P1-6) — same as shownInProgress / shownCompleted /
+   *  shownPaymentsDue already do for orders — so a search never synthesizes
+   *  a row for an unrelated outsourced-only order, and "No matches" still
+   *  shows when the query clears every feed.
+   *
+   *  `shownPaymentsDue()` — NOT `shownPaymentsDueOnly()` — feeds the
+   *  'billing' bucket: `shownPaymentsDueOnly()` drops an order that's ALSO
+   *  in-progress (it existed for the OLD sectioned no-chip view, where that
+   *  dedup had to happen by hand). Feeding it here silently dropped the
+   *  'billing' status off an in-progress-with-a-balance order — it fell
+   *  back to its real order.status (e.g. "Billed", green) with no
+   *  payment-due cue at all. mergeWorkRows already does the union/dedup
+   *  properly (precedence puts 'billing' ahead of 'ip', with 'In progress'
+   *  as the secondary badge) — exactly what the merged list is FOR. */
+  readonly mergedWork = computed<MergedWorkRow<Order>[]>(() => {
+    if (this._rightTab() !== null) return [];
+    const tubes = filterOutsourced(this.outsourcing.windowed(), { query: this.workQuery() });
+    return buildFrontdeskMergedWork(this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDue(), tubes);
+  });
+  /** The merged row's status text for everything but Payments due (the
+   *  template renders the balance itself via the `inr` pipe, as the
+   *  single-status Payments due rows already do) — the order's own
+   *  detailed status for In progress / Completed, a fixed label for
+   *  Outsourced (a tube status, not an order one), and a fixed label for a
+   *  SYNTHETIC Completed row (its fake order.status is a stand-in, never
+   *  read through effectiveStatusLabel — see syntheticOrderFromOutsourcedTubes). */
+  mergedStatusText(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'out') return 'Outsourced';
+    if (row.primary === 'done' && row.source === 'synthetic') return 'Completed';
+    return this.effectiveStatusLabel(row.order);
+  }
+  /** Dot colour for the merged row: Payments due / Outsourced read amber
+   *  (the same "needs the desk" amber Payments due already uses); a
+   *  SYNTHETIC row (no real order state to read a tone from) is green once
+   *  its only status is 'done' (every outsourced tube completed), amber for
+   *  'out' (pending) — covered by the first check since synthetic never
+   *  carries 'billing'/'ip'. Everything else (a real order) uses its own
+   *  tone (rowTone). */
+  mergedTone(row: MergedWorkRow<Order>): string {
+    if (row.primary === 'billing' || row.primary === 'out') return 'amber';
+    if (row.source === 'synthetic') return 'green'; // only reachable for primary 'done' here
+    return this.rowTone(row.order);
+  }
+  /** The order's outsourced tubes within the window, for inline actions
+   *  (pf-outsourced-actions, one per tube) — 'out' carries every tube
+   *  (pending + completed) for an order with at least one pending tube;
+   *  'done' carries the (all-completed) tubes for an outsourced-only order
+   *  whose tubes are all done (buildFrontdeskMergedWork). Empty for a row
+   *  with neither. */
+  outsourcedTubesFor(row: MergedWorkRow<Order>): OutsourcedTube[] {
+    return (row.annotateData.out as OutsourcedTube[] | undefined)
+      ?? (row.annotateData.done as OutsourcedTube[] | undefined)
+      ?? [];
+  }
+  /** Opens the drawer for a merged row. A SYNTHETIC row's `order` is a
+   *  display-only stand-in (no real status/samples) — opening it directly
+   *  would show nonsense like "not collected" (P2-10), so fetch the REAL
+   *  order by id first and open that instead. */
+  openMergedRow(row: MergedWorkRow<Order>) {
+    if (this.swallowClick) { this.swallowClick = false; return; }
+    if (row.source === 'synthetic') {
+      this.api.get<Order>(`/api/orders/${row.order.id}`).subscribe({
+        next: full => { if (full) this.openOrder(full); },
+      });
+      return;
+    }
+    this.openOrder(row.order);
+  }
 
   getBillBalance(orderId: string): number {
     return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;
@@ -703,8 +1089,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly selectedBillingOrder = signal<Order | null>(null);
   readonly selectedBill = signal<Bill | null>(null);
   readonly confirmingPayment = signal(false);
+  /** After a due is cleared in the drawer, if the samples are all collected we
+   *  keep the drawer open and offer "Dispatch" so the FD doesn't have to go back
+   *  to the landing to release the samples. */
+  readonly paidReadyToDispatch = signal(false);
 
   openPaymentDrawer(o: Order) {
+    this.paidReadyToDispatch.set(false);
     this.selectedBillingOrder.set(o);
     this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
       next: fullOrder => {
@@ -718,7 +1109,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (b) {
       this.selectedBill.set(b);
     } else {
-      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).subscribe({
+      // The drawer is already open with its skeleton; if the bill never
+      // arrives it closes again (it used to simply never appear).
+      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).pipe(finalize(() => {
+        if (!this.selectedBill() && this.selectedBillingOrder()?.id === o.id) this.selectedBillingOrder.set(null);
+      })).subscribe({
         next: bill => this.selectedBill.set(bill)
       });
     }
@@ -727,6 +1122,32 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   closePaymentDrawer() {
     this.selectedBillingOrder.set(null);
     this.selectedBill.set(null);
+    this.paidReadyToDispatch.set(false);
+  }
+
+  /** Can we offer Dispatch straight after clearing the due? (all tubes collected
+   *  + user can dispatch). Payment hold is moot here — we just cleared it. */
+  private dispatchEligibleAfterPay(o: Order): boolean {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    const samples = o.samples ?? [];
+    return samples.length > 0 && samples.every(s => s.status === 'collected');
+  }
+
+  /** Dispatch from the settle drawer, then close + refresh the landing. */
+  dispatchFromDrawer(o: Order) {
+    this.confirmingPayment.set(true);
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+      next: () => {
+        this.confirmingPayment.set(false);
+        this.toasts.success('Samples dispatched');
+        this.closePaymentDrawer();
+        this.refresh();
+      },
+      error: err => {
+        this.confirmingPayment.set(false);
+        this.toasts.error(err.message || 'Failed to dispatch');
+      }
+    });
   }
 
   orderTests(o: Order): any[] {
@@ -740,6 +1161,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   confirmOutstandingPayment(o: Order, b: Bill, ev: InlinePaymentResult) {
+    // A due is one-time: it must be cleared, never re-deferred. The "Pay later"
+    // tile is hidden in settle mode, but guard the emit too.
+    if (ev.mode === 'later') {
+      this.toasts.error('This balance must be cleared — pay by Cash or UPI.');
+      return;
+    }
     this.confirmingPayment.set(true);
     const amount = b.balance;
     this.api.post<Bill>(`/api/billing/${b.id}/payment`, {
@@ -749,9 +1176,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: () => {
         this.confirmingPayment.set(false);
-        this.toasts.success('Payment recorded successfully');
-        this.closePaymentDrawer();
+        this.toasts.success('Payment recorded — balance cleared');
         this.refresh();
+        // Samples already collected? Keep the drawer open and offer Dispatch so
+        // the FD can release them without hopping back to the landing.
+        if (this.dispatchEligibleAfterPay(o)) {
+          this.paidReadyToDispatch.set(true);
+        } else {
+          this.closePaymentDrawer();
+        }
       },
       error: err => {
         this.confirmingPayment.set(false);
@@ -899,10 +1332,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
 
-  // Live polling: 30s tick keeps Today's Orders fresh so reception sees
-  // status changes (collected → dispatched → received → validated) without
-  // a manual refresh. Stopped on destroy + when the tab is hidden so we
-  // don't burn requests on a backgrounded laptop.
+  // Live: Today's Orders follow the branch's work events (see ngOnInit), so
+  // reception sees collected → dispatched → received → validated without a
+  // manual refresh. (The 30 s poll handle is retired; kept null-safe.)
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
@@ -932,7 +1364,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       const v = this._twoPaneSplit();
       const el = this.apptSplitEl()?.nativeElement;
       if (!el) return;
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = v + '%';
     });
 
@@ -981,12 +1413,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Drafts are local-only — load them once on init so the tab badge is
     // correct even before the Draft tab is opened.
     this.refreshDrafts();
-    this.pollHandle = setInterval(() => {
-      // Skip polls while the tab is hidden — saves bandwidth on inactive
-      // tabs without changing perceived freshness once focus returns.
-      if (typeof document !== 'undefined' && document.hidden) return;
-      this.refresh();
-    }, 30_000);
+    // Live: refetch the lists (never an open drawer / form) when a work event
+    // lands for this branch — order created, sample collected / not collected,
+    // received, result validated, report ready, bill paid / pay later,
+    // appointment booked … Debounced by the service; its slow poll covers a
+    // dropped socket, and a tab coming back into view re-syncs. Replaces the
+    // old 30 s network poll.
+    this.work.on('frontdesk', 'collection', 'billing', 'appointments', 'reports', 'receive')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refresh());
 
     const perms = this.auth.user()?.permissions ?? [];
     this.isAdmin = perms.includes('*');
@@ -1000,6 +1435,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
+    if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
+    this.cancelPress();
     this.closeInvoicePreview();
   }
 
@@ -1007,7 +1444,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Fetch Appointments based on apptBounds
     const apptB = this.apptBounds();
     if (apptB.isToday) {
-      this.api.get<Appointment[]>('/api/appointments/today').subscribe({
+      this.api.get<Appointment[]>('/api/appointments/today').pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
       });
     } else {
@@ -1015,7 +1452,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(apptB.start).toISOString(),
         to:   new Date(apptB.end).toISOString()
       });
-      this.api.get<Appointment[]>(`/api/appointments?${params}`).subscribe({
+      this.api.get<Appointment[]>(`/api/appointments?${params}`).pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
         error: () => this._appointments.set([])
       });
@@ -1036,7 +1473,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(workB.start).toISOString(),
         to:   new Date(workB.end).toISOString()
       });
-      this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
+      // Summary view: the list never shows line results (the drawer reads them by id).
+      params.set('view', 'summary');
+      this.api.get<Order[]>(`/api/orders/range?${params}`).pipe(finalize(() => this.ordersHold.done())).subscribe({
         next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
         error: () => this._orders.set([])
       });
@@ -1056,20 +1495,29 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         const bills = [...(r?.due ?? []), ...(r?.refundsOwed ?? [])];
         this._bills.set(bills);
         this.fetchOrdersForBills(bills);
+        this.billsHold.done();
       },
-      error: () => { /* endpoint may not exist; silently ignore */ }
+      error: () => { this.billsHold.done(); /* endpoint may not exist; silently ignore */ }
     });
 
-    // Fetch open home-collection requests for the Home Collection tab.
-    this.api.get<Appointment[]>('/api/home-collection/all').subscribe({
-      next: l => this._homeCollections.set(l ?? []),
-      error: () => this._homeCollections.set([])
-    });
+    // Fetch open home-collection requests for the Home Collection tab — only
+    // while home collection is on (the API answers 403 module_disabled else).
+    if (this.showHome()) {
+      this.api.get<Appointment[]>('/api/home-collection/all').pipe(finalize(() => this.homeHold.done())).subscribe({
+        next: l => this._homeCollections.set(l ?? []),
+        error: () => this._homeCollections.set([])
+      });
+    } else {
+      this._homeCollections.set([]);
+      this.homeHold.done();
+    }
 
     // Test catalogue (once) — used to show requested-test names in the
-    // home-collection detail.
-    if (this._tests().length === 0) {
-      this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
+    // home-collection detail. Only for users the /api/tests read admits
+    // (view_test | manage_tests | create_order): a Billing Counter lacks all
+    // three, got a 403, and — the list staying empty — re-sent it every poll.
+    if (this._tests().length === 0 && ['view_test', 'manage_tests', 'create_order'].some(c => this.auth.hasPermission(c))) {
+      this.api.get<Test[]>(testListUrl()).subscribe({ next: l => this._tests.set(l ?? []) });
     }
   }
 
@@ -1079,7 +1527,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (this._ordersEtag) headers['If-None-Match'] = `"${this._ordersEtag}"`;
       const token = await this.auth.getAccessToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today`, {
+      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today?view=summary`, {
         headers,
         observe: 'response',
         // Tell HttpClient that 304 is a successful (non-error) response — by
@@ -1108,6 +1556,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.lastUpdated.set(Date.now());
     } catch {
       /* network blip — leave the existing list intact */
+    } finally {
+      this.ordersHold.done();
     }
   }
 
@@ -1262,7 +1712,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const clamped = Math.max(minPct, Math.min(maxPct, this._twoPaneSplit()));
     if (clamped !== this._twoPaneSplit()) {
       this._twoPaneSplit.set(clamped);
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = clamped + '%';
     }
   }
@@ -1309,7 +1759,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
     const clamped = Math.max(minPct, Math.min(maxPct, raw));
     this._twoPaneSplit.set(clamped);
-    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
     if (firstPane) firstPane.style.flexBasis = clamped + '%';
   }
 
@@ -1447,11 +1897,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (order) { this.router.navigate(['/o', order[1]]); return; }
     const track = text.match(/\/track\/([^/?#\s]+)/);
     if (track) { this.router.navigate(['/track', track[1]]); return; }
-    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(text)}&limit=10`).subscribe({
+    // ABHA card QR / number → pull the 14-digit ABHA and open the patient it's
+    // linked to (backend patient search matches abhaId).
+    const abha = extractAbhaNumber(text);
+    const term = abha || text;
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}&limit=10`).subscribe({
       next: list => {
-        const p = (list ?? [])[0];
+        const arr = list ?? [];
+        const p = (abha ? arr.find(x => (x.abhaId || '').replace(/\D/g, '') === abha) : undefined) ?? arr[0];
         if (p) this.openProfile(p);
-        else this.toasts.warning('No match for that code');
+        else this.toasts.warning('No patient matches that ABHA / code');
       },
       error: () => this.toasts.warning('No match for that code'),
     });
@@ -1463,7 +1918,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/patients', o.patientId]);
   }
   newOrderFor(p: Patient) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: p.id } });
+    void this.orderEntry.startNewOrder(p.id);
+  }
+  /** The "Create order" (+) button — no patient preselected. Always LAB. */
+  newOrder() {
+    void this.orderEntry.startNewOrder();
+  }
+  /** OPD dark build: the stethoscope icon next to the cart — only rendered
+   *  when {@link OpdGateService.visible} is true. */
+  newConsultFor(p: Patient) {
+    void this.orderEntry.startConsult(p.id);
+  }
+  newConsult() {
+    void this.orderEntry.startConsult();
+  }
+  bookAppointment() {
+    this.router.navigate(['/frontdesk/appointments/new']);
   }
   bookAppointmentFor(p: Patient) {
     this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: p.id } });
@@ -1490,7 +1960,32 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (a.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address + ' ' + (a.pincode ?? ''))}`;
     return null;
   }
-  openOrder(o: Order) { this._selectedOrder.set(o); }
+  openOrder(o: Order) {
+    this.sampleIdsOpen.set(false);
+    this._selectedOrder.set(o);
+    this.loadDrawerDetail(o);
+  }
+
+  /** The day feed is the summary view (no line results / test parameters —
+   *  DB optimisation phase 3), so the drawer's Preliminary report reads the
+   *  order by id when it opens — only when a tube is fully validated, the one
+   *  case the panel shows anything. */
+  private readonly _drawerDetail = signal<Order | null>(null);
+  private loadDrawerDetail(o: Order) {
+    this._drawerDetail.set(null);
+    if (!(o.samples ?? []).some(s => this.isSampleValidated(s))) return;
+    this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
+      next: full => { if (full && this._selectedOrder()?.id === o.id) this._drawerDetail.set(full); },
+      error: () => { /* the panel simply stays hidden */ },
+    });
+  }
+  /** Preliminary panel rows for the open drawer (from the by-id read). */
+  readonly drawerPrelim = computed(() => {
+    const so = this._selectedOrder();
+    const d = this._drawerDetail();
+    return so && d && d.id === so.id ? this.validatedSamples(d) : [];
+  });
+  toggleSampleIds() { this.sampleIdsOpen.update(open => !open); }
   /** Build a fresh order pre-populated with the tests from a prior order.
    *  Routes through order-create with `?fromOrderId=…` which triggers
    *  preselectFromOrder() there — the catalog auto-fills, the
@@ -1538,6 +2033,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _reprintOrder = signal<Order | null>(null);
   readonly reprintOrder = this._reprintOrder.asReadonly();
   private readonly _reprintLoading = signal(false);
+  /** The order whose labels are being reprinted (only that row's button shows busy). */
+  readonly reprintOrderId = signal<string | null>(null);
   readonly reprintLoading = this._reprintLoading.asReadonly();
 
   /** Reprint the tube labels straight from the landing. Fetches the full
@@ -1547,6 +2044,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  label-only print path — no bill required, no route change. */
   reprintLabels(o: Order) {
     if (this._reprintLoading()) return;
+    this.reprintOrderId.set(o.id);
     this._reprintLoading.set(true);
     this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
       next: full => {
@@ -1555,15 +2053,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this.toasts.warning('No samples on this order to print');
           return;
         }
-        this._reprintOrder.set(full);
-        // Give the off-screen label cards a beat to paint their barcodes
-        // (JsBarcode is sync but QRCode.toCanvas is async) before printing.
-        setTimeout(() => {
-          printLabelOnly();
-          // Keep the sheet mounted until the print dialog has definitely
-          // consumed it (print() isn't blocking on every platform).
-          setTimeout(() => this._reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this._reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this._reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => {
         this._reprintLoading.set(false);
@@ -1704,7 +2209,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         tatLabel: '',
         docTitle,
         qrDataUrl, orderQrDataUrl, logoDataUrl,
-        cashierName: this.auth.user()?.displayName || undefined,
+        // The BILL's cashier (server-resolved: who billed/collected), so a later
+        // download by another user never swaps the attribution.
+        cashierName: bill.cashierName || this.auth.user()?.displayName || undefined,
+        cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
         ...invoiceTemplateFieldsFrom(tpl),
         // Always carry a name so the invoice never reads "Prefrontal Lab":
         // configured letterhead first, else the tenant's own name.
@@ -1713,7 +2221,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined,
           email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
         },
         action: 'blob',
       });
@@ -1740,15 +2248,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   printInvoicePreview() {
     const blobUrl = this.invoiceBlobUrl;
     if (!blobUrl) return;
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-    frame.src = blobUrl;
-    frame.onload = () => {
-      try { frame.contentWindow?.focus(); frame.contentWindow?.print(); }
-      catch { /* ignore — preview already on screen */ }
-      setTimeout(() => frame.remove(), 60_000);
-    };
-    document.body.appendChild(frame);
+    // The preview is already on screen, so a failure needs no tab fallback.
+    // The blob stays alive for that preview — closeInvoicePreview revokes it.
+    printPdfBlobUrl(blobUrl, { onFallback: () => { /* preview already visible */ } });
   }
 
   closeInvoicePreview() {
@@ -1759,6 +2261,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.invoicePreviewUrl.set(null);
   }
   goToBilling(o: Order) {
+    // Already billed with a due → settle it in the in-place drawer (tests +
+    // Cash/UPI for the balance). Only a genuinely unbilled order needs the full
+    // order-create page (discount + first payment).
+    if (this.getBillBalance(o.id) > 0) { this.openPaymentDrawer(o); return; }
     this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: o.id } });
   }
   /** Friendly label for the status chip. snake_case statuses → Title Case. */
@@ -1790,7 +2296,24 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  until the lab receives), so when the order reads collected but the tubes
    *  have actually been dispatched / received, show the further-along state.
    *  Past the lab (validated/delivered/etc.) the raw status wins. */
+  /** Drawer header chip: the short state ("Not collected") — the timeline
+   *  carries the count and the reason, and a long chip squeezed the name. */
+  drawerStatusLabel(o: Order): string {
+    if (o.status !== 'cancelled' && o.status !== 'delivered' && notCollectedSamples(o.samples).length > 0) return 'Not collected';
+    return this.effectiveStatusLabel(o);
+  }
   effectiveStatusLabel(o: Order): string {
+    // "Can't collect" (QA #6): the tube was never drawn — say so, with the
+    // reason, instead of the raw rollup ('Rejected' / 'Partially Rejected',
+    // or worse a stale 'Dispatched').
+    if (o.status !== 'cancelled' && o.status !== 'delivered') {
+      const nc = notCollectedLabel(o.samples);
+      if (nc) return nc;
+    }
+    // A live repeat series (some tubes drawn, timed points still pending)
+    // reads as its own state — the raw order status ('billed'/'collected')
+    // under-describes an OGTT mid-run.
+    if (this.seriesInProgress(o)) return 'Series in progress';
     if (o.status === 'sample_collected' || o.status === 'collected') {
       const ss = this.sampleStatus(o);
       if (ss === 'received') return 'In Lab';
@@ -1819,6 +2342,34 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   collectSample(o: Order) {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
+  }
+
+  /** Row "Recollect" — a tube on this order was marked not collected and the
+   *  patient is back. Takes the Collect slot (never Collect / Dispatch for a
+   *  not-collected order). Needs collect_sample, like the endpoint. */
+  showRecollectOn(o: Order): boolean {
+    return this.auth.hasPermission('collect_sample') && canRecollect(o);
+  }
+  private readonly _recollecting = signal<string | null>(null);
+  readonly recollecting = this._recollecting.asReadonly();
+  /** Reopen every not-collected tube (PATCH /api/samples/{id}/recollect → back
+   *  to pending, back in the collection queue), then go draw them when the
+   *  desk collects here, else leave them in the queue for the collector. */
+  async recollectOrder(o: Order) {
+    const tubes = notCollectedSamples(o.samples);
+    if (tubes.length === 0 || this._recollecting()) return;
+    this._recollecting.set(o.id);
+    const res = await Promise.all(tubes.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/recollect`, {}))
+        .then(() => null).catch((e: unknown) => ApiError.from(e))));
+    this._recollecting.set(null);
+    const failed = res.filter((e): e is ApiError => e !== null);
+    const ok = tubes.length - failed.length;
+    if (failed.length) this.toasts.error(failed[0].message);
+    if (ok === 0) return;
+    this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} back in the collection queue`);
+    if (this.labCfg.collectsAtFrontdesk()) this.collectSample(o);
+    else this.fetchOrdersWithEtag();
   }
 
   // Dispatch button: visible when every tube on the order has been
@@ -1850,7 +2401,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Per-tube status in 5 buckets — finer than order.status. Drives the
       FD slim card's per-dept badge + the action button gating. */
   sampleStatus(o: Order): 'pending' | 'partially_collected' | 'fully_collected' | 'dispatched' | 'received' {
-    const samples = o.samples ?? [];
+    // Not-collected tubes are a sink — they never make an order look
+    // (partially) collected or dispatched (QA #6: collected + not-collected
+    // used to read 'partially_collected' and re-offer Collect).
+    const samples = (o.samples ?? []).filter(s => !isNotCollected(s));
     if (samples.length === 0) return 'pending';
     const isAtOrPast = (s: string, target: string) => {
       const order = ['pending', 'collected', 'dispatched', 'in_transit', 'received', 'processing'];
@@ -1861,6 +2415,237 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (samples.every(s => isAtOrPast(s.status, 'collected'))) return 'fully_collected';
     if (samples.some(s => s.status !== 'pending' && s.status !== 'rejected')) return 'partially_collected';
     return 'pending';
+  }
+
+  // ── Repetitive mode (series) — Phase 6: frontdesk visibility ─────
+  /** The order carries at least one timed-repeat tube (OGTT-style series). */
+  isSeriesOrder(o: Order): boolean {
+    return (o.samples ?? []).some(s => s.repeatOffsetMin != null);
+  }
+
+  /** ≥1 series time point still pending while ≥1 tube is already drawn —
+   *  the "Series in progress" chip state. */
+  seriesInProgress(o: Order): boolean {
+    const samples = o.samples ?? [];
+    return samples.some(s => s.repeatOffsetMin != null && s.status === 'pending')
+      && samples.some(s => !!s.status && s.status !== 'pending'
+        && s.status !== 'rejected' && s.status !== 'missed');
+  }
+
+  // ── Series schedule sheet ─────────────────────────────────────────
+  /** Id of the order whose schedule sheet is open (null = closed). */
+  private readonly _seriesSheetId = signal<string | null>(null);
+  /** Snapshot fallback if the order drops out of the today feed mid-view. */
+  private readonly _seriesSheetSnapshot = signal<Order | null>(null);
+  /** 1 s wall clock — ticks only while the sheet is open (cleared on
+   *  close/destroy) so the locked-countdown chips stay live. */
+  private readonly seriesNowMs = signal(Date.now());
+  private seriesClock: ReturnType<typeof setInterval> | null = null;
+  readonly seriesClosing = signal(false);
+  /** Lazily-fetched per-tube detail, keyed by series sample id: the test
+   *  NAMES (every time point — the today feed doesn't carry a sample's
+   *  tests, so the schedule can only name a draw from here) plus the
+   *  processed VALUES (resulted tubes only). */
+  private readonly _seriesResults = signal<Record<string,
+    { loading: boolean; names: string[]; bundleName: string | null; tests: SeriesResultTest[] }>>({});
+
+  /** Full sheet view-model: one group per series (repeatProfileTestId),
+   *  one row per time point sorted by offset. Reads the live today feed so
+   *  a poll/refresh (e.g. after Collect or Close collection) updates the
+   *  open sheet in place. */
+  readonly seriesSheet = computed<{ order: Order; groups: SeriesSheetGroup[]; canClose: boolean } | null>(() => {
+    const id = this._seriesSheetId();
+    if (!id) return null;
+    const order = this._orders().find(o => o.id === id) ?? this._seriesSheetSnapshot();
+    if (!order) return null;
+    const now = this.seriesNowMs();
+    const results = this._seriesResults();
+    const seriesSamples = (order.samples ?? []).filter(s => s.repeatOffsetMin != null);
+
+    const byKey = new Map<string, OrderSample[]>();
+    for (const s of seriesSamples) {
+      const key = s.repeatProfileTestId ?? '';
+      const list = byKey.get(key);
+      if (list) list.push(s); else byKey.set(key, [s]);
+    }
+
+    const groups: SeriesSheetGroup[] = [];
+    for (const [key, samples] of byKey) {
+      samples.sort((a, b) => (a.repeatOffsetMin ?? 0) - (b.repeatOffsetMin ?? 0));
+      const anchor = samples.find(x => x.repeatOffsetMin === 0);
+      const anchorMs = anchor && anchor.status !== 'pending' && anchor.collectedAt
+        ? Date.parse(anchor.collectedAt) : NaN;
+      const rows: SeriesSheetRow[] = samples.map(s => {
+        const dueMs = Number.isNaN(anchorMs) ? null : anchorMs + (s.repeatOffsetMin ?? 0) * 60_000;
+        let state: SeriesSheetRow['state'];
+        let countdown = '';
+        if (s.status === 'missed') {
+          state = 'missed'; // server-closed (Close collection)
+        } else if (s.status !== 'pending' && s.status !== 'rejected') {
+          state = 'collected'; // drawn — dispatched/received/… all count
+        } else {
+          const st = seriesState(s, samples, now);
+          if (st.kind === 'missed') state = 'missed'; // window elapsed (visual)
+          else if (st.kind === 'anchor' || st.kind === 'due') state = 'due';
+          else if (st.kind === 'locked' && st.reason === 'not-due') {
+            state = 'countdown';
+            countdown = '−' + countdownLabel(st.msUntilDue ?? 0);
+          } else state = 'pending'; // awaiting-anchor / rejected fallback
+        }
+        const res = results[s.id];
+        // Name the DRAW by what's on the tube. The today feed carries no
+        // tests, so the names come from the per-tube fetch (res.names); the
+        // feed is still preferred when a caller does supply them. One test →
+        // its name; several sharing the time point → first plus a count, so
+        // the row stays one line. Offset phrasing only until the fetch lands.
+        const feedNames = (s.tests ?? []).map(t => (t.name ?? '').trim()).filter(n => n.length > 0);
+        const names = feedNames.length > 0 ? feedNames : (res?.names ?? []);
+        const uniqueNames = [...new Set(names)];
+        const testLabel = uniqueNames.length === 0
+          ? offsetLabel(s.repeatOffsetMin ?? 0)
+          : uniqueNames.length === 1
+            ? uniqueNames[0]
+            : `${uniqueNames[0]} +${uniqueNames.length - 1}`;
+        return {
+          sampleId: s.id,
+          testLabel,
+          offsetLabel: offsetLabel(s.repeatOffsetMin ?? 0),
+          dueLabel: dueMs != null ? dueClockLabel(dueMs) : '—',
+          state,
+          countdown,
+          results: state === 'collected' && res && !res.loading && res.tests.length > 0 ? res.tests : null,
+          resultsLoading: state === 'collected' && !!res?.loading,
+        };
+      });
+      const first = samples[0];
+      // Profile name for the group header — feed-first, then the per-tube
+      // fetch (which resolves packageName/profileName), then the department.
+      const t0 = (first.tests ?? [])[0];
+      const fetched = results[first.id];
+      groups.push({
+        key,
+        name: t0?.packageName || t0?.profileName || t0?.name
+          || fetched?.bundleName || first.department?.name || 'Series',
+        deptCode: first.department?.code ?? '',
+        rows,
+      });
+    }
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+
+    const anyCollected = seriesSamples.some(s => !!s.status && s.status !== 'pending'
+      && s.status !== 'rejected' && s.status !== 'missed');
+    const anyPending = seriesSamples.some(s => s.status === 'pending');
+    return { order, groups, canClose: anyCollected && anyPending };
+  });
+
+  openSeriesSheet(o: Order): void {
+    this._seriesSheetSnapshot.set(o);
+    this._seriesSheetId.set(o.id);
+    this.seriesNowMs.set(Date.now());
+    if (this.seriesClock) clearInterval(this.seriesClock);
+    this.seriesClock = setInterval(() => this.seriesNowMs.set(Date.now()), 1000);
+    this.loadSeriesResults(o);
+  }
+
+  closeSeriesSheet(): void {
+    this._seriesSheetId.set(null);
+    this._seriesSheetSnapshot.set(null);
+    if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
+  }
+
+  /** Fetch processed values for series tubes already past collection —
+   *  one GET /api/samples/{id}/tests per qualifying tube, on sheet open. */
+  private loadSeriesResults(o: Order): void {
+    this._seriesResults.set({});
+    // EVERY series tube is fetched, not just the resulted ones: the today
+    // feed omits a sample's tests, so this is the only source for naming a
+    // draw ("OGTT – 30 Minutes") on a still-pending time point. Values are
+    // extracted only where results exist (extractSeriesTests filters on
+    // entered/validated), so a pending tube contributes a name and nothing else.
+    const targets = (o.samples ?? []).filter(s => s.repeatOffsetMin != null);
+    for (const s of targets) {
+      this._seriesResults.update(m => ({
+        ...m, [s.id]: { loading: true, names: [], bundleName: null, tests: [] } }));
+      this.api.get<OrderSample>(`/api/samples/${s.id}/tests`).subscribe({
+        next: full => {
+          const ts = full?.tests ?? [];
+          const t0 = ts[0];
+          this._seriesResults.update(m => ({
+            ...m,
+            [s.id]: {
+              loading: false,
+              // This endpoint serializes the ENTITY — OrderTestEntity has no
+              // flat Name; the test name rides on the nested `test` navigation.
+              names: ts.map(t => (t.name || t.test?.name || '').trim()).filter(n => n.length > 0),
+              bundleName: t0?.packageName || t0?.profileName || null,
+              tests: SERIES_RESULTED.has(s.status) ? this.extractSeriesTests(full) : [],
+            },
+          }));
+        },
+        error: () => this._seriesResults.update(m => ({
+          ...m, [s.id]: { loading: false, names: [], bundleName: null, tests: [] } })),
+      });
+    }
+  }
+
+  /** Entered/validated values only, parsed from the currentResult snapshot.
+   *  Handles both value shapes: `values: {param: {value, unit}}` and the
+   *  flat `values: {param: value}` (titles/units then come from the test's
+   *  parameter definitions when present). */
+  private extractSeriesTests(sample: OrderSample | null): SeriesResultTest[] {
+    const out: SeriesResultTest[] = [];
+    for (const t of (sample?.tests ?? [])) {
+      if (t.status !== 'entered' && t.status !== 'validated') continue;
+      if (!t.currentResult) continue;
+      let snap: { values?: Record<string, unknown> };
+      try { snap = JSON.parse(t.currentResult); } catch { continue; }
+      if (!snap?.values) continue;
+      let params: Array<{ name: string; title?: string; unit?: string }> = [];
+      try {
+        const blob = JSON.parse(t.test?.parameters ?? '{}') as { parameters?: any[] };
+        params = blob.parameters ?? [];
+      } catch { /* fall back to raw keys */ }
+      const values: SeriesResultTest['values'] = [];
+      for (const [name, raw] of Object.entries(snap.values)) {
+        const isObj = raw !== null && typeof raw === 'object';
+        const v = isObj ? (raw as { value?: unknown }).value : raw;
+        if (v === null || v === undefined || v === '') continue;
+        const p = params.find(x => x.name === name);
+        const unit = (isObj ? (raw as { unit?: string }).unit : undefined) ?? p?.unit ?? '';
+        values.push({ label: p?.title || name, value: String(v), unit });
+      }
+      if (values.length) out.push({ name: t.test?.name || t.name || 'Test', values });
+    }
+    return out;
+  }
+
+  /** Close out the remaining time points: confirm (danger), PATCH
+   *  /close-collection, toast the missed count, refresh the feed. The sheet
+   *  stays open — it re-derives from the refreshed feed, so the closed
+   *  points flip to 'missed' in place. */
+  async closeSeriesCollection(o: Order): Promise<void> {
+    if (this.seriesClosing()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Close collection?',
+      message: 'Pending time points will be reported as missed on the final report. This cannot be undone.',
+      confirmLabel: 'Close collection',
+      cancelLabel: 'Keep collecting',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.seriesClosing.set(true);
+    this.api.patch<{ missed: number }>(`/api/orders/${o.id}/close-collection`, {}).subscribe({
+      next: r => {
+        this.seriesClosing.set(false);
+        const n = r?.missed ?? 0;
+        this.toasts.success(`Collection closed — ${n} time point${n === 1 ? '' : 's'} marked missed`);
+        this.refresh();
+      },
+      error: e => {
+        this.seriesClosing.set(false);
+        this.toasts.error(ApiError.from(e).message);
+      },
+    });
   }
   /** Single-glyph status per tube (used in the FD slim card per-dept pill). */
   sampleGlyph(status: string): string {
@@ -1880,7 +2665,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       and to count how many depts are ready in a partial state. */
   isSampleValidated(s: { tests?: Array<{ status: string }> | null }): boolean {
     const tests = s.tests ?? [];
-    return tests.length > 0 && tests.every(t => t.status === 'validated');
+    // Not reported lines are closed (never print); at least one value signed.
+    return tests.length > 0 && tests.every(t => isSignedOrSkipped(t.status)) && tests.some(t => t.status === 'validated');
   }
   /** Glyph for a tube — uses isSampleValidated to upgrade ✓ when the
       whole tube is dept-validated, otherwise falls back to status-glyph. */
@@ -1910,14 +2696,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   /** All validated samples on the order — feeds the Preliminary report
       panel in the order drawer. */
-  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> }> }> {
+  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> }> }> {
     const out: Array<any> = [];
     for (const s of (o.samples ?? [])) {
       if (!this.isSampleValidated(s)) continue;
       const sampleRow = {
         id: s.id,
-        deptName: s.department?.name ?? '',
-        deptCode: s.department?.code ?? '',
+        deptName: tubeDepartmentLabel(s, ''),
+        deptCode: tubeDepartmentCodes(s),
         tests: [] as Array<any>
       };
       for (const t of (s.tests ?? [])) {
@@ -1932,42 +2718,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
     return out;
   }
-  /** Parse the OrderTest's currentResult JSON into per-parameter rows
-      with reference range + flag. Mirrors what validate-result does. */
+  /** Parse the OrderTest's currentResult JSON into per-parameter rows with
+      the flag + range mw SAVED with the result (never a browser recompute). */
   private extractValuesFor(t: { currentResult?: string; test?: { parameters?: string } }):
-    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> {
+    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> {
     if (!t.currentResult || !t.test?.parameters) return [];
-    let snap: { values?: Record<string, unknown> };
-    try { snap = JSON.parse(t.currentResult); } catch { return []; }
-    if (!snap.values) return [];
-    let params: Array<{
-      name: string; title: string; unit?: string;
-      criticalLow?: number; criticalHigh?: number;
-      referenceRanges?: Array<{ min: number; max: number }>
-    }> = [];
-    try {
-      const blob = JSON.parse(t.test.parameters) as { parameters?: any[] };
-      params = blob.parameters ?? [];
-    } catch { return []; }
-    return params.map(p => {
-      const v = snap.values![p.name];
-      const n = Number(v);
-      const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
-      const r = (p.referenceRanges ?? [])[0];
-      let flag: 'normal' | 'abnormal' | 'critical' = 'normal';
-      if (isNum) {
-        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
-      }
-      return {
-        name: p.name,
-        title: p.title || p.name,
-        value: v ?? '—',
-        unit: p.unit,
-        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
-        flag
-      };
-    });
+    return savedValueRows(t.currentResult, t.test.parameters).map(r => ({
+      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag, code: r.code,
+    }));
   }
   isDispatched(o: Order): boolean {
     const samples = o.samples ?? [];
@@ -1975,8 +2733,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       s.status === 'dispatched' || s.status === 'in_transit'
       || s.status === 'received' || s.status === 'processing');
   }
+  /** Row whose Dispatch request is in flight. */
+  readonly dispatchingId = signal<string | null>(null);
   markDispatched(o: Order) {
-    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+    if (this.dispatchingId() === o.id) return;
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).pipe(busyIdWhile(this.dispatchingId, o.id)).subscribe({
       next: r => {
         this.toasts.success(`${r.dispatched} tube${r.dispatched === 1 ? '' : 's'} dispatched to lab`);
         // Optimistic local update so the badge flips immediately.
@@ -1994,7 +2755,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
-  closeOrder() { this._selectedOrder.set(null); }
+  closeOrder() {
+    this.sampleIdsOpen.set(false);
+    this._selectedOrder.set(null);
+  }
   openStraggler(s: StragglerItem) {
     if (s.orderId) this.router.navigate(['/frontdesk/patients', s.patientId]);
     else if (s.patientId) this.router.navigate(['/frontdesk/patients', s.patientId]);
@@ -2003,34 +2767,39 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (o.patientId) this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId } });
   }
   collectPayment(b: Bill) {
-    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: b.orderId } });
+    // Settle the due in the same in-place drawer the payments-due card uses
+    // (loads the tests + Cash/UPI for the balance) rather than bouncing to the
+    // full order-create page. openPaymentDrawer fetches the full order + bill.
+    const o = this.paymentsDueOrders().find(x => x.id === b.orderId);
+    this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
+  /** Appointment whose Check-in request is in flight. */
+  readonly checkingInId = signal<string | null>(null);
   checkIn(a: Appointment) {
-    // Backend returns { appointment, order, next }:
-    //   • order != null  → tests were pre-booked, an order has been
-    //     spawned automatically. The patient is now in In-Progress on
-    //     this same screen — no navigation needed.
-    //   • order == null  → no tests on the appointment, reception must
-    //     pick tests now. We navigate to the order-create page with
-    //     ?patientId=&appointmentId= so the order links back.
-    this.api.patch<{ appointment: Appointment; order: Order | null; next: string }>(
-      `/api/appointments/${a.id}/checkin`
-    ).subscribe({
-      next: res => {
-        if (res?.order) {
-          this.toasts.success(`${a.patient?.displayName ?? 'Patient'} checked in — order in progress`);
-          this.refresh();
-        } else {
-          // No tests yet → reception needs to add them on the order
-          // page, then the order will appear in In-Progress on return.
-          this.toasts.info(`${a.patient?.displayName ?? 'Patient'} checked in — pick tests to start the order`);
-          this.refresh();
-          this.router.navigate(['/frontdesk/order'], {
-            queryParams: { patientId: a.patientId, appointmentId: a.id }
-          });
-        }
+    if (this.checkingInId() === a.id) return;
+    // Check-in flips the appointment to checked-in but does NOT auto-create an
+    // order. Reception always lands on a FRESH order at the desk with the
+    // pre-booked tests PRE-FILLED (?patientId=&appointmentId= preloads the
+    // appointment's TestIds) — they review/change the tests, then Create + bill
+    // + collect payment exactly like a manual walk-in.
+    this.api.patch(`/api/appointments/${a.id}/checkin`).pipe(busyIdWhile(this.checkingInId, a.id)).subscribe({
+      next: () => {
+        const name = a.patient?.displayName ?? 'Patient';
+        this.toasts.success(`${name} checked in — review & create the order`);
+        this.refresh();
+        this.router.navigate(['/frontdesk/order'], {
+          queryParams: { patientId: a.patientId, appointmentId: a.id }
+        });
       },
       error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Already checked-in but the order wasn't created yet → jump back to the
+   *  order page with the pre-booked tests pre-filled to finish it. */
+  resumeAppointmentOrder(a: Appointment) {
+    this.router.navigate(['/frontdesk/order'], {
+      queryParams: { patientId: a.patientId, appointmentId: a.id }
     });
   }
 
@@ -2077,6 +2846,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._workCustomEnd.set(null);
     }
     this._workDateRange.set(d);
+    this.workSel.clear();
     this.refresh();
   }
 
@@ -2086,6 +2856,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (this._workDateRange() === 'custom') {
       this._workDateRange.set('today');
     }
+    this.workSel.clear();
     this.refresh();
   }
 
@@ -2221,17 +2992,20 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.toasts.success(`Report link sent via Email to ${contact}`);
   }
 
-  /** UI flag for the "Download report" button while we fetch + render. */
-  protected readonly _downloadingReport = signal<boolean>(false);
+  /** Order id whose report is currently being fetched + rendered — null when
+   *  idle. Holds the ID (not a boolean) so the template can mark ONLY the
+   *  clicked row as "Preparing…"; a shared boolean flipped every row's
+   *  Download button at once, which read as "all rows show the same
+   *  download". */
+  protected readonly _downloadingReport = signal<string | null>(null);
   readonly downloadingReport = this._downloadingReport.asReadonly();
 
-  /** Pull the latest final report for the order and render it as a
-   *  client-side PDF. Mirrors the invoice download — no server PDF
-   *  endpoint required, jsPDF builds the document from the snapshot
-   *  the backend already stores on Report.Data. */
+  /** Download the order's live report — its STORED PDF (owner rule
+   *  2026-09-29: the report is the file in blob storage). A report with
+   *  nothing stored yet is rendered ONCE from its saved snapshot and stored. */
   async downloadReport(o: Order) {
     if (this._downloadingReport()) return;
-    this._downloadingReport.set(true);
+    this._downloadingReport.set(o.id);
     try {
       const report = await firstValueFrom(
         this.api.get<Report | null>(`/api/reports/by-order/${o.id}`)
@@ -2240,51 +3014,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
-      const { PlatformService } = await import('../../../core/services/platform.service');
-      const platform = this.injector.get(PlatformService);
-      const [template, resolvedLayouts] = await Promise.all([
-        // Fetch the tenant's report template so colors / logo / signatures
-        // / date format flow into the PDF. Soft-fail (null) so an unconfigured
-        // tenant still gets a sensible default-themed report.
-        firstValueFrom(this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template')).catch(() => null),
-        this.fetchResolvedLayouts(report),
-      ]);
-      const baseInput = { report, resolvedLayouts, template: template ?? null };
-      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
-      generateReportPdf({ ...baseInput, imageCache });
+      const blob = await this.storedReport(report);
+      const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+      const shortId = report.id.replace(/-/g, '').slice(-8).toUpperCase();
+      downloadPdfBlob(blob, `${report.type === 'partial' ? 'PRELIM' : 'REPORT'}-${shortId}.pdf`);
     } catch (err) {
       console.error('[fd] download report failed', err);
-      this.toasts.error('Could not download the report');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not download the report'));
     } finally {
-      this._downloadingReport.set(false);
+      this._downloadingReport.set(null);
     }
   }
-  /** Walk every test on the report and ask the engine to resolve its
-   *  per-test layout against the entered values. Returns a testId →
-   *  ResolvedReportLayout map that the PDF generator consumes; the map
-   *  is empty for tests without a configured layout (PDF then falls
-   *  back to the legacy parameter table for those). */
-  private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
-    const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-    let tests: Array<{ testId?: string; result?: { values?: Record<string, unknown> } }> = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(report.data ?? '{}');
-      tests = snap?.tests ?? [];
-      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-    } catch { /* malformed — proceed with empty layouts map */ }
-    if (tests.length === 0) return out;
-
-    const { ReportLayoutService } = await import('../../../core/services/report-layout.service');
-    const svc = this.injector.get(ReportLayoutService);
-    await Promise.all(tests.map(async t => {
-      if (!t.testId) return;
-      try {
-        out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
-      } catch { /* test without a layout — fallback table renders */ }
-    }));
-    return out;
+  /** THE report PDF (stored; rendered + stored once from the snapshot). */
+  private async storedReport(report: Report): Promise<Blob> {
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(report, this.api, this.injector);
   }
 
   /** Count of staff with status === 'on_duty' for the button badge. */
@@ -2300,31 +3045,89 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   bulkSms() { this.toasts.success(`SMS queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
   bulkWhatsapp() { this.toasts.success(`WhatsApp queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
 
-  /** Selected IDs that are also valid orders ready to dispatch — i.e.
-   *  intersection of the global selection set with the In-Progress
-   *  orders that have at least one collected (not yet dispatched)
-   *  tube. The bulk action bar uses this count to enable/disable
-   *  the dispatch buttons. */
-  readonly dispatchableSelected = computed<string[]>(() => {
-    const sel = this._selectedIds();
-    return this.visibleOrders()
-      // paymentHold orders are excluded: the backend gate would reject them —
-      // they need billing/payment first (their card shows "Bill").
-      .filter(o => sel.has(o.id) && !o.paymentHold && o.samples.some(s => s.status === 'collected'))
-      .map(o => o.id);
-  });
+  // ── Work-list multi-select (In progress) ─────────────────
+  /** ONE model drives the checkbox, the row tint AND the bar count — they
+   *  can't disagree (see work-selection.ts for the old "1 selected / 3
+   *  tinted" bug). Only rows that can take the bulk actions are selectable,
+   *  and only for staff who may dispatch. */
+  readonly workSel = createWorkSelection(this.shownInProgress,
+    o => this.auth.hasPermission('dispatch_sample') && canBulkDispatch(o));
+  /** Show the checkbox column only when at least one row can be selected. */
+  readonly workSelectable = computed(() => this.rightTab() === 'ip' && this.workSel.selectable().length > 0);
+
+  /** Checkbox click: stop the row opening; shift-click selects a range (web). */
+  onWorkCheck(ev: MouseEvent | KeyboardEvent, id: string) {
+    ev.stopPropagation();
+    this.workSel.toggle(id, ev.shiftKey && this.webPointer());
+  }
+
+  /** Phones / touch: long-press a row to select it (the next click, which
+   *  would open the drawer, is swallowed). Cancelled by a move or lift. */
+  private pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private pressAt: { x: number; y: number } | null = null;
+  private swallowClick = false;
+  onRowPointerDown(ev: PointerEvent, o: Order) {
+    if (ev.pointerType === 'mouse' || !this.workSel.isSelectable(o.id)) return;
+    this.cancelPress();
+    this.pressAt = { x: ev.clientX, y: ev.clientY };
+    this.pressTimer = setTimeout(() => {
+      this.pressTimer = null;
+      this.swallowClick = true;
+      this.workSel.toggle(o.id);
+      try { navigator.vibrate?.(10); } catch { /* optional */ }
+    }, 450);
+  }
+  onRowPointerMove(ev: PointerEvent) {
+    if (!this.pressTimer || !this.pressAt) return;
+    if (Math.abs(ev.clientX - this.pressAt.x) > 8 || Math.abs(ev.clientY - this.pressAt.y) > 8) this.cancelPress();
+  }
+  cancelPress() {
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = null;
+    this.pressAt = null;
+  }
+  /** Row click: open the drawer, unless a long-press just selected it. */
+  onWorkRowClick(o: Order) {
+    if (this.swallowClick) { this.swallowClick = false; return; }
+    this.openOrder(o);
+  }
+
+  /** Esc clears the selection (when no drawer / modal is on top). */
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscClearSelection(ev?: Event) {
+    if (this.workSel.count() === 0) return;
+    if (this.selectedOrder() || this.activePackage() || this.selectedHc() || this.selectedBill()) return;
+    // Used → preventDefault, so the desktop app's Esc-leaves-full-screen
+    // rule (desktop-fullscreen-esc.ts) knows this Esc was taken.
+    ev?.preventDefault();
+    this.workSel.clear();
+  }
+
+  /** Quiet sample line: "2 samples", or "1 of 2 samples collected" while a
+   *  draw is partial (replaces the old per-department green / red dots). */
+  sampleLine(o: Order): string {
+    const samples = o.samples ?? [];
+    const n = samples.length;
+    const word = n === 1 ? 'sample' : 'samples';
+    const drawn = samples.filter(s => !!s.status && s.status !== 'pending' && s.status !== 'rejected' && s.status !== 'missed').length;
+    if (drawn > 0 && drawn < n) return `${drawn} of ${n} ${word} collected`;
+    return `${n} ${word}`;
+  }
 
   /** Plain bulk dispatch — flip every selected order's tubes to
    *  dispatched, no package wrapper. */
+  /** Which selection-bar action is in flight. */
+  readonly bulkBusy = signal<'dispatch' | 'package' | null>(null);
   bulkDispatch() {
-    const ids = this.dispatchableSelected();
+    if (this.bulkBusy()) return;
+    const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Select orders that have collected tubes ready to dispatch.'); return; }
     this.api.post<{ ordersTouched: number; samplesDispatched: number }>(
       '/api/orders/bulk-dispatch', { orderIds: ids }
-    ).subscribe({
+    ).pipe(busyIdWhile(this.bulkBusy, 'dispatch')).subscribe({
       next: res => {
         this.toasts.success(`Dispatched ${res.samplesDispatched} sample${res.samplesDispatched === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}`);
-        this.clearSelection();
+        this.workSel.clear();
         this.refresh();
       },
       error: e => this.toasts.error(ApiError.from(e).message)
@@ -2349,13 +3152,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  show the modal with QR + code so reception can hand the lab
    *  one scannable token. */
   createDispatchPackage() {
-    const ids = this.dispatchableSelected();
+    if (this.bulkBusy()) return;
+    const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Pick at least one in-progress order with collected tubes.'); return; }
-    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).subscribe({
+    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).pipe(busyIdWhile(this.bulkBusy, 'package')).subscribe({
       next: pkg => {
         this._activePackage.set(pkg);
         this.toasts.success(`Package ${pkg.code} created with ${pkg.orderCount} order${pkg.orderCount === 1 ? '' : 's'}`);
-        this.clearSelection();
+        this.workSel.clear();
         this.refresh();
       },
       error: e => this.toasts.error(ApiError.from(e).message)
@@ -2387,6 +3191,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return patientDisplayName(this.patientFor(id)) || 'Patient';
   }
   protected readonly formatPatient = formatPatientInfo;
+  /** Drawer headers (ND): the FULL name (never cut), age/sex on the quiet meta line. */
+  protected readonly drawerName = drawerName;
+  protected readonly drawerAgeSex = drawerAgeSex;
+  /** Status chip dot: neutral chip, violet dot while in flight / done. */
+  protected readonly orderStatusState = orderStatusState;
+  /** Work-list row status: dot + coloured word (see workRowTone). */
+  rowTone(o: Order) {
+    return workRowTone(o.status, this.effectiveStatusLabel(o), this.seriesInProgress(o));
+  }
+  /** Text actions on web, icon actions on touch (ND §6 row actions). */
+  readonly webPointer = webPointerSignal();
   hasOutstanding(pid?: string): boolean {
     if (!pid) return false;
     return this._bills().some(b => b.patientId === pid && b.balance > 0);
@@ -2414,77 +3229,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return 'default';
     }
   }
-  orderTone(o: Order): ChipTone {
-    switch (o.status) {
-      case 'completed':
-      case 'validated':
-      case 'delivered': return 'emerald';
-      case 'cancelled':
-      case 'rejected': return 'rose';
-      case 'in_progress':
-      case 'received':
-      case 'processing':
-      case 'resulted': return 'violet';
-      case 'collected':
-      case 'dispatched':
-      case 'in_transit': return 'teal';
-      case 'billed': return 'emerald';
-      case 'created':
-      case 'draft': return 'amber';
-      default: return 'amber';
-    }
+  /** Drawer timeline — see order-drawer.ts drawerPipeline (not-collected aware). */
+  pipeline(o: Order): PipelineStep[] {
+    return drawerPipeline(o);
   }
-
-  pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {
-    const billDone = o.status !== 'draft' && o.status !== 'created';
-    const collected = o.samples.some(s => s.status && s.status !== 'pending');
-    const dispatched = o.samples.some(s => s.status === 'dispatched' || s.status === 'in_transit'
-      || s.status === 'received' || s.status === 'processing');
-    const received = o.samples.some(s => s.status === 'received' || s.status === 'processing');
-    // "Report" step is done once the order has reached validated /
-    // partially_validated / delivered / completed — those all mean
-    // the lab work is signed off and the report is generated.
-    const reportDone = o.status === 'validated' || o.status === 'partially_validated'
-                    || o.status === 'delivered'  || o.status === 'completed';
-    // "Result" step is done as soon as every test has a value entered
-    // or already validated. Differs from reportDone — entered values
-    // still need a pathologist's signature before the report exists.
-    const allTests = o.samples.flatMap(s => s.tests ?? []);
-    const allTestsResulted = allTests.length > 0
-      && allTests.every(t => t.status === 'validated' || t.status === 'entered');
-    const anyResult = allTests.some(t => t.status === 'validated' || t.status === 'entered');
-    return [
-      { label: 'Billing', state: billDone ? 'done' : 'active' },
-      { label: 'Sample', state: collected ? 'done' : billDone ? 'active' : 'pending' },
-      { label: 'Dispatch', state: received ? 'done' : dispatched ? 'done' : collected ? 'active' : 'pending' },
-      { label: 'Result', state: allTestsResulted ? 'done' : anyResult ? 'active' : received ? 'active' : 'pending' },
-      { label: 'Report', state: reportDone ? 'done' : anyResult ? 'active' : 'pending' }
-    ];
+  stepCaption(o: Order, step: PipelineStep): string {
+    return drawerStepCaption(o, step);
   }
-  stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {
-    if (step.state === 'pending') return 'Pending';
-    switch (step.label) {
-      case 'Billing': return step.state === 'done' ? 'Billed' : 'Billing in progress';
-      case 'Sample': {
-        const total = o.samples.length;
-        const collected = o.samples.filter(s => s.status && s.status !== 'pending').length;
-        const received = o.samples.filter(s => s.status === 'received' || s.status === 'processing').length;
-        return step.state === 'done' ? `${received}/${total} received at lab` : `${collected}/${total} collected`;
-      }
-      case 'Result': {
-        const all = o.samples.flatMap(s => s.tests ?? []);
-        const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
-        return `${validated}/${all.length} tests resulted`;
-      }
-      case 'Report': {
-        if (step.state !== 'done') return 'Awaiting validation';
-        if (o.status === 'delivered') return 'Report delivered';
-        if (o.status === 'partially_validated') return 'Partial ready · awaiting full sign-off';
-        // 'validated' / 'completed' → ready for handover at the desk.
-        return 'Ready for delivery';
-      }
-      default: return '';
-    }
+  sampleProgress(sample: OrderSample) { return drawerSampleProgress(sample); }
+  sampleSummary(o: Order): string {
+    const collected = o.samples.filter(sample => this.sampleProgress(sample) === 'collected').length;
+    return `${collected}/${o.samples.length} collected`;
   }
   readonly patientTokens = computed(() => {
     const tokens = new Map<string, number>();

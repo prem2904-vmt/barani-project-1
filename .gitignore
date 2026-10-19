@@ -6,6 +6,10 @@ dist
 tmp
 out-tsc
 
+# Desktop release tooling: pending-notarization bookkeeping only (submission
+# ids, local artifact paths) — never credentials, never committed.
+tools/.release-state
+
 # dependencies
 node_modules
 package-lock.json
@@ -44,10 +48,13 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+.gradle-user-home
+
 .claude/worktrees
 .claude/settings.local.json
 .nx/polygraph
 .angular
+.agents/
 
 __screenshots__/
 
@@ -67,3 +74,11 @@ ios/DerivedData/
 
 # Electron build output
 dist/electron/
+
+# Graphify code-graph output (generated; rebuild with `graphify update .`)
+graphify-out/
+
+# Playwright E2E (LMS)
+apps/lms-e2e/.auth/
+apps/lms-e2e/test-output/
+apps/lms-e2e/playwright-report/

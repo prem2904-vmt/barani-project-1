@@ -1,4 +1,7 @@
 apply plugin: 'com.android.application'
+// Kotlin: the PfBridgeLocal plugin (health.prefrontal.lab.bridge) is Kotlin;
+// the rest of the app stays Java.
+apply plugin: 'kotlin-android'
 
 // Play upload signing — android/key.properties + android/keystore/ are
 // gitignored; keep the keystore backed up. Play App Signing holds the real
@@ -14,13 +17,17 @@ android {
         applicationId "health.prefrontal.lab"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
-        versionName "1.0.3"
+        versionCode 10
+        versionName "1.0.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            // The trailing '!* N.*' entries drop iCloud conflict copies
+            // ("chunk-X 2.js") that iCloud Drive keeps re-materialising into
+            // assets/public — without them a copy can break the build (res)
+            // or double the shipped bundle (assets).
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!* 2.*:!* 3.*:!* 4.*:!* 5.*:!* 6.*:!* 7.*:!* 8.*:!* 9.*'
         }
     }
     signingConfigs {
@@ -42,6 +49,20 @@ android {
     }
 }
 
+// iCloud Drive keeps re-materialising "name 2.ext" conflict copies into the
+// source tree faster than they can be hand-deleted; they broke a release
+// build once (res/) and shipped 170 junk files into an AAB (assets/). Scrub
+// them at the very start of every build so neither can happen again. The
+// ignoreAssetsPattern above is the second line of defence for any that
+// reappear between this task and asset merging.
+tasks.register('scrubICloudConflictCopies', Delete) {
+    delete fileTree(dir: 'src/main', includes: [
+        '**/* 2.*', '**/* 3.*', '**/* 4.*', '**/* 5.*',
+        '**/* 6.*', '**/* 7.*', '**/* 8.*', '**/* 9.*',
+    ])
+}
+preBuild.dependsOn 'scrubICloudConflictCopies'
+
 // A transitive dep pins relinker 1.3.1, which only ever lived on the (now
 // dead) jcenter — mavenCentral has 1.4.x. Force an available, API-compatible
 // version so the release build can resolve.
@@ -49,6 +70,10 @@ configurations.all {
     resolutionStrategy {
         force 'com.getkeepsafe.relinker:relinker:1.4.5'
     }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 repositories {
@@ -63,6 +88,14 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // PrefrontalMessagingService subclasses the push plugin's
+    // FirebaseMessagingService; the plugin keeps firebase-messaging as an
+    // `implementation` dep, so it isn't on our compile classpath. Keep the
+    // version in step with node_modules/@capacitor/push-notifications/android/build.gradle.
+    implementation "com.google.firebase:firebase-messaging:${project.hasProperty('firebaseMessagingVersion') ? rootProject.ext.firebaseMessagingVersion : '25.0.1'}"
+    // Reply-from-notification credentials (ChatReplyStore): AES-256 with a
+    // Keystore master key.
+    implementation "androidx.security:security-crypto:1.1.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

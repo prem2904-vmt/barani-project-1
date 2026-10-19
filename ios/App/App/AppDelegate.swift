@@ -7,7 +7,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Chat notifications: register the CHAT_MESSAGE category (Reply /
+        // Mark as read) and own the notification delegate BEFORE launch ends —
+        // a Reply typed on the lock screen may be what launched us, and it is
+        // handled natively (ChatReply.swift) without the web UI.
+        ChatNotificationCenter.shared.install()
+        // CallKit answer / decline → the server, natively (CallAnswerNative.swift):
+        // a lock-screen AUDIO answer leaves the web app suspended.
+        CallAnswerNative.shared.install()
         return true
     }
 
@@ -26,6 +33,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications,
                                         object: error)
+    }
+
+    // Silent background push (content-available). The only kind the backend
+    // sends is the call RING-STOP ("call-end": caller cancelled, answered or
+    // declined on another device, no answer) — hand it to the CallKit plugin,
+    // which ends that call's CallKit ring if it is still unanswered (a killed
+    // iPhone would otherwise ring on after the caller hung up). Posted by
+    // name so AppDelegate needn't import the plugin module. Never a VoIP push.
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if (userInfo["kind"] as? String) == "call-end", let callId = userInfo["callId"] as? String {
+            NotificationCenter.default.post(name: Notification.Name("PFCallKitEndRing"), object: nil,
+                                            userInfo: ["callId": callId, "reason": (userInfo["reason"] as? String) ?? ""])
+            completionHandler(.newData)
+            return
+        }
+        completionHandler(.noData)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

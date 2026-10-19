@@ -254,6 +254,11 @@
   box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);
   // Bumped on mobile for sunlight readability + thumb-recognisable size.
   @media (max-width: 640px) {
+  /* iOS focus-zoom guard: any input under 16px zooms the viewport and breaks
+     the immersive chat layout. Desktop untouched. */
+  .pf-msgs__composer textarea, .pf-composer textarea, textarea { font-size: 16px !important; }
+  .pf-msgs__search input, input[type='search'], input[type='text'] { font-size: 16px !important; }
+
     min-width: 22px;
     height: 22px;
     line-height: 18px;
@@ -400,12 +405,12 @@
   &.pf-msgs__context-chip--patient {
     background: rgba(59, 130, 246, 0.12);
     border-color: rgba(59, 130, 246, 0.32);
-    color: #93c5fd;
+    color: var(--blue-text);
   }
   &.pf-msgs__context-chip--order {
     background: rgba(16, 185, 129, 0.12);
     border-color: rgba(16, 185, 129, 0.32);
-    color: #6ee7b7;
+    color: var(--green-text);
   }
   &.pf-msgs__context-chip--report {
     background: rgba(168, 85, 247, 0.14);
@@ -471,8 +476,8 @@
   .pf-msgs__rec-card:not(.pf-msgs__rec-card--mine) & {
     background: rgba(255, 255, 255, 0.08);
   }
-  .pf-msgs__rec-card--patient:not(.pf-msgs__rec-card--mine) & { background: rgba(59, 130, 246, 0.22);  color: #93c5fd; }
-  .pf-msgs__rec-card--order:not(.pf-msgs__rec-card--mine)   & { background: rgba(16, 185, 129, 0.22);  color: #6ee7b7; }
+  .pf-msgs__rec-card--patient:not(.pf-msgs__rec-card--mine) & { background: rgba(59, 130, 246, 0.22);  color: var(--blue-text); }
+  .pf-msgs__rec-card--order:not(.pf-msgs__rec-card--mine)   & { background: rgba(16, 185, 129, 0.22);  color: var(--green-text); }
   .pf-msgs__rec-card--report:not(.pf-msgs__rec-card--mine)  & { background: rgba(168, 85, 247, 0.22);  color: var(--color-violet-300); }
   .pf-msgs__rec-card--mine & {
     background: rgba(255, 255, 255, 0.22);
@@ -1165,7 +1170,7 @@
   width: 32px; height: 32px;
   border-radius: 50%;
   background: rgba(59, 130, 246, 0.18);
-  color: #93c5fd;
+  color: var(--blue-text);
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
@@ -1358,6 +1363,7 @@
   }
 }
 
+.pf-msgs__attach-card.pf-msgs__attach-card--gone { opacity: 0.75; border-style: dashed; cursor: default; }
 .pf-msgs__attach-card {
   display: flex;
   align-items: center;
@@ -2150,7 +2156,7 @@
 // ── Light mode compatibility overrides for modals and components ──
 ::ng-deep .light {
   .pf-msgs__modal {
-    background: #ffffff;
+    background: var(--bg-card-solid);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
     border: 1px solid rgba(139, 92, 246, 0.15);
   }
@@ -2165,7 +2171,7 @@
   }
   .pf-msgs__modal-group-name input,
   .pf-msgs__modal-search input {
-    background: #f8fafc;
+    background: var(--bg-card-solid);
     border-color: #cbd5e1;
     color: #0f172a;
     &::placeholder {
@@ -2173,7 +2179,7 @@
     }
     &:focus {
       border-color: var(--input-border-focus);
-      background: #ffffff;
+      background: var(--bg-card-solid);
     }
   }
   .pf-msgs__picker-row {
@@ -2199,7 +2205,7 @@
     color: var(--color-violet-600);
   }
   .pf-msgs__share-popover {
-    background: #ffffff;
+    background: var(--bg-card-solid);
   }
   .pf-msgs__share-popover-item {
     &:hover {
@@ -2230,7 +2236,7 @@
 .pf-msgs-locked__icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 60px; height: 60px; border-radius: 16px;
-  background: rgba(139, 92, 246, 0.14); color: #a78bfa;
+  background: rgba(139, 92, 246, 0.14); color: var(--violet-text);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 .pf-msgs-locked__title { margin: 4px 0 0; font-size: 20px; font-weight: 800; color: var(--text-primary); }

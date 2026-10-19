@@ -15,14 +15,6 @@
         Collect sample
       </pf-touch-btn>
     }
-    <pf-touch-btn actions size="sm" variant="ghost" (pressed)="back()">
-      <span icon-left aria-hidden="true">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m15 18-6-6 6-6"/>
-        </svg>
-      </span>
-      Back to reception
-    </pf-touch-btn>
   </pf-screen-header>
 
   <div class="pf-pp-layout">
@@ -33,11 +25,10 @@
       <!-- Payment Confirmation Banner -->
       <div class="pf-pp-pay">
         <div class="pf-pp-pay__icon-wrap">
-          <span class="pf-pp-pay__ring" aria-hidden="true"></span>
-          <span class="pf-pp-pay__check" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m5 12 4 4L19 6"/>
+          <span class="pf-pp-pay__check pf-empty__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5"/>
             </svg>
           </span>
         </div>
@@ -49,7 +40,7 @@
               {{ ps.amount | inr }}
               @if (order()?.patient?.displayName) {
                 <span class="pf-pp-pay__sep">·</span>
-                <span class="pf-pp-pay__patient">{{ order()!.patient!.displayName }}</span>
+                <span class="pf-pp-pay__patient"><pf-daily-no [of]="order()" />{{ order()!.patient!.displayName }}</span>
               }
             </h2>
             <p class="pf-pp-pay__meta">
@@ -61,7 +52,7 @@
           } @else if (order()?.patient?.displayName) {
             <h2 class="pf-pp-pay__amount">{{ order()!.patient!.displayName }}</h2>
             <p class="pf-pp-pay__meta">
-              <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
+              <pf-busy></pf-busy>
               Loading payment details…
             </p>
           }
@@ -73,7 +64,7 @@
             <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
               <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="3.5"/>
               <circle cx="24" cy="24" r="20" fill="none"
-                      stroke="#10b981" stroke-width="3.5" stroke-linecap="round"
+                      stroke="var(--color-primary, #7c3aed)" stroke-width="3.5" stroke-linecap="round"
                       stroke-dasharray="125.66"
                       [attr.stroke-dashoffset]="ringOffset()"
                       transform="rotate(-90 24 24)"/>
@@ -143,7 +134,8 @@
             Download PDF
           </button>
           <button type="button" class="pf-pp-toolbar__print"
-                  [disabled]="selectedCount() === 0" (click)="printSelected()">
+                  [disabled]="selectedCount() === 0 || labelsPrinting()"
+                  [pfBusy]="labelsPrinting()" pfBusyLabel="Printing labels…" (click)="printSelected()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 9V2h12v7"/>
@@ -156,8 +148,10 @@
       </div>
       }
 
-      <!-- Label grid -->
-      @if (order(); as o) {
+      <!-- Label grid (its own shape while the order is on its way) -->
+      @if (orderLoading()) {
+      <pf-skeleton-tiles [count]="4" min="220px" height="180px" label="Loading labels…"></pf-skeleton-tiles>
+      } @else if (order(); as o) {
       <div class="pf-pp-grid pf-print-label">
         @for (s of o.samples; track s.id; let i = $index) {
           <pf-label-card
@@ -181,7 +175,9 @@
     <!-- ══ SIDEBAR (Patient Details + Tubes + Bill Summary) ══ -->
     <aside class="pf-pp-sidebar">
 
-      @if (order(); as o) {
+      @if (orderLoading()) {
+        <pf-skeleton-detail [fields]="5" [sections]="2" label="Loading order…"></pf-skeleton-detail>
+      } @else if (order(); as o) {
         <!-- Patient card -->
         <div class="pf-sb-card">
           <div class="pf-sb-card__hdr">
@@ -192,7 +188,7 @@
               {{ initials(o.patient?.displayName) }}
             </div>
             <div class="pf-sb-patient__body">
-              <p class="pf-sb-patient__name">{{ o.patient?.displayName ?? '—' }}</p>
+              <p class="pf-sb-patient__name"><pf-daily-no [of]="o" />{{ o.patient?.displayName ?? '—' }}</p>
               <p class="pf-sb-patient__sub">{{ ageSex(o.patient) }}</p>
             </div>
           </div>
@@ -238,7 +234,7 @@
             @for (s of o.samples; track s.id) {
             <li class="pf-sb-tubes__row">
               <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
-              <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
+              <span class="pf-sb-tubes__dept">{{ tubeDeptLabel(s) }}</span>
               <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
             </li>
             }
@@ -295,6 +291,12 @@
             <div class="pf-sb-amt-row pf-sb-amt-row--disc">
               <span>Discount</span>
               <span>−{{ b.totalDiscount | inr }}</span>
+            </div>
+            }
+            @if (roundOffOf(b); as ro) {
+            <div class="pf-sb-amt-row">
+              <span>Round off</span>
+              <span>{{ ro > 0 ? '+' : '−' }}{{ (ro < 0 ? -ro : ro) | inr }}</span>
             </div>
             }
             <div class="pf-sb-amt-row pf-sb-amt-row--total">

@@ -1,0 +1,42 @@
+import { renderBandPage } from './admin-band.spec-helpers';
+import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
+import { PartnersComponent } from './partners/partners.component';
+import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
+
+/**
+ * Tile hubs (Lab settings, Referral & Vendors, OPD): no search before, so
+ * the band pill gains one that filters the tiles; the page header is
+ * classic-only and the tiles sit in the scrolling band body.
+ */
+describe('Admin band — tile hubs', () => {
+  const hubs = [
+    { name: 'Lab settings hub', cmp: LabSettingsHubComponent, hit: 'report', expect: 'Report Template' },
+    { name: 'Referral & Vendors hub', cmp: PartnersComponent, hit: 'vendor', expect: 'Vendor' },
+    { name: 'OPD hub', cmp: OpdAdminComponent, hit: 'doctor', expect: 'Doctor' },
+  ];
+
+  for (const h of hubs) {
+    it(`${h.name}: band + body wiring, header classic-only`, () => {
+      const p = renderBandPage(h.cmp);
+      expect(p.band()).not.toBeNull();
+      expect(p.bandInput()).not.toBeNull();
+      expect(p.body()).not.toBeNull();
+      expect(p.headerIsClassicOnly()).toBe(true);
+    });
+
+    it(`${h.name}: the pill search filters the tiles, with an empty state`, () => {
+      const p = renderBandPage(h.cmp);
+      const tiles = () => Array.from(p.body()!.querySelectorAll('a')).map((a) => a.textContent ?? '');
+      const all = tiles().length;
+      expect(all).toBeGreaterThan(1);
+      p.type(h.hit);
+      expect(tiles().length).toBeGreaterThan(0);
+      expect(tiles().length).toBeLessThanOrEqual(all);
+      expect(tiles().every((t) => t.toLowerCase().includes(h.hit))).toBe(true);
+      expect(tiles().some((t) => t.includes(h.expect))).toBe(true);
+      p.type('zzzz-nothing');
+      expect(tiles().length).toBe(0);
+      expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+    });
+  }
+});

@@ -1,0 +1,1181 @@
+<div class="catalog-shell h-screen max-h-screen overflow-hidden flex flex-col font-sans selection:bg-violet-500/30">
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       GLOBAL TOPBAR
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <header class="catalog-topbar sticky top-0 z-40 px-4 sm:px-6 h-16 flex items-center justify-between border-b border-[var(--border-muted)]">
+    <!-- Brand / Title -->
+    <div class="flex items-center gap-3">
+      <pf-logo-mark [size]="'sm'" [variant]="'badge'" [pulse]="true" />
+      <div class="flex items-baseline gap-2 cursor-pointer" (click)="selectOverview()">
+        <span class="text-base sm:text-lg font-black tracking-tight text-[var(--text-primary)]">
+          Prefrontal <span class="text-violet-400">UI</span>
+        </span>
+        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/30">
+          Cookbook &amp; Living Spec
+        </span>
+        <span class="hidden md:inline text-[11px] font-mono text-[var(--text-tertiary)]">v1.0</span>
+      </div>
+    </div>
+
+    <!-- Center Navigation Tabs -->
+    <nav class="hidden lg:flex items-center gap-1.5 p-1 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-muted)]">
+      <button type="button" class="tab-nav-btn" [class.is-active]="activeSection() === 'cookbook'" (click)="switchSection('cookbook')">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Components ({{ allComponents.length }})
+      </button>
+      <button type="button" class="tab-nav-btn" [class.is-active]="activeSection() === 'compositions'" (click)="switchSection('compositions')">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Clinical Compositions (3)
+      </button>
+      <button type="button" class="tab-nav-btn" [class.is-active]="activeSection() === 'tokens'" (click)="switchSection('tokens')">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+        Tokens &amp; Palette
+      </button>
+      <button type="button" class="tab-nav-btn" [class.is-active]="activeSection() === 'principles'" (click)="switchSection('principles')">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Pattern Rules
+      </button>
+    </nav>
+
+    <!-- Right Controls: Search & Theme Toggle -->
+    <div class="flex items-center gap-3">
+      <div class="relative hidden sm:block w-48 md:w-64">
+        <input
+          type="text"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+          placeholder="Filter components (e.g. pin, btn)..."
+          class="w-full text-xs py-1.5 pl-8 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-violet-500 transition-colors" />
+        <svg class="w-3.5 h-3.5 text-[var(--text-tertiary)] absolute left-2.5 top-2.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+      </div>
+
+      <!-- Theme Switcher Button -->
+      <button
+        type="button"
+        (click)="toggleTheme()"
+        [title]="isDarkMode() ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        class="h-8 px-2.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] text-xs font-medium flex items-center gap-1.5 transition-colors">
+        @if (isDarkMode()) {
+          <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <span class="hidden sm:inline">Light</span>
+        } @else {
+          <svg class="w-4 h-4 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <span class="hidden sm:inline">Dark</span>
+        }
+      </button>
+    </div>
+  </header>
+
+  <!-- Live Status Bar -->
+  <div class="px-4 sm:px-6 py-1.5 dark:bg-violet-950/40 bg-violet-100/70 border-b dark:border-violet-800/20 border-violet-200 flex items-center justify-between text-xs dark:text-violet-300 text-violet-800">
+    <div class="flex items-center gap-2 truncate">
+      <span class="size-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="font-medium truncate">{{ statusMessage }}</span>
+    </div>
+    <span class="text-[11px] font-mono text-violet-400/80 hidden md:inline">
+      @prefrontal/shared · Standalone Angular
+    </span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 1: COMPONENT COOKBOOK
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeSection() === 'cookbook') {
+    <div class="flex-1 flex overflow-hidden min-h-0">
+      <!-- NG-ZORRO STYLE SIDEBAR MENU -->
+      <aside class="catalog-sidebar w-64 md:w-72 flex-shrink-0 border-r overflow-y-auto hidden md:flex flex-col py-4 h-full">
+        <!-- Overview Link -->
+        <div class="px-4 mb-3">
+          <button
+            type="button"
+            (click)="selectOverview()"
+            [class.nav-item-active]="selectedComponentId() === 'overview'"
+            class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-left">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              All Components Overview
+            </span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-black/20 font-mono">{{ allComponents.length }}</span>
+          </button>
+        </div>
+
+        <div class="px-4 text-[11px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+          Component Categories
+        </div>
+
+        <!-- Categorized Nav Items -->
+        <div class="space-y-4 px-2">
+          @for (group of filteredCategories(); track group.id) {
+            <div>
+              <div class="px-3 py-1 flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
+                <span>{{ group.name }}</span>
+                <span class="text-[10px] text-[var(--text-tertiary)] font-mono">{{ group.components.length }}</span>
+              </div>
+              <div class="mt-1 space-y-0.5">
+                @for (c of group.components; track c.id) {
+                  <button
+                    type="button"
+                    (click)="selectComponent(c.id)"
+                    [class.nav-item-active]="selectedComponentId() === c.id"
+                    class="nav-item w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left">
+                    <span class="truncate font-medium">{{ c.name }}</span>
+                    <span class="text-[10px] font-mono text-[var(--text-tertiary)] opacity-70">&lt;{{ c.selector }}&gt;</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT STAGE -->
+      <main class="flex-1 overflow-y-auto min-h-0 h-full p-4 sm:p-8 lg:p-10 max-w-7xl mx-auto w-full">
+        <!-- ── SUBVIEW: ALL COMPONENTS GALLERY OVERVIEW ── -->
+        @if (selectedComponentId() === 'overview') {
+          <div class="space-y-8">
+            <div>
+              <div class="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 mb-3">
+                <span>Standalone Healthcare UI Library</span>
+                <span>·</span>
+                <span>{{ allComponents.length }} Components Ready</span>
+              </div>
+              <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-[var(--text-primary)] mb-2">
+                Prefrontal Component Catalog
+              </h1>
+              <p class="text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+                Production-tested standalone Angular primitives for LMS, OPD, IPD, and Pharmacy. Select any component below or in the sidebar to test its live sandbox, inspect required props, and copy clinical code recipes.
+              </p>
+            </div>
+
+            <!-- Categories Grid -->
+            @for (cat of filteredCategories(); track cat.id) {
+              <section class="space-y-3">
+                <div class="flex items-center justify-between border-b border-[var(--border-muted)] pb-2">
+                  <div>
+                    <h2 class="text-base font-bold text-[var(--text-primary)]">{{ cat.name }}</h2>
+                    <p class="text-xs text-[var(--text-tertiary)]">{{ cat.description }}</p>
+                  </div>
+                  <span class="text-xs font-mono text-[var(--text-muted)]">{{ cat.components.length }} primitives</span>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  @for (comp of cat.components; track comp.id) {
+                    <div
+                      (click)="selectComponent(comp.id)"
+                      class="rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 hover:border-violet-500/60 transition-all cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-violet-500/5">
+                      <div>
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                          <h3 class="text-sm font-bold text-[var(--text-primary)] group-hover:text-violet-400 transition-colors">
+                            {{ comp.name }}
+                          </h3>
+                          <code class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/20 text-[var(--text-tertiary)]">&lt;{{ comp.selector }}&gt;</code>
+                        </div>
+                        <p class="text-xs text-[var(--text-tertiary)] line-clamp-2 leading-relaxed mb-3">
+                          {{ comp.summary }}
+                        </p>
+                      </div>
+
+                      <div class="pt-2 border-t border-[var(--border-muted)] flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--text-tertiary)] font-mono">{{ comp.inputs.length }} inputs</span>
+                        <span class="font-semibold text-violet-400 group-hover:underline flex items-center gap-1">
+                          Cookbook Spec &rarr;
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+        }
+
+        <!-- ── SUBVIEW: SPECIFIC COMPONENT DETAIL & COOKBOOK RECIPE ── -->
+        @if (currentComponent(); as comp) {
+          <div class="space-y-8">
+            <!-- Header Bar -->
+            <div class="border-b border-[var(--border-muted)] pb-6">
+              <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <div class="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+                  <span class="cursor-pointer hover:underline" (click)="selectOverview()">Components</span>
+                  <span>/</span>
+                  <span>{{ comp.category }}</span>
+                  <span>/</span>
+                  <span class="text-[var(--text-primary)] font-semibold">{{ comp.name }}</span>
+                </div>
+
+                <!-- Action Copy Buttons -->
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    (click)="copySnippet(comp.importStatement)"
+                    class="px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1.5 transition-colors">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy Import
+                  </button>
+                  <button
+                    type="button"
+                    (click)="copySnippet(comp.templateSnippet)"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-1.5 transition-colors">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    Copy HTML
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-baseline gap-3 mb-2">
+                <h1 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)]">{{ comp.name }}</h1>
+                <code class="text-xs font-mono px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">&lt;{{ comp.selector }}&gt;</code>
+              </div>
+              <p class="text-sm text-[var(--text-secondary)] max-w-3xl leading-relaxed">
+                {{ comp.summary }}
+              </p>
+              @if (comp.clinicalScenario) {
+                <div class="mt-3 p-3 rounded-lg bg-violet-950/20 border border-violet-800/30 text-xs text-violet-300 flex items-start gap-2">
+                  <span class="font-bold uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-violet-500/30">Clinical Purpose:</span>
+                  <span>{{ comp.clinicalScenario }}</span>
+                </div>
+              }
+            </div>
+
+            <!-- ── INTERACTIVE PLAYGROUND (STAGE + CONTROLS) ── -->
+            <section class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                  <span class="size-2 rounded-full bg-violet-400"></span>
+                  Interactive Playground &amp; Stage
+                </h2>
+                <span class="state-badge">Live Reactive Instance</span>
+              </div>
+
+              <div class="grid lg:grid-cols-12 gap-4">
+                <!-- Main Stage Canvas -->
+                <div class="lg:col-span-8 demo-stage min-h-[260px] flex flex-col justify-center items-center">
+                  @switch (comp.id) {
+                    @case ('hero-band') {
+                      <div class="w-full">
+                        <pf-hero-band [tenantName]="heroTenantName()" (valueChange)="heroSearchVal.set($event); logEvent('Hero band search: ' + $event)">
+                          <ng-container band-actions>
+                            <pf-button variant="primary" (click)="logEvent('New Patient CTA clicked')">+ New Patient</pf-button>
+                          </ng-container>
+                          <ng-container band-tools>
+                            <button type="button" class="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-[var(--border-muted)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-violet-400" (click)="logEvent('Scan QR clicked')">
+                              <pf-scan-icon [size]="18" />
+                            </button>
+                          </ng-container>
+                        </pf-hero-band>
+                      </div>
+                    }
+                    @case ('screen-header') {
+                      <div class="w-full max-w-2xl">
+                        <pf-screen-header [title]="'Test Catalog & Analyzer Mapping'" [subtitle]="'Configure LOINC mappings and clinical normal reference ranges'" [showBack]="true" (back)="logEvent('Screen Header Back Clicked')">
+                          <div header-actions>
+                            <pf-button variant="secondary" (click)="logEvent('Export CSV clicked')">Export</pf-button>
+                            <pf-button variant="primary" (click)="logEvent('Add Test CTA clicked')">Add Test</pf-button>
+                          </div>
+                        </pf-screen-header>
+                      </div>
+                    }
+                    @case ('tat-indicator') {
+                      <div class="flex flex-wrap items-center justify-center gap-6">
+                        <div class="text-center space-y-1">
+                          <span class="text-[10px] text-[var(--text-tertiary)] block">Due in 15 mins (Urgent warning)</span>
+                          <pf-tat-indicator [remainingMinutes]="tatMinutes()" />
+                        </div>
+                        <div class="text-center space-y-1">
+                          <span class="text-[10px] text-[var(--text-tertiary)] block">Overdue (Critical SLA breached)</span>
+                          <pf-tat-indicator [remainingMinutes]="-25" />
+                        </div>
+                        <div class="text-center space-y-1">
+                          <span class="text-[10px] text-[var(--text-tertiary)] block">On schedule</span>
+                          <pf-tat-indicator [remainingMinutes]="180" />
+                        </div>
+                      </div>
+                    }
+                    @case ('daily-no') {
+                      <div class="flex items-center justify-center gap-4">
+                        <div class="p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] flex items-center gap-2">
+                          <pf-daily-no [no]="dailyNoVal()" />
+                          <span class="text-xs font-bold text-[var(--text-primary)]">Mr. Prem Kumar K</span>
+                          <span class="text-[11px] text-[var(--text-tertiary)]">· 3 samples</span>
+                        </div>
+                      </div>
+                    }
+                    @case ('origin-badge') {
+                      <div class="flex flex-wrap items-center justify-center gap-4">
+                        <pf-origin-badge origin="master" />
+                        <pf-origin-badge origin="clone" />
+                        <pf-origin-badge origin="own" />
+                        <pf-origin-badge origin="branch" />
+                      </div>
+                    }
+                    @case ('notification-bell') {
+                      <div class="flex items-center justify-center gap-6">
+                        <button type="button" class="relative p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-violet-400" (click)="logEvent('Notification bell opened')">
+                          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                          <span class="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-600 text-white font-mono shadow-sm">4</span>
+                        </button>
+                      </div>
+                    }
+                    @case ('critical-ack-strip') {
+                      <div class="w-full max-w-xl p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3 text-rose-300">
+                        <div class="flex items-center gap-2 text-xs font-semibold">
+                          <span class="size-2 rounded-full bg-rose-500 animate-pulse"></span>
+                          <span>2 Critical Panic Values Require Immediate Doctor Acknowledgment</span>
+                        </div>
+                        <pf-button variant="danger" (click)="logEvent('Panic values acknowledged')">Acknowledge</pf-button>
+                      </div>
+                    }
+                    @case ('presence-avatar') {
+                      <div class="flex flex-wrap items-center justify-center gap-6">
+                        <div class="relative inline-flex">
+                          <pf-avatar [name]="'Dr. Ananya Rao'" [size]="44" />
+                          <span class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-500 border-2 border-[var(--bg-card)]"></span>
+                        </div>
+                        <div class="relative inline-flex">
+                          <pf-avatar [name]="'Lab Tech Rajesh'" [size]="44" />
+                          <span class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-amber-500 border-2 border-[var(--bg-card)]"></span>
+                        </div>
+                        <div class="relative inline-flex">
+                          <pf-avatar [name]="'Pathologist Dr. Meera'" [size]="44" />
+                          <span class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-rose-500 border-2 border-[var(--bg-card)]"></span>
+                        </div>
+                      </div>
+                    }
+                    @case ('kpi-strip') {
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+                        <div class="p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                          <span class="text-[11px] text-[var(--text-tertiary)] block">STAT Urgent</span>
+                          <span class="text-xl font-bold pf-num text-rose-400">3</span>
+                        </div>
+                        <div class="p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                          <span class="text-[11px] text-[var(--text-tertiary)] block">Pending Phlebotomy</span>
+                          <span class="text-xl font-bold pf-num text-amber-400">12</span>
+                        </div>
+                        <div class="p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                          <span class="text-[11px] text-[var(--text-tertiary)] block">Processing in Lab</span>
+                          <span class="text-xl font-bold pf-num text-violet-400">28</span>
+                        </div>
+                        <div class="p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                          <span class="text-[11px] text-[var(--text-tertiary)] block">Ready for Validation</span>
+                          <span class="text-xl font-bold pf-num text-emerald-400">45</span>
+                        </div>
+                      </div>
+                    }
+                    @case ('patient-search') {
+                      <div class="w-full max-w-lg relative">
+                        <div class="flex items-center gap-2 p-2 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                          <svg class="w-4 h-4 text-[var(--text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          <input type="text" placeholder="Search patient · name, phone, MRN, ABHA…" class="w-full bg-transparent text-xs text-[var(--text-primary)] focus:outline-none" />
+                          <kbd class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-[var(--text-tertiary)]">⌘K</kbd>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('button') {
+                      <div class="flex flex-wrap items-center justify-center gap-4 w-full">
+                        <pf-button [variant]="btnVariant()" [fullWidth]="btnFullWidth()" [disabled]="btnDisabled()" (click)="logEvent('PfButton clicked!')">
+                          {{ btnVariant() === 'primary' ? 'Confirm Diagnosis CTA' : 'Cancel Action' }}
+                        </pf-button>
+                      </div>
+                    }
+                    @case ('touch-button') {
+                      <div class="flex flex-wrap items-center justify-center gap-4">
+                        <pf-touch-btn [variant]="touchVariant()" [size]="'md'" [busy]="touchBusy()" [disabled]="touchDisabled()" (pressed)="logEvent('Touch Button tapped!')">
+                          Collect Specimen
+                        </pf-touch-btn>
+                      </div>
+                    }
+                    @case ('logo-mark') {
+                      <div class="flex flex-wrap items-center justify-center gap-6">
+                        <pf-logo-mark [size]="'md'" [variant]="'badge'" [pulse]="true" />
+                        <pf-logo-mark [size]="'md'" [variant]="'glyph'" />
+                        <pf-logo-mark [size]="'lg'" [variant]="'mono'" [withWordmark]="true" />
+                      </div>
+                    }
+                    @case ('scan-icon') {
+                      <div class="flex items-center gap-6 text-violet-400">
+                        <pf-scan-icon [size]="24" />
+                        <pf-scan-icon [size]="32" />
+                        <pf-scan-icon [size]="48" />
+                      </div>
+                    }
+                    @case ('loading-logo') {
+                      <div class="flex flex-wrap items-center justify-center gap-8">
+                        <pf-loading-logo [size]="'md'" color="purple" [showText]="true" text="Authorizing Lab Tests..." />
+                      </div>
+                    }
+                    @case ('card') {
+                      <div class="w-full max-w-md">
+                        <pf-card>
+                          <pf-card-header>
+                            <span class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Patient Vitals Record</span>
+                          </pf-card-header>
+                          <pf-card-body>
+                            <p class="text-xs text-[var(--text-tertiary)] mb-2">BP: 120/80 mmHg · Pulse: 72 bpm · SpO2: 99%</p>
+                            <span class="text-xs font-mono text-emerald-400">Stable Condition</span>
+                          </pf-card-body>
+                          <pf-card-footer>
+                            <div class="flex justify-end gap-2 w-full">
+                              <pf-button variant="secondary">Edit</pf-button>
+                              <pf-button variant="primary">Save</pf-button>
+                            </div>
+                          </pf-card-footer>
+                        </pf-card>
+                      </div>
+                    }
+                    @case ('ambient-bg') {
+                      <div class="relative w-full h-40 rounded-xl overflow-hidden border border-[var(--border-muted)] flex items-center justify-center">
+                        <pf-ambient-bg />
+                        <span class="relative z-10 text-xs font-semibold px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md">Subtle Radial Gradient Light</span>
+                      </div>
+                    }
+                    @case ('actions-menu') {
+                      <div class="flex items-center justify-center">
+                        <pf-actions-menu [actions]="menuActions" (action)="handleAction($event)" />
+                      </div>
+                    }
+                    @case ('segmented') {
+                      <div class="w-full max-w-sm">
+                        <pf-segmented [options]="segments" [value]="segmentValue" (valueChange)="segmentValue = $event; logEvent('Segment selected: ' + $event)" />
+                      </div>
+                    }
+                    @case ('select') {
+                      <div class="w-full max-w-xs">
+                        <pf-select label="Department Target" [options]="options" [value]="selectValue" (valueChange)="selectValue = $event; logEvent('Select changed: ' + $event)" />
+                      </div>
+                    }
+                    @case ('number-input') {
+                      <div class="w-full max-w-xs">
+                        <pf-number-input label="Sample Volume (µL)" [min]="10" [max]="5000" [step]="50" [value]="numberValue" (valueChange)="numberValue = $event; logEvent('Volume: ' + $event)" />
+                      </div>
+                    }
+                    @case ('num-pad') {
+                      <div class="max-w-xs">
+                        <pf-num-pad [value]="numPadValue" (valueChange)="numPadValue = $event; logEvent('NumPad value: ' + $event)" />
+                      </div>
+                    }
+                    @case ('toggle') {
+                      <div class="flex items-center gap-3">
+                        <pf-toggle [checked]="toggleValue" (checkedChange)="toggleValue = $event; logEvent('Toggle changed: ' + $event)" />
+                        <span class="text-xs font-medium">{{ toggleValue ? 'STAT Urgent Mode ON' : 'Routine Mode' }}</span>
+                      </div>
+                    }
+                    @case ('date') {
+                      <div class="w-full max-w-xs">
+                        <pf-date label="Collection Date" [value]="dateValue" (valueChange)="dateValue = $event; logEvent('Date picked: ' + $event)" />
+                      </div>
+                    }
+                    @case ('calendar') {
+                      <div class="w-full max-w-sm rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4 shadow-sm">
+                        <pf-calendar [value]="dateValue" (valueChange)="dateValue = $event; logEvent('Calendar date picked: ' + $event)" />
+                      </div>
+                    }
+                    @case ('time') {
+                      <div class="w-full max-w-xs">
+                        <pf-time label="Collection Time" [value]="timeValue" (valueChange)="timeValue = $event; logEvent('Time picked: ' + $event)" />
+                      </div>
+                    }
+                    @case ('datetime') {
+                      <div class="w-full max-w-sm">
+                        <pf-datetime label="Specimen Accession Timestamp" [value]="dateTimeValue" (valueChange)="dateTimeValue = $event; logEvent('DateTime picked: ' + $event)" />
+                      </div>
+                    }
+                    @case ('pin-dots') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-pin-dots [autofocus]="false" (completed)="onPin($event)" />
+                        <span class="text-xs text-[var(--text-tertiary)]">
+                          {{ lastPinEntered() ? 'PIN Verified: ' + lastPinEntered() : 'Enter 4 digits to auto-submit' }}
+                        </span>
+                      </div>
+                    }
+                    @case ('signature-pad') {
+                      <div class="space-y-3 flex flex-col items-center">
+                        <pf-button variant="primary" (click)="showSignaturePad = true; logEvent('Launched signature pad')">
+                          {{ signatureDataUrl ? 'Redraw Patient Signature' : 'Launch Signature Pad Modal' }}
+                        </pf-button>
+                        @if (signatureDataUrl) {
+                          <div class="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-4 shadow-sm">
+                            <img [src]="signatureDataUrl" alt="Saved signature preview" class="h-10 object-contain max-w-[200px]" />
+                            <button type="button" class="text-xs font-semibold text-rose-500 hover:text-rose-600 px-2 py-1" (click)="onSignatureCleared()">Clear</button>
+                          </div>
+                        } @else {
+                          <span class="text-xs text-[var(--text-tertiary)]">Modal strictly opens on button click. No viewport trap.</span>
+                        }
+                      </div>
+                    }
+                    @case ('barcode-scanner-modal') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-button variant="secondary" (click)="showScanner = true; logEvent('Launched barcode scanner')">
+                          Open Barcode Scanner Modal
+                        </pf-button>
+                        @if (scannedBarcode) {
+                          <span class="state-badge">Matched: {{ scannedBarcode }}</span>
+                        }
+                      </div>
+                    }
+                    @case ('image-editor') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-button variant="secondary" (click)="triggerSampleImageEdit()">
+                          Open Specimen Crop Modal
+                        </pf-button>
+                      </div>
+                    }
+                    @case ('avatar') {
+                      <div class="flex items-center gap-4">
+                        <pf-avatar name="Dr. Priya Nair" [size]="36" status="online" />
+                        <pf-avatar name="Amit Patel" [size]="44" status="busy" />
+                        <pf-avatar name="Kavita Rao" [size]="52" status="offline" />
+                      </div>
+                    }
+                    @case ('chip') {
+                      <div class="flex flex-wrap items-center gap-2">
+                        <pf-chip [tone]="chipTone()" [selected]="chipSelected()" (tapped)="logEvent('Chip tapped')">
+                          Selected Filter Chip
+                        </pf-chip>
+                        <pf-chip tone="default" (tapped)="logEvent('Default chip tapped')">Routine</pf-chip>
+                        <pf-chip tone="rose" (tapped)="logEvent('Emergency chip tapped')">Emergency</pf-chip>
+                      </div>
+                    }
+                    @case ('status-chip') {
+                      <div class="flex items-center gap-3">
+                        <pf-status-chip [tone]="statusChipTone()">{{ statusChipTone() | uppercase }}</pf-status-chip>
+                        <pf-status-chip tone="violet">READY</pf-status-chip>
+                        <pf-status-chip tone="neutral">DRAFT</pf-status-chip>
+                      </div>
+                    }
+                    @case ('clock') {
+                      <div class="flex items-center gap-4">
+                        <pf-clock [variant]="clockVariant()" [size]="clockSize()" />
+                      </div>
+                    }
+                    @case ('tile') {
+                      <div class="w-full max-w-xs">
+                        <pf-tile [clickable]="true" (tapped)="logEvent('Tile tapped')">
+                          <span class="text-xs text-[var(--text-tertiary)] block">Turnaround Time (TAT)</span>
+                          <strong class="text-xl font-bold pf-num text-[var(--text-primary)] block mt-1">42 mins</strong>
+                        </pf-tile>
+                      </div>
+                    }
+                    @case ('barcode-display') {
+                      <div class="p-4 bg-white rounded-xl text-black flex flex-col items-center gap-2">
+                        <pf-barcode-display [code]="barcodeCode()" [mode]="barcodeMode()" [showValue]="true" />
+                      </div>
+                    }
+                    @case ('confirm-dialog') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-button variant="danger" (click)="showConfirm = true; logEvent('Launched confirm dialog')">
+                          Open Confirm Dialog Modal
+                        </pf-button>
+                        @if (lastConfirmResult) {
+                          <span class="state-badge">Result: {{ lastConfirmResult }}</span>
+                        }
+                      </div>
+                    }
+                    @case ('skeleton') {
+                      <div class="w-full max-w-sm space-y-3">
+                        <div class="flex items-center gap-3">
+                          <pf-skeleton variant="line" [width]="'8rem'" />
+                          <pf-busy label="Loading" />
+                        </div>
+                        <pf-skeleton-rows [rows]="2" />
+                      </div>
+                    }
+                    @case ('busy-directive') {
+                      <div class="flex items-center gap-3">
+                        <button class="pf-btn pf-btn--primary" [pfBusy]="toggleValue" (click)="toggleValue = !toggleValue; logEvent('pfBusy clicked')">
+                          {{ toggleValue ? 'Running Async…' : 'Click to test [pfBusy]' }}
+                        </button>
+                      </div>
+                    }
+                    @case ('currency-inr') {
+                      <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-[var(--border-muted)] flex items-center justify-between w-64">
+                        <span class="text-xs text-[var(--text-tertiary)]">Diagnostic Bill Total</span>
+                        <strong class="text-base font-bold pf-num text-violet-400">{{ 18450.5 | inr }}</strong>
+                      </div>
+                    }
+                    @case ('input-directives') {
+                      <div class="w-full max-w-xs space-y-2">
+                        <label class="text-xs text-[var(--text-secondary)] block">Numeric Only [pfNumeric]</label>
+                        <input pfInput pfNumeric [allowDecimal]="false" placeholder="12345" class="w-full" (input)="logEvent('Numeric input event')" />
+                      </div>
+                    }
+                    @default {
+                      <div class="text-xs text-[var(--text-tertiary)] font-mono">Component live preview loaded</div>
+                    }
+                  }
+                </div>
+
+                <!-- Interactive Props Controller & Event Stream -->
+                <div class="lg:col-span-4 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] p-4 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div class="flex items-center justify-between border-b border-[var(--border-muted)] pb-2 mb-3">
+                      <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Playground Controls</h3>
+                      <span class="text-[10px] text-[var(--text-tertiary)] font-mono">Reactive Signals</span>
+                    </div>
+
+                    <!-- Props Form depending on component -->
+                    <div class="space-y-3 text-xs">
+                      @if (comp.id === 'button') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
+                          <select [ngModel]="btnVariant()" (ngModelChange)="btnVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="primary">primary (Single Main CTA)</option>
+                            <option value="secondary">secondary</option>
+                            <option value="danger">danger</option>
+                            <option value="quiet">quiet</option>
+                          </select>
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                          <input type="checkbox" id="btnFull" [checked]="btnFullWidth()" (change)="btnFullWidth.set(!btnFullWidth())" />
+                          <label for="btnFull" class="text-[11px]">Full width button</label>
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                          <input type="checkbox" id="btnDis" [checked]="btnDisabled()" (change)="btnDisabled.set(!btnDisabled())" />
+                          <label for="btnDis" class="text-[11px]">Disabled state</label>
+                        </div>
+                      }
+
+                      @if (comp.id === 'touch-button') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Touch Variant</label>
+                          <select [ngModel]="touchVariant()" (ngModelChange)="touchVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="primary">primary</option>
+                            <option value="secondary">secondary</option>
+                            <option value="accent">accent</option>
+                            <option value="danger">danger</option>
+                          </select>
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                          <input type="checkbox" id="tBusy" [checked]="touchBusy()" (change)="touchBusy.set(!touchBusy())" />
+                          <label for="tBusy" class="text-[11px]">Busy spinner state</label>
+                        </div>
+                      }
+
+                      @if (comp.id === 'barcode-display') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Symbology Mode</label>
+                          <select [ngModel]="barcodeMode()" (ngModelChange)="barcodeMode.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="both">both (1D + QR)</option>
+                            <option value="barcode">barcode (1D)</option>
+                            <option value="qr">qr (2D matrix)</option>
+                          </select>
+                        </div>
+                      }
+
+                      @if (comp.id === 'clock') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
+                          <div class="flex gap-2">
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'tile'" (click)="clockVariant.set('tile')">Tile Glass</button>
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'bare'" (click)="clockVariant.set('bare')">Bare Ambient</button>
+                          </div>
+                        </div>
+                      }
+
+                      @if (comp.id === 'status-chip') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Semantic Tone</label>
+                          <select [ngModel]="statusChipTone()" (ngModelChange)="statusChipTone.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="urgent">urgent (STAT Panic)</option>
+                            <option value="violet">violet (Active Ready)</option>
+                            <option value="neutral">neutral (Draft)</option>
+                            <option value="required">required (Dot)</option>
+                          </select>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Live Event Log Stream -->
+                  <div class="pt-3 border-t border-[var(--border-muted)]">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] block mb-1.5">Event Output Stream</span>
+                    <div class="space-y-1 font-mono text-[10px]">
+                      @for (log of eventLogs(); track $index) {
+                        <div class="p-1 rounded bg-[var(--bg-primary)] text-[var(--text-secondary)] truncate border border-[var(--border-muted)]/50">
+                          {{ log }}
+                        </div>
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ── COOKBOOK RECIPES SECTION ── -->
+            @if (comp.recipes && comp.recipes.length > 0) {
+              <section class="space-y-4">
+                <div class="flex items-center gap-2">
+                  <h2 class="text-base font-bold text-[var(--text-primary)]">Clinical Usage Recipes</h2>
+                  <span class="text-xs text-[var(--text-tertiary)] font-mono">({{ comp.recipes.length }} Recipes)</span>
+                </div>
+
+                <div class="space-y-4">
+                  @for (recipe of comp.recipes; track recipe.title) {
+                    <div class="rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 sm:p-5 space-y-3">
+                      <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                          <span class="text-violet-400">#</span> {{ recipe.title }}
+                        </h3>
+                        <button
+                          type="button"
+                          (click)="copySnippet(recipe.templateSnippet)"
+                          class="text-xs text-violet-400 hover:underline flex items-center gap-1 font-medium">
+                          Copy Code
+                        </button>
+                      </div>
+                      <p class="text-xs text-[var(--text-secondary)] leading-relaxed">{{ recipe.scenario }}</p>
+
+                      <!-- Snippet Box -->
+                      <pre class="code-box"><code>{{ recipe.templateSnippet }}</code></pre>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+
+            <!-- ── API SPECIFICATION TABLES (REQUIRED VS OPTIONAL) ── -->
+            <section class="space-y-4">
+              <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span class="size-2 rounded-full bg-emerald-400"></span>
+                API Specification &amp; Properties
+              </h2>
+
+              <!-- Inputs Table -->
+              <div class="rounded-xl border border-[var(--border-muted)] overflow-hidden bg-[var(--bg-card)]">
+                <div class="p-3 bg-[var(--bg-secondary)] border-b border-[var(--border-muted)] text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
+                  <span>Component Inputs (Props)</span>
+                  <span class="font-mono text-[10px] text-[var(--text-tertiary)]">{{ comp.inputs.length }} declared</span>
+                </div>
+
+                @if (comp.inputs.length > 0) {
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr class="border-b border-[var(--border-muted)] text-[var(--text-tertiary)] bg-black/10">
+                          <th class="py-2.5 px-3 font-semibold">Property</th>
+                          <th class="py-2.5 px-3 font-semibold">Requirement</th>
+                          <th class="py-2.5 px-3 font-semibold">Type</th>
+                          <th class="py-2.5 px-3 font-semibold">Default</th>
+                          <th class="py-2.5 px-3 font-semibold">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-[var(--border-muted)]">
+                        @for (inp of comp.inputs; track inp.name) {
+                          <tr class="hover:bg-violet-500/5 transition-colors">
+                            <td class="py-2.5 px-3 font-mono font-bold text-violet-400">{{ inp.name }}</td>
+                            <td class="py-2.5 px-3">
+                              @if (inp.required) {
+                                <span class="req-badge">Required</span>
+                              } @else {
+                                <span class="opt-badge">Optional</span>
+                              }
+                            </td>
+                            <td class="py-2.5 px-3 font-mono text-[var(--text-secondary)] text-[11px]">{{ inp.type }}</td>
+                            <td class="py-2.5 px-3 font-mono text-[var(--text-tertiary)]">{{ inp.default || '—' }}</td>
+                            <td class="py-2.5 px-3 text-[var(--text-secondary)] leading-relaxed">{{ inp.description }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <div class="p-4 text-xs text-[var(--text-tertiary)] text-center">No explicit inputs declared for this container surface.</div>
+                }
+              </div>
+
+              <!-- Outputs Table -->
+              @if (comp.outputs && comp.outputs.length > 0) {
+                <div class="rounded-xl border border-[var(--border-muted)] overflow-hidden bg-[var(--bg-card)]">
+                  <div class="p-3 bg-[var(--bg-secondary)] border-b border-[var(--border-muted)] text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Component Outputs (Events)
+                  </div>
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr class="border-b border-[var(--border-muted)] text-[var(--text-tertiary)] bg-black/10">
+                        <th class="py-2.5 px-3 font-semibold">Event Name</th>
+                        <th class="py-2.5 px-3 font-semibold">Type</th>
+                        <th class="py-2.5 px-3 font-semibold">Trigger Condition</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--border-muted)]">
+                      @for (out of comp.outputs; track out.name) {
+                        <tr class="hover:bg-violet-500/5 transition-colors">
+                          <td class="py-2.5 px-3 font-mono font-bold text-emerald-400">({{ out.name }})</td>
+                          <td class="py-2.5 px-3 font-mono text-[11px] text-[var(--text-secondary)]">{{ out.type }}</td>
+                          <td class="py-2.5 px-3 text-[var(--text-secondary)]">{{ out.description }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+
+            <!-- ── PREFRONTAL PATTERN NON-NEGOTIABLES ── -->
+            @if (comp.guidance && comp.guidance.length > 0) {
+              <section class="p-4 rounded-xl border border-violet-500/20 bg-violet-950/15 space-y-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-violet-400 flex items-center gap-1.5">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Prefrontal Engineering Guidelines
+                </h3>
+                <ul class="space-y-1 text-xs text-violet-200 list-disc list-inside leading-relaxed">
+                  @for (rule of comp.guidance; track rule) {
+                    <li>{{ rule }}</li>
+                  }
+                </ul>
+              </section>
+            }
+          </div>
+        }
+      </main>
+    </div>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 2: CLINICAL WORKFLOW COMPOSITIONS
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeSection() === 'compositions') {
+    <main class="flex-1 overflow-y-auto min-h-0 h-full p-4 sm:p-8 lg:p-10 max-w-7xl mx-auto space-y-8 w-full">
+      <div>
+        <div class="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 mb-2">
+          <span>Real-World Healthcare Screen Recipes</span>
+        </div>
+        <h1 class="text-3xl font-black text-[var(--text-primary)]">Clinical Screen Compositions</h1>
+        <p class="text-sm text-[var(--text-secondary)] max-w-2xl mt-1">
+          How Prefrontal primitives work harmoniously in real hospital departments: Frontdesk Billing, Phlebotomy Collection, and Emergency STAT Reporting.
+        </p>
+      </div>
+
+      <!-- Composition Cards -->
+      <div class="space-y-8">
+        @for (comp of clinicalCompositions; track comp.id) {
+          <div class="rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] overflow-hidden shadow-lg">
+            <!-- Composition Header -->
+            <div class="p-4 sm:p-6 bg-[var(--bg-secondary)] border-b border-[var(--border-muted)] flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-violet-400">{{ comp.category }}</span>
+                <h2 class="text-lg font-bold text-[var(--text-primary)]">{{ comp.title }}</h2>
+                <p class="text-xs text-[var(--text-secondary)]">{{ comp.description }}</p>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                @for (tag of comp.componentsUsed; track tag) {
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-black/20 text-[var(--text-tertiary)] border border-[var(--border-muted)]">{{ tag }}</span>
+                }
+              </div>
+            </div>
+
+            <!-- Composition Live Stage Mockup -->
+            <div class="p-6 bg-[var(--bg-primary)]/50 border-b border-[var(--border-muted)]">
+              @if (comp.id === 'order-create') {
+                <!-- Canonical Hero Band + Split Layout Mockup -->
+                <div class="space-y-3 max-w-4xl mx-auto">
+                  <!-- Simulated Hero Band -->
+                  <div class="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <pf-logo-mark [size]="'xs'" [variant]="'badge'" />
+                      <span class="text-xs font-bold text-[var(--text-primary)]">City Diagnostic Center</span>
+                    </div>
+                    <div class="px-3 py-1 rounded-full bg-[var(--bg-primary)] border border-[var(--border-muted)] text-[11px] text-[var(--text-secondary)]">
+                      Patient: <strong class="text-[var(--text-primary)]">Ramesh Kumar (42M)</strong> · Ref: Dr. Sen
+                    </div>
+                    <pf-clock variant="bare" size="sm" />
+                  </div>
+
+                  <!-- Split Layout: Main Test Card + Side Billing Card -->
+                  <div class="grid md:grid-cols-12 gap-3">
+                    <div class="md:col-span-8 p-4 rounded-xl bg-[var(--bg-card-solid)] border border-[var(--border-muted)] space-y-3">
+                      <div class="flex items-center justify-between border-b border-[var(--border-muted)] pb-2">
+                        <span class="text-xs font-bold uppercase text-[var(--text-secondary)]">Test Catalogue (Main Card)</span>
+                        <span class="text-[11px] text-[var(--text-tertiary)]">2 tests selected</span>
+                      </div>
+                      <div class="space-y-2">
+                        <div class="p-2.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-muted)] flex items-center justify-between">
+                          <div>
+                            <span class="text-xs font-semibold block">Complete Blood Count (CBC)</span>
+                            <span class="text-[10px] text-violet-400">Lavender Tube (EDTA)</span>
+                          </div>
+                          <span class="text-xs font-bold pf-num text-[var(--text-primary)]">{{ 450 | inr }}</span>
+                        </div>
+                        <div class="p-2.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-muted)] flex items-center justify-between">
+                          <div>
+                            <span class="text-xs font-semibold block">Liver Function Test (LFT)</span>
+                            <span class="text-[10px] text-amber-400">Gold SST (Serum)</span>
+                          </div>
+                          <span class="text-xs font-bold pf-num text-[var(--text-primary)]">{{ 850 | inr }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Side Billing Summary Card -->
+                    <div class="md:col-span-4 p-4 rounded-xl bg-[var(--bg-card-solid)] border border-[var(--border-muted)] flex flex-col justify-between">
+                      <div>
+                        <div class="flex items-center justify-between border-b border-[var(--border-muted)] pb-2 mb-3">
+                          <span class="text-xs font-bold uppercase text-[var(--text-secondary)]">Billing (Side Card)</span>
+                          <span class="state-badge">Cash Counter</span>
+                        </div>
+                        <div class="space-y-1.5 text-xs">
+                          <div class="flex justify-between text-[var(--text-tertiary)]"><span>Subtotal</span><span class="pf-num">{{ 1300 | inr }}</span></div>
+                          <div class="flex justify-between text-[var(--text-tertiary)]"><span>GST (5%)</span><span class="pf-num">{{ 65 | inr }}</span></div>
+                          <div class="flex justify-between font-bold text-[var(--text-primary)] pt-2 border-t border-[var(--border-muted)]">
+                            <span>Total Payable</span><span class="text-base text-violet-400 pf-num">{{ 1365 | inr }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="pt-4">
+                        <pf-button variant="primary" (click)="logEvent('Order Generated!')">
+                          Generate Order (Single Main CTA)
+                        </pf-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              @if (comp.id === 'phlebotomy-collect') {
+                <!-- Touch-First Kiosk Specimen Collection Mockup -->
+                <div class="p-4 rounded-xl bg-[var(--bg-card-solid)] border border-[var(--border-muted)] max-w-3xl mx-auto space-y-4">
+                  <div class="flex items-center justify-between border-b border-[var(--border-muted)] pb-3">
+                    <div class="flex items-center gap-3">
+                      <pf-avatar name="Amit Phlebotomist" [size]="40" status="online" />
+                      <div>
+                        <span class="text-xs font-bold block">Accession #AK-2026-8801</span>
+                        <span class="text-[10px] text-[var(--text-tertiary)]">Counter 3 · Rapid Phlebotomy</span>
+                      </div>
+                    </div>
+                    <pf-status-chip tone="urgent">STAT URGENT</pf-status-chip>
+                  </div>
+
+                  <div class="grid sm:grid-cols-2 gap-4 items-center">
+                    <div class="p-3 bg-white rounded-lg flex flex-col items-center">
+                      <pf-barcode-display code="AK-2026-8801" mode="barcode" [showValue]="true" />
+                    </div>
+                    <div class="space-y-3">
+                      <span class="text-xs font-medium text-[var(--text-secondary)] block">Enter 4-digit Nurse PIN to authorize collection:</span>
+                      <pf-pin-dots (completed)="onPin($event)" />
+                      <pf-touch-btn variant="primary" size="md" (pressed)="logEvent('Sample drawn confirmed')">
+                        Confirm 2 Vials Drawn
+                      </pf-touch-btn>
+                    </div>
+                  </div>
+                </div>
+              }
+
+              @if (comp.id === 'patient-consent') {
+                <!-- Patient Registration and Consent Mockup -->
+                <div class="p-4 rounded-xl bg-[var(--bg-card-solid)] border border-[var(--border-muted)] max-w-2xl mx-auto space-y-4">
+                  <h3 class="text-xs font-bold uppercase text-[var(--text-secondary)] border-b border-[var(--border-muted)] pb-2">Outpatient Consent Agreement</h3>
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <pf-datetime label="Procedure Scheduled" [value]="dateTimeValue" />
+                    <pf-select label="Clinic Department" [options]="options" [value]="selectValue" />
+                  </div>
+                  <div class="pt-2 flex items-center justify-between">
+                    <pf-button variant="secondary" (click)="showSignaturePad = true">
+                      {{ signatureDataUrl ? 'Re-sign Consent' : 'Launch Signature Modal' }}
+                    </pf-button>
+                    @if (signatureDataUrl) {
+                      <span class="state-badge">Signature Attached</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Prefrontal Principles Demonstrated -->
+            <div class="p-4 bg-[var(--bg-secondary)] text-xs text-[var(--text-secondary)]">
+              <span class="font-bold text-[var(--text-primary)] block mb-1">Architecture Rules Demonstrated:</span>
+              <ul class="list-disc list-inside space-y-0.5 text-[var(--text-tertiary)]">
+                @for (rule of comp.principlesDemonstrated; track rule) {
+                  <li>{{ rule }}</li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+      </div>
+    </main>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 3: DESIGN TOKENS & FOUNDATIONS
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeSection() === 'tokens') {
+    <main class="flex-1 overflow-y-auto min-h-0 h-full p-4 sm:p-8 lg:p-10 max-w-7xl mx-auto space-y-8 w-full">
+      <div>
+        <div class="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 mb-2">
+          <span>System Palette &amp; Foundations</span>
+        </div>
+        <h1 class="text-3xl font-black text-[var(--text-primary)]">Design Tokens &amp; Theme Guide</h1>
+        <p class="text-sm text-[var(--text-secondary)] max-w-2xl mt-1">
+          Strictly Violet brand foundation with neutral slate surfaces. Tabular numbers for clinical metrics, and standardized blood tube cap indicators.
+        </p>
+      </div>
+
+      <!-- Color Swatches Grid -->
+      <section class="space-y-4">
+        <h2 class="text-base font-bold text-[var(--text-primary)]">Core Brand &amp; Accent Palette</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          @for (color of tokenPalette.primary; track color.name) {
+            <div class="rounded-xl border border-[var(--border-muted)] p-3 bg-[var(--bg-card)] space-y-2">
+              <div class="h-16 rounded-lg shadow-inner flex items-end p-2 text-white font-mono text-[10px]" [style.background]="color.hex">
+                {{ color.hex }}
+              </div>
+              <div>
+                <span class="text-xs font-bold text-[var(--text-primary)] block">{{ color.name }}</span>
+                <span class="text-[10px] font-mono text-[var(--text-tertiary)] block">{{ color.cssVar }}</span>
+                <p class="text-[11px] text-[var(--text-secondary)] mt-1">{{ color.use }}</p>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Blood Collection Tube Caps Reference -->
+      <section class="space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-[var(--text-primary)]">Clinical Blood Collection Tube Caps</h2>
+          <p class="text-xs text-[var(--text-tertiary)]">Strictly standard laboratory additives. Colors are never used decoratively.</p>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          @for (tube of clinicalTubeCaps; track tube.name) {
+            <div class="p-3.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] flex items-start gap-3">
+              <div class="size-8 rounded-full border-2 flex-shrink-0 mt-0.5 shadow-sm" [style.background]="tube.hex" [style.border-color]="tube.borderHex"></div>
+              <div>
+                <span class="text-xs font-bold text-[var(--text-primary)] block">{{ tube.name }}</span>
+                <span class="text-[11px] text-violet-400 font-medium block">{{ tube.additive }}</span>
+                <span class="text-[11px] text-[var(--text-tertiary)] block mt-0.5">{{ tube.department }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Tabular Numbers (.pf-num) Showcase -->
+      <section class="rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-5 space-y-3">
+        <h2 class="text-base font-bold text-[var(--text-primary)]">Tabular Numbers (.pf-num Rule)</h2>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed max-w-2xl">
+          Monospace is never used for IDs, specimen accession numbers, dates, or prices. Instead, use Noto Sans with <code class="text-violet-400">font-variant-numeric: tabular-nums</code> via the <code class="text-violet-400">.pf-num</code> class so digits align in vertical columns without jitter.
+        </p>
+        <div class="grid sm:grid-cols-2 gap-4 pt-2">
+          <div class="p-3 rounded-lg bg-[var(--bg-primary)] border border-rose-500/30">
+            <span class="text-[11px] font-bold text-rose-400 block mb-1">❌ Proportional Numbers (Jitters on tick):</span>
+            <span class="text-2xl font-bold tracking-normal">₹ 1,111.11 vs ₹ 8,888.88</span>
+          </div>
+          <div class="p-3 rounded-lg bg-[var(--bg-primary)] border border-emerald-500/30">
+            <span class="text-[11px] font-bold text-emerald-400 block mb-1">✔ Tabular Numbers (.pf-num aligned):</span>
+            <span class="text-2xl font-bold pf-num text-emerald-400">₹ 1,111.11 vs ₹ 8,888.88</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 4: PREFRONTAL PATTERN NON-NEGOTIABLES
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (activeSection() === 'principles') {
+    <main class="flex-1 overflow-y-auto min-h-0 h-full p-4 sm:p-8 lg:p-10 max-w-5xl mx-auto space-y-8 w-full">
+      <div>
+        <div class="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 mb-2">
+          <span>docs/PF-PATTERN.md Distillation</span>
+        </div>
+        <h1 class="text-3xl font-black text-[var(--text-primary)]">Engineering &amp; UX Non-Negotiables</h1>
+        <p class="text-sm text-[var(--text-secondary)] mt-1">
+          Every screen in Prefrontal follows these core principles without exception.
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="p-5 rounded-xl border border-violet-500/30 bg-[var(--bg-card)] space-y-2">
+          <h2 class="text-base font-bold text-violet-400 flex items-center gap-2">
+            <span>1.</span> Primary Gradient ONLY on the Single Main CTA
+          </h2>
+          <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+            The signature violet&rarr;pink gradient pill (<code class="text-violet-300">--gradient-primary</code>) is reserved strictly for the ONE primary action on any view (e.g., "Confirm Order", "Collect Specimen"). Secondary actions must use slate outlines or quiet borders.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-2">
+          <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <span>2.</span> The Hero Band is Continuous &amp; Never Becomes a Page Title
+          </h2>
+          <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+            The top band (<code class="text-violet-300">pf-hero-band</code>) always shows the back chevron, tenant logo mark, and tenant name. Its enclosed pill is the <strong>CONTEXT BAR</strong> for the step (search or read-only subject chips with counts).
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-2">
+          <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <span>3.</span> Two Jobs on One Screen = Main Card + Side Card Split
+          </h2>
+          <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Layouts use <code class="text-violet-300">.pf-body--split</code>. Main work card sits on the left, companion side card (~400px) sits on the right with sticky footer buttons.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-2">
+          <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <span>4.</span> Zero Native HTML Controls
+          </h2>
+          <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Never use native <code class="text-violet-300">&lt;select&gt;</code>, browser checkboxes, or native date pickers. Always use <code class="text-violet-300">pf-select</code>, <code class="text-violet-300">pf-segmented</code>, <code class="text-violet-300">pf-date</code>, and <code class="text-violet-300">pf-toggle</code>.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-2">
+          <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <span>5.</span> Bottom Navbar is Always Visible
+          </h2>
+          <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+            All screens, sheets, and drawers fit above the bottom navbar (<code class="text-violet-300">--pf-botbar-h</code>) and never hide it.
+          </p>
+        </div>
+      </div>
+    </main>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       GATED INTERACTION MODALS (Only mounted when triggered)
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <pf-confirm-dialog
+    [open]="showConfirm"
+    title="Discard sample changes?"
+    message="This is an interactive dialog example. No real database record will be altered."
+    confirmLabel="Confirm"
+    (confirm)="confirmAction()"
+    (cancel)="showConfirm = false" />
+
+  @if (showScanner) {
+    <pf-barcode-scanner-modal
+      title="Test Barcode / QR Scanner"
+      noun="specimen ID"
+      [manualOnly]="true"
+      (matched)="onScan($event)"
+      (cancelled)="showScanner = false" />
+  }
+
+  @if (showImageEditor && imageFile) {
+    <pf-image-editor
+      [file]="imageFile"
+      (applied)="onImageApplied($event)"
+      (cancelled)="showImageEditor = false" />
+  }
+
+  @if (showSignaturePad) {
+    <pf-signature-pad
+      [initialDataUrl]="signatureDataUrl"
+      (saved)="onSignatureSaved($event)"
+      (cancelled)="showSignaturePad = false" />
+  }
+
+  <!-- Footer -->
+  <footer class="mt-auto py-6 px-6 border-t border-[var(--border-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-tertiary)] bg-[var(--bg-secondary)]">
+    <div class="flex items-center gap-2">
+      <pf-logo-mark [size]="'xs'" [variant]="'glyph'" />
+      <span>Prefrontal UI Component Cookbook</span>
+    </div>
+    <span>LMS · OPD · IPD · Pharmacy · Frontdesk Shared Primitives</span>
+  </footer>
+</div>

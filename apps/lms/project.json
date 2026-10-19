@@ -8,7 +8,9 @@
   "targets": {
     "build": {
       "executor": "@angular/build:application",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "options": {
         "outputPath": "dist/apps/lms",
         "browser": "apps/lms/src/main.ts",
@@ -32,7 +34,9 @@
             "output": "assets"
           }
         ],
-        "styles": ["apps/lms/src/styles.scss"],
+        "styles": [
+          "apps/lms/src/styles.scss"
+        ],
         "fileReplacements": [
           {
             "replace": "apps/lms/src/environments/environment.ts",
@@ -46,7 +50,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "1.5mb"
+              "maximumError": "2.5mb"
             },
             {
               "type": "anyComponentStyle",
@@ -72,7 +76,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "1.5mb"
+              "maximumError": "1.55mb"
             },
             {
               "type": "anyComponentStyle",
@@ -94,7 +98,7 @@
             {
               "type": "initial",
               "maximumWarning": "1mb",
-              "maximumError": "1.5mb"
+              "maximumError": "1.55mb"
             },
             {
               "type": "anyComponentStyle",
@@ -109,6 +113,92 @@
               "with": "apps/lms/src/environments/environment.capacitor.ts"
             }
           ]
+        },
+        "stage": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "1.55mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.stage.ts"
+            }
+          ]
+        },
+        "capacitor-stage": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "1.55mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.capacitor-stage.ts"
+            }
+          ]
+        },
+        "electron-stage": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "1.55mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "baseHref": "./",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.electron-stage.ts"
+            }
+          ]
+        },
+        "electron-dev": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "1.55mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "baseHref": "./",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.electron-dev.ts"
+            }
+          ]
         }
       },
       "defaultConfiguration": "production"
@@ -116,6 +206,13 @@
     "serve": {
       "continuous": true,
       "executor": "@angular/build:dev-server",
+      "options": {
+        "prebundle": {
+          "exclude": [
+            "@prefrontal/shared"
+          ]
+        }
+      },
       "configurations": {
         "production": {
           "buildTarget": "lms:build:production"

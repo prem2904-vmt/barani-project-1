@@ -1,4 +1,5 @@
 @import url('tailwindcss');
+@source "../../../libs/shared/src";
 
 @import url('flatpickr/dist/flatpickr.css');
 
@@ -7,195 +8,206 @@
  * the calendar component's `isDark` flag. */
 @import url('@schedule-x/theme-default/dist/index.css');
 
+.pf-collect-nav-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  /* Inlined (not '/assets/…'): an absolute path breaks under Electron's file:// origin. */
+  -webkit-mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CjxwYXRoIGQ9Ik0wIDAgQzEuNjMgLTAuMDEgMy4yNSAtMC4wMSA0Ljg4IC0wLjAyIEM5LjI4IC0wLjA0IDEzLjY4IC0wLjAzIDE4LjA4IC0wLjAyIEMyMi42OSAtMC4wMSAyNy4zIC0wLjAyIDMxLjkxIC0wLjAzIEMzOS42NiAtMC4wMyA0Ny40IC0wLjAyIDU1LjE0IC0wIEM2NC4wOSAwLjAyIDczLjAzIDAuMDEgODEuOTggLTAuMDEgQzg5LjY3IC0wLjAzIDk3LjM2IC0wLjAzIDEwNS4wNCAtMC4wMiBDMTA5LjYzIC0wLjAyIDExNC4yMiAtMC4wMSAxMTguODEgLTAuMDMgQzEyMy4xMiAtMC4wNCAxMjcuNDQgLTAuMDMgMTMxLjc1IC0wLjAxIEMxMzMuMzMgLTAgMTM0LjkxIC0wIDEzNi40OSAtMC4wMSBDMTUxLjQzIC0wLjA5IDE1MS40MyAtMC4wOSAxNTcuMDggNC41MiBDMTYxLjU3IDkuMDUgMTYyLjY2IDE0LjAyIDE2Mi43NyAyMC4yMyBDMTYyLjc2IDIxLjE3IDE2Mi43NSAyMi4xMSAxNjIuNzQgMjMuMDggQzE2Mi43NSAyNC4wNyAxNjIuNzUgMjUuMDYgMTYyLjc2IDI2LjA4IEMxNjIuNzYgMjguMTcgMTYyLjc1IDMwLjI1IDE2Mi43MyAzMi4zMyBDMTYyLjcgMzUuNTEgMTYyLjczIDM4LjY4IDE2Mi43NiA0MS44NSBDMTYyLjc2IDQzLjg5IDE2Mi43NSA0NS45MiAxNjIuNzQgNDcuOTYgQzE2Mi43NSA0OC44OSAxNjIuNzYgNDkuODMgMTYyLjc3IDUwLjggQzE2Mi42NiA1Ny4xOSAxNjEuMjcgNjEuNjEgMTU3LjA4IDY2LjUyIEMxNTMuNDIgNjkuNzUgMTUwLjIgNzAuNzIgMTQ1LjM0IDcwLjYxIEMxNDQuMTQgNzAuNTkgMTQ0LjE0IDcwLjU5IDE0Mi45MiA3MC41NyBDMTQyLjMxIDcwLjU1IDE0MS43IDcwLjU0IDE0MS4wOCA3MC41MiBDMTQxLjA4IDcxLjMgMTQxLjA4IDcyLjA5IDE0MS4wOCA3Mi45IEMxNDEuMTUgMTE5LjQ5IDE0MS4yIDE2Ni4wOSAxNDEuMjMgMjEyLjY5IEMxNDEuMjQgMjE4LjI5IDE0MS4yNCAyMjMuODkgMTQxLjI0IDIyOS40OCBDMTQxLjI0IDIzMC42IDE0MS4yNCAyMzEuNzEgMTQxLjI1IDIzMi44NiBDMTQxLjI2IDI1MC44OSAxNDEuMjggMjY4LjkyIDE0MS4zMSAyODYuOTYgQzE0MS4zNCAzMDUuNDcgMTQxLjM1IDMyMy45OCAxNDEuMzYgMzQyLjQ5IEMxNDEuMzYgMzUzLjkgMTQxLjM4IDM2NS4zMiAxNDEuNCAzNzYuNzQgQzE0MS40MiAzODQuNTcgMTQxLjQyIDM5Mi40MSAxNDEuNDIgNDAwLjI0IEMxNDEuNDIgNDA0Ljc2IDE0MS40MiA0MDkuMjcgMTQxLjQ0IDQxMy43OSBDMTQxLjQ1IDQxNy45NCAxNDEuNDUgNDIyLjA4IDE0MS40NCA0MjYuMjIgQzE0MS40NCA0MjcuNzEgMTQxLjQ0IDQyOS4yIDE0MS40NSA0MzAuNjkgQzE0MS41MyA0NDMuNDYgMTQwLjMxIDQ1Ni4xOCAxMzQuODMgNDY3Ljg5IEMxMzQuNTMgNDY4LjU2IDEzNC4yMiA0NjkuMjMgMTMzLjkxIDQ2OS45MSBDMTMxLjMyIDQ3NS40MSAxMjguMTIgNDc5Ljk4IDEyNC4wOCA0ODQuNTIgQzEyMy41NyA0ODUuMTggMTIzLjA2IDQ4NS44NCAxMjIuNTQgNDg2LjUyIEMxMTQuNiA0OTYuNTIgMTAyLjgxIDUwMi45NyA5MS4wOCA1MDcuNTIgQzkwLjIxIDUwNy44NiA4OS4zNCA1MDguMiA4OC40NCA1MDguNTUgQzcwLjk0IDUxNC4wNyA1MC4zNCA1MTEuMzggMzMuOTUgNTAzLjg5IEMxNS41NSA0OTQgMi44MyA0NzguOTkgLTQuMDUgNDU5LjMgQy02LjA3IDQ1Mi4yMSAtNy4wNSA0NDUuMTkgLTcuMDQgNDM3LjgyIEMtNy4wNSA0MzYuNSAtNy4wNSA0MzUuMTggLTcuMDUgNDMzLjgzIEMtNy4wNSA0MzIuMzggLTcuMDUgNDMwLjkzIC03LjA0IDQyOS40OCBDLTcuMDQgNDI3LjkzIC03LjA0IDQyNi4zOCAtNy4wNCA0MjQuODMgQy03LjA1IDQyMC41OCAtNy4wNCA0MTYuMzMgLTcuMDQgNDEyLjA5IEMtNy4wMyA0MDcuNSAtNy4wNCA0MDIuOTIgLTcuMDQgMzk4LjMzIEMtNy4wNCAzOTAuMzkgLTcuMDMgMzgyLjQ1IC03LjAzIDM3NC41MSBDLTcuMDIgMzYzLjAzIC03LjAyIDM1MS41NSAtNy4wMiAzNDAuMDggQy03LjAxIDMyMS40NSAtNy4wMSAzMDIuODIgLTcgMjg0LjIgQy02Ljk5IDI2Ni4xMSAtNi45OCAyNDguMDIgLTYuOTggMjI5LjkyIEMtNi45OCAyMjguODEgLTYuOTggMjI3LjY5IC02Ljk4IDIyNi41NCBDLTYuOTcgMjIwLjk1IC02Ljk3IDIxNS4zNSAtNi45NyAyMDkuNzYgQy02Ljk2IDE2My4zNCAtNi45NCAxMTYuOTMgLTYuOTIgNzAuNTIgQy03LjUzIDcwLjUzIC04LjEzIDcwLjU1IC04Ljc2IDcwLjU3IEMtOS41NiA3MC41OCAtMTAuMzYgNzAuNiAtMTEuMTkgNzAuNjEgQy0xMS45OCA3MC42MyAtMTIuNzcgNzAuNjUgLTEzLjU5IDcwLjY2IEMtMTcuNDIgNzAuNDIgLTIwLjA3IDY5LjA0IC0yMi45MiA2Ni41MiBDLTI3LjkgNjAuNyAtMjguNjcgNTUuNDIgLTI4LjU5IDQ3Ljk2IEMtMjguNTkgNDYuNDcgLTI4LjU5IDQ2LjQ3IC0yOC42IDQ0Ljk1IEMtMjguNiA0Mi44NyAtMjguNTkgNDAuNzggLTI4LjU3IDM4LjcgQy0yOC41NSAzNS41MyAtMjguNTcgMzIuMzYgLTI4LjYxIDI5LjE4IEMtMjguNiAyNy4xNSAtMjguNiAyNS4xMSAtMjguNTkgMjMuMDggQy0yOC42IDIyLjE0IC0yOC42MSAyMS4yIC0yOC42MiAyMC4yMyBDLTI4LjUxIDE0LjAyIC0yNy40MSA5LjA1IC0yMi45MiA0LjUyIEMtMTYuMTkgLTAuOTggLTguMjcgLTAuMDUgMCAwIFogTS0xNC45MiAxNS41MiBDLTE1LjEyIDE4LjUxIC0xNS4yIDIxLjQgLTE1LjE5IDI0LjM5IEMtMTUuMTkgMjUuMjcgLTE1LjE5IDI2LjE1IC0xNS4xOSAyNy4wNiBDLTE1LjE5IDI4LjkyIC0xNS4xOSAzMC43OSAtMTUuMTggMzIuNjUgQy0xNS4xNyAzNS41MSAtMTUuMTggMzguMzYgLTE1LjIgNDEuMjIgQy0xNS4xOSA0My4wMyAtMTUuMTkgNDQuODQgLTE1LjE5IDQ2LjY0IEMtMTUuMTkgNDcuNSAtMTUuMiA0OC4zNiAtMTUuMiA0OS4yNCBDLTE1LjM4IDUzLjg2IC0xNS4zOCA1My44NiAtMTIuOTIgNTcuNTIgQy0xMC4wNSA1Ny44MiAtMTAuMDUgNTcuODIgLTYuNjIgNTcuNzcgQy01Ljk3IDU3Ljc3IC01LjMxIDU3Ljc4IC00LjY0IDU3Ljc4IEMtMi40NCA1Ny43OSAtMC4yNCA1Ny43OCAxLjk2IDU3Ljc4IEMzLjUzIDU3Ljc4IDUuMTEgNTcuNzggNi42OCA1Ny43OSBDMTAuOTYgNTcuOCAxNS4yNCA1Ny43OSAxOS41MiA1Ny43OSBDMjQgNTcuNzggMjguNDcgNTcuNzkgMzIuOTQgNTcuNzkgQzQwLjQ1IDU3Ljc5IDQ3Ljk3IDU3Ljc5IDU1LjQ4IDU3Ljc4IEM2NC4xNyA1Ny43NyA3Mi44NyA1Ny43NyA4MS41NiA1Ny43OCBDODkuMDIgNTcuNzkgOTYuNDcgNTcuNzkgMTAzLjkzIDU3Ljc5IEMxMDguMzggNTcuNzggMTEyLjg0IDU3Ljc4IDExNy4zIDU3Ljc5IEMxMjEuNDkgNTcuOCAxMjUuNjcgNTcuNzkgMTI5Ljg2IDU3Ljc4IEMxMzEuNDEgNTcuNzggMTMyLjk1IDU3Ljc4IDEzNC40OSA1Ny43OCBDMTM2LjU4IDU3Ljc5IDEzOC42OCA1Ny43OCAxNDAuNzggNTcuNzcgQzE0MS45NSA1Ny43NyAxNDMuMTMgNTcuNzcgMTQ0LjM0IDU3Ljc3IEMxNDcuMjIgNTcuOCAxNDcuMjIgNTcuOCAxNDkuMDggNTUuNTIgQzE0OS4yOCA1Mi41MyAxNDkuMzYgNDkuNjMgMTQ5LjM0IDQ2LjY0IEMxNDkuMzUgNDUuMzIgMTQ5LjM1IDQ1LjMyIDE0OS4zNSA0My45OCBDMTQ5LjM1IDQyLjExIDE0OS4zNSA0MC4yNSAxNDkuMzQgMzguMzkgQzE0OS4zMyAzNS41MyAxNDkuMzQgMzIuNjcgMTQ5LjM1IDI5LjgxIEMxNDkuMzUgMjguMDEgMTQ5LjM1IDI2LjIgMTQ5LjM0IDI0LjM5IEMxNDkuMzUgMjMuMTEgMTQ5LjM1IDIzLjExIDE0OS4zNiAyMS43OSBDMTQ5LjUzIDE3LjE4IDE0OS41MyAxNy4xOCAxNDcuMDggMTMuNTIgQzE0NC4yMSAxMy4yMSAxNDQuMjEgMTMuMjEgMTQwLjc4IDEzLjI2IEMxMzkuOCAxMy4yNiAxMzkuOCAxMy4yNiAxMzguOCAxMy4yNSBDMTM2LjYgMTMuMjUgMTM0LjQgMTMuMjUgMTMyLjIgMTMuMjYgQzEzMC42MiAxMy4yNiAxMjkuMDUgMTMuMjUgMTI3LjQ4IDEzLjI1IEMxMjMuMTkgMTMuMjQgMTE4LjkxIDEzLjI0IDExNC42MyAxMy4yNSBDMTEwLjE2IDEzLjI1IDEwNS42OSAxMy4yNSAxMDEuMjEgMTMuMjUgQzkzLjcgMTMuMjQgODYuMTkgMTMuMjUgNzguNjggMTMuMjYgQzY5Ljk4IDEzLjI3IDYxLjI5IDEzLjI2IDUyLjU5IDEzLjI1IEM0NS4xNCAxMy4yNCAzNy42OSAxMy4yNCAzMC4yMyAxMy4yNSBDMjUuNzcgMTMuMjUgMjEuMzIgMTMuMjUgMTYuODYgMTMuMjQgQzEyLjY3IDEzLjI0IDguNDggMTMuMjQgNC4yOSAxMy4yNSBDMi43NSAxMy4yNiAxLjIxIDEzLjI2IC0wLjMzIDEzLjI1IEMtMi40MyAxMy4yNSAtNC41MiAxMy4yNSAtNi42MiAxMy4yNiBDLTcuOCAxMy4yNiAtOC45NyAxMy4yNyAtMTAuMTggMTMuMjcgQy0xMy4wNyAxMy4yNCAtMTMuMDcgMTMuMjQgLTE0LjkyIDE1LjUyIFogTTYuMDggNzAuNTIgQzYuMDggMTM0LjIxIDYuMDggMTk3LjkgNi4wOCAyNjMuNTIgQzQ2LjM0IDI2My41MiA4Ni42IDI2My41MiAxMjguMDggMjYzLjUyIEMxMjguMDggMTk5LjgzIDEyOC4wOCAxMzYuMTQgMTI4LjA4IDcwLjUyIEM4Ny44MiA3MC41MiA0Ny41NiA3MC41MiA2LjA4IDcwLjUyIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxODguOTIxODc1LDAuNDgyNDIxODc1KSIvPgo8cGF0aCBkPSJNMCAwIEMwLjkyIC0wIDEuODQgLTAuMDEgMi43OSAtMC4wMSBDNC43NCAtMC4wMSA2LjY4IC0wLjAxIDguNjMgMC4wMSBDMTEuNjEgMC4wMyAxNC41OSAwLjAxIDE3LjU4IC0wLjAyIEMxOS40NyAtMC4wMSAyMS4zNiAtMC4wMSAyMy4yNSAwIEMyNC4xNCAtMC4wMSAyNS4wNCAtMC4wMiAyNS45NiAtMC4wMiBDMzIuMSAwLjA3IDMyLjEgMC4wNyAzNC43MSAyLjM3IEMzNi4wNSA1LjUzIDM1LjcyIDcuMzIgMzQuNjIgMTAuNTMgQzMwLjUgMTMuODcgMjYuNTQgMTMuOTcgMjEuNDQgMTMuOTMgQzIwLjY2IDEzLjkzIDE5Ljg4IDEzLjk0IDE5LjA3IDEzLjk0IEMxNy40MyAxMy45NCAxNS43OSAxMy45MyAxNC4xNCAxMy45MiBDMTEuNjMgMTMuOTEgOS4xMyAxMy45MiA2LjYyIDEzLjk0IEM1LjAyIDEzLjk0IDMuNDEgMTMuOTQgMS44MSAxMy45MyBDMS4wNyAxMy45NCAwLjMyIDEzLjk0IC0wLjQ1IDEzLjk1IEMtNC45MSAxMy44OSAtNy44NyAxMy4zNyAtMTEuMzggMTAuNTMgQy0xMi40NyA3LjMyIC0xMi44IDUuNTMgLTExLjQ2IDIuMzcgQy04LjA3IC0wLjYyIC00LjM3IC0wLjA0IDAgMCBaICIgZmlsbD0iIzAwMDAwMCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjQ0LjM3NSwyOS40Njg3NSkiLz4KPHBhdGggZD0iTTAgMCBDMS4yNSAtMC4wMyAyLjQ5IC0wLjA1IDMuNzggLTAuMDggQzcuMDYgMC4yNSA3LjA2IDAuMjUgOC45OCAxLjU4IEMxMC43MSA0LjI0IDEwLjUgNi4xNiAxMC4wNiA5LjI1IEM3LjkgMTIuMDggNi43NCAxMy4xMyAzLjE5IDEzLjc1IEMyLjE2IDEzLjczIDEuMTIgMTMuNzEgMC4wNiAxMy42OSBDLTEuNDggMTMuNjkgLTEuNDggMTMuNjkgLTMuMDYgMTMuNjggQy02LjI0IDEzLjIgLTcuNjIgMTIuNDQgLTkuOTQgMTAuMjUgQy0xMS4yIDcuNTUgLTExIDYuNDUgLTEwLjEyIDMuNTYgQy03Ljg5IC0wLjc5IC00LjUxIDAuMDYgMCAwIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyODcuOTM3NSwxNzguNzUpIi8+CjxwYXRoIGQ9Ik0wIDAgQzEuMTUgLTAuMDQgMi4zIC0wLjA3IDMuNDkgLTAuMTEgQzYuNjkgMC4zMSA2LjY5IDAuMzEgOS4wOCAyLjE0IEMxMC42OSA0LjMxIDEwLjY5IDQuMzEgMTEuMTIgNy4zOCBDMTAuNjkgMTAuMzEgMTAuNjkgMTAuMzEgOS42IDExLjk3IEM2LjY5IDE0LjAxIDQuMTkgMTMuNzEgMC42OSAxMy42OSBDLTAuNTUgMTMuNyAtMS43OSAxMy43IC0zLjA2IDEzLjcxIEMtNi4zMSAxMy4zMSAtNi4zMSAxMy4zMSAtOC4yIDExLjkxIEMtOS41OSA5LjkyIC0xMC4xNyA4Ljc1IC0xMC4zMSA2LjMxIEMtNy4zOSAwLjYxIC02LjM0IDAuMTMgMCAwIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyODcuMzEyNSwxNDAuNjg3NSkiLz4KPHBhdGggZD0iTTAgMCBDMS4yNyAtMC4wMSAxLjI3IC0wLjAxIDIuNTYgLTAuMDIgQzUuMTcgMC4yNyA2Ljc5IDAuODUgOSAyLjI1IEMxMC40IDUuMDUgMTAuMjUgNy4xNSAxMCAxMC4yNSBDOC45NSAxMS45MSA4Ljk1IDExLjkxIDcgMTMuMjUgQzQuMzkgMTMuNiAyLjExIDEzLjc2IC0wLjUgMTMuNzUgQy0xLjE4IDEzLjc4IC0xLjg1IDEzLjgxIC0yLjU1IDEzLjg0IEMtNC41MyAxMy44NCAtNC41MyAxMy44NCAtOCAxMy4yNSBDLTEwIDEwLjkyIC0xMCAxMC45MiAtMTEgOC4yNSBDLTEwLjQ0IDUuMDYgLTEwLjQ0IDUuMDYgLTkgMi4yNSBDLTUuOTkgMC4yOSAtMy41NSAtMC4wMiAwIDAgWiAiIGZpbGw9IiMwMDAwMDAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI4OCwxMDIuNzUpIi8+CjxwYXRoIGQ9Ik0wIDAgQzIgMS4xMiAyIDEuMTIgMyAzLjEyIEMzLjQ1IDguNDEgMy40NSA4LjQxIDEuOTUgMTAuNzkgQy0xLjAyIDEyLjgyIC00LjAzIDEyLjY0IC03LjUgMTIuNjIgQy04LjE4IDEyLjY1IC04Ljg1IDEyLjY4IC05LjU1IDEyLjcxIEMtMTEuNTMgMTIuNzIgLTExLjUzIDEyLjcyIC0xNSAxMi4xMiBDLTE3IDkuNzkgLTE3IDkuNzkgLTE4IDcuMTIgQy0xNy40NCAzLjk0IC0xNy40NCAzLjk0IC0xNiAxLjEyIEMtMTEuMTIgLTIgLTUuNCAtMS41NyAwIDAgWiAiIGZpbGw9IiMwMDAwMDAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI5NSwyMTYuODc1KSIvPgo8L3N2Zz4=') center / contain no-repeat;
+  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CjxwYXRoIGQ9Ik0wIDAgQzEuNjMgLTAuMDEgMy4yNSAtMC4wMSA0Ljg4IC0wLjAyIEM5LjI4IC0wLjA0IDEzLjY4IC0wLjAzIDE4LjA4IC0wLjAyIEMyMi42OSAtMC4wMSAyNy4zIC0wLjAyIDMxLjkxIC0wLjAzIEMzOS42NiAtMC4wMyA0Ny40IC0wLjAyIDU1LjE0IC0wIEM2NC4wOSAwLjAyIDczLjAzIDAuMDEgODEuOTggLTAuMDEgQzg5LjY3IC0wLjAzIDk3LjM2IC0wLjAzIDEwNS4wNCAtMC4wMiBDMTA5LjYzIC0wLjAyIDExNC4yMiAtMC4wMSAxMTguODEgLTAuMDMgQzEyMy4xMiAtMC4wNCAxMjcuNDQgLTAuMDMgMTMxLjc1IC0wLjAxIEMxMzMuMzMgLTAgMTM0LjkxIC0wIDEzNi40OSAtMC4wMSBDMTUxLjQzIC0wLjA5IDE1MS40MyAtMC4wOSAxNTcuMDggNC41MiBDMTYxLjU3IDkuMDUgMTYyLjY2IDE0LjAyIDE2Mi43NyAyMC4yMyBDMTYyLjc2IDIxLjE3IDE2Mi43NSAyMi4xMSAxNjIuNzQgMjMuMDggQzE2Mi43NSAyNC4wNyAxNjIuNzUgMjUuMDYgMTYyLjc2IDI2LjA4IEMxNjIuNzYgMjguMTcgMTYyLjc1IDMwLjI1IDE2Mi43MyAzMi4zMyBDMTYyLjcgMzUuNTEgMTYyLjczIDM4LjY4IDE2Mi43NiA0MS44NSBDMTYyLjc2IDQzLjg5IDE2Mi43NSA0NS45MiAxNjIuNzQgNDcuOTYgQzE2Mi43NSA0OC44OSAxNjIuNzYgNDkuODMgMTYyLjc3IDUwLjggQzE2Mi42NiA1Ny4xOSAxNjEuMjcgNjEuNjEgMTU3LjA4IDY2LjUyIEMxNTMuNDIgNjkuNzUgMTUwLjIgNzAuNzIgMTQ1LjM0IDcwLjYxIEMxNDQuMTQgNzAuNTkgMTQ0LjE0IDcwLjU5IDE0Mi45MiA3MC41NyBDMTQyLjMxIDcwLjU1IDE0MS43IDcwLjU0IDE0MS4wOCA3MC41MiBDMTQxLjA4IDcxLjMgMTQxLjA4IDcyLjA5IDE0MS4wOCA3Mi45IEMxNDEuMTUgMTE5LjQ5IDE0MS4yIDE2Ni4wOSAxNDEuMjMgMjEyLjY5IEMxNDEuMjQgMjE4LjI5IDE0MS4yNCAyMjMuODkgMTQxLjI0IDIyOS40OCBDMTQxLjI0IDIzMC42IDE0MS4yNCAyMzEuNzEgMTQxLjI1IDIzMi44NiBDMTQxLjI2IDI1MC44OSAxNDEuMjggMjY4LjkyIDE0MS4zMSAyODYuOTYgQzE0MS4zNCAzMDUuNDcgMTQxLjM1IDMyMy45OCAxNDEuMzYgMzQyLjQ5IEMxNDEuMzYgMzUzLjkgMTQxLjM4IDM2NS4zMiAxNDEuNCAzNzYuNzQgQzE0MS40MiAzODQuNTcgMTQxLjQyIDM5Mi40MSAxNDEuNDIgNDAwLjI0IEMxNDEuNDIgNDA0Ljc2IDE0MS40MiA0MDkuMjcgMTQxLjQ0IDQxMy43OSBDMTQxLjQ1IDQxNy45NCAxNDEuNDUgNDIyLjA4IDE0MS40NCA0MjYuMjIgQzE0MS40NCA0MjcuNzEgMTQxLjQ0IDQyOS4yIDE0MS40NSA0MzAuNjkgQzE0MS41MyA0NDMuNDYgMTQwLjMxIDQ1Ni4xOCAxMzQuODMgNDY3Ljg5IEMxMzQuNTMgNDY4LjU2IDEzNC4yMiA0NjkuMjMgMTMzLjkxIDQ2OS45MSBDMTMxLjMyIDQ3NS40MSAxMjguMTIgNDc5Ljk4IDEyNC4wOCA0ODQuNTIgQzEyMy41NyA0ODUuMTggMTIzLjA2IDQ4NS44NCAxMjIuNTQgNDg2LjUyIEMxMTQuNiA0OTYuNTIgMTAyLjgxIDUwMi45NyA5MS4wOCA1MDcuNTIgQzkwLjIxIDUwNy44NiA4OS4zNCA1MDguMiA4OC40NCA1MDguNTUgQzcwLjk0IDUxNC4wNyA1MC4zNCA1MTEuMzggMzMuOTUgNTAzLjg5IEMxNS41NSA0OTQgMi44MyA0NzguOTkgLTQuMDUgNDU5LjMgQy02LjA3IDQ1Mi4yMSAtNy4wNSA0NDUuMTkgLTcuMDQgNDM3LjgyIEMtNy4wNSA0MzYuNSAtNy4wNSA0MzUuMTggLTcuMDUgNDMzLjgzIEMtNy4wNSA0MzIuMzggLTcuMDUgNDMwLjkzIC03LjA0IDQyOS40OCBDLTcuMDQgNDI3LjkzIC03LjA0IDQyNi4zOCAtNy4wNCA0MjQuODMgQy03LjA1IDQyMC41OCAtNy4wNCA0MTYuMzMgLTcuMDQgNDEyLjA5IEMtNy4wMyA0MDcuNSAtNy4wNCA0MDIuOTIgLTcuMDQgMzk4LjMzIEMtNy4wNCAzOTAuMzkgLTcuMDMgMzgyLjQ1IC03LjAzIDM3NC41MSBDLTcuMDIgMzYzLjAzIC03LjAyIDM1MS41NSAtNy4wMiAzNDAuMDggQy03LjAxIDMyMS40NSAtNy4wMSAzMDIuODIgLTcgMjg0LjIgQy02Ljk5IDI2Ni4xMSAtNi45OCAyNDguMDIgLTYuOTggMjI5LjkyIEMtNi45OCAyMjguODEgLTYuOTggMjI3LjY5IC02Ljk4IDIyNi41NCBDLTYuOTcgMjIwLjk1IC02Ljk3IDIxNS4zNSAtNi45NyAyMDkuNzYgQy02Ljk2IDE2My4zNCAtNi45NCAxMTYuOTMgLTYuOTIgNzAuNTIgQy03LjUzIDcwLjUzIC04LjEzIDcwLjU1IC04Ljc2IDcwLjU3IEMtOS41NiA3MC41OCAtMTAuMzYgNzAuNiAtMTEuMTkgNzAuNjEgQy0xMS45OCA3MC42MyAtMTIuNzcgNzAuNjUgLTEzLjU5IDcwLjY2IEMtMTcuNDIgNzAuNDIgLTIwLjA3IDY5LjA0IC0yMi45MiA2Ni41MiBDLTI3LjkgNjAuNyAtMjguNjcgNTUuNDIgLTI4LjU5IDQ3Ljk2IEMtMjguNTkgNDYuNDcgLTI4LjU5IDQ2LjQ3IC0yOC42IDQ0Ljk1IEMtMjguNiA0Mi44NyAtMjguNTkgNDAuNzggLTI4LjU3IDM4LjcgQy0yOC41NSAzNS41MyAtMjguNTcgMzIuMzYgLTI4LjYxIDI5LjE4IEMtMjguNiAyNy4xNSAtMjguNiAyNS4xMSAtMjguNTkgMjMuMDggQy0yOC42IDIyLjE0IC0yOC42MSAyMS4yIC0yOC42MiAyMC4yMyBDLTI4LjUxIDE0LjAyIC0yNy40MSA5LjA1IC0yMi45MiA0LjUyIEMtMTYuMTkgLTAuOTggLTguMjcgLTAuMDUgMCAwIFogTS0xNC45MiAxNS41MiBDLTE1LjEyIDE4LjUxIC0xNS4yIDIxLjQgLTE1LjE5IDI0LjM5IEMtMTUuMTkgMjUuMjcgLTE1LjE5IDI2LjE1IC0xNS4xOSAyNy4wNiBDLTE1LjE5IDI4LjkyIC0xNS4xOSAzMC43OSAtMTUuMTggMzIuNjUgQy0xNS4xNyAzNS41MSAtMTUuMTggMzguMzYgLTE1LjIgNDEuMjIgQy0xNS4xOSA0My4wMyAtMTUuMTkgNDQuODQgLTE1LjE5IDQ2LjY0IEMtMTUuMTkgNDcuNSAtMTUuMiA0OC4zNiAtMTUuMiA0OS4yNCBDLTE1LjM4IDUzLjg2IC0xNS4zOCA1My44NiAtMTIuOTIgNTcuNTIgQy0xMC4wNSA1Ny44MiAtMTAuMDUgNTcuODIgLTYuNjIgNTcuNzcgQy01Ljk3IDU3Ljc3IC01LjMxIDU3Ljc4IC00LjY0IDU3Ljc4IEMtMi40NCA1Ny43OSAtMC4yNCA1Ny43OCAxLjk2IDU3Ljc4IEMzLjUzIDU3Ljc4IDUuMTEgNTcuNzggNi42OCA1Ny43OSBDMTAuOTYgNTcuOCAxNS4yNCA1Ny43OSAxOS41MiA1Ny43OSBDMjQgNTcuNzggMjguNDcgNTcuNzkgMzIuOTQgNTcuNzkgQzQwLjQ1IDU3Ljc5IDQ3Ljk3IDU3Ljc5IDU1LjQ4IDU3Ljc4IEM2NC4xNyA1Ny43NyA3Mi44NyA1Ny43NyA4MS41NiA1Ny43OCBDODkuMDIgNTcuNzkgOTYuNDcgNTcuNzkgMTAzLjkzIDU3Ljc5IEMxMDguMzggNTcuNzggMTEyLjg0IDU3Ljc4IDExNy4zIDU3Ljc5IEMxMjEuNDkgNTcuOCAxMjUuNjcgNTcuNzkgMTI5Ljg2IDU3Ljc4IEMxMzEuNDEgNTcuNzggMTMyLjk1IDU3Ljc4IDEzNC40OSA1Ny43OCBDMTM2LjU4IDU3Ljc5IDEzOC42OCA1Ny43OCAxNDAuNzggNTcuNzcgQzE0MS45NSA1Ny43NyAxNDMuMTMgNTcuNzcgMTQ0LjM0IDU3Ljc3IEMxNDcuMjIgNTcuOCAxNDcuMjIgNTcuOCAxNDkuMDggNTUuNTIgQzE0OS4yOCA1Mi41MyAxNDkuMzYgNDkuNjMgMTQ5LjM0IDQ2LjY0IEMxNDkuMzUgNDUuMzIgMTQ5LjM1IDQ1LjMyIDE0OS4zNSA0My45OCBDMTQ5LjM1IDQyLjExIDE0OS4zNSA0MC4yNSAxNDkuMzQgMzguMzkgQzE0OS4zMyAzNS41MyAxNDkuMzQgMzIuNjcgMTQ5LjM1IDI5LjgxIEMxNDkuMzUgMjguMDEgMTQ5LjM1IDI2LjIgMTQ5LjM0IDI0LjM5IEMxNDkuMzUgMjMuMTEgMTQ5LjM1IDIzLjExIDE0OS4zNiAyMS43OSBDMTQ5LjUzIDE3LjE4IDE0OS41MyAxNy4xOCAxNDcuMDggMTMuNTIgQzE0NC4yMSAxMy4yMSAxNDQuMjEgMTMuMjEgMTQwLjc4IDEzLjI2IEMxMzkuOCAxMy4yNiAxMzkuOCAxMy4yNiAxMzguOCAxMy4yNSBDMTM2LjYgMTMuMjUgMTM0LjQgMTMuMjUgMTMyLjIgMTMuMjYgQzEzMC42MiAxMy4yNiAxMjkuMDUgMTMuMjUgMTI3LjQ4IDEzLjI1IEMxMjMuMTkgMTMuMjQgMTE4LjkxIDEzLjI0IDExNC42MyAxMy4yNSBDMTEwLjE2IDEzLjI1IDEwNS42OSAxMy4yNSAxMDEuMjEgMTMuMjUgQzkzLjcgMTMuMjQgODYuMTkgMTMuMjUgNzguNjggMTMuMjYgQzY5Ljk4IDEzLjI3IDYxLjI5IDEzLjI2IDUyLjU5IDEzLjI1IEM0NS4xNCAxMy4yNCAzNy42OSAxMy4yNCAzMC4yMyAxMy4yNSBDMjUuNzcgMTMuMjUgMjEuMzIgMTMuMjUgMTYuODYgMTMuMjQgQzEyLjY3IDEzLjI0IDguNDggMTMuMjQgNC4yOSAxMy4yNSBDMi43NSAxMy4yNiAxLjIxIDEzLjI2IC0wLjMzIDEzLjI1IEMtMi40MyAxMy4yNSAtNC41MiAxMy4yNSAtNi42MiAxMy4yNiBDLTcuOCAxMy4yNiAtOC45NyAxMy4yNyAtMTAuMTggMTMuMjcgQy0xMy4wNyAxMy4yNCAtMTMuMDcgMTMuMjQgLTE0LjkyIDE1LjUyIFogTTYuMDggNzAuNTIgQzYuMDggMTM0LjIxIDYuMDggMTk3LjkgNi4wOCAyNjMuNTIgQzQ2LjM0IDI2My41MiA4Ni42IDI2My41MiAxMjguMDggMjYzLjUyIEMxMjguMDggMTk5LjgzIDEyOC4wOCAxMzYuMTQgMTI4LjA4IDcwLjUyIEM4Ny44MiA3MC41MiA0Ny41NiA3MC41MiA2LjA4IDcwLjUyIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxODguOTIxODc1LDAuNDgyNDIxODc1KSIvPgo8cGF0aCBkPSJNMCAwIEMwLjkyIC0wIDEuODQgLTAuMDEgMi43OSAtMC4wMSBDNC43NCAtMC4wMSA2LjY4IC0wLjAxIDguNjMgMC4wMSBDMTEuNjEgMC4wMyAxNC41OSAwLjAxIDE3LjU4IC0wLjAyIEMxOS40NyAtMC4wMSAyMS4zNiAtMC4wMSAyMy4yNSAwIEMyNC4xNCAtMC4wMSAyNS4wNCAtMC4wMiAyNS45NiAtMC4wMiBDMzIuMSAwLjA3IDMyLjEgMC4wNyAzNC43MSAyLjM3IEMzNi4wNSA1LjUzIDM1LjcyIDcuMzIgMzQuNjIgMTAuNTMgQzMwLjUgMTMuODcgMjYuNTQgMTMuOTcgMjEuNDQgMTMuOTMgQzIwLjY2IDEzLjkzIDE5Ljg4IDEzLjk0IDE5LjA3IDEzLjk0IEMxNy40MyAxMy45NCAxNS43OSAxMy45MyAxNC4xNCAxMy45MiBDMTEuNjMgMTMuOTEgOS4xMyAxMy45MiA2LjYyIDEzLjk0IEM1LjAyIDEzLjk0IDMuNDEgMTMuOTQgMS44MSAxMy45MyBDMS4wNyAxMy45NCAwLjMyIDEzLjk0IC0wLjQ1IDEzLjk1IEMtNC45MSAxMy44OSAtNy44NyAxMy4zNyAtMTEuMzggMTAuNTMgQy0xMi40NyA3LjMyIC0xMi44IDUuNTMgLTExLjQ2IDIuMzcgQy04LjA3IC0wLjYyIC00LjM3IC0wLjA0IDAgMCBaICIgZmlsbD0iIzAwMDAwMCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjQ0LjM3NSwyOS40Njg3NSkiLz4KPHBhdGggZD0iTTAgMCBDMS4yNSAtMC4wMyAyLjQ5IC0wLjA1IDMuNzggLTAuMDggQzcuMDYgMC4yNSA3LjA2IDAuMjUgOC45OCAxLjU4IEMxMC43MSA0LjI0IDEwLjUgNi4xNiAxMC4wNiA5LjI1IEM3LjkgMTIuMDggNi43NCAxMy4xMyAzLjE5IDEzLjc1IEMyLjE2IDEzLjczIDEuMTIgMTMuNzEgMC4wNiAxMy42OSBDLTEuNDggMTMuNjkgLTEuNDggMTMuNjkgLTMuMDYgMTMuNjggQy02LjI0IDEzLjIgLTcuNjIgMTIuNDQgLTkuOTQgMTAuMjUgQy0xMS4yIDcuNTUgLTExIDYuNDUgLTEwLjEyIDMuNTYgQy03Ljg5IC0wLjc5IC00LjUxIDAuMDYgMCAwIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyODcuOTM3NSwxNzguNzUpIi8+CjxwYXRoIGQ9Ik0wIDAgQzEuMTUgLTAuMDQgMi4zIC0wLjA3IDMuNDkgLTAuMTEgQzYuNjkgMC4zMSA2LjY5IDAuMzEgOS4wOCAyLjE0IEMxMC42OSA0LjMxIDEwLjY5IDQuMzEgMTEuMTIgNy4zOCBDMTAuNjkgMTAuMzEgMTAuNjkgMTAuMzEgOS42IDExLjk3IEM2LjY5IDE0LjAxIDQuMTkgMTMuNzEgMC42OSAxMy42OSBDLTAuNTUgMTMuNyAtMS43OSAxMy43IC0zLjA2IDEzLjcxIEMtNi4zMSAxMy4zMSAtNi4zMSAxMy4zMSAtOC4yIDExLjkxIEMtOS41OSA5LjkyIC0xMC4xNyA4Ljc1IC0xMC4zMSA2LjMxIEMtNy4zOSAwLjYxIC02LjM0IDAuMTMgMCAwIFogIiBmaWxsPSIjMDAwMDAwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyODcuMzEyNSwxNDAuNjg3NSkiLz4KPHBhdGggZD0iTTAgMCBDMS4yNyAtMC4wMSAxLjI3IC0wLjAxIDIuNTYgLTAuMDIgQzUuMTcgMC4yNyA2Ljc5IDAuODUgOSAyLjI1IEMxMC40IDUuMDUgMTAuMjUgNy4xNSAxMCAxMC4yNSBDOC45NSAxMS45MSA4Ljk1IDExLjkxIDcgMTMuMjUgQzQuMzkgMTMuNiAyLjExIDEzLjc2IC0wLjUgMTMuNzUgQy0xLjE4IDEzLjc4IC0xLjg1IDEzLjgxIC0yLjU1IDEzLjg0IEMtNC41MyAxMy44NCAtNC41MyAxMy44NCAtOCAxMy4yNSBDLTEwIDEwLjkyIC0xMCAxMC45MiAtMTEgOC4yNSBDLTEwLjQ0IDUuMDYgLTEwLjQ0IDUuMDYgLTkgMi4yNSBDLTUuOTkgMC4yOSAtMy41NSAtMC4wMiAwIDAgWiAiIGZpbGw9IiMwMDAwMDAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI4OCwxMDIuNzUpIi8+CjxwYXRoIGQ9Ik0wIDAgQzIgMS4xMiAyIDEuMTIgMyAzLjEyIEMzLjQ1IDguNDEgMy40NSA4LjQxIDEuOTUgMTAuNzkgQy0xLjAyIDEyLjgyIC00LjAzIDEyLjY0IC03LjUgMTIuNjIgQy04LjE4IDEyLjY1IC04Ljg1IDEyLjY4IC05LjU1IDEyLjcxIEMtMTEuNTMgMTIuNzIgLTExLjUzIDEyLjcyIC0xNSAxMi4xMiBDLTE3IDkuNzkgLTE3IDkuNzkgLTE4IDcuMTIgQy0xNy40NCAzLjk0IC0xNy40NCAzLjk0IC0xNiAxLjEyIEMtMTEuMTIgLTIgLTUuNCAtMS41NyAwIDAgWiAiIGZpbGw9IiMwMDAwMDAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI5NSwyMTYuODc1KSIvPgo8L3N2Zz4=') center / contain no-repeat;
+}
+
 /* Class-based dark/light mode (Tailwind v4). */
 @variant dark (&:where(.dark, .dark *));
 
-/* =============================================================
-   COLOR PALETTE (static)
-   ============================================================= */
-:root {
-  --color-violet-50: #f5f3ff;
-  --color-violet-100: #ede9fe;
-  --color-violet-200: #ddd6fe;
-  --color-violet-300: #c4b5fd;
-  --color-violet-400: #a78bfa;
-  --color-violet-500: #8b5cf6;
-  --color-violet-600: #7c3aed;
-  --color-violet-700: #6d28d9;
-  --color-violet-800: #5b21b6;
-  --color-violet-900: #4c1d95;
-
-  --color-pink-400: #f472b6;
-  --color-pink-500: #ec4899;
-  --color-pink-600: #db2777;
-  --color-fuchsia-400: #e879f9;
-  --color-fuchsia-500: #d946ef;
-  --color-fuchsia-600: #c026d3;
-
-  --gradient-primary: linear-gradient(135deg, #7c3aed, #ec4899);
-  --gradient-secondary: linear-gradient(135deg, #8b5cf6, #d946ef);
-  --gradient-glow: linear-gradient(135deg, #a78bfa, #f472b6);
-
-  /* legacy tokens kept so current screens re-skin through our utilities */
-  --color-primary: #7c3aed;
-  --color-accent: #ec4899;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-urgent: #ef4444;
-  --color-high: #f59e0b;
-  --color-normal: #10b981;
+:root.light.design-new .pf-mw-tab--on {
+  background: #ffffff !important;
+  color: #8749ee !important;
+  box-shadow: inset 0 0 0 1px #ecd8ff, 0 1px 1.5px rgba(16, 24, 40, 0.08) !important;
+}
+:root.light.design-new .pf-mw-tab--on .pf-mw-tab__count {
+  background: #f8f2ff !important;
+  color: #7c3aed !important;
 }
 
-/* =============================================================
-   DARK THEME (default)
-   ============================================================= */
-:root,
-:root.dark {
-  --bg-primary: #0a0a15;
-  --bg-secondary: #0f0f1a;
-  --bg-tertiary: #141422;
-  --bg-card: rgba(20, 20, 35, 0.8);
-  --bg-card-solid: #14141f;
-  --bg-input: rgba(30, 30, 50, 0.8);
-  --bg-hover: rgba(139, 92, 246, 0.1);
-  --bg-active: rgba(139, 92, 246, 0.2);
-
-  --surface-1: #1a1a2e;
-  --surface-2: #16162a;
-  --surface-3: #1e1e36;
-  --surface-elevated: rgba(25, 25, 45, 0.95);
-
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-tertiary: rgba(255, 255, 255, 0.55);
-  --text-muted: rgba(255, 255, 255, 0.4);
-  --text-inverse: #0a0a15;
-
-  --border-primary: rgba(139, 92, 246, 0.22);
-  --border-secondary: rgba(139, 92, 246, 0.12);
-  --border-muted: rgba(255, 255, 255, 0.1);
-  --border-input: rgba(139, 92, 246, 0.3);
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
-
-  --input-bg: rgba(20, 20, 40, 0.9);
-  --input-border: rgba(139, 92, 246, 0.3);
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #ffffff;
-  --input-placeholder: rgba(255, 255, 255, 0.4);
-
-  --card-bg: rgba(20, 20, 35, 0.6);
-  --card-border: rgba(139, 92, 246, 0.15);
-  --card-hover-border: rgba(139, 92, 246, 0.3);
-
-  --header-bg: rgba(10, 10, 21, 0.85);
-  --header-border: rgba(139, 92, 246, 0.12);
-
-  --scrollbar-track: rgba(139, 92, 246, 0.10);
-  --scrollbar-thumb: rgba(139, 92, 246, 0.55);
-  --scrollbar-thumb-hover: rgba(168, 85, 247, 0.85);
-
-  --success-bg: rgba(16, 185, 129, 0.15);
-  --success-text: #10b981;
-  --success-border: rgba(16, 185, 129, 0.3);
-  --error-bg: rgba(239, 68, 68, 0.15);
-  --error-text: #ef4444;
-  --error-border: rgba(239, 68, 68, 0.3);
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  --warning-text: #f59e0b;
-  --warning-border: rgba(245, 158, 11, 0.3);
-  --info-bg: rgba(59, 130, 246, 0.15);
-  --info-text: #3b82f6;
-  --info-border: rgba(59, 130, 246, 0.3);
-
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-bg-hover: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --glass-glow: 0 0 40px rgba(139, 92, 246, 0.15);
-  --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.25);
+/* Bottom-navbar experiment: one source of truth for the docked bar's
+   height so every surface can clear it (pages, toasts, drawers...). */
+:root.design-new.nav-bottom {
+  /* CONTENT height of the docked bar, identical at every width (phone,
+     iPad, desktop): a 44px tap target + 6px air above and below. The
+     owner's iPad read the old bar as far too tall — 56 content + the
+     1px hairline + the home-indicator inset is the whole budget. */
+  --pf-navbar-h: 56px;
+  /* How much of the home-indicator inset the bar reserves under its icons.
+     The full inset left a tall empty strip on iPad (owner, 2026-09-28);
+     like Apple's own tab bars the indicator may overlap part of it:
+     inset − 12px, but never less than half the inset (iPad 20 → 10,
+     iPhone 34 → 22, no indicator → 0). */
+  --pf-home-inset: max(calc(env(safe-area-inset-bottom) - 12px), calc(env(safe-area-inset-bottom) / 2));
+  --pf-botbar-h: calc(var(--pf-navbar-h) + 1px + var(--pf-home-inset));
+}
+/* Phones (owner, iPhone 2026-09-28): the reduced inset put the icons in the
+   home-indicator zone and the screen's corner curve. On a phone the WHOLE
+   inset sits under the icons (iPhone 34); the iPad keeps the reduced split. */
+:root.device-phone { --pf-home-inset: env(safe-area-inset-bottom); }
+@media (max-width: 640px) {
+  :root:not(.device-tablet):not(.device-desktop) { --pf-home-inset: env(safe-area-inset-bottom); }
 }
 
-/* =============================================================
-   LIGHT THEME
-   ============================================================= */
-:root.light {
-  --bg-primary: rgba(237, 232, 246, 0.85);
-  --bg-secondary: rgba(231, 225, 242, 0.7);
-  --bg-tertiary: rgba(224, 217, 238, 0.55);
-  --bg-card: rgba(255, 255, 255, 0.5);
-  --bg-card-solid: rgba(255, 255, 255, 0.9);
-  --bg-input: #ffffff;
-  --bg-hover: rgba(139, 92, 246, 0.08);
-  --bg-active: rgba(139, 92, 246, 0.12);
+/* NEW design: elements that belong to the CLASSIC layout only (duplicate
+   search rows, header Refresh buttons that moved into the band, ...). */
+:root.design-new .pf-classic-only { display: none !important; }
 
-  --surface-1: rgba(245, 242, 250, 0.95);
-  --surface-2: rgba(255, 255, 255, 0.35);
-  --surface-3: rgba(255, 255, 255, 0.25);
-  --surface-elevated: rgba(255, 255, 255, 0.7);
+/* NEW design: the hero band rides flush under the navbar on EVERY band
+   screen (owner: same seamless seam we fixed on frontdesk). Each wrapper
+   zeroes its top padding and hands the band its horizontal padding as
+   the full-bleed amount. Classic keeps the original breathing room. */
+:root.design-new .pf-mw-page,
+:root.design-new .pf-sc-page,
+:root.design-new .pf-rs-page,
+:root.design-new .pf-rq-page,
+:root.design-new .pf-ov,
+:root.design-new .dq-page,
+:root.design-new .pv-page {
+  padding-top: 0 !important;
+}
+:root.design-new .dq-page { --pf-hb-bleed: 1rem; }
+:root.design-new .dq-page .pf-page__header { padding-top: 0 !important; }
+@media (min-width: 1024px) {
+  :root.design-new .dq-page { --pf-hb-bleed: 2.5rem; }
+}
+:root.design-new .pf-ov { --pf-hb-bleed: 1rem; max-width: none !important; }
+@media (min-width: 768px) {
+  :root.design-new .pf-ov { --pf-hb-bleed: 2.5rem; }
+}
+:root.design-new .pf-mw-page { --pf-hb-bleed: 1.25rem; }
+:root.design-new .pf-sc-page,
+:root.design-new .pf-rs-page,
+:root.design-new .pf-rq-page,
+:root.design-new .pv-page { --pf-hb-bleed: 1rem; }
+@media (min-width: 768px) {
+  :root.design-new .pf-mw-page,
+  :root.design-new .pf-sc-page,
+  :root.design-new .pf-rs-page,
+  :root.design-new .pf-rq-page,
+  :root.design-new .pv-page { --pf-hb-bleed: 2rem; }
+}
+@media (min-width: 1024px) {
+  :root.design-new .pf-mw-page,
+  :root.design-new .pf-sc-page { --pf-hb-bleed: 2.5rem; }
+}
 
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-tertiary: #64748b;
-  --text-muted: #94a3b8;
-  --text-inverse: #ffffff;
+/* ── Admin sub-pages: "band pill everywhere" (owner) ──────────────────
+   A page opts in with <section class="pf-band-page"> holding a
+   <pf-hero-band> and ONE <div class="pf-band-body">. The page fills the
+   shell's height, the band stays put and only the body scrolls — no
+   page-level scroll. The gutter IS the band bleed, so the band always
+   reaches edge to edge whatever padding utilities the page carried. */
+:root.design-new .shell-main > :has(> .pf-band-page),
+:root.design-new .shell-main > :has(> .pf-page) {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+:root.design-new .pf-band-page {
+  --pf-hb-bleed: 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 var(--pf-hb-bleed) !important;
+}
+@media (min-width: 768px) {
+  :root.design-new .pf-band-page { --pf-hb-bleed: 2rem; }
+}
+@media (min-width: 1024px) {
+  :root.design-new .pf-band-page { --pf-hb-bleed: 2.5rem; }
+}
+:root.design-new .pf-band-page > pf-hero-band { flex-shrink: 0; }
+:root.design-new .pf-band-page > .pf-band-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 24px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* A body that hosts a grid/editor which scrolls ITSELF: fill, don't scroll. */
+:root.design-new .pf-band-page > .pf-band-body--fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+/* A readable column for form-style settings pages inside the full-width body. */
+:root.design-new .pf-band-body .pf-band-narrow { max-width: 56rem; margin-inline: auto; width: 100%; }
+/* Empty state for a band search that matches nothing. */
+.pf-band-empty {
+  padding: 28px 12px; text-align: center; font-size: 13px;
+  color: var(--text-tertiary);
+}
 
-  --border-primary: rgba(139, 92, 246, 0.3);
-  --border-secondary: rgba(139, 92, 246, 0.15);
-  --border-muted: #e2e8f0;
-  --border-input: #cbd5e1;
+/* NEW design, light theme — designer avatar anatomy (Figma 452-3):
+   flat soft-violet disc with violet initials, replacing the saturated
+   per-name gradient (which is inline style, hence the !important). */
+:root.light.design-new pf-avatar .root {
+  background: #eee1fd !important;
+  color: #7c3aed !important;
+  text-shadow: none !important;
+  border: 1px solid #ecd8ff;
+}
 
-  --shadow-sm: 0 1px 3px rgba(124, 58, 237, 0.06);
-  --shadow-md: 0 4px 12px rgba(124, 58, 237, 0.08);
-  --shadow-lg: 0 12px 32px rgba(124, 58, 237, 0.12);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.2);
+/* CLASSIC design, light theme — the pre-designer lavender palette, kept
+   verbatim so users who switch to Classic (avatar menu) see the app they
+   know. New-design light stays the neutral designer world above. */
+:root.light.design-classic {
+  --bg-primary: #e3dfed;
+  --bg-secondary: #e8e4f1;
+  --bg-tertiary: #ece8f4;
+  --bg-card: rgba(244, 242, 250, 0.62);
+  --bg-card-solid: #f4f2fa;
+  --bg-input: #f7f6fc;
+  --bg-hover: rgba(124, 58, 237, 0.07);
+  --bg-active: rgba(124, 58, 237, 0.12);
 
-  --input-bg: rgba(255, 255, 255, 0.6);
-  --input-border: rgba(139, 92, 246, 0.2);
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #1e293b;
-  --input-placeholder: #94a3b8;
+  --surface-1: rgba(244, 242, 250, 0.55);
+  --surface-2: rgba(247, 245, 252, 0.68);
+  --surface-3: #e9e5f2;
+  --surface-elevated: rgba(248, 246, 253, 0.78);
 
-  --card-bg: rgba(255, 255, 255, 0.55);
-  --card-border: rgba(139, 92, 246, 0.18);
-  --card-hover-border: var(--color-violet-400);
+  --text-primary: #262536;
+  --text-secondary: #4c4a63;
+  --text-tertiary: #6d6b84;
+  --text-muted: #9997b0;
 
-  --header-bg: rgba(240, 233, 253, 0.8);
-  --header-border: rgba(139, 92, 246, 0.12);
+  --border-primary: rgba(124, 58, 237, 0.2);
+  --border-secondary: rgba(124, 58, 237, 0.11);
+  --border-muted: #d8d3e8;
+  --border-input: #cec8e0;
 
-  --scrollbar-track: #e2e8f0;
-  --scrollbar-thumb: #94a3b8;
-  --scrollbar-thumb-hover: #64748b;
+  --input-bg: #f7f6fc;
+  --input-border: #d4cee6;
+  --input-text: #262536;
+  --input-placeholder: #9997b0;
 
-  --success-bg: rgba(16, 185, 129, 0.1);
-  --success-text: #059669;
-  --success-border: rgba(16, 185, 129, 0.3);
-  --error-bg: rgba(239, 68, 68, 0.1);
-  --error-text: #dc2626;
-  --error-border: rgba(239, 68, 68, 0.3);
-  --warning-bg: rgba(245, 158, 11, 0.1);
-  --warning-text: #d97706;
-  --warning-border: rgba(245, 158, 11, 0.3);
-  --info-bg: rgba(59, 130, 246, 0.1);
-  --info-text: #2563eb;
-  --info-border: rgba(59, 130, 246, 0.3);
+  --card-bg: rgba(244, 242, 250, 0.64);
+  --card-border: rgba(124, 58, 237, 0.13);
 
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-bg-hover: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.45);
-  --glass-border-hover: rgba(255, 255, 255, 0.65);
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.12);
-  --glass-glow: 0 0 40px rgba(139, 92, 246, 0.1);
-  --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.15);
+  --header-bg: rgba(231, 227, 242, 0.82);
+  --header-border: rgba(124, 58, 237, 0.11);
+
+  --scrollbar-track: #e0dbee;
+  --scrollbar-thumb: #bbb2d4;
+  --scrollbar-thumb-hover: #988dc0;
+
+  --glass-bg: rgba(246, 244, 252, 0.55);
+  --glass-bg-hover: rgba(248, 246, 253, 0.62);
+  --glass-border: rgba(124, 58, 237, 0.15);
+  --glass-border-hover: rgba(124, 58, 237, 0.3);
+  --pf-hover-border: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
 }
 
 /* =============================================================
@@ -204,15 +216,21 @@
 /* App-shell layout: lock the page height, no browser-level scroll.
  * Every feature section handles its own internal scrolling. */
 html {
+  /* Border-box (Tailwind preflight's `*` rule): the insets below come OUT
+     of the 100dvh, never on top of it. */
   height: 100dvh;
-  max-height: 100dvh;
   overflow: hidden;
-  /* Safe-area insets — iPhone notch / Dynamic Island, gesture
-     handle on iPad, keyboard rim on Android. Horizontal sides
-     were already covered; top + bottom added for Capacitor
-     iOS so the top strip and bottom nav clear the system UI. */
+  /* Safe-area insets — iPhone notch / Dynamic Island, status bar,
+     side cut-outs. ONE source of truth per edge:
+     • top / left / right: absorbed HERE, once, for every page.
+     • bottom: NOT here. The bottom inset belongs to whatever docks at
+       the bottom edge — the navbar (.pf-chrome padding-bottom), the
+       phone pill (its bottom offset), sheets — so its background can
+       run to the physical edge with the inset INSIDE it. A root
+       padding-bottom as well was a second copy of the same inset
+       (owner's iPad: dead band under the bar). No padding-bottom here
+       (preflight zeroes it). Pinned by safe-area-single-source.spec.ts. */
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   touch-action: manipulation;
@@ -247,11 +265,14 @@ html.cap-native {
     padding-top: max(env(safe-area-inset-top), 24px);
   }
 }
-/* Android: the app reserves the status bar natively (capacitor.service sets
-   overlay off), so the CSS floor above would double it into a dead gap below
-   the clock. Zero the top pad; env() is 0 with the bar reserved. */
+/* Android: no CSS floor — just the inset the WebView reports, once.
+   Capacitor 8's SystemBars either pads the WebView natively (older WebViews:
+   env() then reads 0, so this is 0 and nothing doubles) or, on WebView 140+
+   with viewport-fit=cover (targetSdk 35 = enforced edge-to-edge), passes the
+   real status-bar inset through to env() — which the old hard 0 ignored,
+   sliding the page under the clock. env() is right in both cases. */
 html.cap-native.cap-android {
-  padding-top: 0;
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Immersive chat thread (phone, WhatsApp model): the thread header owns the
@@ -295,8 +316,12 @@ body::-webkit-scrollbar {
 
 body {
   margin: 0;
-  height: 100dvh;
-  max-height: 100dvh;
+  /* 100% of <html>'s content box (the viewport minus the top inset), NOT
+     100dvh: a 100dvh body under html's padding-top ran off the bottom of the
+     screen by the whole status-bar inset (24px iPad, 59px iPhone), so the
+     shell — and the last rows of every page — ended below the physical edge,
+     under the docked navbar. */
+  height: 100%;
   overflow: hidden;
   font-family:
     'Noto Sans',
@@ -338,6 +363,12 @@ pf-shell main > router-outlet + * {
  * keeps scroll cheap and lets the ambient layer paint without a second
  * gradient fighting it.
  */
+:root.dark,
+:root:not(.light) {
+  --glass-border-hover: rgba(167, 139, 250, 0.45);
+  --pf-hover-border: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+}
+
 :root.dark body,
 :root:not(.light) body {
   background: var(--bg-primary);
@@ -519,21 +550,12 @@ button {
   animation: pageSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Auto-apply enter animation to the active route component. Angular inserts
-   the activated component as a sibling after <router-outlet>, so this rule
-   re-triggers on every navigation without extra wiring.
-   NOTE: intentionally omitting `will-change: transform` — it would create a
-   new containing block and break `position: fixed` children (like the
-   sticky action bar on result-entry). The animation is cheap enough without it. */
-pf-shell main>router-outlet+* {
-  animation: pageSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  pf-shell main>router-outlet+* {
-    animation: none;
-  }
-}
+/* The routed screen's ENTRANCE is the page-open view transition
+   (core/navigation/page-open.service.ts + slide-transition.ts, `pf-vt-page`
+   below), with a CSS fallback on the shell where the API is missing. The old
+   auto fade on `main > router-outlet + *` is gone: it ran UNDER the view
+   transition (the live new snapshot faded from 0 a second time — a double
+   animation) and its filled opacity pinned the leaving screen visible. */
 
 .pulse-dot {
   animation: pulseDot 1.8s infinite;
@@ -655,48 +677,50 @@ pf-shell main>router-outlet+* {
    ============================================================= */
 .glass {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
   border: 1px solid var(--border-primary);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card {
   background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid var(--card-border);
   border-radius: 20px;
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
   border-color: var(--card-hover-border);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card-elevated {
   background: var(--surface-elevated);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-card-2025 {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card-2025:hover {
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover);
+  box-shadow: var(--glass-shadow-hover), var(--glass-glow-hover), inset 0 1px 0 var(--glass-highlight);
   transform: translateY(-4px);
 }
 
@@ -756,11 +780,11 @@ pf-shell main>router-outlet+* {
 
 .glass-modal {
   background: var(--glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  box-shadow: var(--glass-shadow-hover);
+  box-shadow: var(--glass-shadow-hover), inset 0 1px 0 var(--glass-highlight);
 }
 
 .glass-badge {
@@ -787,7 +811,6 @@ pf-shell main>router-outlet+* {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--card-border);
   border-radius: 20px;
-  padding: 1.25rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -845,6 +868,79 @@ pf-shell main>router-outlet+* {
 .pf-btn-ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Hero-band companions (designer system, Figma 446-113) ──────────
+   Buttons that live INSIDE pf-hero-band's projected slots. Global because
+   projected content can't be styled from the band component itself. */
+.pf-hb-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9px;
+  color: var(--text-secondary, #64748b);
+  background: var(--pf-chip-bg, #f3f4f6);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 180ms cubic-bezier(0.32, 0.72, 0, 1);
+  flex-shrink: 0;
+}
+.pf-hb-tool:hover {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--pf-card-bg, #ffffff));
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35));
+  color: var(--color-primary, #7c3aed);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
+  transform: translateY(-1px);
+}
+.pf-hb-tool:active {
+  transform: scale(0.94);
+}
+.pf-hb-tool:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 1px;
+}
+.dark .pf-hb-tool, [data-theme='dark'] .pf-hb-tool {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.dark .pf-hb-tool:hover, [data-theme='dark'] .pf-hb-tool:hover {
+  background: rgba(124, 58, 237, 0.16);
+  border-color: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+  color: var(--violet-text, #c4b5fd);
+  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.25);
+  transform: translateY(-1px);
+}
+
+.pf-hb-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 18px; border-radius: 8px;
+  font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; border: 1px solid transparent; text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+.pf-hb-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+.pf-hb-btn--primary {
+  background: linear-gradient(163.93deg, #7c3aed 0%, #ec4899 100%);
+  color: #fff;
+}
+.pf-hb-btn--primary:hover { filter: brightness(1.06); transform: translateY(-0.5px); }
+.pf-hb-btn--ghost {
+  background: rgba(255, 255, 255, 0.75); color: #1f2937;
+  border-color: var(--pf-line, #e2e8f0);
+}
+.pf-hb-btn--ghost:hover {
+  background: #ffffff;
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.35));
+  color: var(--color-primary, #7c3aed);
+}
+.dark .pf-hb-btn--ghost, [data-theme='dark'] .pf-hb-btn--ghost {
+  background: rgba(255, 255, 255, 0.08); color: var(--text-primary);
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.16));
+}
+.dark .pf-hb-btn--ghost:hover, [data-theme='dark'] .pf-hb-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+  color: var(--violet-text, #c4b5fd);
 }
 
 .pf-input {
@@ -1127,77 +1223,50 @@ pf-shell main>router-outlet+* {
    can't reach it. These overrides live in the global stylesheet so the
    light-theme treatment lands regardless of where the drawer sits in
    the DOM. */
-html[data-theme="light"] .pf-drawer {
-  background:
-    radial-gradient(60% 50% at 15% 5%, rgba(168, 85, 247, 0.10) 0%, transparent 55%),
-    radial-gradient(55% 45% at 90% 95%, rgba(45, 212, 191, 0.08) 0%, transparent 55%),
-    #f5f7fb !important;
+/* Sample collection screen ONLY: full-height mobile drawer overrides */
+@media (max-width: 640px) {
+  html.pf-collect-immersive .pf-drawer,
+  html.pf-collect-immersive body > .pf-drawer {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  html.pf-collect-immersive .pf-drawer__panel,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__panel {
+    height: 100% !important;
+    max-height: 100% !important;
+    flex: 1 1 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-radius: 0 !important;
+  }
+  html.pf-collect-immersive .pf-drawer__tubes,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__tubes {
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+  html.pf-collect-immersive .pf-drawer__foot,
+  html.pf-collect-immersive body > .pf-drawer .pf-drawer__foot {
+    flex: 0 0 auto !important;
+    margin-top: auto !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+  }
 }
-html[data-theme="light"] .pf-drawer__close {
-  background: rgba(15, 23, 42, 0.04) !important;
-  color: #475569 !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-}
-html[data-theme="light"] .pf-drawer__close:hover {
-  background: rgba(15, 23, 42, 0.08) !important;
-  color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.22) !important;
-}
-html[data-theme="light"] .pf-drawer__name {
-  background: linear-gradient(180deg, #0f172a, rgba(15, 23, 42, 0.55)) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-}
-html[data-theme="light"] .pf-drawer__meta { color: #64748b !important; }
-html[data-theme="light"] .pf-drawer__progress {
-  background: rgba(15, 23, 42, 0.04) !important;
-  border-color: rgba(15, 23, 42, 0.10) !important;
-}
-html[data-theme="light"] .pf-drawer__progress-num { color: #0f172a !important; }
-html[data-theme="light"] .pf-drawer__progress-lbl { color: #64748b !important; }
-html[data-theme="light"] .pf-drawer__progressbar {
-  background: rgba(15, 23, 42, 0.07) !important;
-}
-html[data-theme="light"] .pf-drawer__progressbar > span {
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.4) !important;
-}
-html[data-theme="light"] .pf-drawer__hint { color: #64748b !important; }
-html[data-theme="light"] .pf-drawer__foot {
-  background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.04)) !important;
-  border-top-color: rgba(15, 23, 42, 0.08) !important;
-}
-html[data-theme="light"] .pf-drawer__remaining { color: #64748b !important; }
-html[data-theme="light"] .pf-drawer__done-stamp {
-  color: #047857 !important;
-  background: rgba(16, 185, 129, 0.10) !important;
-  border-color: rgba(16, 185, 129, 0.32) !important;
-}
-/* Tubes inside the teleported drawer */
-html[data-theme="light"] .pf-tube {
-  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.7)) !important;
-  border-color: rgba(15, 23, 42, 0.10) !important;
-}
-html[data-theme="light"] .pf-tube--done {
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255,255,255,0.78)) !important;
-  border-color: rgba(16, 185, 129, 0.45) !important;
-  box-shadow: 0 14px 40px rgba(16, 185, 129, 0.14) !important;
-}
-html[data-theme="light"] .pf-tube__label { color: #0f172a !important; }
-html[data-theme="light"] .pf-tube__dept,
-html[data-theme="light"] .pf-tube__tests,
-html[data-theme="light"] .pf-tube__tests-more,
-html[data-theme="light"] .pf-tube__code { color: #64748b !important; }
-html[data-theme="light"] .pf-tube__stamp {
-  color: #047857 !important;
-  background: rgba(16, 185, 129, 0.10) !important;
-  border-color: rgba(16, 185, 129, 0.30) !important;
-}
-html[data-theme="light"] .pf-tube__stamp--pending {
-  color: #64748b !important;
-  background: rgba(15, 23, 42, 0.03) !important;
-  border-color: rgba(15, 23, 42, 0.10) !important;
-}
+
+/* (Collect drawer light-theme overrides removed: the drawer now uses theme
+   tokens in its own component styles — .pf-drawer--nd — for both themes.) */
 /* Vial illustration: real glass on a white counter reads as a darker
    outline with lighter internal reflections, not a pale ghost. */
 html[data-theme="light"] .pf-vial {
@@ -1356,7 +1425,8 @@ html[data-theme="light"] .pf-vial__outline {
      be small and clusters of them stack vertically when stretched. */
   .pf-msgs__react-pill, .pf-msgs__tab-pill, .pf-msgs__edited-tag,
   .pf-msgs__sys-body, .pf-msgs__pinned-tag-icon,
-  .chip, [class*='__chip'] {
+  .chip, [class*='__chip'],
+  .seg-item, .pf-seg__item, pf-segmented button {
     min-width: auto;
     min-height: auto;
   }
@@ -1611,7 +1681,7 @@ html[data-theme="light"] .pf-vial__outline {
     max-width: 100% !important;
     margin: 0 !important;
     border-radius: 18px 18px 0 0 !important;
-    max-height: 92dvh !important;
+    // max-height: 92dvh !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     animation: pf-sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1) !important;
   }
@@ -2134,6 +2204,604 @@ html.cap-android .pf-bottom-nav:not(.pf-bottom-nav--rail) {
    the root-level bottom-nav. While the scanner is open (body gets
    .pf-scanner-open from the modal), hide the nav so its pill doesn't
    poke through at the bottom — a modal should own the screen. */
-body.pf-scanner-open pf-bottom-nav {
+/* New design: the bottom navbar is ALWAYS visible (owner rule) — the
+   scanner is a sheet that sits above it on phones — so classic only. */
+html:not(.design-new) body.pf-scanner-open pf-bottom-nav {
   display: none !important;
+}
+
+/* ── Design mode (designer capture prep) ─────────────────────────────
+   While the avatar-menu "Design mode" switch is ON, <html> carries this
+   class: animations/transitions freeze and the caret hides so a
+   html.to.design capture is pixel-stable — no mid-transition smears,
+   no blinking cursor baked into the Figma frame. */
+html.pf-design-mode *,
+html.pf-design-mode *::before,
+html.pf-design-mode *::after {
+  /* animation: none (NOT paused): pausing froze route-entry animations at
+     their first frame — opacity 0 — leaving freshly-navigated pages
+     invisible. Removing the animation makes elements take their base
+     (final) styles: still, but fully rendered. */
+  animation: none !important;
+  transition: none !important;
+  caret-color: transparent !important;
+}
+html.pf-design-mode {
+  scroll-behavior: auto !important;
+}
+
+/* Bottom-navbar experiment: the bell panel flips upward too. */
+:root.design-new.nav-bottom .pf-bell-panel {
+  top: auto;
+  bottom: calc(100% + 10px);
+  margin-top: 0;
+}
+
+/* ══ NEW design, DARK theme — the same designer discipline mapped onto
+   the dark palette (holistic pass): quiet violet toggles, outline
+   Receive actions, soft-violet avatars. Gradient stays reserved for the
+   ONE primary button per screen. ══ */
+:root.dark.design-new .pf-mw-tab--on {
+  background: rgba(139, 92, 246, 0.16) !important;
+  color: #c4b5fd !important;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.35) !important;
+}
+:root.dark.design-new .pf-mw-tab--on .pf-mw-tab__count {
+  background: rgba(139, 92, 246, 0.25) !important;
+  color: #ddd6fe !important;
+}
+/* New design: segmented controls follow Figma spec (32px capsule, white raised pill, violet active text/icon) */
+:root.design-new pf-segmented .seg-item.is-selected,
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'],
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'],
+:root.design-new .pf-seg .pf-seg__item[role='tab'][aria-selected='true'],
+:root.design-new .pf-seg .pf-seg__item.is-selected {
+  background: var(--pf-card-bg) !important;
+  color: var(--color-violet-600, #7c3aed) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+:root.dark.design-new pf-segmented .seg-item.is-selected,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'],
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'],
+:root.dark.design-new .pf-seg .pf-seg__item[role='tab'][aria-selected='true'],
+:root.dark.design-new .pf-seg .pf-seg__item.is-selected {
+  background: var(--pf-card-bg) !important;
+  color: var(--color-violet-400, #c4b5fd) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+:root.design-new pf-segmented .seg-item.is-selected .seg-ico,
+:root.design-new pf-segmented .seg-item.is-selected svg,
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'] svg,
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'] svg {
+  color: var(--color-violet-600, #7c3aed) !important;
+}
+:root.dark.design-new pf-segmented .seg-item.is-selected .seg-ico,
+:root.dark.design-new pf-segmented .seg-item.is-selected svg,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'] svg,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'] svg {
+  color: var(--color-violet-400, #c4b5fd) !important;
+}
+:root.design-new pf-segmented .seg-item.is-selected .pf-num,
+:root.design-new .pf-seg .pf-seg__item[aria-checked='true'] .pf-num,
+:root.design-new .pf-seg .pf-seg__item[aria-selected='true'] .pf-num {
+  color: var(--color-violet-600, #7c3aed) !important;
+  opacity: 0.9;
+}
+:root.dark.design-new pf-segmented .seg-item.is-selected .pf-num,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-checked='true'] .pf-num,
+:root.dark.design-new .pf-seg .pf-seg__item[aria-selected='true'] .pf-num {
+  color: var(--color-violet-400, #c4b5fd) !important;
+  opacity: 0.9;
+}
+:root.design-new pf-segmented .bar,
+:root.design-new .pf-seg {
+  background: var(--pf-chip-bg) !important;
+  border-color: var(--pf-line) !important;
+  border-radius: 9999px !important;
+}
+:root.dark.design-new .pf-mw-scan__btn,
+/* Avatars in dark-new: soft violet disc, violet-tinted initials —
+   the dark twin of the light designer disc. */
+:root.dark.design-new pf-avatar .root {
+  background: rgba(139, 92, 246, 0.18) !important;
+  color: #c4b5fd !important;
+  text-shadow: none !important;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* ══ NEW design TYPE RAMP (owner: one font standard app-wide, the
+   frontdesk's sleek scale — nothing more, nothing less).
+   Primary row text 12.5px/500 · secondary 11.5-12px · ids mono 13/600.
+   !important because component-scoped styles otherwise win. ══ */
+:root.design-new {
+  /* Tailwind-styled queue names (Lab benches, Validate rows). */
+  .text-\[15px\].font-semibold {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+  }
+  /* Lab sample ids (queue cards). */
+  .pf-tq__id { font-size: 13px !important; }
+  /* Collect queue names + metas. */
+  .pf-sc__who-name { font-size: 12.5px !important; font-weight: 500 !important; }
+  /* Receive rows. */
+  .pf-rs-row__name,
+  .pf-rs-row__name-main { font-size: 12.5px !important; font-weight: 500 !important; }
+  /* Report queue rows reuse Tailwind names (covered above); their metas
+     already sit at 11-12px mono. */
+}
+
+/* ══ NEW design: the frontdesk ROW ANATOMY, applied everywhere (owner).
+   The in-progress tile set the standard — no avatar/icon column, quiet
+   12.5px names, subtle metas. Queue rows across Results, Collect, Lab
+   intake, My Work and Validate now read the same way. Grids that held a
+   fixed avatar track are re-templated so nothing collapses (the
+   frontdesk lesson). Classic + dark-classic untouched. ══ */
+:root.design-new {
+  /* Avatars/thumbnails leave every queue row. */
+  .pf-sc__card pf-avatar,
+  .pf-rs-row pf-avatar,
+  .pf-rq-row .pf-report-icon,
+  .pf-tq__main pf-avatar,
+  .pv-page pf-avatar,
+  pf-tile pf-avatar { display: none !important; }
+
+  /* Collect cards: [avatar | text | tail] → [text | tail]. */
+  .pf-sc__card { grid-template-columns: minmax(0, 1fr) auto !important; }
+  /* Lab-intake / receive rows: drop the fixed 32px avatar track. */
+  .pf-rs-row { grid-template-columns: minmax(0, 1fr) auto !important; }
+
+  /* Row titles: the frontdesk 12.5/500, not 15px semibold. */
+  .pf-rq-row .text-\[15px\],
+  .pf-sc__who-name,
+  .pf-rs-row__name,
+  .pf-rs-row__name-main {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+  }
+  /* Secondary lines stay quiet. */
+  .pf-rq-row__meta,
+  .pf-sc__who-meta,
+  .pf-rs-row__name-sub { font-size: 11.5px !important; }
+
+  /* Rows themselves: slimmer padding — the space was the point. */
+  .pf-rq-row { padding: 9px 12px 9px 14px !important; }
+  .pf-sc__card { padding-top: 10px !important; padding-bottom: 10px !important; }
+}
+
+/* ══ NEW design: ONE definition of the band/bar wash ═══════════════
+   The hero band and the docked bottom bar must read as one frame, so
+   their colours live here as variables rather than being written out in
+   two components that then drift apart. Dim or re-tint in ONE place.
+   (owner: lighter, then lighter again.) ══ */
+:root.design-new {
+  --pf-band-bg: #ffffff;
+  /* The MILD wash the owner settled on: half the original saturation.
+     0.10 was tried and was too washed out. */
+  --pf-band-sweep: linear-gradient(90deg,
+    rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%,
+    rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+  /* No fade in light — the wash carries it on its own. */
+  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-edge: rgba(124, 58, 237, 0.10);
+  /* Translucent twin of --pf-band-bg for the docked bar, which frosts the
+     page scrolling underneath it. */
+  --pf-band-bg-glass: rgba(255, 255, 255, 0.72);
+}
+:root.dark.design-new {
+  /* ONE dark shade shared by the hero band (top) and the docked navbar
+     (bottom). Both bars are darkest at the SCREEN EDGE (the page's dark
+     base, --bg-primary #0a0a15) and lift to the brand's pinkish shade
+     toward the content — the fuchsia end of the primary gradient
+     (#7c3aed → #c026d3) the buttons use (owner, 2026-09-27). Retint here only. */
+  --pf-dark-shade: rgba(168, 42, 184, 0.30);
+  --pf-dark-shade-mid: rgba(104, 34, 124, 0.16);
+  --pf-dark-shade-base: rgba(10, 10, 21, 0.55);
+  --pf-dark-surface: #120e1c;
+
+  /* Hero band (owner: "the nav bar black to that shade"): VERTICAL, the
+     navbar's wash mirrored — near-black at the top edge, easing into the
+     violet shade at the bottom where the search pill overlaps. The old
+     horizontal violet→magenta sweep read pink. */
+  --pf-band-bg: var(--pf-dark-surface);
+  --pf-band-sweep: linear-gradient(180deg,
+    var(--pf-dark-shade-base) 0%, var(--pf-dark-shade-mid) 55%,
+    var(--pf-dark-shade) 100%);
+  /* The vertical sweep carries the depth now; no extra darkening fade. */
+  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+  --pf-band-edge: rgba(232, 121, 249, 0.18);
+  --pf-band-bg-glass: rgba(18, 14, 28, 0.84);
+  /* Owner: "a subtle violet glow at the bottom". A feathered bloom that
+     spills ~40px below the band's bottom edge. It is a box-shadow, so it
+     paints UNDER the search pill and the page content (no hit-testing, no
+     overlay), in the same violet as --pf-dark-shade. */
+  --pf-band-glow: 0 24px 40px -20px rgba(192, 38, 211, 0.26);
+}
+
+/* ══ NEW design: the docked BOTTOM navbar's own surface ════════════
+   It used to borrow the band's horizontal violet→magenta sweep. Light
+   still does (the owner is happy with it there), but in DARK the owner
+   asked for the bar alone to lose the pink and run VERTICALLY: a lifted
+   dark violet at its top edge, sinking toward the page's dark base at
+   the floor. The hero band now mirrors it (top edge dark, violet toward
+   the content) from the shared --pf-dark-shade-* stops. ══ */
+:root.design-new {
+  --pf-navbar-bg: var(--pf-band-bg);
+  --pf-navbar-bg-glass: var(--pf-band-bg-glass);
+  --pf-navbar-wash: var(--pf-band-fade-up), var(--pf-band-sweep);
+  --pf-navbar-edge: var(--header-border);
+}
+:root.dark.design-new {
+  --pf-navbar-bg: var(--pf-dark-surface);
+  --pf-navbar-bg-glass: rgba(18, 14, 28, 0.84);
+  /* The bar MIRRORS the hero band's effect instead of copying its fill
+     (owner, 2026-09-27: a pink-filled bar "sucks", a flat violet one "isn't
+     adding up"): a quiet near-black body, a thin brand-pink edge on top and
+     a soft pink glow rising into the page — the band's pink glow, reflected.
+     The page sits between two matching glows. */
+  --pf-navbar-shade: rgba(192, 38, 211, 0.08);
+  --pf-navbar-shade-mid: rgba(18, 14, 28, 0.00);
+  --pf-navbar-wash: linear-gradient(180deg,
+    var(--pf-navbar-shade) 0%, var(--pf-navbar-shade-mid) 40%,
+    var(--pf-dark-shade-base) 100%);
+  --pf-navbar-edge: rgba(214, 90, 232, 0.40);
+  --pf-navbar-glow: 0 -14px 36px -18px rgba(192, 38, 211, 0.22);
+}
+
+/* ══ NEW design: the frontdesk STATUS + ACTION vocabulary, app-wide
+   (owner: "take that as the primary thing"). Filled status pills become
+   the dot + coloured word; row actions become the violet-outline
+   "Download →" button. Classic untouched. ══ */
+:root.design-new {
+  /* Results rows carry NO status word: the filter toggle above is the
+     legend (coloured dot + live count per state) and each row keeps its
+     matching accent bar, so the colour alone identifies it. */
+  .pf-rq-row__badge { display: none !important; }
+
+  /* Status chips inside queue rows → dot + word. The chip already
+     carries the right tone COLOUR, so we only drop the pill and prefix
+     a currentColor dot. */
+  .pf-rq-row pf-chip button,
+  .pv-page pf-chip button,
+  .pf-card pf-chip button {
+    background: transparent !important;
+    border-color: transparent !important;
+    padding: 0 !important;
+    gap: 6px;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0;
+  }
+  .pf-rq-row pf-chip button::before,
+  .pv-page pf-chip button::before,
+  .pf-card pf-chip button::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 9999px;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  /* Row actions → the frontdesk ghost button: violet outline, 24px,
+     quiet until hover. The segmented divider rules go away with it. */
+  .pf-rq-actions {
+    gap: 6px;
+    border: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+  /* ONE definition for every row action in the app (owner: "same type of
+     pattern… I don't want to juggle between this again and again"). Lab
+     intake's Receive and the scan bar's Receive join it here rather than
+     each screen hand-sizing its own button. Size lives HERE too — that is
+     the part that kept drifting. */
+  .pf-rq-iconbtn,
+  .pf-rs-row__btn,
+  .pf-mw-scan__btn {
+    border: 1px solid #7c3aed !important;
+    border-radius: 8px !important;
+    padding: 0 10px !important;
+    height: 26px;
+    min-height: 26px !important;   /* beats the global 44px touch floor */
+    min-width: auto !important;
+    color: #7c3aed !important;
+    background: #ffffff !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em;
+  }
+  .pf-rq-iconbtn:hover,
+  .pf-rs-row__btn:hover:not(:disabled),
+  .pf-mw-scan__btn:hover:not(:disabled) { background: #f8f2ff !important; }
+}
+:root.dark.design-new {
+  .pf-rq-iconbtn,
+  .pf-rs-row__btn,
+  .pf-mw-scan__btn {
+    background: transparent !important;
+    border-color: rgba(167, 139, 250, 0.65) !important;
+    color: #c4b5fd !important;
+  }
+  .pf-rq-iconbtn:hover,
+  .pf-rs-row__btn:hover:not(:disabled),
+  .pf-mw-scan__btn:hover:not(:disabled) { background: rgba(139, 92, 246, 0.14) !important; }
+}
+
+/* ══ NEW design: SECTION EYEBROWS on the theme font (owner).
+   "PENDING COLLECTION · 12 PATIENTS" and its siblings were wide-tracked
+   monospace caps — a different product's voice. They keep the caps but
+   move to the app font at the designer's tracking (~0.06em), so they sit
+   with the rest of the type ramp. Mono stays where it means something
+   (sample ids, counts, codes). Classic untouched. ══ */
+:root.design-new {
+  /* Named eyebrows across the daily screens. */
+  .pf-sc__section,
+  .pf-mw-pane__title,
+  .pf-cardpeek__h,
+  .pf-pane-hidden-row__lbl,
+  .pf-scan__label,
+  .pf-rej__label,
+  .pf-drawer__progress-lbl,
+  .pf-head__eyebrow,
+  .pf-ov__eyebrow,
+  .pf-brand-pop__eyebrow,
+  .pf-ts-branch__pop-eyebrow,
+  .pf-msgs-pop__head,
+  .pf-msgs-pop__sect,
+  .pf-profile-eyebrow,
+  /* Tailwind-composed eyebrows (text-[11px] font-mono uppercase tracking-…). */
+  [class*="tracking-[0.16em]"],
+  [class*="tracking-[0.18em]"],
+  [class*="tracking-[0.2em]"],
+  .font-mono.uppercase {
+    font-family: inherit !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+  }
+}
+
+/* ══ NEW design: PRIMARY COLOUR AUDIT (owner).
+   The gradient belongs to the ONE primary action per screen — New
+   Patient on frontdesk, Refresh/Generate on the band. Everywhere else
+   (toggles, tabs, filter chips, nav highlights, selected pills) the
+   selected state is the quiet violet: soft tint + violet text + hairline.
+
+   Scoped to INTERACTIVE elements only (button / a / label), so status
+   dots, accent bars and badges are untouched, and the frontdesk's own
+   designer-skinned controls are excluded — they already define the
+   look this rule imitates. No !important: any component that genuinely
+   needs the gradient can still say so with one. ══ */
+:root.light.design-new {
+  button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
+  button[class*="--active"]:not(.pf-topnav-active),
+  button[class*="is-active"],
+  button[class*="is-selected"]:not(.seg-item):not(.pf-seg__item),
+  a[class*="--on"],
+  a[class*="--active"]:not(.pf-topnav-link--on),
+  label[class*="--on"] {
+    background: rgba(124, 58, 237, 0.10);
+    background-image: none;
+    color: #7c3aed;
+    box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.26);
+    border-color: transparent;
+    text-shadow: none;
+  }
+}
+:root.dark.design-new {
+  button[class*="--on"]:not(.pf-hdr-date-pill--on):not(.pf-tabs__btn--on):not(.pf-daystrip__day--on):not(.pf-mw-tab--on),
+  button[class*="--active"]:not(.pf-topnav-active),
+  button[class*="is-active"],
+  button[class*="is-selected"]:not(.seg-item):not(.pf-seg__item),
+  a[class*="--on"],
+  a[class*="--active"]:not(.pf-topnav-link--on),
+  label[class*="--on"] {
+    background: rgba(139, 92, 246, 0.16);
+    background-image: none;
+    color: #c4b5fd;
+    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.32);
+    border-color: transparent;
+    text-shadow: none;
+  }
+}
+/* Mobile bottom-nav: the active work area is a destination, not a
+   primary action — same quiet treatment (both themes). */
+:root.design-new .pf-nav-btn--active {
+  background: rgba(124, 58, 237, 0.12);
+  background-image: none;
+  color: #7c3aed;
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.26);
+}
+:root.dark.design-new .pf-nav-btn--active {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.32);
+}
+
+/* ── "Not offered here" tag ─────────────────────────────────────────────
+   Quiet neutral tag for a test this tenant / branch doesn't offer. Global so
+   the AG Grid cells (notOfferedElement) and the pricing rows match. There is
+   no "not priced yet" marker: a default-priced test shows just "₹1". */
+.pf-price-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0.01em;
+  white-space: nowrap; vertical-align: middle;
+}
+.pf-price-flag__icon { flex: 0 0 auto; opacity: 0.85; }
+.pf-price-flag--off {
+  color: var(--text-tertiary);
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.28);
+}
+
+/* ── Test origin chip: Master / Customised / Branch / Own test ──────────
+   Where a Test Master row comes from (copy-on-write). Same quiet pill
+   family as the price flag; global so the AG Grid cell
+   (originBadgeElement) and <pf-origin-badge> render the identical chip. */
+.pf-origin-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0.01em;
+  white-space: nowrap; vertical-align: middle;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.26);
+}
+.pf-origin-badge__icon { flex: 0 0 auto; opacity: 0.85; }
+.pf-origin-badge--customised {
+  color: var(--violet-text);
+  background: rgba(139, 92, 246, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.24);
+}
+.pf-origin-badge--branch {
+  color: var(--sky-text);
+  background: rgba(14, 165, 233, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.24);
+}
+.pf-origin-badge--local {
+  color: var(--teal-text);
+  background: rgba(20, 184, 166, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.24);
+}
+/* New design: palette only (violet + neutrals) — Branch / Own origins are
+   neutral chips, never sky / teal (PF-PATTERN §2). */
+:root.design-new .pf-origin-badge--branch,
+:root.design-new .pf-origin-badge--local {
+  color: var(--text-secondary);
+  background: var(--pf-chip-bg);
+  box-shadow: inset 0 0 0 1px var(--pf-line);
+}
+
+/* ═══ pf-kit: the new-design pattern (docs/PF-PATTERN.md) ═══ */
+@import '@prefrontal/shared/styles';
+
+/* ═══ Step-to-step slide (router view transitions, core/navigation) ═══
+   Forward: this screen exits LEFT, the next enters from the right; back
+   reverses. The docked app bar keeps still (its own transition name). Only
+   the navigations slideDirection() allows get the class; all others skip. */
+:root.design-new .pf-chrome { view-transition-name: pf-app-bar; }
+@keyframes pf-vt-out-left  { to   { transform: translateX(-28%); opacity: 0; } }
+@keyframes pf-vt-in-right  { from { transform: translateX(100%); } }
+@keyframes pf-vt-out-right { to   { transform: translateX(28%);  opacity: 0; } }
+@keyframes pf-vt-in-left   { from { transform: translateX(-100%); } }
+html.pf-vt-forward::view-transition-old(root) { animation: pf-vt-out-left 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-forward::view-transition-new(root) { animation: pf-vt-in-right 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-back::view-transition-old(root)    { animation: pf-vt-out-right 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-back::view-transition-new(root)    { animation: pf-vt-in-left 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  html::view-transition-old(root), html::view-transition-new(root) { animation: none !important; }
+}
+
+/* ═══ Page OPEN (core/navigation/page-open.service.ts) ═══
+   Every other move to a different screen: only the content area (the
+   shell's <main>, named for the transition) moves; the app bar and the nav
+   stay put. The old screen eases out quickly, the new one eases in with a
+   small rise + scale on the nd spring. When the destination frame (its band
+   + skeleton) was already up, the screen cross-fades from it instead
+   (pf-vt-settle) — nothing rises twice. Reduced motion: instant (the hook
+   skips the transition; the rule below is the belt and braces). */
+html.pf-vt-page .shell-main { view-transition-name: pf-page; }
+@keyframes pf-vt-page-in  { from { opacity: 0; transform: translateY(10px) scale(0.992); } }
+@keyframes pf-vt-page-out { to   { opacity: 0; transform: scale(0.996); } }
+html.pf-vt-page::view-transition-group(pf-page) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+html.pf-vt-page::view-transition-old(pf-page) { animation: pf-vt-page-out 150ms cubic-bezier(0.4, 0, 1, 1) both; }
+html.pf-vt-page::view-transition-new(pf-page) { animation: pf-vt-page-in 240ms 40ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-page.pf-vt-settle::view-transition-old(pf-page) { animation: pf-vt-fade-out 200ms ease-out both; }
+html.pf-vt-page.pf-vt-settle::view-transition-new(pf-page) { animation: pf-vt-fade-in 200ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  html.pf-vt-page::view-transition-group(*),
+  html.pf-vt-page::view-transition-old(*),
+  html.pf-vt-page::view-transition-new(*) { animation: none !important; }
+}
+
+/* ═══ List → detail ZOOM (core/navigation/zoom-transition.ts) ═══
+   The tapped [pfZoomSource] and the detail's [pfZoomTarget] share ONE name,
+   pf-zoom, only for the transition. The BOX morphs (the group: position +
+   size on the nd spring, 400ms); the CONTENT never stretches: both snapshots
+   keep their natural size, pinned top-left and clipped by the morphing box,
+   and cross-fade (tile content out early, card content in). The page behind
+   recedes; back (pf-vt-zoom-out) reverses it. Reduced motion: nothing. */
+@keyframes pf-vt-recede   { to   { opacity: 0; transform: scale(0.97); } }
+@keyframes pf-vt-emerge   { from { opacity: 0; transform: scale(0.97); } }
+@keyframes pf-vt-fade-in  { from { opacity: 0; } }
+@keyframes pf-vt-fade-out { to   { opacity: 0; } }
+html.pf-vt-zoom-in::view-transition-group(pf-zoom),
+html.pf-vt-zoom-out::view-transition-group(pf-zoom) {
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 2;
+}
+html.pf-vt-zoom-in::view-transition-image-pair(pf-zoom),
+html.pf-vt-zoom-out::view-transition-image-pair(pf-zoom) {
+  overflow: clip;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+html.pf-vt-zoom-in::view-transition-old(pf-zoom),
+html.pf-vt-zoom-in::view-transition-new(pf-zoom),
+html.pf-vt-zoom-out::view-transition-old(pf-zoom),
+html.pf-vt-zoom-out::view-transition-new(pf-zoom) {
+  /* Natural size, no scaling: the text stays crisp while the box morphs. */
+  inline-size: auto; block-size: auto; inset-inline-start: 0; inset-block-start: 0;
+  mix-blend-mode: normal;
+}
+html.pf-vt-zoom-in::view-transition-old(pf-zoom)  { animation: pf-vt-fade-out 140ms ease-out both; }
+html.pf-vt-zoom-in::view-transition-new(pf-zoom)  { animation: pf-vt-fade-in 260ms 60ms ease-out both; }
+html.pf-vt-zoom-out::view-transition-old(pf-zoom) { animation: pf-vt-fade-out 180ms ease-out both; }
+html.pf-vt-zoom-out::view-transition-new(pf-zoom) { animation: pf-vt-fade-in 220ms 140ms ease-out both; }
+html.pf-vt-zoom-in::view-transition-old(root)  { animation: pf-vt-recede 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-in::view-transition-new(root)  { animation: pf-vt-fade-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-out::view-transition-old(root) { animation: pf-vt-fade-out 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-out::view-transition-new(root) { animation: pf-vt-emerge 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+/* A detail with its own entrance (Collect's drawer) lets the zoom do it. */
+html.pf-vt-zoom-in .pf-drawer, html.pf-vt-zoom-in .pf-drawer__panel { animation: none !important; }
+html.pf-vt-zoom-in::view-transition-group(root),
+html.pf-vt-zoom-out::view-transition-group(root) { animation-duration: 400ms; }
+@media (prefers-reduced-motion: reduce) {
+  html::view-transition-group(*), html::view-transition-old(*), html::view-transition-new(*) { animation: none !important; }
+}
+
+/* ═══ Touch devices: GPU budget (iPad stutter / partial paint) ═══
+   Owner, iPad 2026-09-28: the app stuttered, the docked navbar vanished and
+   one Frontdesk frame was only partly painted (right strip, band search,
+   bar missing — only the bell's own animated layer showed). iPad WebKit
+   drops compositing layers under GPU / memory pressure, and the pressure
+   came from live frost: every backdrop-filter surface re-blurs what is
+   behind it, and behind every surface the ambient flow was animating, so
+   dozens of Frontdesk cards (.pf-card, blur 20px each), tiles and glass
+   panels were re-blurred on every frame. On touch devices ONLY
+   (html.device-touch; desktop is untouched):
+     - large in-flow surfaces drop the live blur — what sits behind them is
+       the (now static, already soft) ambient wash, so the look is kept;
+       their translucent fill + border + sheen stay as they are;
+     - decorative forever-loops in the app bar (wordmark beat with an
+       animated drop-shadow = a repaint every frame; bell wiggle) stop — the
+       unread badge still says it;
+     - the ambient flow is static (ambient-bg.component) and the docked bar
+       is one opaque promoted layer (shell.component).
+   Transient overlays (menus, sheets, modal scrims) keep their frost: they
+   are small or short-lived and sit over real content. */
+html.device-touch {
+  .glass,
+  .glass-card,
+  .glass-card-elevated,
+  .glass-card-2025,
+  .glass-button,
+  .glass-input,
+  .glass-badge,
+  .pf-card,
+  pf-tile {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .pf-brand-name,
+  .pf-bell-btn.has-unread svg {
+    animation: none !important;
+  }
 }

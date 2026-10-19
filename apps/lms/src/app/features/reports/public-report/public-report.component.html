@@ -1,0 +1,243 @@
+<main class="pr-page" [attr.data-view]="view()">
+  <!-- Lab identity: the same on every step (never the patient). -->
+  <header class="pr-lab" data-testid="pr-lab">
+    @if (view() === 'loading') {
+      <span class="pr-skel pr-skel--logo" aria-hidden="true"></span>
+      <span class="pr-skel pr-skel--line" aria-hidden="true"></span>
+    } @else {
+      @if (logo() && !logoFailed()) {
+        <img class="pr-lab__logo" [src]="logo()!" alt="" (error)="onLogoError()" referrerpolicy="no-referrer" />
+      } @else if (hasLab()) {
+        <span class="pr-lab__mono" aria-hidden="true">{{ initials() }}</span>
+      } @else {
+        <span class="pr-lab__mono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+        </span>
+      }
+      <div class="pr-lab__who">
+        <p class="pr-lab__name" data-testid="pr-lab-name">{{ labName() }}</p>
+        <p class="pr-lab__sub">Lab report</p>
+      </div>
+    }
+  </header>
+
+  <section class="pr-card" aria-live="polite">
+    @switch (view()) {
+      @case ('loading') {
+        <div class="pr-loading" role="status" aria-busy="true" data-testid="pr-skeleton">
+          <span class="pr-sr">Loading your report link…</span>
+          <span class="pr-skel pr-skel--icon" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--title" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--text" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--field" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--btn" aria-hidden="true"></span>
+        </div>
+      }
+
+      @case ('verify') {
+        <form class="pr-verify" (submit)="onSubmit($event)" data-testid="pr-verify" novalidate>
+          <span class="pr-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+          </span>
+          <h1 class="pr-h1">Confirm it's you</h1>
+          @if (mode() === 'digits') {
+            <p class="pr-sub" id="pr-hint">Enter the <strong>last 4 digits</strong> of your phone number, or your date of birth as <strong>DDMM</strong>.</p>
+          } @else {
+            <p class="pr-sub" id="pr-hint">Enter the invoice number printed on your bill.</p>
+          }
+          <label class="pr-label" for="pr-secret">{{ mode() === 'digits' ? 'Phone (last 4) or DDMM' : 'Invoice number' }}</label>
+          <input #secretInput id="pr-secret" name="secret" class="pr-input" data-testid="pr-secret"
+                 [class.pr-input--num]="mode() === 'digits'"
+                 [value]="secret()" (input)="onInput($event)"
+                 [attr.inputmode]="mode() === 'digits' ? 'numeric' : 'text'"
+                 [attr.pattern]="mode() === 'digits' ? '[0-9]*' : null"
+                 [attr.maxlength]="mode() === 'digits' ? 14 : 40"
+                 [attr.autocapitalize]="mode() === 'invoice' ? 'characters' : 'off'"
+                 [placeholder]="placeholder()"
+                 autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
+                 aria-describedby="pr-hint pr-err"
+                 [attr.aria-invalid]="error() ? 'true' : null"
+                 (focus)="onFocus()" />
+          <p class="pr-err" id="pr-err" role="alert" data-testid="pr-error">{{ error() }}</p>
+          <button type="submit" class="pf-btn pf-btn--primary pr-cta" data-testid="pr-open" [disabled]="busy() || !secret().trim()" [pfBusy]="busy()" pfBusyLabel="Checking…">
+            @if (busy()) { <span class="pr-spin" aria-hidden="true"></span> Checking… } @else { Open my report }
+          </button>
+          @if (mode() === 'digits') {
+            <button type="button" class="pf-btn pf-btn--tertiary pr-alt" data-testid="pr-mode" (click)="setMode('invoice')">Use my invoice number instead</button>
+          } @else {
+            <button type="button" class="pf-btn pf-btn--tertiary pr-alt" data-testid="pr-mode" (click)="setMode('digits')">Use my phone number or date of birth</button>
+          }
+        </form>
+      }
+
+      @case ('locked') {
+        <div class="pr-state" data-testid="pr-locked">
+          <span class="pr-icon pr-icon--warn" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          </span>
+          <h1 class="pr-h1">Too many tries</h1>
+          <p class="pr-sub">For your privacy this link is paused. You can try again in <strong class="pf-num" data-testid="pr-lock-clock">{{ lockClock() }}</strong>.</p>
+          @if (labTel()) {
+            <p class="pr-sub">Not sure what to enter? Call {{ labName() }}.</p>
+            <a class="pf-btn pf-btn--secondary pr-cta" [href]="labTel()!" data-testid="pr-call">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+              Call {{ labPhone() }}
+            </a>
+          } @else {
+            <p class="pr-sub">Not sure what to enter? Contact {{ labName() }}.</p>
+          }
+        </div>
+      }
+
+      @case ('expired') {
+        <div class="pr-state" data-testid="pr-expired">
+          <span class="pr-icon pr-icon--muted" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </span>
+          <h1 class="pr-h1">This link has expired</h1>
+          <p class="pr-sub">Report links stay open for 30 days. Contact {{ labName() }} and ask them to send your report again.</p>
+          @if (labTel()) {
+            <a class="pf-btn pf-btn--primary pr-cta" [href]="labTel()!" data-testid="pr-call">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+              Call {{ labPhone() }}
+            </a>
+          }
+        </div>
+      }
+
+      @case ('invalid') {
+        <div class="pr-state" data-testid="pr-invalid">
+          <span class="pr-icon pr-icon--muted" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="M3 3l18 18"/></svg>
+          </span>
+          <h1 class="pr-h1">This link isn't working</h1>
+          <p class="pr-sub">It may be incomplete or out of date. Open it again from the lab's message, or ask the lab to send your report again.</p>
+        </div>
+      }
+
+      @case ('opening') {
+        <div class="pr-loading" role="status" aria-busy="true" data-testid="pr-opening">
+          <span class="pr-sr">Opening your report…</span>
+          <span class="pr-skel pr-skel--chip" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--title" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--text" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--btn pr-skel--tall" aria-hidden="true"></span>
+          <span class="pr-skel pr-skel--btn" aria-hidden="true"></span>
+        </div>
+      }
+
+      @case ('not-ready') {
+        <div class="pr-state" data-testid="pr-not-ready">
+          <span class="pr-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L5 18a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3"/><path d="M7.5 14h9"/></svg>
+          </span>
+          <h1 class="pr-h1">Your report isn't ready yet</h1>
+          <p class="pr-sub">{{ labName() }} is still finishing it. You'll get a message when it's ready — this same link will open it.</p>
+          @if (labTel()) {
+            <a class="pf-btn pf-btn--secondary pr-cta" [href]="labTel()!">Call {{ labPhone() }}</a>
+          }
+        </div>
+      }
+
+      @case ('payment-due') {
+        <div class="pr-state" data-testid="pr-payment-due">
+          <span class="pr-icon pr-icon--warn" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+          </span>
+          <h1 class="pr-h1" tabindex="-1" #readyHeading>Payment pending</h1>
+          <p class="pr-sub">
+            Your report is ready. Please contact {{ labName() }} to clear
+            @if (balanceDue() !== null) { the balance of <strong class="pf-num" data-testid="pr-balance">₹{{ balanceDue() }}</strong> } @else { your bill }
+            — this same link opens your report once it's paid.
+          </p>
+          @if (labTel()) {
+            <a class="pf-btn pf-btn--primary pr-cta" [href]="labTel()!" data-testid="pr-call">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+              Call {{ labPhone() }}
+            </a>
+          }
+        </div>
+      }
+
+      @case ('ready') {
+        @if (summary(); as s) {
+          <div class="pr-ready" data-testid="pr-ready">
+            <div class="pr-status">
+              <span class="pr-chip" [class.pr-chip--partial]="s.partial" data-testid="pr-status">
+                <span class="pr-chip__dot" aria-hidden="true"></span>{{ s.partial ? 'Partial' : 'Ready' }}
+              </span>
+              @if (s.amended) { <span class="pr-chip pr-chip--quiet">Amended</span> }
+              @if (s.date) { <span class="pr-date pf-num" data-testid="pr-date">{{ formatDate(s.date) }}</span> }
+            </div>
+
+            <h1 class="pr-h1 pr-name" #readyHeading tabindex="-1" data-testid="pr-name">{{ s.name }}</h1>
+            <p class="pr-meta">
+              @if (s.ageSex) { <span>{{ s.ageSex }}</span> }
+              @if (s.orderNumber) { <span>Order <span class="pf-num">{{ s.orderNumber }}</span></span> }
+            </p>
+
+            @if (result()?.superseded) {
+              <p class="pr-notice" data-testid="pr-superseded">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                The lab has updated this report. You're seeing the latest version.
+              </p>
+            }
+            @if (s.partial) {
+              <p class="pr-notice" data-testid="pr-partial-note">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                Some tests are still in progress. The lab will send the full report when it's ready.
+              </p>
+            }
+
+            <div class="pr-actions">
+              <button type="button" class="pf-btn pf-btn--primary pr-download" data-testid="pr-download" [pfBusy]="downloading()" pfBusyLabel="Downloading…" (click)="download()">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                {{ downloading() ? 'Downloading…' : 'Download PDF' }}
+              </button>
+              <div class="pr-actions__row">
+                @if (viewUrl()) {
+                  <a class="pf-btn pf-btn--secondary" data-testid="pr-view" [href]="viewUrl()!" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                    View
+                  </a>
+                }
+                <button type="button" class="pf-btn pf-btn--secondary" data-testid="pr-share" (click)="share()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+                  Share
+                </button>
+              </div>
+              <p class="pr-file"><span class="pr-sr">File name: </span><span data-testid="pr-filename">{{ fileName() }}</span></p>
+              <p class="pr-toast" role="status">{{ note() }}</p>
+            </div>
+
+            @if (result()?.partnerReports?.length) {
+              <div class="pr-partners" data-testid="pr-partners">
+                <p class="pr-partners__label">Also with your report</p>
+                @for (p of result()!.partnerReports!; track p.url) {
+                  <a class="pr-partner" [href]="partnerUrl(p.url)" target="_blank" rel="noopener noreferrer">
+                    <span class="pr-partner__txt">
+                      <span class="pr-partner__name">{{ p.testName }}</span>
+                      @if (p.partnerLabName) { <span class="pr-partner__sub">Tested at {{ p.partnerLabName }}</span> }
+                    </span>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>
+                    <span class="pr-sr">(opens in a new tab)</span>
+                  </a>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    }
+  </section>
+
+  <footer class="pr-foot">
+    @if (view() === 'ready' && labTel()) {
+      <p>Questions about your results? <a [href]="labTel()!">Call {{ labName() }}</a></p>
+    }
+    <p class="pr-foot__secure">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      Private link · secured by Prefrontal
+    </p>
+  </footer>
+</main>

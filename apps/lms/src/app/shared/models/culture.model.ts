@@ -4,6 +4,19 @@ export interface AstRow {
   name: string;
   zoneSize?: number | null;
   interpretation: 'S' | 'I' | 'R' | '';
+  /** Per-row CLSI cutoff overrides (mm). When set they replace the seeded
+   *  breakpoint for THIS row's auto-interpretation and are stored with the
+   *  result — so the report records the cutoffs actually used. */
+  sMin?: number | null;
+  rMax?: number | null;
+  /** Measured MIC (µg/mL) — interpreted against the MIC breakpoints. */
+  micValue?: string | null;
+  /** Per-row CLSI MIC-cutoff overrides (µg/mL, kept as entered — "≤8",
+   *  "8/4", "0.12-0.5"). Same contract as sMin/rMax: set = used for THIS
+   *  row's auto-interpretation and stored with the result. */
+  micS?: string | null;
+  micI?: string | null;
+  micR?: string | null;
 }
 
 export interface CultureOrganism {
@@ -12,6 +25,28 @@ export interface CultureOrganism {
   /** Relative URL of the AST-plate photo this organism's zones were measured
    *  from (camera measure-assist). Kept as evidence for the validator. */
   plateImageUrl?: string | null;
+  /** The measure-assist session (calibration + fitted circles, image px) so
+   *  reopening Measure restores every ring instead of starting over. */
+  plateMeasure?: PlateMeasureSession | null;
+  /** The rows came from the case's PLATE READING (measured before the
+   *  organism): the table shows only the plate's antibiotics, and changing
+   *  the organism re-maps breakpoints onto the same zones. */
+  fromPlate?: boolean;
+}
+
+/** A saved plate-measure session — everything needed to re-edit later. */
+export interface PlateMeasureSession {
+  dishMm: number;
+  /** The two rim calibration points (image px). */
+  calPts: { x: number; y: number }[];
+  /** Fitted circles; abName (not index) so panel reordering can't misassign. */
+  zones: {
+    cx: number; cy: number; r: number; abName: string | null;
+    /** Disk-ruler sessions (OpenCV measure): the printed disk code, the
+     *  local 6 mm ruler radius (image px) the zone was measured with, the
+     *  zone diameter (mm) and the disk's badge number. Absent on old rings. */
+    code?: string | null; diskR?: number; mm?: number; n?: number;
+  }[];
 }
 
 /** One zone measured off the plate photo, mapped back to an antibiotic row
@@ -23,6 +58,9 @@ export interface PlateMeasurement {
 
 /** Structured Culture & Sensitivity result — stored as the test's `values`. */
 export interface CultureResult {
+  /** UNIVERSAL entry mode for the whole AST section: 'zone' (disk, mm) or
+   *  'mic' (dilution, µg/mL). Every organism's table follows it. */
+  astMode?: 'zone' | 'mic' | null;
   specimen?: string;
   gramStain?: string;
   colonyCount?: string;

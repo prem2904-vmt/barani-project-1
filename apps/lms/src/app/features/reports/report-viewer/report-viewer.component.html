@@ -1,0 +1,390 @@
+<!-- Report view on the nd pattern (docs/PF-PATTERN.md → "Report view"):
+     band (back + tenant + actions) whose pill is the CONTEXT BAR (patient,
+     order, report status, date) → the PREVIEW (main card: the exact PDF)
+     + REPORT (right action / summary card: delivery, partner reports),
+     collapsible to a strip; a sheet at ≤900px. ONE primary: Send WhatsApp. -->
+<section class="pf-rv pf-page">
+  <pf-hero-band class="pf-rv-band" [customSearch]="true" [contextBar]="true" [back]="true" backTo="/reports">
+    <!-- Actions, top-right. Web: text buttons. Touch: 44px icons (label
+         kept for AT). Phones: the primary + a "More" sheet. -->
+    <ng-container band-actions>
+      @if (report()) {
+        @if (canEditResult()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--edit pf-rv-in" style="--i: 3"
+                  [class.pf-rv-act--icon]="!web()" aria-label="Edit results" title="Edit results"
+                  (click)="openEditDialog()">
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <span class="pf-rv-act__t">Edit</span>
+          </button>
+        }
+        @if (canPrint()) {
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--print pf-rv-in" style="--i: 4"
+                [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'print'"
+                [attr.aria-label]="done() === 'print' ? 'Printing' : 'Print'" title="Print"
+                [disabled]="busy() === 'print'" [pfBusy]="busy() === 'print'" pfBusyLabel="Preparing the report…" (click)="print()">
+          @if (done() === 'print') {
+            <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Printing</span>
+          } @else {
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span class="pf-rv-act__t">{{ busy() === 'print' ? 'Preparing…' : 'Print' }}</span>
+          }
+        </button>
+        }
+        @if (canDeliver() && entitlements.moduleEnabled('messages')) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--share pf-rv-in" style="--i: 5"
+                  [class.pf-rv-act--icon]="!web()" aria-label="Share with a colleague" title="Share with a colleague"
+                  (click)="openSharePicker()">
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="pf-rv-act__t">Share with…</span>
+          </button>
+        }
+        <!-- ⋮ — EVERY action for this report in one place (share, download,
+             print, workflow steps, go-to), filtered by permission + state.
+             Popover on web / iPad, a bottom sheet on phones. -->
+        @if (menuActions().length) {
+        <pf-actions-menu class="pf-rv-more" style="--i: 5" [actions]="menuActions()" label="Report actions"
+                         [heading]="patientName()" (opened)="onMenuOpened()" (action)="runAction($event)">
+          <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in"
+                  aria-label="Report actions" title="Report actions"
+                  [pfBusy]="menuBusy() !== null" [pfBusyLabel]="menuBusy() === 'regenerate' ? 'Regenerating…' : 'Preparing the PDF…'">
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            <span class="pf-rv-act__t">More</span>
+          </button>
+        </pf-actions-menu>
+        }
+        <!-- THE primary: deliver to the patient (deliver_report only; a
+             view_report-only viewer gets a view-only page). -->
+        @if (canDeliver()) {
+        <!-- Lab has WhatsApp Cloud: the server sends to the patient's number
+             (Sending… → Sent → Delivered / Read); else wa.me on this device. -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-rv-act pf-rv-act--send pf-rv-in" style="--i: 6"
+                [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'whatsapp' || waDone()"
+                [attr.aria-label]="waCloud() ? (waDone() ? waLabel() + ' on WhatsApp' : waLabel()) : (done() === 'whatsapp' ? 'Sent on WhatsApp' : 'Send WhatsApp')"
+                [title]="waCloud() ? 'Send to the patient on WhatsApp' : 'Send WhatsApp'"
+                [disabled]="waState()?.phase === 'sending'" [attr.aria-busy]="waState()?.phase === 'sending'"
+                (click)="deliverWhatsApp()">
+          @if (waCloud() && waState()?.phase === 'sending') {
+            <svg class="pf-rv-act__i pf-rv-act__spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
+            <span class="pf-rv-act__t">Sending…</span>
+          } @else if (waCloud() && waDone()) {
+            <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ waLabel() }}</span>
+          } @else if (done() === 'whatsapp') {
+            <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Sent</span>
+          } @else {
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            <span class="pf-rv-act__t">Send WhatsApp</span>
+          }
+        </button>
+        }
+      }
+    </ng-container>
+
+    <!-- CONTEXT BAR: the subject as read-only chips. -->
+    <div band-search class="pf-rv-ctx">
+      @if (report()) {
+        <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--patient pf-rv-in" style="--i: 0"
+              [title]="patientName() + (patientMeta() ? ' · ' + patientMeta() : '')">
+          <span class="pf-rv-chip__name">{{ patientName() }}</span>
+          @if (patientMeta()) { <span class="pf-rv-chip__meta pf-num">{{ patientMeta() }}</span> }
+        </span>
+        @if (orderLabel()) {
+          <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--order pf-rv-in" style="--i: 1" title="Order ID">
+            <span class="pf-rv-chip__k">Order</span><span class="pf-num pf-rv-chip__val">{{ orderLabel() }}</span>
+          </span>
+        }
+        <span class="pf-chip pf-chip--static pf-rv-chip pf-rv-chip--status pf-rv-in" style="--i: 2"
+              [title]="kindLabel() + ' report · ' + deliveryLabel()">
+          <span class="pf-rv-dot" [class.pf-rv-dot--ring]="isPartial()" aria-hidden="true"></span>
+          <span>{{ kindLabel() }}</span><span class="pf-rv-chip__meta">· {{ deliveryLabel() }}</span>
+        </span>
+        <span class="pf-rv-ctx__grow"></span>
+        <span class="pf-rv-ctx__date pf-num pf-rv-in" style="--i: 3" title="Generated">{{ generatedLabel() }}</span>
+        @if (narrow()) {
+          <button type="button" class="pf-btn pf-btn--quiet pf-rv-ctx__details" (click)="detailsOpen.set(true)"
+                  aria-haspopup="dialog" [attr.aria-expanded]="detailsOpen()" aria-label="Report details" title="Report details">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+            <span class="pf-rv-ctx__details-t">Details</span>
+          </button>
+        }
+      } @else {
+        <span class="pf-rv-skel__bar pf-rv-skel__bar--pill" aria-hidden="true"></span>
+      }
+    </div>
+  </pf-hero-band>
+
+  @if (editDialogOpen() && report(); as r) {
+    <pf-edit-result-dialog
+      [orderId]="r.orderId"
+      title="Edit this report's results"
+      (edited)="onEdited()"
+      (closed)="editDialogOpen.set(false)">
+    </pf-edit-result-dialog>
+  }
+
+  <div class="pf-body pf-rv-body" [class.pf-rv-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-rv-body--narrow]="narrow()">
+    <!-- ─── PREVIEW: the main work card (the exact PDF) ─────────────── -->
+    <!-- ONE element from skeleton to pages: it is the zoom target the
+         Results row morphs into, so nothing is ever swapped mid-morph. -->
+    <section class="pf-card pf-rv-card" aria-label="Report preview" [pfZoomTarget]="zoomKeys()"
+             [attr.aria-busy]="showSkeleton()">
+      <header class="pf-card__head pf-rv-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+        </span>
+        <span class="pf-card__label">Preview</span>
+        <span class="pf-card__spacer"></span>
+        <span class="pf-rv-card__count pf-num" aria-live="polite">
+          @if (pdfReady()) { {{ pageCountLabel() }} } @else if (loadError() || pdfError()) { } @else { Rendering… }
+        </span>
+      </header>
+
+      <div class="pf-card__body pf-rv-preview">
+        @if (loadError()) {
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 12.5l5 5"/><path d="M14.5 12.5l-5 5"/></svg>
+            </span>
+            <p class="pf-empty__title">Couldn’t load this report</p>
+            <p class="pf-empty__body">Check the connection and try again, or go back to the reports list.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="load()">Try again</button>
+          </div>
+        } @else if (pdfError()) {
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg>
+            </span>
+            <p class="pf-empty__title">{{ pdfError() }}</p>
+            <p class="pf-empty__body">The report itself is safe — only the on-screen preview failed.</p>
+            <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="renderPdfView()">Try again</button>
+          </div>
+        } @else {
+          @if (report() && isPartial()) {
+            <!-- Non-negotiable on a partial report: a clinician must know it
+                 is not the final one. (The pages carry the report's own chrome.) -->
+            <div class="pf-rv-notice" role="note">
+              <svg class="pf-rv-notice__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <div>
+                <p class="pf-rv-notice__title">Preliminary report</p>
+                <p class="pf-rv-notice__sub">
+                  Departments shown are signed off and final.
+                  @if (data()?.pendingDepts?.length) {
+                    Other departments still pending: {{ data()?.pendingDepts?.join(', ') }}.
+                  } @else {
+                    Other departments still pending.
+                  }
+                </p>
+              </div>
+            </div>
+          }
+          @if (showSkeleton()) {
+            <!-- Page-shaped skeleton (static — no looping shimmer). -->
+            <div class="pf-rv-skel" aria-hidden="true">
+              <div class="pf-rv-skel__page">
+                <div class="pf-rv-skel__head">
+                  <span class="pf-rv-skel__logo"></span>
+                  <span class="pf-rv-skel__col"><span class="pf-rv-skel__bar" style="width: 46%"></span><span class="pf-rv-skel__bar" style="width: 30%"></span></span>
+                </div>
+                <div class="pf-rv-skel__meta">
+                  @for (i of [1, 2, 3, 4, 5, 6]; track i) { <span class="pf-rv-skel__bar"></span> }
+                </div>
+                <span class="pf-rv-skel__bar pf-rv-skel__bar--th"></span>
+                @for (i of [1, 2, 3, 4, 5, 6, 7]; track i) {
+                  <div class="pf-rv-skel__row"><span class="pf-rv-skel__bar"></span><span class="pf-rv-skel__bar"></span><span class="pf-rv-skel__bar"></span></div>
+                }
+              </div>
+            </div>
+          }
+          @if (showPages()) {
+            <!-- The on-screen report IS the rendered PDF — the same file
+                 Print produces (jsPDF + tenant template + per-test layouts),
+                 painted page-by-page onto canvases (an <iframe> PDF shows
+                 only page 1 in WKWebView). Laid out (for its width) but
+                 hidden until every page is painted, then it fades + rises in. -->
+            <div class="pf-rv-pages" #pdfPages aria-label="Report PDF" [class.pf-rv-pages--in]="pdfReady()"></div>
+          }
+        }
+      </div>
+    </section>
+
+    <!-- ─── REPORT: right action / summary card (billing-style) ─────── -->
+    @if (!narrow()) {
+      @if (sideCollapsed()) {
+        <aside class="pf-card pf-rv-strip" aria-label="Report details">
+          <button type="button" class="pf-rv-strip__btn" (click)="toggleSide()"
+                  title="Show report details" aria-label="Show report details" aria-expanded="false">
+            <span class="pf-btn pf-btn--icon pf-rv-strip__expand" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </span>
+            <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
+            <span class="pf-rv-strip__label">Report</span>
+          </button>
+        </aside>
+      } @else {
+        <aside class="pf-card pf-rv-side" aria-label="Report details">
+          <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: true }"></ng-container>
+          <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+        </aside>
+      }
+    }
+  </div>
+
+  <!-- ≤900px: the REPORT card opens as a sheet from the pill's Details. -->
+  @if (narrow() && detailsOpen()) {
+    <div class="pf-rv-scrim" (click)="detailsOpen.set(false)" aria-hidden="true"></div>
+    <aside class="pf-card pf-rv-sheet pf-rv-sheet--details" role="dialog" aria-modal="true" aria-label="Report details"
+           (keydown.escape)="detailsOpen.set(false)">
+      <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
+      <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: false }"></ng-container>
+      <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+    </aside>
+  }
+
+  <!-- Share with a colleague: pf-card modal on web, a sheet on phones. -->
+  @if (chatPickerOpen()) {
+    <div class="pf-rv-scrim" (click)="closeSharePicker()" aria-hidden="true"></div>
+    <div class="pf-card pf-rv-sheet pf-rv-sheet--share" role="dialog" aria-modal="true" aria-labelledby="pf-rv-share-t"
+         (keydown.escape)="closeSharePicker()">
+      <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="pf-card__label" id="pf-rv-share-t">Share this report</span>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="closeSharePicker()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </header>
+      <p class="pf-rv-share__lead">The colleague will receive a tap-to-open report card in their chat.</p>
+      <div class="pf-rv-share__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
+               [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
+      </div>
+      <ul class="pf-rv-share__list">
+        @if (chatPickerLoading()) {
+          <li><pf-skeleton-rows [rows]="4" [trailing]="false" [dense]="true" label="Loading colleagues…"></pf-skeleton-rows></li>
+        } @else {
+        @for (u of chatPickerFiltered(); track u.id) {
+          <li>
+            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()"
+                    [pfBusy]="chatPickerSendingTo() === u.id" pfBusyLabel="Sending…" (click)="shareWith(u)">
+              <span class="pf-rv-share__avatar" aria-hidden="true">{{ initials(u.displayName) }}</span>
+              <span class="pf-rv-share__meta">
+                <span class="pf-rv-share__name">{{ u.displayName }}</span>
+                <span class="pf-rv-share__email">{{ u.email }}</span>
+              </span>
+            </button>
+          </li>
+        } @empty {
+          <li class="pf-empty pf-empty--compact">
+            <p class="pf-empty__title">No colleagues match</p>
+          </li>
+        }
+        }
+      </ul>
+    </div>
+  }
+
+  <ng-template #reportIcon>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+  </ng-template>
+
+  <ng-template #sideHead let-collapsible="collapsible">
+    <header class="pf-card__head">
+      <span class="pf-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="reportIcon"></ng-container></span>
+      <span class="pf-card__label">Report</span>
+      <span class="pf-card__spacer"></span>
+      @if (collapsible) {
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-collapse" (click)="toggleSide()"
+                title="Hide report details" aria-label="Hide report details" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      } @else {
+        <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="detailsOpen.set(false)" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      }
+    </header>
+  </ng-template>
+
+  <ng-template #sideBody>
+    <div class="pf-card__body pf-rv-sidebody">
+      @if (report(); as r) {
+        <!-- One status line: a neutral chip with the violet mark. -->
+        <span class="pf-chip pf-chip--static pf-rv-state">
+          @if (r.deliveryStatus === 'delivered') {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          } @else {
+            <span class="pf-rv-dot" aria-hidden="true"></span>
+          }
+          {{ deliveryLine() }}
+        </span>
+
+        <dl class="pf-rv-facts">
+          <div><dt>Report</dt><dd>{{ kindLabel() }}</dd></div>
+          @if (isPartial() && data()?.pendingDepts?.length) {
+            <div><dt>Still pending</dt><dd>{{ data()?.pendingDepts?.join(', ') }}</dd></div>
+          }
+          <div><dt>Generated</dt><dd class="pf-num">{{ generatedLabel() }}</dd></div>
+          @if (r.qrExpiresAt) {
+            <div><dt>Patient link valid until</dt><dd class="pf-num">{{ formatStamp(r.qrExpiresAt) }}</dd></div>
+          }
+          @if (r.deliveryNote) {
+            <div><dt>Delivery note</dt><dd>{{ r.deliveryNote }}</dd></div>
+          }
+        </dl>
+
+        @if (partnerReports().length) {
+          <!-- Outsourced tests: the partner lab's own report — joined to the
+               END of our PDF when the desk attached it ("In this PDF"), else
+               delivered alongside ours. Staff can always open the file alone. -->
+          <section class="pf-rv-partner" aria-labelledby="pf-rv-partner-t">
+            <h3 class="pf-rv-sec" id="pf-rv-partner-t">Partner lab reports</h3>
+            @for (p of partnerReports(); track p.orderTestId) {
+              @let w = partnerWhere(p, pdfParts());
+              <div class="pf-rv-partner__row">
+                <span class="pf-rv-partner__name">{{ p.testName }}
+                  @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
+                  <span class="pf-rv-partner__lab" [class.pf-rv-partner__lab--warn]="w.warn" data-testid="rv-partner-where">{{ w.text }}</span>
+                  @if (uploads.isMissing(p.url)) {
+                    <span class="pf-rv-partner__lab pf-rv-partner__lab--warn" data-testid="rv-partner-missing" role="status">File no longer available — upload it again from the Outsourced tab</span>
+                  }
+                </span>
+                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openPartnerReport(p)"
+                        [attr.aria-label]="'Open partner report for ' + p.testName">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                  <span class="pf-rowact__t">Open · print</span>
+                </button>
+                @if (w.canAttach && canAttachPartner()) {
+                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" data-testid="rv-partner-attach"
+                          [disabled]="!!attachingUrl()" [pfBusy]="attachingUrl() === p.url" pfBusyLabel="Attaching…"
+                          (click)="attachPartner(p)" [attr.aria-label]="'Attach the partner report for ' + p.testName + ' to our report'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
+                    <span class="pf-rowact__t">Attach to report</span>
+                  </button>
+                }
+              </div>
+            }
+          </section>
+        }
+
+        @if (!isPartial()) {
+          <!-- Meta WhatsApp Cloud API auto-send status of THIS report version
+               (+ Resend / patient opt-out). The band's wa.me button stays as
+               the manual fallback. -->
+          <pf-report-whatsapp-status [reportId]="r.id" [canDeliver]="canDeliver()" />
+        }
+
+        <p class="pf-rv-explain">The preview is the exact PDF that prints and that the patient’s WhatsApp link opens.</p>
+      } @else if (!loadError()) {
+        <span class="pf-rv-skel__bar" style="width: 60%" aria-hidden="true"></span>
+        <span class="pf-rv-skel__bar" aria-hidden="true"></span>
+        <span class="pf-rv-skel__bar" style="width: 80%" aria-hidden="true"></span>
+      }
+    </div>
+  </ng-template>
+</section>

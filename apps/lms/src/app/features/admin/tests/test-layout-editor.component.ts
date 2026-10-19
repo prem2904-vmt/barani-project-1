@@ -20,12 +20,12 @@ import {
   ReportColumn,
   ReportSection,
   ReportSectionType,
-  ResolvedReportLayout,
   ResolvedRow,
   ResolvedSection,
 } from '../../../shared/models/report-layout.model';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ReportPdfPreviewComponent } from '../report-template/report-pdf-preview.component';
 
 const COLOR_TOKENS: Array<{ value: string; label: string; hex: string }> = [
   { value: '',       label: 'Default', hex: '#cbd5e1' },
@@ -58,7 +58,7 @@ const OPERATORS = [
 @Component({
   selector: 'pf-test-layout-editor',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, RouterLink, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, NgTemplateOutlet, RouterLink, SelectComponent, TileComponent, TouchButtonComponent, ReportPdfPreviewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-tile tone="default" padding="lg" class="block">
@@ -76,8 +76,9 @@ const OPERATORS = [
                       (pressed)="togglePreview()">
           {{ previewOpen() ? 'Hide preview' : 'Preview' }}
         </pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary"
-                      [disabled]="saving() || !testId()"
+        <!-- Secondary: embedded in the test editor, whose band owns the ONE primary. -->
+        <pf-touch-btn size="sm" variant="secondary"
+                      [disabled]="saving() || !testId()" [busy]="saving()" busyLabel="Saving layout…"
                       (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save layout' }}
         </pf-touch-btn>
@@ -96,6 +97,11 @@ const OPERATORS = [
               <div class="pf-le-stabs__scroll">
                 @if (sections().length === 0) {
                   <p class="pf-le-stabs__empty">No sections yet — add one to start.</p>
+                  @if (culture()) {
+                    <button type="button" class="pf-link-btn" (click)="seedCultureLayout()">
+                      Start from the classic C&amp;S structure
+                    </button>
+                  }
                 }
                 @for (s of sections(); track s.id) {
                   <button type="button" class="pf-le-stab"
@@ -118,6 +124,10 @@ const OPERATORS = [
                     <button type="button" data-type="paragraph" (click)="addAndCloseMenu('paragraph')">Paragraph (interpretation)</button>
                     <button type="button" data-type="chart"     (click)="addAndCloseMenu('chart')">Chart (gauge / bar)</button>
                     <button type="button" data-type="image"     (click)="addAndCloseMenu('image')">Image (attachments)</button>
+                    @if (culture()) {
+                      <button type="button" data-type="culture_line" (click)="addAndCloseMenu('culture_line')">Culture line (Gram / growth / notes)</button>
+                      <button type="button" data-type="culture_ast"  (click)="addAndCloseMenu('culture_ast')">AST table (per-organism)</button>
+                    }
                   </div>
                 }
               </div>
@@ -243,13 +253,21 @@ const OPERATORS = [
                               </pf-select>
                               @if (condCount(r) > 0) {
                                 <span class="pf-le-sheet__cond-pill" [title]="condCount(r) + ' condition(s)'">
-                                  {{ condCount(r) }}↯
+                                  <span class="pf-num">{{ condCount(r) }}</span> if
                                 </span>
                               }
                             </td>
                             @for (col of deptColumnsForRender(); track col.id) {
                               @let locked = hasLock(asParam(r).parameter_name, col.name);
                               @let suggestions = cellSuggestions(col, r);
+                              @if (isDerivedCol(col)) {
+                                <!-- Unit / reference range print from the value's own
+                                     definition (single source) — never typed here. -->
+                                <td class="pf-le-sheet__c pf-le-sheet__c--derived"
+                                    title="Printed from the value's own {{ col.type === 'unit' ? 'unit' : 'reference range' }} in the Test Master">
+                                  <span class="pf-le-sheet__derived">from the value</span>
+                                </td>
+                              } @else {
                               <td class="pf-le-sheet__c"
                                   [class.pf-le-sheet__c--locked]="locked">
                                 <!-- All cell controls live inside the inner div so the absolute
@@ -295,6 +313,7 @@ const OPERATORS = [
                                   }
                                 </div>
                               </td>
+                              }
                             }
                           }
                           <td class="pf-le-sheet__c-actions">
@@ -359,10 +378,10 @@ const OPERATORS = [
                                   <div class="pf-le-detail__actions">
                                     <button type="button" class="pf-link-btn"
                                             [disabled]="ri === 0"
-                                            (click)="moveRow(selectedSectionIndex(), ri, -1)">↑ Move up</button>
+                                            (click)="moveRow(selectedSectionIndex(), ri, -1)">Move up</button>
                                     <button type="button" class="pf-link-btn"
                                             [disabled]="ri === asGrid(s).rows.length - 1"
-                                            (click)="moveRow(selectedSectionIndex(), ri, 1)">↓ Move down</button>
+                                            (click)="moveRow(selectedSectionIndex(), ri, 1)">Move down</button>
                                     <button type="button" class="pf-link-btn pf-link-btn--danger"
                                             (click)="removeRow(selectedSectionIndex(), ri)">Delete row</button>
                                   </div>
@@ -419,6 +438,29 @@ const OPERATORS = [
                   @for (c of (s.conditions ?? []); track $index; let ci = $index) {
                     <ng-container *ngTemplateOutlet="sectionCondTpl; context: { c, ci, sec: s }"></ng-container>
                   }
+                </div>
+              }
+
+              <!-- ── CULTURE SECTIONS (offered only for culture tests) ── -->
+              @if (s.type === 'culture_line') {
+                <label class="pf-label-mini">Label on the report</label>
+                <input class="pf-input" [value]="s.label || ''"
+                       (input)="patchSection(selectedSectionIndex(), { label: $any($event.target).value })"
+                       placeholder="e.g. GRAM STAIN" />
+                <label class="pf-label-mini">Data source</label>
+                <pf-select [options]="cultureSourceOptions" [value]="asCultureLine(s).source"
+                           (valueChange)="patchSection(selectedSectionIndex(), $any({ source: $event }))"></pf-select>
+                <p class="pf-le-tip">The line's text comes from the culture bench (stage findings, notes). Empty sources are skipped on the PDF.</p>
+              }
+              @if (s.type === 'culture_ast') {
+                <p class="pf-le-tip">Per-organism antimicrobial tables + the S/R/M legend. Content comes from the bench AST stage — the bench's row checkboxes still hide individual antibiotics or organisms.</p>
+                <!-- The exact legend the PDF prints under the AST tables — shown
+                     here so the print-order surface carries the full picture. -->
+                <div class="pf-le-legend">
+                  <p>S - Sensitive (clinically effective at standard therapeutic dose)</p>
+                  <p>R - Resistant (clinically ineffective at standard or increased dose)</p>
+                  <p>M - Intermediate (may be effective at higher dose or in concentrated body sites)</p>
+                  <p>Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.</p>
                 </div>
               }
 
@@ -534,87 +576,18 @@ const OPERATORS = [
                 </div>
               </div>
 
-              @if (previewLoading()) {
-                <p class="pf-le-tip" style="text-align: center; padding: 24px 0;">Resolving…</p>
-              } @else if (preview(); as pv) {
-                <div class="pf-preview-render">
-                  @for (sec of pv.sections; track sec.id) {
-                    <div class="pf-pv-section" [attr.data-type]="sec.type">
-                      @if (sec.label) { <h5 class="pf-pv-label">{{ sec.label }}</h5> }
-
-                      @if (sec.type === 'grid' && sec.rows) {
-                        <table class="pf-pv-table">
-                          <thead>
-                            <tr>
-                              @for (c of pv.columns; track c.id) {
-                                <th [style.width.%]="c.width">{{ c.label }}</th>
-                              }
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (r of sec.rows; track r.id) {
-                              @if (r.isMerged) {
-                                <tr class="pf-pv-row pf-pv-row--merged">
-                                  <td [attr.colspan]="pv.columns.length">{{ r.mergeContent }}</td>
-                                </tr>
-                              } @else {
-                                <tr class="pf-pv-row"
-                                    [style.color]="r.color || null"
-                                    [style.font-weight]="r.isBold ? '700' : null">
-                                  @for (c of pv.columns; track c.id) {
-                                    <td>{{ r.cells[c.name] }}</td>
-                                  }
-                                </tr>
-                              }
-                            }
-                          </tbody>
-                        </table>
-                      }
-
-                      @if (sec.type === 'paragraph') {
-                        <p class="pf-pv-para">{{ sec.content }}</p>
-                      }
-
-                      @if (sec.type === 'image') {
-                        @if (sec.imageUrls && sec.imageUrls.length > 0) {
-                          <div class="pf-pv-images">
-                            @for (u of sec.imageUrls; track u) {
-                              <img [src]="u" alt="" />
-                            }
-                          </div>
-                        } @else {
-                          <p class="pf-pv-empty">No images attached.</p>
-                        }
-                      }
-
-                      @if (sec.type === 'chart' && sec.chart) {
-                        <div class="pf-pv-chart">
-                          <div class="pf-pv-chart__bar">
-                            @for (z of sec.chart.zones; track z.from) {
-                              <span class="pf-pv-chart__zone"
-                                    [style.left.%]="zonePctLeft(sec.chart, z)"
-                                    [style.width.%]="zonePctWidth(sec.chart, z)"
-                                    [style.background]="zoneHex(z.color)"></span>
-                            }
-                            @if (sec.chart.value !== null && sec.chart.value !== undefined) {
-                              <span class="pf-pv-chart__marker"
-                                    [style.left.%]="markerPct(sec.chart)"></span>
-                            }
-                          </div>
-                          <div class="pf-pv-chart__axis">
-                            <span>{{ sec.chart.min }}</span>
-                            <span>{{ sec.chart.value ?? '–' }}</span>
-                            <span>{{ sec.chart.max }}</span>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  }
-                  @if (pv.sections.length === 0) {
-                    <p class="pf-pv-empty">No sections visible for these values.</p>
-                  }
-                </div>
-              }
+              <!-- The EXACT print: same jsPDF pipeline as the patient report,
+                   with the typed sample values driving the engine. Reflects
+                   the SAVED layout (refresh saves the draft first). -->
+              <div class="pf-preview-render pf-preview-render--pdf">
+                <pf-report-pdf-preview
+                  [testId]="testId()"
+                  [parameters]="parameters()"
+                  [values]="sampleValues()"
+                  [culture]="culture()"
+                  [refreshToken]="previewToken()">
+                </pf-report-pdf-preview>
+              </div>
             </aside>
           }
         </div>
@@ -821,9 +794,9 @@ const OPERATORS = [
       border: 1px solid var(--glass-border);
     }
     .pf-pill--ok {
-      background: rgba(16, 185, 129, 0.14);
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+      color: var(--violet-text, #6d28d9);
     }
 
     /* ───── Empty / shell ───── */
@@ -881,7 +854,7 @@ const OPERATORS = [
     .pf-le-stab--active {
       background: rgba(168, 85, 247, 0.16);
       border-color: rgba(168, 85, 247, 0.45);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-le-stab__type {
       padding: 1px 7px;
@@ -890,11 +863,11 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
       border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
     .pf-le-stab__type[data-type='paragraph'] { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; }
-    .pf-le-stab__type[data-type='chart']     { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d; }
-    .pf-le-stab__type[data-type='image']     { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
+    .pf-le-stab__type[data-type='chart']     { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); color: var(--text-secondary); }
+    .pf-le-stab__type[data-type='image']     { background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
     .pf-le-stab__label {
       font-weight: 600;
       max-width: 180px;
@@ -936,10 +909,10 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s;
     }
     .pf-le-addmenu button:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .pf-le-addmenu button[data-type='grid']:hover      { color: #c4b5fd; background: rgba(168, 85, 247, 0.1); }
+    .pf-le-addmenu button[data-type='grid']:hover      { color: var(--violet-text); background: rgba(168, 85, 247, 0.1); }
     .pf-le-addmenu button[data-type='paragraph']:hover { color: #93c5fd; background: rgba(59, 130, 246, 0.1); }
-    .pf-le-addmenu button[data-type='chart']:hover     { color: #fcd34d; background: rgba(245, 158, 11, 0.1); }
-    .pf-le-addmenu button[data-type='image']:hover     { color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--text-secondary); background: var(--pf-sel-bg); }
+    .pf-le-addmenu button[data-type='image']:hover     { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
 
     /* ───── Section meta row ───── */
     .pf-le-smeta {
@@ -984,7 +957,12 @@ const OPERATORS = [
       color: var(--text-muted);
       border-bottom: 1px solid rgba(168, 85, 247, 0.25);
       background: linear-gradient(180deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.02));
+      /* Long headings ("Reference range") were colliding into their
+         neighbour ("...rangeDescription") — clip inside the cell instead. */
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 0;
       vertical-align: bottom;
     }
     .pf-le-sheet__hdr-param { width: 200px; }
@@ -1004,7 +982,7 @@ const OPERATORS = [
     .pf-le-sheet__hdr-meta {
       display: block;
       font-size: 9.5px;
-      color: #c4b5fd;
+      color: var(--violet-text);
       margin-top: 3px;
       letter-spacing: 0.16em;
       font-weight: 800;
@@ -1026,7 +1004,7 @@ const OPERATORS = [
       background: rgba(168, 85, 247, 0.1) !important;
     }
     .pf-le-sheet__row--merged td {
-      background: rgba(245, 158, 11, 0.06) !important;
+      background: var(--pf-sel-bg) !important;
     }
 
     /* Parameter cell */
@@ -1040,9 +1018,9 @@ const OPERATORS = [
       font-size: 10px; font-weight: 700;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      background: rgba(245, 158, 11, 0.16);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: #fcd34d;
+      background: var(--pf-sel-bg);
+      border: 1px solid var(--pf-sel-border);
+      color: var(--text-secondary);
       flex-shrink: 0;
     }
 
@@ -1051,11 +1029,16 @@ const OPERATORS = [
       position: relative;
       vertical-align: middle;
     }
+    .pf-le-sheet__c--derived { background: var(--surface-2, transparent); }
+    .pf-le-sheet__derived {
+      display: block; padding: 4px 8px; font-size: 12px; font-style: italic;
+      color: var(--text-tertiary, #94a3b8); white-space: nowrap;
+    }
     .pf-le-sheet__c--locked {
-      background: rgba(245, 158, 11, 0.06) !important;
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: #fcd34d;
+      color: var(--text-secondary);
       font-weight: 600;
     }
     .pf-le-sheet__c-inner {
@@ -1089,9 +1072,9 @@ const OPERATORS = [
       box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
     }
     .pf-le-sheet__c--locked .pf-input--cell:focus {
-      background: rgba(245, 158, 11, 0.12);
-      border-color: rgba(245, 158, 11, 0.55);
-      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
+      box-shadow: 0 0 0 2px var(--pf-sel-bg);
     }
 
     /* Right-aligned icon stack inside each cell. */
@@ -1115,7 +1098,7 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s, transform 0.18s;
     }
     .pf-le-sheet__caret:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .pf-le-sheet__caret--open { transform: rotate(180deg); color: #c4b5fd; }
+    .pf-le-sheet__caret--open { transform: rotate(180deg); color: var(--violet-text); }
 
     /* 🔒 Lock toggle. Hidden by default; appears on row hover OR when the
        cell is locked. Locked state is unmistakable: solid amber colour on
@@ -1140,23 +1123,23 @@ const OPERATORS = [
     .pf-le-sheet__row:hover .pf-le-sheet__lock:disabled { opacity: 0; }
     .pf-le-sheet__lock--on {
       opacity: 1 !important;
-      color: #fcd34d !important;
-      background: rgba(245, 158, 11, 0.18);
+      color: var(--text-secondary) !important;
+      background: var(--pf-sel-bg);
     }
     .pf-le-sheet__lock--on:hover {
-      background: rgba(245, 158, 11, 0.28);
+      background: var(--pf-sel-border);
     }
 
     /* Locked cell — clear amber theme so admins can't mistake it for a
        hovered/unlocked one. Cell background, input border, and text are
        all amber-tinted. */
     .pf-le-sheet__c--locked {
-      background: rgba(245, 158, 11, 0.08) !important;
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: #fcd34d;
+      color: var(--text-secondary);
       font-weight: 600;
-      border-color: rgba(245, 158, 11, 0.25);
+      border-color: var(--pf-sel-border);
     }
 
     /* Suggestion popup — anchored to .pf-le-sheet__c-inner. */
@@ -1186,17 +1169,17 @@ const OPERATORS = [
       transition: background 0.12s, color 0.12s;
     }
     .pf-le-sheet__menu button:hover {
-      color: #c4b5fd;
+      color: var(--violet-text);
       background: rgba(168, 85, 247, 0.12);
     }
     .pf-le-sheet__menu-lbl { font-weight: 600; color: var(--text-primary); flex: 1; }
     .pf-le-sheet__menu-hint {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 10.5px;
       color: var(--text-muted);
     }
     .pf-le-sheet__menu-val {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 10.5px;
       color: var(--text-tertiary);
     }
@@ -1241,15 +1224,15 @@ const OPERATORS = [
       font-weight: 700 !important;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      border: 1px dashed rgba(245, 158, 11, 0.4) !important;
+      border: 1px dashed var(--pf-sel-border) !important;
       color: var(--text-muted) !important;
       opacity: 0.6;
       transition: opacity 0.12s, color 0.12s, border-color 0.12s;
     }
     .pf-le-sheet__row:hover .pf-merged-rule__add {
       opacity: 1;
-      color: #fcd34d !important;
-      border-color: rgba(245, 158, 11, 0.6) !important;
+      color: var(--text-secondary) !important;
+      border-color: var(--pf-sel-border) !important;
     }
 
     /* Actions cell */
@@ -1264,7 +1247,7 @@ const OPERATORS = [
     }
     .pf-icon-btn--on {
       background: rgba(168, 85, 247, 0.16);
-      color: #c4b5fd !important;
+      color: var(--violet-text) !important;
       border-color: rgba(168, 85, 247, 0.45);
     }
 
@@ -1287,9 +1270,9 @@ const OPERATORS = [
       overflow: hidden;
     }
     .pf-le-detail-card--merged {
-      border-color: rgba(245, 158, 11, 0.5);
-      border-left-color: rgba(245, 158, 11, 0.7);
-      background: rgba(245, 158, 11, 0.03);
+      border-color: var(--pf-sel-border);
+      border-left-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg);
     }
 
     .pf-le-sheet__detail-row td {
@@ -1299,8 +1282,8 @@ const OPERATORS = [
       border-left: 4px solid rgba(168, 85, 247, 0.7) !important;
     }
     .pf-le-sheet__detail-row--merged td {
-      background: rgba(245, 158, 11, 0.06) !important;
-      border-left-color: rgba(245, 158, 11, 0.7) !important;
+      background: var(--pf-sel-bg) !important;
+      border-left-color: var(--pf-sel-border) !important;
     }
 
     /* Banner sits at the top of the detail panel and names the row
@@ -1322,12 +1305,12 @@ const OPERATORS = [
     /* Merged rows get the amber accent end-to-end (left bar + banner). */
     .pf-le-sheet__row--merged.pf-le-sheet__row--open + .pf-le-sheet__detail-row td,
     .pf-le-detail-banner--merged + * .pf-le-sheet__detail-row td {
-      border-left-color: rgba(245, 158, 11, 0.7);
-      background: rgba(245, 158, 11, 0.06) !important;
+      border-left-color: var(--pf-sel-border);
+      background: var(--pf-sel-bg) !important;
     }
     .pf-le-detail-banner--merged {
-      background: rgba(245, 158, 11, 0.18);
-      border-bottom-color: rgba(245, 158, 11, 0.3);
+      background: var(--pf-sel-bg);
+      border-bottom-color: var(--pf-sel-border);
     }
 
     .pf-le-detail {
@@ -1373,13 +1356,25 @@ const OPERATORS = [
       margin-bottom: 8px;
     }
 
+    .pf-le-legend {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px dashed var(--glass-border, rgba(148,163,184,0.3));
+      border-radius: 8px;
+    }
+    .pf-le-legend p {
+      margin: 0;
+      font-size: 11px; line-height: 1.6;
+      color: var(--text-tertiary, #94a3b8);
+    }
+
     .pf-le-tip {
       font-size: 11.5px; line-height: 1.5;
       color: var(--text-muted);
       margin: 0;
     }
     .pf-le-tip--inline { display: inline; margin: 0 4px; }
-    .pf-le-tip a { color: #c4b5fd; }
+    .pf-le-tip a { color: var(--violet-text); }
 
     .pf-le-grid3 {
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
@@ -1392,9 +1387,9 @@ const OPERATORS = [
       padding: 3px 8px;
       border-radius: 6px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
     }
-    .pf-row__badge--merged { background: rgba(245, 158, 11, 0.14); color: #fcd34d; }
+    .pf-row__badge--merged { background: var(--pf-sel-bg); color: var(--text-secondary); }
 
     /* ───── Conditions ───── */
     .pf-cond {
@@ -1425,7 +1420,7 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(168, 85, 247, 0.16);
       border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c4b5fd;
+      color: var(--violet-text);
       cursor: pointer;
       transition: background 0.12s, border-color 0.12s;
       min-width: 56px;
@@ -1437,16 +1432,16 @@ const OPERATORS = [
     }
     /* ELSE branches read amber so admins can scan IF vs ELSE quickly. */
     .pf-cond--else .pf-cond__mode {
-      background: rgba(245, 158, 11, 0.16);
-      border-color: rgba(245, 158, 11, 0.4);
-      color: #fcd34d;
+      background: var(--pf-sel-bg);
+      border-color: var(--pf-sel-border);
+      color: var(--text-secondary);
     }
     .pf-cond--else .pf-cond__mode:hover {
-      background: rgba(245, 158, 11, 0.28);
-      border-color: rgba(245, 158, 11, 0.6);
+      background: var(--pf-sel-border);
+      border-color: var(--pf-sel-border);
     }
     .pf-cond--else {
-      border-left: 3px solid rgba(245, 158, 11, 0.5);
+      border-left: 3px solid var(--pf-sel-border);
     }
     /* Highlight an IF branch whose predicate has no parameter — that
        condition will never match, which usually means admin forgot to
@@ -1461,7 +1456,7 @@ const OPERATORS = [
       border-radius: 9999px;
       background: rgba(244, 63, 94, 0.14);
       border: 1px solid rgba(244, 63, 94, 0.4);
-      color: #fda4af;
+      color: var(--rose-text);
     }
 
     /* Cell-override list inside a condition. */
@@ -1499,7 +1494,7 @@ const OPERATORS = [
     /* ───── Inputs ───── */
     .pf-input--inline-label { padding: 6px 10px; font-size: 13px; }
     .pf-input--compact { padding: 5px 8px; font-size: 12px; }
-    .pf-input--mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+    .pf-input--mono { font-variant-numeric: tabular-nums; font-size: 11px; }
     .pf-input--ta { font-family: inherit; resize: vertical; min-height: 64px; }
 
     .pf-label-mini {
@@ -1526,7 +1521,7 @@ const OPERATORS = [
     }
     .pf-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .pf-icon-btn--danger:hover:not(:disabled) {
-      color: #f87171;
+      color: var(--red-text);
       border-color: rgba(244, 63, 94, 0.5);
     }
 
@@ -1534,12 +1529,12 @@ const OPERATORS = [
       background: transparent; border: 0;
       padding: 5px 10px;
       font-size: 12px; font-weight: 600;
-      color: #c4b5fd;
+      color: var(--violet-text);
       cursor: pointer;
       border-radius: 6px;
     }
     .pf-link-btn:hover { background: rgba(168, 85, 247, 0.1); }
-    .pf-link-btn--danger { color: #f87171; }
+    .pf-link-btn--danger { color: var(--red-text); }
     .pf-link-btn--danger:hover { background: rgba(244, 63, 94, 0.12); }
     .pf-link-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -1575,7 +1570,7 @@ const OPERATORS = [
       border-radius: 14px;
       background: rgba(0, 0, 0, 0.22);
       position: sticky; top: 12px;
-      max-height: calc(100vh - 24px);
+      max-height: calc(100dvh - 24px);
       overflow: auto;
     }
     .pf-le-preview__hdr {
@@ -1648,12 +1643,18 @@ const OPERATORS = [
     .pf-pv-chart__axis {
       display: flex; justify-content: space-between;
       font-size: 10px; color: #64748b;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     /* Generic flex helper used by toolbar / sticky-spacer spans. */
     .grow { flex: 1; }
-  `]
+  
+    @media (max-width: 640px) {
+      .pf-le-grid3 { grid-template-columns: 1fr; }
+      /* Sticky preview pins over the editor on a short viewport — flow it. */
+      [class*='preview'][style*='sticky'], .pf-le-preview { position: static; }
+    }
+`]
 })
 export class TestLayoutEditorComponent {
   private readonly layout = inject(ReportLayoutService);
@@ -1670,6 +1671,45 @@ export class TestLayoutEditorComponent {
    *  editor can surface the configured columns instead of asking admin
    *  to type column names blindly. */
   readonly departmentId = input<string>('');
+  /** True when the edited test is a culture (microFormat culture_sensitivity):
+   *  unlocks the culture-only section palette. Every other test keeps the
+   *  standard palette untouched. */
+  readonly culture = input<boolean>(false);
+  readonly cultureSourceOptions: PfSelectOption[] = [
+    { value: 'specimen', label: 'Specimen' },
+    { value: 'gramStain', label: 'Gram stain (bench gram stage)' },
+    { value: 'growth', label: 'Growth check' },
+    { value: 'id', label: 'Organism identification' },
+    { value: 'colonyCount', label: 'Colony count' },
+    { value: 'organisms', label: 'Organism(s) isolated' },
+    { value: 'resistancePattern', label: 'Resistance pattern' },
+    { value: 'intrinsicResistance', label: 'Intrinsic resistance' },
+    { value: 'clinicalNotes', label: 'Clinical notes' },
+    { value: 'infectionControlAdvice', label: 'Infection control advice' },
+    { value: 'note', label: 'Bench summary note' },
+  ];
+  asCultureLine(sec: ReportSection): { source: string } {
+    return sec as unknown as { source: string };
+  }
+  /** One-tap starter for culture tests: seeds the classic C&S arrangement
+   *  (the reference report) as editable sections — rearrange from there. */
+  seedCultureLayout() {
+    const mk = (source: string, label: string, order: number): ReportSection =>
+      ({ id: newId(), type: 'culture_line', order, label, source, conditions: [] } as ReportSection);
+    const seeded: ReportSection[] = [
+      mk('specimen', 'Specimen', 1),
+      mk('gramStain', 'Gram stain', 2),
+      mk('growth', 'Growth', 3),
+      mk('colonyCount', 'Colony count', 4),
+      mk('organisms', 'Organism(s) isolated', 5),
+      { id: newId(), type: 'culture_ast', order: 6, conditions: [] } as ReportSection,
+      mk('resistancePattern', 'Resistance pattern', 7),
+      mk('intrinsicResistance', 'Intrinsic resistance', 8),
+      mk('clinicalNotes', 'Clinical notes', 9),
+      mk('infectionControlAdvice', 'Infection control advice', 10),
+    ];
+    this.mutateSections(() => seeded);
+  }
 
   /** Department columns the test inherits — fetched whenever departmentId
    *  changes. Empty array when the dept hasn't been configured yet (the
@@ -1692,8 +1732,8 @@ export class TestLayoutEditorComponent {
   protected readonly saving = signal(false);
 
   protected readonly previewOpen = signal(false);
-  protected readonly previewLoading = signal(false);
-  protected readonly preview = signal<ResolvedReportLayout | null>(null);
+  /** Bumped to re-render the embedded PDF preview drawer. */
+  protected readonly previewToken = signal(0);
   protected readonly sampleValues = signal<Record<string, unknown>>({});
 
   // ── Master-detail UI state ────────────────────────────────
@@ -2264,7 +2304,7 @@ export class TestLayoutEditorComponent {
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
     this._autosaveTimer = setTimeout(async () => {
       try {
-        await this.layout.saveTestLayout(id, this.reindex(list));
+        await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(list)));
         this.configured.set(true);
         this._dirty = false;
       } catch {
@@ -2316,7 +2356,7 @@ export class TestLayoutEditorComponent {
     // the server. Failures are swallowed — worst case the migration
     // re-runs on next load, which is idempotent.
     try {
-      await this.layout.saveTestLayout(id, this.reindex(this.sections()));
+      await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(this.sections())));
       for (const param of paramNames) {
         try { await this.layout.deleteLock(id, param); } catch { /* ignore */ }
       }
@@ -2504,6 +2544,10 @@ export class TestLayoutEditorComponent {
       case 'paragraph': s = { id, type: 'paragraph', order, template: '', conditions: [] }; break;
       case 'chart':     s = { id, type: 'chart', order, parameter: '', min: 0, max: 100, zones: [], conditions: [] }; break;
       case 'image':     s = { id, type: 'image', order, conditions: [] }; break;
+      // Culture-only building blocks — the palette offers them only when the
+      // host says the test is a culture (see the `culture` input).
+      case 'culture_line': s = { id, type: 'culture_line', order, source: 'gramStain', conditions: [] }; break;
+      case 'culture_ast':  s = { id, type: 'culture_ast', order, conditions: [] }; break;
     }
     this.mutateSections(arr => [...arr, s]);
   }
@@ -2795,7 +2839,7 @@ export class TestLayoutEditorComponent {
     if (!id) return;
     this.saving.set(true);
     try {
-      const payload = this.reindex(this.sections());
+      const payload = this.stripDerivedCells(this.reindex(this.sections()));
       await this.layout.saveTestLayout(id, payload);
       this.configured.set(true);
       this.version.update(v => v + 1);
@@ -2824,20 +2868,16 @@ export class TestLayoutEditorComponent {
   async refreshPreview() {
     const id = this.testId();
     if (!id) return;
-    this.previewLoading.set(true);
     try {
       // Save current draft to the server before previewing so the engine sees
-      // the latest sections. Lightweight — same shape we'd persist anyway.
+      // the latest sections (the embedded PDF preview resolves server-side).
       // Skipped if there are no sections yet (draft-empty state).
       if (this.sections().length > 0) {
-        await this.layout.saveTestLayout(id, this.reindex(this.sections()));
+        await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(this.sections())));
       }
-      const pv = await this.layout.preview(id, this.sampleValues(), []);
-      this.preview.set(pv);
+      this.previewToken.update(v => v + 1);
     } catch (e: unknown) {
       this.toasts.error(ApiError.from(e).message);
-    } finally {
-      this.previewLoading.set(false);
     }
   }
 
@@ -2900,18 +2940,6 @@ export class TestLayoutEditorComponent {
 
   // ───────── Chart preview math (resolved) ──────────────
 
-  zonePctLeft(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number }): number {
-    if (!chart || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((z.from - chart.min) / (chart.max - chart.min)) * 100));
-  }
-  zonePctWidth(chart: ResolvedReportLayout['sections'][number]['chart'], z: { from: number; to: number }): number {
-    if (!chart || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((z.to - z.from) / (chart.max - chart.min)) * 100));
-  }
-  markerPct(chart: ResolvedReportLayout['sections'][number]['chart']): number {
-    if (!chart || chart.value === null || chart.value === undefined || chart.max <= chart.min) return 0;
-    return Math.max(0, Math.min(100, ((chart.value - chart.min) / (chart.max - chart.min)) * 100));
-  }
   zoneHex(token: string): string {
     if (token === 'red')    return '#fecaca';
     if (token === 'orange') return '#fed7aa';
@@ -2920,6 +2948,31 @@ export class TestLayoutEditorComponent {
   }
 
   // ───────── Misc helpers ────────────────────────────────
+
+  /** Unit / range columns print from the parameter (single source) — the
+   *  spreadsheet shows them read-only and never stores a typed cell. */
+  isDerivedCol(col: ReportColumn): boolean {
+    return col.type === 'unit' || col.type === 'range';
+  }
+
+  /** Drop typed unit/range cells from grid rows before a save (legacy
+   *  layouts and migrated locks carried them; the engine ignores them). */
+  private stripDerivedCells(arr: ReportSection[]): ReportSection[] {
+    const derived = new Set(['unit', 'range']);
+    for (const c of this.deptColumnsForRender()) if (this.isDerivedCol(c)) derived.add(c.name);
+    return arr.map(s => {
+      if (s.type !== 'grid') return s;
+      const g = s as GridSection;
+      return {
+        ...g,
+        rows: (g.rows ?? []).map(r => {
+          const cells = (r as GridRowParameter).cells;
+          if (r.row_merge || !cells || !Object.keys(cells).some(k => derived.has(k))) return r;
+          return { ...r, cells: Object.fromEntries(Object.entries(cells).filter(([k]) => !derived.has(k))) } as GridRow;
+        }),
+      } as ReportSection;
+    });
+  }
 
   private reindex<T extends { order: number }>(arr: T[]): T[] {
     return arr.map((s, i) => ({ ...s, order: i + 1 }));

@@ -1,7 +1,7 @@
 {
   "name": "prefrontal",
   "productName": "Prefrontal",
-  "version": "0.0.0",
+  "version": "1.0.1",
   "description": "Prefrontal — clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
@@ -12,21 +12,30 @@
   "homepage": "./",
   "scripts": {
     "postinstall": "patch-package",
-    "build": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
+    "build": "nx build lms --configuration=production && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
     "start": "nx serve lms",
+    "catalog": "nx serve pf-components --port=4201",
     "electron": "electron .",
     "electron:dev": "concurrently \"npx nx serve lms\" \"wait-on http://localhost:4200 && electron .\"",
-    "electron:build": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder",
-    "electron:build:win": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder --win",
-    "electron:build:mac": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder --mac",
-    "electron:build:linux": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder --linux",
+    "electron:build": "npx nx build lms --configuration=electron-stage && electron-builder",
+    "electron:build:devapi": "npx nx build lms --configuration=electron && electron-builder",
+    "electron:build:dev:mac": "npx nx build lms --configuration=electron-dev && electron-builder --mac -c.extraMetadata.pfDataProfile=dev",
+    "electron:build:win": "npx nx build lms --configuration=electron-stage && electron-builder --win",
+    "electron:build:mac": "npx nx build lms --configuration=electron-stage && electron-builder --mac",
+    "electron:build:linux": "npx nx build lms --configuration=electron-stage && electron-builder --linux",
     "cap:add:ios": "npx cap add ios",
     "cap:add:android": "npx cap add android",
-    "cap:sync": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=capacitor && npx cap sync",
+    "cap:sync": "npx nx build lms --configuration=capacitor-stage && npx cap sync",
+    "cap:sync:devapi": "npx nx build lms --configuration=capacitor && npx cap sync",
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
     "cap:run:ios": "npx cap run ios",
-    "cap:run:android": "npx cap run android"
+    "cap:run:android": "npx cap run android",
+    "build:stage": "nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
+    "test:instruments": "node --test electron/instruments/test/*.test.js",
+    "test:electron": "node --test electron/test/*.test.js",
+    "smoke:fullscreen": "electron electron/test/fullscreen-smoke.js",
+    "sim:cbc": "node electron/instruments/sim/cbc-sim.js"
   },
   "build": {
     "appId": "in.prefrontal.app",
@@ -37,14 +46,21 @@
     },
     "files": [
       "electron/**/*",
+      "!electron/test/**",
       "dist/apps/lms/browser/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/usb/**",
+      "**/node_modules/@types/w3c-web-usb/**",
+      "**/node_modules/serialport/**",
+      "**/node_modules/@serialport/**"
     ],
     "win": {
       "target": [
         "nsis",
         "portable"
       ],
-      "icon": "electron/icon.png"
+      "icon": "electron/icon.ico"
     },
     "mac": {
       "target": [
@@ -65,16 +81,17 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "electron/icon.png",
-      "installerHeaderIcon": "electron/icon.png",
+      "installerIcon": "electron/icon.ico",
+      "installerHeaderIcon": "electron/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Prefrontal LMS"
+      "shortcutName": "Prefrontal LMS",
+      "uninstallerIcon": "electron/icon.ico"
     }
   },
   "engines": {
     "node": "22.x",
-    "npm": "11.6.2"
+    "npm": "11.x"
   },
   "private": true,
   "devDependencies": {
@@ -84,6 +101,7 @@
     "@angular/cli": "~21.2.0",
     "@angular/compiler-cli": "~21.2.0",
     "@angular/language-service": "~21.2.0",
+    "@aws-sdk/client-s3": "^3.1145.0",
     "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.8.0",
     "@nx/angular": "^22.6.5",
@@ -101,6 +119,7 @@
     "@swc/helpers": "0.5.18",
     "@types/qrcode": "^1.5.6",
     "@types/uuid": "^10.0.0",
+    "@types/web-bluetooth": "^0.0.21",
     "@typescript-eslint/utils": "^8.40.0",
     "angular-eslint": "^21.2.0",
     "concurrently": "^9.2.1",
@@ -109,6 +128,8 @@
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-playwright": "^1.6.2",
+    "fake-indexeddb": "^6.2.5",
+    "js-yaml": "^5.4.2",
     "jsdom": "^27.1.0",
     "nx": "22.6.5",
     "patch-package": "^8.0.0",
@@ -121,7 +142,8 @@
     "wait-on": "^9.0.5"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "libs/*"
   ],
   "dependencies": {
     "@angular/cdk": "~21.2.0",
@@ -146,6 +168,7 @@
     "@capacitor/status-bar": "^8.0.2",
     "@microsoft/signalr": "^10.0.0",
     "@preact/signals": "^2.9.0",
+    "@prefrontal/shared": "^0.0.1",
     "@schedule-x/angular": "^4.0.0",
     "@schedule-x/calendar": "^4.5.0",
     "@schedule-x/events-service": "^4.5.0",
@@ -154,20 +177,29 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "ag-grid-angular": "^36.0.2",
+    "ag-grid-community": "^36.0.2",
+    "barcode-detector": "^3.2.1",
+    "bwip-js": "^4.11.2",
     "capacitor-plugin-callkit-voip": "^1.0.4",
     "date-fns": "^4.1.0",
+    "echarts": "^5.6.0",
     "electron-is-dev": "^3.0.1",
+    "electron-updater": "^6.8.9",
     "flatpickr": "^4.6.13",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "multicast-dns": "^7.2.5",
     "pdfjs-dist": "^4.10.38",
     "postcss": "^8.5.10",
     "preact": "^10.29.1",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
+    "serialport": "^13.0.0",
     "tailwindcss": "^4.2.2",
     "temporal-polyfill": "^0.3.0",
+    "usb": "^2.18.0",
     "uuid": "^13.0.0"
   }
 }

@@ -10,7 +10,7 @@ import { patientDisplayName } from '../../shared/models/patient.model';
 import { AvatarComponent } from '../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /** GET /api/lost-and-found — one disabled workflow stage + its orphaned tubes. */
 interface StrandedStage {
@@ -29,7 +29,7 @@ interface StrandedStage {
 @Component({
   selector: 'pf-lost-and-found',
   standalone: true,
-  imports: [DatePipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, DatePipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -38,7 +38,7 @@ interface StrandedStage {
           eyebrow="Recovery"
           title="Lost &amp; Found"
           subtitle="Records stranded when a workflow stage was switched off. Move them into the lab, mark failed, or cancel the order.">
-          <pf-touch-btn actions size="sm" variant="ghost" [disabled]="loading()" (pressed)="load()">
+          <pf-touch-btn actions size="sm" variant="ghost" [disabled]="loading()" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">
             <span icon-left aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v6h-6"/>
@@ -52,7 +52,7 @@ interface StrandedStage {
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pb-10">
         @if (loading()) {
           <div class="flex justify-center py-10">
-            <pf-loading-logo size="lg" color="purple" [showText]="true" text="Finding stranded records…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="5" label="Finding stranded records…"></pf-skeleton-rows>
           </div>
         } @else if (totalCount() === 0) {
           <div class="pf-empty">
@@ -79,13 +79,13 @@ interface StrandedStage {
                   </div>
                   <div class="pf-lf__actions">
                     @if (canSendToLab()) {
-                      <pf-touch-btn size="sm" variant="primary" [disabled]="isBusy(s.id)" (pressed)="sendToLab(s)">Send to lab →</pf-touch-btn>
+                      <pf-touch-btn size="sm" variant="primary" [disabled]="isBusy(s.id)" [busy]="busyAs(s.id, 'send')" busyLabel="Sending…" (pressed)="sendToLab(s)">Send to lab →</pf-touch-btn>
                     }
                     @if (canReject()) {
-                      <pf-touch-btn size="sm" variant="ghost" [disabled]="isBusy(s.id)" (pressed)="markFailed(s)">Mark failed</pf-touch-btn>
+                      <pf-touch-btn size="sm" variant="ghost" [disabled]="isBusy(s.id)" [busy]="busyAs(s.id, 'fail')" busyLabel="Updating…" (pressed)="markFailed(s)">Mark failed</pf-touch-btn>
                     }
                     @if (canCancel()) {
-                      <pf-touch-btn size="sm" variant="ghost" [disabled]="isBusy(s.id)" (pressed)="cancelOrder(s)">Cancel order</pf-touch-btn>
+                      <pf-touch-btn size="sm" variant="ghost" [disabled]="isBusy(s.id)" [busy]="busyAs(s.id, 'cancel')" busyLabel="Cancelling…" (pressed)="cancelOrder(s)">Cancel order</pf-touch-btn>
                     }
                   </div>
                 </li>
@@ -130,7 +130,7 @@ interface StrandedStage {
     }
     .pf-lf__badge {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 10.5px; font-weight: 700; color: #fbbf24;
+      font-size: 10.5px; font-weight: 700; color: var(--amber-text);
       padding: 5px 10px; border-radius: 999px;
       background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.28);
       white-space: nowrap;
@@ -170,8 +170,12 @@ export class LostAndFoundComponent {
 
   private readonly _busy = signal<Set<string>>(new Set());
   isBusy(id: string): boolean { return this._busy().has(id); }
-  private setBusy(id: string, on: boolean) {
+  /** Which action a busy row is running (that button shows the dots). */
+  private readonly _busyKind = signal<ReadonlyMap<string, string>>(new Map());
+  busyAs(id: string, kind: string): boolean { return this._busyKind().get(id) === kind; }
+  private setBusy(id: string, on: boolean, kind?: string) {
     this._busy.update(s => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n; });
+    this._busyKind.update(m => { const n = new Map(m); if (on && kind) n.set(id, kind); else n.delete(id); return n; });
   }
 
   constructor() { this.load(); }
@@ -204,7 +208,7 @@ export class LostAndFoundComponent {
 
   /** Move a stranded tube straight into the lab (status → received). */
   sendToLab(s: OrderSample) {
-    this.setBusy(s.id, true);
+    this.setBusy(s.id, true, 'send');
     this.api.patch(`/api/lost-and-found/samples/${s.id}/send-to-lab`).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeSample(s.id); this.toasts.success('Sent to the lab'); },
       error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }
@@ -220,7 +224,7 @@ export class LostAndFoundComponent {
       multiline: true, required: true, tone: 'danger', confirmLabel: 'Mark failed'
     });
     if (!reason) return;
-    this.setBusy(s.id, true);
+    this.setBusy(s.id, true, 'fail');
     this.api.patch(`/api/samples/${s.id}/reject`, { reason }).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeSample(s.id); this.toasts.success('Marked failed'); },
       error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }
@@ -237,7 +241,7 @@ export class LostAndFoundComponent {
       multiline: true, required: false, tone: 'danger', confirmLabel: 'Cancel order'
     });
     if (reason === null) return;   // dialog dismissed
-    this.setBusy(s.id, true);
+    this.setBusy(s.id, true, 'cancel');
     this.api.patch(`/api/orders/${s.orderId}/cancel`, { reason: reason || undefined }).subscribe({
       next: () => { this.setBusy(s.id, false); this.removeOrder(s.orderId); this.toasts.success('Order cancelled'); },
       error: e => { this.setBusy(s.id, false); this.toasts.error(ApiError.from(e).message); }

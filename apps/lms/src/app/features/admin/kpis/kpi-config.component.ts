@@ -6,7 +6,11 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface KpiCatalogItem {
   id: string;
@@ -64,11 +68,43 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [CommonModule, SelectComponent, LoadingLogoComponent],
+  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-kpi-page">
-      <header class="pf-kpi-hdr items-center">
+    <div class="pf-kpi-page pf-band-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the catalog search, plus the scope and screen
+             pickers; Discard / Save ride the band actions. -->
+        <pf-hero-band [back]="true" placeholder="Search KPIs — name, code, description…"
+                      [value]="filterQuery()" (valueChange)="filterQuery.set($event)">
+          <ng-container band-tools>
+            <pf-select class="pf-kpi-bandsel pf-kpi-bandsel--scope" size="sm" [options]="scopeOptions()"
+                       [value]="selectedScope()" (valueChange)="onScopeChange($event)"
+                       aria-label="Configure for"></pf-select>
+            <pf-select class="pf-kpi-bandsel" size="sm" [options]="screenOptions()"
+                       [value]="selectedScreen()" (valueChange)="selectScreen($event)"
+                       aria-label="Screen"></pf-select>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!dirty()" (click)="reload()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+              </svg>
+              Discard
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-kpi-hdr pf-classic-only items-center">
         @if (navBack.showBack()) {
           <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -80,7 +116,7 @@ const CATEGORY_LABELS: Record<string, string> = {
         </div>
       </header>
 
-      <section class="pf-kpi-controls">
+      <section class="pf-kpi-controls pf-classic-only">
         <label class="pf-kpi-control">
           <span class="pf-kpi-control__lbl">Configure for</span>
           <pf-select
@@ -93,7 +129,7 @@ const CATEGORY_LABELS: Record<string, string> = {
           @for (s of screens; track s.id) {
             <button type="button"
                     class="pf-kpi-screen-tab"
-                    [class.pf-kpi-screen-tab--on]="selectedScreen() === s.id"
+                    [attr.aria-pressed]="selectedScreen() === s.id"
                     (click)="selectScreen(s.id)">
               <span class="pf-kpi-screen-tab__label">{{ s.label }}</span>
               <span class="pf-kpi-screen-tab__hint">{{ s.hint }}</span>
@@ -105,10 +141,10 @@ const CATEGORY_LABELS: Record<string, string> = {
         </div>
       </section>
 
+      <div class="pf-band-body pf-band-body--fill pf-kpi-body">
       @if (loading()) {
         <div class="pf-kpi-loading flex justify-center py-12">
-          <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                           [showText]="true" text="Loading KPI configuration…"></pf-loading-logo>
+          <pf-skeleton-tiles [count]="6" min="260px" label="Loading KPI configuration…"></pf-skeleton-tiles>
         </div>
       } @else {
         <section class="pf-kpi-workshop">
@@ -117,7 +153,7 @@ const CATEGORY_LABELS: Record<string, string> = {
             <header class="pf-kpi-catalog__hdr">
               <h2>Available KPIs</h2>
               <input type="search"
-                     class="pf-kpi-search"
+                     class="pf-kpi-search pf-classic-only"
                      placeholder="Filter…"
                      [value]="filterQuery()"
                      (input)="filterQuery.set($any($event.target).value)" />
@@ -142,7 +178,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                         @if (isAssigned(k.id)) {
                           <span class="pf-kpi-cat__pill">added</span>
                         } @else {
-                          <span class="pf-kpi-cat__add">＋ Add</span>
+                          <span class="pf-kpi-cat__add">+ Add</span>
                         }
                       </button>
                     </li>
@@ -163,12 +199,12 @@ const CATEGORY_LABELS: Record<string, string> = {
                   {{ scopeLabel() }} · {{ assigned().length }} card{{ assigned().length === 1 ? '' : 's' }}
                 </p>
               </div>
-              <div class="pf-kpi-assigned__actions">
+              <div class="pf-kpi-assigned__actions pf-classic-only">
                 <button type="button" class="pf-kpi-btn pf-kpi-btn--ghost"
                         [disabled]="!dirty()"
                         (click)="reload()">Discard</button>
                 <button type="button" class="pf-kpi-btn pf-kpi-btn--primary"
-                        [disabled]="!dirty() || saving()"
+                        [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                         (click)="save()">
                   {{ saving() ? 'Saving…' : 'Save changes' }}
                 </button>
@@ -178,7 +214,7 @@ const CATEGORY_LABELS: Record<string, string> = {
             @if (assigned().length === 0) {
               <div class="pf-kpi-empty pf-kpi-empty--card">
                 <p><strong>No KPIs assigned yet.</strong></p>
-                <p>Add cards from the catalog on the left. Drag them to reorder; click × to remove.</p>
+                <p>Add cards from the catalog on the left. Drag them to reorder; remove one with its close button.</p>
               </div>
             } @else {
               <ul class="pf-kpi-assigned__list">
@@ -191,18 +227,25 @@ const CATEGORY_LABELS: Record<string, string> = {
                       (dragover)="onDragOver($event, i)"
                       (drop)="onDrop($event, i)"
                       (dragend)="onDragEnd()">
-                    <span class="pf-kpi-tile__grip" aria-hidden="true">⋮⋮</span>
-                    <span class="pf-kpi-tile__pos">{{ i + 1 }}</span>
+                    <span class="pf-kpi-tile__grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+                    <span class="pf-kpi-tile__pos pf-num">{{ i + 1 }}</span>
                     <div class="pf-kpi-tile__body">
                       <span class="pf-kpi-tile__label">{{ kpiName(a.kpiId) }}</span>
                       <span class="pf-kpi-tile__meta">
                         {{ kpiCategory(a.kpiId) }} · {{ kpiValueType(a.kpiId) }}
                       </span>
                     </div>
-                    <label class="pf-kpi-tile__toggle" [title]="a.enabled ? 'Disable' : 'Enable'">
-                      <input type="checkbox" [checked]="a.enabled" (change)="toggleEnabled(i)" />
-                      <span></span>
-                    </label>
+                    <button type="button" class="pf-toggle pf-kpi-tile__switch" role="switch" [attr.aria-checked]="a.enabled"
+                            [attr.aria-label]="kpiName(a.kpiId) + (a.enabled ? ' — shown' : ' — hidden')"
+                            [title]="a.enabled ? 'Disable' : 'Enable'" (click)="toggleEnabled(i)">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                    <span class="pf-kpi-tile__updown" aria-hidden="false">
+                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === 0"
+                              (click)="move(i, -1)" aria-label="Move up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === assigned().length - 1"
+                              (click)="move(i, 1)" aria-label="Move down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                    </span>
                     <button type="button" class="pf-kpi-tile__x"
                             (click)="removeAt(i)" aria-label="Remove">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -217,9 +260,11 @@ const CATEGORY_LABELS: Record<string, string> = {
           </main>
         </section>
       }
+      </div>
     </div>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     :host { display: block; }
 
     .pf-kpi-page {
@@ -230,6 +275,28 @@ const CATEGORY_LABELS: Record<string, string> = {
       flex-direction: column;
       gap: 20px;
     }
+
+    /* NEW design: the workshop fills the band body and each pane scrolls on
+       its own — no page-level scroll. Stacked (<=900px) the body scrolls. */
+    :host-context(.design-new) .pf-kpi-workshop {
+      flex: 1 1 auto; min-height: 0; align-items: stretch;
+      grid-template-rows: minmax(0, 1fr);
+    }
+    :host-context(.design-new) .pf-kpi-catalog,
+    :host-context(.design-new) .pf-kpi-assigned { min-height: 0; overflow-y: auto; }
+    :host-context(.design-new) .pf-kpi-catalog__hdr,
+    :host-context(.design-new) .pf-kpi-assigned__hdr {
+      position: sticky; top: 0; z-index: 1; background: var(--bg-card-solid);
+    }
+    @media (max-width: 900px) {
+      :host-context(.design-new) .pf-kpi-body { display: block !important; overflow-y: auto !important; }
+      :host-context(.design-new) .pf-kpi-workshop { grid-template-rows: none; }
+      :host-context(.design-new) .pf-kpi-catalog,
+      :host-context(.design-new) .pf-kpi-assigned { overflow-y: visible; }
+    }
+    .pf-kpi-bandsel { display: block; min-width: 190px; }
+    .pf-kpi-bandsel--scope { min-width: 170px; }
+    @media (max-width: 640px) { .pf-kpi-bandsel, .pf-kpi-bandsel--scope { min-width: 150px; } }
 
     .pf-kpi-hdr h1 {
       font-size: 22px;
@@ -288,7 +355,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       color: var(--text-primary);
       background: var(--glass-bg-hover);
     }
-    .pf-kpi-screen-tab--on {
+    .pf-kpi-screen-tab[aria-pressed='true'] {
       color: white;
       background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18));
       border-color: rgba(168, 85, 247, 0.5);
@@ -303,7 +370,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       font-size: 11.5px;
       color: var(--text-tertiary);
     }
-    .pf-kpi-screen-tab--on .pf-kpi-screen-tab__hint { color: rgba(255,255,255,0.7); }
+    .pf-kpi-screen-tab[aria-pressed='true'] .pf-kpi-screen-tab__hint { color: rgba(255,255,255,0.7); }
     .pf-kpi-screen-tab__count {
       position: absolute;
       top: 8px;
@@ -319,10 +386,10 @@ const CATEGORY_LABELS: Record<string, string> = {
       border: 1px solid rgba(168, 85, 247, 0.4);
       font-size: 11px;
       font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       color: #d8b4fe;
     }
-    .pf-kpi-screen-tab--on .pf-kpi-screen-tab__count {
+    .pf-kpi-screen-tab[aria-pressed='true'] .pf-kpi-screen-tab__count {
       background: rgba(255,255,255,0.18);
       border-color: rgba(255,255,255,0.32);
       color: white;
@@ -417,7 +484,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     .pf-kpi-cat__type {
       grid-area: type;
       font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       color: var(--text-muted);
       letter-spacing: 0.04em;
     }
@@ -429,7 +496,9 @@ const CATEGORY_LABELS: Record<string, string> = {
       padding: 4px 8px;
       border-radius: 8px;
     }
-    .pf-kpi-cat__add { color: #c4b5fd; background: rgba(168, 85, 247, 0.1); }
+    .pf-kpi-cat__add { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
+    .pf-kpi-tile__switch { flex: none; }
+    @media (pointer: coarse) { .pf-kpi-tile__switch { min-width: 44px; min-height: 44px; justify-content: center; } }
     .pf-kpi-cat__pill { color: var(--text-muted); background: rgba(255,255,255,0.04); }
 
     /* ── Assigned column ───────────────────────────────────── */
@@ -498,9 +567,10 @@ const CATEGORY_LABELS: Record<string, string> = {
     .pf-kpi-tile--over { border-color: rgba(168, 85, 247, 0.7); background: rgba(168,85,247,0.06); }
 
     .pf-kpi-tile__grip {
+      display: inline-flex; align-items: center;
       cursor: grab;
       color: var(--text-muted);
-      font-family: monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 16px;
       letter-spacing: -2px;
       user-select: none;
@@ -515,10 +585,10 @@ const CATEGORY_LABELS: Record<string, string> = {
       justify-content: center;
       border-radius: 8px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       font-size: 11.5px;
       font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     .pf-kpi-tile__body { min-width: 0; display: flex; flex-direction: column; }
@@ -573,7 +643,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     }
     .pf-kpi-tile__x:hover {
       background: rgba(239, 68, 68, 0.1);
-      color: #fca5a5;
+      color: var(--red-text);
     }
 
     .pf-kpi-empty {
@@ -623,7 +693,7 @@ const CATEGORY_LABELS: Record<string, string> = {
        states. Desktop (hover-capable) keeps its existing base hovers. */
     @media (hover: none) {
       .pf-kpi-screen-tab:hover { color: var(--text-secondary); background: var(--glass-bg); }
-      .pf-kpi-screen-tab--on:hover { color: white; background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18)); }
+      .pf-kpi-screen-tab[aria-pressed='true']:hover { color: white; background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18)); }
       .pf-kpi-cat__row:hover:not(:disabled) { background: transparent; }
       .pf-kpi-tile:hover { border-color: var(--glass-border); }
       .pf-kpi-btn--ghost:hover:not([disabled]) { background: transparent; color: var(--text-secondary); }
@@ -643,7 +713,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
     /* Below desktop (<=1279): guard long KPI labels/names from overflowing
        their grid cells. Desktop-web (>=1280) keeps its existing rendering. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-kpi-cat__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       .pf-kpi-tile__label,
       .pf-kpi-tile__meta {
@@ -658,7 +728,7 @@ const CATEGORY_LABELS: Record<string, string> = {
        The base rule collapses to one column below 900px; for the 901–1279
        band the base two-column layout already applies, so nothing extra is
        needed there. Below 900 we tune spacing for the stacked layout. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-kpi-page { padding-top: 20px; }
     }
 
@@ -701,12 +771,30 @@ const CATEGORY_LABELS: Record<string, string> = {
       /* Catalog rows comfortable to tap. */
       .pf-kpi-cat__row { min-height: 48px; align-content: center; }
     }
-  `]
+  
+    /* Touch reorder buttons — drag doesn't exist on touch. Hidden where a
+       mouse can drag, shown on coarse pointers. */
+    .pf-kpi-tile__updown { display: none; }
+    .pf-kpi-tile__mv {
+      width: 34px; height: 22px; border-radius: 6px; border: 1px solid var(--glass-border);
+      background: var(--glass-bg); color: var(--text-secondary); font-size: 10px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 34px !important; min-height: 22px !important;
+    }
+    .pf-kpi-tile__mv:disabled { opacity: .3; }
+    @media (pointer: coarse) {
+      .pf-kpi-tile__updown { display: inline-flex; flex-direction: column; gap: 3px; }
+      .pf-kpi-tile__grip { display: none; }
+      .pf-kpi-tile__mv { min-height: 30px !important; }
+    }
+`]
 })
 export class KpiConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly theme = inject(ThemeService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly screens = SCREENS;
 
@@ -748,6 +836,12 @@ export class KpiConfigComponent implements OnInit {
     { value: '__tenant', label: 'All branches (tenant-wide)' },
     ...this._branches().map(b => ({ value: b.id, label: b.name }))
   ]);
+
+  /** Screen picker in the band pill: label carries the assigned-card count. */
+  readonly screenOptions = computed<PfSelectOption<string>[]>(() => SCREENS.map(s => {
+    const n = this.assignedCountForScreen(s.id);
+    return { value: s.id, label: n > 0 ? `${s.label} · ${n}` : s.label, hint: s.hint };
+  }));
 
   readonly scopeLabel = computed(() => {
     const scope = this.selectedScope();
@@ -802,16 +896,22 @@ export class KpiConfigComponent implements OnInit {
   }
 
   // ── Scope / screen pickers ─────────────────────────────────
-  onScopeChange(value: string) {
+  /** Themed confirm (never window.confirm) before dropping staged edits. */
+  private async okToDiscard(): Promise<boolean> {
+    if (!this.dirty()) return true;
+    return this.dialog.confirm({ title: 'Discard unsaved changes?', tone: 'danger' });
+  }
+
+  async onScopeChange(value: string) {
     if (value === this.selectedScope()) return;
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (!(await this.okToDiscard())) return;
     this.selectedScope.set(value);
     this.loadAssignmentsForCurrentScope();
   }
 
-  selectScreen(id: string) {
+  async selectScreen(id: string) {
     if (id === this.selectedScreen()) return;
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (!(await this.okToDiscard())) return;
     this.selectedScreen.set(id);
     this.loadAssignmentsForCurrentScope();
   }
@@ -879,6 +979,19 @@ export class KpiConfigComponent implements OnInit {
     this.dragOverIndex.set(null);
   }
 
+  /** Touch reorder: HTML5 drag events never fire on touch devices, so the
+   *  ↑/↓ buttons (coarse pointers only) are the phone/iPad path. Same array
+   *  mutation as onDrop, one step at a time. */
+  move(index: number, delta: -1 | 1) {
+    const target = index + delta;
+    const next = this._draft().slice();
+    if (target < 0 || target >= next.length) return;
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    next.forEach((a, i) => a.sortOrder = i);
+    this._draft.set(next);
+  }
+
   // ── Catalog look-ups ───────────────────────────────────────
   kpiName(kpiId: string): string {
     const k = this._catalog().find(x => x.id === kpiId);
@@ -926,8 +1039,8 @@ export class KpiConfigComponent implements OnInit {
     });
   }
 
-  reload() {
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+  async reload() {
+    if (!(await this.okToDiscard())) return;
     this.loadAssignmentsForCurrentScope();
   }
 

@@ -1,30 +1,38 @@
+import { printTubeLabels } from '../../../shared/utils/print-label';
 import { DatePipe, TitleCasePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Bill } from '../../../shared/models/bill.model';
+import { billRoundOff } from '../../../shared/utils/bill-math';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { LabelCardComponent, tubeSpec } from './label-card.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { BusyComponent, SkeletonDetailComponent, SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { formatAge } from '../../../shared/utils/patient-age';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [
+  imports: [DailyNoComponent, BusyComponent, BusyDirective, SkeletonDetailComponent, SkeletonTilesComponent,
     DatePipe,
     TitleCasePipe,
     CurrencyInrPipe,
     LabelCardComponent,
-    LoadingLogoComponent,
     ScreenHeaderComponent,
     TouchButtonComponent
   ],
@@ -36,10 +44,14 @@ export class PostPaymentComponent implements OnInit {
   private readonly api    = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route  = inject(ActivatedRoute);
+  /** Round-off (±0.xx to the whole-rupee total) — 0 hides the row. */
+  roundOffOf(b: Bill): number { return billRoundOff(b); }
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly labCfg  = inject(BranchLabConfigService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly auth    = inject(AuthService);
+  private readonly labelPrint = inject(LabelPrintService);
 
   private readonly _order       = signal<Order | null>(null);
   private readonly _bill        = signal<Bill | null>(null);
@@ -48,6 +60,11 @@ export class PostPaymentComponent implements OnInit {
   private readonly _printingIds = signal<Set<string>>(new Set());
   private readonly _referralLabs = signal<Record<string, string>>({});
   readonly waSent = signal(false);
+  /** First load: the label grid + sidebar draw their shape (never blank). */
+  private readonly orderHold = createLoadHold(true);
+  readonly orderLoading = this.orderHold.active;
+  /** "Print N labels" is sending to the station printer. */
+  readonly labelsPrinting = signal(false);
 
   /** Referral-lab name for an outsourced vial (for its label badge). */
   vendorNameFor(s: OrderSample): string | null {
@@ -101,14 +118,15 @@ export class PostPaymentComponent implements OnInit {
       error: () => { /* badges fall back to "OUTSOURCED" */ }
     });
     const id = this.route.snapshot.queryParamMap.get('orderId');
-    if (!id) { this.router.navigateByUrl('/frontdesk'); return; }
+    if (!id) { this.orderHold.cancel(); this.router.navigateByUrl('/frontdesk'); return; }
 
     this.api.get<Order>(`/api/orders/${id}`).subscribe({
       next: o => {
         this._order.set(o);
         this._selected.set(new Set(o.samples.map(s => s.id)));
+        this.orderHold.done();
       },
-      error: () => this.toasts.error('Could not load order'),
+      error: () => { this.orderHold.done(); this.toasts.error('Could not load order'); },
     });
 
     this.api.get<Bill[]>('/api/billing/').subscribe({
@@ -137,30 +155,35 @@ export class PostPaymentComponent implements OnInit {
 
   // ── Print ──────────────────────────────────────────────────
   printOne(s: OrderSample) {
-    this._printed.update(p => new Set([...p, s.id]));
-    this._printingIds.set(new Set([s.id]));
-    this.runLabelPrint();
+    this.runLabelPrint([s.id]);
   }
 
   printSelected() {
-    const ids = [...this._selected()];
-    this._printed.update(p => new Set([...p, ...ids]));
-    this._printingIds.set(new Set(ids));
-    this.runLabelPrint();
+    if (this.labelsPrinting()) return;
+    this.labelsPrinting.set(true);
+    void this.runLabelPrint([...this._selected()]).finally(() => this.labelsPrinting.set(false));
   }
 
-  /** Print only the selected tube labels — `pf-printing-label` makes the global
-   *  print stylesheet hide everything except the `.pf-print-label` grid. */
-  private runLabelPrint() {
-    document.body.classList.add('pf-printing-label');
-    const done = () => {
-      this._printingIds.set(new Set());
-      document.body.classList.remove('pf-printing-label');
-      window.removeEventListener('afterprint', done);
-    };
-    window.addEventListener('afterprint', done);
-    setTimeout(() => window.print(), 50);
-    setTimeout(done, 2000);
+  /** Print the tube labels — ONLY to this station's label printer, via the
+   *  shared LabelPrintService (no printer → a dialog, never a fallback print).
+   *  A card is marked "printed" only when something actually printed. The
+   *  label-sized system dialog (`printTubeLabels`) runs only when a web user
+   *  explicitly picks it: the selected cards pick up `printing` first. */
+  private async runLabelPrint(ids: string[]) {
+    const order = this._order();
+    const idSet = new Set(ids);
+    const samples = (order?.samples ?? []).filter(s => idSet.has(s.id));
+    const outcome = await this.labelPrint.printTubeLabels({
+      samples,
+      patient: order?.patient ?? null,
+      systemPrint: () => {
+        this._printingIds.set(idSet);
+        setTimeout(() => printTubeLabels(() => this._printingIds.set(new Set())), 50);
+      },
+    });
+    if (outcome === 'printed' || outcome === 'partial' || outcome === 'system') {
+      this._printed.update(p => new Set([...p, ...ids]));
+    }
   }
 
   printReceipt() { this.toasts.success('Receipt print · coming soon'); }
@@ -191,7 +214,7 @@ export class PostPaymentComponent implements OnInit {
     this.toasts.success('Copied');
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  back() { this.navBack.backTo('/frontdesk'); }
 
   // ── Sidebar helpers ────────────────────────────────────────
   initials(name: string | null | undefined): string {
@@ -201,9 +224,8 @@ export class PostPaymentComponent implements OnInit {
 
   ageSex(p: Patient | null | undefined): string {
     if (!p) return '';
-    const age = p.age ?? (p.dateOfBirth ? this.calcAge(p.dateOfBirth) : null);
     const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
-    return [age ? `${age}Y` : null, s].filter(Boolean).join(' · ');
+    return [formatAge(p, 'Y') || null, s].filter(Boolean).join(' · ');
   }
 
   mrn(p: Patient | null | undefined): string {
@@ -211,14 +233,8 @@ export class PostPaymentComponent implements OnInit {
   }
 
   tubeColor(s: OrderSample): string { return tubeSpec(s).color; }
+  /** Every department on the tube (a shared tube spans several). */
+  tubeDeptLabel(s: OrderSample): string { return tubeDepartmentLabel(s); }
   tubeVol(s: OrderSample): string   { return tubeSpec(s).volume; }
 
-  private calcAge(dob: string): number {
-    const d = new Date(dob);
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    return age;
-  }
 }

@@ -1,26 +1,35 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
+import { DesktopWindowService } from '../../core/services/desktop-window.service';
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
-  computed, effect, inject, signal, viewChild, viewChildren
+  Injector, computed, effect, inject, signal, viewChild, viewChildren
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
+import { BranchRef } from '../../core/auth/mock-user';
 import { LockService } from '../../core/auth/lock.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
+import { brandingSrc } from '../../core/services/uploads.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { DesignModeService } from '../../core/services/design-mode.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
-import { PushService } from '../../core/services/push.service';
-import { ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { SessionService } from '../../core/auth/session.service';
+import { DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses, withInsights } from '../nav-items';
+import { opdAreasFor } from '../../features/opd/shared/opd-nav';
+import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { BranchSwitchService } from '../../core/services/branch-switch.service';
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -34,6 +43,8 @@ const DRAG_THRESHOLD_PX = 4;
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
+  /** OPD dark build: the ONE OPD visibility rule. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
@@ -41,6 +52,21 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Theme + people drawer are now reachable from the bottom-nav More
    *  popover instead of the top chrome (which is hidden on mobile). */
   protected readonly theme = inject(ThemeService);
+  /** Design version / bottom-bar / capture toggles. The top chrome is
+   *  hidden below 1280px, so when the bar sits at the TOP this popover is
+   *  the ONLY place these live on phone and iPad (owner). */
+  protected readonly designMode = inject(DesignModeService);
+  /** Desktop app: notification switches in the more menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
+  /** Desktop app, windowed: "Full screen" item (same as the top bar's). */
+  protected readonly desktopWindow = inject(DesktopWindowService);
+  protected readonly fullScreenKey =
+    typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent) ? '⌃⌘F' : 'F11';
+  protected enterFullScreen(): void {
+    this.closeMore();
+    void this.desktopWindow.setFullScreen(true);
+  }
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   /** Teams-style presence — my status dot on the account button + the
    *  status picker row in the account popover. */
@@ -49,7 +75,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly kbd = inject(KeyboardService);
   /** Push token must be unregistered on sign-out (mirrors the top-strip's
    *  logout) — otherwise the device keeps receiving this user's pushes. */
-  private readonly push = inject(PushService);
+  private readonly session = inject(SessionService);
   /** Scroll listener is registered runOutsideAngular (it fires very often),
    *  so signal writes that must trigger OnPush re-render re-enter the zone. */
   private readonly zone = inject(NgZone);
@@ -72,7 +98,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Rail mode — on the iPad band (641–1279px) the nav docks as a
    *  vertical rail on the left edge instead of a floating bottom pill.
    *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
-   *  whole component (xl:hidden) and uses the top-strip nav. */
+   *  whole component (xl:hidden) and uses the top-strip nav; touch-first
+   *  devices (html.device-touch) keep the rail at every width. */
   protected readonly railMode = signal<boolean>(this.computeRailMode());
   /** Show all primary items — the pill is now a horizontally-scrollable
    *  slider so every tab is always reachable without a "More" overflow. */
@@ -88,7 +115,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     // 1366pt, which is ≥1280) uses the left rail, not the desktop layout.
     const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
       .Capacitor?.isNativePlatform?.();
-    if (isNative) return w >= 641;
+    // Same for any touch-first device on the web (Android tablet, iPad Pro
+    // in landscape): html.device-touch, set in index.html before first paint.
+    const isTouch = document.documentElement.classList.contains('device-touch');
+    if (isNative || isTouch) return w >= 641;
     return w >= 641 && w < 1280;
   }
 
@@ -98,7 +128,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly tenantState = inject(TenantStateService);
   protected readonly tenantName = computed(() =>
     this.tenantState.tenant()?.name || this.auth.user()?.tenantName || '');
-  protected readonly tenantLogo = computed(() => this.tenantState.tenant()?.logoUrl || null);
+  private readonly injector = inject(Injector);
+  /** A private "/uploads/…" logo shows through the session (blob: URL). */
+  protected readonly tenantLogo = computed(() => brandingSrc(this.injector, this.tenantState.tenant()?.logoUrl));
   protected readonly tenantInitial = computed(() => {
     const n = this.tenantName().trim();
     return n ? n[0].toUpperCase() : 'P';
@@ -116,27 +148,43 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   });
 
-  /** Branch switcher — the chrome's branch picker folds into the
-   *  account popover. NOTE: this is a UI-only switch, mirroring the
-   *  top-strip's existing mocked branch list (no backend re-scope
-   *  yet). Tapping the Branch row cycles to the next branch. */
-  protected readonly branches = ['Chennai Main', 'Anna Nagar', 'T. Nagar', 'OMR'];
-  private readonly _branch = signal<string>(this.auth.user()?.branchName ?? 'Chennai Main');
-  protected readonly currentBranch = this._branch.asReadonly();
-  protected async onMoreBranch(): Promise<void> {
-    const list = this.branches;
-    const current = this._branch();
-    const i = list.indexOf(current);
-    const nextBranch = list[(i + 1) % list.length];
+  /** Branch switcher — the chrome's branch picker folds into the account
+   *  popover. Parity with the desktop top-strip (OPS-65): the REAL branches
+   *  this user may switch between (from /api/auth/me), shown as a pick-list
+   *  and performing a real re-scope via auth.setActiveBranch — not the old
+   *  hardcoded mock that cycled and never actually switched. */
+  protected readonly branches = computed(() => this.auth.user()?.branches ?? []);
+  /** Show the switcher only when there's more than one branch to pick. */
+  protected readonly canSwitchBranch = computed(() => this.branches().length > 1);
+  protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
+  /** Current active branch name for the row's value label. */
+  protected readonly currentBranch = computed(() =>
+    this.branchSwitch.target()?.name ?? this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? '');
+  /** In-app branch switch (veil + zoom; no page reload). */
+  protected readonly branchSwitch = inject(BranchSwitchService);
+  /** Whether the in-popover branch pick-list is expanded. */
+  protected readonly branchListOpen = signal(false);
+
+  /** Toggle the branch pick-list (no-op for single-branch users). */
+  protected toggleBranchList(): void {
+    if (!this.canSwitchBranch()) return;
+    this.branchListOpen.update(v => !v);
+  }
+  /** Pick a branch → confirm → real re-scope. Tapping the active branch just
+   *  collapses the list. */
+  protected async selectBranch(b: BranchRef): Promise<void> {
+    if (b.id === this.activeBranchId()) { this.branchListOpen.set(false); return; }
     const ok = await this.dialog.confirm({
       title: 'Switch active branch?',
-      message: `Are you sure you want to switch the active branch to "${nextBranch}"?`,
+      message: `Are you sure you want to switch the active branch to "${b.name}"?`,
       confirmLabel: 'Yes, switch branch',
       cancelLabel: 'Cancel',
       tone: 'primary'
     });
     if (!ok) return;
-    this._branch.set(nextBranch);
+    this.branchListOpen.set(false);
+    this.closeMore();
+    void this.branchSwitch.switchTo(b.id);
   }
 
   // ─── Presence status picker ───────────────────────────────────────
@@ -161,6 +209,18 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected closeMore(): void { this.moreOpen.set(false); this.statusListOpen.set(false); }
 
+  /** Per-station Print settings — same gating as the desktop profile menu, so
+   *  the mobile/iPad "More" menu has parity. */
+  protected canPrint(): boolean {
+    return this.auth.hasAnyPermission([
+      'create_order', 'register_patient', 'collect_sample',
+      'enter_result', 'deliver_report', 'view_report', 'manage_lab_settings',
+    ]);
+  }
+  protected goPrinting(): void { this.closeMore(); this.router.navigate(['/printing']); }
+  protected goSignature(): void { this.closeMore(); this.router.navigate(['/signature']); }
+  protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
+
   protected onMoreNotifications(): void {
     this.closeMore();
     // Notifications live at /notifications when that route exists;
@@ -184,15 +244,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected async onMoreLogout(): Promise<void> {
     this.closeMore();
-    // Unregister push BEFORE the auth session is cleared (the call needs
-    // a valid token) — same order as the top-strip's logout.
-    await this.push.unregister().catch(() => undefined);
-    await this.auth.signOut();
-    void this.router.navigateByUrl('/login');
+    // The ONE ordered sign-out (revoke → push → sockets → timers → clear →
+    // /login, history replaced) — same as the avatar menu.
+    await this.session.logout();
   }
 
   // ─── Multi-account switching + PIN (mobile/iPad — mirrors the top strip) ──
-  private readonly lock = inject(LockService);
+  protected readonly lock = inject(LockService);
   protected readonly otherAccounts = computed(() =>
     this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
   protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
@@ -442,46 +500,67 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** People (contacts + chat + calls) is part of the Messages capability —
    *  hide its rail/menu button when the Messages work-area is disabled. */
   readonly canMessages = computed(() => this.process.isEnabled('messages') && this.entitlements.moduleEnabled('messages'));
+  /** The route-guard context (same rule the guards + landing use). */
+  private routeCtx(): RouteAccessCtx {
+    return {
+      hasAny: p => this.auth.hasAnyPermission(p),
+      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
+      isEnabled: a => this.process.isEnabled(a),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  /** Shared nav rule (nav-items.navItemVisible): an item shows only when its
+   *  destination route's guard admits the user, plus its mode/module/action gates. */
   private readonly visible = (items: NavItem[]): NavItem[] => {
-    const cMode = this.labCfg.collectionMode();
-    const bMode = this.labCfg.billingMode();
-    return items.filter(i => {
-      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
-      if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
-      if (i.billingModes && !i.billingModes.includes(bMode)) return false;
-      // Inventory work area only appears when the branch has it enabled.
-      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
-      // Product-module entitlement: hide a whole work area the tenant's plan
-      // doesn't include (inventory / messages / home collection / reports).
-      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
-      // Hide a nav item whose action is switched off in /admin/process.
-      if (i.action && !this.process.isEnabled(i.action)) return false;
-      return true;
-    });
+    const ctx: NavVisibilityCtx = {
+      ...this.routeCtx(),
+      collectionMode: this.labCfg.collectionMode(),
+      billingMode: this.labCfg.billingMode(),
+      inventoryEnabled: this.labCfg.inventoryEnabled(),
+      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+    };
+    return items.filter(i => navItemVisible(i, ctx));
   };
 
   private navCtx(): WorkflowNavCtx {
     return {
       roles: this.auth.user()?.roles ?? [],
-      hasAnyPermission: (p) => this.auth.hasAnyPermission(p),
+      // Effective = the route guards' check (mode-aware collect_sample), so a
+      // work area never shows to someone its screen would bounce.
+      hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
+      hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),
   // each opening its real screen; falls back to PRIMARY_NAV when none is active.
-  readonly primary = computed(() => this.withCollection(this.withInventory(menusFromWorkflow(this.process.active(), this.navCtx()) ?? this.visible(PRIMARY_NAV))));
+  readonly primary = computed(() => {
+    // Expenses: a primary tab for anyone holding expense_* (the route guard's
+    // rule), after the lab work items; the scrollable pill keeps every tab
+    // reachable (no overflow menu).
+    const base = this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV);
+    const items = this.withCollection(this.withInventory(withInsights(withExpenses(base, i => this.visible([i]).length > 0), i => this.visible([i]).length > 0)));
+    // OPD: doctors get "Consults"; anyone who can open at least one OPD area
+    // gets the general "OPD" tab — both only while the OPD gate is open
+    // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
+    // build. Mirrors the top strip (nav-items.ts opdAreasFor).
+    if (!this.opdGate.visible()) return items;
+    const out = this.auth.isDoctor() ? [...items, DOCTOR_NAV] : items;
+    return opdAreasFor(p => this.auth.hasAnyPermission(p)).length ? [...out, OPD_NAV] : out;
+  });
 
-  /** Guarantee a reachable "Collect" work area for anyone who can draw samples
-   *  (the Lab area excludes collect_sample and the workflow-derived nav omits
-   *  Collect unless placed). Append it when no collection surface is visible.
-   *  Mirrors withInventory. */
+  /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
+   *  can draw samples when the tenant has no process workflow (PRIMARY_NAV).
+   *  With a workflow active, Collect is the system Collect WORK AREA
+   *  (menusFromWorkflow, normalised in for older workflows) — the nav follows
+   *  the workflow, so this never adds a second Collect. Mirrors withInventory. */
   private withCollection(items: NavItem[]): NavItem[] {
-    if (!this.auth.hasEffectivePermission('collect_sample')) return items;
-    if (!this.process.isEnabled('sample_collection')) return items;
-    if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
-                     || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
-    const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
-    return collect ? [...items, collect] : items;
+    return withCollectionFallback(items, {
+      hasWorkflow: !!this.process.active()?.categories?.length,
+      canCollect: this.auth.hasEffectivePermission('collect_sample'),
+      collectionEnabled: this.process.isEnabled('sample_collection'),
+    });
   }
 
   /** Workflow-derived nav has no Stores work area; append it when inventory is
@@ -691,6 +770,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   private matches(url: string, n: NavItem): boolean {
+    // The OPD tabs need cross-prefix + exclusion rules a plain href-prefix
+    // check can't express (OPD owns /admin/opd/** too, minus the Consults
+    // subtree) — see nav-items.ts opdNavActive.
+    if (n.id === 'opd' || n.id === 'doctor') return opdNavActive(n, url);
     if (n.exact) return url === n.href;
     return url === n.href || url.startsWith(n.href + '/');
   }

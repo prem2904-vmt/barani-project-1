@@ -5,6 +5,9 @@
   "references": [
     {
       "path": "./apps/lms-e2e"
+    },
+    {
+      "path": "./libs/shared"
     }
   ]
 }

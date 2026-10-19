@@ -29,107 +29,65 @@ const OPERATORS: OperatorOption[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (rules().length === 0) {
-      <p class="text-xs text-slate-500 mb-2">{{ emptyLabel() }}</p>
+      <p class="cb-empty">{{ emptyLabel() }}</p>
     }
 
     @for (rule of rules(); let i = $index; track i) {
-      <div class="flex flex-wrap items-end gap-2 mb-2 cb-row">
+      <div class="cb-row">
         @if (i > 0) {
-          <div class="w-full flex gap-1 text-[11px]">
-            <button type="button"
-                    class="px-2 py-0.5 rounded border cb-logic"
-                    [class.bg-[var(--color-primary)]]="logic() === 'AND'"
-                    [class.text-white]="logic() === 'AND'"
-                    [class.border-slate-300]="logic() !== 'AND'"
-                    (click)="setLogic('AND')">AND</button>
-            <button type="button"
-                    class="px-2 py-0.5 rounded border cb-logic"
-                    [class.bg-[var(--color-primary)]]="logic() === 'OR'"
-                    [class.text-white]="logic() === 'OR'"
-                    [class.border-slate-300]="logic() !== 'OR'"
-                    (click)="setLogic('OR')">OR</button>
-          </div>
+          <span class="pf-seg cb-logicseg" role="radiogroup" aria-label="Combine rules with">
+            <button type="button" class="pf-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'AND'" (click)="setLogic('AND')">AND</button>
+            <button type="button" class="pf-seg__item cb-logic" role="radio" [attr.aria-checked]="logic() === 'OR'" (click)="setLogic('OR')">OR</button>
+          </span>
         }
 
-        <div class="flex-1 min-w-[140px]">
-          <label class="text-[11px] text-slate-500">Field</label>
-          <pf-select
-            [options]="fieldOptions()"
-            [value]="rule.field"
-            placeholder="— pick —"
-            size="sm"
-            (valueChange)="patch(i, { field: $any($event) })"></pf-select>
-        </div>
-
-        <div class="w-40 cb-operator">
-          <label class="text-[11px] text-slate-500">Operator</label>
-          <pf-select
-            [options]="operatorOptions"
-            [value]="rule.operator"
-            size="sm"
-            (valueChange)="patch(i, { operator: $any($event) })"></pf-select>
-        </div>
-
-        @if (needsValue(rule.operator)) {
-          <div class="w-40 cb-value">
-            <label class="text-[11px] text-slate-500">Value</label>
-            <input type="text" class="pf-input"
-                  [ngModel]="rule.value"
-                  (ngModelChange)="patch(i, { value: coerceValue($event) })" />
+        <div class="cb-fields">
+          <div class="pf-field cb-field">
+            <span class="pf-field__lbl">Field</span>
+            <pf-select [options]="fieldOptions()" [value]="rule.field" placeholder="— pick —"
+                       (valueChange)="patch(i, { field: $any($event) })"></pf-select>
           </div>
-        }
-
-        <button type="button"
-                class="text-slate-400 hover:text-red-500 pb-1.5 cb-remove"
-                (click)="removeRow(i)" aria-label="Remove rule">✕</button>
+          <div class="pf-field cb-operator">
+            <span class="pf-field__lbl">Operator</span>
+            <pf-select [options]="operatorOptions" [value]="rule.operator"
+                       (valueChange)="patch(i, { operator: $any($event) })"></pf-select>
+          </div>
+          @if (needsValue(rule.operator)) {
+            <label class="pf-field cb-value">
+              <span class="pf-field__lbl">Value</span>
+              <input type="text" class="pf-input" [ngModel]="rule.value"
+                     (ngModelChange)="patch(i, { value: coerceValue($event) })" />
+            </label>
+          }
+          <button type="button" class="cb-remove" (click)="removeRow(i)" aria-label="Remove rule" title="Remove rule">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
       </div>
     }
 
-    <button type="button"
-            class="text-xs text-[var(--color-primary)] hover:underline cb-add"
-            (click)="addRow()">+ Add condition</button>
+    <button type="button" class="pf-btn pf-btn--tertiary cb-add" (click)="addRow()">+ Add condition</button>
   `,
   styles: [`
-    /* ===========================================================
-       CROSS-PLATFORM — additive only. Desktop layout untouched.
-       =========================================================== */
-    /* Touch sizing: give the small glyph buttons a real tap target
-       on coarse pointers without changing their visual box on
-       mouse-driven desktop. */
+    :host { display: flex; flex-direction: column; gap: 8px; }
+    .cb-empty { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+    .cb-row { display: flex; flex-direction: column; gap: 8px; }
+    .cb-logicseg { align-self: flex-start; }
+    .cb-logic { height: 28px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; }
+    .cb-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+    .cb-field { flex: 1 1 160px; }
+    .cb-operator, .cb-value { flex: 0 1 170px; }
+    .cb-remove { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px;
+      border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+    .cb-remove:hover { color: var(--red-text, #b91c1c); border-color: var(--pf-line); }
+    .cb-add { align-self: flex-start; height: 32px; min-height: 32px; font-size: 12.5px; }
     @media (pointer: coarse) {
-      .cb-remove {
-        min-width: 44px;
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .cb-add {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-      }
-      /* AND / OR logic toggles are tiny px-2/py-0.5 pills on desktop;
-         give them a real tap target on touch without resizing the
-         glyph on mouse-driven screens. */
-      .cb-logic {
-        min-height: 44px;
-        padding-left: 0.875rem;
-        padding-right: 0.875rem;
-      }
+      .cb-remove { width: 44px; height: 44px; }
+      .cb-add { min-height: 44px; }
+      .cb-logic { height: 40px; padding: 0 14px; }
     }
-
-    /* Phone (<=640): the operator and value fields are fixed at
-       w-40 (10rem). On narrow screens that overflows the row even
-       with flex-wrap, so let them shrink/grow fluidly. The field
-       picker (flex-1) keeps its priority. */
     @media (max-width: 640px) {
-      .cb-row .cb-operator,
-      .cb-row .cb-value {
-        flex: 1 1 9rem;
-        width: auto;
-        min-width: 0;
-      }
+      .cb-operator, .cb-value { flex: 1 1 140px; }
     }
   `]
 })

@@ -1,26 +1,34 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
+import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
-import { TestLayoutEditorComponent } from './test-layout-editor.component';
-import { ImageUploadComponent } from './image-upload.component';
+import { ReportSequencingEditorComponent } from './report-sequencing-editor.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ReportHeaderEditorComponent } from './report-header-editor.component';
+import { DialogService } from '../../../core/services/dialog.service';
+import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
+import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
+import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 
-type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' | 'testlayout' | 'signoff';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -30,220 +38,320 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [
+  imports: [SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
-    ScreenHeaderComponent,
     SegmentedComponent,
-    TileComponent,
-    ToggleComponent,
+    SelectComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
-    TestLayoutEditorComponent,
-    ImageUploadComponent,
+    ReportSequencingEditorComponent,
+    HeroBandComponent,
+    ReportHeaderEditorComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
-        eyebrow="Admin"
-        title="Report Template"
-        subtitle="Tune every visual element of the printed lab report — branding, colors, dates, signatures, footer.">
-        <pf-touch-btn actions size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
+    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): the report's sections are the pill's tabs (tabs-only
+             pill — the page has nothing to search); Save rides the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="sectionOptions"
+                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
+              @if (dirty()) {
+                <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
+              } @else {
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
+              }
+            </span>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                    [disabled]="saving() || tplSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" aria-label="Save template" title="Save template">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-rt-head pf-classic-only">
+        <div class="min-w-0">
+          <h1 class="pf-rt-title">Report designer</h1>
+          <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
+        </div>
+        <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
+          @if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
+        </span>
+        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
-      </pf-screen-header>
+      </header>
 
-      <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-        <!-- ── Left: tabbed form. On Per-test layout it spans the full width so
-                the per-test editor + its own resolved preview fill the row. ── -->
-        <div class="{{ tab() === 'testlayout' ? 'lg:col-span-2' : '' }}">
-          <div class="mb-5 overflow-x-auto pb-1">
-            <pf-segmented
-              [options]="tabOptions"
-              [value]="tab()"
-              size="md"
-              (valueChange)="setTab($event)">
-            </pf-segmented>
+      <div class="pf-band-body pf-band-body--fill">
+      @if (tplSkeleton()) {
+        <!-- First load: the designer's shape until the lab's template lands
+             (never the defaults flashing before the saved template). -->
+        <div class="pf-rt-loading">
+          <section class="pf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
+          <section class="pf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
+        </div>
+      } @else {
+      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
+           [class.pf-rt-grid--designer]="designerTab()">
+        <!-- ── Section rail (CLASSIC only): the new design puts the
+             sections in the band pill, so the rail is gone and the editor +
+             preview get the full width. ── -->
+        @if (!theme.isNewDesign()) {
+        <nav class="pf-rt-rail" aria-label="Report template sections">
+          <div class="pf-rt-rail__head">
+            <span>Sections</span>
+            <button type="button" class="pf-rt-side-toggle" (click)="toggleRail()"
+                    title="Collapse panel" aria-label="Collapse section panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
           </div>
+          @for (sec of sections; track sec.value) {
+            <button type="button" class="pf-rt-rail__item press"
+                    [class.pf-rt-rail__item--on]="tab() === sec.value"
+                    (click)="setTab(sec.value)" [title]="sec.desc">
+              <span class="pf-rt-rail__txt">{{ sec.label }}</span>
+            </button>
+          }
+        </nav>
+        }
 
+        @if (designerTab()) {
+          <!-- ── Letterhead / Footer: the page IS the editor (WYSIWYG). ── -->
+          <pf-report-header-editor class="pf-rt-designer"
+            [template]="tpl()" [region]="tab() === 'footer' ? 'footer' : 'header'"
+            [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
+            [canUndo]="canUndo()" [canRedo]="canRedo()"
+            (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
+        } @else {
+        <!-- ── Focused section panel. ── -->
+        <div class="pf-rt-work">
+          @if (!theme.isNewDesign()) {
+            @if (railHidden()) {
+              <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
+                      title="Show sections" aria-label="Show section panel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                Sections
+              </button>
+            }
+            @if (activeSection(); as sec) {
+              <div class="pf-rt-work__hdr">
+                <h2 class="pf-rt-work__title">{{ sec.label }}</h2>
+                <p class="pf-rt-work__sub">{{ sec.desc }}</p>
+              </div>
+            }
+          }
           @switch (tab()) {
 
-            <!-- ────────── IDENTITY ────────── -->
-            @case ('identity') {
-              <pf-tile tone="default" padding="lg" class="block">
+            <!-- ══ PATIENT STRIP ══ -->
+            @case ('patient') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Who is this strip for?</h4>
+                  <p class="pf-rtb-s">Default prints on every report. A department's own arrangement prints when a report holds ONLY that department's tests — e.g. Microbiology showing just name, age and sex.</p>
+                  <div class="pf-pt-scope">
+                    <div class="pf-pt-scope__sel">
+                      <pf-select [options]="$any(patientScopeOptions())" [value]="patientScope()"
+                                 (valueChange)="onPatientScopeChange($any($event))"></pf-select>
+                    </div>
+                    @if (patientScope() !== 'default') {
+                      @if (deptPatientConfigured()) { <span class="pf-pt-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Configured</span> }
+                      <button type="button" class="pf-btn pf-btn--tertiary pf-pt-btn press"
+                              [disabled]="!deptPatientConfigured()"
+                              (click)="resetDeptPatient()">Reset to default</button>
+                      <!-- Secondary: the band's Save owns the ONE primary. -->
+                      <button type="button" class="pf-btn pf-btn--secondary pf-pt-btn press"
+                              [disabled]="!deptPatientDirty() || deptPatientSaving()" [pfBusy]="deptPatientSaving()" pfBusyLabel="Saving…"
+                              (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Patient block</h4>
+                  <p class="pf-rtb-s">Choose the layout, then drag fields between the columns — exactly how they print in the report's patient strip.</p>
                 <div class="space-y-3">
-                  <div><label class="pf-label">Lab name</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().labName"
-                           (ngModelChange)="patch({ labName: $event })" /></div>
-                  <div><label class="pf-label">Tagline</label>
-                    <input type="text" class="pf-input"
-                           placeholder="e.g. Accurate | Caring | Instant"
-                           [ngModel]="tpl().tagline"
-                           (ngModelChange)="patch({ tagline: $event })" /></div>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div><label class="pf-label">Phone</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="tpl().phone"
-                             (ngModelChange)="patch({ phone: $event })" /></div>
-                    <div><label class="pf-label">Email</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="tpl().email"
-                             (ngModelChange)="patch({ email: $event })" /></div>
-                  </div>
-                  <div><label class="pf-label">Website</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().website"
-                           (ngModelChange)="patch({ website: $event })" /></div>
-                  <div><label class="pf-label">Address</label>
-                    <input type="text" class="pf-input"
-                           [ngModel]="tpl().address"
-                           (ngModelChange)="patch({ address: $event })" /></div>
-
-                  <div class="pf-divider"></div>
-
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">NABL accredited</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Display NABL badge on the report header.</p>
-                    </div>
-                    <pf-toggle [checked]="tpl().nablAccredited"
-                               (checkedChange)="patch({ nablAccredited: $event })">
-                    </pf-toggle>
-                  </div>
-
-                  @if (tpl().nablAccredited) {
-                    <div class="grid grid-cols-2 gap-3 pf-nabl-grid">
-                      <div><label class="pf-label">NABL number</label>
-                        <input type="text" class="pf-input"
-                               [ngModel]="tpl().nablNumber"
-                               (ngModelChange)="patch({ nablNumber: $event })" /></div>
-                      <div>
-                        <label class="pf-label">NABL badge image</label>
-                        <pf-image-upload [url]="tpl().nablLogoUrl"
-                                         (urlChange)="patch({ nablLogoUrl: $event })">
-                        </pf-image-upload>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </pf-tile>
-            }
-
-            <!-- ────────── HEADER & LOGO ────────── -->
-            @case ('header') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-4">
                   <div>
-                    <label class="pf-label">Lab logo</label>
-                    <pf-image-upload [url]="tpl().logoUrl"
-                                     (urlChange)="patch({ logoUrl: $event })">
-                    </pf-image-upload>
-                  </div>
-
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label class="pf-label">Header preset</label>
-                      <pf-segmented
-                        [options]="headerPresetOptions"
-                        [value]="tpl().headerPreset ?? 'drlogy'"
-                        size="sm"
-                        (valueChange)="patch({ headerPreset: $event })">
-                      </pf-segmented>
-                    </div>
-                    <div>
-                      <label class="pf-label">Logo position</label>
-                      <pf-segmented
-                        [options]="logoPositionOptions"
-                        [value]="tpl().logoPosition ?? 'left'"
-                        size="sm"
-                        (valueChange)="patch({ logoPosition: $event })">
-                      </pf-segmented>
-                    </div>
-                    <div>
-                      <label class="pf-label">Logo size</label>
-                      <pf-segmented
-                        [options]="sizeOptions"
-                        [value]="tpl().logoSize ?? 'md'"
-                        size="sm"
-                        (valueChange)="patch({ logoSize: $event })">
-                      </pf-segmented>
-                    </div>
-                  </div>
-
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Top accent bar</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Thin colored strip beneath the letterhead.</p>
-                    </div>
-                    <pf-toggle [checked]="tpl().topAccentBar ?? true"
-                               (checkedChange)="patch({ topAccentBar: $event })">
-                    </pf-toggle>
-                  </div>
-
-                  <!-- ── Pre-printed letterpad mode ── -->
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[14px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
-                      <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
-                    </div>
-                    <pf-toggle [checked]="tpl().letterpadMode ?? false"
-                               (checkedChange)="patch({ letterpadMode: $event })">
-                    </pf-toggle>
-                  </div>
-                  @if (tpl().letterpadMode) {
-                    <div class="grid grid-cols-2 gap-3">
-                      <div><label class="pf-label">Header blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="pf-input"
-                               [ngModel]="tpl().letterpadHeaderMm ?? 45"
-                               (ngModelChange)="patch({ letterpadHeaderMm: +$event })" /></div>
-                      <div><label class="pf-label">Footer blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="pf-input"
-                               [ngModel]="tpl().letterpadFooterMm ?? 30"
-                               (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
-                    </div>
-                  }
-                </div>
-              </pf-tile>
-            }
-
-            <!-- ────────── THEME ────────── -->
-            @case ('theme') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Colors</p>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-                  @for (c of colorFields; track c.key) {
-                    <div>
-                      <label class="pf-label">{{ c.label }}</label>
-                      <div class="flex items-center gap-2">
-                        <input type="color" class="pf-color-picker"
-                               [ngModel]="colorOf(c.key) || c.fallback"
-                               (ngModelChange)="patchKey(c.key, $event)" />
-                        <span class="font-mono text-[11px]" style="color: var(--text-secondary);">
-                          {{ colorOf(c.key) || c.fallback }}
-                        </span>
-                      </div>
-                    </div>
-                  }
-                </div>
-
-                <div class="pf-divider"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Typography & table style</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label class="pf-label">Font family</label>
+                    <label class="pf-label">Patient block layout</label>
                     <pf-segmented
-                      [options]="fontOptions"
-                      [value]="tpl().fontFamily ?? 'helvetica'"
-                      size="sm"
-                      (valueChange)="patch({ fontFamily: $event })">
+                      [options]="patientLayoutOptions"
+                      [value]="patientLayoutValue()"
+                      size="md"
+                      (valueChange)="setPatientLayout($event)">
                     </pf-segmented>
                   </div>
+
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">QR codes</h4>
+                  <p class="pf-rtb-s">Print QR codes in the patient strip. Each switch adds its code to the arrangement below — drag it to move it.</p>
+                  <div class="pf-sqr">
+                    @for (q of stripQrOptions; track q.key) {
+                      <div class="pf-sqr__row">
+                        <span class="pf-sqr__ic" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-4M14 18v3"/></svg>
+                        </span>
+                        <span class="pf-sqr__txt">
+                          <span class="pf-sqr__label">{{ q.label }}</span>
+                          <span class="pf-sqr__desc">{{ q.desc }}</span>
+                        </span>
+                        <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="stripQrOn(q.key)"
+                                [attr.aria-label]="q.label" (click)="toggleStripQr(q.key)">
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Date &amp; time format</h4>
+                  <p class="pf-rtb-s">The date fields print inside the patient block using this format.
+                    @if (patientScope() !== 'default') { <strong>Shared across departments — edits here change the Default.</strong> }
+                  </p>
+                  <div class="pf-rt-datesgrid">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label class="pf-label">Date format</label>
+                      <pf-select [options]="$any(dateFormatOptions)" [value]="dateFormatValue()"
+                                 (valueChange)="patch({ dateFormat: $any($event) })"></pf-select>
+                    </div>
+                    <div>
+                      <label class="pf-label">Time format</label>
+                      <pf-segmented [options]="timeFormatOptions" [value]="tpl().timeFormat ?? '12h'" size="sm"
+                                    (valueChange)="patch({ timeFormat: $event })"></pf-segmented>
+                    </div>
+                  </div>
                   <div>
+                    <label class="pf-label">Joiner between date and time</label>
+                    <pf-select [options]="$any(separatorOptions)" [value]="separatorValue()"
+                               (valueChange)="patch({ dateTimeSeparator: $any($event) })"></pf-select>
+                  </div>
+
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Arrange the fields</h4>
+                  <p class="pf-rtb-s">
+                    Drag a field <strong>into a column</strong> to print it (placement &amp; order = how it prints); drag it to <strong>Unused</strong> to hide it. The layout above sets the number of columns.</p>
+                  <div cdkDropListGroup>
+                    <div class="pf-pcols" [style.grid-template-columns]="'repeat(' + patientCols().length + ', minmax(0, 1fr))'">
+                      @for (col of patientCols(); track $index; let i = $index) {
+                        <div class="pf-pcol">
+                          <span class="pf-pcol-h">Column {{ i + 1 }}</span>
+                          <div class="pf-pcol-drop" cdkDropList [id]="'pcol-' + i"
+                               [cdkDropListData]="col"
+                               (cdkDropListDropped)="dropPatientItem($event)">
+                            @for (k of col; track k) {
+                              <div class="pf-pchip" cdkDrag>
+                                <svg class="pf-pchip-grip" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>{{ patientItemLabel(k) }}
+                              </div>
+                            }
+                            @if (col.length === 0) { <span class="pf-pcol-empty">Drop here</span> }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                    <p class="text-[11px] mt-3 mb-1" style="color: var(--text-muted);">Unused — not printed</p>
+                    <div class="pf-ppool" cdkDropList id="pcol-pool" [cdkDropListData]="patientPool()"
+                         (cdkDropListDropped)="dropPatientItem($event)">
+                      @for (k of patientPool(); track k) {
+                        <div class="pf-pchip pf-pchip--pool" cdkDrag>
+                          <svg class="pf-pchip-grip" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg>{{ patientItemLabel(k) }}
+                        </div>
+                      }
+                      @if (patientPool().length === 0) { <span class="pf-pcol-empty">All fields are in columns — drag one here to hide it.</span> }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- ══ RESULTS TABLE — style ══ -->
+            @case ('table') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Report theme</h4>
+                  <p class="pf-rtb-s">The typeface and size scale of the whole report — letterhead, patient strip, results, sign-off and footer. Colours stay yours.</p>
+                  <div class="pf-rtheme" role="radiogroup" aria-label="Report theme">
+                    @for (o of reportThemeOptions; track o.value) {
+                      <button type="button" class="pf-rtheme__card press" role="radio"
+                              [attr.aria-checked]="reportTheme() === o.value" (click)="setReportTheme(o.value)">
+                        <span class="pf-rtheme__spec" aria-hidden="true"
+                              [style.fontFamily]="o.value === 'source-sans' ? sourceSansCss : fontCss(tpl().fontFamily ?? 'helvetica')">
+                          <span class="pf-rtheme__lab" [style.fontWeight]="700">LAB NAME</span>
+                          <span class="pf-rtheme__dept" [style.fontWeight]="700">HAEMATOLOGY</span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">Haemoglobin</span>
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 400">13.8</span>
+                            <span class="pf-rtheme__dim">13.0 – 17.0</span>
+                          </span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">MCV</span>
+                            <span [style.fontWeight]="700">101.7 H</span>
+                            <span class="pf-rtheme__dim">83 – 101</span>
+                          </span>
+                        </span>
+                        <span class="pf-rtheme__name">{{ o.label }}</span>
+                        <span class="pf-rtheme__desc">{{ o.desc }}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Table colours</h4>
+                  <p class="pf-rtb-s">Header row, body text and hairlines of the results table.</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  @for (c of tableColorFields; track c.key) {
+                    <div>
+                      <label class="pf-label">{{ c.label }}</label>
+                      <label class="pf-color-field">
+                        <input type="color"
+                               [ngModel]="colorOf(c.key) || c.fallback"
+                               (ngModelChange)="patchKey(c.key, $event)" />
+                        <span class="pf-color-field__hex">{{ colorOf(c.key) || c.fallback }}</span>
+                      </label>
+                    </div>
+                  }
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Typography &amp; table</h4>
+                  <p class="pf-rtb-s">Font, table lines and department behaviour.</p>
+                @if (reportTheme() !== 'classic') {
+                  <p class="pf-rtb-s pf-rtheme__note">Font family and size are set by the {{ reportThemeLabel() }} theme — switch to Classic to choose them.</p>
+                }
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
+                    <label class="pf-label">Font family</label>
+                    <div class="pf-wys-fonts">
+                      @for (o of fontOptions; track o.value) {
+                        <button type="button" class="pf-wys-font press"
+                                [attr.aria-pressed]="(tpl().fontFamily ?? 'helvetica') === o.value"
+                                [style.fontFamily]="fontCss($any(o.value))"
+                                (click)="patch({ fontFamily: $any(o.value) })">
+                          <span class="pf-wys-font__sample">AaBb123</span>
+                          <span class="pf-wys-font__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
                     <label class="pf-label">Font size</label>
                     <pf-segmented
                       [options]="sizeOptions"
@@ -254,19 +362,47 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                   </div>
                   <div>
                     <label class="pf-label">Table style</label>
-                    <pf-segmented
-                      [options]="tableStyleOptions"
-                      [value]="tpl().tableStyle ?? 'plain'"
-                      size="sm"
-                      (valueChange)="patch({ tableStyle: $event })">
-                    </pf-segmented>
+                    <div class="pf-wys-thumbs">
+                      @for (o of tableStyleOptions; track o.value) {
+                        <button type="button" class="pf-wys-thumb press"
+                                [attr.aria-pressed]="(tpl().tableStyle ?? 'plain') === o.value"
+                                (click)="patch({ tableStyle: $any(o.value) })">
+                          <span class="pf-wys-mini" [class]="'pf-wys-mini--' + o.value">
+                            <i></i><i></i><i></i><i></i>
+                          </span>
+                          <span class="pf-wys-thumb__name">{{ o.label }}</span>
+                        </button>
+                      }
+                    </div>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Zebra rows</span>
-                    <pf-toggle [checked]="tpl().zebraRows ?? false"
-                               (checkedChange)="patch({ zebraRows: $event })">
-                    </pf-toggle>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Zebra rows</span>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().zebraRows ?? false)"
+                            aria-label="Zebra rows" (click)="patch({ zebraRows: !(tpl().zebraRows ?? false) })">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
                   </div>
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Abnormal results</h4>
+                  <p class="pf-rtb-s">How out-of-range values are marked — a high and a low result, live:</p>
+                  <div class="pf-wys-paper pf-wys-demo">
+                    @for (row of flagDemoRows; track row.dir) {
+                      <div class="pf-wys-demo__row">
+                        <span class="pf-wys-demo__kind">{{ row.dir === 'high' ? 'High' : 'Low' }}</span>
+                        <span class="pf-wys-demo__name">{{ row.name }}</span>
+                        <span [style.fontWeight]="(tpl().flagIndicator ?? 'letter') === 'none' ? '400' : '700'"
+                              [style.color]="flagDemoColor(row.dir)">
+                          {{ row.value }}@if (flagGlyph(row.dir); as g) {<span>&nbsp;{{ g }}</span>}
+                        </span>
+                        <span class="pf-wys-demo__range">{{ row.range }}</span>
+                      </div>
+                    }
+                  </div>
+                  <p class="pf-rtb-s pf-flag-legend">{{ flagLegend() }}</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                        [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
                     <label class="pf-label">Abnormal value style</label>
@@ -289,14 +425,14 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                       (valueChange)="patch({ flagIndicator: $event })">
                     </pf-segmented>
                     <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                      Mark high/low with H&nbsp;/&nbsp;L letters or ↑&nbsp;/&nbsp;↓ arrows. Choose <b>None</b> for a plain report — no letters, arrows, bold or colour.
+                      Letters: <b>H</b> marks a <b>High</b> result, <b>L</b> a <b>Low</b> one. Arrows: <b>▲</b> High, <b>▼</b> Low. Choose <b>None</b> for a plain report — no letters, arrows, bold or colour.
                     </p>
                   </div>
                   @if ((tpl().flagStyle ?? 'bold') === 'bold_color') {
                     <div class="pf-toggle-row"
                          [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                          [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
-                      <span class="text-[14px]" style="color: var(--text-primary);">High value colour</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">High value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
                              [ngModel]="tpl().abnormalColor || '#dc2626'"
@@ -305,247 +441,93 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
                     <div class="pf-toggle-row"
                          [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                          [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
-                      <span class="text-[14px]" style="color: var(--text-primary);">Low value colour</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">Low value colour</span>
                       <input type="color"
                              style="width:46px;height:30px;border:1px solid var(--glass-border);border-radius:8px;background:transparent;cursor:pointer;padding:2px"
                              [ngModel]="tpl().abnormalLowColor || '#2563eb'"
                              (ngModelChange)="patch({ abnormalLowColor: $event })" />
                     </div>
                   }
+                </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Departments &amp; details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Group by department</span>
-                    <pf-toggle [checked]="tpl().groupByDepartment ?? false"
-                               (checkedChange)="patch({ groupByDepartment: $event })">
-                    </pf-toggle>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Group by department</span>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().groupByDepartment)"
+                            aria-label="Group by department" (click)="patch({ groupByDepartment: !(tpl().groupByDepartment) })">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <div class="flex flex-col pr-3">
-                      <span class="text-[14px]" style="color: var(--text-primary);">Each department on a new page</span>
+                      <span class="text-[13px]" style="color: var(--text-primary);">Each department on a new page</span>
                       <span class="text-[12px]" style="color: var(--text-tertiary);">Start every department's tests on a fresh page.</span>
                     </div>
-                    <pf-toggle [checked]="tpl().departmentPageBreak ?? false"
-                               (checkedChange)="patch({ departmentPageBreak: $event })">
-                    </pf-toggle>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().departmentPageBreak ?? false)"
+                            aria-label="Each department on a new page" (click)="patch({ departmentPageBreak: !(tpl().departmentPageBreak ?? false) })">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Show method line</span>
-                    <pf-toggle [checked]="tpl().showMethod ?? false"
-                               (checkedChange)="patch({ showMethod: $event })">
-                    </pf-toggle>
+                    <span class="text-[13px]" style="color: var(--text-primary);">Show method line</span>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showMethod)"
+                            aria-label="Show method line" (click)="patch({ showMethod: !(tpl().showMethod) })">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                  </div>
+                  <div class="pf-toggle-row">
+                    <span class="text-[13px]" style="color: var(--text-primary);">Show specimen line</span>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="specimenLineOn()"
+                            aria-label="Show specimen line" (click)="toggleSpecimenLine()">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                  </div>
+                  <!-- Same switch as Lab settings → Report (one metadata option). -->
+                  <div class="pf-toggle-row">
+                    <div class="flex flex-col pr-3">
+                      <span class="text-[13px]" style="color: var(--text-primary);">Consolidated abnormal results sheet</span>
+                      <span class="text-[12px]" style="color: var(--text-tertiary);">Print a first page listing every high and low result.</span>
+                    </div>
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
+                            aria-label="Consolidated abnormal results sheet" (click)="toggleAbnormalSummary()">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
                   </div>
                 </div>
-              </pf-tile>
-            }
-
-            <!-- ────────── PATIENT BLOCK ────────── -->
-            @case ('patient') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <div class="space-y-4">
-                  <div>
-                    <label class="pf-label">Patient block layout</label>
-                    <pf-segmented
-                      [options]="patientLayoutOptions"
-                      [value]="tpl().patientLayout ?? 'three-col'"
-                      size="md"
-                      (valueChange)="setPatientLayout($event)">
-                    </pf-segmented>
-                  </div>
-
-                  <!-- Date & time format — moved here since the date fields print
-                       inside the patient block (arrange them below). -->
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-3"
-                     style="color: var(--text-muted);">Date &amp; time format</p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label class="pf-label">Date format</label>
-                      <select class="pf-input" [ngModel]="dateFormatValue()"
-                              (ngModelChange)="patch({ dateFormat: $event })">
-                        @for (o of dateFormatOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
-                      </select>
-                    </div>
-                    <div>
-                      <label class="pf-label">Time format</label>
-                      <pf-segmented [options]="timeFormatOptions" [value]="tpl().timeFormat ?? '12h'" size="sm"
-                                    (valueChange)="patch({ timeFormat: $event })"></pf-segmented>
-                    </div>
-                  </div>
-                  <div class="mt-2">
-                    <label class="pf-label">Joiner between date and time</label>
-                    <select class="pf-input" [ngModel]="separatorValue()"
-                            (ngModelChange)="patch({ dateTimeSeparator: $event })">
-                      @for (o of separatorOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
-                    </select>
-                  </div>
-
-                  <!-- ── Unified drag-drop arranger (all layouts) ── -->
-                  <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-1 mt-4"
-                     style="color: var(--text-muted);">Patient block — drag to arrange</p>
-                  <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
-                    Drag a field <strong>into a column</strong> to print it (placement &amp; order = how it prints); drag it to <strong>Unused</strong> to hide it. The layout above sets the number of columns.</p>
-                  <div cdkDropListGroup>
-                    <div class="pf-pcols" [style.grid-template-columns]="'repeat(' + patientCols().length + ', minmax(0, 1fr))'">
-                      @for (col of patientCols(); track $index; let i = $index) {
-                        <div class="pf-pcol">
-                          <span class="pf-pcol-h">Column {{ i + 1 }}</span>
-                          <div class="pf-pcol-drop" cdkDropList [id]="'pcol-' + i"
-                               [cdkDropListData]="col"
-                               (cdkDropListDropped)="dropPatientItem($event)">
-                            @for (k of col; track k) {
-                              <div class="pf-pchip" cdkDrag>
-                                <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
-                              </div>
-                            }
-                            @if (col.length === 0) { <span class="pf-pcol-empty">Drop here</span> }
-                          </div>
-                        </div>
-                      }
-                    </div>
-                    <p class="text-[11px] mt-3 mb-1" style="color: var(--text-muted);">Unused — not printed</p>
-                    <div class="pf-ppool" cdkDropList id="pcol-pool" [cdkDropListData]="patientPool()"
-                         (cdkDropListDropped)="dropPatientItem($event)">
-                      @for (k of patientPool(); track k) {
-                        <div class="pf-pchip pf-pchip--pool" cdkDrag>
-                          <span class="pf-pchip-grip">⠿</span>{{ patientItemLabel(k) }}
-                        </div>
-                      }
-                      @if (patientPool().length === 0) { <span class="pf-pcol-empty">All fields are in columns — drag one here to hide it.</span> }
-                    </div>
-                  </div>
                 </div>
-              </pf-tile>
+              </div>
             }
 
-            <!-- ────────── DATE & TIME ────────── -->
-            <!-- ────────── COLUMNS (per-dept results table) ────────── -->
+            <!-- ══ TABLE COLUMNS — per department ══ -->
             @case ('columns') {
               <pf-report-columns-editor (stateChange)="onColumnsState($event)">
               </pf-report-columns-editor>
             }
 
-            <!-- ────────── PER-TEST LAYOUT (sections engine) ────────── -->
-            @case ('testlayout') {
-              <pf-test-layout-editor></pf-test-layout-editor>
+            <!-- ══ SEQUENCING — department + test print order ══ -->
+            @case ('sequence') {
+              <pf-report-sequencing-editor [template]="tpl()"
+                (metadataChange)="patch({ metadata: $event })"
+                (previewTests)="seqPreviewTests.set($event)"></pf-report-sequencing-editor>
             }
 
-            <!-- ────────── SIGN-OFF & FOOTER ────────── -->
-            @case ('signoff') {
-              <pf-tile tone="default" padding="lg" class="block">
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                   style="color: var(--text-muted);">Signature blocks (up to 3)</p>
-
-                @for (sig of signatures(); track $index; let i = $index) {
-                  <div class="pf-sig-card">
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-[12px] font-semibold" style="color: var(--text-secondary);">Sign-off #{{ i + 1 }}</span>
-                      <button type="button" class="pf-link-btn" (click)="removeSignature(i)">Remove</button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input class="pf-input" placeholder="Name (e.g. Dr. Payal Shah)"
-                             [ngModel]="sig.name"
-                             (ngModelChange)="updateSignature(i, { name: $event })" />
-                      <input class="pf-input" placeholder="Title (e.g. MD, Pathologist)"
-                             [ngModel]="sig.title"
-                             (ngModelChange)="updateSignature(i, { title: $event })" />
-                      <input class="pf-input" placeholder="Reg. No"
-                             [ngModel]="sig.regNo"
-                             (ngModelChange)="updateSignature(i, { regNo: $event })" />
-                    </div>
-                    <div class="mt-2">
-                      <label class="pf-label">Signature image (optional)</label>
-                      <pf-image-upload [url]="sig.signatureUrl"
-                                       (urlChange)="updateSignature(i, { signatureUrl: $event })">
-                      </pf-image-upload>
-                    </div>
-                  </div>
-                }
-
-                @if (signatures().length < 3) {
-                  <button type="button" class="pf-add-btn" (click)="addSignature()">+ Add sign-off block</button>
-                }
-
-                <div class="pf-divider mt-4"></div>
-
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3 mt-4"
-                   style="color: var(--text-muted);">Footer text</p>
-                <div class="space-y-3">
-                  <div>
-                    <label class="pf-label">Disclaimer (small print)</label>
-                    <textarea class="pf-input min-h-[64px]"
-                              [ngModel]="tpl().disclaimer"
-                              (ngModelChange)="patch({ disclaimer: $event })"></textarea>
-                  </div>
-                  <div>
-                    <label class="pf-label">Footer text (legal / contact line)</label>
-                    <input class="pf-input"
-                           [ngModel]="tpl().footerText"
-                           (ngModelChange)="patch({ footerText: $event })" />
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label class="pf-label">"End of Report" marker text</label>
-                      <input class="pf-input"
-                             placeholder="****End of Report****"
-                             [ngModel]="tpl().endOfReportText"
-                             (ngModelChange)="patch({ endOfReportText: $event })" />
-                    </div>
-                    <div>
-                      <label class="pf-label">Watermark text (page 1)</label>
-                      <input class="pf-input"
-                             placeholder="e.g. DRAFT, COPY"
-                             [ngModel]="tpl().watermarkText"
-                             (ngModelChange)="patch({ watermarkText: $event })" />
-                    </div>
-                  </div>
-                  @if (tpl().watermarkText) {
-                    <div>
-                      <label class="pf-label">Watermark opacity ({{ ((tpl().watermarkOpacity ?? 0.08) * 100).toFixed(0) }}%)</label>
-                      <input type="range" min="0.02" max="0.4" step="0.02"
-                             [ngModel]="tpl().watermarkOpacity ?? 0.08"
-                             (ngModelChange)="patch({ watermarkOpacity: +$event })" />
-                    </div>
-                  }
-                </div>
-
-                <div class="pf-divider mt-4"></div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
-                  <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Sample Collection band</span>
-                    <pf-toggle [checked]="tpl().showSampleCollectionBand ?? true"
-                               (checkedChange)="patch({ showSampleCollectionBand: $event })">
-                    </pf-toggle>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">"Powered by Prefrontal" line</span>
-                    <pf-toggle [checked]="tpl().showPoweredBy"
-                               (checkedChange)="patch({ showPoweredBy: $event })">
-                    </pf-toggle>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">QR code (verify online)</span>
-                    <pf-toggle [checked]="tpl().showQrCode"
-                               (checkedChange)="patch({ showQrCode: $event })">
-                    </pf-toggle>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[14px]" style="color: var(--text-primary);">Show pathologist name (legacy)</span>
-                    <pf-toggle [checked]="tpl().showPathologistName"
-                               (checkedChange)="patch({ showPathologistName: $event })">
-                    </pf-toggle>
-                  </div>
-                </div>
-              </pf-tile>
-            }
           }
         </div>
 
-        <!-- ── Right: live PDF preview. Shared by all tabs EXCEPT Per-test
-                layout, which renders its own engine-resolved preview for the
-                selected test (full-width). ─────── -->
-        @if (tab() !== 'testlayout') {
-        <aside class="lg:sticky lg:top-4 h-fit">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
-             style="color: var(--text-muted);">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
+        <!-- ── Right: live PDF preview, shared by every section. ─────── -->
+        <aside class="pf-rt-aside" [class.pf-card]="theme.isNewDesign()" aria-label="Live preview">
+          @if (theme.isNewDesign()) {
+            <div class="pf-card__head pf-rt-aside__head">
+              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="pf-card__label">Live preview</span>
+              <span class="pf-card__note">{{ rendering() ? 'Rendering…' : 'PDF' }}</span>
+            </div>
+          } @else {
+          <p class="pf-rt-aside__k">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
+          }
           <div class="pf-pdf-frame">
             @if (previewSafe()) {
               <iframe [src]="previewSafe()" title="Report PDF preview"
@@ -556,15 +538,243 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
               </div>
             }
           </div>
-          <p class="text-[10px] mt-2" style="color: var(--text-tertiary);">
-            Preview uses a sample order. Save to apply this template to real reports.
-          </p>
+          <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
         }
+      </div>
+      }
       </div>
     </section>
   `,
   styles: [`
+    /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
+    .pf-wys-paper { background: #ffffff; color: #111; border-radius: 10px; padding: 12px 14px;
+      border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 6px rgba(0,0,0,0.35); }
+    .pf-wys-masthead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+    .pf-wys-masthead__name { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; }
+    .pf-wys-masthead__tag { font-size: 11.5px; color: #555; }
+    .pf-wys-masthead__bar { height: 4px; border-radius: 2px; margin-top: 8px; }
+
+    .pf-wys-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+    .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
+    .pf-wys-thumb[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
+    .pf-wys-thumb__name { font-size: 11px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
+    .pf-wys-thumb__paper { position: relative; width: 116px; height: 62px; border-radius: 6px; background: #fff;
+      display: block; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-thumb__logo { position: absolute; top: 8px; left: 8px; width: 14px; height: 14px; border-radius: 3px; background: #94a3b8; }
+    .pf-wys-thumb__lines { position: absolute; top: 9px; left: 28px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .pf-wys-thumb__lines i { height: 5px; border-radius: 2px; background: #cbd5e1; display: block; }
+    .pf-wys-thumb__lines i:first-child { background: #64748b; width: 70%; }
+    .pf-wys-thumb__accent { position: absolute; left: 0; right: 0; top: 30px; height: 3px; background: #3b82f6; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__accent { top: 0; height: 10px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__logo { top: 16px; }
+    .pf-wys-thumb__paper--banner .pf-wys-thumb__lines { top: 18px; }
+    .pf-wys-thumb__paper--classic .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__accent { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__logo { display: none; }
+    .pf-wys-thumb__paper--minimal .pf-wys-thumb__lines { left: 10px; }
+
+    .pf-wys-fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 1px;
+      padding: 8px 6px; border-radius: 11px; cursor: pointer; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-wys-font[aria-pressed='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
+    .pf-wys-font__sample { font-size: 15px; }
+    .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
+
+    /* Report theme cards — a paper specimen set in the theme's own face. */
+    .pf-rtheme { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 520px) { .pf-rtheme { grid-template-columns: 1fr; } }
+    .pf-rtheme__card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left;
+      min-height: 44px; padding: 10px; border-radius: 12px; cursor: pointer; font: inherit; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-rtheme__card[aria-checked='true'] { border-color: var(--pf-sel-border); background: var(--pf-sel-bg); }
+    .pf-rtheme__card:focus-visible { outline: 2px solid var(--pf-sel-border); outline-offset: 2px; }
+    .pf-rtheme__spec { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px;
+      background: #fff; color: #1B3A6B; border: 1px solid rgba(0,0,0,0.08); }
+    .pf-rtheme__lab { font-size: 17px; line-height: 1.1; }
+    .pf-rtheme__dept { font-size: 11.5px; border-bottom: 1.5px solid #1B3A6B; padding-bottom: 2px; margin-bottom: 2px; }
+    .pf-rtheme__row { display: grid; grid-template-columns: 1.3fr 0.9fr 1fr; gap: 6px; font-size: 10.5px; color: #1a1a1a; }
+    .pf-rtheme__dim { color: #666; font-weight: 400; }
+    .pf-rtheme__name { font-size: 13px; font-weight: 600; }
+    .pf-rtheme__desc { font-size: 12px; line-height: 1.4; color: var(--text-secondary, #94a3b8); }
+    .pf-rtheme__note { margin: 0 0 8px; }
+    .pf-rtheme__off { opacity: 0.4; pointer-events: none; }
+
+    .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 7px;
+      background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
+    .pf-wys-mini i { display: block; height: 6px; border-radius: 2px; background: #e2e8f0; }
+    .pf-wys-mini i:first-child { background: #64748b; }
+    .pf-wys-mini--bordered i { border: 1px solid #94a3b8; background: #fff; height: 8px; }
+    .pf-wys-mini--bordered i:first-child { background: #cbd5e1; }
+    .pf-wys-mini--striped i:nth-child(odd) { background: #cbd5e1; }
+
+    .pf-wys-demo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; font-size: 13px; }
+    .pf-wys-demo__row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .pf-wys-demo__kind { min-width: 38px; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: #666; }
+    .pf-wys-demo__name { min-width: 128px; }
+    .pf-wys-demo__range { color: #777; font-size: 12px; }
+    .pf-flag-legend { margin-bottom: 12px; font-weight: 600; color: var(--text-secondary); white-space: pre-wrap; }
+
+    .pf-wys-sigs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pf-wys-sig { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; min-width: 120px; font-size: 12px; }
+    .pf-wys-sig__img { max-height: 30px; max-width: 90px; object-fit: contain; }
+    .pf-wys-sig__scribble { font-size: 20px; color: #999; }
+    .pf-wys-sig i { color: #666; font-size: 11px; }
+    .pf-wys-sig small { color: #888; font-size: 10px; }
+    .pf-wys-sig--empty { font-size: 11.5px; color: #666; text-align: center; }
+
+    /* Patient drag area framed like the printed patient strip */
+    .pf-pcols { position: relative; padding-top: 26px !important; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+      border-radius: 12px; padding: 26px 10px 10px; }
+    .pf-pcols::before { content: 'PATIENT BLOCK — AS PRINTED'; position: absolute; top: 6px; left: 12px;
+      font-size: 9.5px; letter-spacing: 0.14em; color: var(--text-tertiary, #94a3b8); font-weight: 700; }
+
+    /* ── Titled setting groups — FLAT on the panel surface. The work panel
+       already provides the card; boxing each group again read as
+       card-in-card clutter. Groups separate with hairlines instead. ── */
+    .pf-rtb { margin: 0; padding: 16px 0; border: 0; border-radius: 0; background: transparent;
+      border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
+    .pf-rtb:first-child { border-top: 0; padding-top: 2px; }
+    .pf-rtb:last-child { padding-bottom: 0; }
+    .pf-rtb-h { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--text-primary, #e2e8f0); }
+    .pf-rtb-s { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+
+    /* Compact field vocabulary inside the panel (test-editor density). */
+    .pf-rt-work .pf-label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;
+      color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-work .pf-input { padding: 8px 12px; font-size: 13.5px; border-radius: 10px; }
+    .pf-rt-work textarea.pf-input { font-size: 13px; line-height: 1.5; }
+    .pf-rt-work .pf-rtb .grid { row-gap: 12px; }
+
+    /* ── Workspace shell: rail | focused panel | preview (test-editor kin). ── */
+    .pf-rt-head { display: flex; align-items: flex-start; gap: 12px; padding: 6px 0 10px; }
+    .pf-rt-head > .min-w-0 { flex: 1; }
+    .pf-rt-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-rt-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-tertiary, #94a3b8); }
+
+    .pf-rt-grid { display: grid; grid-template-columns: 188px minmax(0, 1fr) minmax(400px, 40%); gap: 18px; align-items: start; }
+    .pf-rt-loading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); gap: 18px; align-items: start; }
+    @media (max-width: 1180px) { .pf-rt-loading { grid-template-columns: 1fr; } }
+    @media (max-width: 1180px) { .pf-rt-grid { grid-template-columns: 1fr; } }
+
+    /* ── Section list (left panel). ── */
+    .pf-rt-rail { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 70px; }
+    .pf-rt-rail__head { display: flex; align-items: center; justify-content: space-between;
+      padding: 2px 6px 8px 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-side-toggle, .pf-rt-side-expand { display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px; border-radius: 8px; border: none; background: transparent;
+      color: var(--text-tertiary, #94a3b8); cursor: pointer; }
+    .pf-rt-side-toggle:hover, .pf-rt-side-expand:hover { background: var(--glass-bg-hover, rgba(255,255,255,.05)); color: var(--text-primary); }
+    .pf-rt-side-expand { margin: 0 0 10px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--glass-border); border-radius: 10px; }
+    .pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr) minmax(400px, 40%); }
+    @media (min-width: 1181px) { .pf-rt-grid--norail .pf-rt-rail { display: none; } }
+    @media (max-width: 1180px) {
+      .pf-rt-rail__head, .pf-rt-side-expand { display: none; }
+      .pf-rt-grid--norail { grid-template-columns: 1fr; }
+    }
+    .pf-rt-rail__item { display: flex; align-items: center; height: 40px; padding: 0 14px;
+      border-radius: 11px; border: none; background: transparent; color: var(--text-secondary);
+      font-size: 13px; font-weight: 600; cursor: pointer; text-align: left;
+      transition: color .15s, background .15s; }
+    .pf-rt-rail__txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (hover: hover) {
+      .pf-rt-rail__item:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
+    }
+    .pf-rt-rail__item--on { color: var(--text-primary); font-weight: 700;
+      background: color-mix(in srgb, #a855f7 14%, transparent); }
+    @media (max-width: 1180px) {
+      .pf-rt-rail { position: sticky; top: 58px; z-index: 4; flex-direction: row; overflow-x: auto;
+        scrollbar-width: none; padding: 6px 0; background: var(--bg-primary, #0a0a15); }
+      .pf-rt-rail::-webkit-scrollbar { display: none; }
+      .pf-rt-rail__item { flex: 0 0 auto; height: 34px; }
+    }
+
+    .pf-rt-work { min-width: 0; background: var(--glass-bg, rgba(255,255,255,.03));
+      border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px 20px 20px;
+      animation: rt-sec-in .18s cubic-bezier(0, 0, 0.2, 1); }
+    @media (prefers-reduced-motion: reduce) { .pf-rt-work { animation: none; } }
+    @keyframes rt-sec-in { from { opacity: .4; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    .pf-rt-work__hdr { padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--glass-border); }
+    .pf-rt-work__title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); }
+    .pf-rt-work__sub { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary, #94a3b8); }
+    .pf-rt-flat + .pf-rt-flat .pf-rtb:first-child { border-top: 1px solid var(--glass-border); }
+
+    .pf-rt-aside { min-width: 0; }
+    .pf-rt-aside__k { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-tertiary); }
+    /* New design: the preview is an pf-card side card (header + framed PDF). */
+    .pf-rt-aside.pf-card .pf-pdf-frame { margin: 12px; }
+    .pf-rt-aside.pf-card .pf-rt-aside__hint { margin: 0 14px 12px; }
+    .pf-rt-aside__head { flex: none; }
+    .pf-rt-aside__hint { margin: 8px 0 0; font-size: 12px; color: var(--text-tertiary); }
+
+    /* Desktop: the page holds still; work panel + preview scroll internally. */
+    @media (min-width: 1181px) {
+      :host { display: block; height: 100%; overflow: hidden; }
+      .pf-rt-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+      .pf-rt-head { flex: 0 0 auto; }
+      .pf-rt-grid { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+      .pf-rt-rail { position: static; overflow-y: auto; min-height: 0; }
+      .pf-rt-work { height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+      .pf-rt-aside { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+      .pf-pdf-frame { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+      .pf-pdf-iframe { flex: 1 1 auto; min-height: 0; height: auto; }
+    }
+
+    /* NEW design (band page): the band body fills the shell; the editor
+       panel and the preview each scroll on their own — no page scroll. On
+       narrow screens (single column) the grid itself scrolls. */
+    :host-context(.design-new) .pf-rt-grid { flex: 1 1 auto; min-height: 0; }
+    @media (min-width: 1181px) {
+      :host-context(.design-new) .pf-rt-grid { align-items: stretch; }
+      :host-context(.design-new) .pf-rt-work { height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+      :host-context(.design-new) .pf-rt-aside { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    }
+    @media (max-width: 1180px) {
+      :host-context(.design-new) .pf-rt-grid { overflow-y: auto; overscroll-behavior: contain; }
+    }
+
+    /* Colour field: swatch + hex as ONE 38px control. */
+    .pf-color-field { display: flex; align-items: center; height: 38px; border-radius: 10px;
+      border: 1px solid var(--input-border, var(--glass-border)); background: var(--input-bg, rgba(255,255,255,.03));
+      overflow: hidden; cursor: pointer; }
+    .pf-color-field input[type="color"] { width: 42px; height: 46px; margin: -4px 0 -4px -4px;
+      border: 0; padding: 0; background: transparent; cursor: pointer; }
+    .pf-color-field__hex { padding: 0 10px; font-variant-numeric: tabular-nums; font-size: 12px;
+      color: var(--text-secondary, #cbd5e1); }
+
+    .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--pf-toggle-on, #aeb8c2); }
+    .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Patient-strip QR switches */
+    .pf-sqr { display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0;
+      border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
+    .pf-sqr__row:first-child { border-top: 0; }
+    .pf-sqr__ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+      color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--border-muted); }
+    .pf-sqr__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sqr__desc { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
+    .pf-sqr__sw { flex: none; min-width: 44px; min-height: 44px; }
+
+    /* Department scope row for the patient strip */
+    .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pf-pt-scope__sel { flex: 1 1 240px; min-width: 220px; }
+    .pf-pt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 4px 10px;
+      border-radius: var(--pf-radius-chip, 8px); color: var(--text-secondary); border: 1px solid var(--pf-line); background: var(--pf-chip-bg); }
+    .pf-pt-chip svg { color: var(--violet-text, #7c3aed); }
+    .pf-pt-btn { height: 36px; min-height: 36px; }
+
+    .pf-rt-sw { flex-shrink: 0; }
+    /* New design: the focused section is an pf-card surface (kit line/shadow). */
+    :host-context(.design-new) .pf-rt-work { background: var(--pf-card-bg); border-color: var(--pf-line); box-shadow: var(--pf-shadow-sm); }
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }
@@ -587,8 +797,8 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
     .pf-pchip.cdk-drag-preview { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
     .pf-pchip.cdk-drag-placeholder { opacity: 0.4; }
     .cdk-drop-list-dragging .pf-pchip:not(.cdk-drag-placeholder) { transition: transform 180ms cubic-bezier(0.2,0.8,0.2,1); }
-    .pf-toggle-row { display: flex; align-items: center;
-      justify-content: space-between; padding: 8px 12px; border-radius: 10px;
+    .pf-toggle-row { display: flex; align-items: center; align-self: start; gap: 12px;
+      justify-content: space-between; min-height: 40px; padding: 8px 12px; border-radius: 10px;
       background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-divider { height: 1px; background: var(--border-muted, #e2e8f0);
       margin: 8px 0; opacity: 0.6; }
@@ -640,6 +850,17 @@ type Tab = 'identity' | 'header' | 'theme' | 'patient' | 'datetime' | 'columns' 
       .pf-pdf-iframe { height: 70dvh; min-height: 360px; max-height: 560px; }
       .pf-add-btn { padding: 12px; }
     }
+
+    /* ── Letterhead / Footer designer: the page card + its side card take
+       the whole body (after the classic rail, when it shows). ── */
+    .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: 188px minmax(0, 1fr); }
+    .pf-rt-grid.pf-rt-grid--designer.pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr); }
+    @media (max-width: 1180px) { .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: minmax(0, 1fr); } }
+    .pf-rt-designer { min-width: 0; min-height: 0; }
+    @media (min-width: 901px) and (min-height: 560px) { .pf-rt-designer { height: 100%; } }
+    .pf-rt-savestate { margin-right: 4px; }
+    .pf-classic-only .pf-rt-savestate, .pf-rt-head .pf-rt-savestate { align-self: center; }
+    @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
   `],
 })
 export class ReportTemplateComponent implements OnInit, OnDestroy {
@@ -648,27 +869,43 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly platform = inject(PlatformService);
+  private readonly dialog = inject(DialogService);
+  protected readonly theme = inject(ThemeService);
 
-  readonly tabOptions: SegmentedOption<Tab>[] = [
-    { value: 'identity', label: 'Identity' },
-    { value: 'header',   label: 'Header & Logo' },
-    { value: 'theme',    label: 'Theme' },
-    { value: 'patient',  label: 'Patient' },
-    { value: 'columns',  label: 'Columns' },
-    { value: 'testlayout', label: 'Per-test layout' },
-    { value: 'signoff',  label: 'Sign-off & Footer' },
+  /** Section cards for the left nav — a plain-words label + what it changes,
+   *  so the admin never has to guess what lives behind a tab. */
+  readonly sections: Array<{ value: Tab; label: string; desc: string }> = [
+    { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
+    { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
+    { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
+    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
+    { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
-  private readonly _tab = signal<Tab>('identity');
+  /** The same sections as the band pill's tabs (new design). The
+   *  description rides as the tab's tooltip. */
+  readonly sectionOptions: SegmentedOption<Tab>[] = this.sections.map(s => ({ value: s.value, label: s.label, hint: s.desc }));
+  readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
+  private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
+  /** Left section list hide/unhide — Test Master departments pattern. */
+  readonly railHidden = signal<boolean>(
+    typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
+  toggleRail() {
+    this.railHidden.update(v => !v);
+    try { localStorage.setItem('pf-rt-rail', this.railHidden() ? 'hidden' : 'shown'); } catch { /* private mode */ }
+  }
+
   setTab(t: Tab) {
     this._tab.set(t);
+    if (t === 'table') this.loadSourceSansFace();
     // Re-pull the form-flow fields when entering the Patient tab so the list
     // reflects the latest saved Patient Registration flow (not a stale copy).
     if (t === 'patient') this.loadCustomPatientFields();
   }
 
   readonly headerPresetOptions: SegmentedOption<string>[] = [
-    { value: 'drlogy',   label: 'Classic'  },
+    { value: 'classic',  label: 'Classic'  },
     { value: 'centered', label: 'Centered' },
     { value: 'banner',   label: 'Banner'   },
     { value: 'minimal',  label: 'Minimal'  },
@@ -691,15 +928,41 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'bordered', label: 'Bordered' },
     { value: 'striped',  label: 'Striped'  },
   ];
+  // High / Low made explicit (QA 2026-09-24): users could not tell which
+  // mark meant which. Each option names both marks; the live preview shows a
+  // HIGH and a LOW row side by side, and the legend spells the pair out.
   readonly flagIndicatorOptions: SegmentedOption<string>[] = [
-    { value: 'letter', label: 'H / L' },
-    { value: 'arrow',  label: '↑ / ↓' },
+    { value: 'letter', label: 'Letters H · L' },
+    { value: 'arrow',  label: 'Arrows ▲ · ▼' },
     { value: 'none',   label: 'None' },
   ];
   readonly flagStyleOptions: SegmentedOption<string>[] = [
-    { value: 'bold',       label: 'Bold (H/L)'   },
+    { value: 'bold',       label: 'Bold'          },
     { value: 'bold_color', label: 'Bold + colour' },
   ];
+  /** The two sample results of the abnormal-marks preview. */
+  readonly flagDemoRows: ReadonlyArray<{ dir: 'high' | 'low'; name: string; value: string; range: string }> = [
+    { dir: 'high', name: 'Glucose, fasting', value: '182 mg/dL', range: '70 – 99' },
+    { dir: 'low',  name: 'Hemoglobin',       value: '11.4 g/dL', range: '12.0 – 16.0' },
+  ];
+  /** The mark the report prints after a high / low result (PDF: letter, or a
+   *  ▲ / ▼ triangle in arrow mode; nothing for None). */
+  flagGlyph(dir: 'high' | 'low'): string {
+    const mode = this.tpl().flagIndicator ?? 'letter';
+    if (mode === 'none') return '';
+    if (mode === 'arrow') return dir === 'high' ? '▲' : '▼';
+    return dir === 'high' ? 'H' : 'L';
+  }
+  flagDemoColor(dir: 'high' | 'low'): string {
+    const t = this.tpl();
+    if ((t.flagStyle ?? 'bold') !== 'bold_color' || (t.flagIndicator ?? 'letter') === 'none') return '#111';
+    return dir === 'high' ? (t.abnormalColor || '#dc2626') : (t.abnormalLowColor || '#2563eb');
+  }
+  /** One line naming both marks, e.g. "High: H  ·  Low: L". */
+  flagLegend(): string {
+    if ((this.tpl().flagIndicator ?? 'letter') === 'none') return 'No marks — high and low results print as plain values.';
+    return `High: ${this.flagGlyph('high')}   ·   Low: ${this.flagGlyph('low')}   ·   Critical values print as high / low`;
+  }
   readonly patientLayoutOptions: SegmentedOption<string>[] = [
     { value: 'three-col',     label: '3-column (Classic)' },
     { value: 'four-col-grid', label: '4-column grid'     },
@@ -723,11 +986,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: ' | ',  label: '" | "  →  May 14, 2026 | 11:01 PM' },
   ];
 
-  readonly colorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
-    { key: 'primaryColor',    label: 'Primary',           fallback: '#1B3A6B' },
-    { key: 'accentColor',     label: 'Accent',            fallback: '#0066CC' },
-    { key: 'tableHeaderBg',   label: 'Table header bg',   fallback: '#ffffff' },
-    { key: 'tableHeaderText', label: 'Table header text', fallback: '#000000' },
+  /** Colours are homed by WHERE they print: brand in the letterhead,
+   *  the rest on the results table. */
+  readonly brandColorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
+    { key: 'primaryColor',    label: 'Lab name colour',   fallback: '#1B3A6B' },
+    { key: 'accentColor',     label: 'Accent bar',        fallback: '#0066CC' },
+  ];
+  readonly tableColorFields: Array<{ key: keyof ReportTemplate; label: string; fallback: string }> = [
+    { key: 'tableHeaderBg',   label: 'Header row bg',     fallback: '#ffffff' },
+    { key: 'tableHeaderText', label: 'Header row text',   fallback: '#000000' },
     { key: 'bodyTextColor',   label: 'Body text',         fallback: '#1a1a1a' },
     { key: 'dividerColor',    label: 'Divider / hairline',fallback: '#cccccc' },
   ];
@@ -749,11 +1016,128 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Template state ──────────────────────────────────────────
   private readonly _tpl = signal<ReportTemplate>(this.defaultTemplate());
   readonly tpl = this._tpl.asReadonly();
-  patch(p: Partial<ReportTemplate>) { this._tpl.update(v => ({ ...v, ...p })); }
+  /** Letterhead + Footer are edited ON the page (report-header-editor). */
+  readonly designerTab = computed(() => this._tab() === 'letterhead' || this._tab() === 'footer');
+
+  // ── Undo / redo + unsaved changes ───────────────────────────
+  // Every edit is a patch of the one template object, so history is a stack
+  // of template snapshots. Typing into one field (same keys, < 700 ms apart)
+  // coalesces into a single step.
+  private readonly past = signal<ReportTemplate[]>([]);
+  private readonly future = signal<ReportTemplate[]>([]);
+  readonly canUndo = computed(() => this.past().length > 0);
+  readonly canRedo = computed(() => this.future().length > 0);
+  private lastPatch = { at: 0, keys: '' };
+  /** JSON of the template as last loaded / saved — "dirty" compares to it. */
+  private readonly savedJson = signal<string>(JSON.stringify(this.defaultTemplate()));
+  readonly dirty = computed(() => JSON.stringify(this._tpl()) !== this.savedJson());
+
+  /** "Show specimen line" lives in the template metadata (no column). */
+  specimenLineOn(): boolean { return readReportOption(this.tpl(), 'specimenLine'); }
+  toggleSpecimenLine() {
+    this.patch({ metadata: writeReportOption(this.tpl(), 'specimenLine', !this.specimenLineOn()) });
+  }
+  /** Consolidated "Summary of abnormal results" first page (metadata option). */
+  abnormalSummaryOn(): boolean { return readReportOption(this.tpl(), 'abnormalSummary'); }
+  toggleAbnormalSummary() {
+    this.patch({ metadata: writeReportOption(this.tpl(), 'abnormalSummary', !this.abnormalSummaryOn()) });
+  }
+
+  patch(p: Partial<ReportTemplate>) {
+    const keys = Object.keys(p).sort().join(',');
+    const now = Date.now();
+    const coalesce = keys === this.lastPatch.keys && now - this.lastPatch.at < 700 && this.past().length > 0;
+    this.lastPatch = { at: now, keys };
+    if (!coalesce) {
+      const cur = this._tpl();
+      this.past.update(h => [...h.slice(-99), cur]);
+    }
+    this.future.set([]);
+    this._tpl.update(v => ({ ...v, ...p }));
+  }
+  undo() {
+    const h = this.past();
+    if (!h.length) return;
+    this.future.update(f => [this._tpl(), ...f]);
+    this.past.set(h.slice(0, -1));
+    this._tpl.set(h[h.length - 1]);
+    this.lastPatch = { at: 0, keys: '' };
+    this.initPatientCols();
+  }
+  redo() {
+    const f = this.future();
+    if (!f.length) return;
+    this.past.update(h => [...h, this._tpl()]);
+    this.future.set(f.slice(1));
+    this._tpl.set(f[0]);
+    this.lastPatch = { at: 0, keys: '' };
+    this.initPatientCols();
+  }
+  /** Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z (or Ctrl+Y) — but never while typing in a
+   *  field, where the browser's own text undo belongs. */
+  @HostListener('document:keydown', ['$event'])
+  onUndoKey(ev: KeyboardEvent) {
+    if (!(ev.metaKey || ev.ctrlKey)) return;
+    const k = ev.key.toLowerCase();
+    if (k !== 'z' && k !== 'y') return;
+    const el = ev.target as HTMLElement | null;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    ev.preventDefault();
+    if (k === 'y' || ev.shiftKey) this.redo(); else this.undo();
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(ev: BeforeUnloadEvent) {
+    if (this.dirty() || this.deptPatientDirty()) { ev.preventDefault(); ev.returnValue = ''; }
+  }
+  /** Route guard: leaving with unsaved changes asks first. */
+  async canLeave(): Promise<boolean> {
+    if (!this.dirty() && !this.deptPatientDirty()) return true;
+    return this.dialog.confirm({
+      title: 'Leave without saving?',
+      message: 'Your report design changes are not saved yet. Save first to keep them.',
+      confirmLabel: 'Leave without saving', cancelLabel: 'Stay', tone: 'danger',
+    });
+  }
+
+  // ── Report theme (report-theme.ts) — stored in the template metadata ──
+  readonly reportThemeOptions = REPORT_THEME_OPTIONS;
+  readonly reportTheme = computed<ReportThemeId>(() => readReportTheme(this.tpl()));
+  readonly reportThemeLabel = computed(() => REPORT_THEME_OPTIONS.find(o => o.value === this.reportTheme())?.label ?? '');
+  setReportTheme(id: ReportThemeId) {
+    if (this.reportTheme() === id) return;
+    this.patch({ metadata: writeReportTheme(this.tpl(), id) });
+  }
+  /** The theme card's specimen font: the report's own Source Sans 3 files,
+   *  registered once as a web font when the card is shown. */
+  readonly sourceSansCss = "'PF Source Sans 3', 'Source Sans 3', system-ui, sans-serif";
+  private sourceSansFaceLoaded = false;
+  private loadSourceSansFace() {
+    if (this.sourceSansFaceLoaded || typeof FontFace === 'undefined' || typeof document === 'undefined') return;
+    this.sourceSansFaceLoaded = true;
+    const faces: Array<[keyof typeof SOURCE_SANS_FACES, string, string]> =
+      [['normal', '400', 'normal'], ['semibold', '600', 'normal'], ['bold', '700', 'normal']];
+    for (const [f, weight, style] of faces) {
+      const url = new URL(SOURCE_SANS_DIR + SOURCE_SANS_FACES[f].file, document.baseURI).toString();
+      const face = new FontFace('PF Source Sans 3', `url(${url})`, { weight, style });
+      face.load().then(ff => document.fonts.add(ff)).catch(() => { /* card falls back to system sans */ });
+    }
+  }
+
+  /** Browser stand-ins for the PDF font families, so the picker cards render
+   *  IN the face they select. */
+  fontCss(v: string): string {
+    if (v === 'times') return "'Times New Roman', Georgia, serif";
+    if (v === 'courier') return "'Courier New', ui-monospace, monospace";
+    return 'Arial, Helvetica, sans-serif';
+  }
 
   // Live columns being edited in the Columns tab + their department, so the
   // preview can apply them to that department's sample tests before save.
   private readonly editedCols = signal<ReportColumn[]>([]);
+  /** Sequencing tab: a sample order from the lab's own departments + tests. */
+  readonly seqPreviewTests = signal<Array<Record<string, unknown>>>([]);
+  /** Entering / leaving Sequencing swaps the preview's sample order. */
+  private readonly onSequenceTab = computed(() => this._tab() === 'sequence');
   private readonly editedDeptName = signal<string>('');
   private readonly editedDeptCode = signal<string>('');
   onColumnsState(s: { departmentName: string; departmentCode: string; columns: ReportColumn[] }) {
@@ -782,7 +1166,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       tagline: 'Accurate | Caring | Instant',
       address: '', phone: '', email: '', website: '', logoUrl: '',
       nablAccredited: false, nablNumber: '', nablLogoUrl: '',
-      headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+      headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
       primaryColor: '#1B3A6B', accentColor: '#0066CC',
       tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
       bodyTextColor: '#1a1a1a', dividerColor: '#cccccc',
@@ -807,36 +1191,16 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     };
   }
 
-  // ── Signatures (de/serialised as JSON in signaturesJson) ──────
-  readonly signatures = computed<ReportSignature[]>(() => {
-    const raw = this._tpl().signaturesJson;
-    if (!raw || !raw.trim()) return [];
-    try {
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch { return []; }
-  });
-  private setSignatures(arr: ReportSignature[]) {
-    this.patch({ signaturesJson: JSON.stringify(arr) });
-  }
-  addSignature() {
-    if (this.signatures().length >= 3) return;
-    this.setSignatures([...this.signatures(), { name: '', title: '' }]);
-  }
-  removeSignature(i: number) {
-    const next = this.signatures().slice();
-    next.splice(i, 1);
-    this.setSignatures(next);
-  }
-  updateSignature(i: number, patch: Partial<ReportSignature>) {
-    const next = this.signatures().slice();
-    next[i] = { ...next[i], ...patch };
-    this.setSignatures(next);
-  }
+  // (Dead signature-editor UI removed — the "Sign-off & Footer" tab never bound
+  //  add/remove/updateSignature; the PDF renderer reads signaturesJson directly.)
 
   // ── Live preview ─────────────────────────────────────────────
   private readonly _previewUrl = signal<string | null>(null);
   readonly previewUrl = this._previewUrl.asReadonly();
+  /** The same preview's blob URL without viewer hints — the designer draws page 1. */
+  readonly rawPreviewUrl = signal<string | null>(null);
+  /** Uploaded images (logo, NABL…) as data URLs — the designer measures with them. */
+  readonly imageCache = signal<Record<string, string>>({});
   /** Sanitised version of the blob URL — Angular blocks raw blob: URIs
    *  in `[src]` bindings otherwise. */
   readonly previewSafe = computed<SafeResourceUrl | null>(() => {
@@ -853,8 +1217,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     effect(() => {
       const tpl = this._tpl();
       // Also depend on the columns being edited so the preview reflects the
-      // Columns tab live (per-department).
+      // Columns tab live (per-department), and on the patient-strip scope
+      // draft so a department arrangement previews as you drag.
       this.editedCols(); this.editedDeptName(); this.editedDeptCode();
+      this.patientScope(); this.patientCols(); this.deptPatientLayout();
+      // Sequencing tab: the preview runs on the lab's own departments/tests.
+      this.seqPreviewTests(); this.onSequenceTab();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
@@ -873,27 +1241,63 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     let snap: { tests?: { testId: string; name?: string; department?: string; departmentCode?: string; sampleType?: string }[] };
     try { snap = JSON.parse(this.sampleSnapshot()); } catch { return {}; }
     const out: Record<string, ResolvedReportLayout> = {};
+    const apply = (t: { testId: string; name?: string; sampleType?: string }) => {
+      out[t.testId] = {
+        testId: t.testId, testName: t.name ?? '', sampleType: t.sampleType ?? '',
+        columns: cols, sections: [], configured: true, version: 1,
+      } as unknown as ResolvedReportLayout;
+    };
+    // Columns tab: the preview mirrors the department being edited — every
+    // sample test takes the edited columns (the render step also relabels the
+    // department bands), so what you see IS what you're configuring.
+    if (this.tab() === 'columns') {
+      for (const t of snap.tests ?? []) apply(t);
+      return out;
+    }
+    let matched = 0;
     for (const t of snap.tests ?? []) {
       const td = (t.department ?? '').trim().toLowerCase();
       const tc = (t.departmentCode ?? '').trim().toLowerCase();
       const match = (!!td && (td === dn || td === dc)) || (!!tc && (tc === dn || tc === dc));
-      if (match) {
-        out[t.testId] = {
-          testId: t.testId, testName: t.name ?? '', sampleType: t.sampleType ?? '',
-          columns: cols, sections: [], configured: true, version: 1,
-        } as unknown as ResolvedReportLayout;
-      }
+      if (match) { apply(t); matched++; }
     }
+    // When the edited department isn't in the sample data, apply to every test
+    // so the edit is ALWAYS visible instead of silently no-oping.
+    if (matched === 0) for (const t of snap.tests ?? []) apply(t);
     return out;
   }
 
   private async renderPreview(tpl: ReportTemplate) {
     try {
+      // Columns tab: relabel the whole sample report to the department being
+      // edited so ONE section — titled with that department — previews the
+      // strip exactly; empty configured columns stay visible.
+      let data = this.tab() === 'sequence' ? sequencePreviewSnapshot(this.sampleSnapshot(), this.seqPreviewTests()) : this.sampleSnapshot();
+      const onColumns = this.tab() === 'columns';
+      if (onColumns && (this.editedDeptName() || this.editedDeptCode())) {
+        try {
+          const snap = JSON.parse(data);
+          for (const t of snap.tests ?? []) {
+            t.department = this.editedDeptName() || t.department;
+            t.departmentCode = this.editedDeptCode() || t.departmentCode;
+          }
+          data = JSON.stringify(snap);
+        } catch { /* keep the raw sample */ }
+      }
+      // A department scope previews ITS draft arrangement — swap the strip
+      // fields on a copy so the preview shows what that department prints.
+      const scopedTpl = this.patientScope() === 'default' ? tpl : {
+        ...tpl,
+        patientLayout: this.deptPatientLayout(),
+        patientColumnsJson: JSON.stringify(this.patientCols()),
+      };
+      const effTpl = previewTemplateForTab(this.tab(), scopedTpl);
       const baseInput = {
         report: { id: 'preview-' + Date.now(), type: 'final',
-                  createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
-        template: tpl,
+                  createdAt: new Date().toISOString(), data },
+        template: effTpl,
         resolvedLayouts: this.buildPreviewLayouts(),
+        previewKeepEmptyColumns: onColumns,
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step
@@ -902,6 +1306,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       const prev = this._previewUrl();
       if (prev) URL.revokeObjectURL(prev);
       const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      this.imageCache.set(imageCache);
+      this.rawPreviewUrl.set(url);
       // #view=FitH&toolbar=0 gives a clean top-fit preview in Chrome/FF.
       this._previewUrl.set(url + '#view=FitH&toolbar=0');
     } catch (e) {
@@ -915,24 +1321,33 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
    *  block, multi-test grouping, sample type, multi-parameter test. */
   private sampleSnapshot(): string {
     return JSON.stringify({
-      patient: { displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
+      patient: { id: 'preview-patient', displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
       order:   { id: 'preview-order-12345',
+                 // A realistic order number so the preview's barcode is a true
+                 // Code-128 of a scannable value, not a placeholder.
+                 orderNumber: 'LAB-2608-000042',
+                 // Sample token so a placed patient-strip Order QR previews.
+                 trackToken: 'SAMPLE',
                  createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-                 refDoctorName: 'Dr. A. Sharma' },
+                 refDoctorName: 'Dr. A. Sharma',
+                 refHospitalName: 'Apollo Speciality Hospital',
+                 branchName: 'Chennai Main',
+                 collectedBy: 'S. Priya',
+                 departments: 'Haematology, Biochemistry' },
       type: 'final',
       tests: [
         { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
           sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
           result: { values: {
-            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L' },
+            'Hemoglobin':   { value: '11.4', unit: 'g/dL',     range: '12.0 – 16.0', flag: 'L', description: 'Low in anaemia / blood loss' },
             'RBC Count':    { value: '4.6',  unit: 'mill/cmm',  range: '3.8 – 4.8' },
-            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H' },
+            'WBC Count':    { value: '12800', unit: '/cmm',     range: '4000 – 11000', flag: 'H', description: 'Raised in acute infection' },
             'Platelets':    { value: '240000', unit: '/cmm',    range: '150000 – 410000' },
           } } },
         { testId: 'd2', name: 'Lipid Profile', department: 'Biochemistry', departmentCode: 'BIO',
           sampleType: 'Serum', method: 'Photometry',
           result: { values: {
-            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H' },
+            'Total Cholesterol': { value: '210', unit: 'mg/dL', range: '< 200', flag: 'H', description: 'Dietary review advised' },
             'HDL Cholesterol':   { value: '52',  unit: 'mg/dL', range: '> 40' },
             'LDL Cholesterol':   { value: '135', unit: 'mg/dL', range: '< 100', flag: 'H' },
             'Triglycerides':     { value: '120', unit: 'mg/dL', range: '< 150' },
@@ -946,16 +1361,33 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** First load: skeleton until the lab's template lands (held, no flash). */
+  private readonly tplHold = createLoadHold(true);
+  readonly tplSkeleton = this.tplHold.active;
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
     const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
-    if (initial && this.tabOptions.some(o => o.value === initial)) {
+    if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
+    if (this._tab() === 'table') this.loadSourceSansFace();
+    this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
-      next: t => { if (t) this._tpl.set({ ...this._tpl(), ...t }); this.initPatientCols(); }
+      next: t => {
+        if (t) this._tpl.set({ ...this._tpl(), ...t, headerPreset: normalizeHeaderPreset(t.headerPreset ?? this._tpl().headerPreset) });
+        this.savedJson.set(JSON.stringify(this._tpl()));
+        this.past.set([]); this.future.set([]);
+        this.initPatientCols();
+        this.tplHold.done();
+      },
+      error: () => this.tplHold.done(),
     });
     this.loadCustomPatientFields();
     this.initPatientCols();
+    this.api.get<{ id: string; name: string }[]>('/api/tenants/departments').subscribe({
+      next: d => this.departments.set((d ?? []).map(x => ({ id: x.id, name: x.name }))),
+    });
   }
 
   // ── Custom patient fields (from the Patient Registration form flow) ──
@@ -1013,7 +1445,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Drag-arranged 3-column patient block ──
   private readonly ALL_PATIENT_ITEMS = [
     'name', 'age', 'sex', 'mrn', 'phone', 'orderid', 'refdoctor',
+    // Referral + collection details. Sourced from the ORDER (not the patient
+    // record), so they arrive via the report snapshot's `order` block.
+    'refhospital', 'collectedby', 'department', 'branch',
     'specimen', 'barcode', 'registered', 'collected', 'reported',
+    // Patient-strip QR codes (owner, 2026-09-28) — opt-in, start in Unused.
+    PROFILE_QR_KEY, ORDER_QR_KEY,
   ];
   private readonly DEFAULT_PATIENT_COLS: string[][] = [
     ['name', 'age', 'sex', 'mrn'],
@@ -1025,7 +1462,23 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
     barcode: 'Barcode', registered: 'Registered date', collected: 'Collected date',
     reported: 'Reported date',
+    refhospital: 'Referring hospital', collectedby: 'Collected by',
+    department: 'Department', branch: 'Branch / collection centre',
+    [PROFILE_QR_KEY]: 'Patient profile QR', [ORDER_QR_KEY]: 'Order QR (report download)',
   };
+
+  /** The two patient-strip QR options, surfaced as switches above the
+   *  drag board (the chips stay draggable like any other field). */
+  readonly stripQrOptions = [
+    { key: PROFILE_QR_KEY, label: 'Patient profile QR',
+      desc: 'Scanning opens this patient\u2019s profile in the app. Staff sign in first; anyone else only reaches the login.' },
+    { key: ORDER_QR_KEY, label: 'Order QR \u2014 report soft copy',
+      desc: 'Scanning opens the patient\u2019s report page: they confirm date of birth, phone or invoice no. and download the report. Until it is ready, the page shows the order status.' },
+  ];
+  stripQrOn(key: string): boolean { return this.patientCols().some(c => c.includes(key)); }
+  toggleStripQr(key: string) {
+    this.commitPatientCols(toggleStripQrKey(this.patientCols(), key));
+  }
 
   readonly patientCols = signal<string[][]>([[], [], []]);
 
@@ -1050,7 +1503,109 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     return layout === 'four-col-grid' ? 4 : layout === 'stacked' ? 1 : 3;
   }
 
+  // ── Department-specific patient strip ─────────────────────
+  // 'default' edits the tenant template (autosaved with the page's Save);
+  // a department id edits that department's own arrangement, stored via
+  // /api/report-layout/department/{id}/patient and applied by the PDF
+  // renderer when a report holds only that department's tests.
+  readonly departments = signal<{ id: string; name: string }[]>([]);
+  readonly patientScope = signal<string>('default');
+  readonly patientScopeOptions = computed(() => [
+    { value: 'default', label: 'Default — all departments' },
+    ...this.departments().map(d => ({ value: d.id, label: d.name })),
+  ]);
+  readonly deptPatientConfigured = signal(false);
+  readonly deptPatientDirty = signal(false);
+  readonly deptPatientSaving = signal(false);
+  private readonly deptPatientLayout = signal<string>('three-col');
+
+  patientLayoutValue(): string {
+    return this.patientScope() === 'default'
+      ? (this._tpl().patientLayout ?? 'three-col')
+      : this.deptPatientLayout();
+  }
+
+  onPatientScopeChange(scope: string) {
+    this.patientScope.set(scope);
+    this.deptPatientDirty.set(false);
+    if (scope === 'default') { this.deptPatientConfigured.set(false); this.initPatientCols(); return; }
+    this.api.get<{ patient?: { layout?: string; columns?: string[][] } | null; configured?: boolean }>(
+      `/api/report-layout/department/${scope}/patient`).subscribe({
+      next: r => {
+        this.deptPatientConfigured.set(!!r?.configured);
+        const cols = r?.patient?.columns;
+        if (cols && cols.length && cols.some(c => Array.isArray(c))) {
+          const layout = r!.patient!.layout ?? 'three-col';
+          this.deptPatientLayout.set(layout);
+          this.patientCols.set(this.fitColumns(cols.map(c => [...(c ?? [])]), this.colCountFor(layout)));
+        } else {
+          // No override yet — the draft starts from the tenant default.
+          this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
+          this.seedPatientColsFromTemplate();
+        }
+      },
+      error: (e: ApiError) => {
+        // Snap back to a safe state, but LOUDLY — a silent revert reads as
+        // "the switch does nothing" (it did, against an mw without this
+        // endpoint).
+        this.patientScope.set('default');
+        this.deptPatientConfigured.set(false);
+        this.initPatientCols();
+        this.toasts.error(e?.message || 'Could not load that department\'s strip — is the server up to date?');
+      },
+    });
+  }
+
+  saveDeptPatient() {
+    const dept = this.patientScope();
+    if (dept === 'default' || this.deptPatientSaving()) return;
+    this.deptPatientSaving.set(true);
+    this.api.post(`/api/report-layout/department/${dept}/patient`, {
+      patient: { layout: this.deptPatientLayout(), columns: this.patientCols() },
+    }).subscribe({
+      next: () => {
+        this.deptPatientSaving.set(false);
+        this.deptPatientConfigured.set(true);
+        this.deptPatientDirty.set(false);
+        this.toasts.success('Department patient strip saved');
+      },
+      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); },
+    });
+  }
+
+  resetDeptPatient() {
+    const dept = this.patientScope();
+    if (dept === 'default') return;
+    this.api.post(`/api/report-layout/department/${dept}/patient`, { patient: null }).subscribe({
+      next: () => {
+        this.deptPatientConfigured.set(false);
+        this.deptPatientDirty.set(false);
+        this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
+        this.seedPatientColsFromTemplate();
+        this.toasts.success('Back to the default strip');
+      },
+      error: (e: ApiError) => this.toasts.error(e?.message || 'Reset failed'),
+    });
+  }
+
+  /** Load the tenant-default arrangement into the editor WITHOUT touching
+   *  scope state — used to seed a fresh department draft. */
+  private seedPatientColsFromTemplate() {
+    const n = this.colCountFor(this.deptPatientLayout());
+    let cols: string[][] | null = null;
+    const saved = this._tpl().patientColumnsJson;
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.every(Array.isArray)) cols = arr;
+      } catch { cols = null; }
+    }
+    cols = cols ?? this.DEFAULT_PATIENT_COLS.map(c => [...c]);
+    this.patientCols.set(this.fitColumns(cols, n));
+  }
+
   private initPatientCols() {
+    if (this.patientScope() !== 'default') return;
     const n = this.colCountFor(this._tpl().patientLayout);
     let cols: string[][] | null = null;
     const saved = this._tpl().patientColumnsJson;
@@ -1103,6 +1658,11 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       : this.redistribute(this.patientCols(), n);
     this.patientCols.set(cols);
     this.patientColsCache.set(n, cols.map(c => [...c]));
+    if (this.patientScope() !== 'default') {
+      this.deptPatientLayout.set(layout);
+      this.deptPatientDirty.set(true);
+      return;
+    }
     const placed = new Set(cols.flat());
     const placedCustom = this.customPatientFields().filter(f => placed.has(f.name));
     this.patch({
@@ -1133,7 +1693,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     } else {
       transferArrayItem(from, to, ev.previousIndex, ev.currentIndex);
     }
+    this.commitPatientCols(cols);
+  }
+
+  /** Apply a new column arrangement: a department scope marks its draft dirty;
+   *  the default scope patches the template. */
+  private commitPatientCols(cols: string[][]) {
     this.patientCols.set(cols);                    // pool is derived → recomputes
+    if (this.patientScope() !== 'default') { this.deptPatientDirty.set(true); return; }
     // Persist the arrangement + the titles of any custom fields now placed in a
     // column (so the PDF can label them; placement is the single shown/hidden
     // control — no separate toggle).
@@ -1157,9 +1724,51 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     if (this.saving()) return;
     this.saving.set(true);
     // Send every field — the server merges with defaults and writes one row.
-    this.api.post('/api/config/report-template', this._tpl()).subscribe({
-      next: () => { this.toasts.success('Template saved'); this.saving.set(false); },
+    const sent = this._tpl();
+    this.api.post('/api/config/report-template', sent).subscribe({
+      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); },
       error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
     });
   }
+}
+
+/** Sequencing tab: the sample report with the lab's own departments and
+ *  tests (a desk order), so every move shows on the page. Falls back to the
+ *  standard sample until those load. */
+export function sequencePreviewSnapshot(sample: string, tests: Array<Record<string, unknown>>): string {
+  if (!tests.length) return sample;
+  try {
+    const snap = JSON.parse(sample) as Record<string, unknown>;
+    const depts = [...new Set(tests.map(t => String(t['department'] ?? '')).filter(Boolean))];
+    const order = { ...(snap['order'] as Record<string, unknown>), departments: depts.join(', ') };
+    return JSON.stringify({ ...snap, order, tests });
+  } catch { return sample; }
+}
+
+/** Table columns tab: the preview must open on the department table being
+ *  edited — the consolidated abnormal-results sheet (a fixed 3-column page 1)
+ *  would hide it. Preview only; the saved template and real reports keep the
+ *  lab's setting. */
+export function previewTemplateForTab<T extends Pick<ReportTemplate, 'metadata'>>(tab: string, tpl: T): T {
+  if (tab !== 'columns' || !readReportOption(tpl, 'abnormalSummary')) return tpl;
+  return { ...tpl, metadata: writeReportOption(tpl, 'abnormalSummary', false) };
+}
+
+/** Switch a patient-strip QR on/off in a column arrangement. Off: removed from
+ *  every column. On: placed beside the other QR when that one is already
+ *  printing (they then print side by side), else at the end of the last column. */
+export function toggleStripQrKey(cols: string[][], key: string): string[][] {
+  const out = cols.map(c => [...c]);
+  if (out.some(c => c.includes(key))) return out.map(c => c.filter(k => k !== key));
+  if (out.length === 0) return [[key]];
+  const other = key === PROFILE_QR_KEY ? ORDER_QR_KEY : PROFILE_QR_KEY;
+  const withOther = out.find(c => c.includes(other));
+  if (withOther) {
+    const i = withOther.indexOf(other);
+    // Profile first, then Order — a stable reading order on the page.
+    withOther.splice(key === PROFILE_QR_KEY ? i : i + 1, 0, key);
+    return out;
+  }
+  out[out.length - 1].push(key);
+  return out;
 }

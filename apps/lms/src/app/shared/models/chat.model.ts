@@ -54,6 +54,9 @@ export interface ConversationParticipant {
   userId: string;
   displayName: string;
   email: string;
+  /** When this participant last read the thread (server). Seeds the
+   *  "Seen / Seen by X" receipts after a reload / reconnect. */
+  lastReadAt?: string | null;
 }
 
 export interface ConversationLastMessage {

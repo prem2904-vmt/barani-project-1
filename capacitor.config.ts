@@ -17,9 +17,16 @@ const config: CapacitorConfig = {
     // Domains the WKWebView / Android WebView is allowed to navigate
     // to. Add staging / prod backends here as they come online.
     allowNavigation: [
+      // Dev
       'cottlnsbjnstsgknsgzu.supabase.co',
-      'api.prefrontal.in',
-      'localhost:5270'
+      'med-dev.prefrontal.health',
+      'med-fetch-dev.prefrontal.health',
+      'localhost:5270',
+      // Stage — the default native builds (cap:sync / electron:build) now
+      // ship the *-stage configuration, so these are the live backends.
+      'gxmbbjmcfuxqzdfczrma.supabase.co',
+      'med-stg.prefrontal.health',
+      'med-fetch-stg.prefrontal.health'
     ]
   },
   plugins: {
@@ -37,8 +44,12 @@ const config: CapacitorConfig = {
       showSpinner: false
     },
     StatusBar: {
+      // Launch-only default (the dark splash is up): light text on the dark
+      // splash colour. Once the web app boots, ThemeService (system-bars.ts)
+      // restyles the status bar — and on Android the navigation bar — to the
+      // ACTIVE theme on every change, system-scheme flip and resume.
       style: 'DARK',
-      backgroundColor: '#1B3A6B'
+      backgroundColor: '#0a0a15'
     },
     Keyboard: {
       // 'native' resizes the whole WebView to the area above the keyboard, so
@@ -50,7 +61,10 @@ const config: CapacitorConfig = {
       resizeOnFullScreen: true
     },
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
+      // Must be a real drawable in android/app/src/main/res/drawable — a
+      // missing resource falls back to the launcher icon, which renders as
+      // a white square on API 26+. ic_stat_notify is the monochrome flask.
+      smallIcon: 'ic_stat_notify',
       iconColor: '#2E86AB'
     },
     PushNotifications: {

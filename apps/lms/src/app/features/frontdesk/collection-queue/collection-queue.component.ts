@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { interval } from 'rxjs';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { Patient } from '../../../shared/models/patient.model';
 import { QueueItem, QueueMode } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -11,7 +12,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 const MODE_LABEL: Record<QueueMode, string> = {
   token_queue: 'Token queue — patients called by priority',
@@ -27,7 +28,7 @@ const TYPE_COLOR: Record<string, string> = {
 @Component({
   selector: 'pf-collection-queue',
   standalone: true,
-  imports: [NgTemplateOutlet, PatientSearchComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, NgTemplateOutlet, PatientSearchComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page px-4 md:px-8 pt-6">
@@ -40,7 +41,7 @@ const TYPE_COLOR: Record<string, string> = {
           <span class="text-[12px] font-mono" style="color: var(--text-tertiary);">
             {{ waitingCount() }} waiting · ~{{ avgWait() }}m avg
           </span>
-          <pf-touch-btn size="sm" variant="ghost" (pressed)="load()">Refresh</pf-touch-btn>
+          <pf-touch-btn size="sm" variant="ghost" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">Refresh</pf-touch-btn>
           <pf-touch-btn size="sm" variant="primary" (pressed)="toggleWalkIn()">
             {{ walkInOpen() ? 'Close' : '+ Walk-in' }}
           </pf-touch-btn>
@@ -62,7 +63,7 @@ const TYPE_COLOR: Record<string, string> = {
       @if (loading() && items().length === 0) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading queue…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="5" label="Loading queue…"></pf-skeleton-rows>
           </div>
         </pf-tile>
       } @else {
@@ -149,19 +150,19 @@ const TYPE_COLOR: Record<string, string> = {
           <div class="pf-row-actions flex items-center gap-1.5 flex-wrap justify-end">
             @switch (q.status) {
               @case ('booked') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.checkIn(q.id))">Check in</pf-touch-btn>
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.noShow(q.id))">No-show</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':in'" busyLabel="Checking in…" (pressed)="act(svc.checkIn(q.id), q.id + ':in')">Check in</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':noshow'" busyLabel="Marking no-show…" (pressed)="act(svc.noShow(q.id), q.id + ':noshow')">No-show</pf-touch-btn>
               }
               @case ('checked_in') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.start(q.id))">Call</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':call'" busyLabel="Calling…" (pressed)="act(svc.start(q.id), q.id + ':call')">Call</pf-touch-btn>
                 @if (q.type !== 'urgent' && q.type !== 'emergency') {
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.markUrgent(q.id))">Urgent</pf-touch-btn>
+                  <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':urgent'" busyLabel="Marking urgent…" (pressed)="act(svc.markUrgent(q.id), q.id + ':urgent')">Urgent</pf-touch-btn>
                 }
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.skip(q.id))">Skip</pf-touch-btn>
-                <pf-touch-btn size="sm" variant="ghost" (pressed)="act(svc.noShow(q.id))">No-show</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':skip'" busyLabel="Skipping…" (pressed)="act(svc.skip(q.id), q.id + ':skip')">Skip</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="ghost" [busy]="busyKey() === q.id + ':noshow'" busyLabel="Marking no-show…" (pressed)="act(svc.noShow(q.id), q.id + ':noshow')">No-show</pf-touch-btn>
               }
               @case ('in_progress') {
-                <pf-touch-btn size="sm" variant="primary" (pressed)="act(svc.complete(q.id))">Complete</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="primary" [busy]="busyKey() === q.id + ':done'" busyLabel="Completing…" (pressed)="act(svc.complete(q.id), q.id + ':done')">Complete</pf-touch-btn>
               }
               @default {
                 <span class="text-[12px] font-medium" style="color: var(--text-tertiary);">{{ statusLabel(q.status) }}</span>
@@ -205,13 +206,13 @@ const TYPE_COLOR: Record<string, string> = {
     .pf-queue-hdr--muted { color: var(--text-tertiary); }
     .pf-queue-count { font-weight: 600; color: var(--text-tertiary); margin-left: 4px; }
     .pf-badge-late { font-size: 10px; font-weight: 700; text-transform: uppercase;
-      color: #ef4444; background: rgba(239,68,68,.15); padding: 1px 6px; border-radius: 999px; }
+      color: var(--red-text); background: rgba(239,68,68,.15); padding: 1px 6px; border-radius: 999px; }
     .pf-score {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-width: 52px; padding: 3px 8px; border-radius: 10px; flex-shrink: 0; cursor: help;
       background: rgba(124,58,237,0.14); border: 1px solid rgba(124,58,237,0.32);
     }
-    .pf-score__n { font-size: 15px; font-weight: 700; line-height: 1; color: #c4b5fd; }
+    .pf-score__n { font-size: 15px; font-weight: 700; line-height: 1; color: var(--violet-text); }
     .pf-score__l { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary); }
 
     /* ── Phone (<=640): keep the row legible & tappable.
@@ -248,6 +249,7 @@ const TYPE_COLOR: Record<string, string> = {
 export class CollectionQueueComponent implements OnInit {
   readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
+  private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly _items = signal<QueueItem[]>([]);
@@ -273,6 +275,8 @@ export class CollectionQueueComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
     // Live refresh every 20s so wait-times + priority order stay current.
     interval(20_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
   }
@@ -300,10 +304,15 @@ export class CollectionQueueComponent implements OnInit {
   }
 
   /** Run a transition observable, then refresh; surface failures as a toast. */
-  act(obs: { subscribe: (o: { next: () => void; error: (e: unknown) => void }) => void }) {
+  /** `<row id>:<action>` whose request is in flight — only that button shows busy. */
+  readonly busyKey = signal<string | null>(null);
+  act(obs: { subscribe: (o: { next: () => void; error: (e: unknown) => void }) => void }, key?: string) {
+    if (key && this.busyKey() === key) return;
+    if (key) this.busyKey.set(key);
+    const release = () => { if (key && this.busyKey() === key) this.busyKey.set(null); };
     obs.subscribe({
-      next: () => this.load(),
-      error: (e) => { this.toast.error(ApiError.from(e).message); this.load(); }
+      next: () => { release(); this.load(); },
+      error: (e) => { release(); this.toast.error(ApiError.from(e).message); this.load(); }
     });
   }
 

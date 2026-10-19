@@ -1,8 +1,11 @@
 import { Injectable, OnDestroy, computed, effect, inject, signal } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { SignalingService } from './signaling.service';
+import { SignalingService, cleanHubError, isOnlineStatus } from './signaling.service';
 import { ToastService } from './toast.service';
+import { ChatService } from './chat.service';
+import { ApiService } from './api.service';
+import { environment } from '../../../environments/environment';
 import {
   CallStatus, CallType, IceServer, IncomingCallInfo
 } from '../../shared/models/call.model';
@@ -32,6 +35,25 @@ export class WebrtcService implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
   private readonly toast = inject(ToastService);
+  private readonly chat = inject(ChatService);
+  private readonly api = inject(ApiService);
+
+  /** Who the OUTGOING call is to — the ringing card showed "Calling" / "C"
+   *  because the callee's name was never recorded. Group calls carry the
+   *  group name. Cleared on teardown. */
+  readonly outgoingPeer = signal<{ id: string; name: string; isGroup: boolean } | null>(null);
+  /** The 1:1 callee had no live connection when we dialled: the server is
+   *  ringing their phone / browser by PUSH. The outgoing card says "Ringing
+   *  their devices…" instead of "Ringing…". Same 60 s "No answer" timeout. */
+  readonly ringingDevices = signal(false);
+  /** The callee answered on their phone's native call screen (iOS CallKit on
+   *  the lock screen) and their app is coming up to join. The outgoing card
+   *  says "Answered — connecting…" instead of "Ringing…", and the 60 s
+   *  "No answer" timer gives way to a longer join window. */
+  readonly calleeAnswering = signal(false);
+  /** How long the caller waits for a natively-answered callee to join
+   *  (matches the server's AnsweringTimeout). */
+  static readonly ANSWERING_JOIN_MS = 120_000;
 
   // ── Public state ─────────────────────────────────────────────────
   readonly status = signal<CallStatus>('idle');
@@ -143,7 +165,9 @@ export class WebrtcService implements OnDestroy {
         if (sid) {
           try {
             const blob = new Blob([JSON.stringify({ sessionId: sid })], { type: 'application/json' });
-            navigator.sendBeacon(`${(window as any).__apiUrl__ ?? ''}/api/call-cleanup`, blob);
+            // The API host — `window.__apiUrl__` was never defined, so the
+            // beacon went to the UI's own origin and never reached the server.
+            navigator.sendBeacon(`${environment.apiUrl}/api/call-cleanup`, blob);
           } catch { /* best-effort */ }
         }
       });
@@ -193,10 +217,14 @@ export class WebrtcService implements OnDestroy {
   // ── Initiator side ───────────────────────────────────────────────
 
   /** Place an outgoing call to `targetUserId`. Resolves with sessionId. */
-  async startCall(targetUserId: string, source?: string): Promise<string> {
+  async startCall(targetUserId: string, source?: string, displayName?: string): Promise<string> {
     this.assertIdle();
     this.callError.set(null);
     this.currentSource = source;
+    this.setOutgoingPeer(targetUserId, displayName);
+    // Presence never blocks a call: an offline / away callee is rung on their
+    // registered devices by the server (VoIP / FCM / Web Push).
+    this.ringingDevices.set(!isOnlineStatus(this.signaling.userPresences().get(targetUserId)));
     this.callType.set('audio');
     this.status.set('outgoing');
     try {
@@ -222,6 +250,8 @@ export class WebrtcService implements OnDestroy {
     this.assertIdle();
     this.callError.set(null);
     this.currentSource = source ?? 'messages_group';
+    const conv = this.chat.conversations().find(c => c.id === conversationId);
+    this.outgoingPeer.set({ id: conversationId, name: conv?.name || 'Group call', isGroup: true });
     this.callType.set('audio');
     this.status.set('outgoing');
     try {
@@ -235,6 +265,24 @@ export class WebrtcService implements OnDestroy {
       this.handleFatal(err, 'startGroupCall');
       throw err;
     }
+  }
+
+  /** Resolve the callee's display name: caller-supplied → a conversation
+   *  participant → the tenant directory (async). */
+  private setOutgoingPeer(userId: string, displayName?: string): void {
+    const fromConv = this.chat.conversations()
+      .flatMap(c => c.participants ?? [])
+      .find(p => p.userId === userId)?.displayName;
+    const name = displayName || fromConv || '';
+    this.outgoingPeer.set({ id: userId, name, isGroup: false });
+    if (name) return;
+    void firstValueFrom(this.api.get<Array<{ id: string; displayName: string }>>('/api/directory/users'))
+      .then(list => {
+        const hit = (list ?? []).find(u => u.id === userId)?.displayName;
+        const cur = this.outgoingPeer();
+        if (hit && cur?.id === userId) this.outgoingPeer.set({ ...cur, name: hit });
+      })
+      .catch(() => undefined);
   }
 
   /** Add a third party to an in-flight call (e.g. interpreter). */
@@ -258,56 +306,77 @@ export class WebrtcService implements OnDestroy {
     const info = this.incomingCall();
     if (!info) return;
     this.clearIncomingRingTimer();
-    this.status.set('connecting');
-    try {
-      await this.acquireLocalStream();
-      await this.refreshIceServers();
-      const res = await this.signaling.acceptCall(info.sessionId);
-      this.sessionId.set(res.sessionId);
-      this.remoteParticipants.set(res.participants);
-      // Existing participants will send us offers; we just answer.
-      this.incomingCall.set(null);
-    } catch (err) {
-      this.handleFatal(err, 'acceptIncoming');
-      throw err;
-    }
+    this.callError.set(null); // a previous call's "Call declined." must not show on this one
+    // One accept path: the in-app Answer and a CallKit answer for the same
+    // call (both tapped, or racing) share a single AcceptCall.
+    return this.acceptBySessionId(info.sessionId, 1);
   }
 
   async rejectIncoming(): Promise<void> {
     const info = this.incomingCall();
     if (!info) return;
+    // Clear locally FIRST so the ring stops instantly even if the hub is slow.
+    this.incomingCall.set(null);
+    this.clearIncomingRingTimer();
     try { await this.signaling.rejectCall(info.sessionId); }
-    finally { this.incomingCall.set(null); }
+    finally {
+      // Status used to stay 'incoming' (and its 90s timer armed) after a
+      // decline; only reset when no other call started meanwhile.
+      if (this.status() === 'incoming' && !this.incomingCall()) this.teardown('idle');
+    }
   }
 
   /** Accept a call identified ONLY by its session id — the path taken when the
    *  user answers via the iOS CallKit lockscreen ringer. On a cold launch from
    *  a VoIP push the in-app incomingCall() signal may not be populated, so we
    *  accept the session directly (signaling.acceptCall awaits connect()). */
-  async acceptBySessionId(sessionId: string): Promise<void> {
+  async acceptBySessionId(sessionId: string, attempts = 6): Promise<void> {
+    // Already on it (answered in-app AND on the CallKit screen, or the native
+    // pending answer replayed on resume): never a second AcceptCall.
+    if (this.acceptInFlight?.sessionId === sessionId) return this.acceptInFlight.promise;
+    if (this.sessionId() === sessionId && this.inCall()) return;
+    const promise = this.doAcceptBySessionId(sessionId, attempts);
+    this.acceptInFlight = { sessionId, promise };
+    try { await promise; }
+    finally { if (this.acceptInFlight?.promise === promise) this.acceptInFlight = null; }
+  }
+
+  private acceptInFlight: { sessionId: string; promise: Promise<void> } | null = null;
+
+  private async doAcceptBySessionId(sessionId: string, attempts: number): Promise<void> {
+    this.clearIncomingRingTimer();
     this.status.set('connecting');
     try {
       await this.acquireLocalStream();
       await this.refreshIceServers();
+      // Set the session id BEFORE AcceptCall: the server's ParticipantJoined
+      // makes the caller send its offer at once, and onSessionOffer drops an
+      // offer for a session id we don't hold yet.
+      this.sessionId.set(sessionId);
       // Cold / lockscreen answer: the SignalR connection is usually mid-
       // (re)connect as the app foregrounds, so the first AcceptCall can fail
       // ("connection disconnected"). connect() now drives to Connected; retry a
       // few times to ride out the transition instead of dropping the call.
       let res: { sessionId: string; participants: string[] } | null = null;
       let lastErr: unknown;
-      for (let attempt = 0; attempt < 6; attempt++) {
+      for (let attempt = 0; attempt < attempts; attempt++) {
         try { res = await this.signaling.acceptCall(sessionId); break; }
-        catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 800)); }
+        catch (err) { lastErr = err; if (attempt < attempts - 1) await new Promise(r => setTimeout(r, 800)); }
       }
       if (!res) throw lastErr ?? new Error('acceptCall failed after retries');
       this.sessionId.set(res.sessionId);
-      this.remoteParticipants.set(res.participants);
+      // MERGE: an offer / join may already have landed during the accept.
+      this.remoteParticipants.update(cur => [...new Set([...res!.participants, ...cur])]);
       this.incomingCall.set(null);
     } catch (err) {
       this.handleFatal(err, 'acceptBySessionId');
       throw err;
     }
   }
+
+  /** Present a ring obtained out of band (looked up by id after a push —
+   *  see call-push.actions.ts). Same rules as a live IncomingCall event. */
+  receiveIncoming(info: IncomingCallInfo): void { this.onIncomingCall(info); }
 
   // ── In-call controls ─────────────────────────────────────────────
 
@@ -337,13 +406,22 @@ export class WebrtcService implements OnDestroy {
       this.signaling.callRejected.subscribe(p => this.onCallRejected(p)),
       this.signaling.callCancelled.subscribe(p => this.onCallCancelled(p)),
       this.signaling.callHandledElsewhere.subscribe(p => this.onCallHandledElsewhere(p)),
+      this.signaling.callAnswering.subscribe(p => this.onCallAnswering(p)),
       this.signaling.participantJoined.subscribe(p => this.onParticipantJoined(p)),
       this.signaling.participantLeft.subscribe(p => this.onParticipantLeft(p)),
       this.signaling.sessionOffer.subscribe(p => this.onSessionOffer(p)),
       this.signaling.sessionAnswer.subscribe(p => this.onSessionAnswer(p)),
       this.signaling.sessionIceCandidate.subscribe(p => this.onIceCandidate(p)),
       this.signaling.remoteMuteChanged.subscribe(p => this.onRemoteMuteChanged(p)),
-      this.signaling.reconnected$.subscribe(() => this.onReconnected())
+      this.signaling.reconnected$.subscribe(() => this.onReconnected()),
+      // Account switch / logout: every call, ring and timer belonged to the
+      // previous account.
+      this.signaling.sessionReset$.subscribe(() => {
+        const busy = this.status() !== 'idle' || !!this.incomingCall() || !!this.sessionId();
+        this.incomingCall.set(null);
+        this.callError.set(null);
+        if (busy) this.teardown('idle');
+      })
     );
   }
 
@@ -355,13 +433,46 @@ export class WebrtcService implements OnDestroy {
   }
 
   private onIncomingCall(info: IncomingCallInfo) {
-    // Ignore if we're already in a call — server should never do this but be defensive.
-    if (this.inCall()) return;
+    // Busy here (on a call, ringing out, or already ringing for ANOTHER call):
+    // decline the new one so its caller is told at once. It used to be
+    // accepted as the incoming call even while ringing out — clobbering the
+    // outgoing call's state (and its no-answer timer) — or silently ignored
+    // while the caller rang into the 60s timeout.
+    const cur = this.incomingCall();
+    if (cur?.sessionId === info.sessionId) return;
+    // The call we are joining / on (a ring replayed while a CallKit answer is
+    // being accepted) — never decline our own call.
+    if (info.sessionId === this.sessionId()) return;
+    // Mid-answer from CallKit (session id not known yet) — this ring may be
+    // the very call being answered; never decline it.
+    if (this.status() === 'connecting' && !this.sessionId()) return;
+    if (this.inCall() || this.status() === 'outgoing' || this.status() === 'ending' || cur) {
+      void this.signaling.rejectCall(info.sessionId).catch(() => undefined);
+      return;
+    }
+    this.callError.set(null);
     this.incomingCall.set(info);
     this.status.set('incoming');
     this.callType.set(info.callType);
     this.localCallerName.set(info.callerName);
     this.armIncomingRingTimeout();
+  }
+
+  /** Caller side: the callee answered on their phone's native call screen
+   *  and is joining. Stop "Ringing…" and the 60 s no-answer timer; wait up
+   *  to ANSWERING_JOIN_MS for their ParticipantJoined (which ends ringing
+   *  via markActive) before giving up. */
+  private onCallAnswering(p: { sessionId: string; userId: string }) {
+    if (p.sessionId !== this.sessionId() || this.status() !== 'outgoing') return;
+    this.calleeAnswering.set(true);
+    this.clearOutgoingRingTimer();
+    this.outgoingRingTimer = setTimeout(() => {
+      if (this.status() === 'outgoing') {
+        this.callError.set('Could not connect.');
+        this.toast.info('They answered, but the call could not connect.');
+        void this.cancelOutgoing();
+      }
+    }, WebrtcService.ANSWERING_JOIN_MS);
   }
 
   /** This user accepted/declined on ANOTHER device — dismiss the ring here.
@@ -375,11 +486,28 @@ export class WebrtcService implements OnDestroy {
     }
   }
 
-  private onCallRejected(p: { sessionId: string; userId: string }) {
-    if (p.sessionId === this.sessionId()) {
-      this.callError.set('Call declined.');
-      this.teardown('idle');
+  private onCallRejected(p: { sessionId: string; userId: string; sessionEnded?: boolean }) {
+    if (p.sessionId !== this.sessionId()) return;
+    // One group member / a mid-call invitee declining is not the end of the
+    // call — it used to tear down the caller's live call with everyone else.
+    const ended = p.sessionEnded ?? this.remoteParticipants().length === 0;
+    if (!ended) {
+      this.toast.info(`${this.nameOf(p.userId) ?? 'They'} declined.`);
+      return;
     }
+    this.callError.set('Call declined.');
+    // The call screens are gone after teardown — say it where it's seen.
+    this.toast.info(`${this.outgoingPeer()?.isGroup ? 'Everyone' : (this.nameOf(p.userId) ?? 'They')} declined the call.`);
+    this.teardown('idle');
+  }
+
+  /** Display name of a user we share a conversation with (best effort). */
+  private nameOf(userId: string): string | null {
+    const op = this.outgoingPeer();
+    if (op && !op.isGroup && op.id === userId && op.name) return op.name;
+    return this.chat.conversations()
+      .flatMap(c => c.participants ?? [])
+      .find(p => p.userId === userId)?.displayName ?? null;
   }
 
   private onCallCancelled(p: { sessionId: string }) {
@@ -405,7 +533,10 @@ export class WebrtcService implements OnDestroy {
     if (p.sessionId !== this.sessionId()) return;
     this.tearDownPeer(p.userId);
     this.remoteParticipants.update(list => list.filter(u => u !== p.userId));
-    if (this.remoteParticipants().length === 0) this.teardown('idle');
+    // Alone now: LEAVE on the server too. A local-only teardown left us in
+    // the server session (shown "in a call", reported busy) while members
+    // still ringing could "accept" into a call nobody was on.
+    if (this.remoteParticipants().length === 0) void this.leaveCall().catch(() => this.teardown('idle'));
   }
 
   /**
@@ -732,6 +863,7 @@ export class WebrtcService implements OnDestroy {
     this.outgoingRingTimer = setTimeout(() => {
       if (this.status() === 'outgoing') {
         this.callError.set('No answer.');
+        this.toast.info('No answer.');
         void this.cancelOutgoing();
       }
     }, 60_000);
@@ -784,6 +916,9 @@ export class WebrtcService implements OnDestroy {
     this._maxParticipantsSeen.set(0);
     this.callStartedAt.set(null);
     this.localCallerName.set(null);
+    this.outgoingPeer.set(null);
+    this.ringingDevices.set(false);
+    this.calleeAnswering.set(false);
     this.currentSource = undefined;
     this.usingTurnRelay.set(false);
     this.micMuted.set(false);
@@ -798,7 +933,7 @@ export class WebrtcService implements OnDestroy {
 
   private handleFatal(err: unknown, where: string) {
     console.error(`[webrtc] ${where} failed`, err);
-    this.callError.set((err as Error)?.message ?? 'Call failed.');
+    this.callError.set(cleanHubError(err).message);
     this.teardown('idle');
   }
 

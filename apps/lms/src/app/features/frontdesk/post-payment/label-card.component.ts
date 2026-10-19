@@ -8,11 +8,21 @@ import {
   OnChanges,
   Output,
   ViewChild,
+  inject,
 } from '@angular/core';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
+import bwipjs from 'bwip-js/browser';
 import { OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
+import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
+import { tubeColor } from '../../../shared/utils/tube-colors';
+import { tubeChosenSpecimen } from '../../../shared/utils/micro-specimen';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
+import { FittedLine, QUIET_MODULES, TubeLabelGeometry, code128Modules, fitLabelText, tubeLabelGeometry } from '../../../core/printer/label-layout';
+import { LabelData, labelTextLines } from '../../../core/printer/label-render';
+import { formatAgeParts, patientAge } from '../../../shared/utils/patient-age';
 
 export interface TubeSpec {
   label: string;
@@ -20,8 +30,13 @@ export interface TubeSpec {
   volume: string;
 }
 
+// Keyed by DEPARTMENT CODE (or name). HEM / MIC are the codes going forward
+// (owner 2026-09-26: department codes follow the test codes); the old HAE /
+// HAEM / MICRO keys stay for departments that still carry them.
 const TUBE_MAP: Record<string, TubeSpec> = {
   HAEM:         { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
+  HAE:          { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
+  HEM:          { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
   HAEMATOLOGY:  { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
   ENDO:         { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   ENDOCRINOLOGY:{ label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
@@ -29,6 +44,7 @@ const TUBE_MAP: Record<string, TubeSpec> = {
   BIOCHEM:      { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   BIOCHEMISTRY: { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   MICRO:        { label: 'Red',       color: 'red',       volume: '5 mL' },
+  MIC:          { label: 'Red',       color: 'red',       volume: '5 mL' },
   MICROBIOLOGY: { label: 'Red',       color: 'red',       volume: '5 mL' },
   CPA:          { label: 'Container', color: 'container', volume: '30 mL' },
   PATHOLOGY:    { label: 'Container', color: 'container', volume: '30 mL' },
@@ -37,7 +53,62 @@ const TUBE_MAP: Record<string, TubeSpec> = {
 };
 const DEFAULT_TUBE: TubeSpec = { label: 'Grey', color: 'grey', volume: '5 mL' };
 
+/** Chip styling keys this card has CSS for. Anything else falls to grey — the
+ *  chip is a visual aid, and a missing swatch beats a mislabelled tube. */
+const CHIP_BY_KEY: Readonly<Record<string, TubeSpec['color']>> = {
+  edta: 'lavender', sst: 'yellow', urine: 'yellow', plain: 'red',
+  heparin: 'green', sterile: 'container', blood_culture: 'container', fluoride: 'grey',
+  citrate: 'grey', esr: 'grey', trace: 'grey', multiple: 'grey',
+};
+
+/**
+ * The tube printed on the label.
+ *
+ * The test's configured container wins. This used to read the DEPARTMENT code
+ * and nothing else, so a test whose container was set to Red in Test Master
+ * still printed "Lavender" if it sat in Haematology — while the collection
+ * screen, which does honour the field, drew the red tube. Two screens in one
+ * workflow disagreeing about which tube to draw is exactly the failure the
+ * phlebotomist pays for.
+ *
+ * The department map stays as the fallback for samples with no container
+ * configured, which is how every pre-NABL test still prints something useful.
+ */
 export function tubeSpec(s: OrderSample): TubeSpec {
+  const tc = tubeColor(s.tubeColor);
+  if (tc) {
+    return {
+      label: tc.short,
+      color: CHIP_BY_KEY[tc.key] ?? 'grey',
+      // Volume isn't carried on the container itself; keep the department's
+      // conventional draw volume rather than inventing one.
+      volume: deptTube(s).volume,
+    };
+  }
+  return deptTube(s);
+}
+
+/** Blood vacutainers — one per colour, never one per specimen. */
+const BLOOD_TUBE_KEYS = new Set(['sst', 'edta', 'fluoride', 'citrate', 'plain', 'heparin', 'esr', 'red', 'lavender', 'grey', 'blue', 'gold', 'green', 'black']);
+
+/** The specimen CHOSEN at the desk that this tube's label names — only for
+ *  pots/bottles (tubes group by it server-side); a blood vacutainer is one
+ *  tube per colour whatever the line's specimen, so it names none. */
+export function labelSpecimen(s: OrderSample): string | null {
+  const key = (s.tubeColor ?? '').trim().toLowerCase();
+  if (key && BLOOD_TUBE_KEYS.has(key)) return null;
+  return tubeChosenSpecimen(s);
+}
+
+/** The label's tube line: "Sterile · Urine" when a specimen was chosen,
+ *  else "{tube} · {volume}" as before. */
+export function labelTubeLine(s: OrderSample): string {
+  const spec = tubeSpec(s);
+  const chosen = labelSpecimen(s);
+  return chosen ? `${spec.label} · ${chosen}` : `${spec.label} · ${spec.volume}`;
+}
+
+function deptTube(s: OrderSample): TubeSpec {
   const code = (s.department?.code ?? s.department?.name ?? '').toUpperCase().trim();
   return TUBE_MAP[code] ?? DEFAULT_TUBE;
 }
@@ -65,41 +136,63 @@ export function tubeSpec(s: OrderSample): TubeSpec {
           Label {{ num }}
           <span class="pf-lc__dept">· {{ deptName }}</span>
           @if (isOutsourced) {
-            <span class="pf-lc__out">⇗ {{ vendorName || 'OUTSOURCED' }}</span>
+            <span class="pf-lc__out">OUTSOURCED</span>
           }
         </span>
         <span class="pf-lc__tube-chip" [attr.data-color]="spec.color">
           <span class="pf-lc__tube-dot"></span>
-          {{ spec.label }} · {{ spec.volume }}
+          {{ tubeLine }}
         </span>
       </div>
 
-      <!-- White label preview area -->
+      <!-- The label itself, drawn at its PHYSICAL size (mm) — landscape:
+           patient text on the left, the code beside it on the right. On
+           screen it is zoomed to fit the card; the print path clones the
+           .pf-tl node onto its own W×H mm page (printTubeLabels). -->
       <div class="pf-lc__preview" [attr.data-color]="spec.color">
         <div class="pf-lc__stripe"></div>
-        <div class="pf-lc__preview-grid">
-          <!-- Left: patient info + barcode -->
-          <div class="pf-lc__preview-left">
-            <p class="pf-lc__pname">
-              {{ patientName }}
-              @if (agesex) { <span class="pf-lc__agesex"> {{ agesex }}</span> }
-            </p>
-            <p class="pf-lc__demo">
-              MRN {{ mrnStr }}
-              @if (dobStr) { · DOB {{ dobStr }} }
-            </p>
-            <div class="pf-lc__bar-wrap">
-              <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
+        <div class="pf-lc__stage" [style.zoom]="screenZoom">
+          <div class="pf-tl" [attr.data-code]="codeMode"
+               [attr.data-w-mm]="size.widthMm" [attr.data-h-mm]="size.heightMm"
+               [style.width.mm]="size.widthMm" [style.height.mm]="size.heightMm"
+               [style.padding.mm]="geo.padMm" [style.column-gap.mm]="geo.gapMm">
+            <div class="pf-tl__text" [style.width.mm]="geo.text.w" [style.height.mm]="geo.text.h">
+              @for (l of textLines; track l.role) {
+                @switch (l.role) {
+                  @case ('flag') {
+                    <!-- Same label as any tube — only this word is added (owner). -->
+                    <p class="pf-tl__line pf-lc__outsourced" [style.font-size.mm]="l.fontMm">OUTSOURCED</p>
+                  }
+                  @case ('name') {
+                    <p class="pf-tl__line pf-lc__pname" [style.font-size.mm]="l.fontMm">{{ patientName }}@if (agesex) { <span class="pf-lc__agesex">{{ agesex }}</span>}</p>
+                  }
+                  @case ('meta') {
+                    <p class="pf-tl__line pf-lc__demo" [style.font-size.mm]="l.fontMm">MRN {{ mrnStr }}</p>
+                  }
+                  @case ('dept') {
+                    <p class="pf-tl__line pf-lc__deptcode" [style.font-size.mm]="l.fontMm">{{ deptCode }}</p>
+                  }
+                  @case ('id') {
+                    <p class="pf-tl__line pf-lc__sid" [style.font-size.mm]="l.fontMm">{{ barcode }}</p>
+                  }
+                  @case ('extra') {
+                    <!-- The specimen chosen at the desk (pots / bottles only). -->
+                    <p class="pf-tl__line pf-lc__specimen" [style.font-size.mm]="l.fontMm">{{ specimen }}</p>
+                  }
+                }
+              }
+            </div>
+            <div class="pf-tl__code pf-lc__codes" [style.width.mm]="geo.code.w" [style.height.mm]="geo.code.h">
+              <!-- 1-D: the box carries the 10-module quiet zones as padding. -->
+              <div class="pf-lc__bar-wrap" [class.pf-lc__hidden]="!showBarcode"
+                   [style.padding-inline.mm]="barQuietMm">
+                <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
+              </div>
+              <div #qrBox class="pf-lc__qr pf-lc__qr-wrap" [class.pf-lc__hidden]="!showQr" role="img" [attr.aria-label]="'QR ' + qrValue"></div>
+              <div #dmxBox class="pf-lc__qr pf-lc__qr-wrap" [class.pf-lc__hidden]="!showDataMatrix" role="img" [attr.aria-label]="'Data Matrix ' + barcode"></div>
             </div>
           </div>
-          <!-- Right: QR + dept code + volume -->
-          <div class="pf-lc__preview-right">
-            <canvas #qrCanvas class="pf-lc__qr" [attr.aria-label]="'QR ' + barcode"></canvas>
-            <span class="pf-lc__deptcode">{{ deptCode }}</span>
-            <span class="pf-lc__vol">{{ spec.volume }}</span>
-          </div>
         </div>
-        <p class="pf-lc__bartext">{{ barcode }}</p>
       </div>
 
       <!-- Tests in this tube -->
@@ -234,15 +327,17 @@ export function tubeSpec(s: OrderSample): TubeSpec {
     .pf-lc__tube-chip[data-color='container'] { background: var(--glass-bg); border-color: var(--border-primary); color: var(--text-tertiary); }
     .pf-lc__tube-chip[data-color='container'] .pf-lc__tube-dot { background: #d1d5db; }
 
-    /* ── White label preview (always light — represents printed paper label) ── */
+    /* ── White label preview (always light — represents the printed label) ── */
     .pf-lc__preview {
       position: relative;
       margin: 10px 14px;
       border-radius: 10px;
-      background: #ffffff;
+      background: #f1f5f9;
       border: 1px solid #e5e7eb;
       overflow: hidden;
-      padding: 12px 12px 8px 20px;
+      padding: 10px 10px 10px 18px;
+      display: flex;
+      justify-content: center;
     }
     .pf-lc__stripe {
       position: absolute;
@@ -257,83 +352,63 @@ export function tubeSpec(s: OrderSample): TubeSpec {
     .pf-lc__preview[data-color='red']      .pf-lc__stripe { background: #fca5a5; }
     .pf-lc__preview[data-color='green']    .pf-lc__stripe { background: #6ee7b7; }
     .pf-lc__preview[data-color='container'] .pf-lc__stripe { background: #e5e7eb; }
+    .pf-lc__stage { line-height: 0; }
 
-    .pf-lc__preview-grid {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: start;
+    /* ── The physical label (mm). Black on white in every theme. ── */
+    .pf-tl {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      background: #ffffff;
+      color: #000000;
+      overflow: hidden;
+      box-shadow: 0 0 0 0.2mm #cbd5e1;
+      font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .pf-lc__preview-left {
+    .pf-tl__text {
+      flex: none;
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      justify-content: center;
+      gap: 0;
     }
-    .pf-lc__pname {
+    .pf-tl__line {
       margin: 0;
-      font-size: 13.5px;
-      font-weight: 700;
-      color: #0f172a;
-      line-height: 1.3;
+      line-height: 1.12;
+      color: #000000;
+      /* Never truncated: a line that still doesn't fit at its smallest size
+         wraps (even mid-token) instead of being cut. */
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
-    .pf-lc__agesex {
-      font-size: 11.5px;
-      font-weight: 600;
-      color: #374151;
-    }
-    .pf-lc__demo {
-      margin: 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #475569;
-      letter-spacing: 0.02em;
-    }
-    .pf-lc__bar-wrap {
-      margin-top: 6px;
-      overflow: hidden;
-    }
-    .pf-lc__bar {
-      display: block;
-      height: 36px;
-      width: auto;
-      max-width: 100%;
-    }
-
-    .pf-lc__preview-right {
+    .pf-tl__code {
+      flex: none;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      gap: 3px;
-      flex-shrink: 0;
-    }
-    .pf-lc__qr {
-      display: block;
-      width: 76px;
-      height: 76px;
-      image-rendering: pixelated;
-    }
-    .pf-lc__deptcode {
-      font-size: 10px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #374151;
-    }
-    .pf-lc__vol {
-      font-size: 9.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #6b7280;
+      justify-content: center;
+      margin-left: auto;
+      line-height: 0;
     }
 
-    .pf-lc__bartext {
-      margin: 6px 0 0;
-      font-size: 9px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #64748b;
-      letter-spacing: 0.04em;
-    }
+    /* Printed on the label itself — black on the white label, bold caps. */
+    .pf-lc__outsourced { font-weight: 800; letter-spacing: 0.08em; }
+    .pf-lc__pname { font-weight: 700; }
+    .pf-lc__agesex { font-weight: 600; white-space: nowrap; margin-left: 0.3em; }
+    .pf-lc__demo { font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace; font-weight: 600; }
+    .pf-lc__deptcode { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    /* Sample ID — the label's primary identifier. */
+    .pf-lc__sid { font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace; }
+    .pf-lc__specimen { font-weight: 700; }
+    .pf-lc__hidden { display: none !important; }
+    .pf-lc__bar-wrap { box-sizing: border-box; width: 100%; height: 100%; background: #fff; }
+    .pf-lc__bar { display: block; width: 100%; height: 100%; }
+    .pf-lc__qr { width: 100%; height: 100%; }
+    .pf-lc__qr ::ng-deep svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
     .pf-lc__out {
       margin-left: 6px;
       padding: 1px 7px;
@@ -341,9 +416,9 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.04em;
-      background: rgba(236, 72, 153, 0.16);
-      color: #ec4899;
-      border: 1px solid rgba(236, 72, 153, 0.4);
+      background: var(--pf-chip-bg, rgba(100, 116, 139, 0.12));
+      color: var(--text-secondary);
+      border: 1px solid var(--pf-line, var(--border-primary));
       white-space: nowrap;
     }
 
@@ -461,6 +536,7 @@ export function tubeSpec(s: OrderSample): TubeSpec {
       .pf-lc--printing .pf-lc__hdr,
       .pf-lc--printing .pf-lc__footer { display: none !important; }
       .pf-lc--printing .pf-lc__preview { margin: 0 !important; border-radius: 4px !important; }
+      .pf-tl { box-shadow: none !important; }
     }
 
     /* ── Cross-platform overrides (additive only) ──────────────
@@ -509,22 +585,85 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   @Output() downloadRequest = new EventEmitter<void>();
 
   @ViewChild('barSvg', { static: true }) barSvg!: ElementRef<SVGElement>;
-  @ViewChild('qrCanvas', { static: true }) qrCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('qrBox', { static: true }) qrBox!: ElementRef<HTMLDivElement>;
+  @ViewChild('dmxBox', { static: true }) dmxBox!: ElementRef<HTMLDivElement>;
+
+  private readonly labelCfg = inject(BranchLabConfigService);
+  private readonly printCfg = inject(PrintConfigService);
+  constructor() { this.labelCfg.ensureLoaded(); }
+
+  /** The station's label stock (Printing → Label), mm. */
+  get size(): { widthMm: number; heightMm: number } {
+    // Tolerant of partial test doubles; defaults = PrintConfig defaults.
+    const c = typeof this.printCfg?.config === 'function' ? this.printCfg.config() : null;
+    return { widthMm: c?.labelWidthMm || 50, heightMm: c?.labelHeightMm || 20 };
+  }
+  /** Landscape geometry: text left, code right (shared with the bitmap path). */
+  get geo(): TubeLabelGeometry {
+    const { widthMm, heightMm } = this.size;
+    return tubeLabelGeometry(widthMm, heightMm, this.codeMode,
+      this.codeMode === 'barcode' ? code128Modules(this.barcode) || undefined : undefined);
+  }
+  /** Barcode quiet zone each side (10 × narrow bar), mm. */
+  get barQuietMm(): number { return this.geo.xMm ? QUIET_MODULES * this.geo.xMm : 0; }
+  /** What the label prints, as data — the same line list the bitmap uses. */
+  get labelData(): LabelData {
+    return {
+      code: this.barcode,
+      patientName: this.patientName,
+      ageSex: this.agesex,
+      mrn: this.mrnStr,
+      deptCode: this.deptCode,
+      tube: this.specimen ?? undefined,
+      outsourced: this.isOutsourced,
+    };
+  }
+  /** Text lines sized to the text column (shrink → wrap; never cut). */
+  get textLines(): FittedLine[] {
+    const g = this.geo;
+    return fitLabelText(labelTextLines(this.labelData), g.text.w, g.text.h);
+  }
+  /** On screen the mm-sized label is zoomed to ~300 px wide (never > 1.6×). */
+  get screenZoom(): number {
+    return Math.round(Math.min(1.6, 300 / (this.size.widthMm * 3.7795)) * 100) / 100;
+  }
 
   get spec(): TubeSpec { return tubeSpec(this.sample); }
+  get specimen(): string | null { return labelSpecimen(this.sample); }
+  get tubeLine(): string { return labelTubeLine(this.sample); }
   get num(): string { return String(this.index + 1).padStart(2, '0'); }
-  get deptName(): string { return (this.sample.department?.name ?? 'Sample').toUpperCase(); }
-  get deptCode(): string { return (this.sample.department?.code ?? '').toUpperCase(); }
+  /** Every department on the tube — one label for a shared tube names them all. */
+  get deptName(): string { return tubeDepartmentLabel(this.sample).toUpperCase(); }
+  get deptCode(): string { return tubeDepartmentCodes(this.sample); }
+  /** The Sample ID (e.g. MIC-2607-00001) — what the 1D barcode encodes. */
   get barcode(): string { return this.sample.barcode ?? this.sample.id; }
+  /** QR payload = MRN + Sample ID (the 2D code carries both; the 1D barcode
+   *  stays short with just the Sample ID). Drops the MRN when absent. */
+  get qrValue(): string {
+    const mrn = this.patient?.mrn?.trim();
+    return mrn ? `${mrn}|${this.barcode}` : this.barcode;
+  }
+  /** Admin choice — a SINGLE code: 'barcode' | 'qr' | 'datamatrix' (default
+   *  barcode). A tube label can't fit more than one. */
+  get codeMode(): 'barcode' | 'qr' | 'datamatrix' {
+    const m = this.labelCfg.config()?.labelCodeMode ?? 'barcode';
+    return m === ('both' as string) ? 'barcode' : m; // legacy 'both' → barcode
+  }
+  get showBarcode(): boolean { return this.codeMode === 'barcode'; }
+  get showQr(): boolean { return this.codeMode === 'qr'; }
+  get showDataMatrix(): boolean { return this.codeMode === 'datamatrix'; }
   get isOutsourced(): boolean { return !!this.sample.outsourcedVendorId; }
   get patientName(): string { return this.patient?.displayName ?? 'Patient'; }
 
   get agesex(): string {
     const p = this.patient;
     if (!p) return '';
-    const age = p.age ?? (p.dateOfBirth ? this.calcAge(p.dateOfBirth) : null);
+    // Shared patient-age helper: DOB first (live). Adults keep "34M"; an
+    // infant prints "8M F" / "12D M" (never a bare "0").
+    const a = patientAge(p);
     const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
-    return [age, s].filter(Boolean).join('');
+    if (a && a.years < 1) return [formatAgeParts(a, 'Y'), s].filter(Boolean).join(' ');
+    return [a ? String(a.years) : '', s].filter(Boolean).join('');
   }
 
   get mrnStr(): string {
@@ -538,35 +677,52 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   get dobStr(): string { return this.patient?.dateOfBirth ?? ''; }
 
   ngAfterViewInit(): void { this.render(); }
-  ngOnChanges(): void { if (this.barSvg && this.qrCanvas) this.render(); }
+  ngOnChanges(): void { if (this.barSvg && this.qrBox) this.render(); }
 
   private render(): void {
     const code = this.barcode;
     if (!code) return;
+    // 1D barcode encodes ONLY the Sample ID (short → keeps the bars narrow).
+    // Drawn at 1 unit per module, then stretched to the bar box through the
+    // viewBox so every module prints the same width (the quiet zones are the
+    // wrapper's padding).
     try {
-      JsBarcode(this.barSvg.nativeElement, code, {
+      const svg = this.barSvg.nativeElement;
+      JsBarcode(svg, code, {
         format: 'CODE128',
         displayValue: false,
         margin: 0,
-        height: 36,
-        width: 1.3,
+        height: 100,
+        width: 1,
         background: '#ffffff',
-        lineColor: '#0f172a',
+        lineColor: '#000000',
       });
+      const w = parseFloat(svg.getAttribute('width') ?? '0') || code128Modules(code);
+      svg.setAttribute('viewBox', `0 0 ${w} 100`);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.setAttribute('shape-rendering', 'crispEdges');
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.removeAttribute('style');
     } catch { /* ignore un-encodable strings */ }
-    QRCode.toCanvas(this.qrCanvas.nativeElement, code, {
-      margin: 1,
-      width: 76,
-      color: { dark: '#0f172a', light: '#ffffff' },
-    }).catch(() => {});
+    // QR encodes MRN + Sample ID — vector SVG so it stays crisp at any size.
+    // All three codes are drawn (cheap) so the admin's code choice, which can
+    // load after first render, only toggles visibility.
+    {
+      QRCode.toString(this.qrValue, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } })
+        .then((svg: string) => { this.qrBox.nativeElement.innerHTML = svg; })
+        .catch(() => {});
+    }
+    // Data Matrix (2D) encodes ONLY the Sample ID (like the 1D barcode) but
+    // fits a much smaller square — for narrow tube labels.
+    {
+      try {
+        this.dmxBox.nativeElement.innerHTML = bwipjs.toSVG({
+          bcid: 'datamatrix', text: code, paddingwidth: 1, paddingheight: 1,
+          barcolor: '000000', backgroundcolor: 'ffffff',
+        });
+      } catch { /* ignore un-encodable strings */ }
+    }
   }
 
-  private calcAge(dob: string): number {
-    const d = new Date(dob);
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    return age;
-  }
 }

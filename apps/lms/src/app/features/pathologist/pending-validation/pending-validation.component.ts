@@ -1,7 +1,13 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
+import { ThemeService } from '../../../core/services/theme.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
@@ -14,23 +20,46 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent, needsAckBy } from '../../../shared/models/critical-result.model';
+import { plural } from '../../../shared/utils/plural';
+import { pickReassignee } from '../reassign-picker';
+import { OrderPriority } from '../../../shared/utils/lab-priority';
+import {
+  Enriched, QueueTile, ValidationScope,
+  departmentsIn, enrich, groupBySample, isCritical, matchesQuery, nextTile, tileStatus,
+} from './pending-validation.logic';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 type Tab = 'mine' | 'all';
-type Level = 'urgent' | 'high' | 'normal';
-type Enriched = OrderTest & { _level: Level; _remainingMin: number };
 
-interface ResultSnapshot {
-  values?: Record<string, unknown>;
-  note?: string;
-  flags?: { critical: boolean; notifications: string[] };
-}
-
+/**
+ * /pathologist — the consultant's validation queue.
+ *
+ * New design (docs/PF-PATTERN.md → "Pathologist queue"): band (search + All ·
+ * Assigned to me) → QUEUE card (one tile per tube, sample ID first, one
+ * status word, Urgent / Normal (order priority) groups, department filter) + SCOPE
+ * side card (the consultant's departments, today's numbers, the ONE primary
+ * "Review next"). Tapping a tube zooms into the review screen (the same
+ * sample screen the tech entered on, ?validate=1; culture → culture case).
+ *
+ * The queue is DEPARTMENT-SCOPED on the server: a consultant assigned to
+ * departments (Users & roles / Lab settings validator pools) only receives
+ * those departments' results; unassigned consultants and admins see all.
+ * Classic design keeps its original look.
+ */
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [
+  imports: [DailyNoComponent, BusyDirective, 
+    ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
     AvatarComponent,
@@ -40,10 +69,219 @@ interface ResultSnapshot {
     SkeletonComponent,
     TileComponent,
     TouchButtonComponent,
-    KpiStripComponent
+    KpiStripComponent,
+    HeroBandComponent,
+    TileGridDirective,
+    RegnoPromptComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (theme.isNewDesign()) {
+    <!-- ═══ New design (docs/PF-PATTERN.md → "Pathologist queue") ═══
+         Band: search + ONE neutral filter (All · Assigned to me) in the pill,
+         Refresh as a quiet band action. Body: the QUEUE card (tiles per tube,
+         URGENT / HIGH / ON TIME groups) + the SCOPE side card (the consultant's
+         departments, today's numbers, the ONE primary: Review next). Phones:
+         the side card is a sheet; its summary + primary ride the bottom bar. -->
+    <section class="pf-page pv-page">
+      <header class="pf-page__header px-4 md:px-8 lg:px-10">
+        <pf-hero-band
+          placeholder="Search patient · MRN · sample ID · test…"
+          [value]="query()"
+          (valueChange)="query.set($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pv-seg" [options]="ndTabs()" [value]="tab()" (valueChange)="setTab($any($event))" />
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
+                    [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
+                    aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              <span class="pv-refresh__t">Refresh</span>
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      </header>
+
+      <div class="pf-page__body pf-body pf-body--split pv-body px-4 md:px-8 lg:px-10 pt-2 pb-6">
+        <!-- ── Main card: the queue ── -->
+        <section class="pf-card pv-queue" aria-label="Pending validation">
+          <header class="pf-card__head pv-queue__head">
+            <span class="pf-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </span>
+            <h2 class="pf-card__label">Pending validation</h2>
+            <span class="pv-count pf-num">{{ countLabel() }}</span>
+            <span class="pf-card__spacer"></span>
+            @if (deptFilters().length > 1) {
+              <pf-segmented class="pv-depts" [options]="deptSegmentOptions()" [value]="dept()" (valueChange)="dept.set($any($event))" />
+            }
+          </header>
+
+          <div class="pf-card__body pv-scroll">
+            @if (loading() && rows().length === 0) {
+              <ul class="pv-grid" pfTileGrid aria-hidden="true">
+                @for (i of [0,1,2]; track i) {
+                  <li><div class="pv-tile pv-tile--skel pf-tile-fill">
+                    <pf-skeleton variant="line" width="40%" height="16px"></pf-skeleton>
+                    <pf-skeleton variant="line" width="70%"></pf-skeleton>
+                    <pf-skeleton variant="line" width="55%" height="10px"></pf-skeleton>
+                  </div></li>
+                }
+              </ul>
+            } @else if (visibleTiles().length === 0) {
+              <div class="pf-empty pv-empty">
+                <span class="pf-empty__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <p class="pf-empty__title">{{ emptyTitle() }}</p>
+                <p class="pf-empty__body">{{ emptyBody() }}</p>
+              </div>
+            } @else {
+              @for (grp of ndGroups(); track grp.priority) {
+                <div class="pv-group" [attr.data-priority]="grp.priority">
+                  <h3 class="pv-group__h">
+                    <span class="pv-group__dot" [attr.data-priority]="grp.priority" aria-hidden="true"></span>
+                    {{ grp.label }}
+                    <span class="pv-group__n pf-num">{{ grp.tiles.length }}</span>
+                  </h3>
+                  <ul class="pv-grid" pfTileGrid>
+                    @for (g of grp.tiles; track g.key) {
+                      @let st = status(g);
+                      <li>
+                        <div class="pv-tile pf-tile-fill" role="button" tabindex="0"
+                             [attr.data-priority]="g.priority" [attr.data-status]="st.key"
+                             [class.pv-tile--mine]="g.mine"
+                             [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
+                             [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
+                             (click)="openOrder(g)" (keydown.enter)="openOrder(g)" (keydown.space)="$event.preventDefault(); openOrder(g)">
+                          <div class="pv-tile__top">
+                            <span class="pv-tile__id pf-num">{{ g.sampleLabel }}</span>
+                            <span class="pv-status" [attr.data-tone]="st.tone">
+                              <span class="pv-status__dot" aria-hidden="true"></span>{{ st.label }}
+                            </span>
+                          </div>
+                          <p class="pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
+                          <p class="pv-tile__meta pf-num">{{ tileMeta(g) }}</p>
+                          <p class="pv-tile__tests">{{ g.testNames.join(' · ') }}</p>
+                          <div class="pv-tile__foot">
+                            @if (g.mine) {
+                              <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span>
+                            }
+                            <span class="pv-tile__spacer"></span>
+                            @if (unacknowledged(g)) {
+                              <!-- NABL: the explicit acknowledgement of the tile's critical value(s). -->
+                              <button type="button" class="pf-rowact pv-ack" [class.pf-rowact--icon]="!web()"
+                                      [disabled]="acking() === g.key"
+                                      [attr.aria-label]="'Acknowledge critical result, sample ' + g.sampleLabel" title="Acknowledge critical result"
+                                      (click)="$event.stopPropagation(); acknowledge(g)">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                <span class="pf-rowact__t">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</span>
+                              </button>
+                            }
+                            <button type="button" class="pf-rowact pv-review" [class.pf-rowact--icon]="!web()"
+                                    [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
+                                    (click)="$event.stopPropagation(); openOrder(g)">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                              <span class="pf-rowact__t">Review</span>
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+            }
+          </div>
+        </section>
+
+        <!-- ── Side card: the consultant's scope + today + the ONE primary ── -->
+        @if (sheetOpen()) { <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
+        <aside class="pf-card pv-side" [class.pf-sheet]="sheetOpen()" [class.pv-side--open]="sheetOpen()"
+               aria-label="Your scope" [attr.role]="sheetOpen() ? 'dialog' : null" [attr.aria-modal]="sheetOpen() ? true : null">
+          <span class="pf-sheet__handle" aria-hidden="true"></span>
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7"/></svg>
+            </span>
+            <h2 class="pf-card__label">Your scope</h2>
+            <span class="pf-card__spacer"></span>
+            @if (sheetOpen()) {
+              <button type="button" class="pf-btn pf-btn--icon pv-side__x" aria-label="Close" (click)="sheetOpen.set(false)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            }
+          </header>
+          <div class="pf-card__body pv-side__body">
+            <!-- Missing registration number: it prints under this
+                 consultant's signature — they can add it themselves. -->
+            <pf-regno-prompt />
+            <p class="pv-side__h">Departments</p>
+            <div class="pv-side__depts">
+              @if (scope()?.scoped) {
+                @for (d of scope()!.departments; track d.id) {
+                  <span class="pf-chip pf-chip--static pv-dept">{{ d.name }}</span>
+                }
+              } @else {
+                <span class="pf-chip pf-chip--static pv-dept">All departments</span>
+              }
+            </div>
+            <p class="pv-side__note">
+              @if (scope()?.scoped) {
+                You see and sign only these departments' results.
+              } @else if (isAdmin()) {
+                As an admin you see every department.
+              } @else {
+                No departments are assigned to you yet, so you see every department. An admin can assign yours in Users &amp; roles.
+              }
+            </p>
+
+            <p class="pv-side__h">Today</p>
+            <dl class="pv-stats">
+              <div class="pv-stat"><dt>Pending</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().pending }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().overdue }}}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().critical }}}</dd></div>
+              <div class="pv-stat"><dt>Assigned to you</dt><dd class="pf-num">@if (statsSkel()) {<pf-skeleton variant="line" width="28px" height="16px"></pf-skeleton>} @else {{{ stats().mine }}}</dd></div>
+              @if (scope(); as s) {
+                <div class="pv-stat"><dt>Validated today</dt><dd class="pf-num">{{ s.validatedToday }}</dd></div>
+                <div class="pv-stat"><dt>By you</dt><dd class="pf-num">{{ s.validatedTodayByMe }}</dd></div>
+              }
+            </dl>
+            <p class="pv-side__note">Open a sample to review every test on the tube, then validate, reject, reassign or send it back for correction.</p>
+          </div>
+          <footer class="pf-card__foot">
+            <button type="button" class="pf-btn pf-span pv-next"
+                    [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
+                    [disabled]="!next()" (click)="reviewNext()">
+              {{ next() ? 'Review next · ' + next()!.sampleLabel : (statsSkel() ? 'Loading the queue…' : 'Nothing to review') }}
+            </button>
+          </footer>
+        </aside>
+      </div>
+
+      <!-- Phones: the side card's summary + its primary, above the navbar. -->
+      <div class="pf-bottombar pv-bottombar">
+        <button type="button" class="pf-bottombar__info pv-bottombar__info" (click)="sheetOpen.set(true)"
+                aria-label="Show your scope and today's numbers">
+          <span class="pf-num">{{ stats().pending }}</span> pending
+          @if (stats().overdue) { · <span class="pv-bottombar__warn pf-num">{{ stats().overdue }} overdue</span> }
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+        <button type="button" class="pf-btn pv-next pv-next--bar"
+                [class.pf-btn--primary]="!!next()" [class.pf-btn--secondary]="!next()"
+                [disabled]="!next()" (click)="reviewNext()">Review next</button>
+      </div>
+    </section>
+    } @else {
     <section class="pv-page px-4 md:px-8 pt-6">
       <div class="pv-head">
         <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
@@ -51,7 +289,8 @@ interface ResultSnapshot {
           eyebrow="Validation queue"
           title="Pending validation"
           subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()" aria-label="Refresh">
+          <pf-touch-btn actions size="sm" variant="secondary" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                        [busy]="loading()" busyLabel="Refreshing…">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
@@ -64,7 +303,7 @@ interface ResultSnapshot {
           </pf-touch-btn>
         </pf-screen-header>
 
-        <div class="mb-5">
+        <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
             [value]="tab()"
@@ -72,6 +311,7 @@ interface ResultSnapshot {
             (valueChange)="setTab($event)">
           </pf-segmented>
         </div>
+        <div class="mb-4"><pf-regno-prompt /></div>
       </div>
 
       <div class="pv-scroll pb-10">
@@ -92,11 +332,11 @@ interface ResultSnapshot {
         </div>
       }
 
-      @for (bucket of buckets(); track bucket.level) {
+      @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-7">
             <div class="flex items-center gap-2 mb-3 px-1">
-              <span class="pf-urg-dot" [class]="'pf-urg-' + bucket.level"></span>
+              <span class="pf-urg-dot" [class]="'pf-urg-' + bucket.priority"></span>
               <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
                     style="color: var(--text-secondary);">
                 {{ bucket.label }}
@@ -108,24 +348,26 @@ interface ResultSnapshot {
             </div>
 
             <div class="space-y-2.5">
-              @for (g of patientGroups(bucket.items); track g.orderId) {
-                <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block">
+              @for (g of sampleGroups(bucket.items); track g.key) {
+                <pf-tile [tone]="rowTone(bucket.priority)" padding="md" class="block"
+                         [pfZoomSource]="[g.key, g.items[0]?.subOrder?.id, g.items[0]?.id]">
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                           (click)="openOrder(g)"
-                          [attr.aria-label]="'Validate ' + g.patientName">
+                          [attr.aria-label]="'Validate ' + g.patientName + ' — ' + g.dept + ' sample'">
                     <pf-avatar [name]="g.displayName" [size]="44"></pf-avatar>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
+                        <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</p>
                         <span class="pv-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                        @if (g.mine) { <pf-chip tone="violet" size="sm">Assigned to you</pf-chip> }
                         @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                       </div>
                       <p class="pv-grp-meta text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
-                        #{{ g.orderId.slice(0,8) }}
+                        {{ g.dept }} · {{ g.sampleLabel }}
                         @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                       </p>
                     </div>
-                    <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
+                    <pf-tat-indicator [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
                          style="color: var(--text-muted);">
@@ -150,9 +392,10 @@ interface ResultSnapshot {
       }
       </div>
     </section>
-
+    }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ===== WORK page: non-scroll app layout on all sizes =====
        :host fills the shell's main area; the page is a flex column whose
        header (KPI + title + tabs) is fixed and the queue scrolls internally,
@@ -179,11 +422,11 @@ interface ResultSnapshot {
 
     .pv-grp-count {
       font-size: 10.5px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-family: inherit; font-variant-numeric: tabular-nums;
       letter-spacing: 0.04em;
       padding: 3px 9px; border-radius: 999px;
       background: rgba(168, 85, 247, 0.14);
-      color: #c4b5fd;
+      color: var(--violet-text);
       border: 1px solid rgba(168, 85, 247, 0.28);
       flex-shrink: 0;
     }
@@ -198,13 +441,8 @@ interface ResultSnapshot {
       background: #ef4444;
       box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
     }
-    .pf-urg-high {
-      background: #f59e0b;
-      box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
-    }
     .pf-urg-normal {
-      background: #10b981;
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+      background: #94a3b8;
     }
 
     /* ===== Phone (<=640): stack expanded result rows so 3 actions don't overflow ===== */
@@ -254,7 +492,7 @@ interface ResultSnapshot {
     }
 
     /* ===== iPad (641-1279): keep one indented column, ensure no horizontal overflow ===== */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       :host .pv-result-row {
         flex-wrap: wrap;
       }
@@ -287,70 +525,180 @@ interface ResultSnapshot {
         min-height: 44px;
       }
     }
+  
+    /* ═══ New design ════════════════════════════════════════════════════
+       Band + QUEUE card + SCOPE side card. No page scroll: only the card
+       bodies scroll. Kit classes carry the look; the rules below place
+       them and draw the tube tile (lab work lists: sample ID primary). */
+    .pv-page {
+      height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .pv-body { gap: 16px; }
+    /* Tablet: the side card stays, narrower. */
+    @media (min-width: 641px) and (max-width: 1023px) {
+      .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
+    }
+
+    /* Band filter: neutral segmented, plain tabular counts. */
+    .pv-seg { flex-shrink: 0; }
+    .pv-seg__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .pv-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+    .pv-seg__count { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pv-seg__item[aria-checked='true'] .pv-seg__count { color: var(--color-violet-600, #7c3aed); }
+
+    /* Queue card header: count is plain muted text, never a pill. */
+    .pv-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pv-depts { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .pv-depts::-webkit-scrollbar { display: none; }
+    .pv-scroll { gap: 18px; padding: 14px 16px 18px; }
+
+    .pv-group__h {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pv-group__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+    /* Group = ORDER priority. Dots: Normal neutral; red only for Urgent. */
+    .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-on); }
+    .pv-group__dot[data-priority='urgent'] { background: var(--red-text, #dc2626); }
+
+    /* The tube tile. Sample ID leads (16.5 / 600, tabular), patient 13 / 500,
+       meta 12 muted. Stripe only for an Urgent order (red). */
+    .pv-tile {
+      position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 132px;
+      padding: 14px 14px 12px 16px; border-radius: var(--pf-radius);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: inherit;
+      cursor: pointer; text-align: left; outline: none;
+      transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
+    }
+    .pv-tile::before {
+      content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
+      background: transparent;
+    }
+    .pv-tile[data-priority='urgent']::before { background: var(--red-text, #dc2626); }
+    @media (hover: hover) and (pointer: fine) {
+      .pv-tile:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); }
+    }
+    .pv-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pv-tile--skel { cursor: default; gap: 10px; }
+    .pv-tile__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .pv-tile__id {
+      min-width: 0; font-size: 16.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .pv-tile__who { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--text-secondary); overflow-wrap: anywhere; }
+    .pv-tile__meta { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); overflow-wrap: anywhere; }
+    .pv-tile__tests { margin: 2px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pv-tile__foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; }
+    .pv-tile__spacer { flex: 1 1 auto; }
+
+    /* ONE status per tile: dot + coloured word, no chip / border / fill. */
+    .pv-status {
+      --pv-tone: var(--green-text, #15803d);
+      flex: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+      font-size: 13px; font-weight: 500; line-height: 20px;
+      color: color-mix(in srgb, var(--pv-tone) 70%, var(--text-primary));
+    }
+    .pv-status[data-tone='amber'] { --pv-tone: var(--amber-text, #b45309); }
+    .pv-status[data-tone='red'] { --pv-tone: var(--red-text, #b91c1c); }
+    .pv-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pv-tone); }
+
+    /* "Assigned to you": quiet text with the one violet mark. */
+    .pv-mine { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .pv-mine__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+
+    .pv-empty { flex: 1 1 auto; justify-content: center; }
+
+    /* Side card: calm type — 11px uppercase muted titles, 12.5–13 body. */
+    .pv-side__body { gap: 10px; padding: 14px 16px; }
+    .pv-side__h { margin: 6px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pv-side__h:first-child { margin-top: 0; }
+    .pv-side__depts { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pv-dept { height: 28px; }
+    .pv-side__note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
+    .pv-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+    .pv-stat {
+      display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--pf-radius-sm);
+      border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+    }
+    .pv-stat dt { font-size: 12px; color: var(--text-tertiary); }
+    .pv-stat dd { margin: 0; font-size: 18px; font-weight: 500; color: var(--text-primary); }
+    .pv-stat[data-warn] dd { color: var(--red-text, #b91c1c); }
+    .pv-next { white-space: normal; text-align: center; line-height: 1.25; }
+    .pv-side__x { width: 44px; min-width: 44px; }
+
+    /* Phones: one column; the side card becomes a sheet (above the navbar),
+       its summary + primary ride the bottom bar. */
+    @media (max-width: 640px) {
+      .pv-body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+      .pv-side:not(.pv-side--open) { display: none; }
+      .pv-side.pf-sheet { border-radius: 20px 20px 0 0; }
+      .pv-refresh__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .pv-queue__head { row-gap: 8px; }
+      .pv-depts { flex: 1 1 100%; }
+      .pv-seg__item { min-height: 44px; height: 44px; }
+      .pv-depts .pv-seg__item { min-height: 40px; height: 40px; }
+      .pv-scroll { padding: 12px; }
+      .pv-bottombar__info {
+        display: inline-flex; align-items: center; gap: 4px; min-height: 44px;
+        border: 0; background: transparent; padding: 0; text-align: left; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600;
+      }
+      .pv-bottombar__warn { color: var(--red-text, #b91c1c); }
+      .pv-next--bar { flex: none; }
+    }
+    @media (pointer: coarse) {
+      .pv-tile { min-height: 140px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pv-tile { transition: none; }
+    }
   `]
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the ND screen, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
+  private readonly auth = inject(AuthService);
+  private readonly liveQ = inject(LiveQueueService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+  /** Row actions: text on web, 44px icons on touch (ND §1). */
+  readonly web = webPointerSignal();
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
-    { value: 'mine', label: 'My queue' },
-    { value: 'all',  label: 'All pathologists' }
+    // Icons so the strip stays readable on a phone, where the words are
+    // swapped out; the label still drives the tooltip + accessible name.
+    { value: 'mine', label: 'My queue',
+      iconPath: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z'] },
+    { value: 'all',  label: 'All pathologists',
+      iconPath: ['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
+                 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+                 'M23 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] }
   ];
   private readonly _tab = signal<Tab>('all');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); this.refresh(); }
-
-  rowTone(level: Level): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  setTab(t: Tab) {
+    this._tab.set(t);
+    // New design filters locally (both tabs show a count); classic asks the server.
+    if (!this.theme.isNewDesign()) this.refresh();
   }
 
-  /**
-   * Group bucket items by orderId so the doctor reads "Patient X — N tests"
-   * with all results expandable inline rather than per-result floating rows.
-   * The card's TAT level is the most-urgent across all the tests in that
-   * order so a single critical test pulls the whole group up.
-   */
-  patientGroups(items: Enriched[]): Array<{
-    orderId: string;
-    patientName: string;
-    displayName: string;
-    items: Enriched[];
-    testNames: string[];
-    level: Level;
-    remainingMin: number;
-    anyCritical: boolean;
-  }> {
-    const byOrder = new Map<string, Enriched[]>();
-    for (const t of items) {
-      const oid = t.subOrder?.order?.id ?? t.id;
-      if (!byOrder.has(oid)) byOrder.set(oid, []);
-      byOrder.get(oid)!.push(t);
-    }
-    const rank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
-    return Array.from(byOrder.entries()).map(([orderId, group]) => {
-      const worst = [...group].sort((a, b) => rank[a._level] - rank[b._level])[0];
-      return {
-        orderId,
-        patientName: formatPatientInfo(worst.subOrder?.order?.patient),
-        displayName: worst.subOrder?.order?.patient?.displayName || 'Patient',
-        items: group,
-        testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
-        level: worst._level,
-        remainingMin: Math.min(...group.map(t => t._remainingMin)),
-        anyCritical: group.some(t => this.isCritical(t))
-      };
-    });
+  rowTone(priority: OrderPriority): TileTone {
+    return priority === 'urgent' ? 'rose' : 'default';
   }
 
-  private readonly _expanded = signal<Set<string>>(new Set());
-  expanded(id: string): boolean { return this._expanded().has(id); }
-  toggleExpand(id: string): void {
-    const next = new Set(this._expanded());
-    if (next.has(id)) next.delete(id); else next.add(id);
-    this._expanded.set(next);
+  /** Classic: group the queue by SAMPLE (one tube / department) so a sample
+   *  with N tests is one row — opening it reviews the whole tube at once. */
+  sampleGroups(items: Enriched[]) {
+    return groupBySample(items, this.auth.user()?.id).map(g => ({
+      ...g,
+      // Classic keeps its compact "Name | 44/F | MRN" line.
+      patientName: formatPatientInfo(g.items[0]?.subOrder?.order?.patient),
+      displayName: g.items[0]?.subOrder?.order?.patient?.displayName || 'Patient',
+      testNames: g.testNames.slice(0, 4),
+    }));
   }
 
   private readonly _rows = signal<OrderTest[]>([]);
@@ -358,35 +706,141 @@ export class PendingValidationComponent implements OnInit {
 
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
+  /** First load: the side card's numbers are placeholders, not zeros. */
+  readonly statsSkel = computed(() => this._loading() && this._rows().length === 0);
+
+  /** Hero-band query — filters the queue by patient, MRN, sample ID, or test. */
+  readonly query = signal('');
 
   readonly buckets = computed(() => {
-    const enriched: Enriched[] = this._rows().map(t => {
-      const ral = t.subOrder?.receivedAtLab;
-      const budget = (t.test?.tatHours ?? 0) * 60;
-      const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
-      const remaining = budget - elapsed;
-      const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-      return { ...t, _level: level, _remainingMin: remaining };
-    });
+    const q = this.query().trim().toLowerCase();
+    const enriched = enrich(this._rows().filter(t => matchesQuery(t, q)));
+    // Groups are the ORDER priority (Urgent / Normal); TAT is the row chip.
     return [
-      { level: 'urgent' as const, label: 'Urgent',      items: enriched.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, label: 'High',        items: enriched.filter(e => e._level === 'high')   },
-      { level: 'normal' as const, label: 'Within TAT',  items: enriched.filter(e => e._level === 'normal') }
+      { priority: 'urgent' as const, label: 'Urgent', items: enriched.filter(e => e._priority === 'urgent') },
+      { priority: 'normal' as const, label: 'Normal', items: enriched.filter(e => e._priority === 'normal') }
     ];
   });
 
-  isCritical(t: OrderTest): boolean {
-    if (!t.currentResult) return false;
-    try {
-      const s = JSON.parse(t.currentResult) as ResultSnapshot;
-      return !!s.flags?.critical;
-    } catch { return false; }
+  isCritical(t: OrderTest): boolean { return isCritical(t); }
+
+  // ── New design ───────────────────────────────────────────────────────
+  /** The consultant's scope (their departments) + today's sign-outs. */
+  readonly scope = signal<ValidationScope | null>(null);
+  /** Card-header department filter (null = all of the caller's departments). */
+  readonly dept = signal<string | null>(null);
+  /** Phones: the side card as a sheet. */
+  readonly sheetOpen = signal(false);
+  readonly isAdmin = computed(() => this.auth.hasPermission('manage_tenant'));
+
+  /** Every tube in the queue after the search (before tab / department). */
+  private readonly allTiles = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    return groupBySample(enrich(this._rows().filter(t => matchesQuery(t, q))), this.auth.user()?.id);
+  });
+  /** Tab (All · Assigned to me) applied — what the department filter counts. */
+  private readonly tabTiles = computed(() =>
+    this._tab() === 'mine' ? this.allTiles().filter(t => t.mine) : this.allTiles());
+  readonly deptFilters = computed(() => departmentsIn(this.tabTiles()));
+  readonly deptSegmentOptions = computed<SegmentedOption<string | null>[]>(() => [
+    { value: null, label: 'All' },
+    ...this.deptFilters().map(d => ({ value: d.id, label: d.name, count: d.count })),
+  ]);
+  readonly visibleTiles = computed(() => {
+    const d = this.dept();
+    const tiles = this.tabTiles();
+    // A department that left the queue drops the filter instead of hiding everything.
+    if (!d || !tiles.some(t => (t.deptId ?? t.dept) === d)) return tiles;
+    return tiles.filter(t => (t.deptId ?? t.dept) === d);
+  });
+  readonly ndGroups = computed(() => {
+    const tiles = this.visibleTiles();
+    return [
+      { priority: 'urgent' as const, label: 'Urgent', tiles: tiles.filter(t => t.priority === 'urgent') },
+      { priority: 'normal' as const, label: 'Normal', tiles: tiles.filter(t => t.priority === 'normal') },
+    ].filter(g => g.tiles.length > 0);
+  });
+  readonly ndTabs = computed(() => [
+    { value: 'all' as Tab, label: 'All', count: this.allTiles().length },
+    { value: 'mine' as Tab, label: 'Assigned to me', count: this.allTiles().filter(t => t.mine).length },
+  ]);
+  readonly countLabel = computed(() => plural(this.visibleTiles().length, 'sample'));
+  readonly stats = computed(() => {
+    const tiles = this.allTiles();
+    return {
+      pending: tiles.length,
+      overdue: tiles.filter(t => t.tat === 'overdue').length,
+      critical: tiles.filter(t => t.anyCritical).length,
+      mine: tiles.filter(t => t.mine).length,
+    };
+  });
+  readonly next = computed(() => nextTile(this.visibleTiles()));
+  readonly emptyTitle = computed(() =>
+    this.query().trim() ? 'No matching samples'
+      : this._tab() === 'mine' && this._rows().length ? 'Nothing assigned to you' : 'Nothing to validate');
+  readonly emptyBody = computed(() =>
+    this.query().trim() ? 'Try a patient name, MRN, sample ID or test.'
+      : this._tab() === 'mine' && this._rows().length ? 'Switch to All to see the rest of the queue.'
+      : this.scope()?.scoped ? 'Results from your departments appear here as soon as the lab submits them.'
+      : 'Results appear here as soon as the lab submits them.');
+
+  /** ONE status word: an open NABL record turns "Critical" into "Critical · not acknowledged". */
+  status(g: QueueTile) {
+    const st = tileStatus(g);
+    return st.key === 'critical' && this.unacknowledged(g) ? { ...st, label: 'Critical · not acknowledged' } : st;
   }
 
-  ngOnInit() { this.refresh(); }
+  // ── NABL critical-result records of the queued lines ───────────────────
+  private readonly criticalSvc = inject(CriticalResultsService);
+  private readonly _critical = signal<CriticalResultEvent[]>([]);
+  readonly acking = signal<string | null>(null);
+  /** This user still has to acknowledge a record on one of the tile's lines. */
+  unacknowledged(g: QueueTile): boolean {
+    const me = this.auth.user()?.id;
+    const ids = new Set(g.items.map(i => i.id));
+    return this._critical().some(e => ids.has(e.orderTestId) && needsAckBy(e, me));
+  }
+  loadCritical(ids: string[]) {
+    if (!ids.length) { this._critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({ next: l => this._critical.set(l ?? []), error: () => { /* advisory */ } });
+  }
+  acknowledge(g: QueueTile) {
+    if (this.acking()) return;
+    const me = this.auth.user()?.id;
+    const ids = new Set(g.items.map(i => i.id));
+    const pending = this._critical().filter(e => ids.has(e.orderTestId) && needsAckBy(e, me));
+    if (!pending.length) return;
+    this.acking.set(g.key);
+    let left = pending.length;
+    for (const e of pending) {
+      this.criticalSvc.acknowledge(e.id, 'pathologist_queue').subscribe({
+        next: u => { this._critical.update(l => l.map(x => (x.id === u.id ? u : x))); if (--left === 0) { this.acking.set(null); this.toasts.success('Critical result acknowledged'); } },
+        error: err => { this.acking.set(null); this.toasts.error(ApiError.from(err).message); },
+      });
+    }
+  }
+  /** "44/F · AA0007 · Haematology · entered 9:48 PM" — Noto, tabular, `·`. */
+  tileMeta(g: QueueTile): string {
+    const at = g.items.map(t => t.resultedAt).filter(Boolean).sort().pop();
+    const time = at ? new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    return [g.patientMeta, g.dept, time && `entered ${time}`].filter(Boolean).join(' · ');
+  }
+  reviewNext() {
+    const n = this.next();
+    this.sheetOpen.set(false);
+    if (n) this.openOrder(n);
+  }
+
+  ngOnInit() {
+    this.refresh();
+    // Live queue: refetch when the server says this area changed (no polling).
+    this.liveQ.on('validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+  }
 
   refresh() {
-    const mine = this._tab() === 'mine';
+    // New design: always the whole (department-scoped) queue — the tabs
+    // filter locally. Classic keeps the server-side ?mine switch.
+    const mine = !this.theme.isNewDesign() && this._tab() === 'mine';
     this._loading.set(true);
     this.api.get<OrderTest[]>(`/api/validation/queue?mine=${mine}`).subscribe({
       next: l => {
@@ -395,22 +849,43 @@ export class PendingValidationComponent implements OnInit {
         // / Reassign from firing on already-validated or re-entry rows.
         this._rows.set((l ?? []).filter(t => t.status === 'entered'));
         this._loading.set(false);
+        this.loadCritical(this._rows().map(t => t.id));
       },
       error: () => this._loading.set(false)
     });
+    if (this.theme.isNewDesign()) {
+      this.api.get<ValidationScope>('/api/validation/scope').subscribe({
+        next: s => this.scope.set(s ?? null),
+        error: () => { /* older server: the side card says "All departments" */ },
+      });
+    }
   }
 
   openValidate(t: OrderTest) {
-    this.router.navigate(['/pathologist/validate', t.id]);
+    this.goToReview(t, [t]);
   }
 
-  /** One-click: tapping a pending order goes straight to the validation screen
+  /** Validation review = the SAME screen the tech entered on (?validate=1).
+   *  A CULTURE test signs out on the Culture case page (owner). */
+  private goToReview(t: OrderTest, siblings: OrderTest[]) {
+    if (isCultureOrderTest(t)) { this.router.navigate(['/lab/culture', t.id]); return; }
+    const culture = siblings.find(x => isCultureOrderTest(x));
+    if (culture && siblings.every(x => isCultureOrderTest(x))) { this.router.navigate(['/lab/culture', culture.id]); return; }
+    const isCulture = !!culture;
+    const sampleId = t.subOrder?.id;
+    if (!isCulture && sampleId) {
+      this.router.navigate(['/lab/sample', sampleId], { queryParams: { validate: 1 } });
+    } else {
+      this.router.navigate(['/pathologist/validate', t.id]);
+    }
+  }
+
+  /** One-click: tapping a pending tube goes straight to the review screen
    *  for its first pending test (no expand-then-Validate step). Reject /
-   *  reassign live on that screen. For a multi-test order the validator returns
-   *  here after each, and the next test is one tap away. */
+   *  reassign live on that screen. */
   openOrder(g: { items: OrderTest[] }) {
     const first = g.items[0];
-    if (first) this.router.navigate(['/pathologist/validate', first.id]);
+    if (first) this.goToReview(first, g.items);
   }
 
   async openReject(t: OrderTest) {
@@ -433,14 +908,10 @@ export class PendingValidationComponent implements OnInit {
     });
   }
 
+  /** Reassign to another validator who covers this result's department —
+   *  a picker (DialogService choose), never a pasted id. */
   async reassign(t: OrderTest) {
-    const id = await this.dialog.prompt({
-      title: 'Reassign to pathologist',
-      message: 'Paste the user GUID (demo — a picker will land later).',
-      placeholder: 'user id',
-      required: true,
-      confirmLabel: 'Reassign'
-    });
+    const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
     this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
       next: () => { this.toasts.success('Reassigned'); this._rows.update(l => l.filter(x => x.id !== t.id)); },

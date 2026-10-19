@@ -6,8 +6,15 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AUDIT_ENTITY_TYPES, AuditLog, AuditLogPage } from '../../../shared/models/audit.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+
+/** Quick date windows for the band pill ('' = any time). */
+type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
 
 interface Filters {
   entityType: string;
@@ -30,9 +37,10 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
        flex row; let it wrap and reflow the meta (user/time) so it never forces
        horizontal overflow. Desktop layout (>=641) is untouched. */
@@ -71,45 +79,95 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
     @media (pointer: coarse) {
       :host .audit-row { min-height: 44px; }
     }
+    /* ── Log rows: kit card + a NEUTRAL action chip. Deletes / failed
+       sign-ins keep red text (a real warning); creates carry a violet dot. ── */
+    .audit-card { padding: 10px 14px; overflow: visible; }
+    .audit-badge { height: 24px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
+    .audit-badge[data-tone='warn'] { color: var(--red-text, #b91c1c); }
+    .audit-badge__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+    .audit-id { color: var(--text-tertiary); overflow-wrap: anywhere; }
+    /* ── Band pill filters (new design) ── */
+    .audit-bandsel { display: block; min-width: 150px; }
+    .audit-bandsel--type { min-width: 180px; }
+    .audit-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .audit-date {
+      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit; font-variant-numeric: tabular-nums;
+      background: var(--pf-card-bg); border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); color: var(--text-primary);
+      color-scheme: light dark;
+    }
+    .audit-date:focus { outline: none; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
+    .audit-dates__sep { font-size: 12px; color: var(--text-tertiary); }
+    @media (max-width: 640px) {
+      .audit-bandsel, .audit-bandsel--type { min-width: 140px; }
+      .audit-date { height: 40px; font-size: 16px; }
+    }
     /* Web-below-desktop band (641–1279, behind the 64px icon rail): at >=1024
        Tailwind's lg:grid-cols-5 packs all 5 filters into one row, which leaves
        the date inputs cramped next to the rail. Cap at 3 columns so the filter
        fields reflow with comfortable widths; desktop (>=1280) keeps 5-up. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       :host .audit-filter-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the record id is the search; record type,
+             action and the date window ride in the pill and apply at once. -->
+        <pf-hero-band [back]="true" placeholder="Search by record id…"
+                      [value]="filters().entityId" (valueChange)="onIdInput($event)" (submitted)="apply()">
+          <ng-container band-tools>
+            <pf-select class="audit-bandsel audit-bandsel--type" size="sm" [options]="entityTypeOptions"
+                       [value]="filters().entityType" (valueChange)="setFilter({ entityType: $event })"
+                       aria-label="Record type"></pf-select>
+            <pf-select class="audit-bandsel" size="sm" [options]="actionOptions"
+                       [value]="filters().action" (valueChange)="setFilter({ action: $event })"
+                       aria-label="Action"></pf-select>
+            <pf-select class="audit-bandsel" size="sm" [options]="rangeOptions"
+                       [value]="range()" (valueChange)="setRange($event)"
+                       aria-label="When"></pf-select>
+            @if (range() === 'custom') {
+              <span class="audit-dates">
+                <pf-date label="From" [value]="filters().from || null"
+                            (valueChange)="setFilter({ from: $event ?? '' })"></pf-date>
+                <span class="audit-dates__sep">to</span>
+                <pf-date label="To" [value]="filters().to || null"
+                            (valueChange)="setFilter({ to: $event ?? '' })"></pf-date>
+              </span>
+            }
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!hasFilters()" (click)="clearAll()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              Clear
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Audit trail"
         subtitle="Every change to results, samples, patients, reports, billing and access — who did it, when, and exactly what changed. Append-only.">
       </pf-screen-header>
 
-      <!-- Filters -->
-      <pf-tile tone="default" padding="lg" class="block mb-4">
+      <div class="pf-band-body">
+      <!-- Filters (classic; the new design has them in the band pill) -->
+      <pf-tile tone="default" padding="lg" class="block mb-4 pf-classic-only">
         <div class="audit-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label class="pf-label">Record type</label>
-            <select class="pf-input" [ngModel]="filters().entityType"
-                    (ngModelChange)="patch({ entityType: $event })">
-              @for (t of entityTypes; track t.value) {
-                <option [value]="t.value">{{ t.label }}</option>
-              }
-            </select>
+            <pf-select [options]="entityTypeOptions" [value]="filters().entityType"
+                       (valueChange)="patch({ entityType: $event })"
+                       aria-label="Record type"></pf-select>
           </div>
           <div>
             <label class="pf-label">Action</label>
-            <select class="pf-input" [ngModel]="filters().action"
-                    (ngModelChange)="patch({ action: $event })">
-              <option value="">Any action</option>
-              <option value="create">Created</option>
-              <option value="update">Updated</option>
-              <option value="delete">Deleted</option>
-            </select>
+            <pf-select [options]="actionOptions" [value]="filters().action"
+                       (valueChange)="patch({ action: $event })"
+                       aria-label="Action"></pf-select>
           </div>
           <div>
             <label class="pf-label">Record ID</label>
@@ -118,13 +176,13 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
           </div>
           <div>
             <label class="pf-label">From</label>
-            <input type="date" class="pf-input"
-                   [ngModel]="filters().from" (ngModelChange)="patch({ from: $event })"/>
+            <pf-date label="From" [value]="filters().from || null"
+                        (valueChange)="patch({ from: $event ?? '' })"></pf-date>
           </div>
           <div>
             <label class="pf-label">To</label>
-            <input type="date" class="pf-input"
-                   [ngModel]="filters().to" (ngModelChange)="patch({ to: $event })"/>
+            <pf-date label="To" [value]="filters().to || null"
+                        (valueChange)="patch({ to: $event ?? '' })"></pf-date>
           </div>
         </div>
         <div class="mt-3 flex gap-2 justify-end">
@@ -136,8 +194,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
       @if (loading()) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading audit trail…"></pf-loading-logo>
+            <pf-skeleton-table [rows]="8" [cols]="5" label="Loading audit trail…"></pf-skeleton-table>
           </div>
         </pf-tile>
       } @else if (logs().length === 0) {
@@ -149,22 +206,19 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
       } @else {
         <div class="space-y-2">
           @for (log of logs(); track log.id) {
-            <pf-tile tone="default" padding="md" class="block">
+            <div class="pf-card audit-card">
               <button type="button" class="audit-row w-full flex items-center gap-3 text-left"
-                      (click)="toggle(log.id)">
-                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                      [style.background]="badgeBg(log.action)"
-                      [style.color]="badgeFg(log.action)">
+                      (click)="toggle(log.id)" [attr.aria-expanded]="expanded() === log.id">
+                <span class="pf-chip pf-chip--static audit-badge" [attr.data-tone]="badgeTone(log.action)">
+                  @if (badgeTone(log.action) === 'add') { <span class="audit-badge__dot" aria-hidden="true"></span> }
                   {{ actionLabel(log.action) }}
                 </span>
                 <span class="text-[13px] font-semibold shrink-0">{{ typeLabel(log.entityType) }}</span>
-                <span class="text-[12px] font-mono truncate min-w-0" style="color: var(--text-tertiary);">
-                  {{ shortId(log.entityId) }}
-                </span>
+                <span class="audit-id pf-num text-[12px] min-w-0">{{ log.entityId }}</span>
                 <span class="audit-user ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
                   {{ log.userName || 'System' }}
                 </span>
-                <span class="audit-when text-[11px] shrink-0" style="color: var(--text-tertiary);">
+                <span class="audit-when pf-num text-[11.5px] shrink-0" style="color: var(--text-tertiary);">
                   {{ when(log.at) }}
                 </span>
               </button>
@@ -172,12 +226,20 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
               @if (expanded() === log.id) {
                 <div class="mt-3 pt-3 border-t" style="border-color: var(--border-subtle);">
                   @if (diff(log).length === 0) {
-                    <p class="text-[12px]" style="color: var(--text-tertiary);">No field-level detail recorded.</p>
+                    <p class="text-[12px]" style="color: var(--text-tertiary);">
+                      @if (log.entityType === 'Auth') {
+                        <!-- Older auth rows predate the event description; a
+                             sign-in has no field diff by nature. -->
+                        Sign-in / security event — there are no record fields to compare.
+                      } @else {
+                        No field-level detail recorded.
+                      }
+                    </p>
                   } @else {
                     <div class="space-y-1.5">
                       @for (d of diff(log); track d.field) {
                         <div class="audit-diff grid grid-cols-[140px_1fr] gap-2 text-[12px] audit-diff-row">
-                          <span class="font-mono font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
+                          <span class="pf-num font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
                           @if (d.kind === 'change') {
                             <span>
                               <span class="line-through" style="color: var(--text-tertiary);">{{ d.old }}</span>
@@ -191,10 +253,10 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                       }
                     </div>
                   }
-                  <p class="audit-full-id mt-2 text-[11px] font-mono" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
+                  <p class="audit-full-id mt-2 text-[11.5px] pf-num" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
                 </div>
               }
-            </pf-tile>
+            </div>
           }
         </div>
 
@@ -207,6 +269,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
           </div>
         </div>
       }
+      </div>
     </section>
   `
 })
@@ -215,6 +278,59 @@ export class AuditLogComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly entityTypes = AUDIT_ENTITY_TYPES;
+  protected readonly theme = inject(ThemeService);
+
+  // ── Band pill filters ────────────────────────────────────────────────
+  readonly entityTypeOptions: PfSelectOption<string>[] = AUDIT_ENTITY_TYPES.map(t => ({ value: t.value, label: t.label }));
+  readonly actionOptions: PfSelectOption<string>[] = [
+    { value: '', label: 'Any action' },
+    { value: 'create', label: 'Created' },
+    { value: 'update', label: 'Updated' },
+    { value: 'delete', label: 'Deleted' },
+  ];
+  readonly rangeOptions: PfSelectOption<RangeKey>[] = [
+    { value: '', label: 'Any time' },
+    { value: 'today', label: 'Today' },
+    { value: '7d', label: 'Last 7 days' },
+    { value: '30d', label: 'Last 30 days' },
+    { value: 'custom', label: 'Custom dates…' },
+  ];
+  readonly range = signal<RangeKey>('');
+  private idTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Pill filter change → apply immediately (no Apply button in the band). */
+  setFilter(p: Partial<Filters>) {
+    this.patch(p);
+    this.apply();
+  }
+
+  /** Record-id search: debounced while typing; Enter applies at once. */
+  onIdInput(v: string) {
+    this.patch({ entityId: v ?? '' });
+    if (this.idTimer) clearTimeout(this.idTimer);
+    this.idTimer = setTimeout(() => { this.idTimer = null; this.apply(); }, 400);
+  }
+
+  setRange(r: RangeKey) {
+    this.range.set(r);
+    if (r === 'custom') return; // the two date inputs appear; they apply on change
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = new Date();
+    const back = (n: number) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
+    const from = r === 'today' ? iso(today) : r === '7d' ? back(6) : r === '30d' ? back(29) : '';
+    this.setFilter({ from, to: r ? iso(today) : '' });
+  }
+
+  readonly hasFilters = computed(() => {
+    const f = this._filters();
+    return !!(f.entityType || f.entityId || f.action || f.from || f.to);
+  });
+
+  clearAll() {
+    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
+    this.range.set('');
+    this.reset();
+  }
 
   private readonly _filters = signal<Filters>({ ...EMPTY_FILTERS });
   readonly filters = this._filters.asReadonly();
@@ -250,6 +366,7 @@ export class AuditLogComponent implements OnInit {
   }
 
   apply() {
+    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
     this._page.set(1);
     this.load();
   }
@@ -330,13 +447,25 @@ export class AuditLogComponent implements OnInit {
     return this.entityTypes.find(e => e.value === t)?.label ?? t.replace(/Entity$/, '');
   }
   actionLabel(a: string): string {
-    return a === 'create' ? 'CREATED' : a === 'update' ? 'UPDATED' : a === 'delete' ? 'DELETED' : a.toUpperCase();
+    switch (a) {
+      case 'create': return 'CREATED';
+      case 'update': return 'UPDATED';
+      case 'delete': return 'DELETED';
+      // Auth events written by AuthController — not entity mutations.
+      case 'login': return 'SIGNED IN';
+      case 'login_failed': return 'SIGN-IN FAILED';
+      case 'password_changed': return 'PASSWORD';
+      case 'pin_changed': return 'PIN CHANGED';
+      case 'pin_failed': return 'PIN FAILED';
+      default: return a.toUpperCase();
+    }
   }
-  badgeBg(a: string): string {
-    return a === 'create' ? 'rgba(16,185,129,0.15)' : a === 'delete' ? 'rgba(244,63,94,0.15)' : 'rgba(245,158,11,0.15)';
-  }
-  badgeFg(a: string): string {
-    return a === 'create' ? '#10b981' : a === 'delete' ? '#f43f5e' : '#f59e0b';
+  /** Palette-only action chip: 'warn' (red text) for deletes / failed
+   *  sign-ins, 'add' (violet dot) for creates / sign-ins, else neutral. */
+  badgeTone(a: string): 'warn' | 'add' | 'neutral' {
+    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return 'warn';
+    if (a === 'create' || a === 'login') return 'add';
+    return 'neutral';
   }
   shortId(id: string): string {
     return id.length > 12 ? id.slice(0, 8) + '…' : id;

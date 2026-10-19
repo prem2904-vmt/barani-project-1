@@ -21,6 +21,21 @@ export interface Tenant {
   /** Tenant-wide: number of digits in the running part of the short sample
    * barcode (DD + YY + this many digits). Valid 1–9. Default 5 → 00001. */
   sampleNumberWidth?: number;
+  /** Tenant-wide sample-identification mode driving the lab screens:
+   * 'scan' (default) → QR/barcode camera scanning; 'manual' → no QR, the
+   * sample number is shown and typed by hand. Absent/empty = 'scan'. */
+  scanMode?: 'scan' | 'manual';
+  /** Sample-search preset (Lab settings): true / false = the lab's choice;
+   * null/absent = automatic (on when sample IDs start with yymm). */
+  sampleSearchPreset?: boolean | null;
+  /** Lab calculation constants (JSON object string, e.g.
+   * '{"ISI":1.1,"MNPT":12.5,"NORMAL_HCT":45}') feeding calculated-result
+   * formulas (INR reagent properties, RPI anchor). Absent keys fall back to
+   * the shipped defaults in shared/utils/calculation. */
+  calcConstants?: string | null;
+  /** Per-branch isolation (strict mode). ON → operational data and test
+   *  prices are per branch; OFF → shared across the tenant's branches. */
+  branchIsolationEnabled?: boolean;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;
@@ -37,8 +52,12 @@ export interface Branch {
   code: string;
   type: string;
   /** How departments are physically organised: 'integrated' (all depts share
-   *  one lab) or 'individual' (each dept is its own lab). Drives tube counting. */
-  labStructure?: 'integrated' | 'individual';
+   *  one lab), 'standalone' (each dept is its own lab), or 'auto'. Drives tube
+   *  counting. ('individual' is a legacy alias for 'standalone'.) */
+  labStructure?: 'integrated' | 'standalone' | 'auto' | 'individual';
+  /** Sample-ID prefix for departments in this branch's default "Lab" space
+   *  (no dedicated space). Blank → "LAB". */
+  defaultLabCode?: string | null;
   address?: string;
   city?: string;
   state?: string;
@@ -50,26 +69,6 @@ export interface Branch {
   timezone: string;
   isActive: boolean;
   createdAt: string;
-  subBranches?: SubBranch[];
-  departments?: Department[];
-}
-
-export interface SubBranch {
-  id: string;
-  tenantId: string;
-  branchId: string;
-  name: string;
-  code: string;
-  type: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  stateCode?: string;
-  phone?: string;
-  email?: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt?: string;
   departments?: Department[];
 }
 
@@ -86,7 +85,6 @@ export interface Department {
   id: string;
   tenantId: string;
   branchId?: string;
-  subBranchId?: string;
   /** The lab space this department is assigned to (null = unassigned). */
   spaceId?: string | null;
   name: string;

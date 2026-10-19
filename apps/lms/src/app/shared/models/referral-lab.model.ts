@@ -9,7 +9,7 @@ export interface ReferralLab {
   contactPhone?: string | null;
   contactEmail?: string | null;
   address?: string | null;
-  /** JSON array of department codes this lab handles (e.g. ["BIO","MICRO"]). */
+  /** JSON array of department codes this lab handles (e.g. ["BIO","MIC"]). */
   departmentCodesJson?: string | null;
   isActive: boolean;
   createdAt: string;

@@ -5,9 +5,18 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { AppointmentConfig, QueueMode } from '../../../shared/models/appointment.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
+
+/** Band pill tabs — one per section card. */
+export type AppointmentsTab = 'mode' | 'slots' | 'priority';
 
 interface ModeOption { value: QueueMode; label: string; desc: string }
 
@@ -20,21 +29,30 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
+  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
     :host { display: block; width: 100%; }
+    /* ── ND audit: kit cards + neutral mode tiles ── */
+    .pf-ap-card { margin-bottom: 16px; }
+    .pf-ap-card .pf-section-title { margin: 0; }
+    .pf-ap-body { padding: 16px 18px 18px; }
+    .pf-ap-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); }
+    .pf-ap-hint--top { margin: 0 0 12px; }
+    .pf-mode-btn {
+      display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 12px 14px;
+      border-radius: var(--pf-radius); border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+      cursor: pointer; transition: border-color var(--pf-dur-fast) ease, background var(--pf-dur-fast) ease;
+    }
+    .pf-mode-btn:hover { border-color: var(--pf-sel-border); }
+    .pf-mode-btn[aria-checked='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
+    .pf-mode-btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pf-mode-btn__t { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-mode-btn__d { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
 
-    /* Touch: give the native "Open 24×7" checkbox a comfortable hit target
-       without changing its painted size or affecting desktop/mouse users. The
-       wrapping label becomes a >=44px tap zone while the painted box grows
-       modestly for easier toggling. */
+    /* Touch: the "Open 24×7" slate switch row is a >=44px tap zone. */
     @media (pointer: coarse) {
-      :host input[type='checkbox'] {
-        min-width: 22px;
-        min-height: 22px;
-      }
       :host .pf-check-row {
         min-height: 44px;
       }
@@ -62,99 +80,153 @@ const MODES: ModeOption[] = [
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-3xl">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search — the three sections become tabs in a
+             tabs-only pill; Save rides the band actions. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()" [pfBusy]="saving()" pfBusyLabel="Saving…"
+                    (click)="save()" aria-label="Save" title="Save">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Appointments & queue"
         subtitle="Choose how this branch runs its front desk, and tune the priority engine.">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || !cfg()" (pressed)="save()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || !cfg()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (!cfg()) {
-        <pf-tile tone="default" padding="lg" class="block"><p style="color: var(--text-tertiary);">Loading…</p></pf-tile>
+        <pf-skeleton-form [fields]="6" label="Loading appointment settings…"></pf-skeleton-form>
       } @else {
+        @if (showSec('mode')) {
         <!-- Queue mode -->
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="pf-section-title mb-3">Queue mode</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            @for (m of modes; track m.value) {
-              <button type="button" class="pf-mode-btn text-left" (click)="setMode(m.value)">
-                <pf-tile [tone]="cfg()!.queueMode === m.value ? 'violet' : 'default'" padding="md" class="block h-full">
-                  <p class="font-semibold text-[14px]" style="color: var(--text-primary);">{{ m.label }}</p>
-                  <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">{{ m.desc }}</p>
-                </pf-tile>
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-section-title">Queue mode</h3></div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
+            @for (m of modes(); track m.value) {
+              <!-- Neutral selected tile (PF-PATTERN §3), never a violet tile. -->
+              <button type="button" class="pf-mode-btn pf-tile-sel text-left" role="radio"
+                      [attr.aria-checked]="cfg()!.queueMode === m.value" (click)="setMode(m.value)">
+                <span class="pf-mode-btn__t">{{ m.label }}</span>
+                <span class="pf-mode-btn__d">{{ m.desc }}</span>
               </button>
             }
           </div>
-        </pf-tile>
+        </section>
 
+        }
+
+        @if (showSec('slots')) {
         <!-- Slot config -->
-        <pf-tile tone="default" padding="lg" class="block mb-4">
-          <h3 class="pf-section-title mb-3">Booking slots</h3>
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><h3 class="pf-card__label pf-section-title">Booking slots</h3></div>
+          <div class="pf-ap-body">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="flex flex-col gap-1">
-              <span class="pf-label">Time between appointments (min)</span>
+              <span class="pf-field__lbl">Time between appointments (min)</span>
               <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240"
                 (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
             </label>
             <label class="flex flex-col gap-1">
-              <span class="pf-label">Concurrent slots</span>
+              <span class="pf-field__lbl">Concurrent slots</span>
               <pf-number-input [value]="cfg()!.maxConcurrentSlots" [step]="1" [min]="1"
                 (valueChange)="patch({ maxConcurrentSlots: $event ?? 1 })"></pf-number-input>
             </label>
-            <label class="pf-check-row flex items-center gap-2 sm:mt-6">
-              <input type="checkbox" [checked]="cfg()!.open24h" (change)="patch({ open24h: $any($event.target).checked })" />
-              <span class="text-[13px]" style="color: var(--text-secondary);">Open 24×7</span>
-            </label>
+            <div class="pf-check-row flex items-center sm:mt-6">
+              <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="cfg()!.open24h"
+                      (click)="patch({ open24h: !cfg()!.open24h })">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                <span>Open 24×7</span>
+              </button>
+            </div>
           </div>
 
           @if (!cfg()!.open24h) {
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <label class="flex flex-col gap-1">
-                <span class="pf-label">Start time</span>
-                <input type="time" class="pf-input" [value]="startTime()"
-                  (change)="setStart($any($event.target).value)" />
+                <span class="pf-field__lbl">Start time</span>
+                <pf-time label="Start time" [value]="startTime()"
+                  (valueChange)="setStart($event)"></pf-time>
               </label>
               <label class="flex flex-col gap-1">
-                <span class="pf-label">End time</span>
-                <input type="time" class="pf-input" [value]="endTime()"
-                  (change)="setEnd($any($event.target).value)" />
+                <span class="pf-field__lbl">End time</span>
+                <pf-time label="End time" [value]="endTime()"
+                  (valueChange)="setEnd($event)"></pf-time>
               </label>
             </div>
-            <p class="text-[12px] mt-2" style="color: var(--text-tertiary);">
-              Booking is open every day from {{ startTime() }} to {{ endTime() }},
-              in {{ cfg()!.slotMinutes }}-minute steps.
+            <p class="pf-ap-hint">
+              Booking is open every day from <span class="pf-num">{{ startTime() }}</span> to <span class="pf-num">{{ endTime() }}</span>,
+              in <span class="pf-num">{{ cfg()!.slotMinutes }}</span>-minute steps.
             </p>
           }
-        </pf-tile>
+          </div>
+        </section>
 
+        }
+
+        @if (showSec('priority')) {
         <!-- Priority engine -->
-        <pf-tile tone="default" padding="lg" class="block">
-          <h3 class="pf-section-title mb-1">Priority engine</h3>
-          <p class="text-[12px] mb-3" style="color: var(--text-tertiary);">
+        <section class="pf-card pf-ap-card">
+          <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span><h3 class="pf-card__label pf-section-title">Priority engine</h3></div>
+          <div class="pf-ap-body">
+          <p class="pf-ap-hint pf-ap-hint--top">
             Higher score = called sooner. score = base(type) + minutes&nbsp;waited × weight − late penalty; urgent jumps to the top.
           </p>
           <div class="pf-priority-grid grid grid-cols-2 sm:grid-cols-3 gap-3">
             @for (f of optionFields; track f.key) {
               <label class="flex flex-col gap-1">
-                <span class="pf-label">{{ f.label }}</span>
+                <span class="pf-field__lbl">{{ f.label }}</span>
                 <pf-number-input [value]="opt(f.key)" [step]="f.step" [min]="0"
                   (valueChange)="patchOpt(f.key, $event ?? 0)"></pf-number-input>
               </label>
             }
           </div>
-        </pf-tile>
+          </div>
+        </section>
+        }
       }
+      </div>
     </section>
   `
 })
 export class AppointmentsConfigComponent implements OnInit {
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
 
-  readonly modes = MODES;
+  /** Band pill tabs (new design). Classic shows every card, as before. */
+  readonly tabOptions: SegmentedOption<AppointmentsTab>[] = [
+    { value: 'mode', label: 'Queue mode' },
+    { value: 'slots', label: 'Booking slots' },
+    { value: 'priority', label: 'Priority engine' },
+  ];
+  readonly tab = signal<AppointmentsTab>('mode');
+  showSec(key: AppointmentsTab): boolean {
+    return !this.theme.isNewDesign() || this.tab() === key;
+  }
+
+  /** Home collection off (the ONE lab-feature rule) ⇒ its queue mode is not
+   *  offered — unless it is the stored mode, so the admin can see and change it. */
+  private readonly features = inject(LabFeaturesService);
+  readonly modes = computed(() => MODES.filter(m => m.value !== 'home_collection'
+    || this.features.homeCollectionEnabled() || this.cfg()?.queueMode === 'home_collection'));
   readonly optionFields: { key: keyof AppointmentConfig['queueOptions']; label: string; step: number }[] = [
     { key: 'baseAppointment', label: 'Appointment base', step: 50 },
     { key: 'baseWalkin', label: 'Walk-in base', step: 50 },
@@ -184,8 +256,8 @@ export class AppointmentsConfigComponent implements OnInit {
     this.svc.getConfig().subscribe({ next: c => { this._cfg.set(c); this.hydrateHours(c); } });
   }
 
-  setStart(v: string) { if (v) this._startTime.set(v); }
-  setEnd(v: string) { if (v) this._endTime.set(v); }
+  setStart(v: string | null) { if (v) this._startTime.set(v); }
+  setEnd(v: string | null) { if (v) this._endTime.set(v); }
 
   /** Pull a representative start/end from the stored weekly schedule so the
    *  time pickers reflect what's actually saved. Falls back to 09:00–17:00. */

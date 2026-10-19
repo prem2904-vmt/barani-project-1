@@ -1,0 +1,1060 @@
+    <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.lg:px-10]="!embedded"
+             [class.pt-6]="!embedded" [class.pb-10]="!embedded" [class.pf-sc-page]="!embedded"
+             [class.pf-sc-embed]="embedded">
+      <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
+           row entirely. The user clicked Collect on a specific order
+           — show them THAT order's drawer immediately as if it's a
+           dedicated page. The queue UI used to flash for ~500ms while
+           the order data loaded and felt like "two pages" before
+           the drawer appeared.
+           Embedded mode: rendered inside the lab "My Work" Collect pane —
+           suppress our own KPI strip + screen header (the pane supplies its
+           own header) but keep the queue + scan so the tech can draw tubes. -->
+      <!-- Common hero search (designer band): first thing under the navbar
+           so the seam stays flush like every other band screen. ONE band per
+           screen (PF-PATTERN): while a patient's drawer is open the drawer's
+           band (back + context pills) is THE band, so the queue's steps out. -->
+      @if (!deepLinkMode() && !embedded && theme.isNewDesign() && !activeGroup()) {
+      <pf-hero-band
+        [back]="!!queueFrom()" [backAction]="queueFrom() ? queueBackFn : null"
+        [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
+        [value]="scanValue()"
+        keys="sample" keysEnter="Search" keysEnterAria="Search patient or sample"
+        (valueChange)="onSearchInput($event)"
+        (submitted)="runSearch()">
+        <!-- The scanner FEEDS this field, so it rides inside it, before the
+             divider (owner) — scanning is just another way to type. -->
+        <ng-container band-inline>
+          @if (!scan.manualEntry()) {
+          <button type="button" class="pf-hb-tool press" (click)="openScanner()"
+                  title="Scan with camera" aria-label="Open camera scanner">
+            <pf-scan-icon [size]="18" />
+          </button>
+          }
+        </ng-container>
+        <!-- Refresh is a quiet button on the band, not a bar icon (owner):
+             it's the least-used control on the screen. -->
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+                  [disabled]="refreshing()" [pfBusy]="refreshing()" pfBusyLabel="Refreshing…">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+            </svg>
+            Refresh
+          </button>
+        </ng-container>
+      </pf-hero-band>
+      }
+
+      @if (!deepLinkMode() && !embedded && !theme.isNewDesign()) {
+      <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
+      <pf-screen-header
+        [noBack]="!!queueFrom() && theme.isNewDesign()"
+        eyebrow="Lab · Collection"
+        title="Sample collection"
+        subtitle="Scan the barcode from reception, or tap a patient to draw vials.">
+        <pf-touch-btn actions size="sm" variant="ghost" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                      [busy]="refreshing()" busyLabel="Refreshing…">
+          <span icon-left aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7"/>
+              <path d="M21 4v6h-6"/>
+            </svg>
+          </span>
+          <span class="pf-refresh-txt">Refresh</span>
+        </pf-touch-btn>
+      </pf-screen-header>
+      }
+
+      @if (!deepLinkMode()) {
+      @if (!embedded && theme.isNewDesign()) {
+      <!-- Band hoisted to the top of the section (seam fix); nothing here. -->
+      } @else {
+      <!-- Embedded pane keeps a plain filter box (My Work's band is above).
+           Classic design lands here too — with its original camera button. -->
+      <div class="pf-scan">
+        @if (!scan.manualEntry() && (!theme.isNewDesign() || embedded)) {
+        <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
+                title="Scan with camera" aria-label="Open camera scanner">
+          <pf-scan-icon [size]="24" />
+        </button>
+        }
+        <div class="pf-scan__body">
+          <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
+          <input type="text" class="pf-scan__input" pfKeys="sample" pfSamplePreset pfKeysEnter="Search" pfKeysEnterAria="Search patient or sample"
+                 [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
+                 [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
+                 (keydown.enter)="runSearch()" aria-label="Search" />
+        </div>
+      </div>
+      }
+
+      @if (scannerOpen()) {
+        <pf-barcode-scanner-modal
+        [manualOnly]="scan.manualEntry()"
+          title="Scan vial barcode"
+          (matched)="onScanMatched($event)"
+          (cancelled)="scannerOpen.set(false)">
+        </pf-barcode-scanner-modal>
+      }
+
+      @if (theme.isNewDesign() && !embedded) {
+        <section class="pf-card pf-sc-queue-card">
+          <header class="pf-card__head">
+            <span class="pf-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+                <line x1="16" x2="16" y1="2" y2="6"/>
+                <line x1="8" x2="8" y1="2" y2="6"/>
+                <line x1="3" x2="21" y1="10" y2="10"/>
+              </svg>
+            </span>
+            <span class="pf-card__label">
+              Pending collection · {{ filteredGroups().length }} patient{{ filteredGroups().length === 1 ? '' : 's' }}
+            </span>
+          </header>
+
+          <div class="pf-card__body pf-sc-queue-body">
+            @if (!queueLoaded()) {
+              @if (queueSkeleton()) {
+                <pf-skeleton-rows class="pf-sc__skel" [rows]="4" label="Loading the collection queue…"></pf-skeleton-rows>
+              }
+            } @else if (filteredGroups().length === 0) {
+              <div class="pf-empty pf-sc__empty">No samples waiting for collection.</div>
+            } @else {
+              <div class="pf-sc__grid">
+                @for (g of filteredGroups(); track g.orderId) {
+                  <button type="button" class="pf-sc__pcard" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
+                    <div class="pf-sc__pcard-info">
+                      <span class="pf-sc__pcard-name"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
+                      <span class="pf-sc__pcard-ord pf-num">{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}</span>
+                    </div>
+                    <div class="pf-sc__pcard-meta">
+                      @if (g.paymentHold) {
+                        <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
+                      }
+                      @if (waitingLabel(g)) {
+                        <span class="pf-sc__pcard-wait">{{ waitingLabel(g) }}</span>
+                      }
+                      <svg class="pf-sc__pcard-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m9 18 6-6-6-6"/>
+                      </svg>
+                    </div>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      } @else {
+      <h3 class="pf-sc__section">
+        Pending collection · {{ filteredGroups().length }} patient<span [class.hidden]="filteredGroups().length === 1">s</span>
+      </h3>
+
+      @if (!queueLoaded()) {
+        <!-- First load on its way: the list's own rows as a skeleton (only
+             when the answer is slower than 150ms), never "No samples". -->
+        @if (queueSkeleton()) {
+          <pf-skeleton-rows class="pf-sc__skel" [rows]="4" label="Loading the collection queue…"></pf-skeleton-rows>
+        }
+      } @else if (filteredGroups().length === 0) {
+        <div class="pf-sc__empty">No samples waiting for collection.</div>
+      } @else {
+        <ul class="pf-sc__list">
+          @for (g of filteredGroups(); track g.orderId) {
+            <li>
+              <button type="button" class="pf-sc__card" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
+                <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
+                <div class="pf-sc__who">
+                  @if (embedded) {
+                  <!-- My Work's Collection card: the FULL name (never the
+                       15-char cut), age/sex · MRN underneath. -->
+                  <p class="pf-sc__who-name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</p>
+                  <p class="pf-sc__who-meta">{{ patientSub(g.patientName) }}</p>
+                  } @else {
+                  <p class="pf-sc__who-name"><pf-daily-no [of]="g" />{{ g.patientName }}</p>
+                  <p class="pf-sc__who-meta">{{ g.patientMeta }}</p>
+                  }
+                </div>
+                <div class="pf-sc__card-tail">
+                  @if (g.paymentHold) {
+                    <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
+                  }
+                  <!-- The tube colours become the LINE ALONG THE TOP of the
+                       status block (owner) — a loading bar split evenly by
+                       vial: two tubes read 50/50, three read thirds. The
+                       waiting status sits under it as a dot + word, the
+                       frontdesk pattern. DOM order stays wait-then-rack so
+                       classic's single row (display: contents) is untouched;
+                       the new design flips it with column-reverse. -->
+                  <div class="pf-sc__status">
+                    @if (waitingLabel(g)) {
+                      <span class="pf-sc__wait" [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span>
+                    }
+                    <div class="pf-sc__rack" [attr.aria-label]="g.totalVials + ' vials'"
+                         [title]="g.collected > 0 ? g.collected + ' of ' + g.totalVials + ' collected' : g.totalVials + ' vials'">
+                      @for (s of g.samples; track s.id) {
+                        <span class="pf-sc__chip"
+                              [style.background]="tube(s).color"
+                              [class.pf-sc__chip--done]="drawn(s)"
+                              [class.pf-sc__chip--nc]="notCollected(s)"
+                              [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
+                              [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
+                      }
+                    </div>
+                  </div>
+                  <svg class="pf-sc__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </div>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+      }
+      } @else if (!activeGroup() && theme.isNewDesign()) {
+        <!-- New design, deep-link + order still loading: the SAME frame the
+             drawer will show (band + VIALS + COLLECTION skeleton), so the
+             slide-in from Order & Payments lands on the real layout. -->
+        <div class="pf-drawer pf-drawer--nd pf-fullscreen pf-sc-skel" aria-busy="true" aria-label="Opening collection">
+          <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
+            <div band-search class="pf-sc-ctx"><span class="pf-sc-skel__bar" style="width: 220px"></span></div>
+          </pf-hero-band>
+          <div class="pf-body pf-body--split pf-sc-body">
+            <section class="pf-card">
+              <header class="pf-card__head"><span class="pf-card__label">Vials</span></header>
+              <div class="pf-card__body"><div class="pf-sc-skel__grid"><span class="pf-sc-skel__tile"></span><span class="pf-sc-skel__tile"></span></div></div>
+            </section>
+            <aside class="pf-card">
+              <header class="pf-card__head"><span class="pf-card__label">Collection</span></header>
+              <div class="pf-card__body"><span class="pf-sc-skel__bar" style="width: 60%"></span><span class="pf-sc-skel__bar"></span><span class="pf-sc-skel__bar" style="width: 80%"></span></div>
+            </aside>
+          </div>
+        </div>
+      } @else if (!activeGroup()) {
+        <!-- Deep-link mode + drawer not yet ready: render the org's
+             standard loading logo so the page isn't blank while the
+             order fetch resolves. The drawer takes over the moment
+             activeGroup returns. -->
+        <div class="pf-sc__loading">
+          <!-- Full DNA-skeleton + heartbeat-logo variant (showDna). The
+               richer animation is what the user calls out as the
+               "prepare loading" — used here so collection deep-links
+               feel like the same waiting-room treatment as other
+               long-running screens. -->
+          <pf-skeleton-detail [fields]="4" [sections]="2" label="Opening collection…"></pf-skeleton-detail>
+        </div>
+      }
+    </section>
+
+    <!-- ─── Collect drawer ────────────────────────────────────────────── -->
+    @if (activeGroup(); as g) {
+      <div #drawerEl class="pf-drawer pf-drawer--nd pf-fullscreen" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
+        <div class="pf-drawer__panel pf-page" [pfZoomTarget]="g.orderId" (click)="$event.stopPropagation()">
+          <!-- Band: IDENTICAL to every step (back + tenant). The pill is the
+               CONTEXT BAR: subject chips (patient, order, samples) + this
+               step's filters + the counter. (docs/PF-PATTERN.md) -->
+          <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
+            <div band-search class="pf-sc-ctx">
+              @if (canOpenPatient(g)) {
+                <button type="button" class="pf-chip pf-sc-chip pf-sc-chip--patient" (click)="openPatient(g)"
+                        [attr.aria-label]="'Open patient ' + patientFullName(g)">
+                  <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
+                  @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
+                </button>
+              } @else {
+                <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--patient">
+                  <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
+                  @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
+                </span>
+              }
+              <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--order" title="Order ID">
+                <span class="pf-sc-chip__meta">Order</span><span class="pf-num">{{ g.orderNo }}</span>
+              </span>
+              @if (g.samples.length === 1) {
+                <span class="pf-chip pf-chip--static pf-sc-chip pf-sc-chip--samples" title="Sample ID">
+                  <span class="pf-sc-chip__meta">Sample</span><span class="pf-num">{{ g.samples[0].barcode ?? '—' }}</span>
+                </span>
+              } @else {
+                <span class="pf-sc-samples">
+                  <button type="button" class="pf-chip pf-sc-chip pf-sc-chip--samples" [attr.aria-expanded]="samplesOpen()"
+                          (click)="samplesOpen.set(!samplesOpen())">{{ g.samples.length }} samples</button>
+                  <span class="pf-sc-samples__pop" [class.pf-sc-samples__pop--open]="samplesOpen()" role="list">
+                    @for (x of g.samples; track x.id) { <span class="pf-num" role="listitem">{{ x.barcode ?? '—' }}</span> }
+                  </span>
+                </span>
+              }
+              <span class="pf-sc-ctx__grow"></span>
+              <span class="pf-band-chip pf-sc-ctx__count" aria-live="polite">
+                <strong>@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</strong> drawn
+              </span>
+            </div>
+          </pf-hero-band>
+
+          <div class="pf-body pf-body--split pf-sc-body">
+            <!-- Main card: VIALS (like the catalogue card). -->
+            <section class="pf-card pf-sc-vials" aria-label="Vials">
+              <div class="pf-drawer__progressbar" aria-hidden="true">
+                <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
+              </div>
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/></svg>
+                </span>
+                <span class="pf-card__label">Vials</span>
+                <span class="pf-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
+              </header>
+              <div class="pf-card__body">
+                <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
+                  @for (s of visibleSamples(g); track s.id) {
+                    <div class="pf-tube-wrap">
+              <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
+                   list (a floating popover). A div, not <button>, so the hold /
+                   pointer handling is clean. -->
+              <div class="pf-tube pf-sc-tile" role="button" tabindex="0"
+                   [class.pf-tube--done]="drawn(s)"
+                   [class.pf-tube--holding]="holdingId() === s.id"
+                   [class.pf-tube--locked]="tubeState(s).kind === 'locked'"
+                   [class.pf-tube--due]="tubeState(s).kind === 'due'"
+                   [class.pf-tube--missed]="tubeState(s).kind === 'missed' || notCollected(s)"
+                   [class.pf-tube--inert]="dispatchSelect() !== null && s.status !== 'collected'"
+                   [class.pf-tube--selected]="!!dispatchSelect()?.has(s.id)"
+                   (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
+                   (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
+                   (click)="onVialClick(s, $event)" (keydown.enter)="onVialClick(s, $event)">
+                <!-- Missed-draw badge: red ✕ overlay in the card's top-right
+                     (visual only — the tube stays server-pending and can be
+                     reopened with a double-tap). -->
+                @if (tubeState(s).kind === 'missed' || notCollected(s)) {
+                  <span class="pf-tube__missedmark" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                  </span>
+                }
+                <!-- Partial-dispatch selection mode: collected tubes show a
+                     selection ring (check fills in when selected). -->
+                @if (dispatchSelect() !== null && s.status === 'collected') {
+                  <span class="pf-tube__selectmark" [class.pf-tube__selectmark--on]="!!dispatchSelect()?.has(s.id)" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m5 12 4 4L19 6"/>
+                    </svg>
+                  </span>
+                }
+                <!-- Fixed illustration box (same size for every container
+                     type in a size class): the ORIGINAL tube / jar + its
+                     blood-fill animation is only scaled into it, bottom-
+                     centred, so the text rows below align across tiles. -->
+                <!-- Outsourced tube: the SAME tile, tube and tap-to-draw flow —
+                     only this small neutral mark at the top differs. -->
+                @if (s.outsourcedVendorId) {
+                  <span class="pf-chip pf-chip--static pf-tube__out">Outsourced</span>
+                }
+                <span class="pf-sc-illo">
+                @if (drawn(s)) {
+                  <span class="pf-sc-illo__check" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
+                  </span>
+                }
+                @if (container(s).kind === 'bottle') {
+                  <!-- Blood-culture bottle: wide round-shouldered body, narrow
+                       neck, crimped collar and a coloured flip-cap. Same box
+                       and sizing as the cup; the draw rises with the SAME
+                       pf-vial__blood transition as the vacutainer. -->
+                  <svg class="pf-vial pf-vial--cup pf-vial--bottle" viewBox="0 0 140 220" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
+                       [style.--tube-color]="container(s).color">
+                    <defs>
+                      <linearGradient [attr.id]="'bcap-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                        <stop offset="0.4"  stop-color="#fff" stop-opacity="0.25"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'bglass-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#fff" stop-opacity="0.08"/>
+                        <stop offset="0.2"  stop-color="#fff" stop-opacity="0.3"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.02"/>
+                        <stop offset="0.85" stop-color="#000" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'bblood-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0"    stop-color="#dc2626"/>
+                        <stop offset="0.25" stop-color="#b91c1c"/>
+                        <stop offset="1"    stop-color="#5b1010"/>
+                      </linearGradient>
+                      <clipPath [attr.id]="'bclip-' + s.id">
+                        <path d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"/>
+                      </clipPath>
+                    </defs>
+
+                    <!-- Bottle outline -->
+                    <path class="pf-vial__outline"
+                          d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"/>
+
+                    <!-- Blood fill clipped to the bottle -->
+                    <g [attr.clip-path]="'url(#bclip-' + s.id + ')'">
+                      <rect class="pf-vial__blood"
+                            x="14"
+                            [attr.y]="drawn(s) ? 132 : 220"
+                            width="112"
+                            height="100"
+                            [attr.fill]="'url(#bblood-' + s.id + ')'"/>
+                      @if (drawn(s)) {
+                        <ellipse cx="70" cy="132" rx="50" ry="3.5" fill="#ef4444" opacity="0.7"/>
+                        <ellipse cx="70" cy="133" rx="46" ry="1.8" fill="#fecaca" opacity="0.35"/>
+                      }
+                    </g>
+
+                    <!-- Glass reflection -->
+                    <path d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"
+                          [attr.fill]="'url(#bglass-' + s.id + ')'"/>
+
+                    <!-- Paper label band + fill-line marks -->
+                    <rect x="26" y="150" width="88" height="36" rx="3" fill="#fff" opacity="0.14"/>
+                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round">
+                      <line x1="114" y1="112" x2="120" y2="112"/>
+                      <line x1="114" y1="132" x2="120" y2="132"/>
+                    </g>
+
+                    <!-- Crimped aluminium collar, then the flip-cap on top -->
+                    <rect x="48" y="28" width="44" height="12" rx="2" fill="#cbd5e1"/>
+                    <rect x="48" y="28" width="44" height="12" rx="2" [attr.fill]="'url(#bcap-' + s.id + ')'"/>
+                    <rect x="44" y="8" width="52" height="22" rx="6" [attr.fill]="container(s).color"/>
+                    <rect x="44" y="8" width="52" height="22" rx="6" [attr.fill]="'url(#bcap-' + s.id + ')'"/>
+                    <ellipse cx="70" cy="12" rx="20" ry="2.5" fill="#fff" opacity="0.22"/>
+
+                    @if (drawn(s)) {
+                      <g class="pf-vial__tick">
+                        <circle cx="118" cy="58" r="18" fill="#7c3aed"/>
+                        <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                        <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                      </g>
+                    }
+                  </svg>
+                } @else if (container(s).kind !== 'vacutainer') {
+                  <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
+                       lid. Urine cups fill amber; sterile jars (body fluid,
+                       stool, CSF …) fill a neutral grey — same silhouette, a
+                       cylindrical container, never a test tube. -->
+                  <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
+                       [style.--tube-color]="container(s).color">
+                    <defs>
+                      <linearGradient [attr.id]="'lid-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'cup-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#fff" stop-opacity="0.08"/>
+                        <stop offset="0.2"  stop-color="#fff" stop-opacity="0.3"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.02"/>
+                        <stop offset="0.85" stop-color="#000" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'urine-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0"    [attr.stop-color]="cupFluid(s).top"/>
+                        <stop offset="0.35" [attr.stop-color]="cupFluid(s).mid"/>
+                        <stop offset="1"    [attr.stop-color]="cupFluid(s).bottom"/>
+                      </linearGradient>
+                      <clipPath [attr.id]="'cupclip-' + s.id">
+                        <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
+                      </clipPath>
+                    </defs>
+
+                    <!-- Lid: wider than body, with grip ridges -->
+                    <rect x="6" y="30" width="128" height="42" rx="7"
+                          [attr.fill]="container(s).color"/>
+                    <rect x="6" y="30" width="128" height="42" rx="7"
+                          [attr.fill]="'url(#lid-' + s.id + ')'"/>
+                    <!-- Lid grip texture -->
+                    <g stroke="rgba(0,0,0,0.2)" stroke-width="1" stroke-linecap="round">
+                      <line x1="18" y1="42" x2="18" y2="60"/>
+                      <line x1="30" y1="42" x2="30" y2="60"/>
+                      <line x1="42" y1="42" x2="42" y2="60"/>
+                      <line x1="54" y1="42" x2="54" y2="60"/>
+                      <line x1="66" y1="42" x2="66" y2="60"/>
+                      <line x1="78" y1="42" x2="78" y2="60"/>
+                      <line x1="90" y1="42" x2="90" y2="60"/>
+                      <line x1="102" y1="42" x2="102" y2="60"/>
+                      <line x1="114" y1="42" x2="114" y2="60"/>
+                      <line x1="122" y1="42" x2="122" y2="60"/>
+                    </g>
+                    <!-- Rim shadow under lid -->
+                    <rect x="14" y="64" width="112" height="6" rx="2" fill="#000" opacity="0.25"/>
+
+                    <!-- Cup outline (tapered slightly from rim to base) -->
+                    <path class="pf-vial__outline"
+                          d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"/>
+
+                    <!-- Urine fill clipped to cup shape -->
+                    <g [attr.clip-path]="'url(#cupclip-' + s.id + ')'">
+                      <rect class="pf-vial__blood"
+                            x="14"
+                            [attr.y]="drawn(s) ? 110 : 220"
+                            width="112"
+                            height="120"
+                            [attr.fill]="'url(#urine-' + s.id + ')'"/>
+                      @if (drawn(s)) {
+                        <ellipse cx="70" cy="110" rx="53" ry="4" [attr.fill]="cupFluid(s).surface" opacity="0.6"/>
+                        <ellipse cx="70" cy="112" rx="50" ry="2" [attr.fill]="cupFluid(s).surfaceHi" opacity="0.35"/>
+                      }
+                    </g>
+
+                    <!-- Cup reflection highlight -->
+                    <path d="M18 68 L22 200 Q22 208 30 208 L110 208 Q118 208 118 200 L122 68 Z"
+                          [attr.fill]="'url(#cup-' + s.id + ')'"/>
+
+                    <!-- Volume tick marks on the right (50 / 100 mL) -->
+                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round" font-family="'Noto Sans', sans-serif">
+                      <line x1="116" y1="110" x2="122" y2="110"/>
+                      <line x1="116" y1="150" x2="122" y2="150"/>
+                      <line x1="116" y1="190" x2="122" y2="190"/>
+                    </g>
+
+                    <!-- Tick badge when collected -->
+                    @if (drawn(s)) {
+                      <g class="pf-vial__tick">
+                        <circle cx="118" cy="58" r="18" fill="#7c3aed"/>
+                        <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                        <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                      </g>
+                    }
+                  </svg>
+                } @else {
+                <!-- Vacutainer — proportioned ~ 13×75 mm (1:5.8), with
+                     colored rubber stopper, glass body, hemispherical base,
+                     realistic highlights and a blood fill that rises on tap. -->
+                <svg class="pf-vial" viewBox="0 0 80 320" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
+                     [style.--tube-color]="container(s).color">
+                  <defs>
+                    <!-- Stopper (cap) shading -->
+                    <linearGradient [attr.id]="'cap-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                      <stop offset="0.35" stop-color="#fff" stop-opacity="0.25"/>
+                      <stop offset="0.65" stop-color="#fff" stop-opacity="0"/>
+                      <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                    </linearGradient>
+                    <!-- Glass reflections -->
+                    <linearGradient [attr.id]="'glass-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0"    stop-color="#fff" stop-opacity="0.1"/>
+                      <stop offset="0.18" stop-color="#fff" stop-opacity="0.28"/>
+                      <stop offset="0.32" stop-color="#fff" stop-opacity="0.02"/>
+                      <stop offset="0.68" stop-color="#fff" stop-opacity="0.02"/>
+                      <stop offset="0.82" stop-color="#000" stop-opacity="0.25"/>
+                      <stop offset="1"    stop-color="#000" stop-opacity="0.45"/>
+                    </linearGradient>
+                    <!-- Blood -->
+                    <linearGradient [attr.id]="'blood-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0"    stop-color="#dc2626"/>
+                      <stop offset="0.25" stop-color="#b91c1c"/>
+                      <stop offset="1"    stop-color="#5b1010"/>
+                    </linearGradient>
+                    <!-- Clip to the inside of the glass body so blood never
+                         bleeds outside the tube outline. Tube top extends
+                         to y=50 (under where the cap will sit) so the cap
+                         drawn last cleanly overlaps it. -->
+                    <clipPath [attr.id]="'clip-' + s.id">
+                      <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
+                    </clipPath>
+                  </defs>
+
+                  <!-- ─── Layer 1: Glass tube (drawn first, behind everything) ───
+                       Real vacutainer shape: flat top to meet the cap, then
+                       a long cylinder, then a hemispherical bottom where
+                       the draw collects. The top extends INTO the cap area
+                       (y=50) so the cap drawn later cleanly overlaps and
+                       hides the glass top — same way a rubber stopper sits
+                       on a real tube. -->
+                  <path class="pf-vial__outline"
+                        d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"/>
+
+                  <!-- ─── Layer 2: Blood fill (clipped to tube shape) ─── -->
+                  <g [attr.clip-path]="'url(#clip-' + s.id + ')'">
+                    <rect class="pf-vial__blood"
+                          x="14"
+                          [attr.y]="drawn(s) ? 130 : 320"
+                          width="52"
+                          height="200"
+                          [attr.fill]="'url(#blood-' + s.id + ')'"/>
+                    @if (drawn(s)) {
+                      <!-- Meniscus curve at liquid surface -->
+                      <path d="M20 130 Q40 124 60 130 L60 134 Q40 128 20 134 Z"
+                            fill="#ef4444" opacity="0.75"/>
+                      <ellipse cx="40" cy="131" rx="18" ry="2.5" fill="#fecaca" opacity="0.35"/>
+                    }
+                  </g>
+
+                  <!-- ─── Layer 3: Glass highlights / reflections ─── -->
+                  <path d="M20 50 L60 50 L60 290 Q60 310 40 310 Q20 310 20 290 Z"
+                        [attr.fill]="'url(#glass-' + s.id + ')'"/>
+
+                  <!-- Thin vertical highlight streak -->
+                  <rect x="25" y="74" width="4" height="220" rx="2"
+                        fill="#fff" opacity="0.18"/>
+                  <!-- Subtle right shadow -->
+                  <rect x="54" y="74" width="3" height="220" rx="1.5"
+                        fill="#000" opacity="0.25"/>
+
+                  <!-- Volume ticks -->
+                  <g opacity="0.35" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" stroke-linecap="round">
+                    <line x1="60" y1="120" x2="64" y2="120"/>
+                    <line x1="60" y1="170" x2="64" y2="170"/>
+                    <line x1="60" y1="220" x2="64" y2="220"/>
+                    <line x1="60" y1="270" x2="64" y2="270"/>
+                  </g>
+
+                  <!-- ─── Layer 4: Stopper (cap) — drawn LAST so it sits ON TOP
+                       of the glass, the same way a real rubber stopper
+                       wraps over the open end of a vacutainer. The cap is
+                       slightly wider than the glass body so it visibly
+                       overhangs on each side. -->
+                  <g>
+                    <!-- Cap body (rounded rectangle a touch wider than the glass tube) -->
+                    <rect x="14" y="20" width="52" height="48" rx="8"
+                          [attr.fill]="tube(s).color"/>
+                    <rect x="14" y="20" width="52" height="48" rx="8"
+                          [attr.fill]="'url(#cap-' + s.id + ')'"/>
+                    <!-- Top dome highlight — fakes a soft dome on the rubber. -->
+                    <ellipse cx="40" cy="26" rx="20" ry="3.5" fill="#fff" opacity="0.22"/>
+                    <!-- Rim shadow at the cap's bottom edge sells the
+                         "cap-on-top-of-tube" silhouette. -->
+                    <rect x="14" y="62" width="52" height="6" rx="2"
+                          fill="#000" opacity="0.32"/>
+                    <!-- Subtle highlight ring on the rim -->
+                    <rect x="14" y="60" width="52" height="2" rx="1"
+                          fill="#fff" opacity="0.18"/>
+                  </g>
+
+                  <!-- Tick badge when collected — drawn last so it pops
+                       above both the cap and the tube body. -->
+                  @if (drawn(s)) {
+                    <g class="pf-vial__tick">
+                      <circle cx="62" cy="46" r="16" fill="#7c3aed"/>
+                      <circle cx="62" cy="46" r="16" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                      <path d="M55 46 l5 5 l10 -10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </g>
+                  }
+                </svg>
+                }
+
+                </span>
+                <div class="pf-tube__body">
+                  <p class="pf-tube__label">{{ tube(s).label }}
+                    @if (captionOffset(s); as off) {
+                      <span class="pf-tube__offset">{{ off }}</span>
+                    }
+                  </p>
+                  @if (showTubeDept()) {
+                    <p class="pf-tube__dept">{{ tubeDeptLabel(s) }}</p>
+                  }
+
+                  <!-- Test list stays hidden so a many-test tube doesn't blow
+                       the column height; holding the vial ~2s peeks it. No
+                       textual hint and no draw-volume pill — the card carries
+                       only the container name and the sample id. -->
+                  <p class="pf-tube__code">Sample ID&nbsp;<span class="pf-num">{{ s.barcode ?? '—' }}</span></p>
+
+                  @if (drawn(s)) {
+                    <span class="pf-tube__stamp pf-num">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m5 12 4 4L19 6"/>
+                      </svg>
+                      @if (s.status === 'collected') { {{ s.collectedAt | date:'shortTime' }} }
+                      @else { Dispatched }
+                    </span>
+                    @if (s.source === 'external') {
+                      <span class="pf-tube__extlabel">Brought in</span>
+                    }
+                  } @else if (notCollected(s)) {
+                    <!-- "Can't collect": never drawn, never dispatched. Tap
+                         offers Recollect when the patient is back. -->
+                    <span class="pf-tube__stamp pf-tube__stamp--missed pf-tube__stamp--nc"
+                          [title]="s.rejectedReason || 'Not collected'">Not collected{{ s.rejectedReason ? ' · ' + s.rejectedReason : '' }}</span>
+                  } @else {
+                    <!-- Pending: series tubes carry their schedule state;
+                         normal tubes keep the classic "Tap when drawn". -->
+                    @switch (tubeState(s).kind) {
+                      @case ('anchor') {
+                        <span class="pf-tube__stamp pf-tube__stamp--pending">First draw</span>
+                      }
+                      @case ('locked') {
+                        @if (tubeState(s).reason === 'awaiting-anchor') {
+                          <span class="pf-tube__stamp pf-tube__stamp--series">After first draw</span>
+                        } @else {
+                          <span class="pf-tube__stamp pf-tube__stamp--series">Due {{ tubeState(s).dueAt | date:'HH:mm' }} · −{{ countdown(tubeState(s).msUntilDue) }}</span>
+                        }
+                      }
+                      @case ('due') {
+                        <span class="pf-tube__stamp pf-tube__stamp--due">Due now</span>
+                      }
+                      @case ('missed') {
+                        <span class="pf-tube__stamp pf-tube__stamp--missed">Missed · double-tap to override</span>
+                      }
+                      @default {
+                        <span class="pf-tube__stamp pf-tube__stamp--pending">Tap when drawn</span>
+                      }
+                    }
+                  }
+                </div>
+              </div>
+              @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
+                <button type="button" class="pf-tube__extflag pf-sc-ext"
+                        [class.pf-tube__extflag--on]="s.source === 'external'"
+                        [disabled]="sourceBusy()" [pfBusy]="sourceBusyId() === s.id" pfBusyLabel="Saving…"
+                        (click)="toggleExternal(s, $event)"
+                        [title]="s.source === 'external'
+                          ? 'Brought in from outside — tap to undo'
+                          : 'Mark as brought in from outside (skips the draw)'"
+                        [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
+                        [attr.aria-pressed]="s.source === 'external'">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
+                  </svg>
+                  <!-- Label shows on tablet/desktop; phones keep icon-only. -->
+                  <span class="pf-tube__extflag-txt">External (brought in)</span>
+                </button>
+              }
+                    </div><!-- /pf-tube-wrap -->
+                  }
+                  @if (visibleSamples(g).length === 0) {
+                    <p class="pf-sc-empty">No vials in this view.</p>
+                  }
+                </div>
+              </div>
+            </section>
+
+            <!-- Side card: COLLECTION (like the BILLING card). On phones it is
+                 the sheet opened from the bottom bar. -->
+            @if (actionsOpen()) { <div class="pf-sheet-backdrop pf-sc-backdrop" (click)="actionsOpen.set(false)"></div> }
+            <aside class="pf-card pf-sc-side" [class.pf-sc-side--open]="actionsOpen()" aria-label="Collection">
+              <span class="pf-sheet__handle" aria-hidden="true"></span>
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </span>
+                <span class="pf-card__label">Collection</span>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--icon pf-sc-side__close" (click)="actionsOpen.set(false)" aria-label="Close collection">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </header>
+              <div class="pf-card__body pf-sc-side__body">
+                <!-- ONE status line (neutral chip, violet mark). The tiles
+                     already show each vial, so there is no per-tube list. -->
+                <span class="pf-chip pf-chip--static pf-sc-status">
+                  @if (g.notCollected > 0 && g.notCollected === g.totalVials) {
+                    <span class="pf-sc-status__dot pf-sc-status__dot--nc" aria-hidden="true"></span>
+                    {{ notCollectedText(g) }}
+                  } @else if (isDispatched(g)) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                    Dispatched to lab
+                  } @else if (g.collected === g.totalVials) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                    All vials collected
+                  } @else {
+                    <span class="pf-sc-status__dot" aria-hidden="true"></span>
+                    <span class="pf-num">{{ g.totalVials - g.collected - g.notCollected }} of {{ g.totalVials }}</span> remaining
+                  }
+                </span>
+                @if (g.notCollected > 0 && g.notCollected < g.totalVials) {
+                  <span class="pf-chip pf-chip--static pf-sc-status pf-sc-status--nc">
+                    <span class="pf-sc-status__dot pf-sc-status__dot--nc" aria-hidden="true"></span>
+                    {{ notCollectedText(g) }}
+                  </span>
+                }
+                <!-- Collection info the tiles don't show (only when present). -->
+                @if (hasCollectInfo(g)) {
+                  @let info = collectInfo(g);
+                  <dl class="pf-sc-info">
+                    @if (info.urgent) {
+                      <div class="pf-sc-info__row"><dt>Priority</dt><dd class="pf-sc-info__urgent">Urgent</dd></div>
+                    }
+                    @if (info.fasting.length) {
+                      <div class="pf-sc-info__row"><dt>Fasting</dt><dd>Required for {{ info.fasting.join(', ') }}</dd></div>
+                    }
+                    @if (info.refDoctor) {
+                      <div class="pf-sc-info__row"><dt>Referred by</dt><dd>{{ info.refDoctor }}</dd></div>
+                    }
+                    @if (info.refHospital) {
+                      <div class="pf-sc-info__row"><dt>Hospital</dt><dd>{{ info.refHospital }}</dd></div>
+                    }
+                  </dl>
+                }
+                <!-- Progress of this order over time. -->
+                <section class="pf-sc-sec" aria-label="Timeline">
+                  <h3 class="pf-sc-sec__title">Timeline</h3>
+                  <ol class="pf-sc-timeline">
+                    @for (st of collectTimeline(g); track st.key) {
+                      <li class="pf-sc-timeline__step" [class.pf-sc-timeline__step--done]="st.done"
+                          [class.pf-sc-timeline__step--stopped]="st.tone === 'stopped'">
+                        <span class="pf-sc-timeline__mark" aria-hidden="true"></span>
+                        <span class="pf-sc-timeline__label">{{ st.label }}</span>
+                        <span class="pf-sc-timeline__at pf-num">
+                          @if (st.at && st.done) { {{ st.at | date:'shortTime' }} }
+                          @else if (st.note) { {{ st.note }} }
+                          @else { — }
+                        </span>
+                      </li>
+                    }
+                  </ol>
+                </section>
+
+                <!-- Keep the panel compact until the collector asks for the
+                     per-tube detail. Each tube can then reveal its full list. -->
+                <section class="pf-sc-sec" aria-label="Tests by tube">
+                  <h3 class="pf-sc-sec__title">Tests</h3>
+                  <ul class="pf-sc-tests">
+                    @for (smp of orderedSamples(g); track smp.id) {
+                      <li class="pf-sc-tests__tube">
+                        <details class="pf-sc-tests__accordion">
+                          <summary class="pf-sc-tests__head">
+                            <span class="pf-sc-dot" [style.background]="container(smp).kind !== 'vacutainer' ? container(smp).color : tube(smp).color" aria-hidden="true"></span>
+                            <span>{{ tube(smp).label }}</span>
+                            <svg class="pf-sc-tests__chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                          </summary>
+                          <ul class="pf-sc-tests__list">
+                            @for (t of tubeTests(smp); track $index) {
+                              <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol pf-num">{{ t.vol }} mL</span> }</li>
+                            }
+                          </ul>
+                        </details>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              </div>
+              <footer class="pf-card__foot pf-sc-foot">
+            <p class="pf-sc-labelinfo pf-span">
+              {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
+            </p>
+            @if (dispatchSelect(); as sel) {
+              <!-- Partial-dispatch selection mode: pick collected tubes, then
+                   send just those to the lab. Everything else in the footer is
+                   parked until Cancel / confirm. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text pf-btn pf-btn--secondary" (click)="cancelPartialDispatch()"
+                      aria-label="Cancel" data-label="Cancel">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+                <span class="pf-btn__text">Cancel</span>
+              </button>
+              <span class="pf-drawer__remaining">Tap collected tubes to select</span>
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text pf-btn pf-btn--primary pf-span" (click)="confirmPartialDispatch(g)"
+                      [disabled]="sel.size === 0 || dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
+                      [attr.aria-label]="'Dispatch ' + sel.size" [attr.data-label]="'Dispatch ' + sel.size">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + sel.size }}</span>
+              </button>
+            } @else {
+            @if (isDispatched(g)) {
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="undispatchOrder(g)" [disabled]="dispatching()"
+                      [pfBusy]="dispatching()" pfBusyLabel="Undoing dispatch…">
+                {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="rejectOrder(g)"
+                      [disabled]="pendingCount(g) === 0"
+                      aria-label="Can't collect" data-label="Can't collect">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/>
+                </svg>
+                <span class="pf-btn__text">Can't collect</span>
+              </button>
+            }
+            @if (scan.manualEntry()) {
+              <!-- Manual mode: nothing to print — show what to hand-write on
+                   each container instead. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="writeUpOpen.set(true)"
+                      aria-label="Label by hand" data-label="Label by hand">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                </svg>
+                <span class="pf-btn__text">Label by hand</span>
+              </button>
+            } @else {
+              <!-- Print the order's tube labels (barcode + QR) — available any time
+                   in the drawer so tubes can be labelled before or after the draw. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="printLabels(g)"
+                      [disabled]="printing()" [pfBusy]="printing()" pfBusyLabel="Printing labels…"
+                      aria-label="Print labels" data-label="Print labels">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
+                </svg>
+                <span class="pf-btn__text">Print labels</span>
+              </button>
+            }
+            <!-- Dispatch right here once everything's drawn (FD/collector handoff
+                 to the lab) — only if the user can dispatch and it's not already.
+                 Under a payment hold the gate would reject the dispatch, so the
+                 slot offers "Bill" (→ billing screen) instead — or a passive
+                 "Payment pending" note for collectors without billing access. -->
+            @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold && dispatchStep()) {
+              @if (canBill()) {
+                <button type="button" class="pf-btn pf-btn-primary pf-btn pf-btn--primary pf-span" (click)="goToBilling(g)"
+                        aria-label="Bill" data-label="Bill">
+                  <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 5h18v14H3z"/><path d="M3 10h18M7 15h3"/>
+                  </svg>
+                  <span class="pf-btn__text">Bill</span>
+                </button>
+              } @else {
+                <span class="pf-drawer__remaining pf-span">Payment pending — dispatch locked</span>
+              }
+            } @else if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
+              <button type="button" class="pf-btn pf-btn-primary pf-btn pf-btn--primary pf-span" (click)="dispatchOrder(g)" [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
+                      aria-label="Dispatch" data-label="Dispatch">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch' }}</span>
+              </button>
+            } @else if (canPartialDispatch(g)) {
+              <!-- Series, some tubes drawn, more still to come. One click hands
+                   ALL drawn tubes to the lab (OPS-66 — no select-then-confirm).
+                   "Choose" opens tube-by-tube selection for the rare subset. -->
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text pf-btn pf-btn--secondary" (click)="startPartialDispatch(g)"
+                      aria-label="Choose tubes" data-label="Choose">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                <span class="pf-btn__text">Choose</span>
+              </button>
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial pf-btn pf-btn--primary" (click)="dispatchCollected(g)"
+                      [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"
+                      [attr.aria-label]="'Dispatch ' + collectedCount(g)" [attr.data-label]="'Dispatch ' + collectedCount(g)">
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
+                </svg>
+                <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + collectedCount(g) }}</span>
+              </button>
+            }
+            <button type="button" class="pf-btn pf-drawer__finish pf-btn pf-span" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
+                    [class.pf-btn--primary]="finishIsPrimary(g)" [class.pf-btn--secondary]="!finishIsPrimary(g)"
+                    (click)="close()" [disabled]="doneDisabled(g)"
+                    [attr.aria-label]="doneLabel(g)"
+                    [attr.data-label]="doneLabel(g)">
+              @if (doneDisabled(g)) {
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m17 13 2 2 4-4"/>
+                </svg>
+              } @else {
+                <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 4 4L19 6"/>
+                </svg>
+              }
+              <span class="pf-btn__text">{{ doneLabel(g) }}</span>
+            </button>
+            }
+              </footer>
+            </aside>
+          </div>
+
+          <!-- Phones: the COLLECTION card as a sticky bottom bar. -->
+          <div class="pf-bottombar pf-sc-bar">
+            <span class="pf-bottombar__info">{{ g.collected }}/{{ g.totalVials }} drawn</span>
+            <button type="button" class="pf-btn pf-btn--icon" (click)="actionsOpen.set(true)" aria-label="More collection actions">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            </button>
+            @if (dispatchCtaShown(g)) {
+              <button type="button" class="pf-btn pf-btn--primary pf-sc-bar__cta" (click)="actionsOpen.set(true)">Dispatch…</button>
+            } @else {
+              <button type="button" class="pf-btn pf-sc-bar__cta" [class.pf-btn--primary]="finishIsPrimary(g)" [class.pf-btn--secondary]="!finishIsPrimary(g)"
+                      (click)="close()" [disabled]="doneDisabled(g)">{{ doneLabel(g) }}</button>
+            }
+          </div>
+
+          <!-- Tube labels for printing. Hidden on screen; the global
+               pf-print-label rule reveals ONLY this block during
+               printLabels(). One barcode+QR label per tube, reusing the
+               shared front-desk label card so labels match everywhere. -->
+          <div class="pf-sc-labels pf-print-label" aria-hidden="true">
+            @for (s of g.samples; track s.id; let i = $index) {
+              <pf-label-card [sample]="s" [patient]="s.order?.patient" [index]="i" [printing]="true"></pf-label-card>
+            }
+          </div>
+        </div>
+
+        <!-- Manual-mode "Label by hand" sheet — what to write on each container
+             (no printer in manual mode). A child of .pf-drawer for stacking. -->
+        @if (writeUpOpen()) {
+          <div class="pf-wl" role="dialog" aria-modal="true" (click)="writeUpOpen.set(false)">
+            <div class="pf-wl__panel" (click)="$event.stopPropagation()">
+              <p class="pf-wl__title">Write on each container</p>
+              <p class="pf-wl__sub"><pf-daily-no [of]="g" />{{ g.patientName }} · {{ g.orderNo }}</p>
+              <ul class="pf-wl__list">
+                @for (s of g.samples; track s.id) {
+                  <li class="pf-wl__row">
+                    <span class="pf-wl__dot" [style.background]="tube(s).color" aria-hidden="true"></span>
+                    <span class="pf-wl__container">{{ tube(s).label }}</span>
+                    <span class="pf-wl__code">{{ s.barcode ?? '—' }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="pf-wl__hint">Write the sample number (and patient name) on the matching container.</p>
+              <button type="button" class="pf-btn pf-btn-ghost pf-wl__close" (click)="writeUpOpen.set(false)">Done</button>
+            </div>
+          </div>
+        }
+
+        <!-- Hold-to-peek popover — a child of .pf-drawer (which is a z-index
+             stacking context) so it always paints above the collect content.
+             Shown while a vial is held; hidden on release. -->
+        @if (peekId()) {
+          <div class="pf-tube__peekpop" (click)="$event.stopPropagation()"
+               [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
+            <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
+            <ul>
+              @for (n of peekTests(); track n) { <li>{{ n }}</li> }
+            </ul>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ─── Reject-with-reason modal ─────────────────────────────────────
+         Structured reason picker. Opens when the user taps "Can't collect".
+         Reasons: refused, fainted, no_vein, insufficient, wrong_tube, other. -->
+    @if (_rejectModal(); as r) {
+      <div class="pf-rej" role="dialog" aria-modal="true" (click)="cancelReject()">
+        <div class="pf-rej__panel" (click)="$event.stopPropagation()">
+          <header class="pf-rej__head">
+            <h2 class="pf-rej__title">Can't collect for {{ r.group.patientName }}</h2>
+            <p class="pf-rej__sub">Pick a reason. The {{ pendingCount(r.group) === 1 ? 'tube is' : pendingCount(r.group) + ' pending tubes are' }} marked <b>Not collected</b> with it — use <b>Recollect</b> on the Frontdesk when the patient is back.</p>
+          </header>
+          <div class="pf-rej__body">
+            <div class="pf-rej__chips">
+              @for (opt of REJECT_REASONS; track opt.code) {
+                <button type="button" class="pf-rej__chip"
+                        [class.pf-rej__chip--on]="r.reason === opt.code"
+                        (click)="setRejectReason(opt.code)">
+                  {{ opt.label }}
+                </button>
+              }
+            </div>
+            @if (r.reason === 'other') {
+              <label class="pf-rej__label">Reason</label>
+              <textarea class="pf-input pf-rej__note" rows="2"
+                        placeholder="Describe what happened…"
+                        [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
+            } @else if (r.reason) {
+              <label class="pf-rej__label">Notes (optional)</label>
+              <textarea class="pf-input pf-rej__note" rows="2"
+                        placeholder="Anything the lab should know…"
+                        [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
+            }
+          </div>
+          <footer class="pf-rej__foot">
+            <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="cancelReject()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn-danger pf-btn pf-btn--danger"
+                    [disabled]="!canSubmitReject() || rejectBusy()" [pfBusy]="rejectBusy()" pfBusyLabel="Saving…"
+                    (click)="submitReject()">
+              {{ rejectBusy() ? 'Saving…' : 'Mark ' + (pendingCount(r.group) === 1 ? 'tube' : pendingCount(r.group) + ' tubes') + ' not collected' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    }

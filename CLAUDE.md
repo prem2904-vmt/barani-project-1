@@ -1,3 +1,7 @@
+# Read first
+
+Before any change, read and follow `docs/ENGINEERING-RULES.md` (single source of truth, isolation, query rules, clinical safety, definition of done). When a fix reveals a new kind of mistake, add one line there in the same change.
+
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->
 
@@ -241,3 +245,16 @@ Use these standard library types and **enforce them with module boundary rules**
 - Keep dependencies updated; audit regularly with `pnpm audit` (or `npm audit`)
 - Use HTTPS everywhere; enforce CSP headers in production
 - Configure CORS correctly on the backend; never use wildcard origins for authenticated endpoints
+## New-design UI pattern (REQUIRED)
+- All new-design screens MUST follow `docs/PF-PATTERN.md` and use the pf-kit
+  (`apps/lms/src/app/shared/styles/_pf-kit.scss` global classes, `_pf-mixins.scss`).
+- Canonical example: Order & Payments (`apps/lms/src/app/features/frontdesk/order-create/`).
+- Non-negotiables: primary gradient ONLY on the single main CTA; the band is the same on
+  every step and its pill is the context bar; band + main card + side card layout; slate
+  toggles; neutral selected states; no truncation when there is room; one row per search
+  result; web vs touch search modes; the bottom navbar is ALWAYS visible (layouts fit above
+  it, never hide it); phone bottom bar / 92dvh sheet above the nav;
+  spring motion with reduced-motion off; SVG stroked icons (no emoji); no native controls;
+  ONE font (Noto Sans, tabular numbers for IDs — never monospace); palette = violet +
+  neutrals/slate only (no green/teal decoration; exceptions: tube caps, blood fill, red
+  Urgent / validation, amber unpriced/required dot).
