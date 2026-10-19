@@ -28,7 +28,8 @@
             "glob": "**/*",
             "input": "apps/lms/public",
             "ignore": [
-              "config.json"
+              "config.json",
+              "config.example.json"
             ]
           },
           {

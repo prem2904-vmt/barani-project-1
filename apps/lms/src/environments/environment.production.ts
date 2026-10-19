@@ -9,6 +9,7 @@
 export const environment = {
   production: true,
   runtimeConfig: true,
+  fallbackHosts: ['med-dev.prefrontal.health', 'localhost', '127.0.0.1'],
   apiUrl: 'https://med-fetch-dev.prefrontal.health',
   // Public web origin for patient-facing report links (window.location.origin is
   // capacitor://localhost in the native app, which can't be opened externally).

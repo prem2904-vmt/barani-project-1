@@ -1,4 +1,4 @@
-import { loadRuntimeConfig, mergeRuntimeConfig, RuntimeConfigTarget } from './runtime-config';
+import { loadRuntimeConfig, mergeRuntimeConfig, RuntimeConfigTarget, startWithRuntimeConfig } from './runtime-config';
 
 const builtIn = (over: Partial<RuntimeConfigTarget> = {}): RuntimeConfigTarget => ({
   runtimeConfig: true,
@@ -124,6 +124,85 @@ describe('runtime config loader', () => {
   });
 
   it('mergeRuntimeConfig counts applied keys', () => {
-    expect(mergeRuntimeConfig(builtIn(), { apiUrl: 'a', auth: { supabaseUrl: 'b' } })).toBe(2);
+    expect(mergeRuntimeConfig(builtIn(), { apiUrl: 'https://a.example', auth: { supabaseUrl: 'https://b.example' } })).toBe(2);
+  });
+});
+
+describe('startWithRuntimeConfig', () => {
+  const fail = async () => ({ ok: false, status: 503, json: async () => ({}) });
+  const good = async () => ({ ok: true, status: 200, json: async () => ({ apiUrl: 'https://stg-api' }) });
+  const hosts = ['dev.example.com', 'localhost'];
+  let queue: Array<() => Promise<void>>;
+  const schedule = (fn: () => Promise<void>) => { queue.push(fn); };
+  beforeEach(() => { queue = []; document.body.innerHTML = ''; });
+  const base = () => builtIn({ fallbackHosts: hosts });
+
+  it('success: merges and bootstraps', async () => {
+    const env = base(); let boots = 0;
+    await startWithRuntimeConfig(env, () => boots++, { fetchFn: good, hostname: 'stg.example.com', schedule, warn: () => undefined });
+    expect(boots).toBe(1);
+    expect(env.apiUrl).toBe('https://stg-api');
+  });
+
+  it('failure on a fallback host: built-ins, bootstraps, no message', async () => {
+    const env = base(); let boots = 0;
+    await startWithRuntimeConfig(env, () => boots++, { fetchFn: fail, hostname: 'dev.example.com', schedule, warn: () => undefined });
+    expect(boots).toBe(1);
+    expect(env.apiUrl).toBe('https://dev-api');
+    expect(document.body.textContent).not.toContain("Can't load settings");
+  });
+
+  it('failure elsewhere: no bootstrap, message shown, retries, bootstraps on later success', async () => {
+    const env = base(); let boots = 0; let calls = 0;
+    const flaky = async () => (++calls <= 3 ? fail() : good());
+    await startWithRuntimeConfig(env, () => boots++, { fetchFn: flaky, hostname: 'stg.example.com', schedule, warn: () => undefined });
+    expect(boots).toBe(0);
+    expect(document.body.textContent).toContain("Can't load settings");
+    expect(document.body.textContent).toContain('Try again');
+    expect(env.apiUrl).toBe('https://dev-api');
+    await queue.shift()!();            // retry 1 (call 2) fails
+    expect(boots).toBe(0);
+    await queue.shift()!();            // retry 2 (call 3) fails
+    expect(boots).toBe(0);
+    await queue.shift()!();            // retry 3 (call 4) succeeds
+    expect(boots).toBe(1);
+    expect(env.apiUrl).toBe('https://stg-api');
+    expect(document.body.textContent).not.toContain("Can't load settings");
+  });
+
+  it('stops retrying after the limit and keeps the button', async () => {
+    const env = base(); let boots = 0;
+    await startWithRuntimeConfig(env, () => boots++, { fetchFn: fail, hostname: 'stg.example.com', schedule, warn: () => undefined, retryMs: 5000, maxRetryMs: 15000 });
+    for (let i = 0; i < 3; i++) await queue.shift()!();
+    expect(queue.length).toBe(0);
+    expect(boots).toBe(0);
+    expect(document.querySelector('button')).not.toBeNull();
+  });
+
+  it('Try again button reloads', async () => {
+    let reloaded = 0;
+    await startWithRuntimeConfig(base(), () => undefined, { fetchFn: fail, hostname: 'stg.example.com', schedule, warn: () => undefined, reload: () => { reloaded++; } });
+    document.querySelector('button')!.click();
+    expect(reloaded).toBe(1);
+  });
+
+  it('flag off: bootstraps without fetching', async () => {
+    let boots = 0;
+    await startWithRuntimeConfig(builtIn({ runtimeConfig: false }), () => boots++, { fetchFn: fail, hostname: 'stg.example.com', schedule });
+    expect(boots).toBe(1);
+  });
+});
+
+describe('url safety', () => {
+  it('rejects http:// and non-URLs', () => {
+    const env = builtIn();
+    expect(mergeRuntimeConfig(env, { apiUrl: 'http://evil.example.com', reportPublicBaseUrl: 'javascript:alert(1)' })).toBe(0);
+    expect(env).toEqual(builtIn());
+  });
+  it('allows http on localhost and 127.0.0.1', () => {
+    const env = builtIn();
+    expect(mergeRuntimeConfig(env, { apiUrl: 'http://localhost:5270' })).toBe(1);
+    expect(env.apiUrl).toBe('http://localhost:5270');
+    expect(mergeRuntimeConfig(env, { apiUrl: 'http://127.0.0.1:5270' })).toBe(1);
   });
 });

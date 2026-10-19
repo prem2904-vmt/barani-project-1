@@ -16,6 +16,8 @@
  */
 export interface RuntimeConfigTarget {
   runtimeConfig?: boolean;
+  /** Hosts where the baked-in values are valid (dev + local). Elsewhere a failed load blocks bootstrap. */
+  fallbackHosts?: readonly string[];
   apiUrl: string;
   reportPublicBaseUrl?: string;
   auth: { supabaseUrl: string; supabaseAnonKey: string };
@@ -40,15 +42,25 @@ const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
+/** https only; plain http solely for local development hosts. */
+export function isSafeUrl(v: unknown): v is string {
+  if (!isNonEmptyString(v)) return false;
+  try {
+    const u = new URL(v);
+    if (u.protocol === 'https:') return true;
+    return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+  } catch { return false; }
+}
+
 /** Merge the known, correctly-typed keys of `raw` into `target`. Returns how many were applied. */
 export function mergeRuntimeConfig(target: RuntimeConfigTarget, raw: unknown): number {
   if (!isRecord(raw)) return 0;
   let applied = 0;
-  if (isNonEmptyString(raw['apiUrl'])) { target.apiUrl = raw['apiUrl']; applied++; }
-  if (isNonEmptyString(raw['reportPublicBaseUrl'])) { target.reportPublicBaseUrl = raw['reportPublicBaseUrl']; applied++; }
+  if (isSafeUrl(raw['apiUrl'])) { target.apiUrl = raw['apiUrl']; applied++; }
+  if (isSafeUrl(raw['reportPublicBaseUrl'])) { target.reportPublicBaseUrl = raw['reportPublicBaseUrl']; applied++; }
   const auth = raw['auth'];
   if (isRecord(auth)) {
-    if (isNonEmptyString(auth['supabaseUrl'])) { target.auth.supabaseUrl = auth['supabaseUrl']; applied++; }
+    if (isSafeUrl(auth['supabaseUrl'])) { target.auth.supabaseUrl = auth['supabaseUrl']; applied++; }
     if (isNonEmptyString(auth['supabaseAnonKey'])) { target.auth.supabaseAnonKey = auth['supabaseAnonKey']; applied++; }
   }
   return applied;
@@ -92,4 +104,80 @@ export async function loadRuntimeConfig(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+export interface StartDeps {
+  fetchFn?: FetchFn;
+  hostname?: string;
+  doc?: Document;
+  /** Schedules a retry; the callback returns a promise so tests can await it. */
+  schedule?: (fn: () => Promise<void>, ms: number) => void;
+  reload?: () => void;
+  warn?: (message: string) => void;
+  retryMs?: number;
+  maxRetryMs?: number;
+  timeoutMs?: number;
+}
+
+/**
+ * Load the runtime settings, then call `bootstrap`.
+ *  - success                         -> merge + bootstrap
+ *  - failure on a fallbackHosts host -> keep built-ins, warn, bootstrap
+ *  - failure anywhere else           -> NEVER bootstrap with the baked (dev) values;
+ *    show a plain-DOM message and retry every 5 s for ~2 min, bootstrapping on success.
+ */
+export async function startWithRuntimeConfig(
+  target: RuntimeConfigTarget,
+  bootstrap: () => unknown,
+  deps: StartDeps = {},
+): Promise<void> {
+  const warn = deps.warn ?? ((m: string) => console.warn(m));
+  const ok = await loadRuntimeConfig(target, deps.fetchFn, { warn, timeoutMs: deps.timeoutMs });
+  if (ok || !target.runtimeConfig) { bootstrap(); return; }
+
+  const host = (deps.hostname ?? (typeof location !== 'undefined' ? location.hostname : '')).toLowerCase();
+  if ((target.fallbackHosts ?? []).includes(host)) { bootstrap(); return; }
+
+  const doc = deps.doc ?? document;
+  const schedule = deps.schedule ?? ((fn, ms) => { setTimeout(() => { void fn(); }, ms); });
+  const reload = deps.reload ?? (() => location.reload());
+  const retryMs = deps.retryMs ?? 5000;
+  const maxAttempts = Math.max(1, Math.floor((deps.maxRetryMs ?? 120000) / retryMs));
+  const ui = renderSettingsError(doc, reload);
+  let attempts = 0;
+  const attempt = async (): Promise<void> => {
+    attempts++;
+    const good = await loadRuntimeConfig(target, deps.fetchFn, { warn: () => { /* warned once already */ }, timeoutMs: deps.timeoutMs });
+    if (good) { ui.remove(); bootstrap(); return; }
+    if (attempts >= maxAttempts) { ui.giveUp(); return; }
+    schedule(attempt, retryMs);
+  };
+  schedule(attempt, retryMs);
+}
+
+function renderSettingsError(doc: Document, reload: () => void): { remove(): void; giveUp(): void } {
+  const style = doc.createElement('style');
+  style.textContent =
+    '.pf-cfg{font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;' +
+    'flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;' +
+    'background:#fff;color:#111}.pf-cfg h1{font-size:1.25rem;margin:0 0 8px}.pf-cfg p{margin:0 0 16px}' +
+    '.pf-cfg button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid #888;background:transparent;color:inherit;cursor:pointer}' +
+    '@media (prefers-color-scheme:dark){.pf-cfg{background:#111;color:#eee}}';
+  const root = doc.createElement('div');
+  root.className = 'pf-cfg';
+  root.setAttribute('role', 'alert');
+  const h = doc.createElement('h1');
+  h.textContent = "Can't load settings";
+  const p = doc.createElement('p');
+  p.textContent = "This page couldn't load its settings. Retrying…";
+  const b = doc.createElement('button');
+  b.type = 'button';
+  b.textContent = 'Try again';
+  b.addEventListener('click', reload);
+  root.append(h, p, b);
+  doc.body.append(style, root);
+  return {
+    remove: () => { root.remove(); style.remove(); },
+    giveUp: () => { p.textContent = "This page couldn't load its settings. Check your connection, then try again."; },
+  };
 }
