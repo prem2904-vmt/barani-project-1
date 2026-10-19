@@ -35,9 +35,19 @@ jobs:
           docker push -q $REGISTRY/$APP:${{ steps.tag.outputs.build }}
           docker push -q $REGISTRY/$APP:${{ github.sha }}
           echo "### Build ${{ steps.tag.outputs.build }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release it to stage: Actions → release → Run workflow → stage, build \`${{ steps.tag.outputs.build }}\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the build server tidy
+        if: always()
+        run: |
+          docker builder prune -f --keep-storage 8G >/dev/null || true
+          # keep the newest 10 builds of this app locally; the registry keeps everything
+          docker images "$REGISTRY/$APP" --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' | sort -r | tail -n +21 | cut -f2 | xargs -r docker rmi >/dev/null 2>&1 || true
 
   release-dev:
     needs: build
+    concurrency:
+      group: release-dev-${{ github.repository }}
+      cancel-in-progress: false
     uses: ./.github/workflows/release.yml
     with:
       environment: dev
