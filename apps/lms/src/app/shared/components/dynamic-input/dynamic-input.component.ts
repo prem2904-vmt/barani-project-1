@@ -176,7 +176,7 @@ export { isContactNumberField };
                         (valueChange)="emit($event)"></pf-time>
           }
           @case ('select') {
-            @if (opts.length >= 2 && opts.length <= 4) {
+            @if (field.name !== 'title' && opts.length >= 2 && opts.length <= 4) {
               <!-- 2–4 choices (Sex, …): a neutral segmented control that fills the column. -->
               <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true, err: err }"></ng-container>
             } @else {
@@ -186,7 +186,13 @@ export { isContactNumberField };
             }
           }
           @case ('button_select') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
+            @if (field.name === 'title') {
+              <pf-select [options]="selectOptions()" [value]="value" [searchable]="opts.length > 8"
+                         [class.pf-di-select--error]="!!err" [enterAdvances]="enterAdvances"
+                         [placeholder]="field.placeholder ?? 'Select…'" (valueChange)="emit($event)"></pf-select>
+            } @else {
+              <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
+            }
           }
           @case ('image_select') {
             <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
@@ -991,8 +997,9 @@ export { isContactNumberField };
     .pf-di-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
     /* DOB ⇄ age on one row. */
     .pf-di-dob { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pf-di-dob__date { flex: 1 1 150px; width: auto; }
-    .pf-di-dob__age { flex: 0 0 84px; width: 84px; }
+    .pf-di-dob__date { flex: 1 1 110px; min-width: 100px; width: auto; }
+    .pf-di-dob__age { flex: 0 0 52px; width: 52px; }
+    .pf-di-dob__age .pf-input { padding: 0 6px; text-align: center; }
     /* Typed date + a calendar button over a hidden native picker. */
     .pf-di-date { position: relative; display: block; min-width: 0; }
     .pf-di-date__in { padding-right: 40px; }
@@ -1005,14 +1012,14 @@ export { isContactNumberField };
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
     .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
     /* Segmented choices: a 40px neutral control; wraps rather than clips. */
-    .pf-di-seg { box-sizing: border-box; min-height: 40px; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
+    .pf-di-seg { box-sizing: border-box; min-height: 40px; height: auto; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
     .pf-di-seg .pf-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
     /* Pills (5+ options, e.g. Title) keep their natural width on web. */
     .pf-di-seg:not(.pf-di-seg--fill) { align-self: flex-start; }
     .pf-di-seg--fill { display: flex; width: 100%; }
     .pf-di-seg--fill .pf-seg__item { flex: 1 1 0; }
     .pf-di-seg--unit { flex: none; }
-    .pf-di-seg--unit .pf-seg__item { min-width: 44px; padding: 0 10px; }
+    .pf-di-seg--unit .pf-seg__item { min-width: 34px; padding: 0 7px; font-size: 12.5px; }
     /* Field-level errors (new design): the control is outlined in error red. */
     .pf-di-seg--error { border-color: var(--red-border, #ef4444); }
     :host .pf-di-nd ::ng-deep pf-select.pf-di-select--error .pf-dd__trigger { border-color: var(--red-border, #ef4444) !important; }

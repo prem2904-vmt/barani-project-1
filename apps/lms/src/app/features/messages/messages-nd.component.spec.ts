@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
-import { MessagesNdComponent } from './messages-pf.component';
+import { MessagesNdComponent } from './messages-nd.component';
 import { MessagesRouteComponent } from './messages-route.component';
 import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
