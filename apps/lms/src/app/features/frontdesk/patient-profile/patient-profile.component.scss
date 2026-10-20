@@ -13,7 +13,7 @@
 
 /* WORK page: the host fills the shell; only regions scroll. */
 :host { display: block; height: 100%; min-height: 0; overflow: hidden; }
-.pf-pp { height: 100%; }
+.pf-pp { height: 100%; --pf-hb-bleed: 0px !important; }
 .pf-pp-band { flex: none; }
 
 /* ── First render: pill chips + actions fade in, gently staggered ──── */

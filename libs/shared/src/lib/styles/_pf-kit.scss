@@ -143,6 +143,8 @@
   padding: 12px 14px;
   background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
   border-bottom: 1px solid var(--pf-line);
+  border-top-left-radius: calc(var(--pf-radius-card) - 1px);
+  border-top-right-radius: calc(var(--pf-radius-card) - 1px);
 }
 .pf-card__icon {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
@@ -159,6 +161,8 @@
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
   padding: 12px 14px 14px;   /* the nav below owns the bottom safe area */
   background: var(--pf-card-bg); border-top: 1px solid var(--pf-line);
+  border-bottom-left-radius: calc(var(--pf-radius-card) - 1px);
+  border-bottom-right-radius: calc(var(--pf-radius-card) - 1px);
 }
 .pf-card__foot > :only-child, .pf-card__foot > .pf-span { grid-column: 1 / -1; }
 

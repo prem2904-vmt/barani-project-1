@@ -110,6 +110,109 @@ describe('InlinePaymentPanel (designer panel)', () => {
     c.emit();
     expect(emitted).toEqual([]);
   });
+
+  it('cash input sanitizes alphabetic and special characters from input and DOM element', () => {
+    const { c } = make(500);
+    const input = document.createElement('input');
+    input.value = '4sdaasf!@#';
+    c.onCashInput({ target: input } as unknown as Event);
+    expect(input.value).toBe('4');
+    expect(c.cash()).toBe('4');
+    expect(c.cashNum()).toBe(4);
+  });
+
+  it('split input sanitizes alphabetic and special characters and normalizes decimals', () => {
+    const { c } = make(500);
+    c.setMode('split');
+    const input1 = document.createElement('input');
+    input1.value = '2 sdfl!@#';
+    c.onSplitInput('upi', { target: input1 } as unknown as Event);
+    expect(input1.value).toBe('2');
+    expect(c.splitAmounts()['upi']).toBe(2);
+
+    const input2 = document.createElement('input');
+    input2.value = '@@##%eafasf';
+    c.onSplitInput('cash', { target: input2 } as unknown as Event);
+    expect(input2.value).toBe('');
+    expect(c.splitAmounts()['cash']).toBe(0);
+
+    const input3 = document.createElement('input');
+    input3.value = '250.50.75';
+    c.onSplitInput('card', { target: input3 } as unknown as Event);
+    expect(input3.value).toBe('250.5075');
+    expect(c.splitAmounts()['card']).toBe(250.5075);
+  });
+
+  it('advance input sanitizes alphabetic and special characters', () => {
+    const { c } = make(500);
+    c.setKind('later');
+    const input = document.createElement('input');
+    input.value = '150abc!@#';
+    c.onAdvanceInput({ target: input } as unknown as Event);
+    expect(input.value).toBe('150');
+    expect(c.advance()).toBe('150');
+    expect(c.advanceNum()).toBe(150);
+  });
+
+  it('blockNonNumericKeys prevents non-numeric keys and handles decimal rules', () => {
+    const { c } = make(500);
+    const mockEvent = (key: string, ctrl = false) => {
+      let defaultPrevented = false;
+      return {
+        key,
+        ctrlKey: ctrl,
+        metaKey: false,
+        altKey: false,
+        preventDefault: () => { defaultPrevented = true; },
+        get isPrevented() { return defaultPrevented; },
+      } as unknown as KeyboardEvent & { isPrevented: boolean };
+    };
+
+    const evDigit = mockEvent('5');
+    c.blockNonNumericKeys(evDigit, false);
+    expect(evDigit.isPrevented).toBe(false);
+
+    const evAlpha = mockEvent('a');
+    c.blockNonNumericKeys(evAlpha, false);
+    expect(evAlpha.isPrevented).toBe(true);
+
+    const evSpecial = mockEvent('@');
+    c.blockNonNumericKeys(evSpecial, false);
+    expect(evSpecial.isPrevented).toBe(true);
+
+    const evCtrlV = mockEvent('v', true);
+    c.blockNonNumericKeys(evCtrlV, false);
+    expect(evCtrlV.isPrevented).toBe(false);
+
+    const evNav = mockEvent('Backspace');
+    c.blockNonNumericKeys(evNav, false);
+    expect(evNav.isPrevented).toBe(false);
+
+    const input = document.createElement('input');
+    input.value = '10';
+    const evDot1 = {
+      key: '.',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      target: input,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    c.blockNonNumericKeys(evDot1, true);
+    expect(evDot1.preventDefault).not.toHaveBeenCalled();
+
+    input.value = '10.5';
+    const evDot2 = {
+      key: '.',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      target: input,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    c.blockNonNumericKeys(evDot2, true);
+    expect(evDot2.preventDefault).toHaveBeenCalled();
+  });
 });
 
 describe('InlinePaymentPanel — due-settlement drawer (payment only)', () => {

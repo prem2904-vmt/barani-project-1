@@ -74,7 +74,7 @@ function readDiscount(d: unknown): DraftDiscount | null {
   if (kind !== 'flat' && kind !== 'percent') return null;
   const v = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
   const n = parseFloat(v);
-  if (v === '' || !Number.isFinite(n) || n < 0) return null;
+  if (v === '' || !/^\d+(\.\d+)?$/.test(v) || !Number.isFinite(n) || n < 0) return null;
   return { value: v, kind };
 }
 
