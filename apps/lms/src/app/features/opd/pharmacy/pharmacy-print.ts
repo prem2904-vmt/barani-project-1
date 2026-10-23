@@ -176,7 +176,7 @@ export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
     }
     if (isTaxInvoice) {
       doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
-      doc.text(`(Amount in words: Rupees ${numberToWordsINR(Math.round(b.totalPayable))} Only)`, M, (y += 3), { maxWidth: W - 2 * M });
+      doc.text(`(Amount in words: ${numberToWordsINR(Math.round(b.totalPayable))} Only)`, M, (y += 3), { maxWidth: W - 2 * M });
       y += 4;
       doc.setFont('helvetica', 'normal');
       doc.text('Pharmacist\'s signature: ______________________', W - M - 70, (y += 6));

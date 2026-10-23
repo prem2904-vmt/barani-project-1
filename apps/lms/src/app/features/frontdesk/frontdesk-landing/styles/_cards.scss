@@ -750,24 +750,6 @@
   color: var(--text-muted);
 }
 
-/* Solid primary "Collect" button */
-.pf-btn {
-  height: 32px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  border: none;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-
-.pf-btn:hover {
-  opacity: 0.88;
-}
 
 /* "Partial ready" badge */
 .pf-card__partial {
