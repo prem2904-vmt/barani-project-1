@@ -51,10 +51,12 @@ export interface OptionFamily {
   name: string;
   active: boolean;
   nodes: FamilyNode[];
-  /** Read-only, server-provided: tests whose parameters use this family. */
-  usedBy?: FamilyUse[] | null;
+  /** Read-only (GET): 'own' = this lab's row, 'master' = the template's. */
+  source?: 'own' | 'master' | string | null;
+  updatedAt?: string | null;
 }
 
+/** GET /api/option-families/{code}/usage — one row per test parameter. */
 export interface FamilyUse { testId: string; testCode?: string | null; testName: string; paramName?: string | null }
 
 /** One picked child (any depth below the root). */
@@ -72,6 +74,8 @@ export interface FamilyValue {
   v: string;
   label: string;
   items?: FamilyItem[];
+  /** Server-stamped on save (= !root.normal). */
+  abnormal?: boolean;
 }
 
 /** Root level = depth 1; a family may nest at most this deep. */
@@ -183,8 +187,30 @@ export function familyIsAbnormal(def: OptionFamily | null | undefined, raw: unkn
   const v = asFamilyValue(raw);
   if (!v || !clean(v.v)) return null;
   const node = rootNodeOf(def, v);
-  if (!node) return null;
+  // No definition (or a removed node): the server's stamped verdict.
+  if (!node) return typeof v.abnormal === 'boolean' ? v.abnormal : null;
   return node.normal !== true;
+}
+
+/** mw's coded family errors (400 / 409) in plain words. Unknown → null. */
+export function familyErrorText(code: string | null | undefined): string | null {
+  switch ((code ?? '').trim()) {
+    case 'family_nodes_empty': return 'Add at least one answer (and at least one option under every sub-list).';
+    case 'family_node_code_duplicate': return 'Two answers at the same level share a code — give each a different one.';
+    case 'family_depth': return 'Too deep — a family can nest at most 4 levels.';
+    case 'family_qty_kind': return 'An amount must be a list, a number or text.';
+    case 'family_qty_options': return 'An amount "from a list" needs at least one choice.';
+    case 'family_label_required': return 'Every answer needs a label.';
+    case 'family_name_required': return 'Give the family a name.';
+    case 'family_name_too_long': return 'The family name is too long.';
+    case 'family_code_exists': return 'A family with this code already exists — choose another name or code.';
+    case 'family_in_use': return 'This family is used by a test, so it can\u2019t be deleted.';
+    case 'family_value_invalid': return 'That answer doesn\u2019t fit the family — pick it again from the list.';
+    case 'family_unknown_code': return 'An answer picked here no longer exists in the family — pick it again.';
+    case 'family_qty_invalid': return 'An amount isn\u2019t valid — use a number or a range like 2–3.';
+    case 'family_unknown': return 'The option family linked to this test isn\u2019t set up in this lab — pick another family.';
+    default: return null;
+  }
 }
 
 /** The node at a code path ([root, child, grandchild…]); null if missing. */

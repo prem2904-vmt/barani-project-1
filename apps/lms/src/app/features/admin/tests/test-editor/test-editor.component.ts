@@ -76,7 +76,7 @@ import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { printPickerDefaultOf, type PrintPickerDefault } from '../../../../shared/utils/print-picker';
 import { OptionFamilyService } from '../../../../core/services/option-family.service';
-import type { FamilyNode, OptionFamily } from '../../../../shared/utils/option-family';
+import { familyErrorText, type FamilyNode, type OptionFamily } from '../../../../shared/utils/option-family';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -2324,6 +2324,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     const field = err.field ?? '';
+    // A family parameter whose family isn't set up for this lab (mw 400
+    // family_unknown) — show it where the family is picked.
+    const famText = familyErrorText(err.code);
+    if (famText) {
+      this.jumpToSection('results');
+      this.toasts.warning(famText);
+      return;
+    }
     if (err.code === 'range_invalid' || field === 'referenceRanges') {
       // mw's ReferenceRangeValidator refused the ranges (same rules as the
       // editor's own check) — show them where they are edited.

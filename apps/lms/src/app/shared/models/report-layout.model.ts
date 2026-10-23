@@ -388,6 +388,10 @@ export interface ResolvedRow {
    *  report PREVIEW (no saved result) carries it so a non-normal dropdown
    *  option prints bold there too. Null / absent = not computed. */
   flag?: string | null;
+  /** A FAMILY value's picked item (mw expands them, 2026-10-23): 1 = a pick
+   *  under the parent row, 2 = a sub-pick… `title` = the pick, the result
+   *  cell = amount + unit, other cells empty. Absent / 0 = a normal row. */
+  indent?: number | null;
 }
 
 export interface ResolvedChart {

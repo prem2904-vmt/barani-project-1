@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, finalize, shareReplay, tap } from 'rxjs';
 import { ApiService } from './api.service';
-import type { OptionFamily } from '../../shared/utils/option-family';
+import type { FamilyUse, OptionFamily } from '../../shared/utils/option-family';
 
 /**
  * The tenant's option FAMILIES (`/api/option-families`) — loaded once per
@@ -45,12 +45,19 @@ export class OptionFamilyService {
   }
 
   create(def: OptionFamily): Observable<OptionFamily> {
-    return this.api.post<OptionFamily>('/api/option-families', strip(def)).pipe(tap(() => this.refresh()));
+    return this.api.post<OptionFamily>('/api/option-families',
+      { code: def.code, name: def.name, active: def.active !== false, nodes: def.nodes }).pipe(tap(() => this.refresh()));
   }
 
+  /** The code is immutable (the route names it); only name / active / nodes travel. */
   update(def: OptionFamily): Observable<OptionFamily> {
-    return this.api.put<OptionFamily>(`/api/option-families/${encodeURIComponent(def.code)}`, strip(def))
-      .pipe(tap(() => this.refresh()));
+    return this.api.put<OptionFamily>(`/api/option-families/${encodeURIComponent(def.code)}`,
+      { name: def.name, active: def.active !== false, nodes: def.nodes }).pipe(tap(() => this.refresh()));
+  }
+
+  /** The test parameters using a family (one call for the selected family). */
+  usage(code: string): Observable<FamilyUse[]> {
+    return this.api.get<FamilyUse[]>(`/api/option-families/${encodeURIComponent(code)}/usage`);
   }
 
   /** 409 = a test still uses the family (the caller names them). */
@@ -59,11 +66,4 @@ export class OptionFamilyService {
   }
 
   private refresh() { this.reload().subscribe({ error: () => { /* keep the old list */ } }); }
-}
-
-/** The definition only — never the server's read-only `usedBy`. */
-function strip(def: OptionFamily): OptionFamily {
-  const { usedBy: _u, ...rest } = def;
-  void _u;
-  return rest;
 }

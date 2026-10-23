@@ -263,10 +263,10 @@ export class FamilyInputComponent {
       .filter(x => !x.hasAttribute('disabled'));
   }
 
-  /** Numeric quantity: digits, one separator, editing keys. */
+  /** Numeric quantity: a number or a range ("2-3" / "2–3"), editing keys. */
   onlyNumber(e: KeyboardEvent) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.key.length > 1) return;
-    if (!/[0-9.\-]/.test(e.key)) e.preventDefault();
+    if (!/[0-9.\-–]/.test(e.key)) e.preventDefault();
   }
 
   private nodeAt(path: readonly string[]): FamilyNode | null { return nodeAtPath(this.family(), path); }

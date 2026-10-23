@@ -3141,6 +3141,9 @@ function buildPanelGroup(
         if (row) group.rows.push(row);
         continue;
       }
+      // mw already expanded family values into indented rows (ResolvedRow
+      // .indent): print those as they come and never expand a second time.
+      const serverFamily = (sec.rows ?? []).some(x => (x.indent ?? 0) > 0);
       for (const r of sec.rows ?? []) {
         // Per-report picker: the tech unticked this value for THIS order.
         if (!r.isMerged && r.parameterName && hiddenNames.has(r.parameterName)) continue;
@@ -3149,9 +3152,14 @@ function buildPanelGroup(
           if (note) group.rows.push({ kind: 'note', note });
           continue;
         }
+        if ((r.indent ?? 0) > 0) {
+          group.rows.push(...familyChildRows([{ depth: r.indent!, label: (r.title ?? '').trim(),
+            value: coerceCellText(resultSrc ? r.cells[resultSrc.name] : '') }], r.parameterName || undefined));
+          continue;
+        }
         // A FAMILY value prints its root answer here and one indented row
-        // per picked item right below (owner 2026-10-23).
-        const fam = asFamilyValue(resultSrc ? r.cells[resultSrc.name] : null) ?? savedFamilyOf(t, r.parameterName);
+        // per picked item right below (owner 2026-10-23) — unless mw did it.
+        const fam = serverFamily ? null : asFamilyValue(resultSrc ? r.cells[resultSrc.name] : null) ?? savedFamilyOf(t, r.parameterName);
         const famLines = fam ? familyReportLines(fam) : [];
         const rc = fam ? { value: famLines[0]?.value ?? '', flag: '' } as { value: string; flag: string; saved?: boolean }
           : coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
@@ -4737,9 +4745,16 @@ function renderGridSection(
     const resultCol = cfgCols.find(c => c.type === 'result');
     return asFamilyValue(resultCol ? r.cells[resultCol.name] : null) ?? savedFamilyOf(t, r.parameterName);
   };
+  const serverFamily = rows.some(x => (x.indent ?? 0) > 0);
   const body: RowCell[][] = rows.flatMap(r => {
     const main = rowCells(r);
-    const fam = famOf(r);
+    // mw's own family rows: indent the pick's name, nothing else to do.
+    if ((r.indent ?? 0) > 0) {
+      vcols.forEach((vc, i) => { if (vc.isName) main[i] = { content: (r.title ?? '').trim(),
+        styles: { ...(main[i]?.styles ?? {}), cellPadding: { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * r.indent! } } }; });
+      return [main];
+    }
+    const fam = serverFamily ? null : famOf(r);
     if (!fam) return [main];
     const lines = familyReportLines(fam);
     // The row prints the root answer; each picked item gets its own row.

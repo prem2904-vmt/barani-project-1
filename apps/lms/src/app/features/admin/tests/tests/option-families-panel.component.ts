@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -13,12 +13,12 @@ import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import {
-  FAMILY_MAX_DEPTH, type FamilyNode, type OptionFamily,
-  codeFromLabel, familyCodeFromName, validateFamily,
+  FAMILY_MAX_DEPTH, type FamilyNode, type FamilyUse, type OptionFamily,
+  codeFromLabel, familyCodeFromName, familyErrorText, validateFamily,
 } from '../../../../shared/utils/option-family';
 import { familyTreeOps, fillCodes } from './option-families-tree';
 
-interface FamGridRow { fam: OptionFamily; name: string; code: string; answers: string; tests: number; active: string; }
+interface FamGridRow { fam: OptionFamily; name: string; code: string; answers: string; source: string; active: string; }
 
 /**
  * Test Master → FAMILIES: hierarchical answer lists (Casts: Absent /
@@ -98,7 +98,7 @@ interface FamGridRow { fam: OptionFamily; name: string; code: string; answers: s
                   {{ issues()[0].message }}@if (issues().length > 1) { <span class="pf-of__more">(+{{ issues().length - 1 }} more)</span> }
                 </span>
               } @else {
-                <span class="pf-of__warn">@if (!isNew() && usedCount(d)) { Updates <span class="pf-num">{{ usedCount(d) }}</span> test{{ usedCount(d) === 1 ? '' : 's' }}. Past results keep their wording. }</span>
+                <span class="pf-of__warn">@if (!isNew() && usedCount()) { Updates <span class="pf-num">{{ usedCount() }}</span> test{{ usedCount() === 1 ? '' : 's' }}. Past results keep their wording. }</span>
               }
               @if (!isNew()) {
                 <button type="button" class="pf-btn pf-btn--danger pf-of__del press" [disabled]="saving()" (click)="remove(d)">Delete</button>
@@ -115,18 +115,19 @@ interface FamGridRow { fam: OptionFamily; name: string; code: string; answers: s
               <button type="button" class="pf-btn pf-btn--secondary pf-of__hbtn press" (click)="startEdit(f)">Edit family</button>
             </div>
             <div class="pf-card__body pf-of__body">
-              <div class="pf-of__detailmeta"><span class="pf-num">{{ f.code }}</span>@if (f.active === false) { · <span>Off</span> }</div>
+              <div class="pf-of__detailmeta"><span class="pf-num">{{ f.code }}</span>@if (f.source === 'master') { · Default catalogue } @if (f.active === false) { · <span>Off</span> }</div>
               <ul class="pf-of__tree" role="tree" [attr.aria-label]="f.name">
                 <ng-container [ngTemplateOutlet]="view" [ngTemplateOutletContext]="{ $implicit: f.nodes, depth: 1 }"></ng-container>
               </ul>
-              <div class="pf-of__slabel">Used by (<span class="pf-num">{{ usedCount(f) }}</span>)</div>
-              @for (u of f.usedBy ?? []; track u.testId + (u.paramName ?? '')) {
+              <div class="pf-of__slabel">Used by @if (usage() !== null) { (<span class="pf-num">{{ usedCount() }}</span>) }</div>
+              @if (usage() === null) { <p class="pf-of__note pf-of__note--inline">Loading tests…</p> }
+              @for (u of usage() ?? []; track u.testId + (u.paramName ?? '')) {
                 <button type="button" class="pf-row pf-of__test press" (click)="openTest(u.testId)">
                   <span class="pf-num pf-of__tcode">{{ u.testCode || '—' }}</span>
                   <span class="pf-row__name">{{ u.testName }}</span>
                 </button>
               } @empty {
-                <p class="pf-of__note">No test uses this family yet — pick it in a test's Result entry.</p>
+                @if (usage() !== null) { <p class="pf-of__note">No test uses this family yet — pick it in a test's Result entry.</p> }
               }
             </div>
           } @else {
@@ -226,6 +227,7 @@ interface FamGridRow { fam: OptionFamily; name: string; code: string; answers: s
     .pf-of__spacer { flex: 1; }
     .pf-of__search { flex: 0 1 320px; }
     .pf-of__count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-of__note--inline { padding: 8px 0; text-align: left; }
     .pf-of__note { padding: 28px 12px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
     .pf-of__cols { flex: 1 1 auto; min-height: 0; display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
@@ -326,8 +328,8 @@ export class OptionFamiliesPanelComponent implements OnInit {
   readonly columnDefs: ColDef<FamGridRow>[] = [
     { headerName: 'Family', field: 'name', minWidth: 140, flex: 1, cellStyle: { fontWeight: '600' } },
     { headerName: 'Answers', field: 'answers', minWidth: 180, flex: 1.4 },
-    { headerName: 'Tests', field: 'tests', minWidth: 80, maxWidth: 95 },
-    { headerName: 'Code', field: 'code', minWidth: 110, maxWidth: 150 },
+    { headerName: 'Code', field: 'code', minWidth: 110, maxWidth: 160 },
+    { headerName: 'Source', field: 'source', minWidth: 90, maxWidth: 140 },
     { headerName: 'Status', field: 'active', minWidth: 80, maxWidth: 100 },
   ];
 
@@ -339,13 +341,15 @@ export class OptionFamiliesPanelComponent implements OnInit {
       .map(f => ({
         fam: f, name: f.name, code: f.code,
         answers: f.nodes.map(n => n.children?.nodes?.length ? `${n.label} → ${n.children.nodes.length}` : n.label).join(', '),
-        tests: this.usedCount(f),
+        source: f.source === 'master' ? 'Default' : 'This lab',
         active: f.active === false ? 'Off' : 'On',
       }));
   });
 
   constructor() {
     effect(() => this.editingChange.emit(this.editorOpen()));
+    // The selected family's "used by" list — one request per selection.
+    effect(() => { const code = this.selected()?.code; untracked(() => this.loadUsage(code)); });
     // Keep the selection pointing at the freshest copy after a reload; the
     // first load (or ?fam=<code>) selects one so the card is never empty.
     effect(() => {
@@ -360,7 +364,19 @@ export class OptionFamiliesPanelComponent implements OnInit {
 
   ngOnInit() { this.svc.reload().subscribe({ error: () => this.toasts.error('Could not load option families') }); }
 
-  usedCount(f: OptionFamily): number { return new Set((f.usedBy ?? []).map(u => u.testId)).size; }
+  /** Usage of the SELECTED family (one call per selection; null = loading). */
+  readonly usage = signal<FamilyUse[] | null>(null);
+  private usageFor = '';
+  usedCount(): number { return new Set((this.usage() ?? []).map(u => u.testId)).size; }
+  private loadUsage(code: string | null | undefined, force = false) {
+    if (!code || (code === this.usageFor && !force)) return;
+    this.usageFor = code;
+    this.usage.set(null);
+    this.svc.usage(code).subscribe({
+      next: list => { if (this.usageFor === code) this.usage.set(list ?? []); },
+      error: () => { if (this.usageFor === code) this.usage.set([]); },
+    });
+  }
 
   qtyHint(n: FamilyNode): string {
     const q = n.qty;
@@ -389,8 +405,8 @@ export class OptionFamiliesPanelComponent implements OnInit {
 
   startEdit(f: OptionFamily) {
     this.isNew.set(false);
-    const { usedBy: _u, ...def } = f;
-    void _u;
+    const { source: _s, updatedAt: _t, ...def } = f;
+    void _s; void _t;
     this.draft.set(structuredClone(def));
   }
 
@@ -423,7 +439,7 @@ export class OptionFamiliesPanelComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.saving.set(false);
-        this.toasts.error(serverMessage(err) ?? 'Could not save the option family');
+        this.toasts.error(familyErrorText(ApiError.from(err).code) ?? serverMessage(err) ?? 'Could not save the option family');
       },
     });
   }
@@ -441,18 +457,10 @@ export class OptionFamiliesPanelComponent implements OnInit {
       error: async (err: unknown) => {
         this.saving.set(false);
         if (isInUse(err)) {
-          const used = this.svc.find(d.code)?.usedBy ?? [];
-          const names = [...new Set(used.map(u => u.testCode || u.testName))];
-          await this.dialog.alert({
-            title: 'This family is in use',
-            message: serverMessage(err) ?? (names.length
-              ? `It can't be deleted while ${names.length === 1 ? 'a test uses' : `${names.length} tests use`} it: ${names.join(', ')}. Pick another answer type in ${names.length === 1 ? 'that test' : 'those tests'} first.`
-              : 'It can’t be deleted while a test uses it. Change those tests first.'),
-            confirmLabel: 'OK',
-          });
+          await this.dialog.alert({ title: 'This family is in use', message: inUseMessage(err, this.usage() ?? []), confirmLabel: 'OK' });
           return;
         }
-        this.toasts.error(serverMessage(err) ?? 'Could not delete the option family');
+        this.toasts.error(familyErrorText(ApiError.from(err).code) ?? serverMessage(err) ?? 'Could not delete the option family');
       },
     });
   }
@@ -464,6 +472,17 @@ export class OptionFamiliesPanelComponent implements OnInit {
 function serverMessage(err: unknown): string | null {
   const m = ApiError.from(err).message?.trim();
   return m && m !== 'Request failed' && !m.startsWith('<') ? m : null;
+}
+
+/** "Used by: CLP002 Urine Microscopy, … — pick another answer type there
+ *  first." Names come from the 409 payload (`data.tests`, mw
+ *  CodedConflictException), else the usage already loaded. */
+export function inUseMessage(err: unknown, loaded: FamilyUse[]): string {
+  const payload = ApiError.from(err).data as { tests?: FamilyUse[] } | undefined;
+  const tests = payload?.tests?.length ? payload.tests : loaded;
+  const names = [...new Set(tests.map(u => [u.testCode, u.testName].filter(Boolean).join(' ')))].filter(Boolean);
+  if (!names.length) return 'It can\u2019t be deleted while a test uses it. Change those tests first.';
+  return `Used by: ${names.join(', ')}. Pick another answer type in ${names.length === 1 ? 'that test' : 'those tests'} first, then delete.`;
 }
 
 /** DELETE refused because a test still uses the family (HTTP 409, code

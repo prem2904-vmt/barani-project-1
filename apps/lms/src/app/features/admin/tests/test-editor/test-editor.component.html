@@ -589,7 +589,7 @@
                           [title]="n.normal === true ? 'Normal (expected) answer' : ''">{{ familyRootSummary(n) }}</span>
                   }
                 </div>
-                <p class="pf-hint">Shared family <span class="pf-num">{{ fam.code }}</span>@if (fam.usedBy?.length) { — used by {{ fam.usedBy!.length }} test{{ fam.usedBy!.length === 1 ? '' : 's' }}}.
+                <p class="pf-hint">Shared family <span class="pf-num">{{ fam.code }}</span> — edited once in Test Master → Families.
                   An answer not ticked Normal flags the result.</p>
               } @else if (fields()[i]?.familyCode) {
                 <p class="pf-anslist__idle">Family <span class="pf-num">{{ fields()[i]?.familyCode }}</span> isn't set up in this lab yet.</p>

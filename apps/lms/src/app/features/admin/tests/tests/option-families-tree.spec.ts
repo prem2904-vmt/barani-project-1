@@ -86,7 +86,7 @@ describe('Families editor — tree edits', () => {
   });
 });
 
-import { isInUse } from './option-families-panel.component';
+import { inUseMessage, isInUse } from './option-families-panel.component';
 import { ApiError } from '../../../../shared/models/api-response.model';
 
 describe('Families editor — delete refused while in use (409)', () => {
@@ -96,5 +96,15 @@ describe('Families editor — delete refused while in use (409)', () => {
     expect(isInUse(new ApiError('This family is in use'))).toBe(true);
     expect(isInUse(new ApiError('Request failed'))).toBe(false);
     expect(isInUse(new ApiError('Not found', 'not_found'))).toBe(false);
+  });
+});
+
+describe('Families editor — "used by" names in the refusal', () => {
+  it('names the tests from the 409 payload, else from the loaded usage', () => {
+    const err = new ApiError('x', 'family_in_use', undefined, { tests: [{ testId: 't1', testCode: 'CLP002', testName: 'Urine Microscopy', paramName: 'Casts' }] });
+    expect(inUseMessage(err, [])).toBe('Used by: CLP002 Urine Microscopy. Pick another answer type in that test first, then delete.');
+    expect(inUseMessage(new ApiError('x', 'family_in_use'), [{ testId: 'a', testName: 'A' }, { testId: 'b', testCode: 'B1', testName: 'B' }]))
+      .toContain('Used by: A, B1 B.');
+    expect(ApiError.from({ error: { error: 'family_in_use', message: 'm', data: { tests: [] } } }).data).toEqual({ tests: [] });
   });
 });

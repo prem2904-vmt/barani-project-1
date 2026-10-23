@@ -87,6 +87,27 @@ describe('report PDF — family values print one line per item', () => {
     }
   });
 
+  it('mw-expanded rows (ResolvedRow.indent) print once, indented — never expanded a second time', () => {
+    const cols = [
+      { id: 'n', name: 'name', label: 'Investigation', order: 0, width: 40, type: 'name', locked: false },
+      { id: 'r', name: 'result', label: 'Result', order: 1, width: 30, type: 'result', locked: false },
+    ];
+    const runs = render({ Casts: { value: PRESENT, flag: 'A' } }, {
+      columns: cols as never,
+      sections: [{ id: 's', type: 'grid', isVisible: true, rows: [
+        { id: 'r1', parameterName: 'Casts', title: 'Casts', cells: { result: 'Present' }, isMerged: false, isBold: false, flag: 'A' },
+        { id: 'r1:fam1', parameterName: 'Casts', title: 'Hyaline', indent: 1, cells: { result: '2-3 /LPF', name: '' }, isMerged: false, isBold: false, flag: '' },
+        { id: 'r1:fam2', parameterName: 'Casts', title: 'Granular', indent: 1, cells: { result: 'Few', name: '' }, isMerged: false, isBold: false, flag: '' },
+        { id: 'r1:fam3', parameterName: 'Casts', title: 'Fine texture', indent: 2, cells: { result: '', name: '' }, isMerged: false, isBold: false, flag: '' },
+      ] }] as never,
+    });
+    const parent = find(runs, 'Casts')!, hya = find(runs, 'Hyaline')!, fine = find(runs, 'Fine texture')!;
+    expect(runs.filter(r => r.text.includes('Hyaline')).length).toBe(1);
+    expect(hya.x).toBeGreaterThan(parent.x);
+    expect(fine.x).toBeGreaterThan(hya.x);
+    expect(find(runs, '2-3 /LPF')).toBeTruthy();
+  });
+
   it('isBlankReportValue: a family is blank only without a root answer', () => {
     expect(isBlankReportValue({ family: 'F', v: '', label: '' })).toBe(true);
     expect(isBlankReportValue(ABSENT)).toBe(false);

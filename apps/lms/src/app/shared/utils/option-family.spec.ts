@@ -2,7 +2,7 @@ import {
   type FamilyValue, type OptionFamily,
   asFamilyValue, chooseRoot, codeFromLabel, familyCodeFromName, familyDepth, familyIsAbnormal,
   familyReportLines, familyValueText, isFamilyFilled, itemAt, itemsAt, resultValueText, setItemQty,
-  toggleItem, validateFamily,
+  toggleItem, validateFamily, familyErrorText,
 } from './option-family';
 import { CASTS } from './option-family.spec-helpers';
 
@@ -162,5 +162,18 @@ describe('option family — editor validation', () => {
     expect(codeFromLabel('—', [])).toBe('OPT');
     expect(familyCodeFromName('Casts', [])).toBe('FAM-CASTS');
     expect(familyCodeFromName('Urine crystals!', ['FAM-URINE-CRYSTALS'])).toBe('FAM-URINE-CRYSTALS-2');
+  });
+});
+
+describe('option family — server error codes in plain words', () => {
+  it('maps every coded 400/409 and leaves others alone', () => {
+    for (const c of ['family_nodes_empty', 'family_node_code_duplicate', 'family_depth', 'family_qty_kind', 'family_qty_options',
+      'family_label_required', 'family_value_invalid', 'family_unknown_code', 'family_qty_invalid', 'family_unknown',
+      'family_code_exists', 'family_in_use']) expect(familyErrorText(c)).toBeTruthy();
+    expect(familyErrorText('range_invalid')).toBeNull();
+    expect(familyErrorText(undefined)).toBeNull();
+  });
+  it('without a definition the server-stamped verdict decides', () => {
+    expect(familyIsAbnormal(null, { family: 'F', v: 'PRS', label: 'Present', abnormal: true })).toBe(true);
   });
 });
