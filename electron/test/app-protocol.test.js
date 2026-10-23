@@ -67,3 +67,23 @@ test('storage migration merge never overwrites existing keys, drops non-strings'
   assert.deepEqual(mergeMissing({ a: '1', b: '2', c: null }, ['b']), { a: '1' });
   assert.deepEqual(mergeMissing(null, []), {});
 });
+
+// ── will-navigate guard (nav-guard.js) ─────────────────────────────────
+const { decideNavigation } = require('../nav-guard');
+test('nav guard: exact origins, scheme-limited external open', () => {
+  const o = { isDev: false, appOrigin: 'app://prefrontal' };
+  assert.deepEqual(decideNavigation('app://prefrontal/index.html', o), { allow: true, openExternal: false });
+  assert.equal(decideNavigation('app://prefrontal.evil.com/x', o).allow, false);
+  assert.equal(decideNavigation('http://localhost:4200/', o).allow, false);
+  assert.equal(decideNavigation('file:///etc/passwd', o).allow, false);
+  assert.equal(decideNavigation('file:///etc/passwd', o).openExternal, false);
+  assert.equal(decideNavigation('javascript:alert(1)', o).openExternal, false);
+  assert.equal(decideNavigation('not a url', o).openExternal, false);
+  assert.equal(decideNavigation('https://example.com', o).openExternal, true);
+  assert.equal(decideNavigation('mailto:a@b.c', o).openExternal, true);
+  assert.equal(decideNavigation('tel:+911234567890', o).openExternal, true);
+  const d = { isDev: true, appOrigin: 'app://prefrontal' };
+  assert.equal(decideNavigation('http://localhost:4200/a', d).allow, true);
+  assert.equal(decideNavigation('http://localhost:4201/a', d).allow, false);
+  assert.equal(decideNavigation('http://localhost:4200.evil.com/', d).allow, false);
+});

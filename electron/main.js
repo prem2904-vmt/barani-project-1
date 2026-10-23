@@ -27,6 +27,7 @@ const tray = require('./tray');
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
 const isDev = !app.isPackaged;
+const { decideNavigation } = require('./nav-guard');
 
 // The packaged UI is served from the secure custom origin app://prefrontal
 // (file:// sends `Origin: null`, which the APIs' CORS rejects). Must be
@@ -320,13 +321,9 @@ app.on('window-all-closed', () => {
 // else gets opened in the user's browser instead.
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    if (
-      !url.startsWith('http://localhost') &&
-      !url.startsWith('file://') &&
-      !url.startsWith(appProtocol.APP_ORIGIN + '/')
-    ) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
+    const d = decideNavigation(url, { isDev, appOrigin: appProtocol.APP_ORIGIN });
+    if (d.allow) return;
+    event.preventDefault();
+    if (d.openExternal) shell.openExternal(url);
   });
 });
