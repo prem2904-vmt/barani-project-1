@@ -1085,6 +1085,14 @@
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   </li>
+                  @for (n of m.nested; track n.id) {
+                    <li class="pf-tp-row pf-tp-row--nested" [attr.data-nested-in]="m.id">
+                      <svg class="pf-tp-row__elbow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h10"/></svg>
+                      <span class="pf-tp-row__name">{{ n.name }}</span>
+                      @if (n.code) { <span class="pf-num pf-member-order__code">{{ n.code }}</span> }
+                      <span class="pf-tp-row__infam">in {{ m.name }}</span>
+                    </li>
+                  }
                 }
               </ul>
             </div>
@@ -1150,7 +1158,8 @@
                   <input type="text" class="pf-input pf-input--sm" placeholder="e.g. Casts" [value]="fd.name"
                          (input)="setFamilyLineName($any($event.target).value)" />
                 </label>
-                <pf-family-tree-editor [family]="fd" (familyChange)="famDraft.set($event)"></pf-family-tree-editor>
+                <pf-family-tree-editor [family]="fd" [subtests]="famSubtests()"
+                                       (familyChange)="famDraft.set($event)"></pf-family-tree-editor>
                 <div class="pf-famline__acts">
                   @if (famIssues().length) {
                     <span class="pf-famline__warn" role="status">
@@ -1199,7 +1208,7 @@
                   <div class="pf-pick-grid">
                     @for (t of group.tests; track t.id) {
                       <label class="pf-row pf-pkg-pick" [class.pf-row--in]="isInPackage(t.id)">
-                        <input type="checkbox" class="pf-te2-srcheck" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id)" />
+                        <input type="checkbox" class="pf-te2-srcheck" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id); $any($event.target).checked = isInPackage(t.id)" />
                         <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
                         <span class="pf-pkg-pick__body">
                           <span class="pf-pkg-pick__title">
@@ -1261,6 +1270,14 @@
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   </li>
+                  @for (n of m.nested; track n.id) {
+                    <li class="pf-tp-row pf-tp-row--nested" [attr.data-nested-in]="m.id">
+                      <svg class="pf-tp-row__elbow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h10"/></svg>
+                      <span class="pf-tp-row__name">{{ n.name }}</span>
+                      @if (n.code) { <span class="pf-num pf-member-order__code">{{ n.code }}</span> }
+                      <span class="pf-tp-row__infam">in {{ m.name }}</span>
+                    </li>
+                  }
                 }
               </ul>
             </div>

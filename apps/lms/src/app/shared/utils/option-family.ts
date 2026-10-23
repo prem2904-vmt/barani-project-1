@@ -44,6 +44,13 @@ export interface FamilyNode {
   normal?: boolean;
   qty?: FamilyQty | null;
   children?: FamilyChildren | null;
+  /** Below the root only: the Test Master test this sub-choice IS (its
+   *  CatalogKey). The label follows that test's current name (the server
+   *  stamps it on save and on read). Absent = a typed sub-choice. */
+  test?: string | null;
+  /** Read-only (GET): the linked test is no longer in Test Master — the node
+   *  keeps its stored label. */
+  testMissing?: boolean;
 }
 
 export interface OptionFamily {
@@ -210,6 +217,10 @@ export function familyErrorText(code: string | null | undefined): string | null 
     case 'family_qty_invalid': return 'An amount isn\u2019t valid — use a number or a range like 2–3.';
     case 'family_via_profile': return 'Families are built inside a profile — open the profile and use “Add family”.';
     case 'profile_only': return 'This line belongs to a profile — order the profile instead.';
+    case 'family_test_root': return 'Only sub-choices can be a test — the top answers (Absent, Present…) stay typed.';
+    case 'family_test_not_member': return 'A sub-choice must be one of this profile\u2019s own tests, and in only one family — add the test to the profile first.';
+    case 'family_member_in_use': return 'This test is used in a family line of this profile — remove it from the family first.';
+    case 'family_test_unknown': return 'A sub-choice is linked to a test that can\u2019t be used here — pick another test.';
     case 'family_unknown': return 'The option family linked to this test isn\u2019t set up in this lab — pick another family.';
     default: return null;
   }

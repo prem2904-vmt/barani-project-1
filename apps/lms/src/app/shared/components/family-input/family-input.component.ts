@@ -131,7 +131,7 @@ import {
       .pf-fam__check { flex: 0 0 140px; }
       .pf-fam__item:not(.pf-fam__item--single) > .pf-fam__qty { margin-left: 0; }
     }
-    .pf-fam__qsel { width: 96px; }
+    .pf-fam__qsel { width: 140px; max-width: 100%; }
     .pf-fam__qin { width: 80px; min-width: 0; }
     .pf-fam__qin--text { width: 160px; }
     .pf-fam__unit { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }

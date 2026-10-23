@@ -4,7 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
@@ -79,6 +79,7 @@ import { OptionFamilyService } from '../../../../core/services/option-family.ser
 import { familyErrorText, type FamilyNode, type OptionFamily } from '../../../../shared/utils/option-family';
 import { ProfileFamilyLinesService, type ProfileFamilyLine } from '../../../../core/services/profile-family-lines.service';
 import { FamilyTreeEditorComponent } from './family-tree-editor.component';
+import { type SubtestChoice, absorbedMembers, linkedKeys, moveVisible, nestedMembers, subtestChoices, visibleOrder } from './family-subtest';
 import { lineIssues, lineNodes, newLineDraft, replaceLineMember, withLineMember, withoutLineMember } from './profile-family-lines';
 
 const SELECTED_GROUP = 'Selected';
@@ -989,7 +990,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       return out;
     }
+    const absorbed = this.absorbed();
     for (const id of this.packageItems()) {
+      // A member absorbed into a family line prints only inside its family.
+      if (absorbed.has(id)) continue;
       const t = byId.get(id);
       // Each member previews under ITS OWN department (a package has none).
       if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null, catalogKey: t.catalogKey ?? null });
@@ -1687,14 +1691,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   // order they are stored (items[]), on result entry and on the report. The
   // editor lets the lab arrange that order: drag a row, or step it up/down.
   // Existing profiles keep their stored order as the starting point.
-  readonly orderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
-    const byId = this._memberById();
-    const lines = new Map(this.familyLines().map(l => [l.testId, l] as const));
-    return this._packageItems().map(id => {
-      const t = byId.get(id);
-      const line = t ? undefined : lines.get(id);
-      return { id, name: t?.name ?? line?.name ?? '(unknown test)', code: t?.testCode ?? line?.testCode ?? '' };
-    });
+  readonly orderedMembers = computed<{ id: string; name: string; code: string; nested: { id: string; name: string; code: string }[] }[]>(() => {
+    const abs = this.absorbed();
+    const ids = this._packageItems();
+    return visibleOrder(ids, abs).map(id => ({ ...this.memberRow(id), nested: nestedMembers(id, ids, abs).map(n => this.memberRow(n)) }));
   });
 
   // ── FAMILY LINES (owner 2026-10-23): a family lives INSIDE a profile —
@@ -1711,6 +1711,32 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly famSaving = signal(false);
   readonly famIssues = computed(() => lineIssues(this.famDraft()));
   private famLoadedFor = '';
+  /** Tests a family sub-choice may be (owner 2026-10-23, revision 2): ONLY
+   *  this profile's own members — not family lines, not a member already
+   *  linked in ANOTHER family line of this profile. */
+  readonly famSubtests = computed<SubtestChoice[]>(() => {
+    const open = this.famOpen();
+    const elsewhere = new Set(this.familyLines().filter(l => l.testId !== open).flatMap(l => linkedKeys(l.family.nodes)));
+    return subtestChoices(this._allIndividualTests(), {
+      memberIds: this.packageItems(),
+      excludeIds: this.familyLines().map(l => l.testId),
+      takenElsewhere: elsewhere,
+    });
+  });
+  /** member id → the family line that ABSORBS it (revision 2): such a member
+   *  is entered only through its family, so the order lists show it nested
+   *  under the family line instead of as a row of its own. Decided by the
+   *  saved family-line trees (the server stamps `inFamily` from the same). */
+  readonly absorbed = computed<Map<string, string>>(() => {
+    const byId = this._memberById();
+    const members = this.packageItems().map(id => ({ id, catalogKey: byId.get(id)?.catalogKey ?? null }));
+    return absorbedMembers(this.familyLines(), members);
+  });
+  private memberRow(id: string) {
+    const t = this._memberById().get(id);
+    const line = t ? undefined : this.familyLineOf(id);
+    return { id, name: t?.name ?? line?.name ?? '(unknown test)', code: t?.testCode ?? line?.testCode ?? '' };
+  }
   familyLineOf(testId: string): ProfileFamilyLine | undefined { return this.familyLines().find(l => l.testId === testId); }
   isFamilyLine(testId: string): boolean { return !!this.familyLineOf(testId); }
   private readonly _famLoader = effect(() => {
@@ -1765,7 +1791,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       error: e => {
         this.famSaving.set(false);
         const err = ApiError.from(e);
-        this.toasts.error(familyErrorText(err.code) ?? err.message ?? 'Could not save the family line');
+        // A bad test link: the server's message names the sub-choice.
+        const linkErr = /^family_(test_|member_)/.test(err.code ?? '') && err.message ? err.message : null;
+        this.toasts.error(linkErr ?? familyErrorText(err.code) ?? err.message ?? 'Could not save the family line');
       },
     });
   }
@@ -1800,21 +1828,19 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Step a member one place up (-1) or down (+1). */
+  // Indexes are VISIBLE rows: a member absorbed into a family keeps its own
+  // slot in items[] (so un-linking restores it) and moves with nothing.
   moveMember(index: number, delta: -1 | 1) {
-    const to = index + delta;
     const items = this._packageItems();
-    if (index < 0 || index >= items.length || to < 0 || to >= items.length) return;
-    const next = items.slice();
-    moveItemInArray(next, index, to);
+    const next = moveVisible(items, this.absorbed(), index, index + delta);
+    if (next.every((id, i) => id === items[i])) return;
     this._packageItems.set(next);
     this.dirty.set(true);
   }
 
   dropMember(ev: CdkDragDrop<unknown>) {
     if (ev.previousIndex === ev.currentIndex) return;
-    const next = this._packageItems().slice();
-    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
-    this._packageItems.set(next);
+    this._packageItems.set(moveVisible(this._packageItems(), this.absorbed(), ev.previousIndex, ev.currentIndex));
     this.dirty.set(true);
   }
 
@@ -1828,12 +1854,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _reportOrder = signal<string[]>([]);
   readonly reportOrderIds = computed<string[]>(() =>
     reconcileMemberOrder(this._reportOrder(), this.packageItems()));
-  readonly reportOrderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
-    const byId = this._memberById();
-    return this.reportOrderIds().map(id => {
-      const t = byId.get(id);
-      return { id, name: t?.name ?? '(unknown test)', code: t?.testCode ?? '' };
-    });
+  readonly reportOrderedMembers = computed<{ id: string; name: string; code: string; nested: { id: string; name: string; code: string }[] }[]>(() => {
+    const abs = this.absorbed();
+    const ids = this.reportOrderIds();
+    return visibleOrder(ids, abs).map(id => ({ ...this.memberRow(id), nested: nestedMembers(id, ids, abs).map(n => this.memberRow(n)) }));
   });
   /** True when the printed order differs from the lab entry order. */
   readonly reportOrderCustom = computed(() => {
@@ -1844,19 +1868,15 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   moveReportMember(index: number, delta: -1 | 1) {
     const ids = this.reportOrderIds();
-    const to = index + delta;
-    if (index < 0 || index >= ids.length || to < 0 || to >= ids.length) return;
-    const next = ids.slice();
-    moveItemInArray(next, index, to);
+    const next = moveVisible(ids, this.absorbed(), index, index + delta);
+    if (next.every((id, i) => id === ids[i])) return;
     this._reportOrder.set(next);
     this.dirty.set(true);
   }
 
   dropReportMember(ev: CdkDragDrop<unknown>) {
     if (ev.previousIndex === ev.currentIndex) return;
-    const next = this.reportOrderIds().slice();
-    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
-    this._reportOrder.set(next);
+    this._reportOrder.set(moveVisible(this.reportOrderIds(), this.absorbed(), ev.previousIndex, ev.currentIndex));
     this.dirty.set(true);
   }
 
@@ -1874,6 +1894,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isInPackage(id: string): boolean { return this.packageItems().includes(id); }
   togglePackageMember(id: string) {
+    // A member a family line uses can't leave the profile here (the server
+    // refuses it too: family_member_in_use) — un-link it in the family first.
+    const lineId = this.absorbed().get(id);
+    if (lineId && this._packageItems().includes(id)) {
+      const line = this.familyLineOf(lineId)?.name ?? 'a family line';
+      this.toasts.warning(`${this.memberName(id)} is used in the ${line} family — remove it there first.`);
+      return;
+    }
     if (this.repetitiveActive()) {
       const rows = this._memberRows();
       const offsetMin = rows.length > 0 ? rows[rows.length - 1].offsetMin : 0;
@@ -2434,6 +2462,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const field = err.field ?? '';
     // A family parameter whose family isn't set up for this lab (mw 400
     // family_unknown) — show it where the family is picked.
+    // A member a family line still uses (revision 2): the server names it.
+    if (err.code === 'family_member_in_use') {
+      this.toasts.warning(err.message || familyErrorText(err.code) || '');
+      return;
+    }
     const famText = familyErrorText(err.code);
     if (famText) {
       this.jumpToSection('results');

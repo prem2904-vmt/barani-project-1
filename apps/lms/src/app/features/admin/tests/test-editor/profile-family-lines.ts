@@ -6,6 +6,7 @@
  */
 import { codeFromLabel, validateFamily, type FamilyNode, type OptionFamily } from '../../../../shared/utils/option-family';
 import { fillCodes } from './family-tree';
+import { pendingSubchoiceIssue } from './family-subtest';
 
 /** The starting tree of a new line: Absent (normal) / Present. */
 export function newLineDraft(name = ''): OptionFamily {
@@ -17,15 +18,22 @@ export function newLineDraft(name = ''): OptionFamily {
 
 /** The tree as it is SENT: every labelled node coded, no empty leftovers. */
 export function lineNodes(draft: OptionFamily): FamilyNode[] {
-  return fillCodes(draft, codeFromLabel).nodes;
+  // `testMissing` is read-only (GET) — never sent back.
+  const strip = (nodes: FamilyNode[]): FamilyNode[] => nodes.map(n => {
+    const { testMissing: _m, ...rest } = n;
+    void _m;
+    return rest.children ? { ...rest, children: { ...rest.children, nodes: strip(rest.children.nodes) } } : rest;
+  });
+  return strip(fillCodes(draft, codeFromLabel).nodes);
 }
 
 /** Problems that block saving a line (the server re-validates). */
 export function lineIssues(draft: OptionFamily | null | undefined): string[] {
   if (!draft) return [];
+  const pending = pendingSubchoiceIssue(draft.nodes);
   const out = validateFamily({ ...fillCodes(draft, codeFromLabel), code: draft.code || 'NEW' })
     .map(i => i.path === 'name' ? 'Give the family line a name.' : i.message);
-  return [...new Set(out)];
+  return [...new Set(pending ? [pending, ...out] : out)];
 }
 
 /** The member list after the server ADDED a line (at `position`, else last). */
