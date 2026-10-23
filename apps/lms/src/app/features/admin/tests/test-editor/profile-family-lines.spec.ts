@@ -1,4 +1,4 @@
-import { lineIssues, lineNodes, newLineDraft, withLineMember, withoutLineMember } from './profile-family-lines';
+import { lineIssues, lineNodes, newLineDraft, replaceLineMember, withLineMember, withoutLineMember } from './profile-family-lines';
 
 /** Profile family lines (owner 2026-10-23: families live inside profiles). */
 describe('profile family lines — pure rules', () => {
@@ -36,5 +36,11 @@ describe('profile family lines — pure rules', () => {
     expect(withLineMember(['a', 'f1'], 'f1', 0)).toEqual(['a', 'f1']);
     expect(withLineMember(['a'], 'f1', 9)).toEqual(['a', 'f1']);
     expect(withoutLineMember(['a', 'f1', 'b'], 'f1')).toEqual(['a', 'b']);
+  });
+
+  it('a re-keyed line (copy-on-write) keeps its place', () => {
+    expect(replaceLineMember(['a', 'f1', 'b'], 'f1', 'f2')).toEqual(['a', 'f2', 'b']);
+    expect(replaceLineMember(['a', 'f1', 'b'], 'f1', 'f1')).toEqual(['a', 'f1', 'b']);
+    expect(replaceLineMember(['a', 'b'], 'new', 'f9')).toEqual(['a', 'b', 'f9']);
   });
 });

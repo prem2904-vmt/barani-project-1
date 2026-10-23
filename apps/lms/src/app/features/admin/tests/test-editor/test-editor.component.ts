@@ -79,7 +79,7 @@ import { OptionFamilyService } from '../../../../core/services/option-family.ser
 import { familyErrorText, type FamilyNode, type OptionFamily } from '../../../../shared/utils/option-family';
 import { ProfileFamilyLinesService, type ProfileFamilyLine } from '../../../../core/services/profile-family-lines.service';
 import { FamilyTreeEditorComponent } from './family-tree-editor.component';
-import { lineIssues, lineNodes, newLineDraft, withLineMember, withoutLineMember } from './profile-family-lines';
+import { lineIssues, lineNodes, newLineDraft, replaceLineMember, withLineMember, withoutLineMember } from './profile-family-lines';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -1753,9 +1753,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     call.subscribe({
       next: line => {
         this.famSaving.set(false);
-        this.familyLines.update(ls => ls.some(l => l.testId === line.testId)
-          ? ls.map(l => l.testId === line.testId ? line : l) : [...ls, line]);
-        this._packageItems.set(withLineMember(this._packageItems(), line.testId, line.position));
+        // Copy-on-write (reference labs) can hand back a NEW hidden test id
+        // for the edited line: replace the old one in place.
+        const was = open === 'new' ? line.testId : open;
+        this.familyLines.update(ls => ls.some(l => l.testId === was)
+          ? ls.map(l => l.testId === was ? line : l) : [...ls, line]);
+        this._packageItems.set(replaceLineMember(this._packageItems(), was, line.testId, line.position));
         this.toasts.success(open === 'new' ? `Family line "${line.name}" added` : `Family line "${line.name}" saved`);
         this.cancelFamilyLine();
       },

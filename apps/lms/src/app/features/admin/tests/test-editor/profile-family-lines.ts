@@ -41,3 +41,13 @@ export function withLineMember(items: readonly string[], testId: string, positio
 export function withoutLineMember(items: readonly string[], testId: string): string[] {
   return items.filter(id => id !== testId);
 }
+
+/** After a save: the line's member id `was` becomes `now` (copy-on-write can
+ *  re-key it) in place; a line not yet listed is added (at `position`). */
+export function replaceLineMember(items: readonly string[], was: string, now: string, position?: number | null): string[] {
+  const i = items.indexOf(was);
+  if (i < 0) return withLineMember(items, now, position);
+  const next = items.filter((id, k) => k === i || id !== now);
+  next[next.indexOf(was)] = now;
+  return next;
+}
