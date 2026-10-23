@@ -4,7 +4,6 @@
  * its first sub-choice). Every edit returns a new definition (immutable), so
  * the editor's signal always changes identity and the template re-renders.
  */
-import type { WritableSignal } from '@angular/core';
 import {
   FAMILY_MAX_DEPTH, type FamilyChildren, type FamilyNode, type FamilyQtyKind, type OptionFamily,
 } from '../../../../shared/utils/option-family';
@@ -81,7 +80,10 @@ export function parseOptionList(text: string): string[] {
 }
 
 /** Signal-bound edits for the editor template. */
-export function familyTreeOps(draft: WritableSignal<OptionFamily | null>) {
+/** Anything signal-shaped holding the draft (a WritableSignal or a model()). */
+export interface DraftRef { (): OptionFamily | null; set(v: OptionFamily): void }
+
+export function familyTreeOps(draft: DraftRef) {
   const edit = (fn: (d: OptionFamily) => OptionFamily) => { const d = draft(); if (d) draft.set(fn(d)); };
   const node = (path: readonly number[], fn: NodeFn) => edit(d => updateNode(d, path, fn));
   const kids = (path: readonly number[], fn: (k: FamilyChildren) => FamilyChildren) =>

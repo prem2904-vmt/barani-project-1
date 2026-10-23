@@ -3,7 +3,7 @@ import type { OptionFamily } from '../../../../shared/utils/option-family';
 import { codeFromLabel, validateFamily } from '../../../../shared/utils/option-family';
 import {
   addChildren, addNode, familyTreeOps, fillCodes, moveNode, nodesAt, parseOptionList, removeNode, setQtyKind, updateNode,
-} from './option-families-tree';
+} from './family-tree';
 
 const base = (): OptionFamily => ({ code: 'FAM-CASTS', name: 'Casts', active: true, nodes: [
   { code: 'ABS', label: 'Absent', normal: true },
@@ -83,28 +83,5 @@ describe('Families editor — tree edits', () => {
     ] });
     ops.removeChildren([1]);
     expect(draft()!.nodes[1].children).toBeUndefined();
-  });
-});
-
-import { inUseMessage, isInUse } from './option-families-panel.component';
-import { ApiError } from '../../../../shared/models/api-response.model';
-
-describe('Families editor — delete refused while in use (409)', () => {
-  it('recognises the in-use refusal however ApiService hands it over', () => {
-    expect(isInUse(new ApiError('Used by 2 tests: CLP002, CLP003', 'family_in_use'))).toBe(true);
-    expect(isInUse({ status: 409, error: { message: 'x' } })).toBe(true);
-    expect(isInUse(new ApiError('This family is in use'))).toBe(true);
-    expect(isInUse(new ApiError('Request failed'))).toBe(false);
-    expect(isInUse(new ApiError('Not found', 'not_found'))).toBe(false);
-  });
-});
-
-describe('Families editor — "used by" names in the refusal', () => {
-  it('names the tests from the 409 payload, else from the loaded usage', () => {
-    const err = new ApiError('x', 'family_in_use', undefined, { tests: [{ testId: 't1', testCode: 'CLP002', testName: 'Urine Microscopy', paramName: 'Casts' }] });
-    expect(inUseMessage(err, [])).toBe('Used by: CLP002 Urine Microscopy. Pick another answer type in that test first, then delete.');
-    expect(inUseMessage(new ApiError('x', 'family_in_use'), [{ testId: 'a', testName: 'A' }, { testId: 'b', testCode: 'B1', testName: 'B' }]))
-      .toContain('Used by: A, B1 B.');
-    expect(ApiError.from({ error: { error: 'family_in_use', message: 'm', data: { tests: [] } } }).data).toEqual({ tests: [] });
   });
 });

@@ -82,16 +82,6 @@
             </svg>
             New option group
           </button>
-        } @else if (famView()) {
-          <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
-                  [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="newFamily()"
-                  title="New family" aria-label="New family">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 5v14"/><path d="M5 12h14"/>
-            </svg>
-            New family
-          </button>
         } @else {
           <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
                   [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="openCreate()"
@@ -134,7 +124,7 @@
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
-              [class.pf-tm-tab--active]="!ogView() && !famView() && !microView() && !pricingView() && type() === v.value"
+              [class.pf-tm-tab--active]="!ogView() && !microView() && !pricingView() && type() === v.value"
               (click)="setType(v.value)">
         {{ v.label }}
       </button>
@@ -144,12 +134,6 @@
             [class.pf-tm-tab--active]="ogView()"
             (click)="openOgView()">
       Option groups
-    </button>
-    <button type="button"
-            class="pf-tm-tab"
-            [class.pf-tm-tab--active]="famView()"
-            (click)="openFamView()">
-      Families
     </button>
     <button type="button"
             class="pf-tm-tab"
@@ -167,16 +151,12 @@
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->
-  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || famView()">
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView()">
   @if (ogView()) {
     <!-- Shared option-group vocabularies, derived live from this tenant's
          tests — edit once, changes every linked parameter. -->
     <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
                             (editingChange)="panelEditing.set($event)"></pf-option-groups-panel>
-  } @else if (famView()) {
-    <!-- Option FAMILIES: answers with sub-choices + amounts, shared by tests. -->
-    <pf-option-families-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
-                              (editingChange)="panelEditing.set($event)"></pf-option-families-panel>
   } @else if (microView()) {
     <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
     <pf-micro-masters-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"

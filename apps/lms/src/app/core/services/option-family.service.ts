@@ -1,12 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, finalize, shareReplay, tap } from 'rxjs';
 import { ApiService } from './api.service';
-import type { FamilyUse, OptionFamily } from '../../shared/utils/option-family';
+import type { OptionFamily } from '../../shared/utils/option-family';
 
 /**
- * The tenant's option FAMILIES (`/api/option-families`) — loaded once per
- * session and shared by the Test Master (Families tab + test editor) and
- * both result-entry screens. Saves / deletes refresh the cache.
+ * The tenant's option FAMILIES (`GET /api/option-families`, read only) —
+ * loaded once per session for both result-entry screens and the test editor.
+ * Families are written only as a profile's family lines
+ * (`ProfileFamilyLinesService`), which refreshes this cache.
  */
 @Injectable({ providedIn: 'root' })
 export class OptionFamilyService {
@@ -44,26 +45,4 @@ export class OptionFamilyService {
     return this.inflight;
   }
 
-  create(def: OptionFamily): Observable<OptionFamily> {
-    return this.api.post<OptionFamily>('/api/option-families',
-      { code: def.code, name: def.name, active: def.active !== false, nodes: def.nodes }).pipe(tap(() => this.refresh()));
-  }
-
-  /** The code is immutable (the route names it); only name / active / nodes travel. */
-  update(def: OptionFamily): Observable<OptionFamily> {
-    return this.api.put<OptionFamily>(`/api/option-families/${encodeURIComponent(def.code)}`,
-      { name: def.name, active: def.active !== false, nodes: def.nodes }).pipe(tap(() => this.refresh()));
-  }
-
-  /** The test parameters using a family (one call for the selected family). */
-  usage(code: string): Observable<FamilyUse[]> {
-    return this.api.get<FamilyUse[]>(`/api/option-families/${encodeURIComponent(code)}/usage`);
-  }
-
-  /** 409 = a test still uses the family (the caller names them). */
-  remove(code: string): Observable<unknown> {
-    return this.api.delete<unknown>(`/api/option-families/${encodeURIComponent(code)}`).pipe(tap(() => this.refresh()));
-  }
-
-  private refresh() { this.reload().subscribe({ error: () => { /* keep the old list */ } }); }
 }
