@@ -3589,3 +3589,8 @@ pf-package-suggest { flex: none; margin-top: auto; }
 .pf-paid__sumline--done span:last-child { color: var(--violet-text, #6d28d9) !important; }
 .pf-oc-act--wa { color: var(--text-primary); }
 .pf-collect-icon { box-shadow: var(--pf-shadow-sm) !important; }
+
+/* No side padding above phone width, so the hero band must not bleed: the
+   kit's .pf-page bleed (2.5rem at ≥1024px) pushed the back chevron and the band actions past the viewport
+   edge. Phones keep the global 12px page gutter + its bleed. */
+@media (min-width: 641px) { .pf-oc.pf-page { --pf-hb-bleed: 0px; } }
