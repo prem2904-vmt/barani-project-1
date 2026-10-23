@@ -707,6 +707,20 @@
                 }
               </div>
             }
+            @case ("family") {
+              <!-- Hierarchical answer (Casts: Absent / Present → types, each
+                   with its own amount). The root pick advances like any
+                   dropdown; sub-picks and amounts are inside the control. -->
+              <div class="pf-sre__gselect pf-sre__gfamily" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                   [attr.data-sre-param]="t.id + '::' + p.name"
+                   (keydown.enter)="onEnterKey($event)">
+                <pf-family-input [family]="familyFor(p)" [familyCode]="p.familyCode ?? null"
+                                 [loading]="!familySvc.loaded() && !familySvc.failed()"
+                                 [disabled]="viewOnly()"
+                                 [value]="getValue(t.id, p.name)"
+                                 (valueChange)="onFamilyChange(t.id, p.name, $event)"></pf-family-input>
+              </div>
+            }
             @case ("textarea") {
               <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
                         (input)="autoGrow($event)"

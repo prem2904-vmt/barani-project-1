@@ -31,6 +31,7 @@ import { containerFlag, MISSING_CONTAINER_URL, MissingContainerResponse, missing
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
+import { OptionFamiliesPanelComponent } from './option-families-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
 import { PricingComponent } from '../../pricing/pricing.component';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
@@ -137,7 +138,7 @@ export function actionsWidth(web: boolean, revert: boolean): { width: number; mi
 }
 
 /** Views the band pill's switch can select. */
-type TmView = TestType | 'og' | 'micro' | 'pricing';
+type TmView = TestType | 'og' | 'fam' | 'micro' | 'pricing';
 /** Test Master status filter (the Active/Inactive switch). */
 type TmStatus = 'all' | 'active' | 'inactive';
 
@@ -153,6 +154,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
     ScreenHeaderComponent,
     TouchButtonComponent,
     OptionGroupsPanelComponent,
+    OptionFamiliesPanelComponent,
     MicroMastersPanelComponent,
     PricingComponent,
     CatalogProposalsPanelComponent,
@@ -180,6 +182,9 @@ export class TestsComponent implements OnInit {
 
   /** Option-groups view — the shared vocabularies panel replaces the grid. */
   readonly ogView = signal(false);
+  /** Families view — hierarchical answer lists (Casts: Absent / Present →
+   *  types + amount) replace the grid. */
+  readonly famView = signal(false);
   /** Microbiology view — specimen/antibiotic/CLSI masters replace the grid. */
   readonly microView = signal(false);
   /** Pricing view — the per-tenant pricing table (bulk edit, branch picker
@@ -187,6 +192,7 @@ export class TestsComponent implements OnInit {
   readonly pricingView = signal(false);
   @ViewChild(MicroMastersPanelComponent) private microPanel?: MicroMastersPanelComponent;
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
+  @ViewChild(OptionFamiliesPanelComponent) private famPanel?: OptionFamiliesPanelComponent;
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
   /** id → problem from GET /api/tests/missing-container (read-only check):
@@ -940,6 +946,7 @@ export class TestsComponent implements OnInit {
       }
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
+      if (params['view'] === 'families') this.famView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);
       if (params['view'] === 'pricing' && this.canEditPrices()) this.pricingView.set(true);
     });
@@ -954,9 +961,10 @@ export class TestsComponent implements OnInit {
     this.gridApi = e.api;
   }
 
-  openOgView() { this.panelEditing.set(false); this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
-  openMicroView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
-  openPricingView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
+  openOgView() { this.panelEditing.set(false); this.panelQuery.set(''); this.famView.set(false); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
+  openFamView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(false); this.famView.set(true); }
+  openMicroView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.famView.set(false); this.pricingView.set(false); this.microView.set(true); }
+  openPricingView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.famView.set(false); this.microView.set(false); this.pricingView.set(true); }
 
   // ── Band pill (owner, "band pill everywhere") ──────────────────────────
   /** The ONE view switch in the pill: the three catalogue types plus the
@@ -966,6 +974,7 @@ export class TestsComponent implements OnInit {
     { value: 'profile', label: 'Profiles' },
     { value: 'package', label: 'Packages' },
     { value: 'og', label: 'Option groups' },
+    { value: 'fam', label: 'Families' },
     { value: 'micro', label: 'Microbiology' },
     { value: 'pricing', label: 'Pricing' },
   ];
@@ -973,12 +982,13 @@ export class TestsComponent implements OnInit {
   readonly viewOptions = computed<SegmentedOption<TmView>[]>(() =>
     this.canEditPrices() ? this.allViewOptions : this.allViewOptions.filter(o => o.value !== 'pricing'));
   readonly view = computed<TmView>(() =>
-    this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
+    this.ogView() ? 'og' : this.famView() ? 'fam' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
   /** True while the tests/profiles/packages grid (not a side view) shows. */
-  readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView());
+  readonly gridView = computed(() => !this.ogView() && !this.famView() && !this.microView() && !this.pricingView());
   setView(v: TmView) {
     this.panelEditing.set(false);
     if (v === 'og') this.openOgView();
+    else if (v === 'fam') this.openFamView();
     else if (v === 'micro') this.openMicroView();
     else if (v === 'pricing') this.openPricingView();
     else this.setType(v);
@@ -990,6 +1000,7 @@ export class TestsComponent implements OnInit {
   readonly bandPlaceholder = computed(() => {
     switch (this.view()) {
       case 'og': return 'Search option groups — values, tests, parameters…';
+      case 'fam': return 'Search families — names, answers…';
       case 'micro': return 'Search microbiology masters…';
       case 'pricing': return 'Search test name…';
       case 'profile': return 'Search profiles…';
@@ -1003,6 +1014,8 @@ export class TestsComponent implements OnInit {
   }
   /** Band action for the option-groups view (its own "+ New" moved up here). */
   newOptionGroup() { this.ogPanel?.startCreate(); }
+  /** Band action for the families view. */
+  newFamily() { this.famPanel?.startCreate(); }
   /** A side-view panel (option groups / microbiology / pricing) has an editor
    *  open or unsaved edits —
    *  its own save is then the view's ONE primary. */
@@ -1014,10 +1027,11 @@ export class TestsComponent implements OnInit {
   /** The band's Create / New steps down to secondary when another primary
    *  owns the view (pending grid edits, or an open panel editor). */
   readonly bandPrimaryElsewhere = computed(() =>
-    this.dirtyCount() > 0 || ((this.ogView() || this.microView() || this.pricingView()) && this.panelEditing()));
+    this.dirtyCount() > 0 || ((this.ogView() || this.famView() || this.microView() || this.pricingView()) && this.panelEditing()));
 
   setType(t: TestType) {
     this.ogView.set(false);
+    this.famView.set(false);
     this.microView.set(false);
     this.pricingView.set(false);
     this._type.set(t);
@@ -1207,6 +1221,7 @@ export class TestsComponent implements OnInit {
   openCreate() {
     if (this.microView()) { this.microPanel?.startCreate(); return; }
     if (this.ogView()) { this.ogPanel?.startCreate(); return; }
+    if (this.famView()) { this.famPanel?.startCreate(); return; }
     this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._type() } });
   }
 

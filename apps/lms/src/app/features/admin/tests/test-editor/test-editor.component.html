@@ -567,6 +567,43 @@
             </div>
           }
 
+          <!-- A FAMILY answer (hierarchical): pick the shared family; its tree
+               is edited once in Test Master → Families. -->
+          <ng-template #familyPick let-i>
+            <div class="pf-anslist pf-te2-fam" [attr.data-family-pick]="i">
+              <div>
+                <span class="pf-te2-h">The answers — an option family</span>
+                <p class="pf-rr2__sub">The tech picks one answer; some answers open sub-choices, each with its own amount
+                  (Present → Hyaline 2–3 /LPF, Granular Few). Families are shared across tests.</p>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <pf-select class="pf-te2-ogsel" size="sm" [options]="familyOptions()" [searchable]="true"
+                           [value]="fields()[i]?.familyCode ?? ''" placeholder="— pick an option family —"
+                           (valueChange)="setFamily(i, $any($event))"></pf-select>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-te2-addbtn press" (click)="openFamilies()">Manage families</button>
+              </div>
+              @if (familyOf(i); as fam) {
+                <div class="pf-optprev">
+                  @for (n of fam.nodes; track n.code) {
+                    <span class="pf-optprev__chip" [class.pf-optprev__chip--normal]="n.normal === true"
+                          [title]="n.normal === true ? 'Normal (expected) answer' : ''">{{ familyRootSummary(n) }}</span>
+                  }
+                </div>
+                <p class="pf-hint">Shared family <span class="pf-num">{{ fam.code }}</span>@if (fam.usedBy?.length) { — used by {{ fam.usedBy!.length }} test{{ fam.usedBy!.length === 1 ? '' : 's' }}}.
+                  An answer not ticked Normal flags the result.</p>
+              } @else if (fields()[i]?.familyCode) {
+                <p class="pf-anslist__idle">Family <span class="pf-num">{{ fields()[i]?.familyCode }}</span> isn't set up in this lab yet.</p>
+              } @else if (!familySvc.loaded() && !familySvc.failed()) {
+                <p class="pf-anslist__idle">Loading option families…</p>
+              } @else {
+                <p class="pf-anslist__idle">Pick an option family above — or create one under “Manage families”.</p>
+              }
+            </div>
+          </ng-template>
+          @if (isSingleValue() && entryKind() === 'family' && fields().length === 1) {
+            <ng-container *ngTemplateOutlet="familyPick; context: { $implicit: 0 }"></ng-container>
+          }
+
           <!-- Calculated result (if the test is a formula) -->
           @if (calcInfo(); as calc) {
             <div class="pf-judge">
@@ -786,6 +823,10 @@
                         <p class="pf-anslist__idle">Pick an option group above — or “+ New option group”.</p>
                       }
                     </div>
+                  }
+
+                  @if (p.type === 'family') {
+                    <ng-container *ngTemplateOutlet="familyPick; context: { $implicit: i }"></ng-container>
                   }
 
                   <!-- Per-value extras: input validation + this value's own

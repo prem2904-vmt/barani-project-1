@@ -75,6 +75,8 @@ import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.compone
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { printPickerDefaultOf, type PrintPickerDefault } from '../../../../shared/utils/print-picker';
+import { OptionFamilyService } from '../../../../core/services/option-family.service';
+import type { FamilyNode, OptionFamily } from '../../../../shared/utils/option-family';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -734,7 +736,21 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'number', label: 'A number — e.g. 118' },
     { value: 'choice', label: 'A choice from a list — e.g. Positive / Negative' },
     { value: 'text',   label: 'Free text — a written finding' },
+    { value: 'family', label: 'An answer with sub-choices — e.g. Present → cast types + amount' },
   ];
+
+  // ── Option families (hierarchical answers) ─────────────────────────
+  protected readonly familySvc = inject(OptionFamilyService);
+  readonly familyOptions = computed<PfSelectOption<string>[]>(() =>
+    this.familySvc.families().filter(f => f.active !== false).map(f => ({ value: f.code, label: f.name, hint: f.code })));
+  familyOf(i: number): OptionFamily | null { return this.familySvc.find(this.fields()[i]?.familyCode); }
+  setFamily(i: number, code: string) { this.patchField(i, { familyCode: code || null }); }
+  /** "Absent · Present → Cast type (many)" — the family at a glance. */
+  familyRootSummary(n: FamilyNode): string {
+    const k = n.children;
+    return k?.nodes?.length ? `${n.label} → ${k.label || 'sub-choices'}${k.multi ? ' (many)' : ''}` : n.label;
+  }
+  openFamilies() { this.router.navigate(['/admin/tests'], { queryParams: { view: 'families' } }); }
   readonly isSingleValue = computed(() => this.fields().length <= 1);
 
   private readonly themeSvc = inject(ThemeService);
@@ -752,6 +768,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return rt === 'numeric' ? 'number' : rt === 'choice' ? 'choice' : rt ? 'text' : '';
     }
     const t = fs[0].type;
+    if (t === 'family') return 'family';
     if (this.isNumericType(t)) return 'number';
     if (this.typeHasOptions(t)) return 'choice';
     return 'text';
@@ -765,7 +782,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.patchField(0, { label, name: this.deriveName(label, 'result'),
                            unit: (d.unit ?? '').trim() || undefined });
     }
-    this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : 'textarea' });
+    this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : kind === 'family' ? 'family' : 'textarea' });
+    if (kind === 'family') this.familySvc.ensureLoaded();
     this.patch({ resultType: kind === 'number' ? 'numeric' : kind,
                  reportFormat: this._draft().reportFormat || 'tabular' });
   }
@@ -1767,6 +1785,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit() {
     this.pricing.ensureLoaded();
+    this.familySvc.ensureLoaded();
     this.loadOptionGroups();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])

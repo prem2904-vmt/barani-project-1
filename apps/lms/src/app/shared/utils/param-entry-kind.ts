@@ -24,13 +24,15 @@ import type { FormFieldType } from '../forms/form-field.model';
 import { getFieldType } from '../forms/field-registry';
 import { qualitativeOptionsFor } from './qualitative';
 
-export type ParamEntryKind = 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text';
+export type ParamEntryKind = 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'text' | 'family';
 
 /** The subset of a stored parameter the resolver reads. */
 export interface ParamKindInput {
   type?: string | null;
   options?: (string | null | undefined)[] | null;
   optionRows?: { value?: string | null; active?: boolean | null }[] | null;
+  /** A `family` parameter's option family (shared/utils/option-family.ts). */
+  familyCode?: string | null;
 }
 
 /** 'Button Select' / 'button_select' / 'buttonSelect' → 'buttonselect'. */
@@ -56,6 +58,9 @@ export function hasOwnOptions(p: ParamKindInput): boolean {
  *  carries options/optionRows, or a qualitative type is a dropdown. */
 export function resolveParamEntryKind(p: ParamKindInput): ParamEntryKind {
   const t = compactType(p.type);
+  // A hierarchical answer (Casts: Absent / Present → types + quantity). The
+  // type wins; a stray familyCode on another type is ignored.
+  if (t === 'family') return 'family';
   if (NUMBER_TYPES.has(t)) return 'number';
   if (TEXTAREA_TYPES.has(t)) return 'textarea';
   if (CHOICE_TYPES.has(t)) return 'select';
@@ -102,6 +107,7 @@ export function editorFieldTypeFor(p: ParamKindInput): FormFieldType {
   const kind = resolveParamEntryKind(p);
   const t = compactType(p.type);
   if (kind === 'number') return 'number';
+  if (kind === 'family') return 'family';
   if (kind === 'select') return CHOICE_REGISTRY[t] ?? 'select';
   if (LEGACY_ALIASES[t]) return LEGACY_ALIASES[t];
   const raw = String(p.type ?? '') as FormFieldType;

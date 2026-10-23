@@ -41,6 +41,7 @@ import { CriticalResultEvent } from '../../../shared/models/critical-result.mode
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { familyValueText, isFamilyValue } from '../../../shared/utils/option-family';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -216,7 +217,8 @@ interface ValueRow {
                             <span class="pf-prow__name">{{ r.title }}</span>
                             <span class="pf-prow__val" [class.pf-prow__val--bold]="r.printBold">
                               @if (isEditingTest(st)) {
-                                <input class="pf-prow__editin" [value]="editVal(r.name)"
+                                <input class="pf-prow__editin" [value]="editVal(r.name)" [readOnly]="isFamilyEdit(r.name)"
+                                       [title]="isFamilyEdit(r.name) ? 'Answers with sub-choices are changed in result entry' : ''"
                                        (input)="setEditVal(r.name, $any($event.target).value)"
                                        (click)="$event.stopPropagation()"
                                        [attr.aria-label]="'New value for ' + r.title" />
@@ -1142,8 +1144,11 @@ export class ValidateResultComponent implements OnInit {
   isEditingTest(t: OrderTest): boolean { return this.editing() && this._selected()?.id === t.id; }
   editVal(name: string): string {
     const v = this._edits()[name];
+    if (isFamilyValue(v)) return familyValueText(v);
     return v == null ? '' : String(v);
   }
+  /** A family value (answer + sub-choices) is never retyped as text here. */
+  isFamilyEdit(name: string): boolean { return isFamilyValue(this._edits()[name]); }
   setEditVal(name: string, v: string) { this._edits.update(e => ({ ...e, [name]: v })); }
 
   /** Rail checklist → jump to (and focus) that test's section. */
@@ -1293,7 +1298,7 @@ export class ValidateResultComponent implements OnInit {
       return {
         name: p.name,
         title: p.title,
-        value: v ?? '—',
+        value: isFamilyValue(v) ? familyValueText(v) : (v ?? '—'),
         numeric: isNum ? n : undefined,
         unit,
         range: rangeWithUnit(rangeText, unit),
@@ -1465,6 +1470,7 @@ export class ValidateResultComponent implements OnInit {
     for (const r of this.valueRows()) {
       const raw = edits[r.name];
       if (raw === '' || raw == null) { out[r.name] = null; continue; }
+      if (isFamilyValue(raw)) { out[r.name] = raw; continue; }
       const n = Number(raw);
       out[r.name] = Number.isNaN(n) ? String(raw) : n;
     }

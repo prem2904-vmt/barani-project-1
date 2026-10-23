@@ -32,6 +32,7 @@ import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './repor
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
+import { asFamilyValue, familyReportLines, familyValueText, isFamilyValue, type FamilyReportLine } from './option-family';
 import {
   bodyArea, collapseMissingAnalyzerBoxes, manualRowsByBox, printableBoxes, readPageLayout, tableChain, type BodyArea as ProfileBodyArea,
 } from './report-profile-layout';
@@ -2836,6 +2837,9 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
 // only on page breaks), matching professional NABL / reference reports.
 // ──────────────────────────────────────────────────────────────
 
+/** Left indent (pt) per family level for a picked item's name. */
+const FAMILY_INDENT = 12;
+
 interface PanelRowData {
   kind: 'param' | 'note';
   /** The value's parameter name (param rows) — a Custom layout's manual row
@@ -2883,6 +2887,9 @@ interface PanelRowData {
   description?: string;
   /** This value's EFFECTIVE method (snapshot `valueMethods`, else the test's). */
   method?: string;
+  /** A FAMILY value's picked item (owner 2026-10-23): printed under its
+   *  parameter's row, the name indented by this depth (1 = first level). */
+  indent?: number;
 }
 
 /** The effective method of one value: the snapshot's per-value
@@ -3034,7 +3041,34 @@ function sentencesFitTable(layout: ResolvedReportLayout | undefined): boolean {
 export function isBlankReportValue(v: unknown): boolean {
   if (v === undefined || v === null) return true;
   if (Array.isArray(v)) return v.every(x => isBlankReportValue(x));
+  // A family value is blank until a root answer is picked.
+  if (isFamilyValue(v)) return String(v.v ?? '').trim() === '';
   return String(v).trim() === '';
+}
+
+/** The picked items of a FAMILY value as report rows, one per item, names
+ *  indented by depth (the parent row is the parameter's own row). */
+export function familyChildRows(lines: FamilyReportLine[], rowKey?: string): PanelRowData[] {
+  return lines.filter(l => l.depth > 0).map(l => ({
+    kind: 'param' as const,
+    rowKey,
+    name: l.label,
+    result: l.value,
+    range: '',
+    unit: '',
+    flag: '',
+    isLow: false,
+    abnormal: false,
+    indent: l.depth,
+  }));
+}
+
+/** A family value stored for `paramName` on the snapshot (raw object or mw's
+ *  enriched `{ value, flag, … }` wrapper). */
+function savedFamilyOf(t: { result?: Record<string, unknown> | null }, paramName: string | null | undefined) {
+  if (!paramName) return null;
+  const values = t.result?.['values'] as Record<string, unknown> | undefined;
+  return asFamilyValue(values?.[paramName]);
 }
 
 /** Drop (in place) every block built from real results that has no value
@@ -3115,7 +3149,12 @@ function buildPanelGroup(
           if (note) group.rows.push({ kind: 'note', note });
           continue;
         }
-        const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
+        // A FAMILY value prints its root answer here and one indented row
+        // per picked item right below (owner 2026-10-23).
+        const fam = asFamilyValue(resultSrc ? r.cells[resultSrc.name] : null) ?? savedFamilyOf(t, r.parameterName);
+        const famLines = fam ? familyReportLines(fam) : [];
+        const rc = fam ? { value: famLines[0]?.value ?? '', flag: '' } as { value: string; flag: string; saved?: boolean }
+          : coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
         // The flag is the one mw SAVED with the result — the snapshot's
         // per-value verdict (layouts are resolved with SCALAR values, so the
         // cell rarely carries it) or an enriched cell. Single source: a row
@@ -3181,6 +3220,7 @@ function buildPanelGroup(
           description: descriptionText(r.cells) || undefined,
           method: methodForValue(t, r.parameterName),
         });
+        if (famLines.length > 1) group.rows.push(...familyChildRows(famLines, r.parameterName || undefined));
       }
     }
     // A configured layout whose grid resolved to ZERO param rows (e.g. an
@@ -3201,10 +3241,12 @@ function buildPanelGroup(
   const boldLegacy = printBoldNames(t);
   for (const [paramName, v] of Object.entries(values ?? {})) {
     if (hiddenLegacy.has(paramName)) continue;
+    const famV = asFamilyValue(v);
+    const famL = famV ? familyReportLines(famV) : [];
     // No value → no row (owner 2026-10-03).
-    if (isBlankReportValue(v?.value)) continue;
+    if (famV ? famL.length === 0 : isBlankReportValue(v?.value)) continue;
     // Criticals print as H / L — never C (report rule; see report-flag.ts).
-    const rf = reportFlag(v?.flag, v?.value, v?.range);
+    const rf = reportFlag(v?.flag, famV ? famL[0].value : v?.value, v?.range);
     group.rows.push({
       // Text columns (Description) read from the value payload when present.
       texts: v?.description ? { description: v.description } : undefined,
@@ -3212,15 +3254,16 @@ function buildPanelGroup(
       kind: 'param',
       rowKey: paramName,
       name: humanize(paramName),
-      result: String(v?.value ?? '—'),
+      result: famV ? famL[0].value : String(v?.value ?? '—'),
       range: rangeCellText(v?.range, v?.unit),
-      unit: v?.unit ?? '',
+      unit: famV ? '' : (v?.unit ?? ''),
       flag: rf.flag,
       isLow: rf.isLow,
       abnormal: rf.abnormal,
       printBold: boldLegacy.has(paramName),
       method: methodForValue(t, paramName),
     });
+    if (famL.length > 1) group.rows.push(...familyChildRows(famL, paramName));
   }
   group.rows.push(...trailing);
   return applyValueMethods(group);
@@ -4205,6 +4248,9 @@ function renderColumnarTable(
         }
         // Conditional bold (condition `then.bold`) — bolds name + result.
         if (r.bold && vc.nameOnly) styles['fontStyle'] = faceOf('bold')[1];
+        // A family's picked item: its name sits indented under the parent.
+        if (r.indent && vc.members.some(m => m.type === 'name'))
+          styles['cellPadding'] = { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * r.indent };
         return { content: txt, styles };
       });
       body.push(cells);
@@ -4627,7 +4673,7 @@ function renderGridSection(
   const rawSampleTypeLine = ((t.sampleType ?? layout.sampleType) ?? '').trim();
   const sampleTypeLine = isConcreteSpecimen(rawSampleTypeLine) ? rawSampleTypeLine : '';
 
-  const body: RowCell[][] = rows.map((r): RowCell[] => {
+  const rowCells = (r: typeof rows[number]): RowCell[] => {
     if (r.isMerged) {
       return [{
         content: r.mergeContent ?? '',
@@ -4683,6 +4729,33 @@ function renderGridSection(
       if (r.isBold) styles['fontStyle'] = faceOf('bold')[1];
       return { content: txt, styles };
     });
+  };
+  // A FAMILY value: its root answer on the row, then one indented row per
+  // picked item (owner 2026-10-23).
+  const famOf = (r: typeof rows[number]) => {
+    if (r.isMerged) return null;
+    const resultCol = cfgCols.find(c => c.type === 'result');
+    return asFamilyValue(resultCol ? r.cells[resultCol.name] : null) ?? savedFamilyOf(t, r.parameterName);
+  };
+  const body: RowCell[][] = rows.flatMap(r => {
+    const main = rowCells(r);
+    const fam = famOf(r);
+    if (!fam) return [main];
+    const lines = familyReportLines(fam);
+    // The row prints the root answer; each picked item gets its own row.
+    vcols.forEach((vc, i) => { if (vc.hasResult) main[i] = { ...main[i], content: lines[0]?.value ?? '' }; });
+    const kids = lines.filter(l => l.depth > 0).map(l => vcols.map((vc): RowCell => {
+      const styles: Record<string, unknown> = { halign: alignFor(vc.members[0].type) };
+      if (vc.isName) {
+        Object.assign(styles, cellType('narrativeName'));
+        styles['textColor'] = BLACK;
+        styles['cellPadding'] = { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * l.depth };
+        return { content: l.label, styles };
+      }
+      if (vc.hasResult) { Object.assign(styles, cellType('narrativeResult')); styles['textColor'] = BLACK; return { content: l.value, styles }; }
+      return { content: '', styles };
+    }));
+    return [main, ...kids];
   });
 
   const columnStyles: Record<number, { cellWidth: number; halign?: string }> = {};
@@ -4928,10 +5001,14 @@ function renderLegacyTest(
   const entries = (values ? Object.entries(values) : [])
     .filter(([paramName]) => !hiddenNames.has(paramName))
     // No value → no row (owner 2026-10-03).
-    .filter(([, v]) => !isBlankReportValue(v?.value));
+    .filter(([, v]) => (asFamilyValue(v) ? familyReportLines(v).length > 0 : !isBlankReportValue(v?.value)));
 
   if (entries.length > 0) {
-    entries.forEach(([paramName, v], i) => {
+    entries.forEach(([paramName, v0], i) => {
+      // A family value: the root answer here, its items as indented rows below.
+      const famV = asFamilyValue(v0);
+      const famL = famV ? familyReportLines(famV) : [];
+      const v = famV ? { ...(v0 && !isFamilyValue(v0) ? v0 : {}), value: famL[0]?.value ?? '' } as typeof v0 : v0;
       // Criticals read High / Low — never "Critical" (report rule).
       const rf = reportFlag(v?.flag, v?.value, v?.range);
       const flagText = reportFlagWord(rf.flag);
@@ -4947,8 +5024,16 @@ function renderLegacyTest(
         { content: investContent, styles: { ...cellType('testName'), textColor: BLACK } },
         { content: flagText ? `${valueText}    ${flagText}` : valueText, styles: resultStyles },
         { content: rangeCellText(v?.range, v?.unit) || '—' },
-        { content: v?.unit ?? '—' },
+        { content: famV ? '' : (v?.unit ?? '—') },
       ]);
+      for (const l of famL.slice(1)) {
+        tableRows.push([
+          { content: l.label, styles: { ...cellType('testName'), textColor: BLACK, cellPadding: { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * l.depth } } },
+          { content: l.value, styles: { ...cellType('narrativeResult'), textColor: BLACK } },
+          { content: '' },
+          { content: '' },
+        ]);
+      }
     });
   } else {
     tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: styleOf('note'), textColor: TEXT_DIM } }]);
@@ -5473,6 +5558,11 @@ function titleCaseHeader(label: string): string {
 /** `saved` = the cell is mw's enriched wrapper ({ value, flag, … }) — its
  *  flag is THE verdict (single source), even when blank/'N'. */
 function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: boolean } {
+  const fam = asFamilyValue(raw);
+  if (fam) {
+    const o = (raw && typeof raw === 'object' && !isFamilyValue(raw)) ? raw as { flag?: string } : null;
+    return { value: familyReportLines(fam)[0]?.value ?? '', flag: (o?.flag ?? '').toUpperCase(), saved: !!o && 'flag' in o };
+  }
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try {
@@ -5495,6 +5585,9 @@ export function rangeCellText(raw: string | null | undefined, unit?: string | nu
 
 /** Unwrap any cell to its .value text when it's an enriched object JSON. */
 function coerceCellText(raw: unknown): string {
+  // A family value as one line ("Present — Hyaline 2–3 /LPF; Granular Few").
+  const fam = asFamilyValue(raw);
+  if (fam) return familyValueText(fam);
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try { const o = JSON.parse(s) as { value?: unknown }; return o.value == null ? '' : String(o.value); }

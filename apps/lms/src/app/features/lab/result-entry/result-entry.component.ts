@@ -1,4 +1,7 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, effect, inject, signal, untracked } from '@angular/core';
+import { FamilyInputComponent } from '../../../shared/components/family-input/family-input.component';
+import { OptionFamilyService } from '../../../core/services/option-family.service';
+import { familyIsAbnormal, isFamilyFilled, isFamilyValue, type FamilyValue, type OptionFamily } from '../../../shared/utils/option-family';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -81,7 +84,9 @@ type InputKind =
   | 'canvas'
   | 'stub'
   | 'section-header'
-  | 'info-text';
+  | 'info-text'
+  // Hierarchical answer from an option family (pf-family-input).
+  | 'family';
 
 // Duration unit options by field type — keeps the compound input simple.
 const DURATION_UNITS_LONG = ['days', 'weeks', 'months', 'years'] as const;
@@ -110,6 +115,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     PfDateComponent,
     PfTimeComponent,
     PfDateTimeComponent,
+    FamilyInputComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -365,6 +371,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                          (paste)="onNumericPaste($event, p.name)"
                                          placeholder="—"/>
                                 }
+                                @case ('family') {
+                                  <div class="pf-rg__select pf-rg__family" [attr.data-param]="p.name" (focusin)="setActive(p.name)" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                                    <pf-family-input [family]="familyFor(p)" [familyCode]="p.familyCode ?? null"
+                                                     [loading]="!familySvc.loaded() && !familySvc.failed()"
+                                                     [value]="rawValueOf(p.name)"
+                                                     (valueChange)="setFamilyValue(p.name, $event)"></pf-family-input>
+                                  </div>
+                                }
                                 @case ('dropdown') {
                                   <div class="pf-rg__select" [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
                                     <pf-select
@@ -507,6 +521,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                          to the right when present, otherwise input gets the full width. -->
                     <div class="pf-param__cell">
                       @switch (inputKindFor(p)) {
+                        @case ('family') {
+                          <div class="pf-param__family" [attr.data-param]="p.name" (focusin)="setActive(p.name)" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
+                            <pf-family-input [family]="familyFor(p)" [familyCode]="p.familyCode ?? null"
+                                             [loading]="!familySvc.loaded() && !familySvc.failed()"
+                                             [value]="rawValueOf(p.name)"
+                                             (valueChange)="setFamilyValue(p.name, $event)"></pf-family-input>
+                          </div>
+                        }
                         @case ('dropdown') {
                           <div [attr.data-param]="p.name" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
                             <!-- Qualitative pos/neg results are optional — prepend a real empty '—' choice. -->
@@ -2911,6 +2933,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   protected readonly scan = inject(ScanService);
   private readonly tenantState = inject(TenantStateService);
   private readonly host = inject(ElementRef<HTMLElement>);
+  /** Option families (hierarchical answers) — loaded once a family value shows. */
+  protected readonly familySvc = inject(OptionFamilyService);
 
   @ViewChildren('numInput') private numInputs!: QueryList<ElementRef<HTMLInputElement>>;
 
@@ -3097,6 +3121,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     for (const f of this._fields()) out[f.id] = values[f.name];
     return out;
   });
+  // A family value needs its definitions: fetched once per session, only
+  // when this test actually has one (never from the template — NG0600).
+  private readonly _familyLoad = effect(() => {
+    if (this.allParameters().some(p => resolveParamEntryKind(p) === 'family'))
+      untracked(() => this.familySvc.ensureLoaded());
+  });
   // Visibility-filtered view. Fields with no showWhen always pass; fields
   // from legacy tests (no FormField entry) always pass too.
   readonly parameters = computed<TestParameter[]>(() => {
@@ -3130,6 +3160,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       const vals = (v as { values?: unknown[] } | null)?.values;
       return Array.isArray(vals) && vals.some(x => typeof x === 'number' && !Number.isNaN(x));
     }
+    if (kind === 'family' || isFamilyValue(v)) return isFamilyFilled(v);
     if (Array.isArray(v)) return v.length > 0;
     return v !== undefined && v !== null && v !== '';
   }
@@ -3400,6 +3431,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     // Widened: catalog data carries type strings ('options', 'choice') the
     // FormFieldType union doesn't know.
     const t = (field?.type ?? p.type) as string;
+    if (resolveParamEntryKind(p) === 'family') return 'family';
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':
@@ -3518,6 +3550,10 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly flagChipTitle = flagChipTitle;
 
   flagFor(p: TestParameter): Flag | null {
+    if (this.inputKindFor(p) === 'family') {
+      // The picked ROOT answer decides (normal=false → abnormal), as mw does.
+      return familyIsAbnormal(this.familyFor(p), this._values()[p.name]) ? { tone: 'high', label: 'Abnormal' } : null;
+    }
     if (this.inputKindFor(p) !== 'numeric') return null;
     const raw = this._values()[p.name];
     if (raw === undefined || raw === null || raw === '') return null;
@@ -3577,6 +3613,18 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (!name) return undefined;
     const v = this._values()[name];
     return v === undefined || v === null ? undefined : String(v);
+  }
+
+  /** The stored value as-is (a family value is an object). */
+  rawValueOf(name: string): unknown { return this._values()[name]; }
+
+  /** A family parameter's definition (null until loaded / unknown code). */
+  familyFor(p: TestParameter): OptionFamily | null { return this.familySvc.find(p.familyCode); }
+
+  /** Store a family answer (the whole object; cleared = ''). */
+  setFamilyValue(name: string, v: FamilyValue | null) {
+    this.clearServerError(name);
+    this._values.update(s => ({ ...s, [name]: v ?? '' }));
   }
 
   titleFor(name: string): string {

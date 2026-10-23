@@ -1,4 +1,5 @@
 import type { ResolvedReportLayout, ResolvedRow, ResolvedSection } from '../models/report-layout.model';
+import { isFamilyFilled, isFamilyValue } from './option-family';
 
 /**
  * The results table can never silently leave a report (patient-safety RCA,
@@ -75,7 +76,9 @@ export interface ResultsTableTest {
 }
 
 type Wrapped = { value?: unknown; unit?: unknown; range?: unknown; flag?: unknown; description?: unknown };
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+// A family value travels as its JSON so the renderer can expand it (one row
+// per picked item); everything else is plain text.
+const str = (v: unknown): string => (v === null || v === undefined ? '' : isFamilyValue(v) ? JSON.stringify(v) : String(v));
 
 /**
  * Render safety net: a STANDALONE test with entered values whose resolved
@@ -105,6 +108,7 @@ export function withResultsTable<L>(layout: L, test: ResultsTableTest | null | u
 
   const entries = Object.entries(test.result?.values ?? {}).filter(([, v]) => {
     const scalar = v !== null && typeof v === 'object' && 'value' in (v as object) ? (v as Wrapped).value : v;
+    if (isFamilyValue(scalar)) return isFamilyFilled(scalar);
     return scalar !== null && scalar !== undefined && String(scalar).trim() !== '';
   });
   if (entries.length === 0) return layout;

@@ -15,6 +15,7 @@
  * implementation; call it instead of looping `tests` by hand.
  */
 import { withResultsTable } from './results-table';
+import { asFamilyValue, familyReportLines } from './option-family';
 
 export interface LayoutSnapshotTest {
   testId?: string;
@@ -64,6 +65,10 @@ export type PreviewFn = (
 function scalarValues(vals: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(vals)) {
+    // A FAMILY value posts its root answer ("Present") — conditions compare
+    // that; the report reads the items from the snapshot itself.
+    const fam = asFamilyValue(v);
+    if (fam) { out[k] = familyReportLines(fam)[0]?.value ?? ''; continue; }
     out[k] = v !== null && typeof v === 'object' && 'value' in (v as Record<string, unknown>)
       ? (v as Record<string, unknown>)['value'] : v;
   }

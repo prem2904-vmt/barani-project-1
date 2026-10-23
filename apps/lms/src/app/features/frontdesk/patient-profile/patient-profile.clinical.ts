@@ -14,6 +14,7 @@ import { Order } from '../../../shared/models/order.model';
 import { canOpenRoute, type RouteAccessCtx } from '../../../core/auth/route-access';
 import { flagCodeOf, isCriticalFlag, type FlagCode } from '../../../shared/utils/result-flag';
 import { orderTests, orderTitle } from './patient-profile.nd';
+import { resultValueText } from '../../../shared/utils/option-family';
 
 // ── API shapes ───────────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ export function buildCumulative(results: CumulativeResult[] | null | undefined, 
       const key = `${r.testId}|${v.name.trim().toLowerCase()}`;
       const flag = flagCodeOf(v.flag);
       const cell: CumCell = {
-        orderId: r.orderId, orderTestId: r.orderTestId, value: v.value, num: v.num ?? null, unit: v.unit ?? null,
+        orderId: r.orderId, orderTestId: r.orderTestId, value: resultValueText(v.value), num: v.num ?? null, unit: v.unit ?? null,
         range: v.range ?? null, flag, tone: toneOf(flag), dir: flagDir(flag), final: r.final, unitOff: false,
       };
       let row = rows.get(key);

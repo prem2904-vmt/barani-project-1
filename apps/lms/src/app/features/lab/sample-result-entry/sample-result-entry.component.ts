@@ -15,6 +15,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from "@angular/core";
 import { criticalNames, effectiveHidden, hasEnteredValue, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
@@ -77,6 +78,9 @@ import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
 import { normalizePriority } from "../../../shared/utils/lab-priority";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
 import { NOT_REPORTED, savedResultHasValue } from "../../../shared/utils/line-status";
+import { FamilyInputComponent } from "../../../shared/components/family-input/family-input.component";
+import { OptionFamilyService } from "../../../core/services/option-family.service";
+import { familyIsAbnormal, type FamilyValue, type OptionFamily } from "../../../shared/utils/option-family";
 import {
   MissingEntry,
   TabSnapshot,
@@ -177,6 +181,7 @@ function calcKey(testId: string, paramName: string): string {
     ReportNoteSlotComponent,
     ReportNotesCardComponent,
     PfDateComponent,
+    FamilyInputComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -185,6 +190,9 @@ function calcKey(testId: string, paramName: string): string {
 })
 export class SampleResultEntryComponent {
   private readonly host = inject(ElementRef);
+  /** Option families (hierarchical answers) — loaded only when a test on
+   *  this tube has a family value. */
+  protected readonly familySvc = inject(OptionFamilyService);
   private readonly http = inject(HttpClient);
   private readonly platform = inject(PlatformService);
   private readonly uploads = inject(UploadsService);
@@ -515,6 +523,11 @@ export class SampleResultEntryComponent {
 
   flagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
     const kind = this.inputKindFor(p);
+    if (kind === "family") {
+      // The picked ROOT answer decides (normal=false → abnormal), as mw does.
+      return familyIsAbnormal(this.familyFor(p), this.getValue(t.id, p.name))
+        ? { tone: "high", label: "Abnormal" } : null;
+    }
     if (kind !== "select" && kind !== "number") return null;
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || String(raw).trim() === "") return null;
@@ -639,7 +652,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-date__in",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger, .pf-sre__gdate .pf-date__in, .pf-fam__f, .pf-fam .pf-dd__trigger",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -917,6 +930,14 @@ export class SampleResultEntryComponent {
       if (key === notesKey) return;
       notesKey = key;
       void this.notes.load(oid);
+    });
+    // A family value needs its definitions: fetched once per session, and
+    // only when a test on this tube actually has one.
+    effect(() => {
+      const s = this.sample();
+      if (!s) return;
+      const any = (s.tests ?? []).some((t) => this.parametersFor(t).some((p) => this.inputKindFor(p) === "family"));
+      if (any) untracked(() => this.familySvc.ensureLoaded());
     });
     afterRenderEffect(() => {
       this.tubeTabs();
@@ -1308,8 +1329,17 @@ export class SampleResultEntryComponent {
    *  there. */
   inputKindFor(
     p: TestParameter,
-  ): "number" | "textarea" | "select" | "checkbox" | "date" | "text" {
+  ): "number" | "textarea" | "select" | "checkbox" | "date" | "text" | "family" {
     return resolveParamEntryKind(p);
+  }
+
+  /** A family parameter's definition (null until loaded / unknown code). */
+  familyFor(p: TestParameter): OptionFamily | null {
+    return this.familySvc.find(p.familyCode);
+  }
+
+  onFamilyChange(testId: string, paramName: string, v: FamilyValue | null) {
+    this.setValue(testId, paramName, v ?? "");
   }
 
   /** Options for a select parameter: the test's own option table (active
@@ -1333,6 +1363,9 @@ export class SampleResultEntryComponent {
    *  the standard {min,max} pair plus the `ref_range` text fallback used
    *  for sex-segmented + qualitative ranges. */
   refLabelFor(p: TestParameter): string {
+    // A family's expected answer(s) — the root nodes marked normal.
+    if (resolveParamEntryKind(p) === "family")
+      return (this.familySvc?.find(p.familyCode)?.nodes ?? []).filter((n) => n.normal).map((n) => n.label).join(" / ");
     const r = (p as TestParameter & { ref_range?: string }).ref_range;
     if (r) return r;
     // Every band, labelled ("Adult Male 13–17 · Adult Female 12–15"). This

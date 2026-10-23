@@ -36,6 +36,7 @@ import { currentRecipient } from '../../../shared/utils/report-recipient';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { asFamilyValue, familyValueText, resultValueText } from '../../../shared/utils/option-family';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; ageDisplay?: string | null; ageYears?: number | null; sex?: string; phone?: string; mrn?: string };
@@ -98,6 +99,8 @@ interface ViewPanelGroup {
 /** `saved` = the cell is mw's enriched wrapper ({ value, flag, … }) — its
  *  flag is THE verdict (single source), even when blank/'N'. */
 function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: boolean } {
+  // A family value: one line ("Present — Hyaline 2–3 /LPF; Granular Few").
+  if (asFamilyValue(raw)) return { value: familyValueText(raw), flag: '' };
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try {
@@ -111,6 +114,7 @@ function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: 
 /** Same unwrap for any cell — returns the .value when the cell is an enriched
  *  object JSON, else the text as-is. */
 function coerceCellText(raw: unknown): string {
+  if (asFamilyValue(raw)) return familyValueText(raw);
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try { const o = JSON.parse(s) as { value?: unknown }; return o.value == null ? '' : String(o.value); }
@@ -657,7 +661,7 @@ export class ReportViewerComponent implements OnInit {
         g.rows.push({
           kind: 'param',
           name: this.humanize(name),
-          result: isObj ? String(v.value ?? '—') : String(raw ?? '—'),
+          result: asFamilyValue(raw) ? familyValueText(raw) : isObj ? String(v.value ?? '—') : String(raw ?? '—'),
           range: isObj ? (v.range ?? '') : '',
           unit: isObj ? (v.unit ?? '') : '',
           flag: rf.flag,
@@ -698,7 +702,7 @@ export class ReportViewerComponent implements OnInit {
     const vals = t.result?.values ?? {};
     return Object.entries(vals).map(([name, value]) => ({
       name,
-      value: value == null || value === '' ? '—' : String(value)
+      value: value == null || value === '' ? '—' : resultValueText(value)
     }));
   }
 
