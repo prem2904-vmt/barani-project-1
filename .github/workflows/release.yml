@@ -9,7 +9,7 @@ on:
       environment:
         description: Where to release
         type: choice
-        options: [stage, dev]
+        options: [stage, prod, dev]
         required: true
       build:
         description: Build number (e.g. 2026.10.19.12-abc1234) or full commit SHA
@@ -25,12 +25,12 @@ concurrency:
 
 env:
   APP: lms-web
-  SITE: /opt/pf/www/med-${{ inputs.environment == 'stage' && 'stg' || 'dev' }}
+  SITE: /opt/pf/www/med-${{ inputs.environment == 'stage' && 'stg' || (inputs.environment == 'prod' && 'prod' || 'dev') }}
   REGISTRY: hyd.ocir.io/axhslaiirs9d/pf
 
 jobs:
   release:
-    runs-on: [self-hosted, "${{ inputs.environment == 'stage' && 'oci-stage' || 'oci' }}"]
+    runs-on: [self-hosted, "${{ inputs.environment == 'stage' && 'oci-stage' || (inputs.environment == 'prod' && 'oci-prod' || 'oci') }}"]
     timeout-minutes: 15
     env:
       BUILD: ${{ inputs.build }}
