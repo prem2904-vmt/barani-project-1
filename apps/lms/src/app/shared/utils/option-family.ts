@@ -208,6 +208,8 @@ export function familyErrorText(code: string | null | undefined): string | null 
     case 'family_value_invalid': return 'That answer doesn\u2019t fit the family — pick it again from the list.';
     case 'family_unknown_code': return 'An answer picked here no longer exists in the family — pick it again.';
     case 'family_qty_invalid': return 'An amount isn\u2019t valid — use a number or a range like 2–3.';
+    case 'family_via_profile': return 'Families are built inside a profile — open the profile and use “Add family”.';
+    case 'profile_only': return 'This line belongs to a profile — order the profile instead.';
     case 'family_unknown': return 'The option family linked to this test isn\u2019t set up in this lab — pick another family.';
     default: return null;
   }
