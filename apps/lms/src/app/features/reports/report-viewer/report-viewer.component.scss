@@ -262,3 +262,8 @@
   }
   .pf-rv-body { transition: none !important; }
 }
+
+/* No side padding above phone width, so the hero band must not bleed: the
+   kit's .pf-page bleed (2.5rem at ≥1024px) pushed "Send WhatsApp" past the
+   viewport edge. Phones keep the global 12px page gutter + its bleed. */
+@media (min-width: 641px) { .pf-rv.pf-page { --pf-hb-bleed: 0px; } }

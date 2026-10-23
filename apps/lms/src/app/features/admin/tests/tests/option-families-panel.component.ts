@@ -326,11 +326,11 @@ export class OptionFamiliesPanelComponent implements OnInit {
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
   readonly columnDefs: ColDef<FamGridRow>[] = [
-    { headerName: 'Family', field: 'name', minWidth: 140, flex: 1, cellStyle: { fontWeight: '600' } },
-    { headerName: 'Answers', field: 'answers', minWidth: 180, flex: 1.4 },
-    { headerName: 'Code', field: 'code', minWidth: 110, maxWidth: 160 },
-    { headerName: 'Source', field: 'source', minWidth: 90, maxWidth: 140 },
-    { headerName: 'Status', field: 'active', minWidth: 80, maxWidth: 100 },
+    { headerName: 'Family', field: 'name', minWidth: 120, flex: 1, cellStyle: { fontWeight: '600' } },
+    { headerName: 'Answers', field: 'answers', minWidth: 150, flex: 1.2 },
+    { headerName: 'Code', field: 'code', minWidth: 110, flex: 0.9 },
+    { headerName: 'Source', field: 'source', minWidth: 90, maxWidth: 110 },
+    { headerName: 'Status', field: 'active', minWidth: 76, maxWidth: 86 },
   ];
 
   readonly rows = computed<FamGridRow[]>(() => {

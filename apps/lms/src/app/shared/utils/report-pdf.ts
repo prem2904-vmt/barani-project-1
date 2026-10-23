@@ -4257,8 +4257,11 @@ function renderColumnarTable(
         // Conditional bold (condition `then.bold`) — bolds name + result.
         if (r.bold && vc.nameOnly) styles['fontStyle'] = faceOf('bold')[1];
         // A family's picked item: its name sits indented under the parent.
-        if (r.indent && vc.members.some(m => m.type === 'name'))
+        // (regular weight — the parent row carries the emphasis).
+        if (r.indent && vc.members.some(m => m.type === 'name')) {
           styles['cellPadding'] = { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * r.indent };
+          styles['fontStyle'] = faceOf('normal')[1];
+        }
         return { content: txt, styles };
       });
       body.push(cells);

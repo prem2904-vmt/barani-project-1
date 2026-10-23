@@ -107,7 +107,7 @@ import {
     </ng-template>
   `,
   styles: [`
-    :host { display: block; min-width: 0; }
+    :host { display: block; min-width: 0; container-type: inline-size; }
     .pf-fam { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .pf-fam__miss { font-size: 12px; color: var(--text-tertiary); }
     .pf-fam__level {
@@ -118,12 +118,19 @@ import {
     .pf-fam__lvlname { font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-fam__item { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-height: 36px; }
     .pf-fam__item--single > .pf-fam__one { flex: 1 1 160px; min-width: 0; }
-    .pf-fam__check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; flex: 0 0 104px; min-width: 0;
+    .pf-fam__check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; flex: 1 1 100%; min-width: 0;
       font-size: 13px; color: var(--text-secondary); min-height: 36px; }
     .pf-fam__item--on .pf-fam__check { color: var(--text-primary); font-weight: 500; }
     .pf-fam__cb { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--color-violet-600, #7c3aed); }
     .pf-fam__lbl { overflow-wrap: anywhere; }
     .pf-fam__qty { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
+    /* Narrow column (the bench grid): the amount sits on its own line under
+       its tick, aligned with the label; wide enough → beside it. */
+    .pf-fam__item:not(.pf-fam__item--single) > .pf-fam__qty { margin-left: 26px; }
+    @container (min-width: 330px) {
+      .pf-fam__check { flex: 0 0 140px; }
+      .pf-fam__item:not(.pf-fam__item--single) > .pf-fam__qty { margin-left: 0; }
+    }
     .pf-fam__qsel { width: 96px; }
     .pf-fam__qin { width: 80px; min-width: 0; }
     .pf-fam__qin--text { width: 160px; }

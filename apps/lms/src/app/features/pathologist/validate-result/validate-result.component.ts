@@ -1297,7 +1297,7 @@ export class ValidateResultComponent implements OnInit {
       const rangeText = saved ? (saved.range ?? null) : (normalizeReportText(fillUnit(r?.reportText, unit)) || formatRange(r));
       return {
         name: p.name,
-        title: p.title,
+        title: p.title || p.name,
         value: isFamilyValue(v) ? familyValueText(v) : (v ?? '—'),
         numeric: isNum ? n : undefined,
         unit,
