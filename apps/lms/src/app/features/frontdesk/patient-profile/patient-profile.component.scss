@@ -14,6 +14,10 @@
 /* WORK page: the host fills the shell; only regions scroll. */
 :host { display: block; height: 100%; min-height: 0; overflow: hidden; }
 .pf-pp { height: 100%; }
+/* This page has NO side padding (its regions carry their own gutters), so the
+   band must not bleed: the kit's .pf-page bleed (2.5rem at ≥1024px) pushed
+   the back chevron and "+ New order" past the viewport edges. */
+.pf-pp.pf-page { --pf-hb-bleed: 0px; }
 .pf-pp-band { flex: none; }
 
 /* ── First render: pill chips + actions fade in, gently staggered ──── */
