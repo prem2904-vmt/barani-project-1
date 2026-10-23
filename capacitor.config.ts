@@ -26,7 +26,11 @@ const config: CapacitorConfig = {
       // ship the *-stage configuration, so these are the live backends.
       'gxmbbjmcfuxqzdfczrma.supabase.co',
       'med-stg.prefrontal.health',
-      'med-fetch-stg.prefrontal.health'
+      'med-fetch-stg.prefrontal.health',
+      // Prod — cap:sync:prod / electron:build:*:prod
+      'hslcncwhgqezbqkdowyy.supabase.co',
+      'med.prefrontal.health',
+      'med-fetch.prefrontal.health'
     ]
   },
   plugins: {
