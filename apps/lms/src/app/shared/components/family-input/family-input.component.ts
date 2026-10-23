@@ -116,16 +116,16 @@ import {
       border-left: 2px solid var(--pf-line, rgba(148, 163, 184, .35));
     }
     .pf-fam__lvlname { font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-fam__item { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-height: 36px; }
+    .pf-fam__item { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-height: 36px; }
     .pf-fam__item--single > .pf-fam__one { flex: 1 1 160px; min-width: 0; }
-    .pf-fam__check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; flex: 1 1 140px; min-width: 0;
+    .pf-fam__check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; flex: 0 0 104px; min-width: 0;
       font-size: 13px; color: var(--text-secondary); min-height: 36px; }
     .pf-fam__item--on .pf-fam__check { color: var(--text-primary); font-weight: 500; }
     .pf-fam__cb { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--color-violet-600, #7c3aed); }
     .pf-fam__lbl { overflow-wrap: anywhere; }
     .pf-fam__qty { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
-    .pf-fam__qsel { min-width: 120px; }
-    .pf-fam__qin { width: 88px; min-width: 0; }
+    .pf-fam__qsel { width: 96px; }
+    .pf-fam__qin { width: 80px; min-width: 0; }
     .pf-fam__qin--text { width: 160px; }
     .pf-fam__unit { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
     @media (pointer: coarse) {
@@ -196,7 +196,7 @@ export class FamilyInputComponent {
 
   qtyOptions(n: FamilyNode): PfSelectOption<string>[] {
     return [{ value: '', label: '—' }, ...(n.qty?.options ?? []).filter(o => String(o ?? '').trim())
-      .map(o => ({ value: o, label: n.qty?.unit ? `${o} ${n.qty.unit}` : o }))];
+      .map(o => ({ value: o, label: o }))];
   }
 
   onRoot(code: string) {

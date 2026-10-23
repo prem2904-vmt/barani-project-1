@@ -85,3 +85,16 @@ describe('Families editor — tree edits', () => {
     expect(draft()!.nodes[1].children).toBeUndefined();
   });
 });
+
+import { isInUse } from './option-families-panel.component';
+import { ApiError } from '../../../../shared/models/api-response.model';
+
+describe('Families editor — delete refused while in use (409)', () => {
+  it('recognises the in-use refusal however ApiService hands it over', () => {
+    expect(isInUse(new ApiError('Used by 2 tests: CLP002, CLP003', 'family_in_use'))).toBe(true);
+    expect(isInUse({ status: 409, error: { message: 'x' } })).toBe(true);
+    expect(isInUse(new ApiError('This family is in use'))).toBe(true);
+    expect(isInUse(new ApiError('Request failed'))).toBe(false);
+    expect(isInUse(new ApiError('Not found', 'not_found'))).toBe(false);
+  });
+});

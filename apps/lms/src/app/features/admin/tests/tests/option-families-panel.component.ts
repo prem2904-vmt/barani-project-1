@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
+import { ApiError } from '../../../../shared/models/api-response.model';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
@@ -421,7 +421,7 @@ export class OptionFamiliesPanelComponent implements OnInit {
         this.selected.set({ ...d });
         this.cancelEdit();
       },
-      error: (err: HttpErrorResponse) => {
+      error: (err: unknown) => {
         this.saving.set(false);
         this.toasts.error(serverMessage(err) ?? 'Could not save the option family');
       },
@@ -438,9 +438,9 @@ export class OptionFamiliesPanelComponent implements OnInit {
     this.saving.set(true);
     this.svc.remove(d.code).subscribe({
       next: () => { this.saving.set(false); this.toasts.success(`Family "${d.name}" deleted`); this.selected.set(null); this.cancelEdit(); },
-      error: async (err: HttpErrorResponse) => {
+      error: async (err: unknown) => {
         this.saving.set(false);
-        if (err?.status === 409) {
+        if (isInUse(err)) {
           const used = this.svc.find(d.code)?.usedBy ?? [];
           const names = [...new Set(used.map(u => u.testCode || u.testName))];
           await this.dialog.alert({
@@ -460,10 +460,18 @@ export class OptionFamiliesPanelComponent implements OnInit {
   openTest(testId: string) { this.router.navigate(['/admin/tests', testId, 'edit']); }
 }
 
-function serverMessage(err: HttpErrorResponse | null | undefined): string | null {
-  const e = err?.error as { message?: string; error?: string; title?: string } | string | null | undefined;
-  if (!e) return null;
-  if (typeof e === 'string') return e.trim() && !e.trim().startsWith('<') ? e.trim() : null;
-  return (e.message || e.error || null) as string | null;
+/** The API's message (ApiService normalises every failure to ApiError). */
+function serverMessage(err: unknown): string | null {
+  const m = ApiError.from(err).message?.trim();
+  return m && m !== 'Request failed' && !m.startsWith('<') ? m : null;
 }
 
+/** DELETE refused because a test still uses the family (HTTP 409, code
+ *  `family_in_use` per the contract; the status itself is not exposed by
+ *  ApiService, so the code / wording decides). */
+export function isInUse(err: unknown): boolean {
+  const e = ApiError.from(err);
+  const status = (err as { status?: number } | null)?.status;
+  return status === 409 || ['family_in_use', 'in_use', 'conflict'].includes(String(e.code ?? '').toLowerCase())
+    || /\bin use\b|\bused by\b/i.test(e.message ?? '');
+}

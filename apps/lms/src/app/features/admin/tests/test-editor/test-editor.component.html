@@ -624,8 +624,9 @@
           }
 
           <!-- Reference ranges — single-value tests only; each value of a
-               multi-value test carries its own ranges inside its batch. -->
-          @if (isSingleValue()) {
+               multi-value test carries its own ranges inside its batch. A
+               family's normal answer is ticked on the family itself. -->
+          @if (isSingleValue() && entryKind() !== 'family') {
           <div class="pf-rr2">
             <div class="pf-rr2__head">
               <div>
