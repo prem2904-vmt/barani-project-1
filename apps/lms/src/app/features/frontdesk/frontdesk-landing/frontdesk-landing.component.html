@@ -844,9 +844,8 @@
                     <span class="pf-wrow__check pf-wrow__check--none" aria-hidden="true"></span>
                     }
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name">{{ drawerName(d.patient) }}</p>
+                      <p class="pf-wrow__name">{{ formatPatient(d.patient) }}</p>
                       <p class="pf-wrow__meta pf-num">
-                        @if (drawerAgeSex(d.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
                         <span class="pf-wrow__mi">{{ d.testIds.length }} test{{ d.testIds.length === 1 ? '' : 's'
                           }}</span>
                         <span class="pf-wrow__mi">Saved {{ d.savedAt | date:'MMM d, h:mm a' }}</span>
@@ -913,7 +912,7 @@
                     @if (workSel.isSelectable(o.id)) {
                     <button type="button" class="pf-check pf-wrow__check" role="checkbox"
                       [attr.aria-checked]="workSel.isSelected(o.id)"
-                      [attr.aria-label]="'Select ' + drawerName(o.patient)" (click)="onWorkCheck($event, o.id)"
+                      [attr.aria-label]="'Select ' + formatPatient(o.patient)" (click)="onWorkCheck($event, o.id)"
                       (pointerdown)="$event.stopPropagation()">
                       <span class="pf-check__box" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
@@ -929,10 +928,8 @@
                     }
                     }
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ formatPatient(o.patient) }}</p>
                       <p class="pf-wrow__meta pf-num">
-                        @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
-                        <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
                         <span class="pf-wrow__mi">{{ sampleLine(o) }}</span>
                         <span class="pf-wrow__mi">{{ o.createdAt | date:'shortTime' }}</span>
                       </p>
@@ -1078,10 +1075,8 @@
                     [class.pf-wrow--menu]="activeShareMenuOrderId() === o.id" tabindex="0" (click)="openOrder(o)"
                     (keydown.enter)="$event.target === $event.currentTarget && openOrder(o)">
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ formatPatient(o.patient) }}</p>
                       <p class="pf-wrow__meta pf-num">
-                        @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
-                        <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
                         <span class="pf-wrow__mi">{{ sampleLine(o) }}</span>
                         <span class="pf-wrow__mi">{{ o.createdAt | date:'shortTime' }}</span>
                       </p>
@@ -1192,10 +1187,8 @@
                   <div class="pf-wrow" [attr.data-priority]="o.priority" [attr.data-order-id]="o.id" tabindex="0"
                     (click)="openOrder(o)" (keydown.enter)="$event.target === $event.currentTarget && openOrder(o)">
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ formatPatient(o.patient) }}</p>
                       <p class="pf-wrow__meta pf-num">
-                        @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
-                        <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
                         <span class="pf-wrow__mi">Billed {{ o.createdAt | date:'MMM d, h:mm a' }}</span>
                       </p>
                     </div>
@@ -1254,10 +1247,8 @@
                     (click)="openMergedRow(row)"
                     (keydown.enter)="$event.target === $event.currentTarget && openMergedRow(row)">
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name"><pf-daily-no [of]="row.order" />{{ drawerName(row.order.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="row.order" />{{ formatPatient(row.order.patient) }}</p>
                       <p class="pf-wrow__meta pf-num">
-                        @if (drawerAgeSex(row.order.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
-                        <span class="pf-wrow__mi">{{ row.order.patient?.mrn || '—' }}</span>
                         <span class="pf-wrow__mi">{{ sampleLine(row.order) }}</span>
                         <span class="pf-wrow__mi">{{ row.order.createdAt | date:'shortTime' }}</span>
                       </p>
@@ -1521,8 +1512,7 @@
           @if (drawerAgeSex(so.patient); as ageSex) {
             <span class="pf-drawer__mi">{{ ageSex }}</span>
           }
-          <!-- <span class="pf-drawer__mi">{{ so.patient?.mrn || '—' }}</span><span class="pf-drawer__mi">Order #{{
-            so.id.slice(0, 8).toUpperCase() }}</span> -->
+          <span class="pf-drawer__mi">{{ so.patient?.mrn || '—' }}</span>
         </p>
       </div>
       <div class="pf-drawer__hdr-actions">
@@ -2206,8 +2196,7 @@
       <h2 class="pf-drawer__hdr-name"><pf-daily-no [of]="bo" />{{ drawerName(bo.patient) }}</h2>
       <p class="pf-drawer__hdr-meta pf-num">
         @if (drawerAgeSex(bo.patient); as ageSex) {<span class="pf-drawer__mi">{{ ageSex }}</span>}
-        <!-- <span class="pf-drawer__mi">{{ bo.patient?.mrn || '—' }}</span><span class="pf-drawer__mi">Order #{{
-          bo.id.slice(0, 8).toUpperCase() }}</span> -->
+        <span class="pf-drawer__mi">{{ bo.patient?.mrn || '—' }}</span>
       </p>
     </div>
     <button type="button" class="pf-drawer__close" (click)="closePaymentDrawer()" aria-label="Close">

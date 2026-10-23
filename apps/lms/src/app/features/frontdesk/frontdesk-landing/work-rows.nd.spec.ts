@@ -1,3 +1,4 @@
+import '@angular/compiler';
 import { readFileSync } from 'node:fs';
 import { signal } from '@angular/core';
 import { Order } from '../../../shared/models/order.model';
@@ -50,11 +51,10 @@ describe('Frontdesk work rows — anatomy', () => {
     for (const r of rules()) expect(r.body, r.sel).not.toMatch(/font-family:[^;]*mono/i);
   });
 
-  it('shows the FULL name (drawerName), never formatPatient / an ellipsis', () => {
+  it('shows the global patient format (formatPatient)', () => {
     for (const r of rows()) {
-      expect(r.querySelector('.pf-wrow__name')!.textContent).toMatch(/drawerName\(/);
+      expect(r.querySelector('.pf-wrow__name')!.textContent).toMatch(/formatPatient\(/);
     }
-    expect(work).not.toMatch(/formatPatient\(/);
     expect(work).not.toMatch(/class="[^"]*(truncate|line-clamp)/);
     const name = rule('.pf-wrow__name');
     expect(name).toMatch(/white-space: normal/);
@@ -126,7 +126,7 @@ describe('Frontdesk work rows — selection', () => {
     expect(cb.getAttribute('role')).toBe('checkbox');
     expect(cb.getAttribute('type')).toBe('button'); // Space / Enter toggle natively
     expect(cb.getAttribute('[attr.aria-checked]')).toBe('workSel.isSelected(o.id)');
-    expect(cb.getAttribute('[attr.aria-label]')).toBe("'Select ' + drawerName(o.patient)");
+    expect(cb.getAttribute('[attr.aria-label]')).toBe("'Select ' + formatPatient(o.patient)");
     expect(kit).toMatch(/\.pf-check\[aria-checked='true'\] \.pf-check__box \{ background: var\(--color-violet-600/);
     expect(kit).toMatch(/\.pf-check:focus-visible \.pf-check__box \{ outline: 2px solid/);
   });
