@@ -198,13 +198,13 @@ describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', 
 
   it('GST bill: Total 1000 − Discount 295 + GST 126.90 + Round off 0.10 = Net Payable 832 (discount is the bill\'s, not gross − payable)', () => {
     const m = buildCashBillModel(input(bill()));
-    expect(m.grossTotal).toBe('1,000');
-    expect(m.discount).toBe('295');
+    expect(m.grossTotal).toBe('1,000.00');
+    expect(m.discount).toBe('295.00');
     expect(m.hasTax).toBe(true);
     expect(m.tax).toBe('126.90');
     expect(m.hasRoundOff).toBe(true);
     expect(m.roundOff).toBe('+ 0.10');
-    expect(m.netPayable).toBe('832');
+    expect(m.netPayable).toBe('832.00');
     expect(m.amountWords).toMatch(/Eight Hundred Thirty[- ]Two/i);
   });
 
@@ -217,10 +217,10 @@ describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', 
 
   it('GST-off bill is unchanged: Total − Discount = Net Payable, no GST row', () => {
     const m = buildCashBillModel(input(bill({ totalTax: 0, totalCgst: 0, totalSgst: 0, totalTaxable: 705, totalPayable: 705, roundOff: 0, balance: 705 })));
-    expect(m.discount).toBe('295');
+    expect(m.discount).toBe('295.00');
     expect(m.hasTax).toBe(false);
     expect(m.hasRoundOff).toBe(false);
-    expect(m.netPayable).toBe('705');
+    expect(m.netPayable).toBe('705.00');
   });
 });
 
