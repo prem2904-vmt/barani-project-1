@@ -1,0 +1,23 @@
+name: release-dev
+run-name: Release ${{ github.event.workflow_run.head_sha || inputs.build }} → dev
+
+# Puts the build that just finished on DEV automatically (runs when "build" succeeds on main).
+# Can also be run by hand: Actions → release-dev → Run workflow → build number / commit SHA.
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Build number or full commit SHA
+        required: true
+
+jobs:
+  release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/_release.yml
+    with:
+      environment: dev
+      build: ${{ github.event.workflow_run.head_sha || inputs.build }}

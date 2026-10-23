@@ -1,0 +1,45 @@
+name: release-stage
+run-name: Release ${{ inputs.build || 'what dev runs' }} → stage
+
+# Puts an ALREADY-BUILT image on stage. Nothing is compiled here.
+# Actions → release-stage → Run workflow. Leave "build" empty to release exactly what
+# dev is running now, or type a build number / full commit SHA.
+# Only people with write access can run it — that is the approval.
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Build number or full commit SHA (empty = what dev is running now)
+        required: false
+        default: ''
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  pick:
+    runs-on: [self-hosted, oci-stage]
+    outputs:
+      build: ${{ steps.b.outputs.build }}
+    steps:
+      - id: b
+        env:
+          WANT: ${{ inputs.build }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -n "$WANT" ]; then echo "build=$WANT" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # what dev is running = the commit of the latest successful release-dev run
+          sha=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/actions/workflows/release-dev.yml/runs?status=success&per_page=1" \
+            | python3 -c 'import json,sys; r=json.load(sys.stdin)["workflow_runs"]; print(r[0]["head_sha"] if r else "")')
+          [ -n "$sha" ] || { echo "::error::no successful dev release found — type a build number"; exit 1; }
+          echo "Releasing what dev runs: $sha" >> "$GITHUB_STEP_SUMMARY"
+          echo "build=$sha" >> "$GITHUB_OUTPUT"
+  release:
+    needs: pick
+    uses: ./.github/workflows/_release.yml
+    with:
+      environment: stage
+      build: ${{ needs.pick.outputs.build }}

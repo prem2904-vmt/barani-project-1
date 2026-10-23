@@ -1,19 +1,8 @@
-name: release
-run-name: Release ${{ inputs.build }} → ${{ inputs.environment }}
+name: release (shared steps)
 
 # RELEASE: copies an already-built website onto an environment's server. Nothing
 # is compiled. The site gets its settings from /config.json on that server.
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Where to release
-        type: choice
-        options: [stage, prod, dev]
-        required: true
-      build:
-        description: Build number (e.g. 2026.10.19.12-abc1234) or full commit SHA
-        required: true
   workflow_call:
     inputs:
       environment: { type: string, required: true }
