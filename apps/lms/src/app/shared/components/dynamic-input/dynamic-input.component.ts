@@ -146,19 +146,22 @@ export { isContactNumberField };
                          [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
                 </span>
                 <span class="pf-di-dob__or">or</span>
-                <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
-                       class="pf-input pf-num pf-di-dob__age" [class.pf-input--error]="!!err" placeholder="Age"
-                       [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
-                       [attr.aria-describedby]="err ? inputId + '-e' : null"
-                       [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
-                <div class="pf-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
-                     (keydown)="onUnitKey($event)">
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
-                          [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
-                          [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
-                          [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
+                <div class="pf-di-dob__age-group" [class.pf-di-dob__age-group--error]="!!err">
+                  <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
+                         class="pf-num pf-di-dob__age" [class.pf-input--error]="!!err" placeholder="Age"
+                         [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
+                         [attr.aria-describedby]="err ? inputId + '-e' : null"
+                         [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
+                  <span class="pf-di-dob__age-sep" aria-hidden="true"></span>
+                  <div class="pf-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
+                       (keydown)="onUnitKey($event)">
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
+                            [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
+                            [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
+                            [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
+                  </div>
                 </div>
               </div>
               @if (!err) { <p class="pf-field__hint">Type either — an entered age stays current automatically.</p> }
@@ -995,11 +998,52 @@ export { isContactNumberField };
       font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
     .pf-di-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
-    /* DOB ⇄ age on one row. */
-    .pf-di-dob { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pf-di-dob__date { flex: 1 1 110px; min-width: 100px; width: auto; }
-    .pf-di-dob__age { flex: 0 0 52px; width: 52px; }
-    .pf-di-dob__age .pf-input { padding: 0 6px; text-align: center; }
+    /* DOB ⇄ age on one row: balanced, cohesive, modern inputs. */
+    .pf-di-dob { display: flex; align-items: center; gap: 10px; width: 100%; }
+    .pf-di-dob__date { flex: 1 1 0; min-width: 130px; width: auto; }
+    .pf-di-dob__or {
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+      color: var(--text-tertiary, #94a3b8); background: var(--pf-chip-bg, #f1f5f9);
+      border: 1px solid var(--pf-line, rgba(148, 163, 184, 0.25)); border-radius: 9999px;
+      padding: 2px 7px; line-height: 1.2;
+    }
+    .pf-di-dob__age-group {
+      flex: 1 1 0; min-width: 155px; display: inline-flex; align-items: center; height: 40px;
+      box-sizing: border-box; background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--pf-input-border, var(--pf-line, #cbd5e1)); border-radius: 10px;
+      padding: 3px 4px 3px 2px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-dob__age-group:focus-within {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-violet-600, #7c3aed) 15%, transparent);
+    }
+    .pf-di-dob__age-group--error { border-color: var(--red-border, #ef4444) !important; }
+    .pf-di-dob__age {
+      flex: 1 1 40px; min-width: 36px; width: auto; height: 32px;
+      border: 0 !important; outline: 0 !important; background: transparent !important;
+      box-shadow: none !important; padding: 0 6px; text-align: center;
+      font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+      color: var(--text-primary, #0f172a);
+    }
+    .pf-di-dob__age::placeholder { color: var(--text-muted, #94a3b8); font-weight: 400; }
+    .pf-di-dob__age-sep { flex: none; width: 1px; height: 22px; background: var(--pf-line, #e2e8f0); margin: 0 3px; }
+    .pf-di-seg--unit {
+      flex: none; display: inline-flex; align-items: center; gap: 1px; padding: 2px;
+      background: var(--pf-chip-bg, #f1f5f9); border-radius: 7px !important; border: 0 !important;
+      height: 30px; box-sizing: border-box;
+    }
+    .pf-di-seg--unit .pf-seg__item {
+      min-width: 32px !important; height: 26px !important; min-height: 26px !important;
+      max-height: 26px !important; padding: 0 8px !important; font-size: 12px !important;
+      font-weight: 500; border-radius: 5px !important; border: 0 !important;
+      color: var(--text-secondary, #64748b);
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-seg--unit .pf-seg__item[aria-checked='true'] {
+      background: var(--pf-card-bg, #ffffff) !important; color: var(--color-violet-600, #7c3aed) !important;
+      font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+    }
     /* Typed date + a calendar button over a hidden native picker. */
     .pf-di-date { position: relative; display: block; min-width: 0; }
     .pf-di-date__in { padding-right: 40px; }
@@ -1010,35 +1054,56 @@ export { isContactNumberField };
     }
     .pf-di-date__pick:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
-    .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
-    /* Segmented choices: a 40px neutral control; wraps rather than clips. */
-    .pf-di-seg { box-sizing: border-box; min-height: 40px; height: auto; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
-    .pf-di-seg .pf-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
-    /* Pills (5+ options, e.g. Title) keep their natural width on web. */
-    .pf-di-seg:not(.pf-di-seg--fill) { align-self: flex-start; }
+    /* Segmented choices (Sex, etc.): modern 40px form segmented control matching inputs */
+    .pf-di-seg:not(.pf-di-seg--unit) {
+      box-sizing: border-box; min-height: 40px; height: 40px; max-width: 100%;
+      border-radius: 10px !important; background: var(--pf-chip-bg, #f1f5f9);
+      border: 1px solid var(--pf-line, rgba(148, 163, 184, 0.25)); padding: 3px; gap: 3px; align-items: stretch;
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item {
+      height: 32px; min-height: 32px !important; max-height: 32px !important; padding: 0 16px;
+      font-size: 13.5px; font-weight: 500; border-radius: 7px !important;
+      color: var(--text-secondary, #64748b);
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item:hover:not(:disabled):not([aria-checked='true']) {
+      color: var(--text-primary, #0f172a);
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item[aria-checked='true'] {
+      background: var(--pf-card-bg, #ffffff) !important; color: var(--color-violet-600, #7c3aed) !important;
+      font-weight: 600; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    }
+    .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { align-self: flex-start; }
     .pf-di-seg--fill { display: flex; width: 100%; }
     .pf-di-seg--fill .pf-seg__item { flex: 1 1 0; }
-    .pf-di-seg--unit { flex: none; }
-    .pf-di-seg--unit .pf-seg__item { min-width: 34px; padding: 0 7px; font-size: 12.5px; }
-    /* Field-level errors (new design): the control is outlined in error red. */
-    .pf-di-seg--error { border-color: var(--red-border, #ef4444); }
+    .pf-di-seg--error { border-color: var(--red-border, #ef4444) !important; }
     :host .pf-di-nd ::ng-deep pf-select.pf-di-select--error .pf-dd__trigger { border-color: var(--red-border, #ef4444) !important; }
     .pf-di-seg .pf-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pf-di-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-di-chip { height: 34px; font-size: 13px; }
     .pf-di-switch { min-height: 40px; font-size: 13.5px; white-space: normal; text-align: left; }
     .pf-di-switch__t { display: inline-flex; align-items: center; gap: 6px; }
+    :root.dark .pf-di-seg:not(.pf-di-seg--unit) { background: rgba(30, 41, 59, 0.6); border-color: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item[aria-checked='true'] { background: #1e293b !important; color: #c4b5fd !important; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important; }
+    :root.dark .pf-di-dob__or { background: rgba(30, 41, 59, 0.6); border-color: rgba(148, 163, 184, 0.2); color: var(--text-tertiary); }
+    :root.dark .pf-di-dob__age-group { background: var(--pf-card-bg, #0f172a); border-color: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-dob__age-sep { background: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-seg--unit { background: rgba(30, 41, 59, 0.7); }
+    :root.dark .pf-di-seg--unit .pf-seg__item[aria-checked='true'] { background: #1e293b !important; color: #c4b5fd !important; }
     @media (max-width: 640px) {
       .pf-di-phone { min-height: 44px; }
       .pf-di-phone__num { height: 42px; font-size: 16px; }
       :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger { height: 42px !important; }
       :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger { height: 44px; }
-      .pf-di-seg { min-height: 44px; }
-      .pf-di-seg .pf-seg__item { min-height: 38px; }
+      .pf-di-seg:not(.pf-di-seg--unit) { min-height: 44px; height: 44px; }
+      .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item { min-height: 36px; }
       /* 5+ one-tap options (Title): balanced rows of three, full width. */
       .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+      .pf-di-dob { flex-wrap: wrap; gap: 8px; }
       .pf-di-dob__date { flex-basis: 100%; }
-      .pf-di-dob__age { flex: 1 1 auto; width: auto; }
+      .pf-di-dob__or { display: none; }
+      .pf-di-dob__age-group { flex-basis: 100%; min-height: 44px; height: 44px; }
+      .pf-di-dob__age { height: 38px; font-size: 16px; }
       .pf-di-switch { min-height: 44px; }
     }
   `]
