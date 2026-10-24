@@ -25,7 +25,7 @@ import { environment } from '../../../environments/environment';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
-  readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
+  readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption, footerImageLift } from './report-header-layout';
 import { AgeStyle, formatAge } from './patient-age';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
@@ -1984,7 +1984,10 @@ function computeReportLayout(
   }
 
   // ── Footer lines (last page), stacked up from just above the date strip.
-  let extraY = A4.h - 40;
+  // A footer background image lifts the whole footer chrome above it
+  // (footerImageLift); the footer area does not depend on bodyTop.
+  const footerLift = footerImageLift(resolveBackgrounds(doc, (cfg?.backgrounds ?? []).filter(b => b.area === 'footer'), 0));
+  let extraY = A4.h - footerLift - 40;
   if (theme.disclaimer) {
     const dlh = TYPE.tokens.disclaimer.lineHeight ?? tsz('disclaimer') * 1.2;
     const d = add({ id: 'disclaimer', region: 'footer', kind: 'text', label: 'Disclaimer', text: theme.disclaimer, x: MARGIN_X,
@@ -2013,7 +2016,8 @@ function computeReportLayout(
   // defBox is internal — the published items are plain LayoutItems.
   const out: LayoutItem[] = items.map(({ defBox: _d, ...rest }) => rest);
   return { preset, active, items: out, headerBottom, bodyTop, bodyTopAuto, letterpad: lp,
-           backgrounds: resolveBackgrounds(doc, cfg?.backgrounds ?? [], bodyTop) };
+           backgrounds: resolveBackgrounds(doc, cfg?.backgrounds ?? [], bodyTop),
+           ...(footerLift ? { footerLift } : {}) };
 }
 
 const BG_AREA_LABEL: Record<BgArea, string> = { page: 'Page background', header: 'Header background', footer: 'Footer background' };
@@ -3724,13 +3728,22 @@ const SIGN_OFF_SLACK = 8;
  *  for every page — autoTable's bottom margin cannot vary per page and the
  *  last page is only known once the body is laid out. Footer items dragged up
  *  into the body are the designer's choice and do not raise the floor. */
-export function footerFloor(layout: Pick<ReportLayoutResult, 'items'> | null | undefined): number {
-  let top = A4.h - 40;
+export function footerFloor(layout: Pick<ReportLayoutResult, 'items' | 'footerLift'> | null | undefined): number {
+  // A footer background image lifts the date strip above it (footerImageLift).
+  let top = A4.h - (layout?.footerLift ?? 0) - 40;
   for (const it of layout?.items ?? []) {
     if (it.region !== 'footer' || it.hidden || it.box.y < A4.h * 0.7) continue;
     top = Math.min(top, it.box.y);
   }
   return Math.ceil(A4.h - top + 6);
+}
+
+/** The date strip's "page bottom" (pt): the page edge, or — with a footer
+ *  background image — the image's top, so "Generated on", the page number and
+ *  "Powered by" print above the image (hairline at base-30, text at base-18,
+ *  powered-by at base-4). */
+export function footerStripBase(layout: Pick<ReportLayoutResult, 'footerLift'> | null | undefined): number {
+  return A4.h - (layout?.footerLift ?? 0);
 }
 
 /** Height (pt) of the sign-off block the PRESENT signatories need — 0 when
@@ -5415,17 +5428,20 @@ function drawSigFooterPage(
     for (const it of LAYOUT?.items ?? []) if (it.region === 'footer') drawLayoutItem(doc, it);
   }
 
-  // Bottom strip: "Generated on : <date>" on the left, "Page N of M" on the right
+  // Bottom strip: "Generated on : <date>" on the left, "Page N of M" on the right.
+  // `base` is the strip's "page bottom": the page edge, or the top of a
+  // footer background image (the strip then sits above it, every page).
+  const base = footerStripBase(LAYOUT);
   doc.setDrawColor(HAIR);
   doc.setLineWidth(0.4);
-  doc.line(MARGIN_X, A4.h - 30, A4.w - MARGIN_X, A4.h - 30);
+  doc.line(MARGIN_X, base - 30, A4.w - MARGIN_X, base - 30);
 
   typeset(doc, 'generated');
   doc.setTextColor(BLACK);
-  doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
+  doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, base - 18);
   // Plain page number ("1", "2", "3" …).
   typeset(doc, 'pageNumber');
-  doc.text(String(pageNo), A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
+  doc.text(String(pageNo), A4.w - MARGIN_X, base - 18, { align: 'right' });
 
   // Blue band at the bottom (classic "Sample Collection" strip) — the LAB's
   // contact number (home-collection line), never the patient's phone.
@@ -5446,7 +5462,7 @@ function drawSigFooterPage(
     typeset(doc, 'poweredBy');
     doc.setTextColor(TEXT_DIM);
     const bandOn = theme.showSampleBand && (practice.phone ?? '').trim();
-    doc.text('Powered by Prefrontal', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
+    doc.text('Powered by Prefrontal', A4.w / 2, bandOn ? base - 18 : base - 4, { align: 'center' });
   }
 
   // Optional watermark — a COMBINATION of the lab's logo (faint, centred)
