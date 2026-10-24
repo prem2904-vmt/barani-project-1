@@ -14,6 +14,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import type { RunDto } from '../../../shared/instruments/instrument.models';
+import { LATEST_VALUES } from '../../../shared/instruments/instrument-prefill';
 
 /**
  * Sample result entry × analyzer PREFILL (instrument connector): the latest
@@ -166,6 +167,27 @@ describe('Sample result entry — analyzer prefill', () => {
     expect(c.getValue('ot2', 'result')).toBe('120');                   // typed → kept
     expect(c.getValue('ot5', 'result')).toBe('90');
     expect(c.analyzerRunId()).toBe('m0');
+  });
+
+  it('one message per test (Maglumi): every test fills from its own run; picking one run shows only it', async () => {
+    const perTest: RunDto[] = [
+      { messageId: 'tg', instrumentId: 'i2', instrumentName: 'Maglumi X3', receivedAt: '2026-10-24T01:02:00Z', runAt: '2026-10-24T01:02:00Z',
+        state: 'matched', values: [mv('ot2', '100')] },
+      { messageId: 'chol', instrumentId: 'i2', instrumentName: 'Maglumi X3', receivedAt: '2026-10-24T00:47:00Z', runAt: '2026-10-24T00:47:00Z',
+        state: 'matched', values: [mv('ot1', '180')] },
+    ];
+    const { f, c } = await render({ prefill: () => of({ orderSampleId: 'smp-1', barcode: '26123', runs: perTest }) });
+    expect(c.getValue('ot1', 'result')).toBe('180');   // from the OLDER message
+    expect(c.getValue('ot2', 'result')).toBe('100');
+    expect(c.analyzerRunId()).toBe(LATEST_VALUES);
+    expect(c.analyzerRunOptions()[0]).toEqual({ value: LATEST_VALUES, label: 'Latest values (all runs)' });
+    c.applyAnalyzerRun('tg');
+    f.detectChanges();
+    expect(c.getValue('ot1', 'result')).toBe('');      // untouched fill of the other run → cleared
+    expect(c.getValue('ot2', 'result')).toBe('100');
+    c.applyAnalyzerRun(LATEST_VALUES);
+    f.detectChanges();
+    expect(c.getValue('ot1', 'result')).toBe('180');
   });
 
   it('endpoint 404 / error: silent (no toast), entry works as before', async () => {

@@ -23,7 +23,7 @@ import {
   BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
   buildUpsert, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
-  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, statusWord, toCodeMapUpserts, validateCodeMaps,
+  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, sharedCodeHint, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
@@ -599,6 +599,7 @@ export class InstrumentEditorComponent {
     this.toasts.success(added ? `${plural(added, 'code')} added — pick the test for each` : 'No new codes to add');
   }
   mapIssueAt(i: number): string | null { return this.mapIssues().find((x) => x.index === i)?.message ?? null; }
+  sharedCodeAt(i: number): string | null { return sharedCodeHint(this.maps(), i); }
   skippedCodesText(): string { return this.loincSkipped().map((s) => `${s.code} (${s.reason})`).join(', '); }
 
   /** Analyzer-code box: edits the row as usual, and debounces a LOINC

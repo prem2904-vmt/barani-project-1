@@ -593,16 +593,20 @@ export function codesFromMessages(msgs: readonly InstrumentMessage[]): string[] 
 
 export interface CodeMapIssue { index: number; message: string }
 
-/** Rows the server would reject. Fully blank rows are ignored (dropped on save). */
+/** Rows the server would reject. Fully blank rows are ignored (dropped on save).
+ *  One analyzer code MAY sit on several rows with different tests (Erba "GLU"
+ *  → Fasting / Postprandial / Random blood sugar — the one ordered on the tube
+ *  is used, see {@link sharedCodeHint}); only the same code + test twice is an error. */
 export function validateCodeMaps(rows: readonly CodeMapRow[]): CodeMapIssue[] {
   const out: CodeMapIssue[] = [];
   const seen = new Map<string, number>();
   rows.forEach((r, i) => {
     const code = codeKey(r.analyzerCode);
     if (!code && !r.testCatalogKey) return;
+    const pair = `${code}\u001f${(r.testCatalogKey ?? '').trim().toUpperCase()}`;
     if (!code) out.push({ index: i, message: 'Analyzer code is missing' });
-    else if (seen.has(code)) out.push({ index: i, message: `${r.analyzerCode.trim()} is mapped twice` });
-    else seen.set(code, i);
+    else if (r.testCatalogKey && seen.has(pair)) out.push({ index: i, message: `${r.analyzerCode.trim()} is mapped to this test twice` });
+    else if (r.testCatalogKey) seen.set(pair, i);
     if (!r.testCatalogKey) out.push({ index: i, message: `Pick the test for ${r.analyzerCode.trim() || 'this row'}` });
     if (!Number.isFinite(Number(r.factor)) || Number(r.factor) === 0) out.push({ index: i, message: 'Factor must be a non-zero number' });
     if (r.decimals != null && !(Number.isInteger(Number(r.decimals)) && Number(r.decimals) >= 0 && Number(r.decimals) <= 6)) {
@@ -610,6 +614,15 @@ export function validateCodeMaps(rows: readonly CodeMapRow[]): CodeMapIssue[] {
     }
   });
   return out;
+}
+
+/** The plain hint under a row whose analyzer code is also on another row
+ *  (shown once, on the code's first row); null otherwise. */
+export function sharedCodeHint(rows: readonly CodeMapRow[], index: number): string | null {
+  const code = codeKey(rows[index]?.analyzerCode ?? '');
+  if (!code) return null;
+  const same = rows.map((r, i) => (codeKey(r.analyzerCode) === code ? i : -1)).filter((i) => i >= 0);
+  return same.length > 1 && same[0] === index ? 'Same code on several rows: the one ordered on the tube is used' : null;
 }
 
 /** PUT body (replace-all): blank rows dropped, text trimmed. */

@@ -115,6 +115,7 @@ import {
   PrefillLine,
   analyzerBadge,
   defaultRun,
+  LATEST_VALUES,
   planPrefill,
   runOptions,
 } from "../../../shared/instruments/instrument-prefill";
@@ -1724,8 +1725,10 @@ export class SampleResultEntryComponent {
   private readonly prestore = inject(ReportPrestoreService);
 
   // ── Analyzer prefill (instrument connector) ─────────────────────────
-  // GET /api/instruments/results/by-sample/{id} → runs (newest first). The
-  // selected run PREFILLS empty fields only (pure rules: shared/instruments/
+  // GET /api/instruments/results/by-sample/{id} → runs (newest first). By
+  // default each field takes its NEWEST value across all runs ("Latest
+  // values" — per-test analyzers send one message per test); picking one run
+  // shows only that run's values. The prefill fills empty fields only (pure rules: shared/instruments/
   // instrument-prefill.ts): never overwrites typed values, never submits,
   // never validates, never saves a draft by itself. Errors / 404 → silent.
   readonly analyzerRuns = signal<RunDto[]>([]);
@@ -1855,20 +1858,22 @@ export class SampleResultEntryComponent {
       if (seq !== this.loadSeq || this.validateMode() || this.viewOnly()) return;
       const runs = Array.isArray(dto?.runs) ? dto.runs.filter((r) => !!r?.messageId) : [];
       this.analyzerRuns.set(runs);
-      const first = defaultRun(runs);
-      if (first) this.applyAnalyzerRun(first.messageId);
+      if (defaultRun(runs)) this.applyAnalyzerRun(LATEST_VALUES);
     } catch {
       /* no analyzer / endpoint not there yet — result entry works as before */
     }
   }
 
-  /** Apply one run (the picker): fills empty fields and fields still equal to
-   *  the previous run's prefill; typed values are never touched. */
+  /** Apply one run, or LATEST_VALUES (each field's newest value across all
+   *  runs — the default): fills empty fields and fields still equal to the
+   *  previous prefill; typed values are never touched. */
   applyAnalyzerRun(messageId: string | null) {
-    const run = this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
-    if (!run) return;
+    const merged = messageId === LATEST_VALUES;
+    const run = merged ? null : this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
+    if (!merged && !run) return;
+    if (merged && !this.analyzerRuns().length) return;
     const plan = planPrefill({
-      run,
+      ...(merged ? { runs: this.analyzerRuns() } : { run }),
       lines: this.analyzerLines(),
       current: (ot, p) => this._values()[ot]?.[p],
       previous: this._analyzerApplied(),
@@ -1882,7 +1887,7 @@ export class SampleResultEntryComponent {
       this.recomputeCalcFields();
     }
     this._analyzerApplied.set(plan.applied);
-    this.analyzerRunId.set(run.messageId);
+    this.analyzerRunId.set(merged ? LATEST_VALUES : run!.messageId);
   }
 
   /** The small "From Sysmex · 10:42 am" badge (+ analyzer H/L chips). */

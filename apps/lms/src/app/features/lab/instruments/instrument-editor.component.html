@@ -416,6 +416,8 @@
                         </tr>
                         @if (mapIssueAt(i); as msg) {
                           <tr class="pf-ie-row-msg"><td colspan="8"><p class="pf-field__hint pf-ie-err">{{ msg }}</p></td></tr>
+                        } @else if (sharedCodeAt(i); as hint) {
+                          <tr class="pf-ie-row-msg"><td colspan="8"><p class="pf-field__hint">{{ hint }}</p></td></tr>
                         }
                       }
                     </tbody>
