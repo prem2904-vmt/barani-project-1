@@ -4,7 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
@@ -75,6 +75,12 @@ import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.compone
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { printPickerDefaultOf, type PrintPickerDefault } from '../../../../shared/utils/print-picker';
+import { OptionFamilyService } from '../../../../core/services/option-family.service';
+import { familyErrorText, type FamilyNode, type OptionFamily } from '../../../../shared/utils/option-family';
+import { ProfileFamilyLinesService, type ProfileFamilyLine } from '../../../../core/services/profile-family-lines.service';
+import { FamilyTreeEditorComponent } from './family-tree-editor.component';
+import { type SubtestChoice, absorbedMembers, linkedKeys, moveVisible, nestedMembers, subtestChoices, visibleOrder } from './family-subtest';
+import { lineIssues, lineNodes, newLineDraft, replaceLineMember, withLineMember, withoutLineMember } from './profile-family-lines';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -159,6 +165,7 @@ function makeEmptyDraft(): DraftTest {
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
+    FamilyTreeEditorComponent,
     FormsModule,
     CurrencyInrPipe,
     NumberInputComponent,
@@ -735,6 +742,21 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'choice', label: 'A choice from a list — e.g. Positive / Negative' },
     { value: 'text',   label: 'Free text — a written finding' },
   ];
+  /** A profile-only family line opened directly: its kind is shown (read
+   *  only) — families are built in their profile, never chosen here. */
+  readonly familyKindOption: PfSelectOption<string> = { value: 'family', label: 'An answer with sub-choices (built in its profile)', disabled: true };
+  readonly entryKindSelectOptions = computed<PfSelectOption<string>[]>(() =>
+    this.entryKind() === 'family' ? [...this.entryKindOptions, this.familyKindOption] : this.entryKindOptions);
+
+  // ── Option families (hierarchical answers) ─────────────────────────
+  protected readonly familySvc = inject(OptionFamilyService);
+  familyOf(i: number): OptionFamily | null { return this.familySvc.find(this.fields()[i]?.familyCode); }
+  /** "Absent · Present → Cast type (many)" — the family at a glance. */
+  familyRootSummary(n: FamilyNode): string {
+    const k = n.children;
+    return k?.nodes?.length ? `${n.label} → ${k.label || 'sub-choices'}${k.multi ? ' (many)' : ''}` : n.label;
+  }
+
   readonly isSingleValue = computed(() => this.fields().length <= 1);
 
   private readonly themeSvc = inject(ThemeService);
@@ -752,6 +774,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return rt === 'numeric' ? 'number' : rt === 'choice' ? 'choice' : rt ? 'text' : '';
     }
     const t = fs[0].type;
+    if (t === 'family') return 'family';
     if (this.isNumericType(t)) return 'number';
     if (this.typeHasOptions(t)) return 'choice';
     return 'text';
@@ -765,7 +788,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.patchField(0, { label, name: this.deriveName(label, 'result'),
                            unit: (d.unit ?? '').trim() || undefined });
     }
-    this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : 'textarea' });
+    this.patchField(0, { type: kind === 'number' ? 'number' : kind === 'choice' ? 'select' : kind === 'family' ? 'family' : 'textarea' });
     this.patch({ resultType: kind === 'number' ? 'numeric' : kind,
                  reportFormat: this._draft().reportFormat || 'tabular' });
   }
@@ -967,7 +990,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       return out;
     }
+    const absorbed = this.absorbed();
     for (const id of this.packageItems()) {
+      // A member absorbed into a family line prints only inside its family.
+      if (absorbed.has(id)) continue;
       const t = byId.get(id);
       // Each member previews under ITS OWN department (a package has none).
       if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null, catalogKey: t.catalogKey ?? null });
@@ -1190,7 +1216,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   memberName(testId: string): string {
-    return this._memberById().get(testId)?.name ?? '(unknown test)';
+    return this._memberById().get(testId)?.name ?? this.familyLineOf(testId)?.name ?? '(unknown test)';
   }
 
   memberCalc(t: { calculation?: string | null } | undefined): CalcDef | null {
@@ -1665,30 +1691,156 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   // order they are stored (items[]), on result entry and on the report. The
   // editor lets the lab arrange that order: drag a row, or step it up/down.
   // Existing profiles keep their stored order as the starting point.
-  readonly orderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
-    const byId = this._memberById();
-    return this._packageItems().map(id => {
-      const t = byId.get(id);
-      return { id, name: t?.name ?? '(unknown test)', code: t?.testCode ?? '' };
-    });
+  readonly orderedMembers = computed<{ id: string; name: string; code: string; nested: { id: string; name: string; code: string }[] }[]>(() => {
+    const abs = this.absorbed();
+    const ids = this._packageItems();
+    return visibleOrder(ids, abs).map(id => ({ ...this.memberRow(id), nested: nestedMembers(id, ids, abs).map(n => this.memberRow(n)) }));
   });
 
+  // ── FAMILY LINES (owner 2026-10-23): a family lives INSIDE a profile —
+  // "+ Add family" creates a hidden profile-only test (one family value)
+  // that is a member of this profile; its tree is edited in place. Each
+  // line saves on its own (POST/PUT/DELETE …/family-lines), and the member
+  // list here follows what the server did, so the profile's next Save never
+  // drops a line.
+  private readonly familyLinesSvc = inject(ProfileFamilyLinesService);
+  readonly familyLines = signal<ProfileFamilyLine[]>([]);
+  /** The line being edited: its testId, 'new', or null. */
+  readonly famOpen = signal<string | null>(null);
+  readonly famDraft = signal<OptionFamily | null>(null);
+  readonly famSaving = signal(false);
+  readonly famIssues = computed(() => lineIssues(this.famDraft()));
+  private famLoadedFor = '';
+  /** Tests a family sub-choice may be (owner 2026-10-23, revision 2): ONLY
+   *  this profile's own members — not family lines, not a member already
+   *  linked in ANOTHER family line of this profile. */
+  readonly famSubtests = computed<SubtestChoice[]>(() => {
+    const open = this.famOpen();
+    const elsewhere = new Set(this.familyLines().filter(l => l.testId !== open).flatMap(l => linkedKeys(l.family.nodes)));
+    return subtestChoices(this._allIndividualTests(), {
+      memberIds: this.packageItems(),
+      excludeIds: this.familyLines().map(l => l.testId),
+      takenElsewhere: elsewhere,
+    });
+  });
+  /** member id → the family line that ABSORBS it (revision 2): such a member
+   *  is entered only through its family, so the order lists show it nested
+   *  under the family line instead of as a row of its own. Decided by the
+   *  saved family-line trees (the server stamps `inFamily` from the same). */
+  readonly absorbed = computed<Map<string, string>>(() => {
+    const byId = this._memberById();
+    const members = this.packageItems().map(id => ({ id, catalogKey: byId.get(id)?.catalogKey ?? null }));
+    return absorbedMembers(this.familyLines(), members);
+  });
+  private memberRow(id: string) {
+    const t = this._memberById().get(id);
+    const line = t ? undefined : this.familyLineOf(id);
+    return { id, name: t?.name ?? line?.name ?? '(unknown test)', code: t?.testCode ?? line?.testCode ?? '' };
+  }
+  familyLineOf(testId: string): ProfileFamilyLine | undefined { return this.familyLines().find(l => l.testId === testId); }
+  isFamilyLine(testId: string): boolean { return !!this.familyLineOf(testId); }
+  private readonly _famLoader = effect(() => {
+    const d = this._draft();
+    const id = d.type === 'profile' ? d.id ?? '' : '';
+    if (!id || id === this.famLoadedFor) return;
+    this.famLoadedFor = id;
+    untracked(() => this.familyLinesSvc.list(id).subscribe({
+      next: lines => {
+        this.familyLines.set(lines ?? []);
+        // A line the server holds is a member, whatever the loaded items say.
+        let items = this._packageItems();
+        for (const l of lines ?? []) items = withLineMember(items, l.testId, l.position);
+        if (items.length !== this._packageItems().length) this._packageItems.set(items);
+      },
+      error: () => this.familyLines.set([]),
+    }));
+  });
+  addFamilyLine() {
+    this.famDraft.set(newLineDraft(''));
+    this.famOpen.set('new');
+  }
+  editFamilyLine(line: ProfileFamilyLine) {
+    if (this.famOpen() === line.testId) { this.cancelFamilyLine(); return; }
+    const { source: _s, updatedAt: _u, ...fam } = line.family;
+    void _s; void _u;
+    this.famDraft.set(structuredClone({ ...fam, name: line.name }));
+    this.famOpen.set(line.testId);
+  }
+  cancelFamilyLine() { this.famOpen.set(null); this.famDraft.set(null); }
+  setFamilyLineName(name: string) { const d = this.famDraft(); if (d) this.famDraft.set({ ...d, name }); }
+  saveFamilyLine() {
+    const d = this.famDraft(), open = this.famOpen(), profileId = this._draft().id;
+    if (!d || !open || !profileId || this.famIssues().length) return;
+    this.famSaving.set(true);
+    const name = d.name.trim();
+    const call = open === 'new'
+      ? this.familyLinesSvc.create(profileId, name, lineNodes(d))
+      : this.familyLinesSvc.update(profileId, open, name, lineNodes(d));
+    call.subscribe({
+      next: line => {
+        this.famSaving.set(false);
+        // Copy-on-write (reference labs) can hand back a NEW hidden test id
+        // for the edited line: replace the old one in place.
+        const was = open === 'new' ? line.testId : open;
+        this.familyLines.update(ls => ls.some(l => l.testId === was)
+          ? ls.map(l => l.testId === was ? line : l) : [...ls, line]);
+        this._packageItems.set(replaceLineMember(this._packageItems(), was, line.testId, line.position));
+        this.toasts.success(open === 'new' ? `Family line "${line.name}" added` : `Family line "${line.name}" saved`);
+        this.cancelFamilyLine();
+      },
+      error: e => {
+        this.famSaving.set(false);
+        const err = ApiError.from(e);
+        // A bad test link: the server's message names the sub-choice.
+        const linkErr = /^family_(test_|member_)/.test(err.code ?? '') && err.message ? err.message : null;
+        this.toasts.error(linkErr ?? familyErrorText(err.code) ?? err.message ?? 'Could not save the family line');
+      },
+    });
+  }
+  async removeFamilyLine(line: ProfileFamilyLine) {
+    const profileId = this._draft().id;
+    if (!profileId) return;
+    const ok = await this.dialog.confirm({
+      title: `Remove “${line.name}”?`,
+      message: 'The line leaves this profile. Past results keep printing as they were.',
+      confirmLabel: 'Remove line', cancelLabel: 'Keep it', tone: 'danger',
+    });
+    if (!ok) return;
+    this.famSaving.set(true);
+    this.familyLinesSvc.remove(profileId, line.testId).subscribe({
+      next: () => {
+        this.famSaving.set(false);
+        this.familyLines.update(ls => ls.filter(l => l.testId !== line.testId));
+        this._packageItems.set(withoutLineMember(this._packageItems(), line.testId));
+        if (this.famOpen() === line.testId) this.cancelFamilyLine();
+        this.toasts.success(`Family line "${line.name}" removed`);
+      },
+      error: e => {
+        this.famSaving.set(false);
+        const err = ApiError.from(e);
+        this.toasts.error(familyErrorText(err.code) ?? err.message ?? 'Could not remove the family line');
+      },
+    });
+  }
+  /** Answers at a glance: "Absent · Present → Cast type (many)". */
+  familyLineSummary(line: ProfileFamilyLine): string {
+    return line.family.nodes.map(n => this.familyRootSummary(n)).join(' · ');
+  }
+
   /** Step a member one place up (-1) or down (+1). */
+  // Indexes are VISIBLE rows: a member absorbed into a family keeps its own
+  // slot in items[] (so un-linking restores it) and moves with nothing.
   moveMember(index: number, delta: -1 | 1) {
-    const to = index + delta;
     const items = this._packageItems();
-    if (index < 0 || index >= items.length || to < 0 || to >= items.length) return;
-    const next = items.slice();
-    moveItemInArray(next, index, to);
+    const next = moveVisible(items, this.absorbed(), index, index + delta);
+    if (next.every((id, i) => id === items[i])) return;
     this._packageItems.set(next);
     this.dirty.set(true);
   }
 
   dropMember(ev: CdkDragDrop<unknown>) {
     if (ev.previousIndex === ev.currentIndex) return;
-    const next = this._packageItems().slice();
-    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
-    this._packageItems.set(next);
+    this._packageItems.set(moveVisible(this._packageItems(), this.absorbed(), ev.previousIndex, ev.currentIndex));
     this.dirty.set(true);
   }
 
@@ -1702,12 +1854,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _reportOrder = signal<string[]>([]);
   readonly reportOrderIds = computed<string[]>(() =>
     reconcileMemberOrder(this._reportOrder(), this.packageItems()));
-  readonly reportOrderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
-    const byId = this._memberById();
-    return this.reportOrderIds().map(id => {
-      const t = byId.get(id);
-      return { id, name: t?.name ?? '(unknown test)', code: t?.testCode ?? '' };
-    });
+  readonly reportOrderedMembers = computed<{ id: string; name: string; code: string; nested: { id: string; name: string; code: string }[] }[]>(() => {
+    const abs = this.absorbed();
+    const ids = this.reportOrderIds();
+    return visibleOrder(ids, abs).map(id => ({ ...this.memberRow(id), nested: nestedMembers(id, ids, abs).map(n => this.memberRow(n)) }));
   });
   /** True when the printed order differs from the lab entry order. */
   readonly reportOrderCustom = computed(() => {
@@ -1718,19 +1868,15 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   moveReportMember(index: number, delta: -1 | 1) {
     const ids = this.reportOrderIds();
-    const to = index + delta;
-    if (index < 0 || index >= ids.length || to < 0 || to >= ids.length) return;
-    const next = ids.slice();
-    moveItemInArray(next, index, to);
+    const next = moveVisible(ids, this.absorbed(), index, index + delta);
+    if (next.every((id, i) => id === ids[i])) return;
     this._reportOrder.set(next);
     this.dirty.set(true);
   }
 
   dropReportMember(ev: CdkDragDrop<unknown>) {
     if (ev.previousIndex === ev.currentIndex) return;
-    const next = this.reportOrderIds().slice();
-    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
-    this._reportOrder.set(next);
+    this._reportOrder.set(moveVisible(this.reportOrderIds(), this.absorbed(), ev.previousIndex, ev.currentIndex));
     this.dirty.set(true);
   }
 
@@ -1748,6 +1894,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isInPackage(id: string): boolean { return this.packageItems().includes(id); }
   togglePackageMember(id: string) {
+    // A member a family line uses can't leave the profile here (the server
+    // refuses it too: family_member_in_use) — un-link it in the family first.
+    const lineId = this.absorbed().get(id);
+    if (lineId && this._packageItems().includes(id)) {
+      const line = this.familyLineOf(lineId)?.name ?? 'a family line';
+      this.toasts.warning(`${this.memberName(id)} is used in the ${line} family — remove it there first.`);
+      return;
+    }
     if (this.repetitiveActive()) {
       const rows = this._memberRows();
       const offsetMin = rows.length > 0 ? rows[rows.length - 1].offsetMin : 0;
@@ -1767,6 +1921,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit() {
     this.pricing.ensureLoaded();
+    this.familySvc.ensureLoaded();
     this.loadOptionGroups();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
@@ -2305,6 +2460,19 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     const field = err.field ?? '';
+    // A family parameter whose family isn't set up for this lab (mw 400
+    // family_unknown) — show it where the family is picked.
+    // A member a family line still uses (revision 2): the server names it.
+    if (err.code === 'family_member_in_use') {
+      this.toasts.warning(err.message || familyErrorText(err.code) || '');
+      return;
+    }
+    const famText = familyErrorText(err.code);
+    if (famText) {
+      this.jumpToSection('results');
+      this.toasts.warning(famText);
+      return;
+    }
     if (err.code === 'range_invalid' || field === 'referenceRanges') {
       // mw's ReferenceRangeValidator refused the ranges (same rules as the
       // editor's own check) — show them where they are edited.

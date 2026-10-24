@@ -43,7 +43,10 @@ export type FormFieldType =
   | 'measure'
   | 'table'
   | 'recursive'
-  | 'recursivePages';
+  | 'recursivePages'
+  // Hierarchical answer from an option family (Casts: Absent / Present →
+  // types + quantity). The parameter carries `familyCode`.
+  | 'family';
 
 // Groups for the field-type picker UI.
 export type FormFieldCategory = 'input' | 'choice' | 'layout' | 'media' | 'advanced';
@@ -262,6 +265,8 @@ export interface FormField {
   optionRows?: import('../models/test.model').TestOptionRow[] | null;
   /** Name for the shared option group formed by optionRows (see TestParameter). */
   optionGroupName?: string | null;
+  /** `family` fields: the option family's code (Test Master → Families). */
+  familyCode?: string | null;
   /** Photos & video at result entry for THIS value (per-row toggle);
    *  the Parameters-root `attachments: true` marker means every value. */
   attachments?: boolean;

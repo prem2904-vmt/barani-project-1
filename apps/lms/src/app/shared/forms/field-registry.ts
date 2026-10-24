@@ -41,6 +41,9 @@ const DEFAULT_ENTRIES: FieldTypeEntry[] = [
   { type: 'imageSelect',    label: 'Image select',     category: 'choice', enabled: true, hasOptions: true,  description: 'Choose from image thumbnails' },
   { type: 'yesno',          label: 'Yes / No',         category: 'choice', enabled: true, hasOptions: false, description: 'Binary yes-or-no' },
   { type: 'yesNoNa',        label: 'Yes / No / N-A',   category: 'choice', enabled: true, hasOptions: false, description: 'Yes, no, or not applicable' },
+  // A family is built INSIDE a profile (profile editor → "+ Add family"),
+  // never picked as a field type on a test — kept for rendering only.
+  { type: 'family',         label: 'Family (tree)',    category: 'choice', enabled: false, hasOptions: false, description: 'Answer + sub-choices with quantity, from an option family' },
   { type: 'toggle',         label: 'Toggle switch',    category: 'choice', enabled: true, hasOptions: false, description: 'Visual toggle switch' },
 
   // LAYOUT

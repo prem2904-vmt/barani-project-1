@@ -1120,3 +1120,36 @@ select.pf-input--compact {
 .pf-te2-ctx__nameskel { display: inline-block; vertical-align: middle; }
 .pf-te2-loading .pf-card__body { display: flex; flex-direction: column; gap: 18px; }
 .pf-livewrap__skel { display: block; }
+
+/* ── Profile FAMILY LINES (owner 2026-10-23) — each line a row of the
+   members card; expanded in place into the tree editor. ── */
+.pf-famlines { margin-bottom: 18px; }
+.pf-famlines .pf-tp__hdr { flex-wrap: wrap; gap: 8px; }
+.pf-famlines .pf-tp__badge { white-space: nowrap; flex-shrink: 0; }
+.pf-famlines .pf-tp__count { line-height: 1.35; }
+.pf-famlines__add { height: 36px; min-height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+.pf-famlines__hint { margin: 6px 2px 0; }
+.pf-famlines__list { display: flex; flex-direction: column; gap: 8px; }
+.pf-famline { list-style: none; border: 1px solid var(--pf-line); border-radius: 12px; background: var(--pf-card-bg); }
+.pf-famline--open { border-color: var(--pf-sel-border); }
+.pf-famline__row { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; min-height: 48px; }
+.pf-famline__toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+  padding: 8px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.pf-famline__toggle:hover { background: var(--pf-chip-bg); }
+.pf-famline__chev { flex: none; color: var(--text-tertiary); transition: transform var(--pf-dur, 200ms) var(--pf-spring, ease); }
+.pf-famline--open .pf-famline__chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .pf-famline__chev { transition: none; } }
+.pf-famline__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.pf-famline__sum { flex: 1 1 100%; font-size: 12px; color: var(--text-tertiary); padding-left: 24px; overflow-wrap: anywhere; }
+.pf-famline__edit { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px; }
+.pf-famline--new .pf-famline__edit { padding-top: 14px; }
+.pf-famline__namefld { max-width: 420px; }
+.pf-famline__acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--pf-line); padding-top: 10px; }
+.pf-famline__warn { flex: 1 1 200px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); min-width: 0; }
+
+/* Revision 2 (2026-10-23): a member absorbed into a family line shows nested
+   under it in both order lists — read-only, it moves with the family. */
+.pf-tp-row--nested { padding-left: 44px; min-height: 36px; background: transparent; border-style: dashed; color: var(--text-secondary); }
+.pf-tp-row--nested .pf-tp-row__name { font-size: 13px; color: var(--text-secondary); }
+.pf-tp-row__elbow { flex: none; color: var(--text-tertiary); }
+.pf-tp-row__infam { margin-left: auto; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }

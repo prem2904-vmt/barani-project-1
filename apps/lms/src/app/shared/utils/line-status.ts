@@ -5,6 +5,8 @@
  * without them?"); it never prints and never holds the report back. Mirrors
  * mw `LineStatus`.
  */
+import { isFamilyFilled, isFamilyValue } from './option-family';
+
 export const NOT_REPORTED = 'not_reported';
 
 const LABELS: Record<string, string> = {
@@ -47,6 +49,7 @@ export function savedResultHasValue(json: string | null | undefined): boolean {
       if (typeof v === 'string') return v.trim() !== '';
       if (Array.isArray(v)) return v.some(filled);
       if (typeof v === 'boolean') return v;
+      if (isFamilyValue(v)) return isFamilyFilled(v);
       if (typeof v === 'object') return 'value' in (v as object) ? filled((v as { value: unknown }).value) : Object.keys(v as object).length > 0;
       return true;
     };

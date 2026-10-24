@@ -11,6 +11,7 @@
  * (an older server), which was the behaviour before profiles had the switch.
  */
 import { isCriticalFlag, parseResultSnapshot } from './result-flag';
+import { isFamilyFilled, isFamilyValue } from './option-family';
 
 export function printPickerFlag(parametersJson: string | null | undefined): boolean {
   if (!parametersJson) return false;
@@ -118,5 +119,6 @@ export function hasEnteredValue(v: unknown): boolean {
   if (Array.isArray(v)) return v.some((x) => hasEnteredValue(x));
   if (typeof v === 'number') return !Number.isNaN(v);
   if (typeof v === 'boolean') return true;
+  if (isFamilyValue(v)) return isFamilyFilled(v);
   return String(v).trim() !== '';
 }

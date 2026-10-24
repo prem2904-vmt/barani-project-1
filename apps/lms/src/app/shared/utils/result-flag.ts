@@ -18,6 +18,7 @@
 import type { TestParameter } from '../models/test.model';
 import { describeAllRanges, flagAgainst, selectReferenceRange, type RangeLike } from './reference-range';
 import { parseParametersBlob, readParameters } from './test-parameters';
+import { familyValueText, isFamilyValue } from './option-family';
 
 /**
  * mw flag codes: H high, L low, CL critical low, CH critical high, A abnormal
@@ -187,7 +188,8 @@ export function savedValueRows(
     return {
       name: p.name,
       title: p.title || p.name,
-      value: snap.values![p.name],
+      // A family value reads as one line, never "[object Object]".
+      value: isFamilyValue(snap.values![p.name]) ? familyValueText(snap.values![p.name]) : snap.values![p.name],
       unit,
       range,
       flag: flagTone(sf?.flag),

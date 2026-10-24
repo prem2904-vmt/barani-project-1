@@ -1,7 +1,9 @@
-const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme, protocol } = require('electron');
 const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
+const appProtocol = require('./app-protocol');
+const storageMigration = require('./storage-migration');
 const chatNotify = require('./chat-notify');
 // Kiosk-style full screen: opens full screen, Esc (renderer-decided) leaves,
 // F11 / Ctrl+Cmd+F / avatar menu re-enter. See fullscreen.js.
@@ -25,6 +27,13 @@ const tray = require('./tray');
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
 const isDev = !app.isPackaged;
+const { decideNavigation } = require('./nav-guard');
+
+// The packaged UI is served from the secure custom origin app://prefrontal
+// (file:// sends `Origin: null`, which the APIs' CORS rejects). Must be
+// registered before app 'ready'.
+appProtocol.registerScheme(protocol);
+const BUNDLE_DIR = path.join(__dirname, '../dist/apps/lms/browser');
 
 // Override the macOS app menu / About / dock title. In dev mode
 // electron falls back to package.json `name` which is the npm slug;
@@ -134,12 +143,10 @@ function createWindow() {
   });
 
   // In dev: load the Nx serve URL (live reload).
-  // In prod: load the built bundle off disk via file://. The
-  // HashLocationStrategy on the Angular side handles deep links
-  // since file:// can't do server-side route resolution.
-  const url = isDev
-    ? 'http://localhost:4200'
-    : `file://${path.join(__dirname, '../dist/apps/lms/browser/index.html')}`;
+  // In prod: load the built bundle through the app://prefrontal protocol
+  // handler (see app-protocol.js). The HashLocationStrategy on the Angular
+  // side handles deep links.
+  const url = isDev ? 'http://localhost:4200' : appProtocol.APP_ENTRY;
 
   mainWindow.loadURL(url);
 
@@ -267,8 +274,12 @@ ipcMain.handle('doc:printPdf', async (_e, opts = {}) => {
   });
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return;
+  appProtocol.install(protocol, BUNDLE_DIR);
+  // Packaged builds only: carry localStorage over from the old file:// origin
+  // once, before the UI boots at the new origin.
+  if (!isDev) await storageMigration.run({ BrowserWindow, app });
   createWindow();
   notify.start();
   // Paired analyzers start with the app and keep running in the tray.
@@ -306,16 +317,13 @@ app.on('window-all-closed', () => {
 });
 
 // Defence-in-depth: block any in-app navigation that isn't to
-// the dev server, the local file:// bundle, or our API. Anything
+// the dev server, the app:// bundle (file:// is the call window), or our API. Anything
 // else gets opened in the user's browser instead.
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    if (
-      !url.startsWith('http://localhost') &&
-      !url.startsWith('file://')
-    ) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
+    const d = decideNavigation(url, { isDev, appOrigin: appProtocol.APP_ORIGIN });
+    if (d.allow) return;
+    event.preventDefault();
+    if (d.openExternal) shell.openExternal(url);
   });
 });

@@ -1,0 +1,45 @@
+name: build
+
+# BUILD ONCE: every push to main builds this website once (one build for every
+# environment), stores it in the registry, release-dev then puts it on DEV automatically.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP: lms-web
+  REGISTRY: hyd.ocir.io/axhslaiirs9d/pf
+
+jobs:
+  build:
+    runs-on: [self-hosted, oci]
+    timeout-minutes: 45
+    outputs:
+      build: ${{ steps.tag.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "build=$(date -u +%Y.%m.%d).${{ github.run_number }}-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build site image
+        run: |
+          flock /tmp/pf-build.lock docker build --pull -f deploy/web.Dockerfile \
+            --label pf.commit=${{ github.sha }} --label pf.build=${{ steps.tag.outputs.build }} \
+            -t $REGISTRY/$APP:${{ steps.tag.outputs.build }} -t $REGISTRY/$APP:${{ github.sha }} .
+      - name: Push to registry
+        run: |
+          docker push -q $REGISTRY/$APP:${{ steps.tag.outputs.build }}
+          docker push -q $REGISTRY/$APP:${{ github.sha }}
+          echo "### Build ${{ steps.tag.outputs.build }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dev release starts automatically. Stage/prod: Actions → release-stage / release-prod → Run workflow (empty build = what dev runs)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the build server tidy
+        if: always()
+        run: |
+          docker builder prune -f --keep-storage 8G >/dev/null || true
+          # keep the newest 10 builds of this app locally; the registry keeps everything
+          docker images "$REGISTRY/$APP" --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' | sort -r | tail -n +21 | cut -f2 | xargs -r docker rmi >/dev/null 2>&1 || true
+

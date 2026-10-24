@@ -1,0 +1,46 @@
+name: release (shared steps)
+
+# RELEASE: copies an already-built website onto an environment's server. Nothing
+# is compiled. The site gets its settings from /config.json on that server.
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+      build: { type: string, required: true }
+
+concurrency:
+  group: release-${{ inputs.environment }}-lms-web
+  cancel-in-progress: false
+
+env:
+  APP: lms-web
+  SITE: /opt/pf/www/med-${{ inputs.environment == 'stage' && 'stg' || (inputs.environment == 'prod' && 'prod' || 'dev') }}
+  REGISTRY: hyd.ocir.io/axhslaiirs9d/pf
+
+jobs:
+  release:
+    runs-on: [self-hosted, "${{ inputs.environment == 'stage' && 'oci-stage' || (inputs.environment == 'prod' && 'oci-prod' || 'oci') }}"]
+    timeout-minutes: 15
+    env:
+      BUILD: ${{ inputs.build }}
+      TARGET: ${{ inputs.environment }}
+    steps:
+      - name: Check build number
+        env:
+          BUILD: ${{ inputs.build }}
+        run: |
+          # only a real build number or a full commit SHA — nothing else reaches the shell
+          [[ "$BUILD" =~ ^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+-[0-9a-f]{7,40}|[0-9a-f]{40})$ ]] || { echo "::error::not a build number: $BUILD"; exit 1; }
+      - name: Pull build
+        run: docker pull -q "$REGISTRY/$APP:$BUILD"
+      - name: Publish files
+        run: |
+          C=$(docker create "$REGISTRY/$APP:$BUILD" true)
+          rm -rf "$SITE.next"; docker cp "$C:/site" "$SITE.next"; docker rm -f "$C" >/dev/null
+          test -f "$SITE.next/index.html"
+          rm -rf "$SITE.old"; [ -d "$SITE" ] && mv "$SITE" "$SITE.old"; mv "$SITE.next" "$SITE"; rm -rf "$SITE.old"
+          mkdir -p /opt/pf/releases; echo "$(date -Is) $APP $BUILD ${{ github.actor }}" >> "/opt/pf/releases/$TARGET.log"
+          echo "Released **$BUILD** to **$TARGET** ($(find "$SITE" -type f | wc -l) files)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Clean old images
+        if: always()
+        run: docker image prune -f >/dev/null

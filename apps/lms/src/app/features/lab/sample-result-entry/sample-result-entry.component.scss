@@ -544,3 +544,8 @@
   border-color: color-mix(in srgb, var(--red-text, #dc2626) 35%, transparent) !important;
   font-weight: 600;
 }
+
+/* No side padding above phone width, so the hero band must not bleed: the
+   kit's .pf-page bleed (2.5rem at ≥1024px) pushed "Submit all" past the viewport
+   edge. Phones keep the global 12px page gutter + its bleed. */
+@media (min-width: 641px) { .pf-sre.pf-page { --pf-hb-bleed: 0px; } }

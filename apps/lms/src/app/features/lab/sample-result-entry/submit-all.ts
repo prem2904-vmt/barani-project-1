@@ -2,6 +2,7 @@ import type { OrderTest } from '../../../shared/models/order.model';
 import type { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { readParameters } from '../../../shared/utils/test-parameters';
 import { resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
+import { isFamilyFilled, isFamilyValue } from '../../../shared/utils/option-family';
 
 /**
  * "Submit all" across the tube tabs of one order (owner 2026-09-27): the
@@ -83,6 +84,8 @@ export function isFilled(v: unknown): boolean {
   if (typeof v === 'boolean') return v;
   // Multi-select: filled when at least one pick is non-blank.
   if (Array.isArray(v)) return v.some((x) => String(x ?? '').trim() !== '');
+  // Family value: filled once a root answer is picked.
+  if (isFamilyValue(v)) return isFamilyFilled(v);
   return String(v).trim() !== '';
 }
 

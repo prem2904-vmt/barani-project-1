@@ -24,6 +24,9 @@ export class ApiError extends Error {
     public readonly code?: string,
     /** Offending form field, e.g. "email" — highlight this input. */
     public readonly field?: string,
+    /** The error's payload (mw `CodedConflictException.Payload`, e.g.
+     *  `family_in_use` → `{ tests: [...] }`); absent for most errors. */
+    public readonly data?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -40,10 +43,10 @@ export class ApiError extends Error {
   /** Normalize ANY error (ApiError, HttpErrorResponse, Error) into ApiError. */
   static from(e: unknown): ApiError {
     if (e instanceof ApiError) return e;
-    const anyE = e as { error?: { error?: string; message?: string; field?: string }; message?: string };
+    const anyE = e as { error?: { error?: string; message?: string; field?: string; data?: unknown }; message?: string };
     const body = anyE?.error;
     if (body && typeof body === 'object' && (body.message || body.error)) {
-      return new ApiError(body.message ?? body.error ?? 'Request failed', body.error, body.field);
+      return new ApiError(body.message ?? body.error ?? 'Request failed', body.error, body.field, body.data);
     }
     return new ApiError(anyE?.message ?? 'Request failed');
   }

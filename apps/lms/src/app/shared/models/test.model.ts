@@ -162,6 +162,9 @@ export interface TestParameter {
    *  set when the list is created in the test editor; DeriveGroups prefers
    *  it over the first linked parameter's title. */
   optionGroupName?: string | null;
+  /** `type: 'family'`: the option family this value is answered from
+   *  (shared/utils/option-family.ts). */
+  familyCode?: string | null;
   referenceRanges?: ReferenceRange[];
   normalValue?: string;
   criticalLow?: number;

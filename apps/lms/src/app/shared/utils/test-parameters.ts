@@ -150,6 +150,7 @@ export function paramToField(p: TestParameter, order: number): FormField {
     normalValue: p.normalValue ?? null,
     optionRows: p.optionRows ?? null,
     optionGroupName: p.optionGroupName ?? null,
+    familyCode: p.familyCode || undefined,
     attachments: p.attachments === true || undefined,
     printOnReport: p.printOnReport === false ? false : undefined,
     options: optionsForParam(p),
@@ -173,6 +174,7 @@ export function fieldToParam(f: FormField): TestParameter {
   put('options', f.options?.map(o => o.label));
   put('optionRows', f.optionRows);
   put('optionGroupName', f.optionGroupName);
+  if (f.type === 'family') put('familyCode', f.familyCode);
   if (f.attachments === true) p['attachments'] = true;
   if (f.printOnReport === false) p['printOnReport'] = false;
   put('referenceRanges', f.referenceRanges);
@@ -193,7 +195,7 @@ export function loadEditorFields(json: string | null | undefined): FormField[] {
 /** Keys `fieldToParam` owns; anything else on a stored parameter (seeded
  *  `methodology`, catalogue tags, …) is carried through a save untouched. */
 const MANAGED_KEYS = new Set<string>([
-  'id', 'name', 'title', 'type', 'unit', 'options', 'optionRows', 'optionGroupName',
+  'id', 'name', 'title', 'type', 'unit', 'options', 'optionRows', 'optionGroupName', 'familyCode',
   'attachments', 'printOnReport', 'referenceRanges', 'normalValue', 'criticalLow',
   'criticalHigh', 'validLow', 'validHigh', ...EDITOR_PROPS,
 ]);

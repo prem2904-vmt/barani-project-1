@@ -360,8 +360,8 @@ function drawItemsTable(
   startY: number,
 ): number {
   const head = isTaxInvoice
-    ? [["#", "Particulars", "HSN/SAC", "Taxable", "GST %", "Amount"]]
-    : [["#", "Particulars", "HSN/SAC", "Amount"]];
+    ? [["#", "Particulars", "HSN/SAC", "Taxable (Rs.)", "GST %", "Amount (Rs.)"]]
+    : [["#", "Particulars", "HSN/SAC", "Amount (Rs.)"]];
   const body = bill.items.map((it, i) =>
     isTaxInvoice
       ? [
@@ -700,7 +700,7 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
     isPaid,
     paidOrDueLabel: isPaid ? "Amount Paid" : "Due Amount",
     paidOrDueAmount: plain(isPaid ? bill.totalPaid : Math.max(0, bill.balance)),
-    amountWords: numberToWordsINR(Math.round(effectivePayable)),
+    amountWords: numberToWordsINR(effectivePayable),
   };
 }
 
@@ -836,7 +836,7 @@ function drawCashBill(
   // ── Items table: S.No | Test Name | Amount (Quantity removed) ──
   autoTable(doc, {
     startY: y,
-    head: [["S.No", "Test Name", "Amount"]],
+    head: [["S.No", "Test Name", "Amount (Rs.)"]],
     body: m.items.map((it) => [it.sno, it.name, it.amount]),
     margin: { left: MARGIN, right: MARGIN },
     theme: "plain",
@@ -1238,7 +1238,7 @@ function drawThermalBill(
   // ── Items: S.No | Test | Amount ──
   autoTable(doc, {
     startY: y,
-    head: [["#", "Test", "Amount"]],
+    head: [["#", "Test", "Amount (Rs.)"]],
     body: m.items.map((it) => [it.sno, it.name, it.amount]),
     // bottom: 0 so the exact-height second pass can't trigger a page break.
     margin: { left: MG, right: MG, top: 0, bottom: 0 },
@@ -1382,9 +1382,8 @@ function drawThermalBill(
  *  the cash-bill style ("2,570" / "2,570.00"). */
 function plain(n: number): string {
   const v = n ?? 0;
-  const whole = Math.round(v) === v;
   return v.toLocaleString("en-IN", {
-    minimumFractionDigits: whole ? 0 : 2,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
@@ -1412,9 +1411,11 @@ function formatDateTime(iso: string | undefined | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** Integer rupees → English words, Indian numbering (lakh/crore). */
+/**
+ * Rupees amount → English words following Indian numbering standards (Rupees ... and ... Paise Only).
+ */
 export function numberToWordsINR(num: number): string {
-  if (!isFinite(num) || num <= 0) return "Zero";
+  if (!isFinite(num) || num <= 0) return "Rupees Zero";
   const ones = [
     "",
     "One",
@@ -1458,20 +1459,35 @@ export function numberToWordsINR(num: number): string {
       r = n % 100;
     return `${h ? ones[h] + " Hundred" + (r ? " " : "") : ""}${r ? twoDigits(r) : ""}`;
   };
-  let n = Math.floor(num);
-  const parts: string[] = [];
-  const crore = Math.floor(n / 10000000);
-  n %= 10000000;
-  const lakh = Math.floor(n / 100000);
-  n %= 100000;
-  const thousand = Math.floor(n / 1000);
-  n %= 1000;
-  const hundred = n;
-  if (crore) parts.push(`${threeDigits(crore)} Crore`);
-  if (lakh) parts.push(`${twoDigits(lakh)} Lakh`);
-  if (thousand) parts.push(`${twoDigits(thousand)} Thousand`);
-  if (hundred) parts.push(threeDigits(hundred));
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+
+  const convertWhole = (amount: number): string => {
+    let n = Math.floor(amount);
+    if (n === 0) return "";
+    const parts: string[] = [];
+    const crore = Math.floor(n / 10000000);
+    n %= 10000000;
+    const lakh = Math.floor(n / 100000);
+    n %= 100000;
+    const thousand = Math.floor(n / 1000);
+    n %= 1000;
+    const hundred = n;
+    if (crore) parts.push(`${threeDigits(crore)} Crore`);
+    if (lakh) parts.push(`${twoDigits(lakh)} Lakh`);
+    if (thousand) parts.push(`${twoDigits(thousand)} Thousand`);
+    if (hundred) parts.push(threeDigits(hundred));
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  };
+
+  const rupees = Math.floor(num);
+  const paise = Math.round((num - rupees) * 100);
+
+  const rupeeStr = convertWhole(rupees);
+  const paiseStr = paise > 0 ? twoDigits(paise) : "";
+
+  if (rupees === 0 && paise === 0) return "Rupees Zero";
+  if (rupees === 0 && paise > 0) return `${paiseStr} Paise`;
+  if (rupees > 0 && paise > 0) return `Rupees ${rupeeStr} and ${paiseStr} Paise`;
+  return `Rupees ${rupeeStr}`;
 }
 
 /** Lighten a hex accent toward white for table-head fills (modern style). */
@@ -1545,7 +1561,10 @@ export async function loadImageDataUrl(
 }
 
 function formatMoney(n: number): string {
-  return `Rs. ${(n ?? 0).toLocaleString("en-IN")}`;
+  return `Rs. ${(n ?? 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatDate(iso: string | undefined | null): string {

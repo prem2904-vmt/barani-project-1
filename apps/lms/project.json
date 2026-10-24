@@ -26,7 +26,11 @@
         "assets": [
           {
             "glob": "**/*",
-            "input": "apps/lms/public"
+            "input": "apps/lms/public",
+            "ignore": [
+              "config.json",
+              "config.example.json"
+            ]
           },
           {
             "glob": "pdf.worker.min.mjs",
@@ -197,6 +201,49 @@
             {
               "replace": "apps/lms/src/environments/environment.ts",
               "with": "apps/lms/src/environments/environment.electron-dev.ts"
+            }
+          ]
+        },
+        "capacitor-prod": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "2.5mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.capacitor-prod.ts"
+            }
+          ]
+        },
+        "electron-prod": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "1mb",
+              "maximumError": "2.5mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "20kb",
+              "maximumError": "2mb"
+            }
+          ],
+          "outputHashing": "all",
+          "baseHref": "./",
+          "fileReplacements": [
+            {
+              "replace": "apps/lms/src/environments/environment.ts",
+              "with": "apps/lms/src/environments/environment.electron-prod.ts"
             }
           ]
         }

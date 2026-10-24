@@ -13,6 +13,7 @@
  *  - Target = the order line (orderTestId) + parameterName; null
  *    parameterName = the line's first / only parameter.
  */
+import { isFamilyFilled, isFamilyValue } from '../utils/option-family';
 import type { MappedValue, RunDto } from './instrument.models';
 
 /** One order line on screen and the parameters it can take a value in. */
@@ -52,6 +53,7 @@ export function isFilledValue(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (typeof v === 'boolean') return v;
   if (Array.isArray(v)) return v.some((x) => String(x ?? '').trim() !== '');
+  if (isFamilyValue(v)) return isFamilyFilled(v);
   return String(v).trim() !== '';
 }
 

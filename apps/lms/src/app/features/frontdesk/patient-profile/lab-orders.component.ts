@@ -19,6 +19,7 @@ import { REPORT_BY_ORDER_PERMS, ReportActionsService } from '../../../core/servi
 import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
 } from './patient-profile.nd';
+import { resultValueText } from '../../../shared/utils/option-family';
 
 /** A stored report as `GET /api/reports/by-order/{id}` returns it. */
 type StoredReport = { id: string; orderId?: string; qrToken?: string; data?: string } & Record<string, unknown>;
@@ -375,7 +376,7 @@ export class LabOrdersComponent implements OnDestroy {
   resultRows(t: OrderTest): ResultRow[] {
     const snap = parseResultSnapshot(t.currentResult);
     if (!snap?.values) return [];
-    const show = (v: unknown) => v === undefined || v === null || v === '' ? '—' : String(v);
+    const show = (v: unknown) => v === undefined || v === null || v === '' ? '—' : resultValueText(v) || '—';
     const rows = savedValueRows(t.currentResult, t.test?.parameters);
     if (rows.length) {
       return rows.map(r => ({ title: r.title, value: show(r.value), unit: r.unit, range: r.range, flag: r.flag, code: r.code }));

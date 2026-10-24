@@ -8,6 +8,33 @@ import { CapacitorConfig } from '@capacitor/cli';
  * `nx build lms --configuration=capacitor` (or use the
  * cap:sync npm script which does both).
  */
+// PF_TARGET=prod (set for the production native sync) ships ONLY the prod
+// hosts; every other build keeps the dev + stage + prod list.
+const PROD_HOSTS = [
+  'hslcncwhgqezbqkdowyy.supabase.co',
+  'med.prefrontal.health',
+  'med-fetch.prefrontal.health'
+];
+const allowNavigation =
+  process.env['PF_TARGET'] === 'prod'
+    ? PROD_HOSTS
+    : [
+          // Dev
+          'cottlnsbjnstsgknsgzu.supabase.co',
+          'med-dev.prefrontal.health',
+          'med-fetch-dev.prefrontal.health',
+          'localhost:5270',
+          // Stage — the default native builds (cap:sync / electron:build) now
+          // ship the *-stage configuration, so these are the live backends.
+          'gxmbbjmcfuxqzdfczrma.supabase.co',
+          'med-stg.prefrontal.health',
+          'med-fetch-stg.prefrontal.health',
+          // Prod — cap:sync:prod / electron:build:*:prod
+          'hslcncwhgqezbqkdowyy.supabase.co',
+          'med.prefrontal.health',
+          'med-fetch.prefrontal.health'
+      ];
+
 const config: CapacitorConfig = {
   appId: 'health.prefrontal.app',
   appName: 'Prefrontal',
@@ -16,18 +43,7 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
     // Domains the WKWebView / Android WebView is allowed to navigate
     // to. Add staging / prod backends here as they come online.
-    allowNavigation: [
-      // Dev
-      'cottlnsbjnstsgknsgzu.supabase.co',
-      'med-dev.prefrontal.health',
-      'med-fetch-dev.prefrontal.health',
-      'localhost:5270',
-      // Stage — the default native builds (cap:sync / electron:build) now
-      // ship the *-stage configuration, so these are the live backends.
-      'gxmbbjmcfuxqzdfczrma.supabase.co',
-      'med-stg.prefrontal.health',
-      'med-fetch-stg.prefrontal.health'
-    ]
+    allowNavigation,
   },
   plugins: {
     SplashScreen: {
@@ -94,7 +110,7 @@ const config: CapacitorConfig = {
     limitsNavigationsToAppBoundDomains: true
   },
   android: {
-    allowMixedContent: true,
+    allowMixedContent: process.env['PF_TARGET'] !== 'prod',
     captureInput: true,
     webContentsDebuggingEnabled: false,
     // capacitor-plugin-callkit-voip is iOS-only (CallKit) and its 2021-era

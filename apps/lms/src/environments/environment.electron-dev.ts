@@ -9,6 +9,9 @@
  */
 export const environment = {
   production: true,
+  // Native / local builds keep their baked-in settings; only the web production
+  // build fetches /config.json at startup (see runtime-config.ts).
+  runtimeConfig: false,
   isElectron: true,
   isMobile: false,
   apiUrl: 'https://med-fetch-dev.prefrontal.health',

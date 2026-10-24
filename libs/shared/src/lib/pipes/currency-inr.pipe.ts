@@ -5,6 +5,7 @@ export class CurrencyInrPipe implements PipeTransform {
   private readonly fmt = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
   transform(value: number | string | null | undefined): string {

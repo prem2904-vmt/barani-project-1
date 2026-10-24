@@ -1,0 +1,8 @@
+{
+  "apiUrl": "https://med-fetch-dev.prefrontal.health",
+  "reportPublicBaseUrl": "https://med-dev.prefrontal.health",
+  "auth": {
+    "supabaseUrl": "https://cottlnsbjnstsgknsgzu.supabase.co",
+    "supabaseAnonKey": "sb_publishable_P8V0_uNNHKth6NOF57Ph6A_vjwZRDJY"
+  }
+}

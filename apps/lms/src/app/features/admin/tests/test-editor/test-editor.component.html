@@ -466,7 +466,7 @@
             @if (isSingleValue()) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">What will the tech enter?</label>
-                <pf-select [options]="entryKindOptions" [value]="entryKind()"
+                <pf-select [options]="entryKindSelectOptions()" [disabled]="entryKind() === 'family'" [value]="entryKind()"
                            (valueChange)="setEntryKind($any($event))"></pf-select>
                 <p class="pf-uf__hint">One result per test — everything below follows from this.</p>
               </div>
@@ -567,6 +567,34 @@
             </div>
           }
 
+          <!-- A FAMILY answer (hierarchical): pick the shared family; its tree
+               is edited once in Test Master → Families. -->
+          <ng-template #familyPick let-i>
+            <div class="pf-anslist pf-te2-fam" [attr.data-family-pick]="i">
+              <div>
+                <span class="pf-te2-h">The answers — an option family</span>
+                <p class="pf-rr2__sub">The tech picks one answer; some answers open sub-choices, each with its own amount
+                  (Present → Hyaline 2–3 /LPF, Granular Few). This line belongs to a profile — edit its answers there, under the profile's members.</p>
+              </div>
+              @if (familyOf(i); as fam) {
+                <div class="pf-optprev">
+                  @for (n of fam.nodes; track n.code) {
+                    <span class="pf-optprev__chip" [class.pf-optprev__chip--normal]="n.normal === true"
+                          [title]="n.normal === true ? 'Normal (expected) answer' : ''">{{ familyRootSummary(n) }}</span>
+                  }
+                </div>
+                <p class="pf-hint">Family <span class="pf-num">{{ fam.code }}</span>. An answer not ticked Normal flags the result.</p>
+              } @else if (fields()[i]?.familyCode) {
+                <p class="pf-anslist__idle">Family <span class="pf-num">{{ fields()[i]?.familyCode }}</span> isn't set up in this lab yet.</p>
+              } @else if (!familySvc.loaded() && !familySvc.failed()) {
+                <p class="pf-anslist__idle">Loading option families…</p>
+              }
+            </div>
+          </ng-template>
+          @if (isSingleValue() && entryKind() === 'family' && fields().length === 1) {
+            <ng-container *ngTemplateOutlet="familyPick; context: { $implicit: 0 }"></ng-container>
+          }
+
           <!-- Calculated result (if the test is a formula) -->
           @if (calcInfo(); as calc) {
             <div class="pf-judge">
@@ -587,8 +615,9 @@
           }
 
           <!-- Reference ranges — single-value tests only; each value of a
-               multi-value test carries its own ranges inside its batch. -->
-          @if (isSingleValue()) {
+               multi-value test carries its own ranges inside its batch. A
+               family's normal answer is ticked on the family itself. -->
+          @if (isSingleValue() && entryKind() !== 'family') {
           <div class="pf-rr2">
             <div class="pf-rr2__head">
               <div>
@@ -786,6 +815,10 @@
                         <p class="pf-anslist__idle">Pick an option group above — or “+ New option group”.</p>
                       }
                     </div>
+                  }
+
+                  @if (p.type === 'family') {
+                    <ng-container *ngTemplateOutlet="familyPick; context: { $implicit: i }"></ng-container>
                   }
 
                   <!-- Per-value extras: input validation + this value's own
@@ -1052,10 +1085,97 @@
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   </li>
+                  @for (n of m.nested; track n.id) {
+                    <li class="pf-tp-row pf-tp-row--nested" [attr.data-nested-in]="m.id">
+                      <svg class="pf-tp-row__elbow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h10"/></svg>
+                      <span class="pf-tp-row__name">{{ n.name }}</span>
+                      @if (n.code) { <span class="pf-num pf-member-order__code">{{ n.code }}</span> }
+                      <span class="pf-tp-row__infam">in {{ m.name }}</span>
+                    </li>
+                  }
                 }
               </ul>
             </div>
           }
+
+          <!-- FAMILY LINES (owner 2026-10-23): answers with sub-choices
+               (Casts: Absent / Present → types + amount) live INSIDE the
+               profile — built and edited here, saved line by line. -->
+          @if (d.type === 'profile' && !repetitiveActive()) {
+            <div class="pf-tp pf-famlines" data-testid="family-lines">
+              <div class="pf-tp__hdr">
+                <span class="pf-tp__badge">Family lines</span>
+                <span class="pf-tp__count">An answer that opens sub-choices, each with its own amount — e.g. Casts: Present → Hyaline 2–3 /LPF.</span>
+                <span class="grow"></span>
+                @if (d.id) {
+                  <button type="button" class="pf-btn pf-btn--secondary pf-famlines__add press" [disabled]="famOpen() === 'new'"
+                          (click)="addFamilyLine()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    Add family
+                  </button>
+                }
+              </div>
+              @if (!d.id) {
+                <p class="pf-hint pf-famlines__hint">Save the profile first — then add its family lines here.</p>
+              }
+              <ul class="pf-tp__list pf-famlines__list">
+                @for (line of familyLines(); track line.testId) {
+                  <li class="pf-famline" [class.pf-famline--open]="famOpen() === line.testId">
+                    <div class="pf-famline__row">
+                      <button type="button" class="pf-famline__toggle press" [attr.aria-expanded]="famOpen() === line.testId"
+                              [attr.aria-label]="(famOpen() === line.testId ? 'Collapse ' : 'Edit ') + line.name" (click)="editFamilyLine(line)">
+                        <svg class="pf-famline__chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                        <span class="pf-famline__name">{{ line.name }}</span>
+                        @if (line.testCode) { <span class="pf-num pf-member-order__code">{{ line.testCode }}</span> }
+                        <span class="pf-famline__sum">{{ familyLineSummary(line) }}</span>
+                      </button>
+                      <button type="button" class="pf-tp-row__btn pf-tp-row__btn--danger press" [disabled]="famSaving()"
+                              [attr.aria-label]="'Remove ' + line.name" title="Remove this family line" (click)="removeFamilyLine(line)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                    @if (famOpen() === line.testId) {
+                      <ng-container *ngTemplateOutlet="famEditor"></ng-container>
+                    }
+                  </li>
+                }
+                @if (famOpen() === 'new') {
+                  <li class="pf-famline pf-famline--open pf-famline--new">
+                    <ng-container *ngTemplateOutlet="famEditor"></ng-container>
+                  </li>
+                }
+              </ul>
+              @if (familyLines().length === 0 && famOpen() !== 'new' && d.id) {
+                <p class="pf-hint pf-famlines__hint">No family lines yet.</p>
+              }
+            </div>
+          }
+          <ng-template #famEditor>
+            @if (famDraft(); as fd) {
+              <div class="pf-famline__edit">
+                <label class="pf-uf pf-famline__namefld">
+                  <span class="pf-uf__lbl">Line name — prints on the report</span>
+                  <input type="text" class="pf-input pf-input--sm" placeholder="e.g. Casts" [value]="fd.name"
+                         (input)="setFamilyLineName($any($event.target).value)" />
+                </label>
+                <pf-family-tree-editor [family]="fd" [subtests]="famSubtests()"
+                                       (familyChange)="famDraft.set($event)"></pf-family-tree-editor>
+                <div class="pf-famline__acts">
+                  @if (famIssues().length) {
+                    <span class="pf-famline__warn" role="status">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                      {{ famIssues()[0] }}
+                    </span>
+                  } @else { <span class="pf-famline__warn"></span> }
+                  <button type="button" class="pf-btn pf-btn--tertiary press" (click)="cancelFamilyLine()">Cancel</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="famSaving() || famIssues().length > 0"
+                          [pfBusy]="famSaving()" pfBusyLabel="Saving…" (click)="saveFamilyLine()">
+                    {{ famSaving() ? 'Saving…' : (famOpen() === 'new' ? 'Add line' : 'Save line') }}
+                  </button>
+                </div>
+              </div>
+            }
+          </ng-template>
 
           <div class="pf-picker-toolbar">
             @if (d.type === 'package') {
@@ -1088,7 +1208,7 @@
                   <div class="pf-pick-grid">
                     @for (t of group.tests; track t.id) {
                       <label class="pf-row pf-pkg-pick" [class.pf-row--in]="isInPackage(t.id)">
-                        <input type="checkbox" class="pf-te2-srcheck" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id)" />
+                        <input type="checkbox" class="pf-te2-srcheck" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id); $any($event.target).checked = isInPackage(t.id)" />
                         <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
                         <span class="pf-pkg-pick__body">
                           <span class="pf-pkg-pick__title">
@@ -1150,6 +1270,14 @@
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                   </li>
+                  @for (n of m.nested; track n.id) {
+                    <li class="pf-tp-row pf-tp-row--nested" [attr.data-nested-in]="m.id">
+                      <svg class="pf-tp-row__elbow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h10"/></svg>
+                      <span class="pf-tp-row__name">{{ n.name }}</span>
+                      @if (n.code) { <span class="pf-num pf-member-order__code">{{ n.code }}</span> }
+                      <span class="pf-tp-row__infam">in {{ m.name }}</span>
+                    </li>
+                  }
                 }
               </ul>
             </div>
