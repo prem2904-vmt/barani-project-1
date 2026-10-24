@@ -48,7 +48,7 @@ export const PATIENT_REGISTER_ND_STYLES = `
      four (4 + 3) instead of a lone "Baby of" on row two. */
   .pf-reg-form ::ng-deep [data-field="title"] { container-type: inline-size; }
   @container (max-width: 460px) {
-    .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg:not(.pf-di-seg--fill) { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+    .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg:not(.pf-di-seg--fill) { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; height: auto !important; border-radius: var(--pf-radius-sm); }
   }
 
   /* Phones: one column that scrolls naturally under the pinned band;

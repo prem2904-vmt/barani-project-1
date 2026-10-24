@@ -2,37 +2,37 @@
    COLOR PALETTE (static)
    ============================================================= */
 :root {
-  --color-violet-50: #f5f3ff;
-  --color-violet-100: #ede9fe;
-  --color-violet-200: #ddd6fe;
-  --color-violet-300: #c4b5fd;
-  --color-violet-400: #a78bfa;
-  --color-violet-500: #8b5cf6;
-  --color-violet-600: #7c3aed;
-  --color-violet-700: #6d28d9;
-  --color-violet-800: #5b21b6;
-  --color-violet-900: #4c1d95;
+   --color-violet-50: #f5f3ff;
+   --color-violet-100: #ede9fe;
+   --color-violet-200: #ddd6fe;
+   --color-violet-300: #c4b5fd;
+   --color-violet-400: #a78bfa;
+   --color-violet-500: #8b5cf6;
+   --color-violet-600: #7c3aed;
+   --color-violet-700: #6d28d9;
+   --color-violet-800: #5b21b6;
+   --color-violet-900: #4c1d95;
 
-  --color-pink-400: #f472b6;
-  --color-pink-500: #ec4899;
-  --color-pink-600: #db2777;
-  --color-fuchsia-400: #e879f9;
-  --color-fuchsia-500: #d946ef;
-  --color-fuchsia-600: #c026d3;
+   --color-pink-400: #f472b6;
+   --color-pink-500: #ec4899;
+   --color-pink-600: #db2777;
+   --color-fuchsia-400: #e879f9;
+   --color-fuchsia-500: #d946ef;
+   --color-fuchsia-600: #c026d3;
 
-  --gradient-primary: linear-gradient(135deg, #7c3aed, #ec4899);
-  --gradient-secondary: linear-gradient(135deg, #8b5cf6, #d946ef);
-  --gradient-glow: linear-gradient(135deg, #a78bfa, #f472b6);
+   --gradient-primary: linear-gradient(135deg, #7c3aed, #ec4899);
+   --gradient-secondary: linear-gradient(135deg, #8b5cf6, #d946ef);
+   --gradient-glow: linear-gradient(135deg, #a78bfa, #f472b6);
 
-  /* legacy tokens kept so current screens re-skin through our utilities */
-  --color-primary: #7c3aed;
-  --color-accent: #ec4899;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-urgent: #ef4444;
-  --color-high: #f59e0b;
-  --color-normal: #10b981;
+   /* legacy tokens kept so current screens re-skin through our utilities */
+   --color-primary: #7c3aed;
+   --color-accent: #ec4899;
+   --color-success: #10b981;
+   --color-warning: #f59e0b;
+   --color-danger: #ef4444;
+   --color-urgent: #ef4444;
+   --color-high: #f59e0b;
+   --color-normal: #10b981;
 }
 
 /* =============================================================
@@ -40,213 +40,214 @@
    ============================================================= */
 :root,
 :root.dark {
-  --bg-primary: #0a0a15;
-  --bg-secondary: #0f0f1a;
-  --bg-tertiary: #141422;
-  --bg-card: rgba(20, 20, 35, 0.8);
-  --bg-card-solid: #14141f;
-  --bg-input: rgba(30, 30, 50, 0.8);
-  --bg-hover: rgba(139, 92, 246, 0.1);
-  --bg-active: rgba(139, 92, 246, 0.2);
+   --bg-primary: #0a0a15;
+   --bg-secondary: #0f0f1a;
+   --bg-tertiary: #141422;
+   --bg-card: rgba(20, 20, 35, 0.8);
+   --bg-card-solid: #14141f;
+   --bg-input: rgba(30, 30, 50, 0.8);
+   --bg-hover: rgba(139, 92, 246, 0.1);
+   --bg-active: rgba(139, 92, 246, 0.2);
 
-  --surface-1: #1a1a2e;
-  --surface-2: #16162a;
-  --surface-3: #1e1e36;
-  --surface-elevated: rgba(25, 25, 45, 0.95);
+   --surface-1: #1a1a2e;
+   --surface-2: #16162a;
+   --surface-3: #1e1e36;
+   --surface-elevated: rgba(25, 25, 45, 0.95);
 
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-tertiary: rgba(255, 255, 255, 0.55);
-  --text-muted: rgba(255, 255, 255, 0.4);
-  --text-inverse: #0a0a15;
+   --text-primary: #ffffff;
+   --text-secondary: rgba(255, 255, 255, 0.72);
+   --text-tertiary: rgba(255, 255, 255, 0.55);
+   --text-muted: rgba(255, 255, 255, 0.4);
+   --text-inverse: #0a0a15;
 
-  --border-primary: rgba(139, 92, 246, 0.22);
-  --border-secondary: rgba(139, 92, 246, 0.12);
-  --border-muted: rgba(255, 255, 255, 0.1);
-  --border-input: rgba(139, 92, 246, 0.3);
+   --border-primary: rgba(139, 92, 246, 0.22);
+   --border-secondary: rgba(139, 92, 246, 0.12);
+   --border-muted: rgba(255, 255, 255, 0.1);
+   --border-input: rgba(139, 92, 246, 0.3);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
+   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+   --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
 
-  --input-bg: rgba(20, 20, 40, 0.9);
-  --input-border: rgba(139, 92, 246, 0.3);
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #ffffff;
-  --input-placeholder: rgba(255, 255, 255, 0.4);
+   --input-bg: rgba(20, 20, 40, 0.9);
+   --input-border: rgba(139, 92, 246, 0.3);
+   --input-border-focus: var(--color-violet-500);
+   --input-text: #ffffff;
+   --input-placeholder: rgba(255, 255, 255, 0.4);
 
-  --card-bg: rgba(20, 20, 35, 0.6);
-  --card-border: rgba(139, 92, 246, 0.15);
-  --card-hover-border: rgba(139, 92, 246, 0.3);
+   --card-bg: rgba(20, 20, 35, 0.6);
+   --card-border: rgba(139, 92, 246, 0.15);
+   --card-hover-border: rgba(139, 92, 246, 0.3);
 
-  --header-bg: rgba(10, 10, 21, 0.85);
-  --header-border: rgba(139, 92, 246, 0.12);
+   --header-bg: rgba(10, 10, 21, 0.85);
+   --header-border: rgba(139, 92, 246, 0.12);
 
-  --scrollbar-track: rgba(139, 92, 246, 0.10);
-  --scrollbar-thumb: rgba(139, 92, 246, 0.55);
-  --scrollbar-thumb-hover: rgba(168, 85, 247, 0.85);
+   --scrollbar-track: rgba(139, 92, 246, 0.10);
+   --scrollbar-thumb: rgba(139, 92, 246, 0.55);
+   --scrollbar-thumb-hover: rgba(168, 85, 247, 0.85);
 
-  --success-bg: rgba(16, 185, 129, 0.15);
-  --success-text: #10b981;
-  --success-border: rgba(16, 185, 129, 0.3);
-  --error-bg: rgba(239, 68, 68, 0.15);
-  --error-text: #ef4444;
-  --error-border: rgba(239, 68, 68, 0.3);
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  --warning-text: #f59e0b;
-  --warning-border: rgba(245, 158, 11, 0.3);
-  --info-bg: rgba(59, 130, 246, 0.15);
-  --info-text: #3b82f6;
-  --info-border: rgba(59, 130, 246, 0.3);
+   --success-bg: rgba(16, 185, 129, 0.15);
+   --success-text: #10b981;
+   --success-border: rgba(16, 185, 129, 0.3);
+   --error-bg: rgba(239, 68, 68, 0.15);
+   --error-text: #ef4444;
+   --error-border: rgba(239, 68, 68, 0.3);
+   --warning-bg: rgba(245, 158, 11, 0.15);
+   --warning-text: #f59e0b;
+   --warning-border: rgba(245, 158, 11, 0.3);
+   --info-bg: rgba(59, 130, 246, 0.15);
+   --info-text: #3b82f6;
+   --info-border: rgba(59, 130, 246, 0.3);
 
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-bg-hover: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(167, 139, 250, 0.45);
-  --pf-hover-border: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --glass-glow: 0 0 40px rgba(139, 92, 246, 0.15);
-  --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.25);
-  --glass-highlight: rgba(255, 255, 255, 0.08);
+   --glass-bg: rgba(255, 255, 255, 0.03);
+   --glass-bg-hover: rgba(255, 255, 255, 0.06);
+   --glass-border: rgba(255, 255, 255, 0.08);
+   --glass-border-hover: rgba(167, 139, 250, 0.45);
+   --pf-hover-border: var(--glass-border-hover, rgba(167, 139, 250, 0.45));
+   --glass-blur: 20px;
+   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+   --glass-shadow-hover: 0 16px 48px rgba(0, 0, 0, 0.4);
+   --glass-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+   --glass-glow-hover: 0 0 60px rgba(139, 92, 246, 0.25);
+   --glass-highlight: rgba(255, 255, 255, 0.08);
 
-  /* Accent text/icon colours — bright shades read great on the dark surfaces. */
-  --amber-text: #fbbf24;
-  --red-text: #fca5a5;
-  --green-text: #34d399;
-  --violet-text: #c4b5fd;
-  --blue-text: #93c5fd;
-  --teal-text: #5eead4;
-  --cyan-text: #67e8f9;
-  --sky-text: #7dd3fc;
-  --pink-text: #f9a8d4;
-  --rose-text: #fda4af;
-  /* Segmented/pill TRACK background (the container behind tab pills). */
-  --seg-track: rgba(0, 0, 0, 0.18);
-  --pf-dark-shade: rgba(168, 42, 184, 0.30);
-  --pf-dark-shade-mid: rgba(104, 34, 124, 0.16);
-  --pf-dark-shade-base: rgba(10, 10, 21, 0.55);
-  --pf-dark-surface: #120e1c;
-  --pf-band-bg: var(--pf-dark-surface);
-  --pf-band-sweep: linear-gradient(180deg, var(--pf-dark-shade-base) 0%, var(--pf-dark-shade-mid) 55%, var(--pf-dark-shade) 100%);
-  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
-  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
-  --pf-band-edge: rgba(232, 121, 249, 0.18);
-  --pf-band-bg-glass: rgba(18, 14, 28, 0.84);
-  --pf-band-glow: 0 24px 40px -20px rgba(192, 38, 211, 0.26);
+   /* Accent text/icon colours — bright shades read great on the dark surfaces. */
+   --amber-text: #fbbf24;
+   --red-text: #fca5a5;
+   --green-text: #34d399;
+   --violet-text: #c4b5fd;
+   --blue-text: #93c5fd;
+   --teal-text: #5eead4;
+   --cyan-text: #67e8f9;
+   --sky-text: #7dd3fc;
+   --pink-text: #f9a8d4;
+   --rose-text: #fda4af;
+   /* Segmented/pill TRACK background (the container behind tab pills). */
+   --seg-track: rgba(0, 0, 0, 0.18);
+   --pf-dark-shade: rgba(168, 42, 184, 0.30);
+   --pf-dark-shade-mid: rgba(104, 34, 124, 0.16);
+   --pf-dark-shade-base: rgba(10, 10, 21, 0.55);
+   --pf-dark-surface: #120e1c;
+   --pf-band-bg: var(--pf-dark-surface);
+   --pf-band-sweep: linear-gradient(180deg, var(--pf-dark-shade-base) 0%, var(--pf-dark-shade-mid) 55%, var(--pf-dark-shade) 100%);
+   --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+   --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+   --pf-band-edge: rgba(232, 121, 249, 0.18);
+   --pf-band-bg-glass: rgba(18, 14, 28, 0.84);
+   --pf-band-glow: 0 24px 40px -20px rgba(192, 38, 211, 0.26);
 
 }
 
 /* =============================================================
    LIGHT THEME
    ============================================================= */
-:root.light, :root[data-theme="light"] {
-  --pf-band-bg: #ffffff;
-  --pf-band-sweep: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%, rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
-  --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
-  --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
-  --pf-band-edge: rgba(124, 58, 237, 0.10);
-  --pf-band-bg-glass: rgba(255, 255, 255, 0.72);
-  --pf-band-glow: none;
+:root.light,
+:root[data-theme="light"] {
+   --pf-band-bg: #ffffff;
+   --pf-band-sweep: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%, rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+   --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+   --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
+   --pf-band-edge: rgba(124, 58, 237, 0.10);
+   --pf-band-bg-glass: rgba(255, 255, 255, 0.72);
+   --pf-band-glow: none;
 
-  /* Designer light world (Figma "Prefrontal LMS UI", 446-113):
+   /* Designer light world (Figma "Prefrontal LMS UI", 446-113):
      whisper-lavender page, PURE WHITE cards, neutral gray text ramp
      (#111928 → #9CA3AF) and #E5E7EB hairlines. The violet identity comes
      from the hero band, primaries, and states — not from tinted surfaces. */
-  --bg-primary: #f3f1f8;
-  --bg-secondary: #f6f4fa;
-  --bg-tertiary: #f8f7fc;
-  --bg-card: rgba(255, 255, 255, 0.86);
-  --bg-card-solid: #ffffff;
-  --bg-input: #ffffff;
-  --bg-hover: rgba(124, 58, 237, 0.06);
-  --bg-active: rgba(124, 58, 237, 0.11);
+   --bg-primary: #f3f1f8;
+   --bg-secondary: #f6f4fa;
+   --bg-tertiary: #f8f7fc;
+   --bg-card: rgba(255, 255, 255, 0.86);
+   --bg-card-solid: #ffffff;
+   --bg-input: #ffffff;
+   --bg-hover: rgba(124, 58, 237, 0.06);
+   --bg-active: rgba(124, 58, 237, 0.11);
 
-  --surface-1: rgba(255, 255, 255, 0.72);
-  --surface-2: rgba(255, 255, 255, 0.85);
-  --surface-3: #f0f1f3;
-  --surface-elevated: #ffffff;
+   --surface-1: rgba(255, 255, 255, 0.72);
+   --surface-2: rgba(255, 255, 255, 0.85);
+   --surface-3: #f0f1f3;
+   --surface-elevated: #ffffff;
 
-  --text-primary: #111928;
-  --text-secondary: #374151;
-  --text-tertiary: #6b7280;
-  --text-muted: #9ca3af;
-  --text-inverse: #ffffff;
+   --text-primary: #111928;
+   --text-secondary: #374151;
+   --text-tertiary: #6b7280;
+   --text-muted: #9ca3af;
+   --text-inverse: #ffffff;
 
-  --border-primary: rgba(124, 58, 237, 0.18);
-  --border-secondary: rgba(17, 25, 40, 0.07);
-  --border-muted: #e5e7eb;
-  --border-input: #d1d5db;
+   --border-primary: rgba(124, 58, 237, 0.18);
+   --border-secondary: rgba(17, 25, 40, 0.07);
+   --border-muted: #e5e7eb;
+   --border-input: #d1d5db;
 
-  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
-  --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.08);
-  --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.11);
-  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.14);
+   --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
+   --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.08);
+   --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.11);
+   --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.14);
 
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-border-focus: var(--color-violet-500);
-  --input-text: #111928;
-  --input-placeholder: #9ca3af;
+   --input-bg: #ffffff;
+   --input-border: #d1d5db;
+   --input-border-focus: var(--color-violet-500);
+   --input-text: #111928;
+   --input-placeholder: #9ca3af;
 
-  --card-bg: rgba(255, 255, 255, 0.88);
-  --card-border: #e5e7eb;
-  --card-hover-border: rgba(124, 58, 237, 0.38);
+   --card-bg: rgba(255, 255, 255, 0.88);
+   --card-border: #e5e7eb;
+   --card-hover-border: rgba(124, 58, 237, 0.38);
 
-  --header-bg: rgba(255, 255, 255, 0.92);
-  --header-border: #e5e7eb;
+   --header-bg: rgba(255, 255, 255, 0.92);
+   --header-border: #e5e7eb;
 
-  --scrollbar-track: #eceef2;
-  --scrollbar-thumb: #cdd2da;
-  --scrollbar-thumb-hover: #aab1bd;
+   --scrollbar-track: #eceef2;
+   --scrollbar-thumb: #cdd2da;
+   --scrollbar-thumb-hover: #aab1bd;
 
-  --success-bg: rgba(16, 185, 129, 0.1);
-  --success-text: #059669;
-  --success-border: rgba(16, 185, 129, 0.28);
-  --error-bg: rgba(239, 68, 68, 0.1);
-  --error-text: #dc2626;
-  --error-border: rgba(239, 68, 68, 0.28);
-  --warning-bg: rgba(245, 158, 11, 0.1);
-  --warning-text: #d97706;
-  --warning-border: rgba(245, 158, 11, 0.28);
-  --info-bg: rgba(59, 130, 246, 0.1);
-  --info-text: #2563eb;
-  --info-border: rgba(59, 130, 246, 0.28);
+   --success-bg: rgba(16, 185, 129, 0.1);
+   --success-text: #059669;
+   --success-border: rgba(16, 185, 129, 0.28);
+   --error-bg: rgba(239, 68, 68, 0.1);
+   --error-text: #dc2626;
+   --error-border: rgba(239, 68, 68, 0.28);
+   --warning-bg: rgba(245, 158, 11, 0.1);
+   --warning-text: #d97706;
+   --warning-border: rgba(245, 158, 11, 0.28);
+   --info-bg: rgba(59, 130, 246, 0.1);
+   --info-text: #2563eb;
+   --info-border: rgba(59, 130, 246, 0.28);
 
-  /* Glass panels: near-white lavender-tinged lift with a soft lavender hairline
+   /* Glass panels: near-white lavender-tinged lift with a soft lavender hairline
      edge — not the glary near-opaque white of before. */
-  /* Glass base is a soft lavender off-white (not pure white) so frosted panels
+   /* Glass base is a soft lavender off-white (not pure white) so frosted panels
      read calm, not glary. */
-  --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-hover: rgba(255, 255, 255, 0.8);
-  --glass-border: #e5e7eb;
-  --glass-border-hover: rgba(124, 58, 237, 0.3);
-  --pf-hover-border: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
-  --glass-blur: 20px;
-  --glass-shadow: 0 8px 28px rgba(76, 29, 149, 0.08);
-  --glass-shadow-hover: 0 16px 44px rgba(76, 29, 149, 0.12);
-  --glass-glow: 0 0 40px rgba(124, 58, 237, 0.08);
-  --glass-glow-hover: 0 0 60px rgba(124, 58, 237, 0.12);
-  /* Top-edge sheen — softened so it doesn't add a hard white line. */
-  --glass-highlight: rgba(255, 255, 255, 0.5);
+   --glass-bg: rgba(255, 255, 255, 0.66);
+   --glass-bg-hover: rgba(255, 255, 255, 0.8);
+   --glass-border: #e5e7eb;
+   --glass-border-hover: rgba(124, 58, 237, 0.3);
+   --pf-hover-border: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+   --glass-blur: 20px;
+   --glass-shadow: 0 8px 28px rgba(76, 29, 149, 0.08);
+   --glass-shadow-hover: 0 16px 44px rgba(76, 29, 149, 0.12);
+   --glass-glow: 0 0 40px rgba(124, 58, 237, 0.08);
+   --glass-glow-hover: 0 0 60px rgba(124, 58, 237, 0.12);
+   /* Top-edge sheen — softened so it doesn't add a hard white line. */
+   --glass-highlight: rgba(255, 255, 255, 0.5);
 
-  /* Accent text/icon colours — WCAG-AA darker shades (600-700) so amber/red/
+   /* Accent text/icon colours — WCAG-AA darker shades (600-700) so amber/red/
      green/violet foregrounds stay legible on the light surfaces (bright dark-mode
      shades like #fbbf24 fail contrast on light, ~1.2:1). */
-  --amber-text: #b45309;
-  --red-text: #dc2626;
-  --green-text: #059669;
-  --violet-text: #6d28d9;
-  --blue-text: #2563eb;
-  --teal-text: #0d9488;
-  --cyan-text: #0891b2;
-  --sky-text: #0284c7;
-  --pink-text: #db2777;
-  --rose-text: #e11d48;
-  /* Segmented track — subtle lavender tint instead of a heavy grey/black blob. */
-  --seg-track: rgba(124, 58, 237, 0.08);
+   --amber-text: #b45309;
+   --red-text: #dc2626;
+   --green-text: #059669;
+   --violet-text: #6d28d9;
+   --blue-text: #2563eb;
+   --teal-text: #0d9488;
+   --cyan-text: #0891b2;
+   --sky-text: #0284c7;
+   --pink-text: #db2777;
+   --rose-text: #e11d48;
+   /* Segmented track — subtle lavender tint instead of a heavy grey/black blob. */
+   --seg-track: rgba(124, 58, 237, 0.08);
 }
 
 /* NEW design, light: TOGGLES wear the designer's quiet anatomy — the

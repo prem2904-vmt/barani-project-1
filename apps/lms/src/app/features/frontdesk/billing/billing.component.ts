@@ -199,7 +199,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            [attr.max]="discountKind() === 'percent' ? 100 : preDiscountGross()"
                            [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
                            [value]="discount()"
-                           (input)="setDiscount(asInput($event))"
+                           (input)="filterDiscountInput($event)"
                            (keydown)="blockDiscountChars($event)"
                            class="pf-discount__input"
                            placeholder="0"/>
@@ -354,6 +354,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       autocomplete="off"
                       enterkeyhint="done"
                       [value]="cashAmount()"
+                      (keydown)="blockCashKeys($event)"
                       (input)="setCash(cashDigits($event))"
                       placeholder="Tap to enter amount received"
                       aria-label="Cash received" />
@@ -2068,13 +2069,31 @@ export class BillingComponent implements OnInit, OnChanges {
   /** Cash field is whole rupees — keep only digits so the native OS numpad
    *  (mobile) or the keyboard (web) can't slip in stray characters. */
   cashDigits(e: Event): string {
-    return (e.target as HTMLInputElement).value.replace(/\D/g, '');
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, '');
+    el.value = digits;
+    return digits;
+  }
+  blockCashKeys(ev: KeyboardEvent) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) {
+      return;
+    }
+    if (/^[0-9]$/.test(ev.key)) return;
+    ev.preventDefault();
   }
   readonly cashNotes = [100, 500, 2000];
   setExactCash() { this._cash.set(String(this.effectivePayable())); }
   addCash(n: number) { this._cash.set(String(this.cashAmountNum() + n)); }
   setCashExact() { this._cash.set(String(this.effectivePayable())); }
   clearCash() { this._cash.set(''); }
+
+  filterDiscountInput(ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    const digits = (el.value || '').replace(/\D/g, '');
+    el.value = digits;
+    this.setDiscount(digits);
+  }
 
   setDiscount(v: string) {
     this._discountError.set(null); // clear any inline server error on edit
@@ -2102,12 +2121,14 @@ export class BillingComponent implements OnInit, OnChanges {
     // as 500%).
     this._discount.set('');
   }
-  /** Block obviously bad keystrokes at source — minus, plus, e/E exponent,
-   *  and decimal point. Keeps Tab/Backspace/arrows/etc. flowing. */
+  /** Block obviously bad keystrokes at source — only digits and navigation keys. */
   blockDiscountChars(ev: KeyboardEvent) {
-    if (['-', '+', 'e', 'E', '.', ','].includes(ev.key)) {
-      ev.preventDefault();
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) {
+      return;
     }
+    if (/^[0-9]$/.test(ev.key)) return;
+    ev.preventDefault();
   }
   setReferenceNo(v: string) { this._referenceNo.set(v); }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }

@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PatientRegisterComponent } from './patient-register.component';
-import { PATIENT_REGISTER_ND_STYLES } from './patient-register.pf.styles';
+import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';

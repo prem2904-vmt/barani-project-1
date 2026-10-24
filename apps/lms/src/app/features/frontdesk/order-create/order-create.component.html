@@ -766,7 +766,8 @@
             </div>
             <input type="text" inputmode="decimal" aria-label="Discount amount"
               [class.pf-cart-disc__input--err]="discountOverCap() || !!discountServerError()" [value]="discountValue()" [disabled]="discountLocked()"
-              (input)="setDiscountValue($any($event.target).value)" class="pf-cart-disc__input" placeholder="0" />
+              (keydown)="blockDiscountKeys($event)"
+              (input)="filterDiscountInput($event)" class="pf-cart-disc__input" placeholder="0" />
           </div>
         </div>
         @if (discountOverCap()) {

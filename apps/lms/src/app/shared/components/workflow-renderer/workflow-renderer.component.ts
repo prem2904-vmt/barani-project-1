@@ -469,8 +469,10 @@ export class WorkflowRendererComponent implements OnChanges {
   /** In a card, fields sit two-up; wide controls take the whole row. */
   ndSpan(f: WorkflowField): string {
     const wide = f.width === 'full'
+      || f.name === 'title'
       || ['phone', 'textarea', 'multiselect', 'multi_button_select', 'test_parameters', 'tube_collection'].includes(f.type)
       || (f.type === 'date' && /(^|_)dob$|date_of_birth|birth_?date/i.test(f.name))
+      || /(^|_)(sex|gender)$/i.test(f.name)
       || isContactNumberField(f)
       || (['button_select', 'image_select', 'radio'].includes(f.type) && (f.options?.length ?? 0) > 4);
     return wide ? 'pf-wr-span' : '';

@@ -1039,7 +1039,42 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  recorded (QA #3a) — the server rejects a change on a settled bill too. */
   readonly discountLocked = computed(() => this.orderLocked() || this.isPaymentSettled());
   setDiscountKind(k: 'flat' | 'percent') { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountKind.set(k); }
-  setDiscountValue(v: string) { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountValue.set(v); }
+  setDiscountValue(v: string) {
+    if (this.discountLocked()) return;
+    this.discountServerError.set(null);
+    let cleaned = (v ?? '').replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+    this.discountValue.set(cleaned);
+  }
+
+  filterDiscountInput(ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    let val = (el.value || '').replace(/[^0-9.]/g, '');
+    const parts = val.split('.');
+    if (parts.length > 2) {
+      val = parts[0] + '.' + parts.slice(1).join('');
+    }
+    if (this.discountKind() === 'percent') {
+      const num = parseFloat(val);
+      if (num > 100) val = '100';
+    }
+    el.value = val;
+    this.setDiscountValue(val);
+  }
+
+  blockDiscountKeys(ev: KeyboardEvent) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) {
+      return;
+    }
+    if (/^[0-9]$/.test(ev.key)) return;
+    if (ev.key === '.') {
+      const el = ev.target as HTMLInputElement;
+      if (!el.value.includes('.')) return;
+    }
+    ev.preventDefault();
+  }
 
   /** The discount % this user may grant, by their role's permission tier:
    *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */

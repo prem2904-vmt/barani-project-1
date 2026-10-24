@@ -414,7 +414,10 @@ export class PatientRegisterComponent implements OnInit {
 
     type Field = WorkflowConfig['steps'][number]['fields'][number];
     const relabel = (f: Field): Field => {
-      if (f.name === 'title') return PatientRegisterComponent.withBabyOf(f);
+      if (f.name === 'title') {
+        const withBaby = PatientRegisterComponent.withBabyOf(f);
+        return { ...withBaby, type: 'select' };
+      }
       if (!baby) return f;
       if (f.name === 'first_name') return { ...f, title: "Mother's first name", placeholder: "Mother's first name" };
       if (f.name === 'fathers_name') return { ...f, title: "Mother's last name", placeholder: "Mother's last name" };

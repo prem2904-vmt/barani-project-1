@@ -129,7 +129,9 @@ interface MethodDef {
                     Cash received
                     <!-- Digits only: brings up the OS number pad on phones. -->
                     <input class="pf-ipp__input pf-ipp__input--num" inputmode="numeric" autocomplete="off"
-                           enterkeyhint="done" [value]="cash()" (input)="cash.set(cashDigits($event))"
+                           enterkeyhint="done" [value]="cash()"
+                           (keydown)="blockNonNumericKeys($event, false)"
+                           (input)="onCashInput($event)"
                            placeholder="Amount received" />
                   </label>
                   <div class="pf-ipp__quick">
@@ -160,8 +162,9 @@ interface MethodDef {
                       <span>{{ m.label }}</span>
                       <input class="pf-ipp__input" type="text" inputmode="decimal" placeholder="₹0.00"
                              [attr.aria-label]="m.label + ' amount'"
-                             [value]="splitAmounts()[m.id] || ''"
-                             (input)="setSplitAmount(m.id, asVal($event))" />
+                             [value]="splitAmounts()[m.id] ? splitAmounts()[m.id] : ''"
+                             (keydown)="blockNonNumericKeys($event, true)"
+                             (input)="onSplitInput(m.id, $event)" />
                     </label>
                   }
                   <p class="pf-ipp__muted" [attr.data-kind]="splitOk() ? 'ok' : 'short'">
@@ -223,7 +226,9 @@ interface MethodDef {
                      [class.pf-ipp__input--err]="advanceOver()"
                      [attr.aria-invalid]="advanceOver() ? 'true' : null"
                      [attr.aria-describedby]="advanceOver() ? 'pf-ipp-adv-err' : null"
-                     [value]="advance()" (input)="setAdvance(asVal($event))" />
+                     [value]="advance()"
+                     (keydown)="blockNonNumericKeys($event, false)"
+                     (input)="onAdvanceInput($event)" />
             </label>
             @if (advanceOver()) {
               <!-- Never silently clamp: the desk must see the advance is over
@@ -570,7 +575,10 @@ export class InlinePaymentPanelComponent {
     () => this.amount() > 0 && Math.abs(this.splitSum() - this.amount()) < 0.005,
   );
   setSplitAmount(m: SplitMode, v: string) {
-    const n = parseFloat((v || "").replace(/[^0-9.]/g, ""));
+    const cleaned = (v || "").replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    const normalized = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+    const n = parseFloat(normalized);
     this.splitAmounts.update((a) => ({ ...a, [m]: isFinite(n) && n > 0 ? n : 0 }));
   }
 
@@ -642,10 +650,49 @@ export class InlinePaymentPanelComponent {
     return (e.target as HTMLInputElement).value;
   }
 
+  onCashInput(ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "");
+    el.value = digits;
+    this.cash.set(digits);
+  }
+
+  onSplitInput(m: SplitMode, ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    let val = el.value.replace(/[^0-9.]/g, "");
+    const parts = val.split(".");
+    if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
+    el.value = val;
+    this.setSplitAmount(m, val);
+  }
+
+  onAdvanceInput(ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "");
+    el.value = digits;
+    this.setAdvance(digits);
+  }
+
+  blockNonNumericKeys(ev: KeyboardEvent, allowDecimal = false) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (["Backspace", "Delete", "Tab", "Enter", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) {
+      return;
+    }
+    if (/^[0-9]$/.test(ev.key)) return;
+    if (allowDecimal && ev.key === ".") {
+      const el = ev.target as HTMLInputElement;
+      if (!el.value.includes(".")) return;
+    }
+    ev.preventDefault();
+  }
+
   /** Cash field is whole rupees — keep only digits so the native OS numpad
    *  (mobile) or the keyboard (web) can't slip in stray characters. */
   cashDigits(e: Event): string {
-    return (e.target as HTMLInputElement).value.replace(/\D/g, "");
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "");
+    el.value = digits;
+    return digits;
   }
 
   emit() {
